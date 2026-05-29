@@ -66,14 +66,17 @@ async function switchToFreshTenant(page: Page, tenantId: string, tenantName: str
   // click the Home tab too — internal-state tabs ignore the URL after
   // first mount, so the click guarantees we end up where we want.
   await page.goto('/dashboard?tab=home');
-  await page.waitForTimeout(600);
+  // page.goto waits for 'load' by default — the tab click can fire immediately.
   await page
     .getByRole('tab', { name: /^Home$/ })
     .first()
     .click();
   // Wait for the dashboard's loadData() round-trip to settle so the
   // needsSetup calculation reflects the fresh tenant's empty state.
-  await page.waitForTimeout(2000);
+  // networkidle = no pending requests for 500ms, which means all 6
+  // parallel loadData() calls have returned and loading=false has been
+  // set — the auto-open effect fires synchronously after that.
+  await page.waitForLoadState('networkidle');
 }
 
 test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {

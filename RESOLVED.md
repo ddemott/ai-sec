@@ -16,6 +16,21 @@ This work established many of the consistency, accessibility, and empty-state pa
 
 ---
 
+## 2026-05-28 — E2E flake fixes (timing synchronization in 3 tests)
+
+Three known Playwright flakes fixed by replacing `waitForTimeout` with explicit DOM + network waits.
+
+**1. `booking-alignment.spec.ts:295` — List sub-tab popover cancel**
+- Root cause: fixed `waitForTimeout(800)` after clicking the Schedule tab wasn't long enough for `NewSchedulerView` (and its `view-tab-list` tab button) to mount. If the click landed before the button appeared in the DOM, Playwright would time out looking for the element. The Refresh button conditional check (`isVisible` with 2s grace) also silently skipped on slow renders, leaving stale data.
+- Fix: replaced `waitForTimeout(800)` with `expect(view-tab-list).toBeVisible({ timeout: 8000 })`; replaced the conditional Refresh click with `expect(refreshBtn).toBeVisible({ timeout: 8000 })` + `refreshBtn.click()` + `waitForLoadState('networkidle')`.
+- Same fix applied to `openAppointmentPopoverFromList` helper in `appointment-cancel-ui.spec.ts` (waited for `appointment-list-view` which is absent when the list is empty — now waits for the Refresh button which is always in the list header).
+
+**2 & 3. `wizard-welcome-auto-open.spec.ts` — welcome dialog auto-open timing**
+- Root cause: `switchToFreshTenant` used `waitForTimeout(600)` + `waitForTimeout(2000)` (total 2.6s) for `DashboardHome.loadData()` (6 parallel API calls) to settle. If the backend was under load or cold, loading took longer than 2s and the `AUTO_OPEN` effect hadn't fired when the assertions ran (even with an 8s assertion timeout, that wasn't the issue — the test assertions started before the load was done).
+- Fix: removed `waitForTimeout(600)` (redundant after `page.goto` which waits for `'load'` by default) and replaced `waitForTimeout(2000)` with `page.waitForLoadState('networkidle')`. `networkidle` fires when all 6 `loadData()` responses have returned and there's 500ms of quiet — at that point `loading=false` is guaranteed, and the auto-open effect fires synchronously in the same render cycle.
+
+---
+
 ## 2026-05-21 — Unauthenticated cross-tenant data access via `?tenant_id=` (CVE-class) + threadpool fix
 
 **Two findings, fixed together; kept in separate commits.**

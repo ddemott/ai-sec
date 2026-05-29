@@ -18,10 +18,8 @@ import { collectStartupWarnings } from './services/envWarnings';
 import multipart from '@fastify/multipart';
 import { getPool, closePool, createWithTenantClient } from './database';
 import { jsonContentTypeParser } from './jsonContentTypeParser';
-import { runReadinessCheck } from './readinessHandler';
 import { buildLogger } from './services/logger';
 import {
-  registry as metricsRegistry,
   httpRequestsTotal,
   httpRequestDurationMs,
   errorsTotal,
@@ -55,6 +53,7 @@ import { registerVoiceRoutes } from './routes/voice';
 import { registerVersionHistoryRoutes } from './routes/versionHistory';
 import { registerCommunicationRoutes } from './routes/communications';
 import { registerReminderRoutes } from './routes/reminders';
+import { registerHealthRoutes } from './routes/health';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { createGetEmbedding } from '../shared/getEmbedding';
@@ -228,91 +227,9 @@ app.setErrorHandler(
   }
 );
 
-// --- Health & Admin ---
-
-// Static landing/demo HTML read once at module load, not per-request.
-// These routes are public + unauthenticated, so a per-request
-// fs.readFileSync would block the event loop on every hit. The
-// {{DASHBOARD_URL}} token stays substituted per-request (cheap string op).
-const LANDING_HTML = fs.readFileSync(
-  path.resolve(__dirname, '..', '..', 'public', 'index.html'),
-  'utf-8'
-);
-const DEMO_HTML = fs.readFileSync(
-  path.resolve(__dirname, '..', '..', 'public', 'secretaryhq-demo.html'),
-  'utf-8'
-);
-
-app.get('/', async (_req, reply) => {
-  const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
-  const html = LANDING_HTML.replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
-  return reply.type('text/html').send(html);
-});
-app.get('/demo', async (_req, reply) => {
-  return reply.type('text/html').send(DEMO_HTML);
-});
-// Process-startup timestamp, captured once at module load. Exposed via
-// /health so E2E globalSetup can detect a backend that's older than
-// the most-recently-modified source file — the "stale binary" trap
-// that produced 24h of false-red E2E runs on 2026-05-18. See the
-// "Backend code changes require BOTH a rebuild AND a restart" Build
-// Principle in CLAUDE.md.
-const PROCESS_STARTED_AT = new Date().toISOString();
-// Liveness: process is up. Intentionally shallow + synchronous — does NOT
-// touch the DB, so a transient DB blip can't restart-loop the container, and
-// E2E globalSetup's stale-binary check keeps its {status, started_at} shape.
-app.get('/health', () => ({ status: 'ok', started_at: PROCESS_STARTED_AT }));
-
-// Readiness: can this instance actually serve requests? Pings the DB and
-// reports pool saturation. A monitoring/alerting signal — curl/scrape it and
-// page on 503 or sustained waiting>0. NOT an automatic traffic gate unless
-// Railway's healthcheck path is repointed here. connectionTimeoutMillis (5s,
-// see database/index.ts) bounds the worst-case response under pool
-// exhaustion, so this endpoint always answers instead of hanging. (2026-05-21)
-app.get('/ready', (_req, reply) => runReadinessCheck(pool, app.log, reply));
-
-// --- Prometheus-format metrics scrape endpoint ---
-// Strict opt-in: refuses ALL requests when METRICS_TOKEN is unset, so a
-// fresh deploy can't accidentally expose tenant-keyed counters publicly.
-// Once set, the scraper passes the token via Authorization: Bearer.
-// Returns text/plain per Prometheus exposition spec.
-app.get('/metrics', async (req, reply) => {
-  const token = process.env.METRICS_TOKEN;
-  if (!token) {
-    return reply.status(404).send({ success: false, error: 'Metrics endpoint disabled' });
-  }
-  const auth = req.headers['authorization'];
-  const provided =
-    typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : null;
-  if (provided !== token) {
-    return reply.status(401).send({ success: false, error: 'Unauthorized' });
-  }
-  return reply.type('text/plain; version=0.0.4; charset=utf-8').send(metricsRegistry.expose());
-});
-
-app.post('/admin/purge-soft-reservations', async (_req, reply) => {
-  const client = await pool.connect();
-  try {
-    const res = await client.query('SELECT purge_expired_soft_reservations() as deleted_count');
-    return reply.send({ success: true, deleted_count: res.rows[0].deleted_count });
-  } catch (err) {
-    app.log.error(
-      {
-        event: 'purge_soft_reservations_failed',
-        error_message: (err as Error).message,
-        error_stack: (err as Error).stack?.split('\n').slice(0, 5).join('\n'),
-        timestamp: new Date().toISOString(),
-      },
-      `purge_soft_reservations_failed: ${(err as Error).message}`
-    );
-    return reply.status(500).send({ success: false, error: 'Failed to purge soft reservations' });
-  } finally {
-    client.release();
-  }
-});
-
 // --- Register Route Modules ---
 
+registerHealthRoutes(app, pool);
 registerAuthRoutes(app, pool, generateToken);
 registerTenantRoutes(app, pool, withTenantClient);
 registerAppointmentRoutes(app, pool, withTenantClient);

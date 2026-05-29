@@ -37,8 +37,7 @@ import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
 import { isSlotOnFifteenMinuteGrid } from '../lib/calendarSlot';
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-const localizer = dateFnsLocalizer({
+const localizer = dateFnsLocalizer({ // eslint-disable-line @typescript-eslint/no-unsafe-assignment
   format,
   parse,
   startOfWeek,
@@ -581,8 +580,7 @@ function AppointmentViewInner({
               </div>
             )}
             <DnDCalendar
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              localizer={localizer}
+              localizer={localizer} // eslint-disable-line @typescript-eslint/no-unsafe-assignment
               events={calendarEvents}
               startAccessor="start"
               endAccessor="end"

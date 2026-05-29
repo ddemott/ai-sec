@@ -41,8 +41,8 @@ module.exports = {
 
     // Same warn-then-promote model as the backend config — see comment there.
     '@typescript-eslint/no-floating-promises': 'error',
-    '@typescript-eslint/no-misused-promises': ['warn', { checksVoidReturn: false }],
-    '@typescript-eslint/await-thenable': 'warn',
+    '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: false }],
+    '@typescript-eslint/await-thenable': 'error',
     '@typescript-eslint/require-await': 'error',
     '@typescript-eslint/restrict-template-expressions': 'error',
     '@typescript-eslint/no-unnecessary-type-assertion': 'error',

@@ -63,13 +63,13 @@ module.exports = {
     // CI. Promote to 'error' per family once the count hits zero — same
     // play as the no-explicit-any cleanup.
     '@typescript-eslint/no-floating-promises': 'error',
-    '@typescript-eslint/no-misused-promises': ['warn', {
+    '@typescript-eslint/no-misused-promises': ['error', {
       // Allow void-returning async handlers in places that expect
       // void callbacks (e.g., Fastify route handlers — handled via
       // `withHandler`, so the floating-promise check is enough).
       checksVoidReturn: false,
     }],
-    '@typescript-eslint/await-thenable': 'warn',
+    '@typescript-eslint/await-thenable': 'error',
     '@typescript-eslint/require-await': 'error',
     '@typescript-eslint/restrict-template-expressions': 'error',
     '@typescript-eslint/no-unnecessary-type-assertion': 'error',

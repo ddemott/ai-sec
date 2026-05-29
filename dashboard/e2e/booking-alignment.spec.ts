@@ -361,17 +361,23 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
       .getByRole('tab', { name: /^Schedule$/ })
       .first()
       .click();
-    await page.waitForTimeout(800);
+    // Wait for NewSchedulerView (default staff sub-tab) to mount so that
+    // view-tab-list is in the DOM before we try to click it.
+    await expect(page.getByTestId('view-tab-list')).toBeVisible({ timeout: 8000 });
 
     // List sub-tab — a flat list of appointments, easiest to locate by tag.
     await page.getByTestId('view-tab-list').click();
+    // The resources/list header (with the Refresh button) mounts after the view
+    // switch. Wait for that button — it's present regardless of appointment count,
+    // unlike appointment-list-view which is only rendered when sorted.length > 0.
+    const refreshBtn = page.getByRole('button', { name: /Refresh/i }).first();
+    await expect(refreshBtn).toBeVisible({ timeout: 8000 });
+
     // Trigger an explicit refresh so a just-inserted row (manual SQL) is guaranteed
     // to be in the current useSchedulerData response for the selected date.
-    const refreshBtn = page.getByRole('button', { name: /Refresh/i }).first();
-    if (await refreshBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await refreshBtn.click();
-    }
-    await page.waitForTimeout(600);
+    await refreshBtn.click();
+    // Wait for the refresh network request to complete.
+    await page.waitForLoadState('networkidle');
 
     // Find the row by appointment id (List view exposes
     // data-testid="list-item-${id}"). More reliable than text matching

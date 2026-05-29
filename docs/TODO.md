@@ -3,7 +3,7 @@
 **Status at a Glance** (as of 2026-05-28 — UX pass + solo-mode dedup shipped)
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
-- **CI**: green again after a ~3-day red streak (stale migration-count drift, fixed `cd185dd`). Agent package now gated in CI. Tests: backend 1,930 · dashboard 720 · agent 99. E2E: 100 passed / 3 known flaky (see "E2E Known Issues" section below) as of 2026-05-27 run. New coverage added 2026-05-27: customer-notes.spec.ts (Gap 1), appointment-cancel-ui.spec.ts (Gap 2, hardened multi-surface cancel including the former flaky List popover path), owner-config-to-booking.spec.ts (Gap 3).
+- **CI**: green. Agent package gated in CI. Tests: backend 1,930 · dashboard 720 · agent 99. E2E: 3 flakes fixed 2026-05-28 (timing synchronization — see "E2E Known Issues"). New coverage added 2026-05-27: customer-notes.spec.ts (Gap 1), appointment-cancel-ui.spec.ts (Gap 2), owner-config-to-booking.spec.ts (Gap 3).
 - **Voice / Telnyx**: `+1-630-937-9478` unreachable from PSTN. LERG ticket open. Zero inbound CDRs. Blocks all live voice validation and DynaTire beta.
 - **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0: Railway deploy is NOT gated on CI** (deploys on push regardless of result).
 - **Browser validation**: Role gating + invite flow needs real-browser testing.
@@ -69,7 +69,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 - [ ] **P3 — (C) latency filler** — speak a short "one sec while I check that" before known-slow tool calls to cut the up-to-8s silence window. Pairs with reconsidering `toolsClient` `timeoutMs` (8s is long for voice).
 
 **Gap 3 — follow-through (core fix done above):**
-- [ ] **P3 — Audit the ~12 `:id` routes** for any place that still leaks a raw value or 500 on bad input despite the class-22 mapper (e.g. routes not wrapped in `withHandler`, or non-pg validation). The mapper is the safety net; explicit `requireValidUUID` at the route door is the belt.
+- [x] **P3 — Audit the ~12 `:id` routes** — DONE 2026-05-28. All 26 route files use `withHandler` (class-22 mapper fires automatically). One route (`jobber.ts:95`) bypasses `withHandler` but has its own manual UUID check. `requireValidUUID` is defined but unused — not needed since the mapper covers every route. No gaps found.
 
 ---
 
@@ -85,7 +85,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 ## Non-blocking / Polish
 
 - [ ] Pricing tiers (Pro/Enterprise) positioning
-- [ ] Continue `src/index.ts` extraction / cleanup
+- [x] Continue `src/index.ts` extraction / cleanup — DONE 2026-05-28. Health/admin inline routes (/, /demo, /health, /ready, /metrics, /admin/purge-soft-reservations) extracted to `src/routes/health.ts`. index.ts: 386→303 lines. `/admin/purge-soft-reservations` now wrapped in `withHandler` (was bare try/catch). health.ts has no file-wide eslint-disable (targeted inline disables only).
 - [ ] Finish broader CRM sync structure extraction (NEEDS-REFACTORING #10)
 
 Closed: `pw.txt` decision (`ac61161` — deleted, NEEDS-REFACTORING #14 closed); dashboard Sentry integration (`c3e679e` — `@sentry/nextjs` server+client wired); `docs/README.md` (2026-05-15).
@@ -150,8 +150,8 @@ Small mechanical hygiene pass completed: cleaned up remaining references to the 
 Most of the 2026-05-17 lint adoption already promoted to `error`. Still at `warn`:
 
 - [x] `@typescript-eslint/no-explicit-any` + `no-unsafe-*` family — DONE 2026-05-28. Fixed all 13 files / 59 warnings: typed `response.json()` casts in `api.ts`, `hooks.ts`, `LoginView`, `register`, `forgot-password`, `reset-password`; cast `JSON.parse` returns in `NewSchedulerView`; eslint-disable for `react-big-calendar` third-party `any` (unfixable at source); removed unused `Wrench`/`QuickAction`/`Save`/`rate` symbols; fixed unescaped entities in `Step7CallerQuestions`. Dashboard lint: **0 warnings, 0 errors**.
-- [ ] `@typescript-eslint/no-misused-promises`
-- [ ] `@typescript-eslint/await-thenable`
+- [x] `@typescript-eslint/no-misused-promises` — DONE 2026-05-28. Zero violations across all 3 packages; promoted to `error` in all three eslint configs.
+- [x] `@typescript-eslint/await-thenable` — DONE 2026-05-28. Zero violations; promoted to `error` in all three eslint configs.
 - [ ] `@typescript-eslint/unbound-method` (heavy in tests — may stay warn forever)
 
 Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `require-await`, `restrict-template-expressions`, `no-unnecessary-type-assertion`, `no-base-to-string`, `ban-types`, `prefer-promise-reject-errors` (all promoted to error 2026-05-17/18); Prettier format sweep across all three projects (`79b227c`).
@@ -164,32 +164,11 @@ Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `re
 
 ## E2E Known Issues (Playwright)
 
-These three failures were observed during a full E2E run on **2026-05-27** (after bringing up a fresh `docker compose` Postgres on 5433, running `scripts/rebuild-db.sh --yes`, and starting backend + dashboard in production mode). The run executed 110 tests; 100 passed, 3 failed, 7 skipped. Voice / customer-context flows (the area touched by the recent `shared/voiceCrm.ts` refactor) were all green.
+Three failures were observed on **2026-05-27** (110 tests; 100 passed, 3 failed, 7 skipped). All three fixed 2026-05-28 — see RESOLVED.md.
 
-### 1. Booking alignment — List sub-tab popover cancel
-- **Location**: `dashboard/e2e/booking-alignment.spec.ts:295`
-- **Failure**: "cross-view: appointment popover Cancel works from the List sub-tab and soft-cancels in DB"
-- **Symptom**: After clicking Cancel in the AppointmentPopover while viewing the List sub-tab, the subsequent DB state or UI assertions did not match expectations (soft-cancel not reflected, or timing out waiting for the row to update).
-- **Related UX note**: See the original raw audit (archived) for AppointmentPopover findings on popover reliability.
-- **Reproduction**: Requires a scheduled appointment visible in both Calendar and List views + the popover interaction from the list.
-
-### 2 & 3. Wizard welcome dialog timing (D1/D2 work)
-- **Location**:
-  - `dashboard/e2e/ui-rename-verification.spec.ts:129` — "Setup Assistant opens welcome → 'Let's go' advances to mode chooser"
-  - `dashboard/e2e/ui-rename-verification.spec.ts:167` — "Setup Assistant → welcome 'show me around' exits cleanly (no chooser appears)"
-- **Failure**: `expect(page.getByRole('dialog', { name: /welcome/i })).toBeVisible()` timed out (10s).
-- **Symptom**: The new `WizardWelcome` dialog (introduced for the first-run guided tour) is not reliably appearing in the DOM in time for the test assertions.
-- **Related UX note**: Original raw audit (archived) for WizardWelcome findings on dialog semantics and copy. Tracked under P1 Cluster C.
-- **Reproduction**: Run with a fresh tenant or cleared localStorage so the first-run welcome flow triggers.
-
-**Notes & Next Steps**:
-- These are **not** regressions from the `shared/voiceCrm.ts` type move (that refactor passed all relevant E2E).
-- Strong candidates for the existing "P1 — Add E2E (Playwright) job to CI" item (the comment already calls out "browser install + server startup are the usual flake sources").
-- Recommended actions:
-  - Add explicit `waitFor` + retry helpers (or `expect.poll`) around the welcome dialog and booking list updates.
-  - Consider `test.fixme()` or `test.skip()` on the two wizard tests with links back here until the dialog is moved onto the shared Modal primitive (Cluster C).
-  - For the booking cancel test: improve state synchronization between the List view and the soft-cancel DB assertion (possible `waitForResponse` or polling the appointments table).
-- Once stabilized, move these bullets to `RESOLVED.md` under the date they are closed.
+**Fix summary (2026-05-28)**:
+1. `booking-alignment.spec.ts` — replaced `waitForTimeout(800)` with `expect(view-tab-list).toBeVisible()`, added `expect(Refresh btn).toBeVisible()` + `waitForLoadState('networkidle')` after click. Also fixed same pattern in `appointment-cancel-ui.spec.ts` helper (`openAppointmentPopoverFromList`).
+2. `wizard-welcome-auto-open.spec.ts` — replaced `waitForTimeout(600)` + `waitForTimeout(2000)` in `switchToFreshTenant` with `waitForLoadState('networkidle')` so all 6 `loadData()` API calls settle before the auto-open effect fires.
 
 **New E2E coverage added 2026-05-27**: 
 - `customer-notes.spec.ts` (Gap 1) — Internal Notes persistence + visibility. Research surfaced likely latent bug: CRMView sends top-level `notes` on PUT but backend schema drops it.
