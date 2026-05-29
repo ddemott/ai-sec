@@ -362,7 +362,7 @@ export default function VoiceCallsView() {
       </div>
 
       {/* Right Panel: Call Details */}
-      <div className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--bg-base)' }}>
+      <div className="flex-1 overflow-y-auto flex flex-col" style={{ backgroundColor: 'var(--bg-base)' }}>
         {selectedCall ? (
           <div className="p-6">
             {/* Call Header */}
@@ -601,7 +601,7 @@ export default function VoiceCallsView() {
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="flex-1 flex items-center justify-center text-gray-500">
             <div className="text-center">
               <PhoneIncoming className="w-12 h-12 mx-auto mb-4 text-gray-300" />
               <p>Select a call to view details</p>
