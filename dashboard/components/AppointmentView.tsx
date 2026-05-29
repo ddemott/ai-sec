@@ -37,7 +37,8 @@ import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
 import { isSlotOnFifteenMinuteGrid } from '../lib/calendarSlot';
 
-const localizer = dateFnsLocalizer({ // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+const localizer = dateFnsLocalizer({
   format,
   parse,
   startOfWeek,

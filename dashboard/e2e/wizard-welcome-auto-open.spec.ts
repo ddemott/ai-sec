@@ -109,7 +109,7 @@ test.describe('Wizard welcome — auto-open on fresh-tenant landing', () => {
 
       // Welcome dialog auto-opens. The Home tab is the default landing.
       await expect(page.getByRole('dialog', { name: /welcome/i })).toBeVisible({ timeout: 8000 });
-      await expect(page.getByText(/10 minutes from going live/i)).toBeVisible();
+      await expect(page.getByText(/a few quick steps/i)).toBeVisible();
       await expect(page.getByText(/stop and come back any time/i)).toBeVisible();
 
       // The staged flow gate: mode chooser is NOT yet rendered. A

@@ -219,12 +219,12 @@ test.describe("Business Type move — Settings hosts it, AI Persona doesn't", ()
     // The AI Persona sub-tab is the default landing for Phone Assistant.
 
     // Header still present
-    await expect(page.getByRole('heading', { name: /AI Persona Tuning/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Voice Settings/i })).toBeVisible();
     // Old section heading removed — the 24-card grid no longer here.
     await expect(page.getByRole('heading', { name: /^Business Type Templates$/ })).toHaveCount(0);
     // The new header subtitle directs the user where business-type now lives.
     await expect(
-      page.getByText(/To change your industry template, go to Business Settings/i)
+      page.getByText(/To change your business type, go to Business Settings/i)
     ).toBeVisible();
   });
 

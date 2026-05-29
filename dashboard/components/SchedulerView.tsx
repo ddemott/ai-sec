@@ -40,6 +40,12 @@ export default function SchedulerView() {
   const tenantId = useActiveTenantId();
   const vocab = useVocabulary();
   const tenantTimezone = useTenantTimezone();
+  // Declare activeView before viewTabs so Terser's let-chain doesn't produce
+  // a TDZ when overflowActive uses activeView inside an Array.some callback.
+  // TypeScript allows the reference inside the closure regardless of order,
+  // but at runtime the minifier collapses all consts into one let sequence,
+  // so the declaration must precede any expression that evaluates the variable.
+  const [activeView, setActiveView] = useState<SchedulerViewTab>(resolveInitialView);
 
   const viewTabs: { key: SchedulerViewTab; label: string; icon: React.ElementType }[] = [
     { key: 'calendar', label: 'Calendar', icon: Calendar },
@@ -71,7 +77,7 @@ export default function SchedulerView() {
   // survive. `resolveInitialView` reads the URL on first mount; the
   // effect below writes the default back on first render so a bare
   // /dashboard?tab=schedule lands with the URL telling the truth.
-  const [activeView, setActiveView] = useState<SchedulerViewTab>(resolveInitialView);
+  // (activeView useState hoisted above viewTabs — see comment above viewTabs)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [overflowMenuOpen, setOverflowMenuOpen] = useState(false);
   const overflowBtnRef = useRef<HTMLButtonElement>(null);
