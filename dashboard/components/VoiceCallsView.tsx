@@ -88,6 +88,108 @@ function getOutcomeStyle(outcome: string | null): OutcomeStyle {
   }
 }
 
+// ── Shared badge ─────────────────────────────────────────────────────────────
+
+function OutcomeBadge({ outcome }: { outcome: string | null }) {
+  return (
+    <span className="px-1.5 py-0.5 rounded text-xs" style={getOutcomeStyle(outcome)}>
+      {getOutcomeLabel(outcome)}
+    </span>
+  );
+}
+
+// ── Active call row ───────────────────────────────────────────────────────────
+
+interface ActiveCallRowProps {
+  call: VoiceSessionDisplay;
+  tenantId: string | null;
+  onSelect: (session: VoiceSession) => void;
+}
+
+function ActiveCallRow({ call, tenantId, onSelect }: ActiveCallRowProps) {
+  return (
+    <div
+      className="p-3 hover:brightness-110 cursor-pointer transition-colors"
+      onClick={() => {
+        void Api.voice.getSession(tenantId, call.call_id).then((session) => {
+          onSelect(session);
+        });
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-2 h-2 rounded-full animate-pulse"
+            style={{ backgroundColor: 'var(--success)' }}
+          />
+          <span className="font-medium text-[var(--text-primary)]">
+            {call.customer_name || formatPhone(call.caller_phone)}
+          </span>
+        </div>
+        <span className="text-xs text-gray-500">{formatRelativeTime(call.started_at)}</span>
+      </div>
+      {call.is_known_customer && (
+        <span className="text-xs ml-4" style={{ color: 'var(--success)' }}>
+          Returning customer
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── History call row ──────────────────────────────────────────────────────────
+
+interface HistoryCallRowProps {
+  call: VoiceSession;
+  isSelected: boolean;
+  onSelect: (call: VoiceSession) => void;
+}
+
+function HistoryCallRow({ call, isSelected, onSelect }: HistoryCallRowProps) {
+  return (
+    <div
+      className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
+        isSelected ? 'border-l-2' : ''
+      }`}
+      style={
+        isSelected
+          ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent)' }
+          : undefined
+      }
+      onClick={() => onSelect(call)}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-medium text-[var(--text-primary)] text-sm">
+          {call.customer_name ||
+            call.customer_context?.customer?.name ||
+            formatPhone(call.caller_phone)}
+        </span>
+        <ChevronRight className="w-4 h-4 text-gray-400" />
+      </div>
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        <span>{formatRelativeTime(call.started_at)}</span>
+        <span>·</span>
+        <span>{formatDuration(call.duration_seconds)}</span>
+        {call.outcome && (
+          <>
+            <span>·</span>
+            <OutcomeBadge outcome={call.outcome} />
+          </>
+        )}
+      </div>
+      {call.customer_context?.is_known_customer && (
+        <div className="mt-1">
+          <span className="text-xs" style={{ color: 'var(--accent-soft)' }}>
+            {call.customer_context.appointment_history.total} appointments
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main view ─────────────────────────────────────────────────────────────────
+
 export default function VoiceCallsView() {
   const tenantId = useActiveTenantId();
   const [activeCalls, setActiveCalls] = useState<VoiceSessionDisplay[]>([]);
@@ -198,36 +300,12 @@ export default function VoiceCallsView() {
             </div>
             <div className="divide-y">
               {activeCalls.map((call) => (
-                <div
+                <ActiveCallRow
                   key={call.voice_session_id}
-                  className="p-3 hover:brightness-110 cursor-pointer transition-colors"
-                  onClick={() => {
-                    // Fetch full session details
-                    void Api.voice.getSession(tenantId, call.call_id).then((session) => {
-                      setSelectedCall(session);
-                    });
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-2 h-2 rounded-full animate-pulse"
-                        style={{ backgroundColor: 'var(--success)' }}
-                      />
-                      <span className="font-medium text-[var(--text-primary)]">
-                        {call.customer_name || formatPhone(call.caller_phone)}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-500">
-                      {formatRelativeTime(call.started_at)}
-                    </span>
-                  </div>
-                  {call.is_known_customer && (
-                    <span className="text-xs ml-4" style={{ color: 'var(--success)' }}>
-                      Returning customer
-                    </span>
-                  )}
-                </div>
+                  call={call}
+                  tenantId={tenantId}
+                  onSelect={setSelectedCall}
+                />
               ))}
             </div>
           </div>
@@ -295,50 +373,12 @@ export default function VoiceCallsView() {
                   );
                 }
                 return filtered.map((call) => (
-                  <div
+                  <HistoryCallRow
                     key={call.voice_session_id}
-                    className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
-                      selectedCall?.voice_session_id === call.voice_session_id ? 'border-l-2' : ''
-                    }`}
-                    style={
-                      selectedCall?.voice_session_id === call.voice_session_id
-                        ? { backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent)' }
-                        : undefined
-                    }
-                    onClick={() => setSelectedCall(call)}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-[var(--text-primary)] text-sm">
-                        {call.customer_name ||
-                          call.customer_context?.customer?.name ||
-                          formatPhone(call.caller_phone)}
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <span>{formatRelativeTime(call.started_at)}</span>
-                      <span>·</span>
-                      <span>{formatDuration(call.duration_seconds)}</span>
-                      {call.outcome && (
-                        <>
-                          <span>·</span>
-                          <span
-                            className="px-1.5 py-0.5 rounded text-xs"
-                            style={getOutcomeStyle(call.outcome)}
-                          >
-                            {getOutcomeLabel(call.outcome)}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    {call.customer_context?.is_known_customer && (
-                      <div className="mt-1">
-                        <span className="text-xs" style={{ color: 'var(--accent-soft)' }}>
-                          {call.customer_context.appointment_history.total} appointments
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                    call={call}
+                    isSelected={selectedCall?.voice_session_id === call.voice_session_id}
+                    onSelect={setSelectedCall}
+                  />
                 ));
               })()}
 
@@ -423,12 +463,7 @@ export default function VoiceCallsView() {
                 <div>
                   <span className="text-gray-500">Outcome</span>
                   <p className="font-medium">
-                    <span
-                      className="px-2 py-1 rounded"
-                      style={getOutcomeStyle(selectedCall.outcome)}
-                    >
-                      {getOutcomeLabel(selectedCall.outcome)}
-                    </span>
+                    <OutcomeBadge outcome={selectedCall.outcome} />
                   </p>
                 </div>
               </div>
