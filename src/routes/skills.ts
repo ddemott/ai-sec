@@ -8,6 +8,7 @@ import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import { slugify } from '../../shared/name';
 
 const CreateSkillSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -49,7 +50,7 @@ export function registerSkillRoutes(
       const res = await withTenantClient(body.tenant_id, async (client) => {
         return client.query(
           'INSERT INTO tenant_skills (tenant_id, name, description) VALUES ($1, $2, $3) RETURNING *',
-          [body.tenant_id, body.name.toLowerCase().trim().replace(/\s+/g, '-'), body.description]
+          [body.tenant_id, slugify(body.name), body.description]
         );
       });
 
