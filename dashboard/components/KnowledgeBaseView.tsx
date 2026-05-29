@@ -16,6 +16,7 @@ import {
   Plus,
   X,
 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { Api } from '../lib/api';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { Card } from './ui/Card';
@@ -29,6 +30,7 @@ import { showToast } from './ui/Toast';
 import type { KnowledgeEntry } from '../lib/types';
 
 type Tab = 'questionnaire' | 'documents' | 'entries';
+const VALID_TABS: Tab[] = ['questionnaire', 'documents', 'entries'];
 
 const CUSTOM_QUESTION_SOURCE = 'custom-question';
 
@@ -393,11 +395,50 @@ function CustomQuestionsSection({
 
 export default function KnowledgeBaseView() {
   const tenantId = useActiveTenantId();
-  const [tab, setTab] = useState<Tab>('questionnaire');
+  const searchParams = useSearchParams();
+
+  const initialTab = ((): Tab => {
+    const raw = searchParams.get('tab') as Tab | null;
+    return raw && VALID_TABS.includes(raw) ? raw : 'questionnaire';
+  })();
+  const initialSearch = searchParams.get('q') ?? '';
+
+  const [tab, setTabState] = useState<Tab>(initialTab);
+  const [searchTerm, setSearchTermState] = useState(initialSearch);
+
+  const setTab = useCallback((next: Tab) => {
+    setTabState(next);
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', next);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  }, []);
+
+  const setSearchTerm = useCallback((next: string) => {
+    setSearchTermState(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next) {
+      params.set('q', next);
+    } else {
+      params.delete('q');
+    }
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  }, []);
+
+  useEffect(() => {
+    function onPopState() {
+      const rawTab = new URLSearchParams(window.location.search).get('tab') as Tab | null;
+      const nextTab = rawTab && VALID_TABS.includes(rawTab) ? rawTab : 'questionnaire';
+      setTabState((prev) => (prev === nextTab ? prev : nextTab));
+      const nextSearch = new URLSearchParams(window.location.search).get('q') ?? '';
+      setSearchTermState((prev) => (prev === nextSearch ? prev : nextSearch));
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   const [docs, setDocs] = useState<KnowledgeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showUnansweredOnly, setShowUnansweredOnly] = useState(false);
   const [savedAnswers, setSavedAnswers] = useState<Map<string, { id: string; answer: string }>>(
