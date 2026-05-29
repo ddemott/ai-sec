@@ -110,7 +110,8 @@ describe('ServiceTitan Routes — Happy Paths', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.url).toBe('https://auth.servicetitan.io/connect/authorize?client_id=test');
+    expect(body.success).toBe(true);
+    expect(body.authUrl).toBe('https://auth.servicetitan.io/connect/authorize?client_id=test');
     expect(servicetitanClient.getAuthUrl).toHaveBeenCalledWith(TENANT_ID);
   });
 

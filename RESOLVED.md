@@ -4,6 +4,15 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-05-29 — Improvement ideas triage + quick-win batch
+
+- **IMPROVEMENT_IDEAS.md restructured** — verified all items against current code; 3 stale items closed (KB alert, shared Tenant type, SA tests already done); 1 item closed as invalid (parseDateRange in calendar.ts — no date params exist there); remaining items reworded to bite-size format with file:line, one-sentence do, concise done-when, size+impact.
+- **UUID_RE → requireValidUUID in mappings.ts** — removed file-local `UUID_RE` regex; all 4 assign/unassign handlers now use `requireValidUUID` from routeHelpers. Tests updated to assert per-param error messages.
+- **Tenant reorder batched** — replaced N-query for-loop with single `UPDATE … FROM unnest($1::uuid[], $2::int[])`. Reorder test updated to assert 1 query with correct array params.
+- **CRM auth-init success envelope** — all 4 CRM providers (jobber, hubspot, square, servicetitan) now return `{ success: true, authUrl }` instead of `{ url }`. Updated: 4 backend routes, `api.ts` (4 type annotations), `CRMIntegrationCard` interface + `res.authUrl`. 4 auth test assertions updated.
+
+---
+
 ## 2026 Early Reviews (March–April) — Bug & UX Cleanup (Historical)
 
 During March–April 2026 code reviews, 72 bugs and 47 UX/a11y issues were tracked in `docs/BUGS.md`.

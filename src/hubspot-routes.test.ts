@@ -128,7 +128,8 @@ describe('HubSpot Routes — Happy Paths', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.url).toBe('https://app.hubspot.com/oauth/authorize?client_id=test');
+    expect(body.success).toBe(true);
+    expect(body.authUrl).toBe('https://app.hubspot.com/oauth/authorize?client_id=test');
     expect(hubspotClient.getAuthUrl).toHaveBeenCalledWith(TENANT_ID);
   });
 

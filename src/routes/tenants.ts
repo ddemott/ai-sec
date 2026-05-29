@@ -340,12 +340,12 @@ export function registerTenantRoutes(
       await withPoolClient(pool, async (client) => {
         await client.query('BEGIN');
         try {
-          for (let i = 0; i < order.length; i++) {
-            await client.query('UPDATE tenants SET sort_order = $1 WHERE tenant_id = $2', [
-              i,
-              order[i],
-            ]);
-          }
+          await client.query(
+            `UPDATE tenants SET sort_order = v.idx
+             FROM unnest($1::uuid[], $2::int[]) AS v(tenant_id, idx)
+             WHERE tenants.tenant_id = v.tenant_id`,
+            [order, order.map((_, i) => i)]
+          );
           await client.query('COMMIT');
         } catch (err) {
           await client.query('ROLLBACK');

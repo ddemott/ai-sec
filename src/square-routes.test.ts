@@ -128,7 +128,8 @@ describe('Square Routes — Happy Paths', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.url).toBe('https://connect.squareup.com/oauth2/authorize?client_id=test');
+    expect(body.success).toBe(true);
+    expect(body.authUrl).toBe('https://connect.squareup.com/oauth2/authorize?client_id=test');
     expect(squareClient.getAuthUrl).toHaveBeenCalledWith(TENANT_ID);
   });
 

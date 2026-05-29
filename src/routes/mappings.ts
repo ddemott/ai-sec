@@ -1,8 +1,7 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { requireValidUUID } from './routeHelpers';
 
 export function registerMappingRoutes(
   app: AppFastifyInstance,
@@ -39,11 +38,8 @@ export function registerMappingRoutes(
     '/services/:serviceId/employees/:employeeId/assign',
     withHandler(async (req: AppRequest, reply) => {
       const { serviceId, employeeId } = req.params as { serviceId: string; employeeId: string };
-      if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
-        return reply
-          .status(400)
-          .send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
-      }
+      if (!requireValidUUID(serviceId, reply, 'serviceId')) return;
+      if (!requireValidUUID(employeeId, reply, 'employeeId')) return;
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
@@ -63,11 +59,8 @@ export function registerMappingRoutes(
     '/services/:serviceId/employees/:employeeId/unassign',
     withHandler(async (req: AppRequest, reply) => {
       const { serviceId, employeeId } = req.params as { serviceId: string; employeeId: string };
-      if (!UUID_RE.test(serviceId) || !UUID_RE.test(employeeId)) {
-        return reply
-          .status(400)
-          .send({ success: false, error: 'Invalid serviceId or employeeId — must be UUID' });
-      }
+      if (!requireValidUUID(serviceId, reply, 'serviceId')) return;
+      if (!requireValidUUID(employeeId, reply, 'employeeId')) return;
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
@@ -87,11 +80,8 @@ export function registerMappingRoutes(
     '/services/:serviceId/resources/:resourceId/assign',
     withHandler(async (req: AppRequest, reply) => {
       const { serviceId, resourceId } = req.params as { serviceId: string; resourceId: string };
-      if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
-        return reply
-          .status(400)
-          .send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
-      }
+      if (!requireValidUUID(serviceId, reply, 'serviceId')) return;
+      if (!requireValidUUID(resourceId, reply, 'resourceId')) return;
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
@@ -111,11 +101,8 @@ export function registerMappingRoutes(
     '/services/:serviceId/resources/:resourceId/unassign',
     withHandler(async (req: AppRequest, reply) => {
       const { serviceId, resourceId } = req.params as { serviceId: string; resourceId: string };
-      if (!UUID_RE.test(serviceId) || !UUID_RE.test(resourceId)) {
-        return reply
-          .status(400)
-          .send({ success: false, error: 'Invalid serviceId or resourceId — must be UUID' });
-      }
+      if (!requireValidUUID(serviceId, reply, 'serviceId')) return;
+      if (!requireValidUUID(resourceId, reply, 'resourceId')) return;
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 

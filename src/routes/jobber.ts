@@ -42,7 +42,7 @@ export function registerJobberRoutes(
       }
 
       logEvent(req, 'jobber_oauth_initiated', {});
-      return reply.send({ url });
+      return reply.send({ success: true, authUrl: url });
     }, 'Failed to initiate Jobber auth')
   );
 

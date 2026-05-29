@@ -42,7 +42,7 @@ export function registerHubSpotRoutes(
       }
 
       logEvent(req, 'hubspot_oauth_initiated', {});
-      return reply.send({ url });
+      return reply.send({ success: true, authUrl: url });
     }, 'Failed to initiate HubSpot auth')
   );
 

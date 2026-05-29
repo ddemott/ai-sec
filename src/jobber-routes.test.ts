@@ -115,7 +115,7 @@ describe('Jobber Routes — Happy Paths', () => {
   // 1. GET /jobber/auth returns { url } when configured
   it('1. GET /jobber/auth returns OAuth URL when configured', async () => {
     // WHO: Dashboard integration card — user clicks "Connect Jobber" button
-    // WHAT: Jobber env vars are set (JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET), request includes tenant_id
+    // WHAT: Jobber env vars are set (JOBBER_CLIENT_ID, JOBBER_CLIENT_SECRET); response is { success: true, authUrl }
     // WHEN: GET /jobber/auth with valid tenant_id query param
     // WHERE: src/routes/jobber.ts registerJobberRoutes — GET /jobber/auth handler
     // WHY: Without this, clicking "Connect Jobber" in the CRM integration card would fail silently — user sees no OAuth popup and cannot link their Jobber account
@@ -131,7 +131,8 @@ describe('Jobber Routes — Happy Paths', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.url).toBe('https://api.getjobber.com/api/oauth/authorize?client_id=test');
+    expect(body.success).toBe(true);
+    expect(body.authUrl).toBe('https://api.getjobber.com/api/oauth/authorize?client_id=test');
     expect(jobberClient.getAuthUrl).toHaveBeenCalledWith(TENANT_ID);
   });
 

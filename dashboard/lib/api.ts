@@ -813,7 +813,10 @@ export const Api = {
       ),
 
     getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ url: string }>(`/jobber/auth`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<{ success: boolean; authUrl: string }>(
+        `/jobber/auth`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     disconnect: (tenantId: string | null) =>
       apiMutate(`/jobber/settings/disconnect`, 'POST', { tenant_id: tenantId }),
@@ -841,7 +844,10 @@ export const Api = {
       ),
 
     getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ url: string }>(`/hubspot/auth`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<{ success: boolean; authUrl: string }>(
+        `/hubspot/auth`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     disconnect: (tenantId: string | null) =>
       apiMutate(`/hubspot/settings/disconnect`, 'POST', { tenant_id: tenantId }),
@@ -869,7 +875,10 @@ export const Api = {
       ),
 
     getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ url: string }>(`/square/auth`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<{ success: boolean; authUrl: string }>(
+        `/square/auth`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
 
     disconnect: (tenantId: string | null) =>
       apiMutate(`/square/settings/disconnect`, 'POST', { tenant_id: tenantId }),
@@ -897,7 +906,7 @@ export const Api = {
       ),
 
     getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ url: string }>(
+      apiFetch<{ success: boolean; authUrl: string }>(
         `/servicetitan/auth`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),

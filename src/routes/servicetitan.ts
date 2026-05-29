@@ -42,7 +42,7 @@ export function registerServiceTitanRoutes(
       }
 
       logEvent(req, 'servicetitan_oauth_initiated', {});
-      return reply.send({ url });
+      return reply.send({ success: true, authUrl: url });
     }, 'Failed to initiate ServiceTitan auth')
   );
 

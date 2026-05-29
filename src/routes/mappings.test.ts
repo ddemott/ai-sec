@@ -172,7 +172,7 @@ describe('POST /services/:serviceId/employees/:employeeId/assign', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({
       success: false,
-      error: 'Invalid serviceId or employeeId — must be UUID',
+      error: 'Invalid serviceId — must be UUID',
     });
 
     const dataQueries = handle.queries.filter(
@@ -286,7 +286,7 @@ describe('POST /services/:serviceId/resources/:resourceId/assign', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({
       success: false,
-      error: 'Invalid serviceId or resourceId — must be UUID',
+      error: 'Invalid resourceId — must be UUID',
     });
   });
 });

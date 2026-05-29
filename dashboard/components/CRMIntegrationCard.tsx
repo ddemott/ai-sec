@@ -12,7 +12,7 @@ interface CRMProvider {
   icon: string; // single letter/emoji for avatar
   description: string;
   getSettings: (tenantId: string | null) => Promise<{ last_sync_at?: string } | null>;
-  getAuthUrl: (tenantId: string | null) => Promise<{ url: string }>;
+  getAuthUrl: (tenantId: string | null) => Promise<{ success: boolean; authUrl: string }>;
   disconnect: (tenantId: string | null) => Promise<{ success: boolean }>;
   triggerSync: (tenantId: string | null) => Promise<unknown>;
   connectedParam: string; // URL param to check (e.g. 'jobberConnected')
@@ -57,7 +57,7 @@ export function CRMIntegrationCard({ provider, tenantId }: CRMIntegrationCardPro
     setLoading(true);
     try {
       const res = await provider.getAuthUrl(tenantId);
-      window.location.href = res.url;
+      window.location.href = res.authUrl;
     } catch {
       setLoading(false);
     }

@@ -169,7 +169,7 @@ describe('DELETE /tenants/:id — sad paths', () => {
 describe('POST /tenants/reorder — happy paths', () => {
   it('HAPPY: assigns sort_order = 0..N-1 in transaction order', async () => {
     // WHO: super-admin saving a new tenant ordering after drag/drop
-    // WHAT: route opens a transaction, runs N UPDATEs (sort_order = i, id = order[i]),
+    // WHAT: route opens a transaction, runs one batched UPDATE via unnest($1::uuid[], $2::int[]),
     //       commits, and emits an audit event with the count
     // WHEN: admin clicks "Save Order" in the drag-reorder banner
     // WHERE: src/routes/tenants.ts → app.post('/tenants/reorder', ...)
@@ -178,9 +178,7 @@ describe('POST /tenants/reorder — happy paths', () => {
     //      and they'll lose confidence in the picker. Pinning the
     //      sort_order = i invariant prevents that drift
     queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
-    queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE row 0
-    queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE row 1
-    queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE row 2
+    queryResponses.push({ rows: [], rowCount: 3 }); // single batch UPDATE
     queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
 
     const res = await app.inject({
@@ -193,12 +191,14 @@ describe('POST /tenants/reorder — happy paths', () => {
     expect(res.json()).toEqual({ success: true });
 
     const updateQueries = queries.filter((q) => q.text.startsWith('UPDATE'));
-    expect(updateQueries).toHaveLength(3);
-    expect(updateQueries[0].params).toEqual([0, TENANT_ID_C]);
-    expect(updateQueries[1].params).toEqual([1, TENANT_ID_A]);
-    expect(updateQueries[2].params).toEqual([2, TENANT_ID_B]);
+    expect(updateQueries).toHaveLength(1);
+    expect(updateQueries[0].text).toContain('unnest(');
+    expect(updateQueries[0].params).toEqual([
+      [TENANT_ID_C, TENANT_ID_A, TENANT_ID_B],
+      [0, 1, 2],
+    ]);
 
-    // BEGIN must precede the UPDATEs and COMMIT must follow
+    // BEGIN must precede the UPDATE and COMMIT must follow
     expect(queries[0].text).toBe('BEGIN');
     expect(queries[queries.length - 1].text).toBe('COMMIT');
   });
