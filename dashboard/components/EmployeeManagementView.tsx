@@ -212,6 +212,20 @@ export default function EmployeeManagementView() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {(employees || []).filter((e) => e.type !== 'user').length === 0 && !loading && (
+          <div
+            className="col-span-full flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-2xl"
+            style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
+          >
+            <Users className="w-8 h-8 mb-2 opacity-30" aria-hidden="true" />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              No {vocab.employee_plural.toLowerCase()} yet
+            </p>
+            <p className="text-xs mt-1">
+              Add your first {vocab.employee_label.toLowerCase()} using the form above.
+            </p>
+          </div>
+        )}
         {(employees || [])
           .filter((e) => e.type !== 'user')
           .map((emp) => (

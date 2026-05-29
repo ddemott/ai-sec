@@ -118,14 +118,14 @@ describe('ProfileView', () => {
       // WHY: admins need to see their elevated role
     });
 
-    test('shows coming soon placeholder for future features', () => {
+    test('shows factual security info instead of placeholder', () => {
+      // WHO: any user viewing profile | WHAT: security card shows real account
+      //      facts (session expiry, password change path) instead of "coming soon"
+      // WHEN: viewing profile | WHERE: Security card
+      // WHY: "coming soon" was a dead placeholder — replaced with durable facts
+      //      (session expiry + password-change instruction) that stay accurate
       render(<ProfileView />);
-      expect(
-        screen.getByText('Password change and notification preferences coming soon.')
-      ).toBeInTheDocument();
-      // WHO: all users | WHAT: feature placeholder
-      // WHEN: viewing profile | WHERE: bottom card
-      // WHY: set expectations for upcoming features
+      expect(screen.getByText(/sessions expire after 8 hours/i)).toBeInTheDocument();
     });
   });
 

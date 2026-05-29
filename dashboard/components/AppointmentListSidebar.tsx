@@ -66,6 +66,17 @@ export function AppointmentListSidebar({
             Showing sample data. Log in to see real appointments.
           </div>
         )}
+        {loading && appointments.length === 0 && (
+          <div className="flex flex-col gap-2 p-4" aria-label="Loading appointments" aria-busy="true">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-16 rounded-lg animate-pulse"
+                style={{ backgroundColor: 'var(--bg-raised)' }}
+              />
+            ))}
+          </div>
+        )}
         {appointments.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
             <ChevronRight

@@ -14,6 +14,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Filter,
 } from 'lucide-react';
 import { Api } from '../lib/api';
 import { formatPhone } from '../lib/phone';
@@ -281,8 +282,15 @@ export default function VoiceCallsView() {
                 if (filtered.length === 0) {
                   return (
                     <div className="flex flex-col items-center justify-center py-8 text-gray-500">
-                      <PhoneOff className="w-8 h-8 mb-2 opacity-40" />
-                      <p className="text-sm">No calls matching this filter</p>
+                      <Filter className="w-7 h-7 mb-2 opacity-40" aria-hidden="true" />
+                      <p className="text-sm font-medium">No calls match this filter</p>
+                      <button
+                        onClick={() => setOutcomeFilter('all')}
+                        className="text-xs mt-2 underline hover:no-underline"
+                        style={{ color: 'var(--accent-soft)' }}
+                      >
+                        Clear filter
+                      </button>
                     </div>
                   );
                 }

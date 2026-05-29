@@ -26,6 +26,7 @@ import { Select } from './ui/Select';
 import { Card } from './ui/Card';
 import { Badge } from './ui/Badge';
 import { type Customer } from '@/lib/types';
+import { EmptyState } from './ui/EmptyState';
 
 interface EditForm {
   first_name: string;
@@ -431,9 +432,11 @@ export function CustomerDetailPanel({
                       ))}
                     </div>
                   ) : (
-                    <p className="italic text-sm" style={{ color: 'var(--text-muted)' }}>
-                      No upcoming appointments.
-                    </p>
+                    <EmptyState
+                      icon={Calendar}
+                      title="No upcoming appointments"
+                      variant="compact"
+                    />
                   )}
                 </div>
 
@@ -526,9 +529,11 @@ export function CustomerDetailPanel({
                       })}
                     </div>
                   ) : (
-                    <p className="italic text-sm" style={{ color: 'var(--text-muted)' }}>
-                      No past appointments.
-                    </p>
+                    <EmptyState
+                      icon={History}
+                      title="No past appointments"
+                      variant="compact"
+                    />
                   )}
                 </div>
 
@@ -582,9 +587,11 @@ export function CustomerDetailPanel({
                         </div>
                       ))
                     ) : (
-                      <p className="italic text-sm" style={{ color: 'var(--text-muted)' }}>
-                        No call history available.
-                      </p>
+                      <EmptyState
+                        icon={Phone}
+                        title="No call history"
+                        variant="compact"
+                      />
                     )}
                   </div>
                 </div>

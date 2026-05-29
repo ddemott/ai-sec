@@ -116,8 +116,8 @@ export default function ProfileView() {
           </fieldset>
         </Card>
 
-        {/* Future: Password change, notification preferences, etc. */}
-        <Card className="p-6 text-center" style={{ backgroundColor: 'var(--bg-raised)' }}>
+        {/* Account facts — session is JWT-managed; password reset is handled via the login flow */}
+        <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
           <fieldset>
             <legend
               className="text-xs font-bold uppercase tracking-widest mb-4"
@@ -125,9 +125,20 @@ export default function ProfileView() {
             >
               Security
             </legend>
-            <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>
-              Password change and notification preferences coming soon.
-            </p>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  Sessions expire after 8 hours and auto-logout on 401.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  To change your password, log out and use the login page.
+                </span>
+              </div>
+            </div>
           </fieldset>
         </Card>
       </div>
