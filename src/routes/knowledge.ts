@@ -6,10 +6,17 @@
 
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
-import pdfParse from 'pdf-parse';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import { assertRowAffected } from './routeHelpers';
+import {
+  getFileExtension,
+  isAllowedExtension,
+  extractFileContent,
+  splitIntoChunks,
+  prepareQADocument,
+  ALLOWED_EXTENSIONS,
+} from '../services/knowledgeIngestion';
 
 const knowledgeEntrySchema = z.object({
   question: z.string().min(1, 'question is required'),
@@ -75,47 +82,26 @@ export function registerKnowledgeRoutes(
       if (!tenantId)
         return reply.status(400).send({ success: false, error: 'tenant_id is required' });
 
-      // Validate file type — only accept text and PDF files
       const filename = data.filename;
-      const allowedExtensions = ['.txt', '.md', '.csv', '.json', '.pdf'];
-      const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
-      if (!allowedExtensions.includes(ext)) {
+      const ext = getFileExtension(filename);
+      if (!isAllowedExtension(ext)) {
         return reply.status(400).send({
           success: false,
-          error: `Unsupported file type "${ext}". Allowed: ${allowedExtensions.join(', ')}`,
+          error: `Unsupported file type "${ext}". Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
         });
       }
 
       const buffer = await data.toBuffer();
-      let text = '';
-
-      if (filename.toLowerCase().endsWith('.pdf')) {
-        // pdf-parse's installed types declare the import as a namespace
-        // but at runtime the default-imported value is callable. The
-        // double-cast through `unknown` is the canonical TS pattern for
-        // this exact "the types say one thing, the runtime does another"
-        // shape — narrower than bare `any` because the function signature
-        // (input + return-field name) is pinned.
-        const pdfFn = pdfParse as unknown as (buf: Buffer) => Promise<{ text: string }>;
-        const pdfData = await pdfFn(buffer);
-        text = pdfData.text;
-      } else {
-        text = buffer.toString('utf8');
+      const extracted = await extractFileContent(buffer, filename);
+      if (!extracted.success) {
+        return reply.status(400).send({ success: false, error: extracted.error });
       }
 
-      if (!text || text.trim().length < 10) {
-        return reply.status(400).send({ success: false, error: 'No readable text found in file' });
+      const chunked = splitIntoChunks(extracted.text);
+      if (!chunked.success) {
+        return reply.status(400).send({ success: false, error: chunked.error });
       }
-
-      const MAX_CHUNKS = 500;
-      const allChunks = text.split('\n\n').filter((c) => c.trim().length > 20);
-      if (allChunks.length > MAX_CHUNKS) {
-        return reply.status(400).send({
-          success: false,
-          error: `File too large — produced ${allChunks.length} chunks (max ${MAX_CHUNKS}). Please split into smaller files.`,
-        });
-      }
-      const chunks = allChunks;
+      const chunks = chunked.chunks;
 
       await withTenantClient(tenantId, async (client) => {
         for (const chunk of chunks) {
@@ -151,18 +137,9 @@ export function registerKnowledgeRoutes(
       }
 
       const { question, answer, category, source } = parsed.data;
-      const combined = `Q: ${question}\nA: ${answer}`;
-
-      let normalizedText = combined;
-      if (normalizeForEmbedding) {
-        try {
-          normalizedText = await normalizeForEmbedding(combined, { context: 'knowledge base Q&A' });
-        } catch {
-          normalizedText = combined;
-        }
-      }
-
-      const embedding = await getEmbedding(normalizedText);
+      const { combined, normalizedText, embedding } = await prepareQADocument(
+        question, answer, getEmbedding, normalizeForEmbedding
+      );
 
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
@@ -199,18 +176,9 @@ export function registerKnowledgeRoutes(
       }
 
       const { question, answer, category, source } = parsed.data;
-      const combined = `Q: ${question}\nA: ${answer}`;
-
-      let normalizedText = combined;
-      if (normalizeForEmbedding) {
-        try {
-          normalizedText = await normalizeForEmbedding(combined, { context: 'knowledge base Q&A' });
-        } catch {
-          normalizedText = combined;
-        }
-      }
-
-      const embedding = await getEmbedding(normalizedText);
+      const { combined, normalizedText, embedding } = await prepareQADocument(
+        question, answer, getEmbedding, normalizeForEmbedding
+      );
 
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
