@@ -129,7 +129,7 @@ test.describe('Quick Book with employee_schedule', () => {
       await page.waitForTimeout(1500);
 
       // Switch to Chairs view (which has the Quick Book button)
-      const chairsTab = page.getByTestId('view-tab-resources');
+      const chairsTab = page.getByTestId('day-mode-resources');
       await expect(chairsTab).toBeVisible({ timeout: 5000 });
       await chairsTab.click();
       await page.waitForTimeout(1000);
@@ -247,7 +247,7 @@ test.describe('Quick Book with employee_schedule', () => {
     await page.getByText('Schedule').first().click();
     await page.waitForTimeout(1500);
 
-    const chairsTab = page.getByTestId('view-tab-resources');
+    const chairsTab = page.getByTestId('day-mode-resources');
     await expect(chairsTab).toBeVisible({ timeout: 5000 });
     await chairsTab.click();
     await page.waitForTimeout(1000);
@@ -296,7 +296,7 @@ test.describe('Quick Book with employee_schedule', () => {
     await page.getByText('Schedule').first().click();
     await page.waitForTimeout(1500);
 
-    const chairsTab = page.getByTestId('view-tab-resources');
+    const chairsTab = page.getByTestId('day-mode-resources');
     await expect(chairsTab).toBeVisible({ timeout: 5000 });
     await chairsTab.click();
     await page.waitForTimeout(1000);
@@ -351,7 +351,7 @@ test.describe('Quick Book with employee_schedule', () => {
     await page.waitForTimeout(1500);
 
     // Click Chairs tab
-    const chairsTab = page.getByTestId('view-tab-resources');
+    const chairsTab = page.getByTestId('day-mode-resources');
     await expect(chairsTab).toBeVisible({ timeout: 5000 });
     await chairsTab.click();
     await page.waitForTimeout(1000);

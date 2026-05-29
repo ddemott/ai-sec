@@ -164,7 +164,7 @@ test('alignment: picking a service narrows the Tech dropdown to mapped staff onl
 
   // Resources sub-tab has Quick Book + the dropdown is the same one used
   // everywhere; switching there avoids any Staff-grid layout flakiness.
-  const resourcesTab = page.getByTestId('view-tab-resources');
+  const resourcesTab = page.getByTestId('day-mode-resources');
   await expect(resourcesTab).toBeVisible({ timeout: 10000 });
   await resourcesTab.click();
   await page.waitForTimeout(500);
@@ -362,11 +362,11 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
       .first()
       .click();
     // Wait for NewSchedulerView (default staff sub-tab) to mount so that
-    // view-tab-list is in the DOM before we try to click it.
-    await expect(page.getByTestId('view-tab-list')).toBeVisible({ timeout: 8000 });
+    // day-mode-list is in the DOM before we try to click it.
+    await expect(page.getByTestId('day-mode-list')).toBeVisible({ timeout: 8000 });
 
     // List sub-tab — a flat list of appointments, easiest to locate by tag.
-    await page.getByTestId('view-tab-list').click();
+    await page.getByTestId('day-mode-list').click();
     // The resources/list header (with the Refresh button) mounts after the view
     // switch. Wait for that button — it's present regardless of appointment count,
     // unlike appointment-list-view which is only rendered when sorted.length > 0.

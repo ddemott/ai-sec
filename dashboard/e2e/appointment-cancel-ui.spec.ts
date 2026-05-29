@@ -131,10 +131,10 @@ test.afterAll(async () => {
 // Helper: robust navigation to a scheduler sub-tab and opening a popover
 // ────────────────────────────────────────────────────────────────────────────
 async function openAppointmentPopoverFromList(page: Page, apptId: string) {
-  // Ensure view-tab-list is in the DOM before clicking (it's rendered by
+  // Ensure day-mode-list is in the DOM before clicking (it's rendered by
   // NewSchedulerView's tab bar when activeView==='staff', the default landing).
-  await expect(page.getByTestId('view-tab-list')).toBeVisible({ timeout: 8000 });
-  await page.getByTestId('view-tab-list').click();
+  await expect(page.getByTestId('day-mode-list')).toBeVisible({ timeout: 8000 });
+  await page.getByTestId('day-mode-list').click();
   // Wait for the list view container to be present (data is loading).
   // Uses the Refresh button (always present in the list header) instead of
   // appointment-list-view, which is absent when the list is empty.
@@ -200,7 +200,7 @@ test('cancel-ui-list: Cancel button in AppointmentPopover from List sub-tab soft
     await switchToTenant(page, tenant.tenantId, `E2E Test`);
 
     await page.getByRole('tab', { name: /^Schedule$/ }).first().click();
-    // openAppointmentPopoverFromList waits for view-tab-list to appear and clicks it.
+    // openAppointmentPopoverFromList waits for day-mode-list to appear and clicks it.
 
     // Actually exercise the UI popover cancel button (the real surface)
     const cancelBtn = await openAppointmentPopoverFromList(page, apptId);

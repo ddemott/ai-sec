@@ -151,7 +151,7 @@ test.describe('iPhone 14 viewport', () => {
     await page.waitForTimeout(800);
 
     // Resources sub-view holds Quick Book
-    const resourcesTab = page.getByTestId('view-tab-resources');
+    const resourcesTab = page.getByTestId('day-mode-resources');
     await expect(resourcesTab).toBeVisible({ timeout: 10_000 });
     await resourcesTab.click();
     await page.waitForTimeout(500);

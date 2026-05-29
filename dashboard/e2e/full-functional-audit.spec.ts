@@ -82,7 +82,7 @@ test.describe.serial('Full Functional Audit', () => {
     await expect(header).toBeVisible({ timeout: 10000 });
 
     // Check for staff tab (default view)
-    const staffTab = page.locator('[data-testid="view-tab-staff"]');
+    const staffTab = page.locator('[data-testid="view-tab-day"]');
     if (await staffTab.isVisible({ timeout: 3000 }).catch(() => false)) {
       await staffTab.click();
     }
@@ -123,20 +123,27 @@ test.describe.serial('Full Functional Audit', () => {
       await page.waitForTimeout(1000);
     }
 
-    // Check other view tabs (Staff, Resources, List, Calendar)
-    for (const tab of ['resources', 'list', 'calendar']) {
-      const tabBtn = page.locator(`[data-testid="view-tab-${tab}"]`);
-      if (await tabBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await tabBtn.click();
+    // Check day sub-modes (Resources, List) and Calendar tab
+    for (const mode of ['resources', 'list']) {
+      const modeBtn = page.locator(`[data-testid="day-mode-${mode}"]`);
+      if (await modeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await modeBtn.click();
         await page.waitForTimeout(500);
-        // Verify no crash
         await expect(page.locator('text=Schedule').first()).toBeVisible();
       } else {
-        logIssue('SCHEDULER', `View tab "${tab}" not visible`);
+        logIssue('SCHEDULER', `Day mode "${mode}" not visible`);
       }
     }
-    // Switch back to staff view
-    const staffBtn = page.locator('[data-testid="view-tab-staff"]');
+    const calendarTab = page.locator('[data-testid="view-tab-calendar"]');
+    if (await calendarTab.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await calendarTab.click();
+      await page.waitForTimeout(500);
+      await expect(page.locator('text=Schedule').first()).toBeVisible();
+    } else {
+      logIssue('SCHEDULER', 'Calendar tab not visible');
+    }
+    // Switch back to Day view
+    const staffBtn = page.locator('[data-testid="view-tab-day"]');
     if (await staffBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await staffBtn.click();
     }

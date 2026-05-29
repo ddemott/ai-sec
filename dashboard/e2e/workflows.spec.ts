@@ -182,7 +182,7 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
     await page.waitForTimeout(1000);
 
     // Switch to Resources view (where Quick Book lives)
-    const resourcesTab = page.getByTestId('view-tab-resources');
+    const resourcesTab = page.getByTestId('day-mode-resources');
     await expect(resourcesTab).toBeVisible({ timeout: 10000 });
     await resourcesTab.click();
     await page.waitForTimeout(500);
@@ -313,7 +313,7 @@ test('quick book real-time: new appointment appears in the scheduler grid withou
     await page.waitForTimeout(1000);
 
     // Resources sub-view (where Quick Book + the resource-columns grid live)
-    const resourcesTab = page.getByTestId('view-tab-resources');
+    const resourcesTab = page.getByTestId('day-mode-resources');
     await expect(resourcesTab).toBeVisible({ timeout: 10000 });
     await resourcesTab.click();
     await page.waitForTimeout(500);

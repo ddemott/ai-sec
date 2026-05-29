@@ -116,10 +116,10 @@ function GripDots() {
 export interface NewSchedulerViewProps {
   /** Override tenant ID (defaults to active tenant from context) */
   tenantId?: string | null;
-  /** View tabs from parent SchedulerView (Staff, Resources, List, Calendar) */
-  viewTabs?: { key: string; label: string; icon: React.ElementType }[];
-  activeView?: string;
-  onViewChange?: (key: string) => void;
+  /** When provided by SchedulerView, the parent controls the selected date.
+      The internal DateNav is hidden; the component just consumes this value. */
+  selectedDate?: Date;
+  onDateChange?: (d: Date) => void;
   /** Optional Quick Book trigger — when provided, renders a button in the
       header toolbar so the front-desk operator can book a call-in without
       switching sub-tabs. Empty grid cells are also click-targets that call
@@ -130,9 +130,8 @@ export interface NewSchedulerViewProps {
 
 export default function NewSchedulerView({
   tenantId: tenantIdProp,
-  viewTabs,
-  activeView,
-  onViewChange,
+  selectedDate: selectedDateProp,
+  onDateChange,
   onQuickBook,
 }: NewSchedulerViewProps) {
   const contextTenantId = useActiveTenantId();
@@ -172,7 +171,9 @@ export default function NewSchedulerView({
   // Filter out user accounts — only show employees in scheduler
   const baseEmployees = useMemo(() => allStaff.filter((e) => e.type !== 'user'), [allStaff]);
 
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [internalDate, setInternalDate] = useState<Date>(new Date());
+  const selectedDate = selectedDateProp ?? internalDate;
+  const setSelectedDate = onDateChange ?? setInternalDate;
   const [colW, setColW] = useState(DEFAULT_COL_W);
   const [viewMode, setViewMode] = useState<ViewMode>('hours');
 
@@ -700,44 +701,21 @@ export default function NewSchedulerView({
         }}
       >
         <div className="flex items-center gap-3">
-          {/* View switcher tabs (from parent SchedulerView) */}
-          {viewTabs && onViewChange && (
-            <div className="flex items-center gap-1" data-testid="scheduler-view-tabs">
-              {viewTabs.map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  onClick={() => onViewChange(key)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition ${
-                    activeView !== key ? 'hover:brightness-125' : ''
-                  }`}
-                  style={{
-                    background: activeView === key ? 'var(--accent, #3b82f6)' : 'transparent',
-                    color:
-                      activeView === key ? 'var(--primary-text, #fff)' : 'var(--text-secondary)',
-                  }}
-                  data-testid={`view-tab-${key}`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {!viewTabs && (
-            <h1
-              className="font-display text-2xl tracking-wide uppercase"
-              style={{
-                fontFamily: 'var(--font-display, "Bebas Neue", sans-serif)',
-                color: 'var(--text-primary, #fff)',
-              }}
-            >
-              Schedule
-            </h1>
-          )}
+          <h1
+            className="font-display text-2xl tracking-wide uppercase"
+            style={{
+              fontFamily: 'var(--font-display, "Bebas Neue", sans-serif)',
+              color: 'var(--text-primary, #fff)',
+            }}
+          >
+            Schedule
+          </h1>
         </div>
 
         <div className="flex items-center gap-3">
-          <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+          {!selectedDateProp && (
+            <SchedulerDateNav selectedDate={selectedDate} onDateChange={setSelectedDate} />
+          )}
 
           {/* Quick Book trigger — wired by SchedulerView so the front-desk
               operator can book a call-in from this sub-tab too. Hidden when
