@@ -60,3 +60,6 @@ improvement-ideas.md
 
 # Claude Code harness state (per-machine, not source-controlled)
 .claude/
+
+# Local Netlify folder
+.netlify

@@ -4,7 +4,7 @@
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
 - **CI**: green. Agent package gated in CI. Tests: backend 1,930 · dashboard 720 · agent 99. E2E: 3 flakes fixed 2026-05-28 (timing synchronization — see "E2E Known Issues"). New coverage added 2026-05-27: customer-notes.spec.ts (Gap 1), appointment-cancel-ui.spec.ts (Gap 2), owner-config-to-booking.spec.ts (Gap 3).
-- **Voice / Telnyx**: `+1-630-937-9478` unreachable from PSTN. LERG ticket open. Zero inbound CDRs. Blocks all live voice validation and DynaTire beta.
+- **Voice / Telnyx**: `+1-630-937-9478` unreachable from PSTN. Thinking Hammer LLC registered (2026-06-01); waiting on Telnyx help desk to unblock account creation. Zero inbound CDRs. Blocks all live voice validation and DynaTire beta.
 - **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0: Railway deploy is NOT gated on CI** (deploys on push regardless of result).
 - **Browser validation**: Role gating + invite flow needs real-browser testing.
 - **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (now archived/reduced). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
@@ -24,7 +24,7 @@ Everything else complete or tracked below.
 
 ## Phase 13 – Blocking Launch
 
-- [ ] **IN FLIGHT (external)** Telnyx PSTN ticket for `+1-630-937-9478` (see `TICKET_SUPPORT.md`)
+- [ ] **IN FLIGHT (external)** Telnyx account creation for Thinking Hammer LLC — waiting on help desk (2026-06-01). Once active: provision `+1-630-937-9478` via `POST /provisioning/activate` → assign to SIP Connection `livekit-outbound`.
 - [ ] **IN FLIGHT (user)** Set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway `ai-sec` service
 - [ ] **IN FLIGHT (user)** Set `SENTRY_DSN` on Railway backend + agent (dashboard Sentry already wired client+server, just needs DSN)
 - [ ] **IN FLIGHT (validation pending)** Browser-verify role gating + invite flow
