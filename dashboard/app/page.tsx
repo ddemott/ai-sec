@@ -128,7 +128,7 @@ nav {
   font-size: clamp(64px, 7vw, 100px);
   line-height: 0.95; letter-spacing: 1px; color: #fff; margin-bottom: 10px;
 }
-.hero-h1 .accent { color: transparent; -webkit-text-stroke: 1.5px rgba(255,255,255,0.25); }
+.hero-h1 .accent { color: rgba(255,255,255,0.08); -webkit-text-stroke: 2px rgba(255,255,255,0.55); }
 .hero-h1 .blue { color: var(--blue-lt); }
 .hero-sub {
   font-size: 18px; font-weight: 300; color: #999;

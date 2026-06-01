@@ -135,7 +135,7 @@ nav {
   font-size: clamp(64px, 7vw, 100px);
   line-height: 0.95; letter-spacing: 1px; color: #fff; margin-bottom: 10px;
 }
-.hero-h1 .accent { color: transparent; -webkit-text-stroke: 1.5px rgba(255,255,255,0.25); }
+.hero-h1 .accent { color: rgba(255,255,255,0.08); -webkit-text-stroke: 2px rgba(255,255,255,0.55); }
 .hero-h1 .blue { color: var(--blue-lt); }
 .hero-sub {
   font-size: 18px; font-weight: 300; color: #999;
@@ -555,24 +555,9 @@ footer {
     <li><a href="#industries">Industries</a></li>
   </ul>
   <div class="nav-cta">
-    <a href="https://dashboard-production-cee3.up.railway.app/dashboard" class="btn-login">Log in</a>
-    <a href="https://dashboard-production-cee3.up.railway.app/register" class="btn-primary">Start free trial</a>
-    <button class="hamburger" id="hamburger-btn" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
-      <span></span><span></span><span></span>
-    </button>
+    <span style="padding:7px 16px;background:rgba(37,99,235,0.15);border:1px solid rgba(59,130,246,0.35);border-radius:20px;font-size:12px;font-weight:600;color:#60A5FA;letter-spacing:1px;text-transform:uppercase;">Coming Soon</span>
   </div>
 </nav>
-<div class="nav-mobile-backdrop" id="mobile-backdrop" aria-hidden="true"></div>
-<div class="nav-mobile-menu" id="mobile-menu" role="navigation" aria-label="Mobile navigation">
-  <a href="#how" onclick="closeMobileMenu()">How It Works</a>
-  <a href="#features" onclick="closeMobileMenu()">Features</a>
-  <a href="#pricing" onclick="closeMobileMenu()">Pricing</a>
-  <a href="#industries" onclick="closeMobileMenu()">Industries</a>
-  <div class="nav-mobile-cta">
-    <a href="https://dashboard-production-cee3.up.railway.app/dashboard" class="btn-login">Log in</a>
-    <a href="https://dashboard-production-cee3.up.railway.app/register" class="btn-primary">Start free trial</a>
-  </div>
-</div>
 
 <!-- HERO -->
 <section class="hero">
@@ -580,7 +565,7 @@ footer {
     <div class="hero-content">
       <div class="hero-eyebrow reveal">
         <div class="hero-eyebrow-dot"></div>
-        Secretary HQ — AI Phone Receptionist
+        Coming Soon — AI Phone Receptionist
       </div>
       <h1 class="hero-h1 reveal reveal-delay-1">
         YOUR<br>
@@ -591,13 +576,6 @@ footer {
       <p class="hero-sub reveal reveal-delay-2">
         <strong>Secretary HQ</strong> answers every call, books every appointment, and knows your business inside out. From day one, without hiring anyone.
       </p>
-      <div class="hero-actions reveal reveal-delay-2">
-        <a href="https://dashboard-production-cee3.up.railway.app/register" class="btn-hero">
-          Start free trial
-          <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </a>
-        <a href="https://dashboard-production-cee3.up.railway.app/demo" class="btn-ghost">Try live demo</a>
-      </div>
       <div class="hero-stats reveal reveal-delay-3">
         <div class="hero-stat">
           <div class="hero-stat-n">30<span>+</span></div>
@@ -817,7 +795,7 @@ footer {
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Text message confirmations</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Customer records</li>
         </ul>
-        <a href="https://dashboard-production-cee3.up.railway.app/register" class="price-btn outline">Start free trial</a>
+        <span class="price-btn outline" style="opacity:0.5;cursor:default;pointer-events:none;">Coming soon</span>
       </div>
       <div class="price-card featured reveal reveal-delay-1">
         <div class="price-name">Growth</div>
@@ -833,7 +811,7 @@ footer {
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Google Calendar sync</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>FAQ library (upload PDFs or text)</li>
         </ul>
-        <a href="https://dashboard-production-cee3.up.railway.app/register" class="price-btn filled">Start free trial</a>
+        <span class="price-btn outline" style="opacity:0.5;cursor:default;pointer-events:none;">Coming soon</span>
       </div>
       <div class="price-card reveal reveal-delay-2">
         <div class="price-name">Professional</div>
@@ -849,7 +827,7 @@ footer {
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom words &amp; phrases for your trade</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Priority support</li>
         </ul>
-        <a href="https://dashboard-production-cee3.up.railway.app/register" class="price-btn outline">Start free trial</a>
+        <span class="price-btn outline" style="opacity:0.5;cursor:default;pointer-events:none;">Coming soon</span>
       </div>
       <div class="price-card reveal reveal-delay-2" style="border-color:rgba(245,158,11,0.3);background:linear-gradient(180deg,rgba(245,158,11,0.06) 0%,var(--bg3) 100%)">
         <div class="price-name" style="color:var(--amber)">Enterprise</div>
@@ -864,7 +842,7 @@ footer {
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Dedicated account support</li>
           <li><div class="check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Custom integrations &amp; uptime guarantee</li>
         </ul>
-        <a href="mailto:sales@secretaryhq.com" class="price-btn outline" style="border-color:rgba(245,158,11,0.3);color:var(--amber)">Talk to us</a>
+        <span class="price-btn outline" style="opacity:0.5;cursor:default;pointer-events:none;">Coming soon</span>
       </div>
     </div>
     <p class="price-annual-note" id="price-annual-note">Monthly equivalent — billed as one annual payment.</p>
@@ -918,25 +896,13 @@ footer {
   <h2 class="cta-band-h reveal">YOUR NEXT CALL<br>IS ABOUT TO<br><span style="color:var(--blue-lt)">GET ANSWERED.</span></h2>
   <p class="cta-band-sub reveal reveal-delay-1">Sign up in two minutes. Finish the quick setup. Call your new number and hear Secretary HQ pick up. It's that fast.</p>
   <div class="cta-band-actions reveal reveal-delay-2">
-    <a href="https://dashboard-production-cee3.up.railway.app/register" class="btn-hero">
-      Start free trial
-      <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-    </a>
-    <div class="cta-number">
-      <span class="cta-number-label">Try it live →</span>
-      <span style="color:var(--blue-lt)">(630) 937-9478</span>
-    </div>
+    <span style="padding:16px 36px;background:rgba(37,99,235,0.15);border:1px solid rgba(59,130,246,0.35);border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#60A5FA;">COMING SOON</span>
   </div>
 </section>
 
 <!-- FOOTER -->
 <footer>
   <div class="footer-logo">SECRETARY HQ</div>
-  <div class="footer-links">
-    <a href="/privacy">Privacy</a>
-    <a href="/terms">Terms</a>
-    <a href="mailto:sales@secretaryhq.com">Contact</a>
-  </div>
   <div class="footer-copy">&copy; 2026 Thinking Hammer LLC. All rights reserved.</div>
 </footer>
 
