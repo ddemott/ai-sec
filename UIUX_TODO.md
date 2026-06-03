@@ -16,7 +16,7 @@
 
 ### Navigation & IA
 
-- [ ] **[P0][L]** Merge "My Business" + "My Team" + "Business Settings" into one "Setup" tab — three separate destinations for the same user question ("where do I configure my business?") is the single biggest confusion source for new owners — `dashboard/components/OutlookLayout.tsx` `dashboard/components/MyBusinessView.tsx` `dashboard/components/MyTeamView.tsx` `dashboard/components/BusinessSettingsView.tsx` — _source: /ux-expert simplification review_
+- [~] **[P0][L]** Merge "My Business" + "My Team" + "Business Settings" into one "Setup" tab — **Phase 1 DONE 2026-06-03** (`a8eb438`). New `SetupView` hosts Services/Resources/Team/Working Days/Who Can Do What/Team Access/Business Settings as sub-tabs; orphaned MyBusinessView/MyTeamView deleted; legacy `?tab=` URLs redirect to `?tab=setup&subtab=…`. Verified: tsc clean, 762 unit, affected e2e green. **Phase 2 (open):** dedup the Calendar/CRM/Resources sections still shared between BusinessSettingsView and SettingsView, and reduce SettingsView to super-admin onboarding only. — _source: /ux-expert simplification review_
 - [x] **[P0][S]** Remove the 4 Quick Action cards from Home — duplicate nav, removed — DONE 2026-05-28
 
 ### Knowledge Base (before KB work starts)
@@ -57,7 +57,7 @@
 
 ### Navigation & IA
 
-- [ ] **[P1][S]** Move "Logins" (now "Team Access") sub-tab out of My Team → Settings/Profile — label renamed but tab still in My Team; full move deferred until IA merge — `dashboard/components/MyTeamView.tsx:79` `dashboard/components/TeamAccessView.tsx`
+- [x] **[P1][S]** "Team Access" sub-tab — resolved by the IA merge (2026-06-03, `a8eb438`). Per the decision to keep team config together, Team Access is now a sub-tab under the unified **Setup** tab (no longer a separate top-level destination). `dashboard/components/SetupView.tsx`
 - [x] **[P1][M]** Remove duplicate services section from Business Settings — replaced with pointer card navigating to My Business → Services — DONE 2026-05-28 (`2179825`)
 - [x] **[P1][M]** Solo operator "Working Days" uses a full team timeline — `SoloScheduleView` added: Mon–Sun grid with TimeInput pickers, writes via `expandWeekly` — DONE 2026-05-28 (`2179825`)
 
