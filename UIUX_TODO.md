@@ -124,12 +124,12 @@
 
 - [x] **[P1][S]** iPad: shift delete button bumped to min-h-[44px] — DONE 2026-05-28
 - [x] **[P2][S]** iPad: "Add customer" button in CRMView empty state → `size="md"` (44px touch target) — DONE 2026-05-28
-- [ ] **[P3][S]** KB: add "show unanswered only" toggle — owners finishing remaining questions must open every accordion to find them; toggle or sort unanswered categories to top — `dashboard/components/KnowledgeBaseView.tsx` — _source: KB review #16_
-- [ ] **[P3][S]** Add empty-state context to Calls tab — explain calls appear once AI is live — `dashboard/components/VoiceCallsView.tsx` — _source: audit #F5_
+- [x] **[P3][S]** KB: add "show unanswered only" toggle — DONE (verified 2026-06-03). `KnowledgeBaseView.tsx:443` `showUnansweredOnly` state + toggle button (line 799/815) + filter (line 832/843).
+- [x] **[P3][S]** Add empty-state context to Calls tab — DONE (verified 2026-06-03). `VoiceCallsView.tsx:351` "Calls appear here once your AI phone line is active".
 - [ ] **[P3][M]** Migrate `FirstRunTour` to shared Modal primitive — no Escape handling or focus trap — `dashboard/components/FirstRunTour.tsx` — _source: audit #DS4_
-- [ ] **[P3][M]** Self-host landing page fonts via `next/font` — `fonts.googleapis.com` is GDPR risk + Core Web Vitals hit — `dashboard/app/page.tsx` — _source: audit #DS3_
+- [x] **[P3][M]** Self-host landing page fonts via `next/font` — DONE (verified 2026-06-03). `layout.tsx:2` already imports `Bebas_Neue, DM_Sans, JetBrains_Mono` from `next/font/google`, which self-hosts at build time (no runtime `fonts.googleapis.com` request → GDPR + CWV concern already resolved). No googleapis fetch remains in page.tsx.
 - [ ] **[P3][S]** Normalize brand name capitalization — "SECRETARY HQ" (nav/footer), "Secretary HQ" (register page); pick one — `dashboard/app/page.tsx:499,894` `dashboard/app/register/page.tsx` — _source: landing review #14_
-- [ ] **[P3][S]** Verify meta title, description, favicon — missing = blank tab label + no SEO — `dashboard/app/layout.tsx` — _source: landing review #15_
+- [x] **[P3][S]** Verify meta title, description, favicon — DONE (verified 2026-06-03). `layout.tsx:30` title "Secretary HQ" + :31 description; `dashboard/app/favicon.ico` present.
 - [ ] **[P3][S]** Normalize section eyebrow copy case on landing page — one section uses title case, all others uppercase — `dashboard/app/page.tsx:621` — _source: landing review #13_
 - [ ] **[P3]** B4 — Reconsider sub-tab URL persistence (verify usage first) — `dashboard/app/dashboard/page.tsx` — _source: docs/TODO.md:98_
 - [ ] **[P3][L]** SetupWizard Phase B — full draft-state wizard: hold all data in local state, commit only on Done, discard on dismiss — `dashboard/components/SetupWizard/useWizardCrud.ts` + all Step*.tsx — open fresh branch; coordinate with Cluster C — _source: docs/TODO.md:137_
