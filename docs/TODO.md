@@ -176,6 +176,33 @@ Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `re
 
 ---
 
+## E2E suite broken by seed-strip (discovered 2026-06-03) — NEEDS DECISION
+
+The bare-bones seed (commit `9e9f186`) deletes the DynaTire tenant, and the
+e2e fixture `seedDynaTireBusinessConfig` (dashboard/e2e/helpers/fixtures.ts) was
+NOT updated to recreate it — it inserts resources/services/employees under
+`DYNATIRE_TENANT_ID` but never inserts the tenant + `admin@dynatire.com` owner
+row. Result: the helper FK-fails on `resources_tenant_id_fkey`, breaking all
+~16 specs that call it (confirmed via `workflows.spec.ts:630`). CLAUDE.md's
+"99 Playwright e2e passing" is therefore stale — the suite has been red since
+`9e9f186`.
+
+Two ways to fix (pick one):
+- **(A) Keep the test fixture on DynaTire** — add the missing test-only tenant +
+  owner INSERT (idempotent) to the top of `seedDynaTireBusinessConfig`. Tiny,
+  makes the suite green. The DynaTire name here is a fictional TEST fixture in an
+  ephemeral rebuilt DB, NOT the real ex-customer (already removed from real DBs).
+- **(B) Migrate the suite off DynaTire** — repoint the ~16 specs + helpers to
+  Bella's Hair Studio or self-registered fresh tenants, delete DYNATIRE_*. Large.
+
+Dale chose "rename visible surfaces only" for the codebase pass (done, `ec0d754`),
+which left test fixtures as-is — so (A) is the consistent finish, but it re-adds a
+test-only DynaTire bootstrap that was deliberately reverted earlier this session.
+Confirm before applying.
+
+Also open: **prod DB DynaTire removal** — gated on the Railway token (`/tmp/rwtok`);
+local dev DB already clean (0 DynaTire rows).
+
 ## E2E Known Issues (Playwright)
 
 Three failures were observed on **2026-05-27** (110 tests; 100 passed, 3 failed, 7 skipped). All three fixed 2026-05-28 — see RESOLVED.md.
