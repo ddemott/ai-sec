@@ -27,7 +27,7 @@ Physical layout post-LiveKit migration (`661d21d`, 2026-04-27).
 ```mermaid
 flowchart TB
   Caller([Caller phone])
-  Telnyx["Telnyx SIP Trunk<br/>+1 630 937 9478"]
+  Telnyx["Telnyx SIP Trunk<br/>+1 630 866 1960"]
   Caller -->|PSTN| Telnyx
 
   LiveKit["LiveKit Cloud<br/>SIP bridge + rooms<br/>dispatch rule SDR_if97ky4Zf7e6"]

@@ -154,11 +154,11 @@ Durable rules-of-engagement that override "build for the future":
 
 **Phase 13 (Production Readiness) in progress.** 1,930 backend + 716 dashboard = 2,646 tests passing (backend verified 2026-05-21 against real DB; dashboard 716 verified 2026-05-22; 0 skips, 0 failures). 99 agent tests, 99 Playwright e2e passing (7 skipped, intentional), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + Sentry + Better Stack setup in `docs/DEPLOYMENT.md`.
 
-Remaining blockers: Telnyx PSTN unblock, `DASHBOARD_URL` + `SENTRY_DSN` on Railway, 4 prod migrations apply. Full task list in `docs/TODO.md`.
+Remaining blockers: LiveKit inbound trunk wiring (Telnyx side DONE 2026-06-02 — account funded+upgraded, number `+1 630-866-1960` bought + routed to `livekit-outbound`; now needs fresh LiveKit creds + trunk update OLD→new number + tenant phone fields — see `docs/BETH_GO_LIVE_TODO.md`), `DASHBOARD_URL` + `SENTRY_DSN` on Railway, 4 prod migrations apply. Full task list in `docs/TODO.md`.
 
 ## Production
 
 - Backend: `https://ai-sec-production.up.railway.app/` (`/health` endpoint)
-- Phone: `+1-630-937-9478` (Telnyx). Provisioning via `POST /provisioning/activate` (search → purchase → assign to SIP Connection `livekit-outbound`).
+- Phone: **`+1 630-866-1960`** (Telnyx, tenant Thinking Hammer LLC `d5e3c6a1`; bought + routed 2026-06-02; Telnyx id `2973794140900296302`). Old `+1-630-937-9478` is dead (order deleted). Provisioning via `POST /provisioning/activate` (search → purchase → assign to SIP Connection `livekit-outbound`).
 - Stripe webhook: `https://ai-sec-production.up.railway.app/billing/webhook` (3 events).
 - Full Railway env-var list, deploy commands, and observability setup in `docs/DEPLOYMENT.md`.

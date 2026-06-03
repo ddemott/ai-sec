@@ -4,7 +4,7 @@
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
 - **CI**: green. Agent package gated in CI. Tests: backend 1,930 · dashboard 720 · agent 99. E2E: 3 flakes fixed 2026-05-28 (timing synchronization — see "E2E Known Issues"). New coverage added 2026-05-27: customer-notes.spec.ts (Gap 1), appointment-cancel-ui.spec.ts (Gap 2), owner-config-to-booking.spec.ts (Gap 3).
-- **Voice / Telnyx**: `+1-630-937-9478` unreachable from PSTN. Thinking Hammer LLC registered (2026-06-01); waiting on Telnyx help desk to unblock account creation. Zero inbound CDRs. Blocks all live voice validation and DynaTire beta.
+- **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Replaced by **`+1 630-866-1960`** — DONE 2026-06-02: account funded + upgraded (trial cap lifted), number purchased (Telnyx id `2973794140900296302`), routed to SIP connection `livekit-outbound` (`2945038451784812111`), connection activated. **Remaining**: local `.env` LiveKit API key is dead (rotated at Railway) → need fresh creds → update LiveKit inbound trunk OLD→`+16308661960` → write tenant phone fields → live test. Full checklist: `docs/BETH_GO_LIVE_TODO.md`. Still zero inbound CDRs until trunk wired.
 - **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0: Railway deploy is NOT gated on CI** (deploys on push regardless of result).
 - **Browser validation**: Role gating + invite flow needs real-browser testing.
 - **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (now archived/reduced). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
@@ -24,9 +24,23 @@ Everything else complete or tracked below.
 
 ## Phase 13 – Blocking Launch
 
-- [ ] **IN FLIGHT (external)** Telnyx account creation for Thinking Hammer LLC — waiting on help desk (2026-06-01). Once active: provision `+1-630-937-9478` via `POST /provisioning/activate` → assign to SIP Connection `livekit-outbound`.
+- [ ] **IN FLIGHT (user)** Open LLC bank account for Thinking Hammer LLC (required before Stripe payouts can be configured)
+- [ ] **FUTURE (user)** At ~$60K taxable income, elect S Corp taxation on the LLC (file IRS Form 2553). Thinking Hammer LLC stays as-is legally — the S Corp election just changes how it's taxed, letting you split income between salary and distributions to reduce self-employment tax. Talk to a CPA before filing.
+- [ ] **IN FLIGHT (user)** Legal docs — use Bonterms (bonterms.com) for SaaS Terms of Service, Privacy Policy, and Data Processing Agreement (free, open source, lawyer-drafted). Add to site before first paying customer. Separately: add TCPA-compliant SMS opt-in consent language at booking time (Twilio publishes a copy-ready template) — required before sending any confirmation texts.
+- [ ] **FUTURE (user)** Get E&O (Errors & Omissions) insurance before first paying customer. Quote via Next Insurance or Hiscox (~$800–1,200/yr for solo SaaS). Covers:
+  - Customer claims Secretary HQ missed a booking or double-booked and they lost business
+  - Customer claims the AI gave wrong information (pricing, hours, services) during a call
+  - Legal defense costs even if the claim is frivolous
+- [ ] **FUTURE (user)** Get Cyber Liability insurance before first paying customer. Often bundled with E&O. Covers:
+  - Data breach notification costs (state laws require notifying affected customers — can be expensive)
+  - Legal fees if a customer sues over their data being exposed
+  - Regulatory fines if the FTC or a state AG investigates
+  - You hold phone numbers, call recordings, names, and appointment history — this is real exposure
+- [~] **Telnyx provisioning — DONE 2026-06-02.** Account for Thinking Hammer LLC funded ($10) + upgraded (trial 1-order cap lifted). SIP Connection `livekit-outbound` (`2945038451784812111`) → FQDN `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060`. `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` set (local `.env`; verify on Railway `ai-sec`). Number **`+1 630-866-1960`** purchased (id `2973794140900296302`), routed to `livekit-outbound`, connection activated. Old `+1-630-937-9478` is dead (order deleted). **Still TODO (see `docs/BETH_GO_LIVE_TODO.md`)**: refresh dead local LiveKit creds → point inbound trunk at `+16308661960` → write tenant `inbound_phone`/`phone_status`/`telnyx_phone_number_id` → live call test.
 - [ ] **IN FLIGHT (user)** Set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway `ai-sec` service
 - [ ] **IN FLIGHT (user)** Set `SENTRY_DSN` on Railway backend + agent (dashboard Sentry already wired client+server, just needs DSN)
+- [ ] **IN FLIGHT (user)** Stripe setup — set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID` on Railway. Register webhook at `https://ai-sec-production.up.railway.app/billing/webhook` (3 events). See `docs/DEPLOYMENT.md` for full env-var list.
+- [ ] **IN FLIGHT (user)** Stripe Tax — enable in Stripe dashboard before going live in multiple states. Stripe Tax automatically calculates state/local sales tax per customer location. Requires: (1) enable Stripe Tax in dashboard, (2) add `automatic_tax: { enabled: true }` to checkout session creation in `src/routes/billing.ts`, (3) register tax nexus for IL + any state where you have customers.
 - [ ] **IN FLIGHT (validation pending)** Browser-verify role gating + invite flow
 
 Closed: prod migrations apply (36 applied 2026-05-17 → version `20260514000000`); first-run guided tour (`20838a4`).
@@ -73,7 +87,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 ---
 
-## Voice Validation (blocked on Telnyx)
+## Voice Validation (Telnyx done; now blocked on LiveKit trunk — see `docs/BETH_GO_LIVE_TODO.md`)
 
 - [ ] Call transcript + summary flow end-to-end
 - [ ] Expanded live QA suite (`scripts/qa-live-test.py`)

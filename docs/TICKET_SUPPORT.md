@@ -1,10 +1,10 @@
 # Telnyx Support — Active Ticket
 
-**Number**: `+1-630-937-9478`  
-**Status**: Unreachable from PSTN ("not in service") since purchase on 2026-04-25. Zero inbound CDRs.  
-**Current Ticket**: Re-submitted 2026-05-01 to LERG/porting team after original ticket `#2850682` received no human response.
+**Number**: `+1 630-866-1960` (active, Thinking Hammer LLC). Telnyx id `2973794140900296302`.
+**Status (2026-06-02)**: The original `+1-630-937-9478` was a dead order (deleted, never kept) — root cause was a trial account that could only place 1 order plus a negative balance, not a LERG/carrier issue. Resolved by funding + upgrading the account, then purchasing **`+1 630-866-1960`** and routing it to SIP connection `livekit-outbound`. Ticket `#2850682` / LERG escalation is moot.
+**Remaining to reach live**: LiveKit inbound trunk still points at the old number; needs fresh LiveKit creds + trunk update + tenant phone fields. See `docs/BETH_GO_LIVE_TODO.md`.
 
-**Blocking**: All live voice validation and DynaTire beta testing.
+**Blocking**: Live voice validation, until the LiveKit trunk is repointed.
 
 ### Latest Escalation Email
 

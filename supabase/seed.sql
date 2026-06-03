@@ -2,50 +2,32 @@
 -- All test data is Chicago / Chicagoland / Chicago suburbs
 
 -- 0. Create a Platform Tenant for the SecretaryHQ Admin (Super Admin)
-INSERT INTO tenants (tenant_id, name, business_type, timezone)
+--    onboarding_completed = true: super-admin has no business to configure,
+--    so skip the setup wizard entirely.
+INSERT INTO tenants (tenant_id, name, business_type, timezone, onboarding_completed)
 VALUES (
     '00000000-0000-0000-0000-000000000000',
     'SecretaryHQ Platform',
     'platform-admin',
-    'America/Chicago'
-) ON CONFLICT (tenant_id) DO NOTHING;
+    'America/Chicago',
+    true
+) ON CONFLICT (tenant_id) DO UPDATE SET onboarding_completed = true;
 
 -- 0b. Create a SecretaryHQ Admin User (Platform Admin)
 INSERT INTO users (tenant_id, email, password_hash, full_name)
 VALUES ('00000000-0000-0000-0000-000000000000', 'admin@secretaryhq.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'SecretaryHQ Admin')
 ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
--- 1. Create DynaTire tenant (mobile tire service in Naperville/Aurora area)
-INSERT INTO tenants (tenant_id, name, business_type, timezone, system_prompt, voice_id)
-VALUES (
-    'f234e471-0e60-4163-86c9-93cfd9338e3a',
-    'DynaTire Mobile Service',
-    'mobile-tire',
-    'America/Chicago',
-    'You are a professional, helpful secretary for DynaTire Mobile Service, a mobile tire shop serving the western Chicago suburbs including Naperville, Aurora, Wheaton, and Downers Grove. You help customers book tire services, answer questions about pricing and availability, and provide friendly, knowledgeable service.',
-    'ba124806-6962-4354-94a0-7607775952f4'
-) ON CONFLICT (tenant_id) DO UPDATE SET
-    name = EXCLUDED.name,
-    timezone = EXCLUDED.timezone,
-    system_prompt = EXCLUDED.system_prompt;
-
--- 1b. Create a User Account for DynaTire
-INSERT INTO users (tenant_id, email, password_hash, full_name)
-VALUES ('f234e471-0e60-4163-86c9-93cfd9338e3a', 'admin@dynatire.com', '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK', 'Dale Demott')
-ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
-
--- 1c. DeMott LLC tenant + Dale's personal owner account.
---     Separates Dale's super-admin platform rights (admin@secretaryhq.com)
---     from his real-business owner identity (daledemott@gmail.com on
---     DeMott LLC). Added 2026-05-18 after the UX walkthrough surfaced
---     that mixing both roles on one identity confused the user listing.
+-- 1. Thinking Hammer LLC tenant + Dale's personal owner account.
+--    Separates Dale's super-admin platform rights (admin@secretaryhq.com)
+--    from his real-business owner identity (daledemott@gmail.com).
 INSERT INTO tenants (tenant_id, name, business_type, timezone)
 VALUES (
     'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0',
-    'DeMott LLC',
+    'Thinking Hammer LLC',
     'answering-service',
     'America/Chicago'
-) ON CONFLICT (tenant_id) DO NOTHING;
+) ON CONFLICT (tenant_id) DO UPDATE SET name = 'Thinking Hammer LLC';
 
 INSERT INTO users (tenant_id, email, password_hash, full_name, role)
 VALUES (
@@ -55,6 +37,20 @@ VALUES (
     'Dale DeMott',
     'owner'
 ) ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash, full_name = EXCLUDED.full_name;
+
+-- 1b. Remove stale DynaTire tenant if it exists (deprecated 2026-06-02)
+DELETE FROM users WHERE tenant_id = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+DELETE FROM tenants WHERE tenant_id = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+
+-- 1c. SECURITY: ensure daledemott@gmail.com exists ONLY on Thinking Hammer,
+-- never on the platform/super-admin tenant. A stray duplicate on
+-- 00000000 was found in prod 2026-06-02 — it gave Dale's personal email
+-- super-admin rights AND made /login resolve his account to the wrong
+-- tenant. The design (CLAUDE.md) keeps his business identity strictly
+-- separate from the super-admin identity (admin@secretaryhq.com).
+DELETE FROM users
+ WHERE email = 'daledemott@gmail.com'
+   AND tenant_id = '00000000-0000-0000-0000-000000000000';
 
 -- 2. (intentionally empty) Resources are NOT seeded.
 -- 3. (intentionally empty) Customers are NOT seeded.
@@ -105,8 +101,5 @@ VALUES (
     'owner'
 ) ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash, full_name = EXCLUDED.full_name;
 
--- 6-9. (intentionally empty) DynaTire's services / employees / shifts
--- / service-mapping rows now live in
--- `dashboard/e2e/helpers/fixtures.ts::seedDynaTireBusinessConfig` and
--- get bootstrapped per-spec for the 5 specs that need them. See the
--- block-comment above (sections 2-5) for the motivating principle.
+-- 6-9. (intentionally empty) Services / employees / shifts / service-mapping
+-- rows are set up per-test in fixtures. See block-comment above (sections 2-5).
