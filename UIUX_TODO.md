@@ -16,7 +16,7 @@
 
 ### Navigation & IA
 
-- [~] **[P0][L]** Merge "My Business" + "My Team" + "Business Settings" into one "Setup" tab — **Phase 1 DONE 2026-06-03** (`a8eb438`). New `SetupView` hosts Services/Resources/Team/Working Days/Who Can Do What/Team Access/Business Settings as sub-tabs; orphaned MyBusinessView/MyTeamView deleted; legacy `?tab=` URLs redirect to `?tab=setup&subtab=…`. Verified: tsc clean, 762 unit, affected e2e green. **Phase 2 (open):** dedup the Calendar/CRM/Resources sections still shared between BusinessSettingsView and SettingsView, and reduce SettingsView to super-admin onboarding only. — _source: /ux-expert simplification review_
+- [~] **[P0][L]** Merge "My Business" + "My Team" + "Business Settings" into one "Setup" tab — **Phase 1 DONE 2026-06-03** (`a8eb438`). New `SetupView` hosts Services/Resources/Team/Working Days/Who Can Do What/Team Access/Business Settings as sub-tabs; orphaned MyBusinessView/MyTeamView deleted; legacy `?tab=` URLs redirect to `?tab=setup&subtab=…`. Verified: tsc clean, 762 unit, affected e2e green. **Phase 2a DONE 2026-06-03** (`ad1f675`): removed the duplicate Resources editor from BusinessSettingsView (Setup → Resources sub-tab is canonical) + its 8 tests. **Phase 2b (open):** strip SettingsView's owner-mode (Calendar/CRM/Resources — a latent dup, reachable only via stale `?tab=settings`) so it's super-admin onboarding only; ~280-line excision + cascading unused-state cleanup, own focused pass. Connections (Calendar+CRM) stays in the Business Settings sub-tab as the single owner-facing source. — _source: /ux-expert simplification review_
 - [x] **[P0][S]** Remove the 4 Quick Action cards from Home — duplicate nav, removed — DONE 2026-05-28
 
 ### Knowledge Base (before KB work starts)
