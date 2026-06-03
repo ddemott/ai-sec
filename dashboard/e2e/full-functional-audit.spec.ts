@@ -13,7 +13,19 @@ function logIssue(area: string, description: string) {
   console.log(`⚠️  ${msg}`);
 }
 
+// IA merge (2026-06-03): "My Business"/"My Team"/"Business Settings" are now
+// sub-tabs of "Setup" — route those via the URL; other labels click directly.
 async function navigateToTab(page: Page, tabLabel: string) {
+  const SETUP_SUBTAB: Record<string, string> = {
+    'My Business': 'services',
+    'My Team': 'employees',
+    'Business Settings': 'business-settings',
+  };
+  if (SETUP_SUBTAB[tabLabel]) {
+    await page.goto(`/dashboard?tab=setup&subtab=${SETUP_SUBTAB[tabLabel]}`);
+    await page.waitForLoadState('networkidle');
+    return;
+  }
   await page.locator(`text=${tabLabel}`).first().click();
   await page.waitForTimeout(1000);
 }

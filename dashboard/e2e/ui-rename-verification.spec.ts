@@ -70,37 +70,35 @@ async function landOnDynatireDashboard(page: Page) {
 }
 
 test.describe('UI rename — A1 + B2', () => {
-  test('owner sees the three renamed advanced tabs', async ({ page }) => {
+  test('owner sees the merged Setup tab + Phone Assistant', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
-    // A1: new labels present
-    await expect(page.getByRole('tab', { name: /^My Business$/ }).first()).toBeVisible();
-    await expect(page.getByRole('tab', { name: /^My Team$/ }).first()).toBeVisible();
+    // IA merge (2026-06-03): My Business + My Team + Business Settings collapsed
+    // into one "Setup" tab. Setup + Phone Assistant present as advanced tabs.
+    await expect(page.getByRole('tab', { name: /^Setup$/ }).first()).toBeVisible();
     await expect(page.getByRole('tab', { name: /^Phone Assistant$/ }).first()).toBeVisible();
 
-    // A1: old labels absent
-    await expect(page.getByRole('tab', { name: /Services & Resources/ })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /Staff & Shifts/ })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /AI & Knowledge/ })).toHaveCount(0);
+    // Old top-level tabs are gone (they're sub-tabs of Setup now).
+    await expect(page.getByRole('tab', { name: /^My Business$/ })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /^My Team$/ })).toHaveCount(0);
   });
 
-  test('B2: My Team sub-tab reads "Working Days", not "Shifts"', async ({ page }) => {
+  test('B2: Setup sub-tab reads "Working Days", not "Shifts"', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
     await page
-      .getByRole('tab', { name: /^My Team$/ })
+      .getByRole('tab', { name: /^Setup$/ })
       .first()
       .click();
 
     // Wait properly for the sub-tabs to render (short fixed waits are flaky after tenant switch / rebuild)
     await expect(page.getByRole('tab', { name: /Working Days/ }).first()).toBeVisible({ timeout: 10000 });
 
-    // Old sub-tab label should not appear — the parent "My Team" no longer
-    // contains "Shifts" anywhere.
+    // Old sub-tab label should not appear anywhere under Setup.
     await expect(page.getByRole('tab', { name: /^Shifts$/ })).toHaveCount(0);
   });
 
-  test('B3: Knowledge Base lives under Phone Assistant, not My Business', async ({ page }) => {
+  test('B3: Knowledge Base lives under Phone Assistant, not Setup', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
     // Under Phone Assistant: Knowledge Base sub-tab is present.
@@ -111,10 +109,9 @@ test.describe('UI rename — A1 + B2', () => {
     await page.waitForTimeout(500);
     await expect(page.getByRole('tab', { name: /Knowledge Base/ }).first()).toBeVisible();
 
-    // Under My Business: Knowledge Base sub-tab is absent. Only Services
-    // and the vocab-driven resources sub-tab remain.
+    // Under Setup: no Knowledge Base sub-tab (it stayed with Phone Assistant).
     await page
-      .getByRole('tab', { name: /^My Business$/ })
+      .getByRole('tab', { name: /^Setup$/ })
       .first()
       .click();
     await page.waitForTimeout(500);
@@ -140,11 +137,11 @@ test.describe('UI rename — A1 + B2', () => {
 });
 
 test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
-  test('Setup Assistant from My Business goes directly to mode chooser (no welcome)', async ({ page }) => {
+  test('Setup Assistant from Setup goes directly to mode chooser (no welcome)', async ({ page }) => {
     await landOnDynatireDashboard(page);
 
     await page
-      .getByRole('tab', { name: /^My Business$/ })
+      .getByRole('tab', { name: /^Setup$/ })
       .first()
       .click();
     await page.waitForTimeout(500);
@@ -168,13 +165,13 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
       .click();
   });
 
-  test('Setup Assistant from My Business can be closed cleanly', async ({ page }) => {
-    // When launched from My Business the chooser appears directly.
+  test('Setup Assistant from Setup can be closed cleanly', async ({ page }) => {
+    // When launched from the Setup tab the chooser appears directly.
     // Closing it must exit cleanly with no leftover modals.
     await landOnDynatireDashboard(page);
 
     await page
-      .getByRole('tab', { name: /^My Business$/ })
+      .getByRole('tab', { name: /^Setup$/ })
       .first()
       .click();
     await page.waitForTimeout(500);
@@ -198,10 +195,11 @@ test.describe("Business Type move — Settings hosts it, AI Persona doesn't", ()
     await landOnDynatireDashboard(page);
 
     // Open the profile dropdown, then Business Settings.
-    await page.getByRole('button', { name: /Account menu/i }).click();
-    await page.waitForTimeout(300);
-    await page.getByRole('button', { name: /Business Settings/i }).click();
-    await page.waitForTimeout(800);
+    // IA merge: Business Settings is now the 'business-settings' sub-tab of
+    // Setup. Route there directly (deterministic; exercises the merged routing).
+    await page.goto('/dashboard?tab=setup&subtab=business-settings');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(500);
 
     // The new section card lives at the top of the settings stack.
     await expect(page.getByRole('heading', { name: /Business type/i })).toBeVisible();
@@ -233,10 +231,11 @@ test.describe("Business Type move — Settings hosts it, AI Persona doesn't", ()
   }) => {
     await landOnDynatireDashboard(page);
 
-    await page.getByRole('button', { name: /Account menu/i }).click();
-    await page.waitForTimeout(300);
-    await page.getByRole('button', { name: /Business Settings/i }).click();
-    await page.waitForTimeout(800);
+    // IA merge: Business Settings is now the 'business-settings' sub-tab of
+    // Setup. Route there directly (deterministic; exercises the merged routing).
+    await page.goto('/dashboard?tab=setup&subtab=business-settings');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(500);
 
     await page.getByRole('button', { name: /Change business type/i }).click();
     await page.waitForTimeout(500);

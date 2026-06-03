@@ -91,9 +91,18 @@ export default function DashboardPage() {
 
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     if (typeof window === 'undefined') return 'dashboard';
-    const raw = new URLSearchParams(window.location.search).get('tab');
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('tab');
     const legacy = raw ? LEGACY_TAB_MAP[raw] : undefined;
-    if (legacy) return legacy.tab;
+    if (legacy) {
+      // Stamp the upgraded URL SYNCHRONOUSLY here (not in a mount effect) so
+      // it's corrected before SetupView mounts and reads ?subtab — otherwise
+      // SetupView would race ahead and default to its first sub-tab.
+      params.set('tab', legacy.tab);
+      if (!params.get('subtab')) params.set('subtab', legacy.subtab);
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+      return legacy.tab;
+    }
     if (raw && VALID_TABS.includes(raw as Tab)) return raw as Tab;
     return localStorage.getItem('tenantId') === '00000000-0000-0000-0000-000000000000'
       ? 'all-businesses'

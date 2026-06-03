@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Wand2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { FolderTab, FolderTabBar } from './ui/FolderTabs';
@@ -62,8 +61,16 @@ function resolveInitialTab(searchParams: URLSearchParams): SubTab {
 }
 
 export default function SetupView() {
-  const searchParams = useSearchParams();
-  const initialTab = resolveInitialTab(new URLSearchParams(searchParams.toString()));
+  // Read the initial sub-tab from window.location directly rather than Next's
+  // useSearchParams(): page.tsx upgrades a legacy ?tab=my-team URL to
+  // ?tab=setup&subtab=employees via history.replaceState, which Next's router
+  // hook does NOT observe — so useSearchParams() would still report no subtab
+  // and we'd wrongly default to 'services'. window.location.search reflects the
+  // replaceState immediately.
+  const initialTab =
+    typeof window !== 'undefined'
+      ? resolveInitialTab(new URLSearchParams(window.location.search))
+      : 'services';
   const [activeSubTab, setActiveSubTab] = useState<SubTab>(initialTab);
 
   const handleSubTabChange = useCallback((tab: SubTab) => {

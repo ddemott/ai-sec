@@ -651,12 +651,13 @@ test('front-desk role: cannot see Advanced tabs; stale URL redirects to Home', a
     await expect(page.getByRole('tab', { name: /^Customers$/ }).first()).toBeVisible();
     await expect(page.getByRole('tab', { name: /^Calls$/ }).first()).toBeVisible();
 
-    // Advanced tabs hidden
-    await expect(page.getByRole('tab', { name: /My Business/ })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /My Team/ })).toHaveCount(0);
+    // Advanced tabs hidden (IA merge 2026-06-03: My Business + My Team +
+    // Business Settings are now the single "Setup" tab, still owner-only).
+    await expect(page.getByRole('tab', { name: /^Setup$/ })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: /Phone Assistant/ })).toHaveCount(0);
 
-    // Stale URL → snapped back to Home (the dashboard tab)
+    // Stale legacy URL → redirected to Setup, which front-desk can't see, so
+    // they're snapped back to Home; the management-only content never renders.
     await page.goto('/dashboard?tab=my-business');
     await page.waitForTimeout(1500);
     // After the snap-back, the URL should not contain my-business as the active tab.
