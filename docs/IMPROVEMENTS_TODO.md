@@ -54,7 +54,9 @@ Step 4 of the global `commit-code` skill hardcodes test commands for a different
 **Category:** skill
 **Priority:** medium
 **Effort:** S (<30min)
-**Status:** proposed
+**Status:** done 2026-06-03 (option B)
+
+**Resolution (2026-06-03):** Fixed via option B — removed the dead "Skip a skill if `fully_analyzed`…" paragraph from the skills phase. It referenced state fields the schema never defined and no step ever wrote, so the optimization could never fire; deleting it removes the contradiction with zero added state complexity (per "delete the dormant abstraction"). Skill lives in `~/.claude/skills/`; only this status update is committed.
 
 **Proposal:**
 The skills-phase says "Skip a skill if its path in state has `fully_analyzed: true` AND its file mtime hasn't changed since that flag was set" and "Mark `fully_analyzed` only after 2 passes with no findings" — but the documented `.improve/state.json` schema has no per-skill structure, no `fully_analyzed` field, and no mtime store, and no step ever writes them. So the optimization can never fire: a skill that's been analyzed twice with zero findings gets re-analyzed forever, wasting one of the 3 capped analyses per session. Fix by adding a defined state sub-object (e.g. `"skill_state": { "<name>": { "fully_analyzed": true, "mtime": "<iso>", "clean_passes": 1 } }`) to the schema + a Step-5 instruction to write it, OR drop the skip-optimization paragraph entirely if it's not worth the state complexity. Done = the skip rule references a field the schema actually defines and a step actually writes.
