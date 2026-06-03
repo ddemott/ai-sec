@@ -89,8 +89,9 @@ describe('OutlookLayout role gating', () => {
     );
     expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /schedule/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /my business/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /my team/i })).toBeInTheDocument();
+    // IA merge (2026-06-03): My Business + My Team + Business Settings collapsed
+    // into a single "Setup" tab.
+    expect(screen.getByRole('tab', { name: /setup/i })).toBeInTheDocument();
   });
 
   test('SAD: front_desk user does NOT see management tabs', () => {
@@ -105,8 +106,7 @@ describe('OutlookLayout role gating', () => {
       </OutlookLayout>
     );
     expect(screen.getByRole('tab', { name: /home/i })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /my business/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /my team/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /setup/i })).not.toBeInTheDocument();
     // Mobile nav has plain <button>s rather than role="tab"; assert by name.
     expect(screen.queryByRole('button', { name: /^businesses$/i })).not.toBeInTheDocument();
   });
@@ -121,7 +121,7 @@ describe('OutlookLayout role gating', () => {
     //      though the tab to switch back is gone — a dead-end for the user.
     const setActiveTab = vi.fn();
     render(
-      <OutlookLayout activeTab="my-business" setActiveTab={setActiveTab} role="front_desk">
+      <OutlookLayout activeTab="setup" setActiveTab={setActiveTab} role="front_desk">
         <div>content</div>
       </OutlookLayout>
     );
@@ -205,6 +205,6 @@ describe('OutlookLayout role gating', () => {
         <div>content</div>
       </OutlookLayout>
     );
-    expect(await screen.findByRole('tab', { name: /my business/i })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /setup/i })).toBeInTheDocument();
   });
 });

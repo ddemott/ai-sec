@@ -13,14 +13,12 @@ import { useSessionContext } from '@/lib/SessionContext';
 const DashboardHome = dynamic(() => import('@/components/DashboardHome'), { ssr: false });
 const SchedulerView = dynamic(() => import('@/components/SchedulerView'), { ssr: false });
 const CRMView = dynamic(() => import('@/components/CRMView'), { ssr: false });
-const MyTeamView = dynamic(() => import('@/components/MyTeamView'), { ssr: false });
-const MyBusinessView = dynamic(() => import('@/components/MyBusinessView'), { ssr: false });
+// IA merge (2026-06-03): My Business + My Team + Business Settings collapsed into
+// one "Setup" tab hosting them as sub-tabs. SetupView imports those leaf views.
+const SetupView = dynamic(() => import('@/components/SetupView'), { ssr: false });
 const AIInsightsView = dynamic(() => import('@/components/AIInsightsView'), { ssr: false });
 const SettingsView = dynamic(() => import('@/components/SettingsView'), { ssr: false });
 const ProfileView = dynamic(() => import('@/components/ProfileView'), { ssr: false });
-const BusinessSettingsView = dynamic(() => import('@/components/BusinessSettingsView'), {
-  ssr: false,
-});
 const SuperAdminDashboard = dynamic(() => import('@/components/SuperAdminDashboard'), {
   ssr: false,
 });
@@ -31,13 +29,21 @@ export type Tab =
   | 'schedule'
   | 'customers'
   | 'calls'
-  | 'my-team'
-  | 'my-business'
+  | 'setup'
   | 'ai-insights'
   | 'settings'
   | 'all-businesses'
-  | 'profile'
-  | 'business-settings';
+  | 'profile';
+
+// IA merge (2026-06-03): the old 'my-business' / 'my-team' / 'business-settings'
+// top-level tabs are gone — they're now sub-tabs of 'setup'. Old bookmarks,
+// deep links, and tests using ?tab=<legacy> are transparently redirected to
+// ?tab=setup&subtab=<section> so nothing 404s.
+const LEGACY_TAB_MAP: Record<string, { tab: Tab; subtab: string }> = {
+  'my-business': { tab: 'setup', subtab: 'services' },
+  'my-team': { tab: 'setup', subtab: 'employees' },
+  'business-settings': { tab: 'setup', subtab: 'business-settings' },
+};
 
 export default function DashboardPage() {
   const {
@@ -58,19 +64,37 @@ export default function DashboardPage() {
     'schedule',
     'customers',
     'calls',
-    'my-team',
-    'my-business',
+    'setup',
     'ai-insights',
     'settings',
     'all-businesses',
     'profile',
-    'business-settings',
   ];
+
+  // Resolve ?tab= → a valid Tab, transparently upgrading legacy tab ids to the
+  // merged 'setup' tab (and stamping the matching ?subtab= so the right section
+  // shows). Returns null if the param isn't a tab we recognize.
+  const resolveUrlTab = useCallback((): Tab | null => {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('tab');
+    if (!raw) return null;
+    const legacy = LEGACY_TAB_MAP[raw];
+    if (legacy) {
+      params.set('tab', legacy.tab);
+      if (!params.get('subtab')) params.set('subtab', legacy.subtab);
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+      return legacy.tab;
+    }
+    return VALID_TABS.includes(raw as Tab) ? (raw as Tab) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     if (typeof window === 'undefined') return 'dashboard';
-    const urlTab = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    if (urlTab && VALID_TABS.includes(urlTab)) return urlTab;
+    const raw = new URLSearchParams(window.location.search).get('tab');
+    const legacy = raw ? LEGACY_TAB_MAP[raw] : undefined;
+    if (legacy) return legacy.tab;
+    if (raw && VALID_TABS.includes(raw as Tab)) return raw as Tab;
     return localStorage.getItem('tenantId') === '00000000-0000-0000-0000-000000000000'
       ? 'all-businesses'
       : 'dashboard';
@@ -84,11 +108,21 @@ export default function DashboardPage() {
     window.history.pushState({}, '', url.toString());
   }, []);
 
+  // On mount, rewrite a legacy ?tab=my-business|my-team|business-settings URL to
+  // ?tab=setup&subtab=… so the address bar is honest and SetupView reads the
+  // right section. (The useState initializer already resolved activeTab; this
+  // just corrects the URL.)
+  useEffect(() => {
+    const resolved = resolveUrlTab();
+    if (resolved && resolved !== activeTab) setActiveTab(resolved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Handle browser back/forward
   useEffect(() => {
     const onPopState = () => {
-      const urlTab = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-      if (urlTab && VALID_TABS.includes(urlTab)) setActiveTab(urlTab);
+      const next = resolveUrlTab();
+      if (next) setActiveTab(next);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -225,12 +259,10 @@ export default function DashboardPage() {
         {activeTab === 'schedule' && <SchedulerView />}
         {activeTab === 'customers' && <CRMView />}
         {activeTab === 'calls' && <VoiceCallsView />}
-        {activeTab === 'my-team' && <MyTeamView />}
-        {activeTab === 'my-business' && <MyBusinessView />}
+        {activeTab === 'setup' && <SetupView />}
         {activeTab === 'ai-insights' && <AIInsightsView />}
         {activeTab === 'settings' && <SettingsView />}
         {activeTab === 'profile' && <ProfileView />}
-        {activeTab === 'business-settings' && <BusinessSettingsView />}
       </ErrorBoundary>
       <ShortcutsHelpModal
         isOpen={shortcutsHelpOpen}

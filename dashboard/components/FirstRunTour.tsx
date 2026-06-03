@@ -126,9 +126,9 @@ export function FirstRunTour({ onNavigate }: FirstRunTourProps) {
           />
           <TourCard
             icon={Wrench}
-            title="My Business"
-            description={`Add or edit services, ${vocab.resource_plural.toLowerCase()}, and which staff can perform which service. Owners only.`}
-            onClick={() => go('my-business')}
+            title="Setup"
+            description={`Configure your business: services, ${vocab.resource_plural.toLowerCase()}, staff, hours, and which staff can perform which service. Owners only.`}
+            onClick={() => go('setup')}
           />
           <TourCard
             icon={Wand2}

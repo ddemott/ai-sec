@@ -243,8 +243,10 @@ export default function BusinessSettingsView() {
             className="w-full flex items-center justify-between p-5 rounded-xl border text-left transition-colors"
             style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
             onClick={() => {
-              const el = document.querySelector('[data-tab-id="my-business"]') as HTMLElement;
-              el?.click();
+              // Now a sibling sub-tab under Setup (IA merge 2026-06-03).
+              window.dispatchEvent(
+                new CustomEvent('ai-sec:setup-subtab', { detail: { subtab: 'services' } })
+              );
             }}
             onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-soft)')}
             onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
@@ -279,8 +281,10 @@ export default function BusinessSettingsView() {
                   When clients can book you. Edit your schedule in{' '}
                   <button
                     onClick={() => {
-                      const el = document.querySelector('[data-tab-id="my-team"]') as HTMLElement;
-                      el?.click();
+                      // Working Days is now a sibling sub-tab under Setup.
+                      window.dispatchEvent(
+                        new CustomEvent('ai-sec:setup-subtab', { detail: { subtab: 'shifts' } })
+                      );
                     }}
                     className="underline font-bold"
                     style={{ color: 'var(--accent)' }}
@@ -301,8 +305,10 @@ export default function BusinessSettingsView() {
                 No schedule set yet. Set your hours in{' '}
                 <button
                   onClick={() => {
-                    const el = document.querySelector('[data-tab-id="my-team"]') as HTMLElement;
-                    el?.click();
+                    // Working Days is now a sibling sub-tab under Setup.
+                    window.dispatchEvent(
+                      new CustomEvent('ai-sec:setup-subtab', { detail: { subtab: 'shifts' } })
+                    );
                   }}
                   className="underline font-bold"
                   style={{ color: 'var(--accent)' }}
