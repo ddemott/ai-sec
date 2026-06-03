@@ -14,7 +14,6 @@ import {
   ChevronRight,
   LayoutDashboard,
   Phone,
-  UserCog,
   Keyboard,
 } from 'lucide-react';
 import { Api } from '../lib/api';
@@ -31,13 +30,11 @@ type Tab =
   | 'schedule'
   | 'customers'
   | 'calls'
-  | 'my-team'
-  | 'my-business'
+  | 'setup'
   | 'ai-insights'
   | 'settings'
   | 'all-businesses'
-  | 'profile'
-  | 'business-settings';
+  | 'profile';
 
 interface LayoutProps {
   children: ReactNode;
@@ -65,15 +62,16 @@ const PRIMARY_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 // schema; possessive plain-English ("My Business") describes the user's
 // job-to-be-done. Also: shorter labels survive the mobile bottom-nav's
 // 64px-wide tap targets without truncation.
+// IA merge (2026-06-03): "My Business" + "My Team" + "Business Settings" were
+// three destinations answering one question — "where do I configure my
+// business?" They're now one "Setup" tab with those areas as sub-tabs.
 const ADVANCED_TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'my-business', label: 'My Business', icon: Wrench },
-  { id: 'my-team', label: 'My Team', icon: UserCog },
+  { id: 'setup', label: 'Setup', icon: Wrench },
   { id: 'ai-insights', label: 'Phone Assistant', icon: Bot },
 ];
 
-const ACCOUNT_TABS: Record<'profile' | 'business-settings' | 'all-businesses', string> = {
+const ACCOUNT_TABS: Record<'profile' | 'all-businesses', string> = {
   profile: 'My Profile',
-  'business-settings': 'Business Settings',
   'all-businesses': 'All Businesses',
 };
 
@@ -133,8 +131,7 @@ export function OutlookLayout({
   useEffect(() => {
     if (!isFrontDeskOnly) return;
     const restrictedTabs = new Set<Tab>([
-      'my-business',
-      'my-team',
+      'setup',
       'ai-insights',
       'settings',
       'all-businesses',
@@ -345,12 +342,12 @@ export function OutlookLayout({
                 title={`Account: ${userName || 'Profile'}`}
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 className={`inline-flex items-center justify-center min-w-[40px] min-h-[40px] p-2 rounded-md transition-all ${
-                  profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
+                  profileMenuOpen || activeTab === 'profile'
                     ? ''
                     : 'hover:brightness-110'
                 }`}
                 style={
-                  profileMenuOpen || activeTab === 'profile' || activeTab === 'business-settings'
+                  profileMenuOpen || activeTab === 'profile'
                     ? { color: 'var(--accent-soft)', backgroundColor: 'var(--accent-muted)' }
                     : undefined
                 }
@@ -584,18 +581,17 @@ export function OutlookLayout({
               </button>
               <button
                 onClick={() => {
-                  setActiveTab('business-settings');
+                  setActiveTab('setup');
                   setProfileMenuOpen(false);
                 }}
                 className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors hover:brightness-125"
                 style={{
                   color: 'var(--text-primary)',
-                  backgroundColor:
-                    activeTab === 'business-settings' ? 'var(--accent-muted)' : 'transparent',
+                  backgroundColor: activeTab === 'setup' ? 'var(--accent-muted)' : 'transparent',
                 }}
               >
                 <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-                Business Settings
+                Setup
               </button>
               {onShowShortcuts && (
                 <button

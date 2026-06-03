@@ -449,7 +449,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
                 View this week
               </Button>
               {employees.length > 1 && (
-                <Button variant="secondary" size="sm" onClick={() => onNavigate?.('my-team')}>
+                <Button variant="secondary" size="sm" onClick={() => onNavigate?.('setup')}>
                   <Users className="w-3.5 h-3.5 mr-1.5" aria-hidden="true" />
                   See staff shifts
                 </Button>
