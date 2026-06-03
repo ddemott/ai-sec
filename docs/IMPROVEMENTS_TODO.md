@@ -47,3 +47,33 @@ Step 4 of the global `commit-code` skill hardcodes test commands for a different
 - Note: global skills live in `~/.claude/skills/` (outside this repo), so the edits are not in this commit — only this status update is.
 
 ---
+
+### [2026-06-03] skill — continuously-improve: `fully_analyzed` skip is unwired (no state field backs it)
+
+**Target:** `skill: continuously-improve` (SKILL.md — skills-phase "Skip a skill if" + State file schema)
+**Category:** skill
+**Priority:** medium
+**Effort:** S (<30min)
+**Status:** proposed
+
+**Proposal:**
+The skills-phase says "Skip a skill if its path in state has `fully_analyzed: true` AND its file mtime hasn't changed since that flag was set" and "Mark `fully_analyzed` only after 2 passes with no findings" — but the documented `.improve/state.json` schema has no per-skill structure, no `fully_analyzed` field, and no mtime store, and no step ever writes them. So the optimization can never fire: a skill that's been analyzed twice with zero findings gets re-analyzed forever, wasting one of the 3 capped analyses per session. Fix by adding a defined state sub-object (e.g. `"skill_state": { "<name>": { "fully_analyzed": true, "mtime": "<iso>", "clean_passes": 1 } }`) to the schema + a Step-5 instruction to write it, OR drop the skip-optimization paragraph entirely if it's not worth the state complexity. Done = the skip rule references a field the schema actually defines and a step actually writes.
+
+---
+
+### [2026-06-03] skill — create-tests: Step 6 mislabels the Vitest shuffle flag
+
+**Target:** `skill: create-tests` (SKILL.md Step 6 — Verify independence, line ~114)
+**Category:** skill
+**Priority:** low
+**Effort:** S (<30min)
+**Status:** done 2026-06-03
+
+**Proposal:**
+Step 6 says "Vitest/Jest: `--shuffle` (Vitest) or `--randomize` equivalent" — but `--shuffle` is Jest's flag (Jest 28+); Vitest has no bare `--shuffle` and randomizes via `--sequence.shuffle` (CLI) / `sequence.shuffle` (config). `npx vitest run --shuffle` errors out. Since Vitest is this repo's primary runner (backend + dashboard), the independence-verification step is broken on the main path — the reader falls back to the "run each file alone" alternative, but the documented command is simply wrong. Fix: relabel to `Vitest: --sequence.shuffle · Jest: --shuffle`. Done = each runner is paired with its real flag.
+
+**Resolution (2026-06-03):** Fixed in the global skill — line now reads
+`Vitest: --sequence.shuffle · Jest: --shuffle`. (Skill lives in `~/.claude/skills/`,
+outside this repo; only this status update is committed.)
+
+---
