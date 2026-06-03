@@ -176,31 +176,21 @@ Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `re
 
 ---
 
-## E2E suite broken by seed-strip (discovered 2026-06-03) — NEEDS DECISION
+## E2E suite broken by seed-strip — RESOLVED 2026-06-03 (`f1666e8`)
 
-The bare-bones seed (commit `9e9f186`) deletes the DynaTire tenant, and the
-e2e fixture `seedDynaTireBusinessConfig` (dashboard/e2e/helpers/fixtures.ts) was
-NOT updated to recreate it — it inserts resources/services/employees under
-`DYNATIRE_TENANT_ID` but never inserts the tenant + `admin@dynatire.com` owner
-row. Result: the helper FK-fails on `resources_tenant_id_fkey`, breaking all
-~16 specs that call it (confirmed via `workflows.spec.ts:630`). CLAUDE.md's
-"99 Playwright e2e passing" is therefore stale — the suite has been red since
-`9e9f186`.
+The bare-bones seed (commit `9e9f186`) deletes the DynaTire tenant, but the e2e
+fixture `seedDynaTireBusinessConfig` was NOT updated to recreate it — it inserted
+resources/services/employees under `DYNATIRE_TENANT_ID` while never inserting the
+tenant + owner, so it FK-failed on `resources_tenant_id_fkey` and broke all ~16
+specs that call it. The suite had been red since `9e9f186`.
 
-Two ways to fix (pick one):
-- **(A) Keep the test fixture on DynaTire** — add the missing test-only tenant +
-  owner INSERT (idempotent) to the top of `seedDynaTireBusinessConfig`. Tiny,
-  makes the suite green. The DynaTire name here is a fictional TEST fixture in an
-  ephemeral rebuilt DB, NOT the real ex-customer (already removed from real DBs).
-- **(B) Migrate the suite off DynaTire** — repoint the ~16 specs + helpers to
-  Bella's Hair Studio or self-registered fresh tenants, delete DYNATIRE_*. Large.
+**Fixed via option (A):** `seedDynaTireBusinessConfig` now creates the test-only
+DynaTire tenant + owner (idempotent) before the rest; `auth-flows.spec.ts` (never
+migrated) now calls the helper in beforeAll/afterAll. This DynaTire is a fictional
+TEST fixture in the ephemeral rebuilt DB, NOT the removed real customer. Verified:
+full Playwright suite **111 passed / 7 skipped**.
 
-Dale chose "rename visible surfaces only" for the codebase pass (done, `ec0d754`),
-which left test fixtures as-is — so (A) is the consistent finish, but it re-adds a
-test-only DynaTire bootstrap that was deliberately reverted earlier this session.
-Confirm before applying.
-
-Also open: **prod DB DynaTire removal** — gated on the Railway token (`/tmp/rwtok`);
+Still open: **prod DB DynaTire removal** — gated on the Railway token (`/tmp/rwtok`);
 local dev DB already clean (0 DynaTire rows).
 
 ## E2E Known Issues (Playwright)
