@@ -11,6 +11,17 @@ theory is superseded; LiveKit `+`/format theory is ruled out (no INVITE arrives 
 
 > **Full evidence in `docs/BETH_GO_LIVE_TODO.md` → Step 5 (2026-06-03 ~16:00 UTC entry).**
 
+**Added evidence (2026-06-03):** Telnyx's own Elastic SIP Trunking dashboard shows
+**0 inbound calls / 0 minutes** for this number — inbound never reaches the trunk at
+all (not a SIP-negotiation failure on our connection). API confirms only 2 connections
+exist (`livekit-outbound` FQDN `2945038451784812111` — the number's connection — + an
+unused "Forward Only" credential conn `2944916791014459118`), number `connection_id`
+correctly = `2945038451784812111`, status active. So the number's inbound routing onto
+the trunk, or its PSTN reachability, isn't active on Telnyx's side. Append to the reply:
+*"Your Elastic SIP Trunking dashboard shows 0 inbound calls/minutes for +16308661960 —
+inbound isn't reaching our trunk. Please confirm inbound calls are delivered to connection
+2945038451784812111 and that the number is fully activated for inbound on your network."*
+
 **Reply to send Telnyx (data-backed; keeps us on Option 1, refuses Call Control/TeXML):**
 > We use **FQDN SIP trunking (your Option 1)** to an external SIP server (LiveKit Cloud) — a
 > Call Control/TeXML app (options 2/3) would break our architecture, so we won't use those.
