@@ -2,24 +2,30 @@
 
 **Number**: `+1 630-866-1960` (active, Thinking Hammer LLC). Telnyx id `2973794140900296302`.
 
-**Status (2026-06-03) — OPEN, number unreachable.** Inbound calls hit a recorded
-"no longer in service" carrier intercept; the call never reaches Telnyx. Telnyx config
-fully re-verified clean via API (number active + voice-configured, connection + FQDN +
-LiveKit trunk all correct). Likely root cause: recycled-DID sticky disconnect record
-cached in carrier LERG/routing tables.
+**Status (2026-06-03) — OPEN, inbound unreachable. Leg localized via instrumented dial: NOT LiveKit; Telnyx-domain.**
+A measured dial proved the SIP INVITE never reaches our LiveKit SIP server (LiveKit
+`listRooms()` stayed at 0 across the dial; no `call-*` room created). Caller hears a carrier
+intercept: "The number you dialed is not in service… Message EL402IL53." This matches Telnyx
+support's "the FQDN connection lacks inbound call handling." Earlier "recycled-DID propagation"
+theory is superseded; LiveKit `+`/format theory is ruled out (no INVITE arrives to reject).
 
-> **Full diagnosis + action plan live in `docs/BETH_GO_LIVE_TODO.md` → Step 5
-> (2026-06-03 ~12:40 UTC entry).** That is the source of truth — do not duplicate it here.
+> **Full evidence in `docs/BETH_GO_LIVE_TODO.md` → Step 5 (2026-06-03 ~16:00 UTC entry).**
 
-**History**: The earlier `+1-630-937-9478` was a dead trial-account order (1-order cap +
-negative balance, deleted). Ticket `#2850682` / its LERG escalation is moot — that was a
-different number. The current intercept on `+16308661960` is a fresh issue.
+**Reply to send Telnyx (data-backed; keeps us on Option 1, refuses Call Control/TeXML):**
+> We use **FQDN SIP trunking (your Option 1)** to an external SIP server (LiveKit Cloud) — a
+> Call Control/TeXML app (options 2/3) would break our architecture, so we won't use those.
+> The number `+16308661960` is on FQDN connection `2945038451784812111`, whose **inbound
+> `default_primary_fqdn_id` = `2945040817925916333`**, which is our FQDN
+> `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060`. On an inbound call, **nothing arrives at our
+> SIP server** and the caller gets a "not in service" intercept (carrier code EL402IL53).
+> Question: on an inbound call to this number, are you (a) finding **no inbound route**, or
+> (b) routing to our FQDN and getting a **SIP failure** back — and **what SIP cause code** do
+> you see? The inbound FQDN pointer is set, so we need to know why inbound isn't being
+> delivered to it.
 
-### Recommended Next Actions (see BETH_GO_LIVE_TODO Step 5 for detail)
-- Open a Telnyx ticket for `+16308661960` (recorded "no longer in service" intercept,
-  no inbound CDRs, request upstream routing/activation refresh). **Log the ticket # here.**
-- Retest from a different carrier; wait up to 24–72h from purchase (bought 2026-06-03T01:18Z).
-- If still dead, provision a different fresh DID as the fastest fallback.
-- Update this file with any new ticket number or Telnyx response.
+### Also have Dale check in Mission Control
+- The number's **inbound routing** (number → connection inbound, not just outbound assignment).
+- Voice → the FQDN connection's **SIP call-flow / debugging** tool for the failed inbound attempt.
+- Fallback if Telnyx stalls: provision a different fresh DID (`POST /provisioning/activate`).
 
-**Last updated**: 2026-06-03 (ticket #: _none filed yet_)
+**Last updated**: 2026-06-03 (ticket #: _none filed yet_ — send the reply above)

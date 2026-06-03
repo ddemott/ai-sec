@@ -52,6 +52,32 @@ Last worked: 2026-06-02 (night). Owner: Dale. Claude walks you through each step
 - Try a real booking → confirm row lands in `appointments` for tenant d5e3c6a1
   inside Dale's Mon–Fri 1–5pm window (out-of-window should reject).
 
+**2026-06-03 ~16:00 UTC — INSTRUMENTED DIAL (decisive). Leg localized: NOT LiveKit.**
+Telnyx support (earlier) said the number is active but the FQDN connection "lacks inbound
+call handling." Re-verified via API: connection `2945038451784812111` inbound
+`default_primary_fqdn_id` = `2945040817925916333`, which MATCHES the live LiveKit FQDN
+`ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` — so the static config LOOKS correctly wired.
+To stop guessing, ran a measured dial:
+- Baseline `RoomServiceClient.listRooms()` = 0. Dale dialed `+16308661960`. Polled again at
+  +0s and +5s = **still 0 rooms.** No `call-*` room, no participant — **the SIP INVITE never
+  reached LiveKit.**
+- Dale heard his **carrier's** recorded intercept: "The number you dialed is not in service…
+  dial 611 for customer service. **Message EL402IL53**" (EL…IL = an Illinois carrier SIT).
+- **Conclusion:** the call dies UPSTREAM of LiveKit (Telnyx or originating carrier). LiveKit
+  is exonerated — the earlier LiveKit trunk `+`/no-`+` DNIS-format theory is RULED OUT (no
+  INVITE arrives to reject). Do NOT mutate the LiveKit trunk. This matches Telnyx support's
+  "inbound not handled" direction: despite the inbound FQDN pointer being set, Telnyx is not
+  delivering inbound INVITEs to our SIP server.
+- **Next (Telnyx-domain, see `docs/TICKET_SUPPORT.md` for the reply):** go back to Telnyx with
+  the data — "We use FQDN SIP trunking (your Option 1) to LiveKit; connection
+  `2945038451784812111` inbound `default_primary_fqdn_id` points to our FQDN; on an inbound
+  call NOTHING arrives at our SIP server. Are you (a) finding no inbound route, or (b) routing
+  to the FQDN and getting a SIP failure — and what cause code do you see?" Plus Dale checks
+  Mission Control → the number's inbound routing + the FQDN connection's SIP debugging/call
+  flow. Do NOT create a Call Control/TeXML app (their options 2/3 — wrong for LiveKit).
+
+---
+
 **2026-06-03 09:33 UTC — first dial returned SIT "the number you dialed is not in service."**
 Diagnosed as PSTN activation lag, NOT config. Verified correct end-to-end:
 - Telnyx: `+16308661960` status active, voice-enabled, on FQDN connection `livekit-outbound`
