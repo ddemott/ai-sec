@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  PlusCircle,
   Settings,
   Calendar,
   ExternalLink,
@@ -19,7 +18,6 @@ import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
-import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
 import type { EffectiveShift } from '../lib/types';
 import { ConfirmModal } from './ui/ConfirmModal';
@@ -27,19 +25,11 @@ import { useConfirm } from '../lib/useConfirm';
 
 export default function BusinessSettingsView() {
   const tenantId = useActiveTenantId();
-  const {
-    resources,
-    services,
-    employees,
-    loading: staticLoading,
-    error: resourcesError,
-    refresh: refreshResources,
-  } = useStaticData(tenantId);
+  const { services, employees, loading: staticLoading } = useStaticData(tenantId);
   const vocab = useVocabulary();
   const refreshVocabulary = useVocabularyRefresh();
 
   const [teamSize, setTeamSize] = useState<number | null>(null);
-  const [newResource, setNewResource] = useState({ name: '', description: '' });
   const { state: confirmState, close: closeConfirm } = useConfirm();
 
   // Availability
@@ -149,34 +139,6 @@ export default function BusinessSettingsView() {
       console.error('Disconnect failed');
     } finally {
       setCalLoading(false);
-    }
-  }
-
-  async function handleCreateResource(e: React.FormEvent) {
-    e.preventDefault();
-    if (!tenantId || !newResource.name.trim()) return;
-    try {
-      const res = await Api.resources.create(tenantId, {
-        name: newResource.name.trim(),
-        description: newResource.description.trim() || undefined,
-      });
-      if (res.success) {
-        void refreshResources();
-        setNewResource({ name: '', description: '' });
-      }
-    } catch (err) {
-      console.error('Failed to create resource', err);
-    }
-  }
-
-  async function toggleResourceActive(resourceId: string, currentActive: boolean | undefined) {
-    try {
-      const res = await Api.resources.update(resourceId, { is_active: !currentActive });
-      if (res.success) {
-        void refreshResources();
-      }
-    } catch (err) {
-      console.error('Failed to update resource', err);
     }
   }
 
@@ -532,97 +494,9 @@ export default function BusinessSettingsView() {
           </div>{/* end Connections space-y-4 */}
         </div>{/* end Connections section */}
 
-        {/* ─── RESOURCES & CAPACITY (team mode only) ─── */}
-        {!isSolo && (
-          <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-bold">{vocab.resource_plural} & Capacity Units</h2>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                  Each unit (bay, chair, room, or vehicle) is a {vocab.resource_label.toLowerCase()}{' '}
-                  that can run its own {vocab.booking_label.toLowerCase()}s in parallel.
-                </p>
-              </div>
-            </div>
-
-            {resourcesError && (
-              <div className="mb-4 text-sm text-red-600 dark:text-red-400">{resourcesError}</div>
-            )}
-
-            <form onSubmit={handleCreateResource} className="flex flex-col md:flex-row gap-3 mb-6">
-              <Input
-                placeholder={`${vocab.resource_label} Name (e.g. Station 2)`}
-                value={newResource.name}
-                onChange={(e) => setNewResource((prev) => ({ ...prev, name: e.target.value }))}
-                className="flex-1"
-              />
-              <Input
-                placeholder="Optional description"
-                value={newResource.description}
-                onChange={(e) =>
-                  setNewResource((prev) => ({ ...prev, description: e.target.value }))
-                }
-                className="flex-1"
-              />
-              <Button
-                type="submit"
-                disabled={!tenantId || !newResource.name.trim()}
-                icon={PlusCircle}
-              >
-                Add {vocab.resource_label}
-              </Button>
-            </form>
-
-            <div
-              className="border rounded-xl overflow-hidden"
-              style={{ borderColor: 'var(--border-soft)' }}
-            >
-              <div
-                className="px-4 py-2 text-xs font-bold uppercase tracking-widest flex justify-between"
-                style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
-              >
-                <span>Name</span>
-                <span className="w-32 text-right">Status</span>
-              </div>
-              {staticLoading && resources.length === 0 ? (
-                <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  Loading {vocab.resource_plural.toLowerCase()}...
-                </div>
-              ) : resources.length === 0 ? (
-                <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  No {vocab.resource_plural.toLowerCase()} yet. Add your first{' '}
-                  {vocab.resource_label.toLowerCase()} above.
-                </div>
-              ) : (
-                resources.map((r) => (
-                  <div
-                    key={r.resource_id}
-                    className="px-4 py-3 border-t flex items-center justify-between text-sm"
-                    style={{ borderColor: 'var(--border-soft)' }}
-                  >
-                    <div>
-                      <div className="font-semibold">{r.name}</div>
-                      {r.description && (
-                        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          {r.description}
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      className="h-8 text-xs px-3"
-                      onClick={() => toggleResourceActive(r.resource_id, r.is_active ?? true)}
-                    >
-                      <Badge variant={(r.is_active ?? true) ? 'success' : 'secondary'}>
-                        {(r.is_active ?? true) ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        )}
+        {/* RESOURCES & CAPACITY removed 2026-06-03 (IA merge Phase 2): the
+            canonical resource editor is the "Resources" sub-tab under Setup
+            (ResourceManagerView). This team-only block duplicated it. */}
         <ConfirmModal {...confirmState} onClose={closeConfirm} />
       </div>
     </div>

@@ -189,16 +189,6 @@ describe('BusinessSettingsView', () => {
       // WHY: team mode has different wording than solo
     });
 
-    test('shows resources section in team mode', async () => {
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Stations & Capacity Units')).toBeInTheDocument();
-      });
-      // WHO: team businesses | WHAT: resource management
-      // WHEN: team_size > 1 | WHERE: resources section
-      // WHY: team mode manages workstations/bays
-    });
-
     test('displays Google and Outlook calendar connection buttons when not connected', async () => {
       render(<BusinessSettingsView />);
       await waitFor(() => {
@@ -278,66 +268,9 @@ describe('BusinessSettingsView', () => {
       // WHY: connect to external CRM systems
     });
 
-    test('creates new resource when form is submitted', async () => {
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText('Station Name (e.g. Station 2)')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByPlaceholderText('Station Name (e.g. Station 2)'), {
-        target: { value: 'Bay 1' },
-      });
-      fireEvent.change(screen.getByPlaceholderText('Optional description'), {
-        target: { value: 'Main bay' },
-      });
-      fireEvent.click(screen.getByText('Add Station'));
-
-      await waitFor(() => {
-        expect(mockCreateResource).toHaveBeenCalledWith('test-tenant-123', {
-          name: 'Bay 1',
-          description: 'Main bay',
-        });
-        expect(mockRefreshResources).toHaveBeenCalled();
-      });
-      // WHO: business owners | WHAT: resource creation
-      // WHEN: submitting resource form | WHERE: resources section
-      // WHY: add new workstations/capacity
-    });
-
-    test('displays existing resources', async () => {
-      mockResources = [
-        { resource_id: 'res-1', name: 'Bay 1', description: 'Main bay', is_active: true },
-        { resource_id: 'res-2', name: 'Bay 2', is_active: false },
-      ];
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Bay 1')).toBeInTheDocument();
-        expect(screen.getByText('Main bay')).toBeInTheDocument();
-        expect(screen.getByText('Bay 2')).toBeInTheDocument();
-      });
-      // WHO: users | WHAT: resource list
-      // WHEN: viewing settings | WHERE: resources section
-      // WHY: show existing capacity units
-    });
-
-    test('toggles resource active status', async () => {
-      mockResources = [{ resource_id: 'res-1', name: 'Bay 1', is_active: true }];
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Active')).toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByText('Active'));
-
-      await waitFor(() => {
-        expect(mockUpdateResource).toHaveBeenCalledWith('res-1', { is_active: false });
-      });
-      // WHO: users managing capacity | WHAT: toggle resource
-      // WHEN: clicking status badge | WHERE: resource row
-      // WHY: temporarily disable a workstation
-    });
+    // Resource-management tests removed 2026-06-03 (IA merge Phase 2): the
+    // resource editor moved to the Setup → Resources sub-tab (ResourceManagerView,
+    // covered by its own tests). BusinessSettingsView no longer renders it.
   });
 
   describe('Happy Paths - Solo Mode', () => {
@@ -451,20 +384,6 @@ describe('BusinessSettingsView', () => {
       // WHY: guide user to add services
     });
 
-    test('shows empty resources message in team mode', async () => {
-      mockResources = [];
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(
-          screen.getByText('No stations yet. Add your first station above.')
-        ).toBeInTheDocument();
-      });
-      // WHO: new team users | WHAT: empty resources state
-      // WHEN: no resources | WHERE: resources list
-      // WHY: guide user to add resources
-    });
-
     test('shows no schedule message when shifts are empty', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 });
       mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
@@ -479,31 +398,8 @@ describe('BusinessSettingsView', () => {
       // WHY: direct user to set schedule
     });
 
-    test('prevents resource creation without name', async () => {
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Add Station')).toBeInTheDocument();
-      });
-
-      // Button should be disabled when name is empty
-      const addButton = screen.getByText('Add Station');
-      expect(addButton).toBeDisabled();
-      // WHO: users | WHAT: form validation
-      // WHEN: empty resource name | WHERE: resource form
-      // WHY: prevent empty resource names
-    });
-
-    test('displays resources error message', async () => {
-      mockResourcesError = 'Failed to load resources';
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.getByText('Failed to load resources')).toBeInTheDocument();
-      });
-      // WHO: users | WHAT: error display
-      // WHEN: static data hook error | WHERE: resources section
-      // WHY: inform user of data loading issue
-    });
+    // Resource sad-path tests removed 2026-06-03 (IA merge Phase 2) — resource
+    // editor moved to Setup → Resources (ResourceManagerView).
   });
 
   describe('Edge Cases', () => {
@@ -517,15 +413,6 @@ describe('BusinessSettingsView', () => {
       });
     });
 
-    test('hides Resources section in solo mode', async () => {
-      mockGetConfig.mockResolvedValue({ team_size: 1 });
-      mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
-
-      render(<BusinessSettingsView />);
-      await waitFor(() => {
-        expect(screen.queryByText('Stations & Capacity Units')).not.toBeInTheDocument();
-      });
-    });
 
     test('shows shifts loading state', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 });
