@@ -43,7 +43,7 @@ SEED_OUTPUT=$(psql "$DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f "$SEED_F
 }
 echo "[secretaryhq] Seed data applied successfully."
 
-echo "[secretaryhq] Done. Platform admin + DeMott LLC + DynaTire demo tenant seeded."
+echo "[secretaryhq] Done. Platform admin + Thinking Hammer LLC + Bella's Hair Studio demo seeded."
 echo "  Login: admin@secretaryhq.com / password (platform super-admin)"
-echo "  Login: daledemott@gmail.com  / password (DeMott LLC — Dale's real business)"
-echo "  Login: admin@dynatire.com    / password (DynaTire — demo tenant)"
+echo "  Login: daledemott@gmail.com  / password (Thinking Hammer LLC — Dale's real business)"
+echo "  Login: bella@bellashair.com  / password (Bella's Hair Studio — salon demo tenant)"

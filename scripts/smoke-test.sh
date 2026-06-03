@@ -128,8 +128,8 @@ fi
 echo ""
 echo "5. Vocabulary endpoint..."
 
-# Use the DynaTire PoC tenant ID
-POC_TENANT="f234e471-0e60-4163-86c9-93cfd9338e3a"
+# Use the Bella's Hair Studio demo tenant ID (DynaTire PoC removed 2026-06-03)
+POC_TENANT="b3e1aaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
 VOCAB_RESPONSE=$(curl $CURL_OPTS "$BACKEND_URL/vocabulary?tenant_id=$POC_TENANT" \
   -H "$AUTH_HEADER" 2>/dev/null || echo "")

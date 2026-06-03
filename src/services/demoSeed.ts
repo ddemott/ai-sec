@@ -5,8 +5,8 @@
  * (the tenant itself lives outside this transaction — it is created by the
  * caller before invoking this function so the tenant_id is known up front).
  *
- * Data modelled on DynaTire but with different names/phones so it doesn't
- * collide with the real seed fixtures.
+ * Data modelled on a generic mobile-tire shop but with fictional names/phones
+ * so it doesn't collide with the real seed fixtures.
  */
 
 import type { Pool, PoolClient } from 'pg';
