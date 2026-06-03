@@ -1,55 +1,29 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import {
-  PlusCircle,
-  Building2,
-  UserPlus,
-  ShieldCheck,
-  Settings,
-  Calendar,
-  ExternalLink,
-  Unlink,
-  CheckCircle2,
-} from 'lucide-react';
+import { PlusCircle, Building2, UserPlus, ShieldCheck } from 'lucide-react';
 import { Api } from '../lib/api';
-import { CRMIntegrationCard } from './CRMIntegrationCard';
-import { useStaticData } from '../lib/hooks';
-import { useActiveTenantId, useSessionContext } from '../lib/SessionContext';
-import { useVocabulary } from '@/lib/VocabularyContext';
+import { useSessionContext } from '../lib/SessionContext';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
-import { Badge } from './ui/Badge';
 import { showToast } from './ui/Toast';
-import { ConfirmModal } from './ui/ConfirmModal';
-import { useConfirm } from '../lib/useConfirm';
 
+// IA merge Phase 2b (2026-06-03): SettingsView is now SUPER-ADMIN ONLY — the
+// multi-business onboarding console. Owner business configuration (calendar/CRM
+// connections, resources) was a duplicate of what now lives under the Setup tab
+// (BusinessSettingsView Connections + the Setup → Resources sub-tab), so the
+// owner-mode block here was removed. A non-super-admin who reaches
+// ?tab=settings via a stale link gets a pointer to Setup rather than a
+// second, divergent copy of the config surface.
 export default function SettingsView() {
-  const tenantId = useActiveTenantId();
   const { isAdmin: isSuperAdmin } = useSessionContext();
-  const {
-    resources,
-    loading: resourcesLoading,
-    error: resourcesError,
-    refresh: refreshResources,
-  } = useStaticData(tenantId);
-  const vocab = useVocabulary();
 
   const [templates, setTemplates] = useState<{ business_type: string; display_name: string }[]>([]);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
-  const [newResource, setNewResource] = useState({ name: '', description: '' });
-
-  // Calendar State
-  const [calendarSettings, setCalendarSettings] = useState<{
-    provider: string;
-    external_calendar_id: string;
-  } | null>(null);
-  const [calLoading, setCalLoading] = useState(false);
-  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
 
   // Form State for onboarding
   const [form, setForm] = useState({
@@ -62,78 +36,9 @@ export default function SettingsView() {
   });
 
   useEffect(() => {
-    if (isSuperAdmin) {
-      void fetchTemplates();
-    } else if (tenantId) {
-      void fetchCalendarSettings();
-    }
+    if (isSuperAdmin) void fetchTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuperAdmin, tenantId]);
-
-  // Detect OAuth redirect params
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('calendarConnected') === 'true') {
-      void fetchCalendarSettings();
-      // Clean up URL
-      const url = new URL(window.location.href);
-      url.searchParams.delete('calendarConnected');
-      window.history.replaceState({}, '', url.pathname);
-    }
-    if (params.get('calendarError')) {
-      showToast('Calendar connection failed', 'error');
-      const url = new URL(window.location.href);
-      url.searchParams.delete('calendarError');
-      window.history.replaceState({}, '', url.pathname);
-    }
-    // CRM OAuth callbacks handled by CRMIntegrationCard component
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function fetchCalendarSettings() {
-    try {
-      const data = await Api.calendar.getSettings(tenantId);
-      setCalendarSettings(data);
-    } catch {
-      showToast('Failed to load calendar settings', 'error');
-    }
-  }
-
-  async function handleConnectCalendar(provider: 'google' | 'outlook') {
-    setCalLoading(true);
-    try {
-      const res = await Api.calendar.getAuthUrl(tenantId, provider);
-      // Redirect browser to provider's consent screen
-      window.location.href = res.url;
-    } catch {
-      showToast(`Failed to connect ${provider} calendar`, 'error');
-      setCalLoading(false);
-    }
-  }
-
-  function handleDisconnectCalendar() {
-    confirmAction({
-      title: 'Disconnect Calendar',
-      message: 'Disconnect your calendar? Appointments will no longer sync automatically.',
-      confirmLabel: 'Disconnect',
-      confirmVariant: 'warning',
-      onConfirm: async () => {
-        closeConfirm();
-        setCalLoading(true);
-        try {
-          const res = await Api.calendar.disconnect(tenantId);
-          if (res.success) {
-            setCalendarSettings(null);
-          }
-        } catch {
-          showToast('Failed to disconnect calendar', 'error');
-        } finally {
-          setCalLoading(false);
-        }
-      },
-    });
-  }
+  }, [isSuperAdmin]);
 
   async function fetchTemplates() {
     try {
@@ -141,34 +46,6 @@ export default function SettingsView() {
       setTemplates(data);
     } catch {
       showToast('Failed to load templates', 'error');
-    }
-  }
-
-  async function handleCreateResource(e: React.FormEvent) {
-    e.preventDefault();
-    if (!tenantId || !newResource.name.trim()) return;
-    try {
-      const res = await Api.resources.create(tenantId, {
-        name: newResource.name.trim(),
-        description: newResource.description.trim() || undefined,
-      });
-      if (res.success) {
-        void refreshResources();
-        setNewResource({ name: '', description: '' });
-      }
-    } catch (e) {
-      console.error('Failed to create resource', e);
-    }
-  }
-
-  async function toggleResourceActive(resourceId: string, currentActive: boolean | undefined) {
-    try {
-      const res = await Api.resources.update(resourceId, { is_active: !currentActive });
-      if (res.success) {
-        void refreshResources();
-      }
-    } catch (e) {
-      console.error('Failed to update resource', e);
     }
   }
 
@@ -203,280 +80,15 @@ export default function SettingsView() {
   if (!isSuperAdmin) {
     return (
       <div
-        className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200"
+        className="flex-1 flex flex-col items-center justify-center p-8 text-center"
         style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
       >
-        <header className="mb-8 flex items-center">
-          <div
-            className="p-2 rounded-lg mr-4"
-            style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
-          >
-            <Settings className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-display">Business Settings</h1>
-            <p style={{ color: 'var(--text-secondary)' }}>
-              Manage your bays, resources, and preferences
-            </p>
-          </div>
-        </header>
-        <div className="space-y-8">
-          <Card className="p-8 text-center" style={{ backgroundColor: 'var(--bg-raised)' }}>
-            <p className="italic" style={{ color: 'var(--text-muted)' }}>
-              User profile settings will appear here.
-            </p>
-          </Card>
-
-          {/* CALENDAR SYNC SECTION */}
-          <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center">
-                <div
-                  className="p-2 rounded-lg mr-4"
-                  style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
-                >
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold">Calendar Synchronization</h2>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    Automatically push AI bookings to your Google or Outlook calendar.
-                  </p>
-                </div>
-              </div>
-              {calendarSettings && (
-                <Badge variant="success" className="flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Connected
-                </Badge>
-              )}
-            </div>
-
-            {!calendarSettings ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => handleConnectCalendar('google')}
-                  disabled={calLoading}
-                  className="flex items-center justify-center gap-3 p-4 border rounded-2xl transition-all font-bold group"
-                  style={{
-                    backgroundColor: 'var(--bg-surface)',
-                    borderColor: 'var(--border-soft)',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-soft)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
-                >
-                  <div className="w-8 h-8 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center text-red-600">
-                    G
-                  </div>
-                  <span>Connect Google Calendar</span>
-                  <ExternalLink className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-                </button>
-                <button
-                  onClick={() => handleConnectCalendar('outlook')}
-                  disabled={calLoading}
-                  className="flex items-center justify-center gap-3 p-4 border rounded-2xl transition-all font-bold group"
-                  style={{
-                    backgroundColor: 'var(--bg-surface)',
-                    borderColor: 'var(--border-soft)',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-soft)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
-                >
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
-                  >
-                    O
-                  </div>
-                  <span>Connect Outlook Calendar</span>
-                  <ExternalLink className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-                </button>
-              </div>
-            ) : (
-              <div
-                className="p-4 border rounded-2xl flex items-center justify-between"
-                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-              >
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${calendarSettings.provider === 'google' ? 'bg-red-500 text-white' : ''}`}
-                    style={
-                      calendarSettings.provider !== 'google'
-                        ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
-                        : undefined
-                    }
-                  >
-                    {calendarSettings.provider === 'google' ? 'G' : 'O'}
-                  </div>
-                  <div>
-                    <div className="font-bold capitalize">
-                      {calendarSettings.provider} Calendar Connected
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      ID: {calendarSettings.external_calendar_id}
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  onClick={handleDisconnectCalendar}
-                  disabled={calLoading}
-                  className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  icon={Unlink}
-                >
-                  Disconnect
-                </Button>
-              </div>
-            )}
-          </Card>
-
-          {/* CRM INTEGRATIONS */}
-          <CRMIntegrationCard
-            tenantId={tenantId}
-            provider={{
-              name: 'Jobber',
-              color: 'green',
-              icon: 'J',
-              description: 'Sync customers and appointments with your Jobber account.',
-              getSettings: Api.jobber.getSettings,
-              getAuthUrl: Api.jobber.getAuthUrl,
-              disconnect: Api.jobber.disconnect,
-              triggerSync: Api.jobber.triggerSync,
-              connectedParam: 'jobberConnected',
-            }}
-          />
-          <CRMIntegrationCard
-            tenantId={tenantId}
-            provider={{
-              name: 'HubSpot',
-              color: 'orange',
-              icon: 'H',
-              description: 'Sync customers and appointments with your HubSpot account.',
-              getSettings: Api.hubspot.getSettings,
-              getAuthUrl: Api.hubspot.getAuthUrl,
-              disconnect: Api.hubspot.disconnect,
-              triggerSync: Api.hubspot.triggerSync,
-              connectedParam: 'hubspotConnected',
-            }}
-          />
-          <CRMIntegrationCard
-            tenantId={tenantId}
-            provider={{
-              name: 'Square',
-              color: 'blue',
-              icon: 'S',
-              description: 'Sync customers and bookings with your Square account.',
-              getSettings: Api.square.getSettings,
-              getAuthUrl: Api.square.getAuthUrl,
-              disconnect: Api.square.disconnect,
-              triggerSync: Api.square.triggerSync,
-              connectedParam: 'squareConnected',
-            }}
-          />
-          <CRMIntegrationCard
-            tenantId={tenantId}
-            provider={{
-              name: 'ServiceTitan',
-              color: 'purple',
-              icon: 'ST',
-              description: 'Sync customers and jobs with your ServiceTitan account.',
-              getSettings: Api.servicetitan.getSettings,
-              getAuthUrl: Api.servicetitan.getAuthUrl,
-              disconnect: Api.servicetitan.disconnect,
-              triggerSync: Api.servicetitan.triggerSync,
-              connectedParam: 'servicetitanConnected',
-            }}
-          />
-
-          <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-bold">{vocab.resource_plural} & Capacity Units</h2>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                  Each unit (bay, chair, room, or vehicle) is a {vocab.resource_label.toLowerCase()}{' '}
-                  that can run its own {vocab.booking_label.toLowerCase()}s in parallel.
-                </p>
-              </div>
-            </div>
-
-            {resourcesError && (
-              <div className="mb-4 text-sm text-red-600 dark:text-red-400">{resourcesError}</div>
-            )}
-
-            <form onSubmit={handleCreateResource} className="flex flex-col md:flex-row gap-3 mb-6">
-              <Input
-                placeholder={`${vocab.resource_label} Name (e.g. Station 2)`}
-                value={newResource.name}
-                onChange={(e) => setNewResource((prev) => ({ ...prev, name: e.target.value }))}
-                className="flex-1"
-              />
-              <Input
-                placeholder="Optional description"
-                value={newResource.description}
-                onChange={(e) =>
-                  setNewResource((prev) => ({ ...prev, description: e.target.value }))
-                }
-                className="flex-1"
-              />
-              <Button
-                type="submit"
-                disabled={!tenantId || !newResource.name.trim()}
-                icon={PlusCircle}
-              >
-                Add {vocab.resource_label}
-              </Button>
-            </form>
-
-            <div
-              className="border rounded-xl overflow-hidden"
-              style={{ borderColor: 'var(--border-soft)' }}
-            >
-              <div
-                className="px-4 py-2 text-xs font-bold uppercase tracking-widest flex justify-between"
-                style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }}
-              >
-                <span>Name</span>
-                <span className="w-32 text-right">Status</span>
-              </div>
-              {resourcesLoading && resources.length === 0 ? (
-                <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  Loading {vocab.resource_plural.toLowerCase()}...
-                </div>
-              ) : resources.length === 0 ? (
-                <div className="p-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  No {vocab.resource_plural.toLowerCase()} yet. Add your first{' '}
-                  {vocab.resource_label.toLowerCase()} above.
-                </div>
-              ) : (
-                resources.map((r) => (
-                  <div
-                    key={r.resource_id}
-                    className="px-4 py-3 border-t flex items-center justify-between text-sm"
-                    style={{ borderColor: 'var(--border-soft)' }}
-                  >
-                    <div>
-                      <div className="font-semibold">{r.name}</div>
-                      {r.description && (
-                        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          {r.description}
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      className="h-8 text-xs px-3"
-                      onClick={() => toggleResourceActive(r.resource_id, r.is_active ?? true)}
-                    >
-                      <Badge variant={(r.is_active ?? true) ? 'success' : 'secondary'}>
-                        {(r.is_active ?? true) ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
-        <ConfirmModal {...confirmState} onClose={closeConfirm} />
+        <ShieldCheck className="w-10 h-10 mb-4" style={{ color: 'var(--text-muted)' }} />
+        <h1 className="text-2xl font-display mb-2">Settings moved</h1>
+        <p style={{ color: 'var(--text-secondary)', maxWidth: '28rem' }}>
+          Business configuration — services, team, hours, calendar &amp; CRM connections — now
+          lives under the <strong>Setup</strong> tab in the main navigation.
+        </p>
       </div>
     );
   }
@@ -651,11 +263,10 @@ export default function SettingsView() {
             className="w-full py-4 text-lg"
             icon={PlusCircle}
           >
-            Finalize & Create Business
+            Finalize &amp; Create Business
           </Button>
         </form>
       </div>
-      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }
