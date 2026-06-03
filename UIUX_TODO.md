@@ -133,7 +133,7 @@
 - [x] **[P3][S]** Normalize section eyebrow copy case — NOT A DEFECT (verified 2026-06-03). Both `.hero-eyebrow` and `.section-eyebrow` carry `text-transform: uppercase` (page.tsx CSS lines 116, 230), so every eyebrow renders uppercase uniformly regardless of source-text casing; `.problem-card-eyebrow` uses the all-caps display font. Rendered output is consistent. No change.
 - [ ] **[P3]** B4 — Reconsider sub-tab URL persistence (verify usage first) — `dashboard/app/dashboard/page.tsx` — _source: docs/TODO.md:98_
 - [ ] **[P3][L]** SetupWizard Phase B — full draft-state wizard: hold all data in local state, commit only on Done, discard on dismiss — `dashboard/components/SetupWizard/useWizardCrud.ts` + all Step*.tsx — open fresh branch; coordinate with Cluster C — _source: docs/TODO.md:137_
-- [ ] **[P3]** E1 — Demo mode (sample data via session flag, no real account) — `dashboard/app/demo` — _source: docs/TODO.md:99_
+- [x] **[P3]** E1 — Demo mode — DONE 2026-05-29 (`4934ed5`). `/demo` provisions a per-session isolated demo tenant (`is_demo`, 30-min TTL) with sample data, no real account. — `dashboard/app/demo` + `src/routes/demo.ts`
 
 ---
 
