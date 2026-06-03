@@ -338,6 +338,40 @@ export async function seedDynaTireBusinessConfig(pool: Pool): Promise<void> {
   // strings when any `$n` parameter is present (one-statement-per-
   // prepared-statement rule). Inlining keeps the script readable as
   // one block; the values are public constants in this file anyway.
+
+  // Tenant + owner user. This is a TEST-ONLY fictional fixture in the
+  // ephemeral rebuilt test DB — NOT the real ex-customer (removed from the
+  // real DBs 2026-06-03). The seed-strip (commit 9e9f186) moved the old
+  // seed.sql sections 2-4 here VERBATIM but left section 1 (the tenant +
+  // owner) behind, and the bare-bones seed now DELETEs the DynaTire tenant
+  // (seed.sql ~line 42). Without this block every INSERT below FK-fails on
+  // *_tenant_id_fkey. Idempotent (ON CONFLICT) so re-seeds across specs'
+  // beforeAll are safe; clearDynaTireBusinessConfig intentionally does NOT
+  // drop the tenant/owner, so this stays stable. role='owner' is required
+  // by the invite + customer-notes specs that log in as admin@dynatire.com.
+  await pool.query(
+    `
+    INSERT INTO tenants (tenant_id, name, business_type, timezone, system_prompt, voice_id)
+    VALUES (
+      '${DYNATIRE_TENANT_ID}',
+      'DynaTire Mobile Service',
+      'mobile-tire',
+      'America/Chicago',
+      'You are a professional, helpful secretary for DynaTire Mobile Service, a mobile tire shop serving the western Chicago suburbs including Naperville, Aurora, Wheaton, and Downers Grove. You help customers book tire services, answer questions about pricing and availability, and provide friendly, knowledgeable service.',
+      'ba124806-6962-4354-94a0-7607775952f4'
+    ) ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name;
+
+    INSERT INTO users (tenant_id, email, password_hash, full_name, role)
+    VALUES (
+      '${DYNATIRE_TENANT_ID}',
+      'admin@dynatire.com',
+      '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK',
+      'Dale Demott',
+      'owner'
+    ) ON CONFLICT (tenant_id, email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role;
+    `
+  );
+
   await pool.query(
     `
     -- Resources (2 service trucks).

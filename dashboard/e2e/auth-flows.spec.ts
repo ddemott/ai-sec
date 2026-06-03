@@ -17,6 +17,7 @@
 import { test, expect } from './helpers/test';
 import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
+import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
 import { createHash, randomUUID } from 'crypto'; // createHash for password-reset token (sha256), randomUUID for token plaintext
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -114,10 +115,16 @@ async function apiGet(
   return { status: res.status() };
 }
 
-test.beforeAll(() => {
+// The bare-bones seed (post seed-strip, commit 9e9f186) no longer ships the
+// DynaTire tenant — specs that need it self-bootstrap via the fixture helper.
+// Without this, every INSERT below hits users_tenant_id_fkey (DYNATIRE_ID
+// absent from `tenants`). Matches the pattern in the sibling specs.
+test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
+  await seedDynaTireBusinessConfig(pool);
 });
 test.afterAll(async () => {
+  await clearDynaTireBusinessConfig(pool);
   await pool.end();
 });
 
