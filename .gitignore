@@ -61,5 +61,14 @@ improvement-ideas.md
 # Claude Code harness state (per-machine, not source-controlled)
 .claude/
 
+# continuously-improve loop state (per-machine, session-scoped)
+.improve/
+
+# Playwright test output (build artifact)
+test-results/
+
+# Windows "downloaded file" mark-of-the-web cruft
+*:Zone.Identifier
+
 # Local Netlify folder
 .netlify

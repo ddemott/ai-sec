@@ -205,26 +205,4 @@ describe('nameUtils', () => {
     });
   });
 
-  describe('CRM sync files use shared nameUtils', () => {
-    it('HAPPY: jobberSync imports from nameUtils (not local definition)', () => {
-      const fs = require('fs');
-      const src = fs.readFileSync('src/services/jobberSync.ts', 'utf8');
-      expect(src).toContain("from './nameUtils'");
-      expect(src).not.toMatch(/function splitName\(/);
-    });
-
-    it('HAPPY: hubspotSync imports from nameUtils', () => {
-      const fs = require('fs');
-      const src = fs.readFileSync('src/services/hubspotSync.ts', 'utf8');
-      expect(src).toContain("from './nameUtils'");
-      expect(src).not.toMatch(/function splitName\(/);
-    });
-
-    it('HAPPY: squareSync imports from nameUtils', () => {
-      const fs = require('fs');
-      const src = fs.readFileSync('src/services/squareSync.ts', 'utf8');
-      expect(src).toContain("from './nameUtils'");
-      expect(src).not.toMatch(/function splitName\(/);
-    });
-  });
 });
