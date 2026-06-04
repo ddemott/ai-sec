@@ -425,3 +425,10 @@
 - **[high]** The intro text says answers “save automatically as you type,” but the implementation actually saves on blur, which creates a trust gap right in an autosave-heavy onboarding step → Change the copy to match the real save trigger or switch the behavior to true debounced autosave so users are not misled about when their answers persist.
 - **[medium]** The per-question labels are visual only and are not programmatically tied to their textareas with `htmlFor`/`id`, which weakens accessibility on a form that is otherwise simple to navigate → Add stable ids and associated labels for each question so screen-reader and click-to-focus behavior work reliably.
 - **[medium]** Saved/error state is shown in small inline text at the far right of each prompt, which can be easy to miss when users move quickly through several answers → Strengthen save-state visibility and differentiate unsaved, saving, saved, and failed states more clearly so the autosave workflow feels dependable instead of ambient.
+
+## Review — 2026-05-29
+
+### DemoBanner (dashboard/components/DemoBanner.tsx)
+- **[medium]** The banner switches to red “urgent” styling in the last five minutes, which reads like a warning state rather than neutral operational information and conflicts with the product rule against warnings, grades, or opinions → Keep the countdown prominent but present expiry as factual session timing, not an alarm-style escalation.
+- **[medium]** The entire banner is built with inline styles and a custom button instead of dashboard UI primitives, which makes a persistent app-level surface more likely to drift in focus, spacing, and theming behavior → Rebuild the banner and exit action from shared primitives or shared utility classes so it stays consistent with the rest of the dark-theme system.
+- **[low]** The copy line is long and held on a single flex row with a non-wrapping exit button, which is likely to crowd or wrap awkwardly on narrower laptop widths → Add a responsive stacked or multi-line layout so the countdown, explanation, and exit action remain readable without squeezing the banner.
