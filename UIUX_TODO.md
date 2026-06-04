@@ -99,7 +99,7 @@
 - [x] **[P2]** Cluster D — accessible action controls — Done 2026-05-28: StepEmployees/Services/Resources delete buttons now gated by ConfirmModal (useConfirm) + aria-label on edit+delete; SkillManagementView delete opacity-0→opacity-40 always-visible + aria-label; ResourceManagerView + AppointmentBlock already adequate.
 - [x] **[P2]** Cluster E — empty/loading/no-results distinctness — Done 2026-05-28: AppointmentListSidebar empty state added; VoiceCallsView "No call history yet" + AI-live context + filter no-results; StepResources spinner replaces "Loading..." text; DeletedRecordsPanel "no matches for X" vs "no deleted records" split with Clear search button. EmployeeManagementView/MyTeamView/CustomerDetailPanel already adequate.
 - [x] **[P2][S]** Add "Dismiss all" to error toast stack when > 2 stacked — DONE 2026-05-28 (`a619314`)
-- [ ] **[P2]** Responsive fallbacks for wide matrices/maps: `SchedulerDateNav`, `ResourceColumnsView`, `SkillRelationshipMap` — _source: docs/TODO.md:143_
+- [x] **[P2]** Responsive fallbacks for wide matrices/maps — verified present 2026-06-03. `ResourceColumnsView` has `overflow-x-auto`, `SkillRelationshipMap` has `overflow-auto`, `OutlookLayout` has an `md:hidden` mobile nav (`overflow-x-auto`); `SchedulerDateNav` is a compact ~5-button control that doesn't overflow. `mobile-responsive.spec.ts` asserts "no horizontal overflow" on iPhone-14 (390px) + Android viewports. No change needed.
 
 ### Analytics
 
@@ -131,7 +131,7 @@
 - [x] **[P3][S]** Normalize brand name capitalization — NOT A DEFECT (verified 2026-06-03). Nav + footer logo are both literal "SECRETARY HQ" rendered in Bebas Neue (`var(--ff-display)`, an inherently all-caps display font) — intentional logo styling. Prose uses correctly-cased proper noun "Secretary HQ". Register page renders no brand string at all. Rendered output is consistent; the audit flagged source casing but missed the display font. No change.
 - [x] **[P3][S]** Verify meta title, description, favicon — DONE (verified 2026-06-03). `layout.tsx:30` title "Secretary HQ" + :31 description; `dashboard/app/favicon.ico` present.
 - [x] **[P3][S]** Normalize section eyebrow copy case — NOT A DEFECT (verified 2026-06-03). Both `.hero-eyebrow` and `.section-eyebrow` carry `text-transform: uppercase` (page.tsx CSS lines 116, 230), so every eyebrow renders uppercase uniformly regardless of source-text casing; `.problem-card-eyebrow` uses the all-caps display font. Rendered output is consistent. No change.
-- [ ] **[P3]** B4 — Reconsider sub-tab URL persistence (verify usage first) — `dashboard/app/dashboard/page.tsx` — _source: docs/TODO.md:98_
+- [x] **[P3]** B4 — Sub-tab URL persistence — KEEP, verified working 2026-06-03. `?subtab=` (and scheduler `?daymode=`) is wired with init-from-URL + `replaceState` on change + `popstate` restore across SetupView, SchedulerView, BusinessSettingsView, SkillAssignmentsView. Deep-links + back/forward both work; actively used (esp. the IA-merge legacy redirects depend on it). No change needed.
 - [ ] **[P3][L]** SetupWizard Phase B — full draft-state wizard: hold all data in local state, commit only on Done, discard on dismiss — `dashboard/components/SetupWizard/useWizardCrud.ts` + all Step*.tsx — open fresh branch; coordinate with Cluster C — _source: docs/TODO.md:137_
 - [x] **[P3]** E1 — Demo mode — DONE 2026-05-29 (`4934ed5`). `/demo` provisions a per-session isolated demo tenant (`is_demo`, 30-min TTL) with sample data, no real account. — `dashboard/app/demo` + `src/routes/demo.ts`
 

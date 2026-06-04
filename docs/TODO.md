@@ -155,7 +155,7 @@ Source: Raw UX audit performed 2026-05-19 (previously captured in `ux-review-not
 ### P3 — large structural decomposition (defer; medium-high effort, vague-per-finding)
 
 - [ ] Dense-view chunking / shell-continuity `[high]`s — track but don't action piecemeal: `SettingsView` (split owner vs super-admin), `TenantEditPanel` (separate provisioning from AI-config), `CRMView`, `AppointmentView`, `DashboardHome` hierarchy, `CustomerDetailPanel`, `DeletedRecordsPanel`, `RecordHistoryModal`, `NewSchedulerView` / `SchedulerView` orchestration overlap, `ShiftManagementView` changed-vs-saved, `ServiceAssignmentView` / `SkillAssignmentsView` / `SkillMatrixView` completion cues. Several overlap with **C1+C2** (scheduler consolidation) above — sequence with that work.
-- [ ] Responsive fallbacks for wide matrices/maps (medium): `SchedulerDateNav`, `ResourceColumnsView`, `SkillRelationshipMap`, `OutlookLayout`.
+- [x] Responsive fallbacks for wide matrices/maps — verified present 2026-06-03. `ResourceColumnsView`/`SkillRelationshipMap` already scroll (`overflow-x-auto`/`overflow-auto`); `OutlookLayout` has an `md:hidden` mobile nav; `SchedulerDateNav` is compact. `mobile-responsive.spec.ts` covers no-horizontal-overflow on 390px + Android. No change needed.
 
 ## Tooling cleanup (remaining ESLint promotions)
 
