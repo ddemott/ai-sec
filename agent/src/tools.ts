@@ -1,7 +1,7 @@
 /**
  * Tool definitions for the LiveKit agent.
  *
- * Each of the 10 backend /agent-tools/* routes is exposed to the LLM as a
+ * Each of the 11 backend /agent-tools/* routes is exposed to the LLM as a
  * function-tool. The `tenant_id` and (where relevant) `call_id` are
  * injected from the session context — the LLM never sees or supplies them.
  * This prevents an entire class of bugs where the LLM hallucinates or
@@ -36,7 +36,7 @@ export function buildTools(ctx: SessionContext, client: ToolsClient): llm.ToolCo
   return {
     get_customer_context: llm.tool({
       description:
-        "Look up the caller in the CRM by their caller-ID phone. Returns the customer's name and a short history. Call this ONCE at the start of the call when a phone is available.",
+        "Look up the caller in the CRM by their caller-ID phone. Returns the customer's name, a short history, and any saved preferences (preferred staff, last service, likes) to personalize the call. Call this ONCE at the start of the call when a phone is available.",
       parameters: {
         type: 'object',
         properties: {},
@@ -340,6 +340,41 @@ export function buildTools(ctx: SessionContext, client: ToolsClient): llm.ToolCo
           tenant_id: ctx.tenantId,
           phone: args.phone,
           code: args.code,
+        });
+        return formatResponse(res);
+      },
+    }),
+
+    save_customer_preference: llm.tool({
+      description:
+        "Remember a durable fact about the caller for future calls — preferred staff member, the service they just had, a like/dislike, an allergy, a standing request. Only use when the business has asked you to track preferences and the fact will still matter next time. Saving is silent; don't announce it. No-op if the caller isn't a known customer yet.",
+      parameters: {
+        type: 'object',
+        properties: {
+          phone: {
+            type: 'string',
+            description:
+              "The caller's phone. Pass the caller-ID phone unless they gave a different verified one.",
+          },
+          key: {
+            type: 'string',
+            description:
+              'Short stable label for the preference, e.g. "preferred_stylist", "last_service", "dislikes". Reuse the same key to update an existing preference.',
+          },
+          value: {
+            type: 'string',
+            description: 'The preference itself in plain text, e.g. "Maria" or "balayage".',
+          },
+        },
+        required: ['phone', 'key', 'value'],
+        additionalProperties: false,
+      },
+      execute: async (args: { phone: string; key: string; value: string }) => {
+        const res = await client.call('/agent-tools/save-customer-preference', {
+          tenant_id: ctx.tenantId,
+          phone: args.phone,
+          key: args.key,
+          value: args.value,
         });
         return formatResponse(res);
       },

@@ -274,12 +274,33 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/take a message/i);
     // The exhaustion condition must be documented so the LLM knows when
     // to escalate vs. keep trying.
-    expect(prompt).toMatch(/rejected all|rejected every|zero slots|nothing.*lines up/i);
+    expect(prompt).toMatch(/run out|turned down several|searches come back empty|zero slots/i);
+    // Customer-led booking (2026-06-06): when the offered times don't work
+    // the agent must WIDEN the search and offer the next set, not jump
+    // straight to a message. Pin both halves so a reword can't drop the loop.
+    expect(prompt).toMatch(/do NOT jump to taking a message|widen, don't give up/i);
+    expect(prompt).toMatch(/next set of open times|NEXT window/i);
     // Capture rules: name + reason. Pre-rule the agent might forget to
     // ask for the reason, leaving the call summary ambiguous.
     expect(prompt).toMatch(/name.*reason|reason.*name/i);
     // Don't-promise-a-specific-callback rule — preserves trust.
     expect(prompt).toMatch(/don't promise|do not promise/i);
+  });
+
+  it('CONVERSATION-SHAPE (e): booking is customer-led — ask the caller their time, never impose', () => {
+    // WHO: any caller who hasn't already volunteered a specific day/time.
+    // WHAT: the prompt directs the agent to ASK what works for the caller and
+    //        states plainly that the caller chooses the time, not the agent.
+    // WHEN: the start of every booking flow.
+    // WHERE: # Availability discipline section.
+    // WHY: 2026-06-06 feedback — an agent that announces a slot it picked
+    //      ("you're booked at 2") treats the caller's day as filler for the
+    //      shop's gaps. The caller's time is theirs; the agent fits the shop
+    //      around it, asking politely and offering options to choose from.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toMatch(/caller chooses the time/i);
+    expect(prompt).toMatch(/what day and time work for THEM|what day were you thinking/i);
+    expect(prompt).toMatch(/never (announce|impose)|don't (assume|impose)/i);
   });
 
   // ───────────────────────────────────────────────────────────────────
@@ -365,6 +386,63 @@ describe('buildSystemPrompt', () => {
     for (const customPrompt of [null, undefined, '', '   \n\t  ']) {
       const prompt = buildSystemPrompt({ ...BASE_CTX, customPrompt });
       expect(prompt).toContain('You are Clara, the AI receptionist for DynaTire.');
+    }
+  });
+
+  it('PREFERENCES OFF: no "Customer preferences" section and no save tool when disabled', () => {
+    // WHO: a tenant who never opted into preference capture (the default).
+    // WHAT: the prompt must be byte-for-byte unchanged from the pre-feature
+    //        prompt — no preferences section, no save tool line.
+    // WHEN: every call for a tenant with save_preferences_enabled = false.
+    // WHERE: buildSystemPrompt preferencesSection/preferenceToolLine branches.
+    // WHY: the feature is opt-in; a disabled tenant must not have their AI's
+    //      behavior or token budget changed by a feature they didn't enable.
+    for (const ctx of [
+      BASE_CTX,
+      { ...BASE_CTX, savePreferencesEnabled: false },
+      { ...BASE_CTX, savePreferencesEnabled: false, preferencesInstructions: 'ignored when off' },
+    ]) {
+      const prompt = buildSystemPrompt(ctx);
+      expect(prompt).not.toContain('# Customer preferences');
+      expect(prompt).not.toContain('save_customer_preference');
+    }
+  });
+
+  it('PREFERENCES ON: owner instructions are injected verbatim + save tool is offered', () => {
+    // WHO: a salon owner who turned the toggle on and wrote their own guidance.
+    // WHAT: their exact instruction text appears in the prompt, the section
+    //        header + the save tool both appear so the LLM knows to use it.
+    // WHEN: every call once save_preferences_enabled = true with instructions.
+    // WHERE: buildSystemPrompt preferences branches.
+    // WHY: the owner's words are the steering signal — if they don't reach the
+    //      LLM verbatim the feature silently does nothing.
+    const ownerText = 'Always offer the same stylist and ask about nails.';
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      savePreferencesEnabled: true,
+      preferencesInstructions: ownerText,
+    });
+    expect(prompt).toContain('# Customer preferences');
+    expect(prompt).toContain(ownerText);
+    expect(prompt).toContain('save_customer_preference(phone, key, value)');
+  });
+
+  it('PREFERENCES ON, no instructions: falls back to built-in default guidance', () => {
+    // WHO: an owner who flipped the toggle on but left the textarea blank.
+    // WHAT: the section still renders with sensible default guidance (so the
+    //        toggle is useful immediately) and still offers the save tool.
+    // WHEN: save_preferences_enabled = true, preferences_instructions null/blank.
+    // WHERE: buildSystemPrompt ownerPrefGuidance `||` default branch.
+    // WHY: a blank instruction box must not produce an empty, useless section.
+    for (const preferencesInstructions of [null, undefined, '   ']) {
+      const prompt = buildSystemPrompt({
+        ...BASE_CTX,
+        savePreferencesEnabled: true,
+        preferencesInstructions,
+      });
+      expect(prompt).toContain('# Customer preferences');
+      expect(prompt).toContain('remember what each customer likes');
+      expect(prompt).toContain('save_customer_preference');
     }
   });
 });

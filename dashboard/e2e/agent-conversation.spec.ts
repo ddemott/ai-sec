@@ -455,6 +455,89 @@ test("conversation: service-catalog returns the tenant's services for the LLM to
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// 7. Customer preferences — save on one call, recall on the next
+// ────────────────────────────────────────────────────────────────────────────
+test('conversation: a saved preference is recalled by customer-context on the next call', async ({
+  request,
+}) => {
+  // WHO: a returning caller the salon's AI is told to remember things about.
+  // WHAT: save_customer_preference writes a durable fact to
+  //        customers.metadata.preferences; on a later call the agent's
+  //        get_customer_context tool (→ /agent-tools/customer-context) hands
+  //        that preference back so the LLM can personalize + upsell.
+  // WHEN: every returning caller once the tenant enabled preference capture.
+  // WHERE: /agent-tools/save-customer-preference (write) +
+  //        /agent-tools/customer-context (recall) — the SAME route the agent
+  //        actually calls, not the dashboard's get_customer_context_for_call.
+  // WHY: this is the load-bearing round-trip of the feature. The recall path
+  //        is the one that historically dropped preferences (returned only
+  //        {name, history}); pin both the wire contract AND the DB side effect
+  //        so a regression in either layer fails loudly here.
+  const tag = uniqueTag();
+  const phone = `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`;
+  let customerId: string | null = null;
+
+  try {
+    const ins = await pool.query(
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
+      [DYNATIRE_ID, `${tag}-Sarah`, phone]
+    );
+    customerId = ins.rows[0].customer_id;
+
+    // Call 1: the agent saves two durable facts.
+    const save1 = await callAgentTool(request, '/agent-tools/save-customer-preference', {
+      tenant_id: DYNATIRE_ID,
+      phone,
+      key: 'Preferred Stylist', // human label → slugified to preferred_stylist
+      value: 'Maria',
+    });
+    expect(save1.status).toBe(200);
+    expect(save1.body.success).toBe(true);
+    expect((save1.body.result as { saved: boolean; key: string }).saved).toBe(true);
+    expect((save1.body.result as { key: string }).key).toBe('preferred_stylist');
+
+    await callAgentTool(request, '/agent-tools/save-customer-preference', {
+      tenant_id: DYNATIRE_ID,
+      phone,
+      key: 'last_service',
+      value: 'balayage',
+    });
+
+    // Side-effect check: both preferences merged into metadata.preferences.
+    const row = await pool.query(
+      `SELECT metadata->'preferences' AS prefs FROM customers WHERE customer_id = $1`,
+      [customerId]
+    );
+    expect(row.rows[0].prefs).toEqual({ preferred_stylist: 'Maria', last_service: 'balayage' });
+
+    // Call 2 (next week): customer-context hands the agent the preferences.
+    const ctx = await callAgentTool(request, '/agent-tools/customer-context', {
+      tenant_id: DYNATIRE_ID,
+      phone,
+    });
+    expect(ctx.status).toBe(200);
+    expect(ctx.body.success).toBe(true);
+    const result = ctx.body.result as { name: string; preferences: Record<string, unknown> };
+    expect(result.name).toBe(`${tag}-Sarah`);
+    expect(result.preferences).toEqual({ preferred_stylist: 'Maria', last_service: 'balayage' });
+
+    // Unknown caller: save is a graceful no-op (saved:false), never an error.
+    const miss = await callAgentTool(request, '/agent-tools/save-customer-preference', {
+      tenant_id: DYNATIRE_ID,
+      phone: `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`,
+      key: 'preferred_stylist',
+      value: 'Maria',
+    });
+    expect(miss.status).toBe(200);
+    expect(miss.body.success).toBe(true);
+    expect((miss.body.result as { saved: boolean }).saved).toBe(false);
+  } finally {
+    if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
+    await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // 6. OTP — anonymous-caller flow end-to-end
 // ────────────────────────────────────────────────────────────────────────────
 test('conversation: anonymous caller verifies via OTP before booking', async ({ request }) => {

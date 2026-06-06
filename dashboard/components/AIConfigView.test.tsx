@@ -1,0 +1,119 @@
+/**
+ * AIConfigView — Customer Preferences section tests.
+ *
+ * Covers the toggle + instruction textarea added 2026-06-06: the owner-facing
+ * controls that turn on AI customer-preference capture and author the guidance
+ * the voice agent follows. Happy + sad paths with 5W diagnostics.
+ */
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import React from 'react';
+import type { Tenant } from '../lib/types';
+
+const mockTenantId = 'test-tenant-123';
+vi.mock('../lib/SessionContext', () => ({
+  useActiveTenantId: () => mockTenantId,
+}));
+
+const mockGetConfig = vi.fn();
+const mockUpdateConfig = vi.fn();
+vi.mock('../lib/api', () => ({
+  Api: {
+    tenants: {
+      getConfig: (...args: unknown[]) => mockGetConfig(...args),
+      updateConfig: (...args: unknown[]) => mockUpdateConfig(...args),
+    },
+  },
+}));
+
+vi.mock('./ui/Toast', () => ({ showToast: vi.fn() }));
+
+import AIConfigView from './AIConfigView';
+
+const BASE_CONFIG: Tenant = {
+  tenant_id: mockTenantId,
+  name: 'Debbie Salon',
+  business_type: 'salon',
+  system_prompt: 'You are Debbie.',
+  voice_id: null,
+  first_message: 'Hi!',
+  save_preferences_enabled: false,
+  preferences_instructions: null,
+};
+
+beforeEach(() => {
+  mockGetConfig.mockReset();
+  mockUpdateConfig.mockReset().mockResolvedValue({ success: true });
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('AIConfigView — Customer Preferences', () => {
+  test('HAPPY: textarea is disabled until the toggle is turned on, then enabled', async () => {
+    // WHO: an owner opening Phone Assistant config with preferences off.
+    // WHAT: the instruction textarea is disabled while the feature is off so
+    //        you can't author guidance for a feature that won't run; flipping
+    //        the toggle enables it.
+    // WHEN: every visit to the AI config page.
+    // WHERE: AIConfigView Customer Preferences section.
+    // WHY: a disabled textarea is the visual cue that the toggle gates the
+    //      feature — editing guidance without enabling it would silently no-op.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
+    render(<AIConfigView />);
+
+    const textarea = await screen.findByPlaceholderText(/Remember the service each client had/i);
+    expect(textarea).toBeDisabled();
+
+    const toggle = screen.getByRole('switch', { name: /save customer preferences/i });
+    fireEvent.click(toggle);
+    expect(textarea).toBeEnabled();
+  });
+
+  test('HAPPY: saving sends the toggle + instructions to updateConfig', async () => {
+    // WHO: an owner who enabled preferences and wrote guidance, then saved.
+    // WHAT: the two new fields reach Api.tenants.updateConfig so the backend
+    //        persists them (and the agent then injects them into the prompt).
+    // WHEN: clicking Save Changes after editing the section.
+    // WHERE: AIConfigView handleSave.
+    // WHY: if the fields aren't in the payload the UI looks like it worked but
+    //      nothing is stored — the classic silent-form-drop bug.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
+    render(<AIConfigView />);
+
+    const toggle = await screen.findByRole('switch', { name: /save customer preferences/i });
+    fireEvent.click(toggle);
+
+    const textarea = screen.getByPlaceholderText(/Remember the service each client had/i);
+    fireEvent.change(textarea, { target: { value: 'Offer the same stylist; ask about nails.' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.save_preferences_enabled).toBe(true);
+    expect(payload.preferences_instructions).toBe('Offer the same stylist; ask about nails.');
+  });
+
+  test('HAPPY: an already-enabled tenant renders its saved instructions', async () => {
+    // WHO: an owner returning to a config they previously turned on.
+    // WHAT: the saved instruction text is shown in the (enabled) textarea.
+    // WHY: round-trips the persisted value back into the form so edits start
+    //      from the real state, not a blank box.
+    mockGetConfig.mockResolvedValue({
+      ...BASE_CONFIG,
+      save_preferences_enabled: true,
+      preferences_instructions: 'Track stylist + last service.',
+    });
+    render(<AIConfigView />);
+
+    const textarea = await screen.findByDisplayValue('Track stylist + last service.');
+    expect(textarea).toBeEnabled();
+    expect(screen.getByRole('switch', { name: /save customer preferences/i })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+  });
+});

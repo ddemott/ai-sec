@@ -44,6 +44,8 @@ const UpdateConfigSchema = z.object({
   voice_id: z.string().max(100).optional().nullable(),
   business_type: z.string().max(50).optional(),
   first_message: z.string().optional().nullable(),
+  save_preferences_enabled: z.boolean().optional(),
+  preferences_instructions: z.string().optional().nullable(),
 });
 
 const CreateTemplateSchema = z.object({
@@ -145,7 +147,7 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone FROM tenants WHERE tenant_id = $1',
+          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );
@@ -192,8 +194,10 @@ export function registerTenantRoutes(
             system_prompt: string | null;
             voice_id: string | null;
             first_message: string | null;
+            save_preferences_enabled: boolean | null;
+            preferences_instructions: string | null;
           }>(
-            'SELECT business_type, system_prompt, voice_id, first_message FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            'SELECT business_type, system_prompt, voice_id, first_message, save_preferences_enabled, preferences_instructions FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
           const prior = priorRes.rows[0];
@@ -201,14 +205,34 @@ export function registerTenantRoutes(
 
           // Partial-update safety: body fields not present (undefined) keep
           // the existing DB value; explicit null clears the field intentionally.
-          const finalSystemPrompt = body.system_prompt !== undefined ? body.system_prompt : (prior?.system_prompt ?? null);
-          const finalVoiceId = body.voice_id !== undefined ? body.voice_id : (prior?.voice_id ?? null);
-          const finalBusinessType = body.business_type !== undefined ? body.business_type : priorBusinessType;
-          const finalFirstMessage = body.first_message !== undefined ? body.first_message : (prior?.first_message ?? null);
+          const finalSystemPrompt =
+            body.system_prompt !== undefined ? body.system_prompt : (prior?.system_prompt ?? null);
+          const finalVoiceId =
+            body.voice_id !== undefined ? body.voice_id : (prior?.voice_id ?? null);
+          const finalBusinessType =
+            body.business_type !== undefined ? body.business_type : priorBusinessType;
+          const finalFirstMessage =
+            body.first_message !== undefined ? body.first_message : (prior?.first_message ?? null);
+          const finalSavePreferences =
+            body.save_preferences_enabled !== undefined
+              ? body.save_preferences_enabled
+              : (prior?.save_preferences_enabled ?? false);
+          const finalPreferencesInstructions =
+            body.preferences_instructions !== undefined
+              ? body.preferences_instructions
+              : (prior?.preferences_instructions ?? null);
 
           const updRes = await client.query(
-            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4 WHERE tenant_id = $5 RETURNING tenant_id',
-            [finalSystemPrompt, finalVoiceId, finalBusinessType, finalFirstMessage, id]
+            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6 WHERE tenant_id = $7 RETURNING tenant_id',
+            [
+              finalSystemPrompt,
+              finalVoiceId,
+              finalBusinessType,
+              finalFirstMessage,
+              finalSavePreferences,
+              finalPreferencesInstructions,
+              id,
+            ]
           );
 
           let cleanedServices = 0;

@@ -56,6 +56,12 @@ export interface Tenant {
   first_message: string | null;
   team_size?: number;
   timezone?: string;
+  // Customer-preference capture (Phone Assistant config). When enabled, the AI
+  // remembers durable facts about callers and uses them for personal service +
+  // relevant upsells. Instructions are owner-authored guidance; null = use the
+  // agent's built-in default guidance.
+  save_preferences_enabled?: boolean;
+  preferences_instructions?: string | null;
 }
 
 export interface BusinessTemplate {

@@ -52,7 +52,7 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 10 expected tool names', () => {
+  it('HAPPY: exposes exactly the 11 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
@@ -67,6 +67,7 @@ describe('buildTools', () => {
         'get_customer_context',
         'get_scheduling_options',
         'get_service_catalog',
+        'save_customer_preference',
         'send_verification_code',
         'verify_phone_code',
       ].sort()
@@ -324,5 +325,34 @@ describe('response formatting', () => {
     const parsed = JSON.parse(result);
     expect(parsed.error).toBe('Backend returned 500');
     expect(parsed.error_code).toBeUndefined();
+  });
+});
+
+describe('save_customer_preference', () => {
+  it('HAPPY: forwards tenant_id + phone + key + value to the route', async () => {
+    // WHO: the agent learned a durable fact mid-call and saves it.
+    // WHAT: the tool posts to /agent-tools/save-customer-preference with the
+    //        injected tenant_id plus the LLM-supplied phone/key/value.
+    // WHY: tenant_id must come from context (never the LLM); the rest is the
+    //        preference the LLM heard. A drift here means saves silently miss.
+    const { client, calls } = makeClient([
+      { ok: true, result: { saved: true, key: 'preferred_stylist' } },
+    ]);
+    const tools = buildTools(makeCtx(), client);
+
+    const result = await exec(tools.save_customer_preference, {
+      phone: '+15551112222',
+      key: 'preferred_stylist',
+      value: 'Maria',
+    });
+
+    expect(calls[0].path).toBe('/agent-tools/save-customer-preference');
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: '+15551112222',
+      key: 'preferred_stylist',
+      value: 'Maria',
+    });
+    expect(JSON.parse(result).saved).toBe(true);
   });
 });

@@ -350,7 +350,10 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(res.json()).toEqual({ success: true });
     // Pin tx boundaries + correct cleanup order.
     expect(queries[0].text).toBe('BEGIN');
-    expect(queries[1].text).toContain('SELECT business_type, system_prompt, voice_id, first_message FROM tenants');
+    expect(queries[1].text).toContain(
+      'SELECT business_type, system_prompt, voice_id, first_message'
+    );
+    expect(queries[1].text).toContain('FROM tenants');
     expect(queries[1].text).toContain('FOR UPDATE');
     expect(queries[2].text).toContain('UPDATE tenants SET');
     expect(queries[3].text).toContain('DELETE FROM services');
@@ -473,12 +476,14 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     //      partial save. Regression test pins the merge behaviour.
     queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
     queryResponses.push({
-      rows: [{
-        business_type: 'auto_shop',
-        system_prompt: 'You are a helpful assistant.',
-        voice_id: 'old-voice',
-        first_message: 'Hello!',
-      }],
+      rows: [
+        {
+          business_type: 'auto_shop',
+          system_prompt: 'You are a helpful assistant.',
+          voice_id: 'old-voice',
+          first_message: 'Hello!',
+        },
+      ],
       rowCount: 1,
     }); // SELECT FOR UPDATE — prior values
     queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE tenants
@@ -496,8 +501,84 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery).toBeDefined();
     expect(updateQuery!.params[0]).toBe('You are a helpful assistant.'); // system_prompt preserved
-    expect(updateQuery!.params[1]).toBe('ara');                           // voice_id from body
-    expect(updateQuery!.params[2]).toBe('auto_shop');                     // business_type preserved
-    expect(updateQuery!.params[3]).toBe('Hello!');                        // first_message preserved
+    expect(updateQuery!.params[1]).toBe('ara'); // voice_id from body
+    expect(updateQuery!.params[2]).toBe('auto_shop'); // business_type preserved
+    expect(updateQuery!.params[3]).toBe('Hello!'); // first_message preserved
+  });
+
+  it('HAPPY: customer-preference fields persist through update-config', async () => {
+    // WHO: owner enabling preference capture + writing guidance in the AI
+    //      config page, then saving.
+    // WHAT: save_preferences_enabled + preferences_instructions are written to
+    //      the UPDATE so the agent's tenant-config fetch sees them next call.
+    // WHERE: src/routes/tenants.ts UPDATE tenants SET ... save_preferences_enabled, preferences_instructions.
+    // WHY: without these in the UPDATE the dashboard toggle is cosmetic — it
+    //      would look saved but never reach the DB or the voice agent.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          system_prompt: 'You are Bella.',
+          voice_id: 'ara',
+          first_message: 'Hi!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE — prior values
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: {
+        save_preferences_enabled: true,
+        preferences_instructions: 'Remember the stylist and last service.',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery!.text).toContain('save_preferences_enabled');
+    expect(updateQuery!.text).toContain('preferences_instructions');
+    // Param order: [system_prompt, voice_id, business_type, first_message,
+    //               save_preferences_enabled, preferences_instructions, tenant_id]
+    expect(updateQuery!.params[4]).toBe(true); // from body
+    expect(updateQuery!.params[5]).toBe('Remember the stylist and last service.'); // from body
+  });
+
+  it('HAPPY: omitting preference fields preserves their prior values', async () => {
+    // WHY: a save from the Voice Settings page that only touches system_prompt
+    //      must NOT silently disable an already-enabled preference toggle.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          system_prompt: 'old',
+          voice_id: 'ara',
+          first_message: 'Hi!',
+          save_preferences_enabled: true,
+          preferences_instructions: 'Keep notes on regulars.',
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { system_prompt: 'new prompt' }, // preference fields omitted
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery!.params[4]).toBe(true); // preserved
+    expect(updateQuery!.params[5]).toBe('Keep notes on regulars.'); // preserved
   });
 });

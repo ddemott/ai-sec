@@ -126,6 +126,21 @@ const GetTenantConfigSchema = z.object({
   tenant_id: z.string().uuid(),
 });
 
+// save_customer_preference — the AI persists a durable fact about the caller
+// (preferred stylist, last service, likes/dislikes, upsell flags) as a
+// key/value pair into customers.metadata.preferences. Read back on the next
+// call by get_customer_context_for_call. Key is normalized to a short stable
+// slug; value is free text the AI heard. Only writes for an existing customer
+// (a phone the CRM already knows) — we don't conjure a customer row just to
+// hang a preference on, and the agent should have already called
+// get_customer_context (or booked) before it has anything worth saving.
+const SaveCustomerPreferenceSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  key: z.string().min(1).max(60),
+  value: z.string().min(1).max(500),
+});
+
 const GetAvailableSlotsSchema = z.object({
   tenant_id: z.string().uuid(),
   service_type: z.string().min(1),
@@ -212,7 +227,7 @@ function toolRoute<T>(
 ): void {
   // Strip the "/agent-tools/" prefix so the metric label matches the tool
   // name the LLM uses in its prompt (e.g. "book-with-scheduling"). Cardinality
-  // is bounded by the number of registered tools (10 today).
+  // is bounded by the number of registered tools (11 today).
   const toolName = path.replace(/^\/agent-tools\//, '');
   app.post(
     path,
@@ -295,9 +310,12 @@ export function registerAgentToolRoutes(
           name: string;
           timezone: string | null;
           system_prompt: string | null;
-        }>(`SELECT name, timezone, system_prompt FROM tenants WHERE tenant_id = $1`, [
-          args.tenant_id,
-        ]);
+          save_preferences_enabled: boolean | null;
+          preferences_instructions: string | null;
+        }>(
+          `SELECT name, timezone, system_prompt, save_preferences_enabled, preferences_instructions FROM tenants WHERE tenant_id = $1`,
+          [args.tenant_id]
+        );
         return res.rows[0] ?? null;
       });
       if (!row) {
@@ -311,9 +329,76 @@ export function registerAgentToolRoutes(
         // section. NULL means "use the agent's hardcoded fallback" — preserves
         // backwards compatibility with tenants that haven't customized.
         system_prompt: row.system_prompt,
+        // 2026-06-06: customer-preference capture config. When enabled, the
+        // agent injects preferences_instructions into the prompt and is told
+        // to call save_customer_preference. Default false / null is "off".
+        save_preferences_enabled: row.save_preferences_enabled ?? false,
+        preferences_instructions: row.preferences_instructions ?? null,
       });
     },
     'Failed to fetch tenant config'
+  );
+
+  // save_customer_preference — persist a durable fact about a known caller
+  // into customers.metadata.preferences. The same JSON surface
+  // get_customer_context_for_call reads back on the next call, so this closes
+  // the write half of the preference round-trip. No-ops gracefully (success
+  // shape with saved=false) when the phone isn't a known customer yet, so the
+  // LLM relays "noted" without a scary error mid-call.
+  toolRoute(
+    app,
+    '/agent-tools/save-customer-preference',
+    SaveCustomerPreferenceSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!isValidPhone(normalized)) {
+        return fail(
+          reply,
+          "That phone number doesn't look complete enough to save a note against."
+        );
+      }
+      // Normalize the key to a short stable slug so repeat saves of the same
+      // concept ("preferred stylist" / "Preferred Stylist") collapse onto one
+      // JSON key instead of accreting near-duplicates.
+      const key = args.key
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      if (!key) {
+        return fail(reply, 'Preference name was empty after cleanup — nothing to save.');
+      }
+
+      const saved = await withTenantClient(args.tenant_id, async (client) => {
+        // jsonb merge: metadata || { preferences: (metadata.preferences || {}) || { key: value } }
+        // Updates only a live (non-deleted) customer the CRM already knows.
+        const res = await client.query<{ customer_id: string }>(
+          `UPDATE customers
+             SET metadata = COALESCE(metadata, '{}'::jsonb)
+               || jsonb_build_object(
+                    'preferences',
+                    COALESCE(metadata->'preferences', '{}'::jsonb)
+                      || jsonb_build_object($3::text, $4::text)
+                  )
+           WHERE tenant_id = $1 AND phone = $2
+             AND (is_deleted IS NULL OR is_deleted = false)
+           RETURNING customer_id`,
+          [args.tenant_id, normalized, key, args.value.trim()]
+        );
+        return (res.rowCount ?? 0) > 0;
+      });
+
+      if (!saved) {
+        // Not an error — the caller just isn't a known customer yet. Tell the
+        // LLM plainly so it doesn't read an alarming failure to the caller.
+        return ok(reply, {
+          saved: false,
+          message: 'No existing customer for that number yet — preference not stored.',
+        });
+      }
+      return ok(reply, { saved: true, key });
+    },
+    'Failed to save customer preference'
   );
 
   // get_service_catalog — list public services for the tenant.
@@ -349,8 +434,14 @@ export function registerAgentToolRoutes(
       }
 
       const data = await withTenantClient(args.tenant_id, async (client) => {
-        const cust = await client.query<{ customer_id: string; name: string }>(
-          `SELECT customer_id, name FROM customers
+        const cust = await client.query<{
+          customer_id: string;
+          name: string;
+          preferences: Record<string, unknown> | null;
+        }>(
+          `SELECT customer_id, name,
+                  COALESCE(metadata->'preferences', '{}'::jsonb) AS preferences
+          FROM customers
           WHERE tenant_id = $1 AND phone = $2
             AND (is_deleted IS NULL OR is_deleted = false)`,
           [args.tenant_id, normalized]
@@ -371,6 +462,12 @@ export function registerAgentToolRoutes(
       return ok(reply, {
         name: data.customer.name || 'Unknown',
         history: data.summaries.map((s) => s.summary).join('; ') || 'No history',
+        // Saved customer preferences (preferred staff, last service, likes)
+        // captured by save_customer_preference. THIS is how they reach the
+        // LLM on the next call — the agent's get_customer_context tool reads
+        // this route, so preferences must ride along here, not only in the
+        // dashboard's get_customer_context_for_call path. Default {} when none.
+        preferences: data.customer.preferences ?? {},
       });
     },
     'Failed to fetch customer context'

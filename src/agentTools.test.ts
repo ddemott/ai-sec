@@ -291,6 +291,9 @@ describe('agentTools /tenant-config', () => {
       name: 'DynaTire',
       timezone: 'America/Chicago',
       system_prompt: null,
+      // New 2026-06-06 fields default off when the row doesn't carry them.
+      save_preferences_enabled: false,
+      preferences_instructions: null,
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -335,6 +338,8 @@ describe('agentTools /tenant-config', () => {
       name: 'Legacy Co',
       timezone: 'America/Chicago',
       system_prompt: null,
+      save_preferences_enabled: false,
+      preferences_instructions: null,
     });
   });
 
@@ -398,9 +403,46 @@ describe('agentTools /customer-context', () => {
     expect(res.json().result).toEqual({
       name: 'Alice',
       history: 'Booked oil change; Asked about winter tires',
+      // No saved preferences for this row → empty object (not omitted).
+      preferences: {},
     });
     // WHY: Phone must be normalized to +1 form before the lookup
     expect(queries[0].params).toEqual([TENANT_ID, '+15551234567']);
+  });
+
+  it('HAPPY: saved preferences ride along so the LLM sees them next call', async () => {
+    // WHO: a returning customer whose preferences were saved on a prior call.
+    // WHAT: customer-context returns metadata.preferences alongside name +
+    //        history. This is the ACTUAL recall path the agent uses — the
+    //        agent's get_customer_context tool hits THIS route, not the
+    //        dashboard's get_customer_context_for_call. If preferences don't
+    //        surface here, save_customer_preference is write-only and the
+    //        whole feature silently does nothing on the next call.
+    // WHERE: src/routes/agentTools.ts /agent-tools/customer-context.
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              customer_id: 'cust1',
+              name: 'Sarah',
+              preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
+            },
+          ],
+        },
+        { rows: [] }, // no call summaries
+      ],
+    });
+    const res = await post(app, '/agent-tools/customer-context', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({
+      name: 'Sarah',
+      history: 'No history',
+      preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
+    });
   });
 
   it('HAPPY: unknown customer returns "new caller" message', async () => {

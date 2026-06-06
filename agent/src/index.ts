@@ -144,80 +144,84 @@ export default defineAgent({
     let client: ToolsClient;
     let tenantConfig: Awaited<ReturnType<typeof fetchTenantConfig>>;
     try {
-    client = new ToolsClient({
-      backendUrl: config.BACKEND_URL,
-      agentSecret: config.AGENT_SECRET,
-    });
-    const tools = buildTools(sessionCtx, client);
-    tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
-    callLog.info(
-      {
-        event: 'tenant_config_fetched',
-        tenant_name: tenantConfig.name,
-        timezone: tenantConfig.timezone,
-      },
-      'tenant config resolved'
-    );
-
-    // 4. Build prompt with runtime context
-    const instructions = buildSystemPrompt({
-      tenantName: tenantConfig.name,
-      callerPhone: sessionCtx.callerPhone,
-      currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
-      timezone: tenantConfig.timezone,
-      // 2026-05-18: feed the tenant's customized persona (from
-      // tenants.system_prompt, displayed/edited in the dashboard's AI
-      // Persona page) into the prompt's identity section. NULL falls
-      // back to the hardcoded "You are Clara, ..." line.
-      customPrompt: tenantConfig.systemPrompt,
-    });
-
-    // 5. Start the voice session. Wrapped in try/catch → runFallback: a
-    //    throw here (LiveKit session.start, a plugin constructor, an STT/LLM/
-    //    TTS upstream that rejects at init) would otherwise propagate out of
-    //    `entry`, kill the job, and leave the caller in dead air. The fallback
-    //    speaks a short message so the call degrades to "sorry" instead of
-    //    silence. (2026-05-21 — closes the gap-1 outer-throw dead-air path.)
-    try {
-      const session = new voice.AgentSession({
-        vad: ctx.proc.userData.vad as silero.VAD,
-        stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
-        llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-        tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
+      client = new ToolsClient({
+        backendUrl: config.BACKEND_URL,
+        agentSecret: config.AGENT_SECRET,
       });
-
-      const agent = new voice.Agent({
-        instructions,
-        tools,
-      });
-
-      await session.start({ agent, room: ctx.room });
-      callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
-
-      // 6. Greeting. Kept short — the LLM will warm up from here.
-      void session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
-        allowInterruptions: true,
-      });
-    } catch (err) {
-      callLog.error(
+      const tools = buildTools(sessionCtx, client);
+      tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
+      callLog.info(
         {
+          event: 'tenant_config_fetched',
+          tenant_name: tenantConfig.name,
+          timezone: tenantConfig.timezone,
+        },
+        'tenant config resolved'
+      );
+
+      // 4. Build prompt with runtime context
+      const instructions = buildSystemPrompt({
+        tenantName: tenantConfig.name,
+        callerPhone: sessionCtx.callerPhone,
+        currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
+        timezone: tenantConfig.timezone,
+        // 2026-05-18: feed the tenant's customized persona (from
+        // tenants.system_prompt, displayed/edited in the dashboard's AI
+        // Persona page) into the prompt's identity section. NULL falls
+        // back to the hardcoded "You are Clara, ..." line.
+        customPrompt: tenantConfig.systemPrompt,
+        // 2026-06-06: per-tenant customer-preference capture. When enabled, the
+        // prompt gains a "Customer preferences" section + save tool guidance.
+        savePreferencesEnabled: tenantConfig.savePreferencesEnabled,
+        preferencesInstructions: tenantConfig.preferencesInstructions,
+      });
+
+      // 5. Start the voice session. Wrapped in try/catch → runFallback: a
+      //    throw here (LiveKit session.start, a plugin constructor, an STT/LLM/
+      //    TTS upstream that rejects at init) would otherwise propagate out of
+      //    `entry`, kill the job, and leave the caller in dead air. The fallback
+      //    speaks a short message so the call degrades to "sorry" instead of
+      //    silence. (2026-05-21 — closes the gap-1 outer-throw dead-air path.)
+      try {
+        const session = new voice.AgentSession({
+          vad: ctx.proc.userData.vad as silero.VAD,
+          stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
+          llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
+          tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
+        });
+
+        const agent = new voice.Agent({
+          instructions,
+          tools,
+        });
+
+        await session.start({ agent, room: ctx.room });
+        callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
+
+        // 6. Greeting. Kept short — the LLM will warm up from here.
+        void session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
+          allowInterruptions: true,
+        });
+      } catch (err) {
+        callLog.error(
+          {
+            event: 'fallback_triggered',
+            reason: 'session_start_failed',
+            tenant_id: sessionCtx.tenantId,
+            room: ctx.room.name,
+            error_message: err instanceof Error ? err.message : String(err),
+          },
+          'voice session failed to start — running fallback so the caller is not left in dead air'
+        );
+        captureSentry(err instanceof Error ? err : new Error(String(err)), {
           event: 'fallback_triggered',
           reason: 'session_start_failed',
           tenant_id: sessionCtx.tenantId,
           room: ctx.room.name,
-          error_message: err instanceof Error ? err.message : String(err),
-        },
-        'voice session failed to start — running fallback so the caller is not left in dead air'
-      );
-      captureSentry(err instanceof Error ? err : new Error(String(err)), {
-        event: 'fallback_triggered',
-        reason: 'session_start_failed',
-        tenant_id: sessionCtx.tenantId,
-        room: ctx.room.name,
-      });
-      await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
-      return;
-    }
+        });
+        await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
+        return;
+      }
     } catch (err) {
       // Outer catch: unexpected throw from tool-client setup, buildTools,
       // fetchTenantConfig, or buildSystemPrompt. Inner session.start errors

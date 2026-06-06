@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { MOCK_TENANT } from '@/lib/mockData';
 import { type Tenant } from '@/lib/types';
-import { Settings, MessageSquare, Mic, Info } from 'lucide-react';
+import { Settings, MessageSquare, Mic, Info, Sparkles } from 'lucide-react';
 import { Api } from '../lib/api';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { Card } from './ui/Card';
@@ -58,6 +58,8 @@ export default function AIConfigView() {
         voice_id: config.voice_id,
         business_type: config.business_type,
         first_message: config.first_message,
+        save_preferences_enabled: config.save_preferences_enabled ?? false,
+        preferences_instructions: config.preferences_instructions ?? null,
       });
       setSuccess(res.success);
       if (res.success) {
@@ -247,6 +249,89 @@ export default function AIConfigView() {
               </Card>
             ))}
           </div>
+        </section>
+
+        {/* Customer Preferences Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2
+              className="text-lg font-bold flex items-center"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              <Sparkles className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
+              Customer Preferences
+            </h2>
+            {/* Toggle */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config?.save_preferences_enabled ?? false}
+              aria-label="Save customer preferences"
+              onClick={() => {
+                setConfig((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        save_preferences_enabled: !(prev.save_preferences_enabled ?? false),
+                      }
+                    : null
+                );
+                setDirty(true);
+              }}
+              className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+              style={{
+                backgroundColor: config?.save_preferences_enabled
+                  ? 'var(--accent)'
+                  : 'var(--border-soft)',
+              }}
+            >
+              <span
+                className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                style={{
+                  transform: config?.save_preferences_enabled
+                    ? 'translateX(24px)'
+                    : 'translateX(4px)',
+                }}
+              />
+            </button>
+          </div>
+          <div
+            className="border p-4 rounded-xl flex items-start"
+            style={{ backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent-muted)' }}
+          >
+            <Info
+              className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0"
+              style={{ color: 'var(--accent-soft)' }}
+            />
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--accent-soft)' }}>
+              When this is on, your AI remembers things about each customer between calls — their
+              favorite service, who served them last, what they like — and uses it to give a
+              personal welcome and suggest things they&apos;d genuinely enjoy. Describe below{' '}
+              <strong>what</strong> to remember, <strong>why</strong> it matters, and{' '}
+              <strong>when</strong> to bring it up, so the AI uses it intelligently instead of
+              guessing. Leave it blank to use a sensible default.
+            </p>
+          </div>
+          <textarea
+            rows={8}
+            disabled={!config?.save_preferences_enabled}
+            value={config?.preferences_instructions || ''}
+            onChange={(e) => {
+              setConfig((prev) =>
+                prev ? { ...prev, preferences_instructions: e.target.value } : null
+              );
+              setDirty(true);
+            }}
+            className="w-full p-4 border rounded-xl text-sm md:text-base leading-relaxed focus:ring-2 outline-none shadow-inner disabled:opacity-50"
+            style={{
+              borderColor: 'var(--border-soft)',
+              backgroundColor: 'var(--bg-raised)',
+              color: 'var(--text-primary)',
+            }}
+            placeholder={
+              'Ex: Remember the service each client had and which stylist did it. A returning client is a great moment for a friendly upsell — if they book a cut and never mention nails, offer to add a manicure. Always offer them the same stylist they had last time. Note anything they say they love or want to avoid (colors, products, scalp sensitivity) so next time feels personal.'
+            }
+          />
         </section>
 
         {/* Test Section */}

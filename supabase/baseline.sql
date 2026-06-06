@@ -2907,7 +2907,9 @@ CREATE TABLE public.tenants (
     phone_status text DEFAULT 'inactive'::text NOT NULL,
     telnyx_phone_number_id text,
     sms_enabled boolean DEFAULT true NOT NULL,
-    email_enabled boolean DEFAULT true NOT NULL
+    email_enabled boolean DEFAULT true NOT NULL,
+    save_preferences_enabled boolean DEFAULT false NOT NULL,
+    preferences_instructions text
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -2939,6 +2941,20 @@ COMMENT ON COLUMN public.tenants.sms_enabled IS 'Per-tenant SMS reminder channel
 --
 
 COMMENT ON COLUMN public.tenants.email_enabled IS 'Per-tenant email reminder channel toggle. Default TRUE — owner opts out by explicit UPDATE.';
+
+
+--
+-- Name: COLUMN tenants.save_preferences_enabled; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.save_preferences_enabled IS 'Opt-in gate for AI customer-preference capture. Default FALSE — owner turns it on in the Phone Assistant config.';
+
+
+--
+-- Name: COLUMN tenants.preferences_instructions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.preferences_instructions IS 'Owner-authored guidance injected into the AI system prompt: what customer preferences to save, why, when, and how to use them. NULL = use the agent built-in default guidance.';
 
 
 --

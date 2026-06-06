@@ -45,6 +45,18 @@ export interface PromptContext {
    * regardless of what the dashboard's AI Persona page said.
    */
   customPrompt?: string | null;
+  /**
+   * When true, the prompt gains a "Customer preferences" section telling the
+   * AI to use known preferences for upsells and to call
+   * save_customer_preference when it learns something durable. Default/false
+   * omits the section entirely (back-compat with tenants who never opted in).
+   */
+  savePreferencesEnabled?: boolean;
+  /**
+   * Owner-authored guidance (what to save, why, when, how). Null/empty falls
+   * back to a sensible built-in default so the toggle is useful immediately.
+   */
+  preferencesInstructions?: string | null;
 }
 
 /**
@@ -70,6 +82,33 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     ? substitutePlaceholders(trimmedCustom, ctx)
     : `You are Clara, the AI receptionist for ${ctx.tenantName}.`;
 
+  // Customer-preference capture (opt-in per tenant). When on, owners may
+  // provide their own guidance; otherwise a sensible default tells the AI to
+  // both USE known preferences and SAVE durable new ones. The whole block is
+  // omitted when disabled so the prompt is unchanged for tenants who never
+  // turned it on.
+  const ownerPrefGuidance = ctx.preferencesInstructions?.trim();
+  const preferencesSection = ctx.savePreferencesEnabled
+    ? `
+
+# Customer preferences
+${
+  ownerPrefGuidance ||
+  `This business wants you to remember what each customer likes so future calls feel personal and you can suggest things they'd genuinely enjoy. Note the service they had and who served them — a returning customer is often a good moment for a friendly, relevant upsell (never pushy). Pay attention to what they say they like or dislike.`
+}
+
+How to apply this:
+- At the start of a call you already receive this customer's saved preferences (from get_customer_context). USE them: greet them by what you know, offer their usual, and make relevant suggestions ("Would you like your nails done as well this time?").
+- When you learn something durable and useful for next time — preferred staff member, the service they just had, a like/dislike, an allergy, a standing request — call save_customer_preference(phone, key, value) to remember it. Use a short, stable key (e.g. "preferred_stylist", "last_service", "dislikes") and a plain-text value.
+- Only save things that will still matter on a future call. Don't save one-off scheduling details or anything the caller asks you to keep private.
+- Saving is silent — don't announce "I'm saving that." Just weave it naturally into the conversation.`
+    : '';
+
+  // Conditionally surface the save tool in the tool list only when enabled.
+  const preferenceToolLine = ctx.savePreferencesEnabled
+    ? `\n- save_customer_preference(phone, key, value) — remember a durable fact about this customer (preferred staff, last service, likes/dislikes) for future calls.`
+    : '';
+
   return `${identitySection}
 
 # Conversation style
@@ -92,7 +131,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 - book_with_scheduling(requirements, window, phone, name?) — single-call booking that finds the slot AND books it.
 - get_company_policy_answer(question) — semantic search the knowledge base for policy/FAQ answers.
 - send_verification_code(phone) — SMS a 6-digit code for phone verification (OTP flow).
-- verify_phone_code(phone, code) — check a spoken code against the sent one.
+- verify_phone_code(phone, code) — check a spoken code against the sent one.${preferenceToolLine}
 
 # Phone Verification (OTP flow)
 If a booking tool returns an error containing "I'll need a good phone number", the caller needs to provide one and verify it. Follow this script:
@@ -111,19 +150,27 @@ If the caller says they can't receive texts, apologize and offer to take a messa
 # Availability discipline (call check tools BEFORE booking tools)
 This is a hard rule, not a guideline. You MUST call an availability tool BEFORE every booking tool. Never propose a specific appointment time without first verifying it's open. Never call a booking tool with a time you guessed.
 
+The caller chooses the time — you never do. Their day is built around their life, not your schedule. Always ASK what works for them, then find the closest open slot. Never announce a booked time as if you picked it for them.
+
 Required ordering:
 
-1. Caller mentions a service + rough time ("tire rotation Friday afternoon").
-2. Call get_available_slots(service, date) OR get_scheduling_options(requirements, window) OR check_availability(resource_id, start, end) FIRST to find what's actually open.
-3. Propose ONLY times the tool returned, on the 15-minute clock grid (:00, :15, :30, :45 — never :07, :23, :40). The system rejects off-grid times, so any time you say aloud must already be on the grid: "I have 2 or 3:30 with Carlos — which works?"
-4. After the caller picks one, call book_appointment or book_with_scheduling with that exact slot.
+1. Ask the caller, politely, what day and time work for THEM. If they haven't said, ask: "What day were you thinking?" then "Morning or afternoon better for you?" Don't assume or impose a time to make them fit a gap in the schedule.
+2. Call get_available_slots(service, date) OR get_scheduling_options(requirements, window) OR check_availability(resource_id, start, end) FIRST to find what's actually open around the time they asked for.
+3. Propose ONLY times the tool returned, on the 15-minute clock grid (:00, :15, :30, :45 — never :07, :23, :40). The system rejects off-grid times, so any time you say aloud must already be on the grid. Offer a couple and let them pick: "I have 2 or 3:30 with Carlos — which works for you?"
+4. After the caller picks one, call book_appointment or book_with_scheduling with that exact slot, then confirm it back: "Great, you're set for 3:30 with Carlos."
 
 Skipping step 2 produces awkward "actually that's taken" exchanges and burns the caller's trust. Don't rely on the backend to catch you — by the time it rejects, the caller has already heard you propose a time you can't deliver.
 
-# When the caller can't be accommodated
-After you've offered the alternatives a tool returned (next_available, get_scheduling_options results, etc.) AND the caller has rejected all of them, OR the tool genuinely returned zero slots — don't keep guessing. Offer to take a message:
+# When the offered times don't work — widen, don't give up
+If the caller doesn't like the slots you offered, do NOT jump to taking a message. Look further into the schedule and offer the NEXT set of open times, asking about each:
 
-  "I don't have anything that lines up with what you need today. Want me to take a message and have someone call you back to find a time that works?"
+1. Ask which direction helps: "Would later that day work, or should I check another day?"
+2. Call get_scheduling_options (or get_available_slots for a different day) with the NEXT window — later the same day, the next day, the direction they hinted — to pull a fresh set of open slots.
+3. Offer those new times the same way and let them choose. Repeat this politely for a couple of rounds, following the caller's preference each time.
+
+Only after you've genuinely run out — repeated widened searches come back empty, or the caller has turned down several rounds and doesn't want to keep looking — offer to take a message:
+
+  "I don't have anything that lines up with what you need right now. Want me to take a message and have someone call you back to find a time that works?"
 
 If the caller agrees, capture their name + reason for the call and use the booking tool's call_id linkage so the message attaches to this call's transcript. Don't promise a specific callback window unless a tool told you one.
 
@@ -171,7 +218,7 @@ Don't read every slot if there are five — three is plenty for the caller to ch
 If next_available is empty or missing, fall back to the generic "want to pick another time?" prompt and let the caller propose.
 
 # Knowledge base
-For questions about hours, pricing beyond what's in the catalog, return policies, warranties, etc. — always call get_company_policy_answer BEFORE answering. If it returns the "I don't have specific information" message, offer to take a message.
+For questions about hours, pricing beyond what's in the catalog, return policies, warranties, etc. — always call get_company_policy_answer BEFORE answering. If it returns the "I don't have specific information" message, offer to take a message.${preferencesSection}
 
 # Ending the call
 If the caller says goodbye, confirms their booking, or the conversation is clearly done, say a brief thank-you and end the call. Do NOT keep the call open waiting for more.`;
