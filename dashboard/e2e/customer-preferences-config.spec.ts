@@ -66,7 +66,7 @@ test('owner enables Customer Preferences + guidance, and it survives a reload', 
   await openAiPersona(page);
 
   const toggle = page.getByRole('switch', { name: /save customer preferences/i });
-  const textarea = page.getByPlaceholder(/Remember the service each client had/i);
+  const textarea = page.getByTestId('preferences-instructions');
 
   // Textarea is disabled until the feature is on — flip the toggle first.
   if ((await toggle.getAttribute('aria-checked')) !== 'true') {
@@ -90,7 +90,5 @@ test('owner enables Customer Preferences + guidance, and it survives a reload', 
     'aria-checked',
     'true'
   );
-  await expect(page.getByPlaceholder(/Remember the service each client had/i)).toHaveValue(
-    guidance
-  );
+  await expect(page.getByTestId('preferences-instructions')).toHaveValue(guidance);
 });

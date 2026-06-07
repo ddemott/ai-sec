@@ -12,6 +12,32 @@ import { Input } from './ui/Input';
 import { showToast } from './ui/Toast';
 import { LoadingState } from './ui/LoadingState';
 
+// Per-industry starter example for the Customer Preferences textarea, so an
+// owner isn't staring at a blank box. Matched loosely on the tenant's
+// business_type so it survives template-id variants (e.g. "salon" / "salon_v1")
+// and falls back to a generic-but-good example for anything unrecognized
+// (including the platform-admin tenant). Shown as placeholder only — the moment
+// the owner types, their own words take over.
+function preferencesPlaceholder(businessType?: string | null): string {
+  const t = (businessType || '').toLowerCase();
+  if (/salon|spa|hair|nail|beauty|barber|lash|brow/.test(t)) {
+    return 'Ex: Remember the service each client had and which stylist did it. If they book a cut and never mention nails, offer to add a manicure. Always offer them the same stylist they had last time. Note colors, products, or sensitivities they mention so next time feels personal.';
+  }
+  if (/auto|tire|mechanic|repair|bay|vehicle|car|lube|brake/.test(t)) {
+    return "Ex: Remember the customer's vehicle (year/make/model) and the last service done. If they're due for something related — a rotation after new tires, the next oil-change interval — mention it. Note any preferred technician and recurring concerns (brakes, alignment) to bring up next time.";
+  }
+  if (/trade|plumb|hvac|electric|contractor|roof|handyman|landscap/.test(t)) {
+    return 'Ex: Remember the property and the work last done, plus equipment details (furnace model, water-heater age). Flag recurring issues and seasonal maintenance (an AC tune-up before summer). Note a preferred tech and the time window the customer likes.';
+  }
+  if (/fitness|gym|yoga|studio|pilates|train|crossfit|cycle/.test(t)) {
+    return "Ex: Remember the classes or trainer the member prefers and their goals. Suggest the next session in their usual time slot, or a related class they'd enjoy. Note any injuries or limitations they mention so bookings stay appropriate.";
+  }
+  if (/food|restaurant|cafe|coffee|bar|dining|kitchen|catering|grill/.test(t)) {
+    return "Ex: Remember the customer's usual order and party size, their favorite table or seating, and any dietary needs or allergies. Offer their usual and flag specials they'd like. Note occasions (birthdays, anniversaries) to personalize the visit.";
+  }
+  return "Ex: Remember what each customer prefers — the service they had, who served them, and anything they like or want to avoid. Use it next time to greet them personally and suggest things they'd genuinely want. Don't save one-off details or anything they ask you to keep private.";
+}
+
 // Business-type / template browsing lives in BusinessSettingsView now
 // (BusinessTypeSection.tsx). Owners pick the template once during the
 // wizard — putting the 24-card grid here forced every prompt-tuning
@@ -313,6 +339,7 @@ export default function AIConfigView() {
             </p>
           </div>
           <textarea
+            data-testid="preferences-instructions"
             rows={8}
             disabled={!config?.save_preferences_enabled}
             value={config?.preferences_instructions || ''}
@@ -328,9 +355,7 @@ export default function AIConfigView() {
               backgroundColor: 'var(--bg-raised)',
               color: 'var(--text-primary)',
             }}
-            placeholder={
-              'Ex: Remember the service each client had and which stylist did it. A returning client is a great moment for a friendly upsell — if they book a cut and never mention nails, offer to add a manicure. Always offer them the same stylist they had last time. Note anything they say they love or want to avoid (colors, products, scalp sensitivity) so next time feels personal.'
-            }
+            placeholder={preferencesPlaceholder(config?.business_type)}
           />
         </section>
 

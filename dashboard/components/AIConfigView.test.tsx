@@ -64,7 +64,7 @@ describe('AIConfigView — Customer Preferences', () => {
     mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
     render(<AIConfigView />);
 
-    const textarea = await screen.findByPlaceholderText(/Remember the service each client had/i);
+    const textarea = await screen.findByTestId('preferences-instructions');
     expect(textarea).toBeDisabled();
 
     const toggle = screen.getByRole('switch', { name: /save customer preferences/i });
@@ -86,7 +86,7 @@ describe('AIConfigView — Customer Preferences', () => {
     const toggle = await screen.findByRole('switch', { name: /save customer preferences/i });
     fireEvent.click(toggle);
 
-    const textarea = screen.getByPlaceholderText(/Remember the service each client had/i);
+    const textarea = screen.getByTestId('preferences-instructions');
     fireEvent.change(textarea, { target: { value: 'Offer the same stylist; ask about nails.' } });
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
@@ -115,5 +115,28 @@ describe('AIConfigView — Customer Preferences', () => {
       'aria-checked',
       'true'
     );
+  });
+
+  test('HAPPY: the textarea placeholder example matches the tenant industry', async () => {
+    // WHO: a brand-new owner who hasn't written guidance yet.
+    // WHAT: the empty-box example is industry-specific (salon talks stylists,
+    //        auto talks vehicles) so it's relevant, with a generic fallback
+    //        for unrecognized/platform business types.
+    // WHEN: every first visit before any guidance is typed.
+    // WHERE: AIConfigView preferencesPlaceholder(business_type).
+    // WHY: a salon-only example in a tire shop's box is worse than none — it
+    //      teaches the wrong thing. The match must follow business_type.
+    const cases: Array<{ business_type: string; expect: RegExp }> = [
+      { business_type: 'salon', expect: /stylist/i },
+      { business_type: 'automotive', expect: /vehicle/i },
+      { business_type: 'platform-admin', expect: /what each customer prefers/i },
+    ];
+    for (const c of cases) {
+      mockGetConfig.mockResolvedValue({ ...BASE_CONFIG, business_type: c.business_type });
+      const { unmount } = render(<AIConfigView />);
+      const textarea = await screen.findByTestId('preferences-instructions');
+      expect(textarea).toHaveAttribute('placeholder', expect.stringMatching(c.expect));
+      unmount();
+    }
   });
 });
