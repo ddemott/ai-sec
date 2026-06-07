@@ -62,6 +62,10 @@ export interface Tenant {
   // agent's built-in default guidance.
   save_preferences_enabled?: boolean;
   preferences_instructions?: string | null;
+  // Minutes of gap the AI leaves between back-to-back bookings (Phone Assistant
+  // config). 0 = no buffer (default). Applies to AI/customer-facing bookings
+  // only; owner manual dashboard bookings are unrestricted.
+  default_buffer_minutes?: number;
 }
 
 export interface BusinessTemplate {

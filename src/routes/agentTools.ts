@@ -29,6 +29,7 @@ import { validateAppointmentTimeRange } from '../services/appointmentValidation'
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../services/customerLookup';
 import { findNextAvailableSlots } from '../services/availabilitySearch';
+import { getTenantBufferMinutes } from '../services/tenantBuffer';
 import {
   findOverlappingAppointment,
   isOverlapError,
@@ -489,16 +490,23 @@ export function registerAgentToolRoutes(
       }
 
       const result = await withTenantClient(args.tenant_id, async (client) => {
-        const tz = await client.query<{ timezone: string }>(
-          `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE tenant_id = $1`,
+        const tz = await client.query<{ timezone: string; default_buffer_minutes: number | null }>(
+          `SELECT COALESCE(timezone, 'America/Chicago') AS timezone, default_buffer_minutes FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         const ianaTimezone = tz.rows[0]?.timezone || 'America/Chicago';
+        // Buffer makes "is this slot free?" agree with what booking will accept,
+        // so the agent never reports a within-buffer time as available.
+        const bufferMinutes =
+          typeof tz.rows[0]?.default_buffer_minutes === 'number' &&
+          tz.rows[0].default_buffer_minutes > 0
+            ? tz.rows[0].default_buffer_minutes
+            : 0;
         const start = applyTimezone(args.start_time, ianaTimezone);
         const end = applyTimezone(args.end_time, ianaTimezone);
         const rpc = await client.query(
-          'SELECT * FROM check_availability_with_tz($1, $2, $3::timestamptz, $4::timestamptz)',
-          [args.tenant_id, args.resource_id, start, end]
+          'SELECT * FROM check_availability_with_tz($1, $2, $3::timestamptz, $4::timestamptz, $5, $6)',
+          [args.tenant_id, args.resource_id, start, end, null, bufferMinutes]
         );
         if (rpc.rows.length === 0) {
           throw new Error('check_availability_with_tz returned no result');
@@ -614,14 +622,19 @@ export function registerAgentToolRoutes(
       // the response can carry conflict details (matches /appointments/create
       // contract — Slice 1 of the booking enforcement hardening 2026-05-09).
       const outcome = await withTenantClient(args.tenant_id, async (client) => {
+        // Buffer enforced on the agent path only (owner manual booking via
+        // /appointments/create passes no buffer → 0 → unrestricted).
+        const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
         // p_assignment_id is TEXT in the current RPC (holds UUID post-Phase 9).
+        // Trailing NULLs are p_service_id / p_customer_phone / p_customer_name
+        // (unused on this path); the final arg is p_buffer_minutes.
         const rpc = await client.query<{
           success: boolean;
           appointment_id: string | null;
           error_message: string | null;
         }>(
           `SELECT * FROM book_appointment_atomic(
-           $1, $2, $3, $4::timestamptz, $5::timestamptz, $6, $7, $8, $9
+           $1, $2, $3, $4::timestamptz, $5::timestamptz, $6, $7, $8, $9, NULL, NULL, NULL, $10
          )`,
           [
             args.tenant_id,
@@ -633,6 +646,7 @@ export function registerAgentToolRoutes(
             args.call_id,
             args.location || null,
             args.employee_id || null,
+            bufferMinutes,
           ]
         );
         const result = rpc.rows[0];
@@ -759,7 +773,8 @@ export function registerAgentToolRoutes(
           [args.tenant_id, dateStr]
         );
 
-        return { resRes, empRes, apptRes, shiftRes };
+        const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
+        return { resRes, empRes, apptRes, shiftRes, bufferMinutes };
       });
 
       const resources: ResourceCandidate[] = data.resRes.rows.map((r) => ({
@@ -793,6 +808,7 @@ export function registerAgentToolRoutes(
         shifts: [] as Shift[], // date-based scheduling only; no weekly patterns
         shiftOverrides,
         existingAppointments,
+        bufferMinutes: data.bufferMinutes,
       });
 
       return ok(reply, { options, diagnostics });
@@ -837,6 +853,10 @@ export function registerAgentToolRoutes(
       );
 
       const result = await withTenantClient(args.tenant_id, async (client) => {
+        // Buffer enforced on the agent path; the RPC's internal slot selection
+        // skips any resource/employee that would land within the buffer of an
+        // existing appointment, so the slot it picks is one booking will accept.
+        const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
         const rpc = await client.query<{
           success: boolean;
           appointment_id: string | null;
@@ -851,7 +871,7 @@ export function registerAgentToolRoutes(
           error_code: string | null;
         }>(
           `SELECT * FROM book_with_scheduling_atomic(
-           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
          )`,
           [
             args.tenant_id,
@@ -870,6 +890,7 @@ export function registerAgentToolRoutes(
             null, // p_preferred_employee_id
             args.requirements.serviceType,
             30, // p_duration_minutes — RPC derives actual duration from service
+            bufferMinutes, // p_buffer_minutes
           ]
         );
         return rpc.rows[0];
@@ -881,16 +902,20 @@ export function registerAgentToolRoutes(
         // capability filters as the booking attempt, searches forward up
         // to 24h. Failure to find alternatives leaves next_available
         // empty; the agent prompt handles both shapes.
-        const nextAvailable = await withTenantClient(args.tenant_id, (client) =>
-          findNextAvailableSlots(client, {
+        const nextAvailable = await withTenantClient(args.tenant_id, async (client) => {
+          // Same buffer as the booking attempt, so every suggested alternative
+          // is one the agent can actually book under this tenant's buffer.
+          const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
+          return findNextAvailableSlots(client, {
             tenantId: args.tenant_id,
             fromTime: new Date(args.window.from).toISOString(),
             durationMinutes: 30,
             requiredSkills: args.requirements.requiredEmployeeSkills || [],
             requiredCapabilities: args.requirements.requiredResourceCapabilities || [],
             count: 5,
-          })
-        ).catch(() => []);
+            bufferMinutes,
+          });
+        }).catch(() => []);
         bookingAttemptsTotal.inc({
           outcome: bookingOutcomeFromAgentError(result?.error_message, result?.error_code),
           source: 'agent',
@@ -996,7 +1021,9 @@ export function registerAgentToolRoutes(
             appointments.push({ start_time: row.start_time, end_time: row.end_time });
           }
         }
-        return { service, shifts, appointments };
+        // Buffer so the openings we read aloud match what booking will accept.
+        const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
+        return { service, shifts, appointments, bufferMinutes };
       });
 
       // Format date for speech ("Wednesday, April 2")
@@ -1033,9 +1060,12 @@ export function registerAgentToolRoutes(
           end: timeToMinutes(s.end_time),
         }))
       );
+      // Expand each booking by the tenant's buffer on both sides before
+      // subtracting it from shift coverage, so the open windows we offer keep
+      // the required gap around existing appointments (matches the booking RPC).
       const booked = data.appointments.map((a) => ({
-        start: dateTimeToMinutes(a.start_time),
-        end: dateTimeToMinutes(a.end_time),
+        start: dateTimeToMinutes(a.start_time) - data.bufferMinutes,
+        end: dateTimeToMinutes(a.end_time) + data.bufferMinutes,
       }));
       const open = subtractIntervals(coverage, booked);
       const usable = open.filter((slot) => slot.end - slot.start >= duration_minutes);

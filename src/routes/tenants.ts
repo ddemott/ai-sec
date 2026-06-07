@@ -46,6 +46,10 @@ const UpdateConfigSchema = z.object({
   first_message: z.string().optional().nullable(),
   save_preferences_enabled: z.boolean().optional(),
   preferences_instructions: z.string().optional().nullable(),
+  // Minutes of gap the AI leaves between back-to-back bookings. 0 = no buffer
+  // (default). Capped at 120 (2h) — beyond that is almost certainly a typo, not
+  // an intent, and a runaway value would starve a day's availability.
+  default_buffer_minutes: z.number().int().min(0).max(120).optional(),
 });
 
 const CreateTemplateSchema = z.object({
@@ -147,7 +151,7 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions FROM tenants WHERE tenant_id = $1',
+          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, default_buffer_minutes FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );
@@ -196,8 +200,9 @@ export function registerTenantRoutes(
             first_message: string | null;
             save_preferences_enabled: boolean | null;
             preferences_instructions: string | null;
+            default_buffer_minutes: number | null;
           }>(
-            'SELECT business_type, system_prompt, voice_id, first_message, save_preferences_enabled, preferences_instructions FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            'SELECT business_type, system_prompt, voice_id, first_message, save_preferences_enabled, preferences_instructions, default_buffer_minutes FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
           const prior = priorRes.rows[0];
@@ -221,9 +226,13 @@ export function registerTenantRoutes(
             body.preferences_instructions !== undefined
               ? body.preferences_instructions
               : (prior?.preferences_instructions ?? null);
+          const finalDefaultBufferMinutes =
+            body.default_buffer_minutes !== undefined
+              ? body.default_buffer_minutes
+              : (prior?.default_buffer_minutes ?? 0);
 
           const updRes = await client.query(
-            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6 WHERE tenant_id = $7 RETURNING tenant_id',
+            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, default_buffer_minutes = $7 WHERE tenant_id = $8 RETURNING tenant_id',
             [
               finalSystemPrompt,
               finalVoiceId,
@@ -231,6 +240,7 @@ export function registerTenantRoutes(
               finalFirstMessage,
               finalSavePreferences,
               finalPreferencesInstructions,
+              finalDefaultBufferMinutes,
               id,
             ]
           );

@@ -83,11 +83,17 @@ function hasAll(have: string[], need: string[] | undefined): boolean {
 function isResourceFree(
   resourceId: string,
   window: TimeWindow,
-  existing: ExistingAppointment[]
+  existing: ExistingAppointment[],
+  bufferMs = 0
 ): boolean {
   return !existing.some((appt) => {
     if (appt.resourceId !== resourceId) return false;
-    return overlaps(window, { from: appt.start, to: appt.end });
+    // Expand the existing appointment by the buffer on both sides so a window
+    // landing within the buffer counts as not-free — matching the booking RPC.
+    return overlaps(window, {
+      from: new Date(appt.start.getTime() - bufferMs),
+      to: new Date(appt.end.getTime() + bufferMs),
+    });
   });
 }
 
@@ -140,12 +146,16 @@ export function selectAssignments(args: {
   shifts?: Shift[];
   shiftOverrides?: ShiftOverride[];
   existingAppointments?: ExistingAppointment[];
+  /** Minimum gap to leave on both sides of an existing appointment, in
+   *  minutes (the tenant's default buffer). 0 = no buffer (original behavior). */
+  bufferMinutes?: number;
 }): SelectAssignmentsResult {
   const { requirements, window: win } = args;
   const employees = args.employees ?? [];
   const shifts = args.shifts ?? [];
   const overrides = args.shiftOverrides ?? [];
   const existing = args.existingAppointments ?? [];
+  const bufferMs = (args.bufferMinutes && args.bufferMinutes > 0 ? args.bufferMinutes : 0) * 60_000;
 
   const totalResources = args.resources.length;
 
@@ -156,7 +166,7 @@ export function selectAssignments(args: {
 
   // Step 2: Filter capable resources by availability
   const availableResources = capableResources.filter((r) =>
-    isResourceFree(r.resource_id, win, existing)
+    isResourceFree(r.resource_id, win, existing, bufferMs)
   );
 
   const needEmployee = !!(

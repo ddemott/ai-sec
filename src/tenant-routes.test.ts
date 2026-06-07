@@ -545,9 +545,61 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(updateQuery!.text).toContain('save_preferences_enabled');
     expect(updateQuery!.text).toContain('preferences_instructions');
     // Param order: [system_prompt, voice_id, business_type, first_message,
-    //               save_preferences_enabled, preferences_instructions, tenant_id]
+    //               save_preferences_enabled, preferences_instructions,
+    //               default_buffer_minutes, tenant_id]
     expect(updateQuery!.params[4]).toBe(true); // from body
     expect(updateQuery!.params[5]).toBe('Remember the stylist and last service.'); // from body
+  });
+
+  it('HAPPY: default_buffer_minutes persists through update-config', async () => {
+    // WHO: owner setting a 15-minute gap between AI bookings in Voice Settings.
+    // WHAT: default_buffer_minutes is written to the UPDATE so the agent's
+    //      booking/availability routes read it and pad slot checks.
+    // WHERE: src/routes/tenants.ts UPDATE tenants SET ... default_buffer_minutes.
+    // WHY: without it in the UPDATE the buffer field is cosmetic — the AI would
+    //      keep booking back-to-back no matter what the owner set.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          system_prompt: 'You are Bella.',
+          voice_id: 'ara',
+          first_message: 'Hi!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          default_buffer_minutes: 0,
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE — prior values
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { default_buffer_minutes: 15 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery!.text).toContain('default_buffer_minutes');
+    expect(updateQuery!.params[6]).toBe(15); // from body, before tenant_id
+  });
+
+  it('SAD: a buffer above the 120-minute cap is rejected 400 (Zod), no UPDATE runs', async () => {
+    // WHY: an absurd buffer (e.g. a fat-fingered 1200) would starve a day's
+    //      availability — the schema caps it at 120 and rejects before any DB
+    //      write, so a typo can't silently break booking.
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { default_buffer_minutes: 121 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(queries.find((q) => q.text.includes('UPDATE tenants SET'))).toBeUndefined();
   });
 
   it('HAPPY: omitting preference fields preserves their prior values', async () => {
