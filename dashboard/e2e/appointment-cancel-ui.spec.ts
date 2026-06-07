@@ -171,10 +171,17 @@ test('cancel-ui-list: Cancel button in AppointmentPopover from List sub-tab soft
 
   try {
     tenant = await registerFreshTenant(request);
-    // Use *today* (like the DynaTire cross-view test) so the List view (which
-    // queries for the scheduler's current selectedDate) will actually show the
-    // appointment without extra date-nav clicks. 14:00 is safely inside seeded shifts.
-    const date = isoDateDaysFromNow(0);
+    // Use *today* so the List view (which queries the scheduler's current
+    // selectedDate) shows the appointment without extra date-nav clicks. 14:00
+    // is safely inside seeded shifts.
+    //
+    // NB: must be the browser-LOCAL today, not UTC. The scheduler defaults
+    // selectedDate to `new Date()` (rendered in local time), while
+    // isoDateDaysFromNow uses toISOString() (UTC). During the evening US window
+    // those are different calendar days, so a UTC-seeded appointment lands on a
+    // day the List isn't showing → the row never appears (the historical
+    // "known flake"). en-CA gives a YYYY-MM-DD string in local time.
+    const date = new Date().toLocaleDateString('en-CA');
     const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
       employees: ['Test Tech'],
       resources: ['Test Bay'],

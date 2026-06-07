@@ -935,10 +935,10 @@ describe('Source code correctness checks', () => {
     // WHERE: src/services/*Client.ts and outlookCalendar.ts
     // WHY: without fetch timeouts, hung external APIs block the Node event loop indefinitely
     const files = [
-      'src/services/jobberClient.ts',
-      'src/services/hubspotClient.ts',
-      'src/services/squareClient.ts',
-      'src/services/servicetitanClient.ts',
+      'src/services/crm/jobberClient.ts',
+      'src/services/crm/hubspotClient.ts',
+      'src/services/crm/squareClient.ts',
+      'src/services/crm/servicetitanClient.ts',
       'src/services/outlookCalendar.ts',
     ];
     for (const file of files) {
@@ -960,10 +960,10 @@ describe('Source code correctness checks', () => {
 
     // All CRM sync services delegate to getIntegrationTokens
     for (const file of [
-      'src/services/jobberSync.ts',
-      'src/services/hubspotSync.ts',
-      'src/services/squareSync.ts',
-      'src/services/servicetitanSync.ts',
+      'src/services/crm/jobberSync.ts',
+      'src/services/crm/hubspotSync.ts',
+      'src/services/crm/squareSync.ts',
+      'src/services/crm/servicetitanSync.ts',
     ]) {
       expect(fs.readFileSync(file, 'utf8')).toContain('getIntegrationTokens');
     }
