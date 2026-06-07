@@ -45,6 +45,8 @@ Everything else complete or tracked below.
 
 - [ ] **IN FLIGHT (validation pending)** Manual conversation testing — exercise full voice calls (esp. booking + customer-preference capture) and confirm the AI follows a logical progression: asks the caller's preferred day/time, offers open slots, widens to the next window when none fit, confirms the caller's choice (never imposes a time), and saves/recalls preferences across calls. Code + unit/prompt tests are green; this is the human-in-the-loop check that the dialog actually flows naturally. Blocked on live inbound (Telnyx). See `agent/src/prompt.ts` "# Availability discipline" + "# Customer preferences".
 
+- [ ] **IN FLIGHT (prod-apply) — REQUIRED** Apply migration `20260606000000_tenants_customer_preferences.sql` to the prod DB (`npm run db:migrate -- "<PROD_DATABASE_URL>"`). Shipped to `main` 2026-06-07 (deploys via Railway), but the code's widened SELECTs (`GET /tenants/:id/config`, `/agent-tools/tenant-config`) **500 until the two columns exist in prod**. Additive + forward-only (`ADD COLUMN IF NOT EXISTS`, zero data loss) — safe to run anytime. Until applied, the AI-config page + every call's tenant-config fetch break in prod.
+
 Closed: prod migrations apply (36 applied 2026-05-17 → version `20260514000000`); first-run guided tour (`20838a4`).
 
 ---
