@@ -33,6 +33,13 @@ function buildMockTelnyxClient(
         id: 'pn-abc',
         phone_number: '+16305551234',
       })),
+      findPhoneNumberIdByNumber: vi.fn(async () => 'pn-abc'),
+      getPhoneNumber: vi.fn(async () => ({
+        id: 'pn-abc',
+        phone_number: '+16305551234',
+        connection_id: 'sip-conn-123',
+        status: 'active',
+      })),
       assignToConnection: vi.fn(async () => undefined),
       release: vi.fn(async () => undefined),
       ...overrides,
@@ -133,6 +140,43 @@ describe('activatePhone', () => {
     }
 
     // Rollback release must be called with the purchased number's ID
+    expect(telnyx.client.release).toHaveBeenCalledWith('pn-abc');
+  });
+
+  it('VERIFY FAILS: assign succeeds but connection_id did not stick → rollback, result failed', async () => {
+    // WHO: super-admin provisioning against a connection that silently fails to bind
+    // WHAT: orderNumber + assignToConnection both resolve, but getPhoneNumber shows
+    //       connection_id != sipConnectionId → activatePhone throws, releases the
+    //       number, tenant set to 'failed'. The number is NEVER marked active.
+    // WHEN: Telnyx accepts the PATCH but inbound routing never binds (the silent
+    //       dead-line failure mode that shipped dead numbers as 'active').
+    // WHERE: activatePhone post-assign verification branch
+    // WHY: this is the core guard added 2026-06-04 — a number that cannot receive
+    //      calls must fail provisioning, not report healthy. Pins that a mismatched
+    //      connection_id triggers rollback rather than an 'ok' result.
+    const telnyx = buildMockTelnyxClient({
+      getPhoneNumber: vi.fn(async () => ({
+        id: 'pn-abc',
+        phone_number: '+16305551234',
+        connection_id: null, // assignment did not take
+        status: 'active',
+      })),
+    });
+    const pool = buildMockPool([
+      { rows: [{ tenant_id: TENANT_ID, name: 'Test Biz', phone_status: 'inactive' }] },
+      { rows: [], rowCount: 1 }, // UPDATE provisioning
+      { rows: [], rowCount: 1 }, // UPDATE failed
+    ]);
+
+    const result = await activatePhone(pool, telnyx, TENANT_ID);
+
+    expect(result.status).toBe('failed');
+    if (result.status === 'failed') {
+      expect(result.detail).toContain('did not take');
+      expect(result.number_purchased).toBe(true);
+      expect(result.rolled_back).toBe(true);
+    }
+    // The dead number must be released, never left assigned-but-dead.
     expect(telnyx.client.release).toHaveBeenCalledWith('pn-abc');
   });
 

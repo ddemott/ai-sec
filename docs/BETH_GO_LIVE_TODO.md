@@ -1,9 +1,34 @@
 # Beth Go-Live — Resume Checklist
 
-Last worked: 2026-06-02 (night). Owner: Dale. Claude walks you through each step.
+Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 
 **Goal:** Beth answers real calls on `+1 630-866-1960` for Thinking Hammer LLC
 (tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`).
+
+> ## 📩 2026-06-05 — Telnyx support escalated; account healthy
+> Telnyx (Mark Morse, 13:55 UTC) replied: *"We have escalated these call examples to
+> our team for investigation — we will let you know as soon as we hear back."* Ticket
+> alive + escalated; awaiting Telnyx. Account suspension (30-day negative balance,
+> 2026-05-25 — the real inbound-killer) cleared 2026-06-03: paid → re-enabled →
+> upgraded → ID + account verification approved. Full thread in `docs/TICKET_SUPPORT.md`.
+> **Still blocked on:** (a) Telnyx's escalation findings, AND (b) the different-carrier
+> dial test below.
+
+> ## ⚠️ 2026-06-04 UPDATE — supersedes the "NOT LiveKit / Telnyx-domain / do NOT
+> ## mutate the trunk" conclusion below.
+> Full live-API audit found **all config correct**; the inbound failure is **PSTN
+> number-reachability**, not LiveKit or Telnyx config. Details in
+> `docs/TICKET_SUPPORT.md` (top) and `docs/PROVISIONING_AUDIT.md` (2026-06-04 update).
+> - The earlier "INVITE never reaches LiveKit → don't touch the trunk" was based on a
+>   broken test (Dale dialing from his cursed/unsynced carrier — that call never even
+>   reaches Telnyx). We **did** touch the trunk (correctly): normalized its number to
+>   `+E.164` and added the new number.
+> - **New test number bought + fully wired today: `+1 630-822-9086`** (Telnyx id
+>   `2975078589701031880`, on connection `2945038451784812111`, in LiveKit trunk
+>   `ST_aUM3GuCuc9wL`). `+16308661960` is a dead recycled DID — stop testing it.
+> - **NEXT STEP:** call `+16308229086` from a **different carrier** (not Dale's phone)
+>   while monitoring LiveKit `listRooms()`. Room appears → pipe works, wait for
+>   carrier propagation. Nothing → investigate UDP transport to LiveKit Cloud.
 
 ---
 

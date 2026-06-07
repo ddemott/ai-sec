@@ -26,6 +26,13 @@ export interface OrderedNumber {
   phone_number: string;
 }
 
+export interface PhoneNumberDetail {
+  id: string;
+  phone_number: string;
+  connection_id: string | null;
+  status: string;
+}
+
 export class TelnyxNumbersClient {
   constructor(private apiKey: string) {}
 
@@ -93,6 +100,38 @@ export class TelnyxNumbersClient {
       throw new Error(`Telnyx number_order returned no phone_numbers for ${phoneNumber}`);
     }
     return { id: purchased.id, phone_number: purchased.phone_number };
+  }
+
+  /**
+   * Resolve the canonical `/phone_numbers` resource id for a number.
+   *
+   * The id returned by `POST /number_orders` is an order-line id and is NOT
+   * guaranteed to equal the phone_numbers resource id that `PATCH/DELETE
+   * /phone_numbers/{id}` operate on. Assigning or releasing with the wrong id
+   * silently no-ops (connection never set; number never released). Always
+   * resolve the real id here before assign/verify/release.
+   *
+   * Returns null if Telnyx doesn't yet list the number (e.g. order still
+   * settling), so the caller can poll/retry.
+   */
+  async findPhoneNumberIdByNumber(phoneNumber: string): Promise<string | null> {
+    const params = new URLSearchParams({ 'filter[phone_number]': phoneNumber });
+    const res = await this.fetch<{ data: Array<{ id: string }> }>(
+      'GET',
+      `/phone_numbers?${params.toString()}`
+    );
+    return res.data?.[0]?.id ?? null;
+  }
+
+  /**
+   * Fetch a number's current detail, including the connection it is routed to.
+   * Used to verify an assignment actually took before declaring a tenant active.
+   */
+  async getPhoneNumber(phoneNumberId: string): Promise<PhoneNumberDetail> {
+    const res = await this.fetch<{
+      data: { id: string; phone_number: string; connection_id: string | null; status: string };
+    }>('GET', `/phone_numbers/${phoneNumberId}`);
+    return res.data;
   }
 
   /**

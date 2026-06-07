@@ -59,6 +59,29 @@ export type DeactivateResult =
     }
   | { status: 'not_found' };
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Resolve the canonical /phone_numbers resource id for a freshly ordered number.
+ *
+ * Telnyx may not list a just-purchased number immediately, so we retry briefly.
+ * Falls back to the order-line id if lookup never resolves — the post-assign
+ * verification will then catch a bad id rather than marking a dead line active.
+ */
+async function resolvePhoneNumberId(
+  telnyx: TelnyxProvisioningConfig,
+  ordered: { id: string; phone_number: string }
+): Promise<string> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const found = await telnyx.client.findPhoneNumberIdByNumber(ordered.phone_number);
+    if (found) return found;
+    if (attempt < 2) await sleep(1000 * (attempt + 1));
+  }
+  return ordered.id;
+}
+
 // ── activatePhone ─────────────────────────────────────────────────────────────
 
 /**
@@ -127,10 +150,28 @@ export async function activatePhone(
       }
 
       const ordered = await telnyx.client.orderNumber(available.phone_number);
-      purchasedId = ordered.id;
       purchasedNumber = ordered.phone_number;
 
-      await telnyx.client.assignToConnection(ordered.id, telnyx.sipConnectionId);
+      // Resolve the canonical phone_numbers resource id. The order-line id from
+      // number_orders is not guaranteed to equal it; using the wrong id makes
+      // assign/release silently no-op. Set purchasedId to the resolved id so
+      // rollback releases the right resource.
+      const resolvedId = await resolvePhoneNumberId(telnyx, ordered);
+      purchasedId = resolvedId;
+
+      await telnyx.client.assignToConnection(resolvedId, telnyx.sipConnectionId);
+
+      // Verify the assignment actually took before declaring the line live.
+      // Without this, a number that never routes inbound is still marked
+      // 'active' (the silent-dead-line failure mode). If the connection did not
+      // stick, throw → rollback releases the number and the tenant goes 'failed'.
+      const detail = await telnyx.client.getPhoneNumber(resolvedId);
+      if (detail.connection_id !== telnyx.sipConnectionId) {
+        throw new Error(
+          `Connection assignment did not take for ${ordered.phone_number}: ` +
+            `expected connection_id=${telnyx.sipConnectionId}, got ${detail.connection_id ?? 'null'}`
+        );
+      }
 
       await client.query(
         `UPDATE tenants SET
@@ -138,13 +179,13 @@ export async function activatePhone(
           inbound_phone = $2,
           phone_status = 'active'
         WHERE tenant_id = $3`,
-        [ordered.id, ordered.phone_number, tenantId]
+        [resolvedId, ordered.phone_number, tenantId]
       );
 
       return {
         status: 'ok',
         phone_number: ordered.phone_number,
-        telnyx_phone_number_id: ordered.id,
+        telnyx_phone_number_id: resolvedId,
         tenant_id: tenantId,
       };
     } catch (err: unknown) {
