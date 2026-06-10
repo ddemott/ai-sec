@@ -240,5 +240,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: dashboard/playwright-report/
+          # test-results/ holds the per-test screenshot + error-context.md
+          # (the page's accessibility snapshot at the moment of failure) —
+          # the only way to see WHY a headless CI test failed.
+          path: |
+            dashboard/playwright-report/
+            dashboard/test-results/
           retention-days: 7
+          if-no-files-found: ignore
