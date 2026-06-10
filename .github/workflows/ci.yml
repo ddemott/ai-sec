@@ -209,7 +209,7 @@ jobs:
       - name: Build and start dashboard
         run: cd dashboard && npm run build && npm run start &
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:4001
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
           PORT: 4000
 
       - name: Wait for servers
@@ -223,7 +223,7 @@ jobs:
         run: cd dashboard && npx playwright test
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
-          NEXT_PUBLIC_API_URL: http://localhost:4001
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
           # globalSetup pings BACKEND_URL/health for the freshness check; it
           # defaults to https://localhost:4001, but the CI backend is plain
           # HTTP (USE_HTTPS=false), so point it at http or the check fails.
