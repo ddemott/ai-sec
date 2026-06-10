@@ -95,7 +95,12 @@ const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
 
 // --- Server Setup ---
 
-const useHttps = process.env.NODE_ENV !== 'production';
+// HTTPS for local dev (mkcert-trusted localhost certs); plain HTTP in
+// production (TLS terminated at the Railway proxy) and in CI, where the rest
+// of the E2E stack — wait-on, the dashboard's NEXT_PUBLIC_API_URL, Playwright —
+// all speak http://localhost:4001. CI sets USE_HTTPS=false so the backend
+// doesn't boot TLS the self-signed cert nobody else in the job trusts.
+const useHttps = process.env.NODE_ENV !== 'production' && process.env.USE_HTTPS !== 'false';
 const certDir = path.resolve(__dirname, '..', '..', 'certs');
 const logger = buildLogger({ service: 'ai-sec-backend' });
 const app = Fastify(
