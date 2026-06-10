@@ -234,6 +234,13 @@ jobs:
           # Dashboard runs `next start` (HTTP) in CI; the Playwright baseURL
           # defaults to https for local dev, so override it here.
           DASHBOARD_URL: http://localhost:4000
+          # The "Apply migrations and seed" step already built test_db via the
+          # full migration chain. Do NOT let globalSetup rebuild-db.sh run: it
+          # DROP SCHEMA CASCADEs out from under the already-running backend
+          # (→ "relation users does not exist" on /login), and it rebuilds from
+          # the stale baseline.sql snapshot that lacks recent migrations
+          # (e.g. the tts_* columns).
+          PLAYWRIGHT_SKIP_DB_RESET: '1'
 
       - name: Dump backend log on failure
         if: failure()
