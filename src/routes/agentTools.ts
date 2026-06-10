@@ -312,8 +312,11 @@ export function registerAgentToolRoutes(
           system_prompt: string | null;
           save_preferences_enabled: boolean | null;
           preferences_instructions: string | null;
+          tts_voice: string | null;
+          tts_speed: number | null;
+          tts_soft: boolean | null;
         }>(
-          `SELECT name, timezone, system_prompt, save_preferences_enabled, preferences_instructions FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         return res.rows[0] ?? null;
@@ -334,6 +337,12 @@ export function registerAgentToolRoutes(
         // to call save_customer_preference. Default false / null is "off".
         save_preferences_enabled: row.save_preferences_enabled ?? false,
         preferences_instructions: row.preferences_instructions ?? null,
+        // 2026-06-10: per-tenant xAI Grok TTS voice + delivery. NULL means the
+        // agent falls back to its XAI_TTS_VOICE / XAI_TTS_SPEED / XAI_TTS_SOFT
+        // env defaults, so tenants who haven't picked a voice are unaffected.
+        tts_voice: row.tts_voice ?? null,
+        tts_speed: row.tts_speed ?? null,
+        tts_soft: row.tts_soft ?? null,
       });
     },
     'Failed to fetch tenant config'

@@ -46,15 +46,46 @@ describe('fetchTenantConfig', () => {
       },
     });
     const cfg = await fetchTenantConfig(client, TENANT_ID);
-    // Preference fields absent from the response default to off (false/null)
-    // so an older backend that doesn't send them keeps the feature disabled.
+    // Preference + Grok-voice fields absent from the response default to off
+    // (false/null) so an older backend that doesn't send them keeps the feature
+    // disabled and the agent falls back to its XAI_TTS_* env defaults.
     expect(cfg).toEqual({
       name: 'DynaTire',
       timezone: 'America/Chicago',
       systemPrompt: null,
       savePreferencesEnabled: false,
       preferencesInstructions: null,
+      ttsVoice: null,
+      ttsSpeed: null,
+      ttsSoft: null,
     });
+  });
+
+  it('HAPPY: surfaces per-tenant Grok voice (tts_voice/speed/soft, snake → camel)', async () => {
+    // WHO: an owner who picked "Eve", slowed her down, and turned on soft delivery.
+    // WHAT: the three tts_* fields convert snake → camel at the boundary so the
+    //        agent passes the tenant's voice/speed/soft to GrokTTS instead of
+    //        the global env defaults.
+    // WHY: per-tenant voice is the whole feature — if these don't surface, every
+    //        tenant sounds identical.
+    const client = clientWith({
+      status: 200,
+      body: {
+        success: true,
+        result: {
+          name: 'DynaTire',
+          timezone: 'America/Chicago',
+          system_prompt: null,
+          tts_voice: 'eve',
+          tts_speed: 0.85,
+          tts_soft: true,
+        },
+      },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg.ttsVoice).toBe('eve');
+    expect(cfg.ttsSpeed).toBe(0.85);
+    expect(cfg.ttsSoft).toBe(true);
   });
 
   it('HAPPY: surfaces save_preferences_enabled + preferences_instructions (snake → camel)', async () => {

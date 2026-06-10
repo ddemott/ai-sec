@@ -46,6 +46,10 @@ const UpdateConfigSchema = z.object({
   first_message: z.string().optional().nullable(),
   save_preferences_enabled: z.boolean().optional(),
   preferences_instructions: z.string().optional().nullable(),
+  // Per-tenant xAI Grok TTS settings (NULL = use agent env defaults).
+  tts_voice: z.string().max(100).optional().nullable(),
+  tts_speed: z.number().min(0.7).max(1.5).optional().nullable(),
+  tts_soft: z.boolean().optional().nullable(),
 });
 
 const CreateTemplateSchema = z.object({
@@ -147,7 +151,7 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions FROM tenants WHERE tenant_id = $1',
+          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );
@@ -196,8 +200,11 @@ export function registerTenantRoutes(
             first_message: string | null;
             save_preferences_enabled: boolean | null;
             preferences_instructions: string | null;
+            tts_voice: string | null;
+            tts_speed: number | null;
+            tts_soft: boolean | null;
           }>(
-            'SELECT business_type, system_prompt, voice_id, first_message, save_preferences_enabled, preferences_instructions FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            'SELECT business_type, system_prompt, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
           const prior = priorRes.rows[0];
@@ -221,9 +228,15 @@ export function registerTenantRoutes(
             body.preferences_instructions !== undefined
               ? body.preferences_instructions
               : (prior?.preferences_instructions ?? null);
+          const finalTtsVoice =
+            body.tts_voice !== undefined ? body.tts_voice : (prior?.tts_voice ?? null);
+          const finalTtsSpeed =
+            body.tts_speed !== undefined ? body.tts_speed : (prior?.tts_speed ?? null);
+          const finalTtsSoft =
+            body.tts_soft !== undefined ? body.tts_soft : (prior?.tts_soft ?? null);
 
           const updRes = await client.query(
-            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6 WHERE tenant_id = $7 RETURNING tenant_id',
+            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9 WHERE tenant_id = $10 RETURNING tenant_id',
             [
               finalSystemPrompt,
               finalVoiceId,
@@ -231,6 +244,9 @@ export function registerTenantRoutes(
               finalFirstMessage,
               finalSavePreferences,
               finalPreferencesInstructions,
+              finalTtsVoice,
+              finalTtsSpeed,
+              finalTtsSoft,
               id,
             ]
           );
