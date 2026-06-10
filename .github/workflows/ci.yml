@@ -234,6 +234,13 @@ jobs:
           # Dashboard runs `next start` (HTTP) in CI; the Playwright baseURL
           # defaults to https for local dev, so override it here.
           DASHBOARD_URL: http://localhost:4000
+          # Run the test process in the seed tenants' timezone. Specs derive
+          # datetime-local wall-clock strings from Node's tz (getTimezoneOffset)
+          # while the browser reads them in timezoneId=America/Chicago. Locally
+          # Node is already Chicago (where these tests were authored + pass); CI
+          # Node defaults to UTC, so without this the two disagree by 5h and
+          # UI bookings land at the wrong time (no overlap / outside shift).
+          TZ: America/Chicago
           # The "Apply migrations and seed" step already built test_db via the
           # full migration chain. Do NOT let globalSetup rebuild-db.sh run: it
           # DROP SCHEMA CASCADEs out from under the already-running backend
