@@ -25,6 +25,14 @@ export default defineConfig({
     baseURL: process.env.DASHBOARD_URL ?? 'https://localhost:4000',
     ignoreHTTPSErrors: true,
     screenshot: 'only-on-failure',
+    // Pin the browser timezone to the seed tenants' tz. Quick-book specs fill
+    // `<input type="datetime-local">`, which the browser interprets in ITS
+    // timezone — Chicago on a local dev machine but UTC on the CI runner. That
+    // 5h skew pushed a "10:00 local" booking to 05:00 Chicago, before the
+    // seeded shift's 07:00 start → EMPLOYEE_NOT_SCHEDULED only in CI. Fixing
+    // the browser tz makes datetime-local match the tenant's local time
+    // everywhere.
+    timezoneId: 'America/Chicago',
     // NB: storageState is set on the chromium project, NOT globally. A global
     // storageState is applied to the `setup` project too, so Playwright tries
     // to READ e2e/.auth/user.json before auth.setup.ts can write it — which
