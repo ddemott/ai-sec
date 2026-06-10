@@ -339,6 +339,23 @@ test('quick book real-time: new appointment appears in the scheduler grid withou
       await page.waitForTimeout(150);
     }
 
+    // Guarantee a bookable slot: give every DynaTire tech a full-day shift on
+    // the target date, so whichever employee auto-assign picks is on shift and
+    // the booking can't fail with EMPLOYEE_NOT_SCHEDULED. This test asserts the
+    // real-time GRID refresh, not shift enforcement (covered elsewhere); on a
+    // clean DB the fixture's 2-week window can miss the exact target date at
+    // window/timezone edges, which would make the grid assertion moot.
+    const targetYmd = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+    await pool.query(
+      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+       SELECT tenant_id, employee_id, $2::date, '06:00', '20:00', false
+         FROM employees
+        WHERE tenant_id = $1 AND (is_deleted IS NULL OR is_deleted = false)
+       ON CONFLICT (tenant_id, employee_id, shift_date)
+         DO UPDATE SET start_time = '06:00', end_time = '20:00', is_off = false`,
+      [DYNATIRE_ID, targetYmd]
+    );
+
     // Capture URL before submission — assertion below confirms it didn't
     // change, i.e. no client-side route push and no reload.
     const urlBeforeBooking = page.url();
