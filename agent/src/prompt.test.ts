@@ -26,6 +26,19 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('America/Chicago');
   });
 
+  it('HAPPY: instructs the agent to offer the service menu, not ask blind', () => {
+    // WHO: Caller wants to book but Beth previously asked "what service?"
+    //       without listing the options, so the caller couldn't answer.
+    // WHAT: The prompt must tell the agent to call get_service_catalog FIRST
+    //        and read the real options back, plus offer to take a message.
+    // WHY: An open-ended "which service?" with no menu is a dead end — the
+    //        caller can't guess what's on offer. Fix lives in the prompt.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toContain('get_service_catalog');
+    expect(prompt).toMatch(/never ask an open-ended/i);
+    expect(prompt).toMatch(/take a message/i);
+  });
+
   it('HAPPY: caller-ID present → includes the phone with a verified-by-caller-ID note', () => {
     // WHO: Normal inbound call, caller-ID came through clean
     // WHAT: Prompt tells the LLM the phone is trusted so it can skip
