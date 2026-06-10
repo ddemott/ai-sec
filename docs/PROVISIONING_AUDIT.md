@@ -1,5 +1,16 @@
 # Provisioning Audit — Inbound Call Failure Root Cause
 
+> ## ⛔ ROOT CAUSE CORRECTED 2026-06-09 — read `docs/TELNYX_HANDOVER.md`
+> Both prior conclusions in this file (connection-inbound-config theory, then
+> PSTN-number-reachability theory) were **wrong**. Actual cause: a **stale FQDN** in the
+> Telnyx SIP connection pointed at the deleted LiveKit project subdomain
+> `ai-secretary-nmlkkmgf` → LiveKit returned `404 No trunk found` → carrier intercept.
+> Fixed by repointing Telnyx → `3jay24s076x.sip.livekit.cloud:5060`. SIP verified
+> end-to-end (real 19s call 2026-06-09). **The provisioning *code* defects flagged below
+> (#1 verify-before-active, #2 resolve real phone id, #3 order-completion wait) still
+> stand on their own merit** — they were never the inbound cause but are real hardening.
+> Current blocker: agent tenant resolution (no `tenant_id` in dispatch metadata).
+
 **Date:** 2026-06-04
 **Trigger:** Number `+1 630-866-1960` receives no inbound calls. Telnyx SIP Call
 Flow Tool shows **4 inbound CDRs (Jun 3)**, all `+1-608-217-5303 → +1-630-866-1960`,

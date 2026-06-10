@@ -1,5 +1,13 @@
 # Telnyx Support — Active Ticket
 
+> ## ⛔ RESOLVED 2026-06-09 — ticket can be CLOSED; read `docs/TELNYX_HANDOVER.md`
+> The inbound failure was **our** misconfig, not Telnyx's: a stale FQDN in the SIP
+> connection (`ai-secretary-nmlkkmgf`, a deleted LiveKit project) → LiveKit `404 No trunk
+> found`. Telnyx diagnosed the 404 correctly and pointed at LiveKit. Fixed on our side by
+> repointing Telnyx → `3jay24s076x.sip.livekit.cloud:5060`; verified by a real 19s call
+> (2026-06-09, Q.850 cause 16). The 0s-CDR / error-10007 thread is moot. Nothing below is
+> a Telnyx-side action item anymore. Current blocker is agent tenant resolution (handover).
+
 **Number**: `+1 630-866-1960` (active, Thinking Hammer LLC). Telnyx id `2973794140900296302`.
 
 > ## 📩 UPDATE 2026-06-05 — Telnyx escalated to their internal team

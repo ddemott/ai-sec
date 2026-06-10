@@ -1,5 +1,16 @@
 # Beth Go-Live — Resume Checklist
 
+> ## ⛔ SUPERSEDED 2026-06-09 — read `docs/TELNYX_HANDOVER.md` first
+> The "PSTN carrier propagation / recycled-DID" conclusion below is **WRONG**. Real
+> root cause: a **stale FQDN** in the Telnyx SIP connection pointed at the deleted
+> LiveKit project subdomain `ai-secretary-nmlkkmgf.sip.livekit.cloud`. Telnyx delivered
+> the INVITE; LiveKit returned `404 No trunk found`; the carrier translated that into
+> "not in service." Fixed by repointing Telnyx → **`3jay24s076x.sip.livekit.cloud:5060`**.
+> SIP chain now verified end-to-end (real 19s call 2026-06-09 10:35 CT, Q.850 cause 16,
+> agent joined the room). **Current blocker:** agent tenant resolution — no `tenant_id`
+> in dispatch/room metadata → agent plays the "system issue" fallback. See the handover
+> for Option A (hardcode dispatch metadata) vs Option B (DID→tenant lookup).
+
 Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 
 **Goal:** Beth answers real calls on `+1 630-866-1960` for Thinking Hammer LLC
