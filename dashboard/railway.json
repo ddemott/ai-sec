@@ -1,11 +1,12 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
+  "//": "Commands run from the REPO ROOT (set the dashboard service's Root Directory to BLANK, not 'dashboard') so the build can see repo-root /shared/* that the dashboard imports. We cd into dashboard and use plain next build/start (no standalone — see next.config.mjs).",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm install && npm run build && cp -r .next/static .next/standalone/.next/static && (cp -r public .next/standalone/public 2>/dev/null || true)"
+    "buildCommand": "cd dashboard && npm ci && npm run build"
   },
   "deploy": {
-    "startCommand": "node .next/standalone/server.js",
+    "startCommand": "cd dashboard && npx next start -H 0.0.0.0 -p $PORT",
     "healthcheckPath": "/",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10

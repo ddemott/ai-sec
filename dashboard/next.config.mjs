@@ -2,7 +2,14 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // NOTE: `output: 'standalone'` was removed 2026-06-10. This is a monorepo and
+  // the dashboard imports repo-root `/shared/*` (../../shared/...). Standalone's
+  // file-tracing mirrors the monorepo path (server.js lands at
+  // .next/standalone/dashboard/server.js, not .next/standalone/server.js), which
+  // made the Railway start command wrong and the build effectively undeployable
+  // after the May `/shared` extraction. Plain `next build` + `next start` resolves
+  // `/shared` at build time (when built from the repo root so /shared is present)
+  // and serves `.next` directly — no fragile standalone path. See dashboard/railway.json.
   eslint: {
     // Test files have cosmetic `any` warnings — don't block production builds
     ignoreDuringBuilds: true,
