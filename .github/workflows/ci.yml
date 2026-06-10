@@ -228,6 +228,9 @@ jobs:
           # defaults to https://localhost:4001, but the CI backend is plain
           # HTTP (USE_HTTPS=false), so point it at http or the check fails.
           BACKEND_URL: http://localhost:4001
+          # Several specs call /agent-tools/* directly with x-agent-secret;
+          # must match the value the backend was started with.
+          AGENT_SECRET: ci-agent-secret
 
       - name: Upload Playwright report on failure
         if: failure()
