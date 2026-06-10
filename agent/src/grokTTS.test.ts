@@ -80,8 +80,48 @@ describe('GrokTTS.synthesize', () => {
       text: 'Hello caller',
       voice_id: 'rex',
       language: 'en',
+      speed: 1.0,
       output_format: { codec: 'pcm', sample_rate: SAMPLE_RATE },
     });
+  });
+
+  it('HAPPY: speed + soft are applied — body carries speed, text wrapped in <soft>', async () => {
+    // WHO: Tenant wants a slow, soothing "caring friend" delivery (Dale's brief)
+    // WHAT: speed flows to the xAI `speed` param; soft wraps the utterance in
+    //        the <soft> prosody tag so delivery is gentler. voice is unchanged.
+    // WHY: These are the two knobs that turn the British female voice (eve) from
+    //        brisk/neutral into slow+soothing without changing WHO is speaking.
+    const calls: Array<{ init: RequestInit }> = [];
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      calls.push({ init: init ?? {} });
+      return pcmResponse();
+    };
+    const t = new GrokTTS({ apiKey: API_KEY, voice: 'eve', speed: 0.85, soft: true, fetchImpl });
+
+    for await (const _f of t.synthesize('How can I help you today?')) {
+      // drain
+    }
+
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(body.voice_id).toBe('eve');
+    expect(body.speed).toBe(0.85);
+    expect(body.text).toBe('<soft>How can I help you today?</soft>');
+  });
+
+  it('HAPPY: soft defaults off — text is sent unwrapped when soft not set', async () => {
+    // WHY: The TTS class must stay byte-for-byte backward compatible when the
+    //        new options are omitted (e.g. other call sites / tests) — soft=false
+    //        and speed=1.0 by default so behavior is unchanged unless opted in.
+    let sentText: string | undefined;
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentText = JSON.parse(init!.body as string).text;
+      return pcmResponse();
+    };
+    const t = new GrokTTS({ apiKey: API_KEY, fetchImpl });
+    for await (const _f of t.synthesize('plain')) {
+      // drain
+    }
+    expect(sentText).toBe('plain');
   });
 
   it('HAPPY: emits frames; the LAST frame is marked final:true', async () => {

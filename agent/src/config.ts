@@ -21,6 +21,15 @@ const envSchema = z.object({
   XAI_API_KEY: z.string().min(1),
   // ara = warm & friendly (recommended default for AI secretary)
   XAI_TTS_VOICE: z.enum(['eve', 'ara', 'rex', 'sal', 'leo']).default('ara'),
+  // Speech pace multiplier (xAI /v1/tts `speed`, range 0.7–1.5). <1 = slower,
+  // calmer delivery. Default 0.85 = unhurried "caring friend" pace; tune by ear.
+  XAI_TTS_SPEED: z.coerce.number().min(0.7).max(1.5).default(0.85),
+  // When true, the synthesized text is wrapped in xAI's <soft> prosody tag for a
+  // softer, soothing delivery. Env arrives as a string; transform to boolean.
+  XAI_TTS_SOFT: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });

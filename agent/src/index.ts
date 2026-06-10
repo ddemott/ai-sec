@@ -187,7 +187,12 @@ export default defineAgent({
           vad: ctx.proc.userData.vad as silero.VAD,
           stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
           llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-          tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
+          tts: new GrokTTS({
+            apiKey: config.XAI_API_KEY,
+            voice: config.XAI_TTS_VOICE,
+            speed: config.XAI_TTS_SPEED,
+            soft: config.XAI_TTS_SOFT,
+          }),
         });
 
         const agent = new voice.Agent({
