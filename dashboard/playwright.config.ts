@@ -19,20 +19,26 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   use: {
-    baseURL: 'https://localhost:4000',
+    // Local dev serves the dashboard over HTTPS (server.js + mkcert certs);
+    // CI runs `next start` (plain HTTP). Honor DASHBOARD_URL so CI can point
+    // at http://localhost:4000 without the TLS handshake failing every goto.
+    baseURL: process.env.DASHBOARD_URL ?? 'https://localhost:4000',
     ignoreHTTPSErrors: true,
     screenshot: 'only-on-failure',
-    storageState: 'e2e/.auth/user.json',
+    // NB: storageState is set on the chromium project, NOT globally. A global
+    // storageState is applied to the `setup` project too, so Playwright tries
+    // to READ e2e/.auth/user.json before auth.setup.ts can write it — which
+    // ENOENTs on a fresh checkout (the file is gitignored). The setup project
+    // must run with no storage state.
   },
   projects: [
     {
       name: 'setup',
       testMatch: /auth\.setup\.ts/,
-      use: { storageState: undefined },
     },
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: { browserName: 'chromium', storageState: 'e2e/.auth/user.json' },
       dependencies: ['setup'],
     },
   ],
