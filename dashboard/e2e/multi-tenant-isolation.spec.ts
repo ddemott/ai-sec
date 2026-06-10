@@ -36,7 +36,7 @@ const SUPER_ADMIN_ID = '00000000-0000-0000-0000-000000000000';
 // gives us a stable handle independent of seed history.
 let OTHER_TENANT_ID: string;
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-const BACKEND_URL = 'https://localhost:4001';
+const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 
 let pool: Pool;
 

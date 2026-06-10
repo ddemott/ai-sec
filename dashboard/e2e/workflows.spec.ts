@@ -12,7 +12,7 @@
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig, BACKEND_URL } from './helpers/fixtures';
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
@@ -112,15 +112,15 @@ async function loginAs(page: Page, email: string, password: string) {
 /** Login via API to get a JWT, then store it so page.evaluate(fetch) works. */
 async function getApiToken(page: Page, email: string, password: string): Promise<string> {
   const result = await page.evaluate(
-    async ({ email, password }) => {
-      const res = await fetch('https://localhost:4001/login', {
+    async ({ email, password, backendUrl }) => {
+      const res = await fetch(`${backendUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
       return await res.json();
     },
-    { email, password }
+    { email, password, backendUrl: BACKEND_URL }
   );
   if (!result?.token) throw new Error(`Login failed for ${email}: ${JSON.stringify(result)}`);
   return result.token as string;
@@ -496,8 +496,8 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
     const newEnd = new Date(future);
     newEnd.setHours(14, 0, 0, 0);
     const updateResp = await page.evaluate(
-      async ({ token, id, tenantId, startIso, endIso }) => {
-        const res = await fetch(`https://localhost:4001/appointments/${id}/update`, {
+      async ({ token, id, tenantId, startIso, endIso, backendUrl }) => {
+        const res = await fetch(`${backendUrl}/appointments/${id}/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ tenant_id: tenantId, start_time: startIso, end_time: endIso }),
@@ -510,23 +510,24 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
         tenantId: DYNATIRE_ID,
         startIso: newStart.toISOString(),
         endIso: newEnd.toISOString(),
+        backendUrl: BACKEND_URL,
       }
     );
     expect(updateResp.status, `update response: ${JSON.stringify(updateResp)}`).toBeLessThan(400);
 
     // SAD path: API rejects end <= start
     const badResp = await page.evaluate(
-      async ({ token, id, tenantId, startIso }) => {
+      async ({ token, id, tenantId, startIso, backendUrl }) => {
         const earlier = new Date(startIso);
         earlier.setHours(earlier.getHours() - 2);
-        const res = await fetch(`https://localhost:4001/appointments/${id}/update`, {
+        const res = await fetch(`${backendUrl}/appointments/${id}/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ tenant_id: tenantId, end_time: earlier.toISOString() }),
         });
         return { status: res.status, body: await res.json() };
       },
-      { token, id: apptId, tenantId: DYNATIRE_ID, startIso: newStart.toISOString() }
+      { token, id: apptId, tenantId: DYNATIRE_ID, startIso: newStart.toISOString(), backendUrl: BACKEND_URL }
     );
     expect(badResp.status, 'expected 400 from validator on end<=start').toBe(400);
     expect(String(badResp.body?.error || '')).toMatch(/End time must be after start time/i);
@@ -571,15 +572,15 @@ test('create customer: API insert renders in CRM list and is queryable', async (
     const token = await getApiToken(page, 'admin@dynatire.com', 'password');
 
     const created = await page.evaluate(
-      async ({ token, name, phone, tenantId }) => {
-        const res = await fetch('https://localhost:4001/customers/create', {
+      async ({ token, name, phone, tenantId, backendUrl }) => {
+        const res = await fetch(`${backendUrl}/customers/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ tenant_id: tenantId, name, phone }),
         });
         return { status: res.status, body: await res.json() };
       },
-      { token, name: customerName, phone, tenantId: DYNATIRE_ID }
+      { token, name: customerName, phone, tenantId: DYNATIRE_ID, backendUrl: BACKEND_URL }
     );
     expect(
       created.status,
@@ -687,8 +688,8 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
     const token = await getApiToken(page, 'admin@dynatire.com', 'password');
 
     const result = await page.evaluate(
-      async ({ token, email, tenantId }) => {
-        const res = await fetch('https://localhost:4001/users/invite', {
+      async ({ token, email, tenantId, backendUrl }) => {
+        const res = await fetch(`${backendUrl}/users/invite`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
@@ -700,7 +701,7 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
         });
         return { status: res.status, body: await res.json() };
       },
-      { token, email: inviteEmail, tenantId: DYNATIRE_ID }
+      { token, email: inviteEmail, tenantId: DYNATIRE_ID, backendUrl: BACKEND_URL }
     );
     expect(result.status, `expected 201 from /users/invite, got ${JSON.stringify(result)}`).toBe(
       201

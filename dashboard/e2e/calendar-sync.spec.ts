@@ -57,7 +57,7 @@ const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localho
 const TENANT_ADMIN_EMAIL = 'admin@dynatire.com';
 const TENANT_ADMIN_PASSWORD = 'password';
 const FUTURE_DATE = '2026-06-22';
-const BACKEND_URL = 'https://localhost:4001';
+const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 
 function readAgentSecret(): string {
   if (process.env.AGENT_SECRET) return process.env.AGENT_SECRET;

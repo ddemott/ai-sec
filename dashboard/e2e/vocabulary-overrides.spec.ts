@@ -36,7 +36,7 @@ import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-const BACKEND_URL = 'https://localhost:4001';
+const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 
 let pool: Pool;
 
