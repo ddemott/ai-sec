@@ -193,7 +193,7 @@ jobs:
           AGENT_SECRET: ci-agent-secret
 
       - name: Start backend
-        run: node dist/src/index.js &
+        run: node dist/src/index.js > /tmp/backend.log 2>&1 &
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
           JWT_SECRET: ci-test-secret
@@ -234,6 +234,10 @@ jobs:
           # Dashboard runs `next start` (HTTP) in CI; the Playwright baseURL
           # defaults to https for local dev, so override it here.
           DASHBOARD_URL: http://localhost:4000
+
+      - name: Dump backend log on failure
+        if: failure()
+        run: cat /tmp/backend.log || true
 
       - name: Upload Playwright report on failure
         if: failure()
