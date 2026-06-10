@@ -13,6 +13,18 @@ Everything else complete or tracked below.
 
 ---
 
+## ★ Priority Feature — Website Knowledge Import (onboarding)
+
+**Decision 2026-06-10:** the highest-value onboarding work. Owner pastes their existing website URL → bounded same-origin crawl → single-LLM extraction → pre-fills the question-bank questionnaire with "from website ✓ [source link]" badges + confidence → owner confirms/edits/fills gaps. The owner knows their business better than any industry standard; the industry template is demoted to a **fallback floor** (see precedence below).
+
+- **Answer precedence:** owner-confirmed > scraped-from-their-site (suggested) > industry-template default (floor) > blank.
+- **Scoped floor (safety):** template default fills ONLY generalizable questions (policy/vocab); tenant-specific facts (hours, address, phone, prices, staff) stay blank + flagged — a wrong default is worse than blank for those.
+- **Spec:** `docs/superpowers/specs/2026-06-09-website-knowledge-import-design.md` (§4a precedence added 2026-06-10).
+- **Plans (sequential):** Plan 1 = question-bank DB + business-type-filtered questionnaire (*ships value alone*); Plan 2 = scrape/extract engine; Plan 3 = suggestion review UI + approve→embed + `StepWebsiteImport` wizard step. See `docs/superpowers/plans/2026-06-09-website-knowledge-import-plan{1,2,3}-*.md`.
+- **Build order:** Plan 1 first, in a dedicated session. The "Wizard pre-fill from template" backlog item (`docs/IMPROVEMENTS_TODO.md`) is re-parented as tier 3 of this feature, not standalone.
+
+---
+
 ## In-flight markers
 
 - **IN FLIGHT (external)**: Waiting on vendor/third party.
