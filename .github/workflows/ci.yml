@@ -224,6 +224,10 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
           NEXT_PUBLIC_API_URL: http://localhost:4001
+          # globalSetup pings BACKEND_URL/health for the freshness check; it
+          # defaults to https://localhost:4001, but the CI backend is plain
+          # HTTP (USE_HTTPS=false), so point it at http or the check fails.
+          BACKEND_URL: http://localhost:4001
 
       - name: Upload Playwright report on failure
         if: failure()
