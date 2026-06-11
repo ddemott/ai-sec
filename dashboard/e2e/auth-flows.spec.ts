@@ -24,7 +24,7 @@ import { join } from 'path';
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-const BACKEND_URL = 'https://localhost:4001';
+const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 
 // AGENT_SECRET read from the backend's .env so the test sends the same
 // value the running server expects. Falls back to env var if test is

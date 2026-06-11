@@ -62,6 +62,13 @@ export interface Tenant {
   // agent's built-in default guidance.
   save_preferences_enabled?: boolean;
   preferences_instructions?: string | null;
+  // Per-tenant xAI Grok TTS voice + delivery (2026-06-10). `tts_voice` is a Grok
+  // voice_id (eve/ara/rex/sal/leo or a custom clone id). null = use the agent's
+  // platform default. These replace the dead legacy `voice_id` (Vapi/ElevenLabs)
+  // for the live Grok agent.
+  tts_voice?: string | null;
+  tts_speed?: number | null;
+  tts_soft?: boolean | null;
 }
 
 export interface BusinessTemplate {

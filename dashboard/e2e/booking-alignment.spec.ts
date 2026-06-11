@@ -26,7 +26,7 @@
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig, BACKEND_URL } from './helpers/fixtures';
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
@@ -68,15 +68,15 @@ async function switchToDynaTireTenant(page: Page) {
 
 async function getApiToken(page: Page): Promise<string> {
   const result = await page.evaluate(
-    async ({ email, password }) => {
-      const res = await fetch('https://localhost:4001/login', {
+    async ({ email, password, backendUrl }) => {
+      const res = await fetch(`${backendUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
       return await res.json();
     },
-    { email: ADMIN_EMAIL, password: ADMIN_PASSWORD }
+    { email: ADMIN_EMAIL, password: ADMIN_PASSWORD, backendUrl: BACKEND_URL }
   );
   if (!result?.token) throw new Error(`Login failed: ${JSON.stringify(result)}`);
   return result.token as string;
@@ -246,8 +246,8 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
   );
 
   const result = await page.evaluate(
-    async ({ token, payload }) => {
-      const res = await fetch('https://localhost:4001/appointments/create', {
+    async ({ token, payload, backendUrl }) => {
+      const res = await fetch(`${backendUrl}/appointments/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -260,6 +260,7 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
     },
     {
       token,
+      backendUrl: BACKEND_URL,
       payload: {
         tenant_id: DYNATIRE_ID,
         resource_id: truckId,
@@ -473,8 +474,8 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
 
     // Cancel A via the production API path.
     const cancelRes = await page.evaluate(
-      async ({ token, id }) => {
-        const res = await fetch(`https://localhost:4001/appointments/${id}/cancel`, {
+      async ({ token, id, backendUrl }) => {
+        const res = await fetch(`${backendUrl}/appointments/${id}/cancel`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -484,7 +485,7 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
         });
         return { status: res.status, body: await res.json() };
       },
-      { token, id: insA.rows[0].appointment_id }
+      { token, id: insA.rows[0].appointment_id, backendUrl: BACKEND_URL }
     );
     expect(cancelRes.status, `cancel must succeed; body=${JSON.stringify(cancelRes.body)}`).toBe(
       200
@@ -494,8 +495,8 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
     // the route's status='scheduled' filter the GiST exclusion would
     // reject the overlap. With it, B's INSERT lands cleanly.
     const bookRes = await page.evaluate(
-      async ({ token, payload }) => {
-        const res = await fetch('https://localhost:4001/appointments/create', {
+      async ({ token, payload, backendUrl }) => {
+        const res = await fetch(`${backendUrl}/appointments/create`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -507,6 +508,7 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
       },
       {
         token,
+        backendUrl: BACKEND_URL,
         payload: {
           tenant_id: DYNATIRE_ID,
           resource_id: truckId,

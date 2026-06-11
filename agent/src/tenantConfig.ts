@@ -34,6 +34,15 @@ export interface TenantDisplayConfig {
    * toggle works before the owner writes anything.
    */
   preferencesInstructions: string | null;
+  /**
+   * Per-tenant xAI Grok TTS settings (2026-06-10). NULL means "use the agent's
+   * XAI_TTS_VOICE / XAI_TTS_SPEED / XAI_TTS_SOFT env default", so a tenant that
+   * hasn't picked a voice keeps the platform default. ttsVoice is a Grok
+   * voice_id (eve/ara/rex/sal/leo or a custom clone id).
+   */
+  ttsVoice: string | null;
+  ttsSpeed: number | null;
+  ttsSoft: boolean | null;
 }
 
 export const TENANT_FALLBACK: TenantDisplayConfig = {
@@ -42,6 +51,9 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   systemPrompt: null,
   savePreferencesEnabled: false,
   preferencesInstructions: null,
+  ttsVoice: null,
+  ttsSpeed: null,
+  ttsSoft: null,
 };
 
 export async function fetchTenantConfig(
@@ -56,6 +68,9 @@ export async function fetchTenantConfig(
     system_prompt: string | null;
     save_preferences_enabled?: boolean;
     preferences_instructions?: string | null;
+    tts_voice?: string | null;
+    tts_speed?: number | null;
+    tts_soft?: boolean | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {
@@ -64,6 +79,9 @@ export async function fetchTenantConfig(
       systemPrompt: res.result.system_prompt ?? null,
       savePreferencesEnabled: res.result.save_preferences_enabled ?? false,
       preferencesInstructions: res.result.preferences_instructions ?? null,
+      ttsVoice: res.result.tts_voice ?? null,
+      ttsSpeed: res.result.tts_speed ?? null,
+      ttsSoft: res.result.tts_soft ?? null,
     };
   }
   return TENANT_FALLBACK;

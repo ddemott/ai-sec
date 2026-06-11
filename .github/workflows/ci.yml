@@ -193,7 +193,7 @@ jobs:
           AGENT_SECRET: ci-agent-secret
 
       - name: Start backend
-        run: node dist/src/index.js &
+        run: node dist/src/index.js > /tmp/backend.log 2>&1 &
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
           JWT_SECRET: ci-test-secret
@@ -201,11 +201,15 @@ jobs:
           STRIPE_SECRET_KEY: sk_test_dummy
           AGENT_SECRET: ci-agent-secret
           PORT: 4001
+          # Serve plain HTTP — wait-on, the dashboard, and Playwright all hit
+          # http://localhost:4001. Without this the backend boots HTTPS with a
+          # self-signed cert and every probe/request fails the TLS handshake.
+          USE_HTTPS: 'false'
 
       - name: Build and start dashboard
         run: cd dashboard && npm run build && npm run start &
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:4001
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
           PORT: 4000
 
       - name: Wait for servers
@@ -219,12 +223,46 @@ jobs:
         run: cd dashboard && npx playwright test
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
-          NEXT_PUBLIC_API_URL: http://localhost:4001
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
+          # globalSetup pings BACKEND_URL/health for the freshness check; it
+          # defaults to https://localhost:4001, but the CI backend is plain
+          # HTTP (USE_HTTPS=false), so point it at http or the check fails.
+          BACKEND_URL: http://localhost:4001
+          # Several specs call /agent-tools/* directly with x-agent-secret;
+          # must match the value the backend was started with.
+          AGENT_SECRET: ci-agent-secret
+          # Dashboard runs `next start` (HTTP) in CI; the Playwright baseURL
+          # defaults to https for local dev, so override it here.
+          DASHBOARD_URL: http://localhost:4000
+          # Run the test process in the seed tenants' timezone. Specs derive
+          # datetime-local wall-clock strings from Node's tz (getTimezoneOffset)
+          # while the browser reads them in timezoneId=America/Chicago. Locally
+          # Node is already Chicago (where these tests were authored + pass); CI
+          # Node defaults to UTC, so without this the two disagree by 5h and
+          # UI bookings land at the wrong time (no overlap / outside shift).
+          TZ: America/Chicago
+          # The "Apply migrations and seed" step already built test_db via the
+          # full migration chain. Do NOT let globalSetup rebuild-db.sh run: it
+          # DROP SCHEMA CASCADEs out from under the already-running backend
+          # (→ "relation users does not exist" on /login), and it rebuilds from
+          # the stale baseline.sql snapshot that lacks recent migrations
+          # (e.g. the tts_* columns).
+          PLAYWRIGHT_SKIP_DB_RESET: '1'
+
+      - name: Dump backend log on failure
+        if: failure()
+        run: cat /tmp/backend.log || true
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: dashboard/playwright-report/
+          # test-results/ holds the per-test screenshot + error-context.md
+          # (the page's accessibility snapshot at the moment of failure) —
+          # the only way to see WHY a headless CI test failed.
+          path: |
+            dashboard/playwright-report/
+            dashboard/test-results/
           retention-days: 7
+          if-no-files-found: ignore

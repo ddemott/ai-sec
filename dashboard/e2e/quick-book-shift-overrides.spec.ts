@@ -1,7 +1,7 @@
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig, BACKEND_URL } from './helpers/fixtures';
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
@@ -83,10 +83,10 @@ async function getScheduledEmployeeId(page: Page, dateStr: string): Promise<stri
   // null, and the test fell back to auto-assign, which picked an employee
   // that may not have been scheduled (causing "Employee is not on shift").
   return page.evaluate(
-    async ({ dateStr }) => {
+    async ({ dateStr, backendUrl }) => {
       const token = localStorage.getItem('authToken');
       const res = await fetch(
-        `https://localhost:4001/shifts/overrides?tenant_id=f234e471-0e60-4163-86c9-93cfd9338e3a&start_date=${dateStr}&end_date=${dateStr}`,
+        `${backendUrl}/shifts/overrides?tenant_id=f234e471-0e60-4163-86c9-93cfd9338e3a&start_date=${dateStr}&end_date=${dateStr}`,
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
@@ -105,7 +105,7 @@ async function getScheduledEmployeeId(page: Page, dateStr: string): Promise<stri
         : null;
       return row?.employee_id ?? null;
     },
-    { dateStr }
+    { dateStr, backendUrl: BACKEND_URL }
   );
 }
 
@@ -229,13 +229,16 @@ test.describe('Quick Book with employee_schedule', () => {
       }
     } finally {
       if (createdId) {
-        await page.evaluate(async (id) => {
-          const token = localStorage.getItem('authToken');
-          await fetch(`https://localhost:4001/appointments/${id}`, {
-            method: 'DELETE',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
-        }, createdId);
+        await page.evaluate(
+          async ({ id, backendUrl }) => {
+            const token = localStorage.getItem('authToken');
+            await fetch(`${backendUrl}/appointments/${id}`, {
+              method: 'DELETE',
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+          },
+          { id: createdId, backendUrl: BACKEND_URL }
+        );
       }
     }
   });

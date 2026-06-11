@@ -35,7 +35,7 @@ import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpe
 
 const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-const BACKEND_URL = 'https://localhost:4001';
+const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 
 function readAgentSecret(): string {
   if (process.env.AGENT_SECRET) return process.env.AGENT_SECRET;

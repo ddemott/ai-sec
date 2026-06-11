@@ -189,9 +189,11 @@ export default defineAgent({
           llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
           tts: new GrokTTS({
             apiKey: config.XAI_API_KEY,
-            voice: config.XAI_TTS_VOICE,
-            speed: config.XAI_TTS_SPEED,
-            soft: config.XAI_TTS_SOFT,
+            // Per-tenant Grok voice + delivery (2026-06-10), falling back to the
+            // platform env defaults when the tenant hasn't picked one.
+            voice: tenantConfig.ttsVoice ?? config.XAI_TTS_VOICE,
+            speed: tenantConfig.ttsSpeed ?? config.XAI_TTS_SPEED,
+            soft: tenantConfig.ttsSoft ?? config.XAI_TTS_SOFT,
           }),
         });
 

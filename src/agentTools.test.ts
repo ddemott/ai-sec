@@ -294,6 +294,10 @@ describe('agentTools /tenant-config', () => {
       // New 2026-06-06 fields default off when the row doesn't carry them.
       save_preferences_enabled: false,
       preferences_instructions: null,
+      // 2026-06-10 Grok TTS fields default null → agent uses XAI_TTS_* env.
+      tts_voice: null,
+      tts_speed: null,
+      tts_soft: null,
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -340,6 +344,9 @@ describe('agentTools /tenant-config', () => {
       system_prompt: null,
       save_preferences_enabled: false,
       preferences_instructions: null,
+      tts_voice: null,
+      tts_speed: null,
+      tts_soft: null,
     });
   });
 
