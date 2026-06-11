@@ -158,6 +158,24 @@ const VerifyPhoneCodeSchema = z.object({
   code: z.string().regex(/^\d+$/, 'Code must be numeric'),
 });
 
+// voice-session-start / -end — the LiveKit agent logs a call so the dashboard
+// Calls tab + customer call history populate. These mirror the JWT-gated
+// /voice/session/{start,end} routes but use the agent-secret + body-tenant_id
+// auth model every other agent-tools call uses (the agent has no JWT). Both
+// reuse the existing start_voice_session / end_voice_session DB functions.
+const VoiceSessionStartSchema = z.object({
+  tenant_id: z.string().uuid(),
+  call_id: z.string().min(1),
+  caller_phone: z.string().min(1).nullable().optional(),
+});
+
+const VoiceSessionEndSchema = z.object({
+  tenant_id: z.string().uuid(),
+  call_id: z.string().min(1),
+  duration_seconds: z.number().int().nonnegative().nullable().optional(),
+  outcome: z.string().max(50).nullable().optional(),
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function ok(reply: FastifyReply, result: unknown) {
@@ -351,6 +369,56 @@ export function registerAgentToolRoutes(
       });
     },
     'Failed to fetch tenant config'
+  );
+
+  // voice-session-start — agent calls this on connect to create the
+  // voice_sessions row (and resolve customer context). start_voice_session
+  // does a plain INSERT (not idempotent) — the agent calls it once per call
+  // and treats failure as non-fatal, so a duplicate/transient error can't
+  // affect the live call.
+  toolRoute(
+    app,
+    '/agent-tools/voice-session-start',
+    VoiceSessionStartSchema,
+    async (args, reply) => {
+      await withTenantClient(args.tenant_id, (client) =>
+        client.query('SELECT start_voice_session($1, $2, $3) AS context', [
+          args.tenant_id,
+          args.call_id,
+          args.caller_phone ?? null,
+        ])
+      );
+      return ok(reply, { started: true });
+    },
+    'Failed to start voice session'
+  );
+
+  // voice-session-end — agent calls this from its shutdown callback when the
+  // call ends, recording duration (+ optional outcome). transcript/summary
+  // are deferred (NULL) for now. Returns ended:false if no open row matched.
+  toolRoute(
+    app,
+    '/agent-tools/voice-session-end',
+    VoiceSessionEndSchema,
+    async (args, reply) => {
+      const ended = await withTenantClient(args.tenant_id, async (client) => {
+        const res = await client.query<{ ended: boolean }>(
+          'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) AS ended',
+          [
+            args.tenant_id,
+            args.call_id,
+            args.duration_seconds ?? null,
+            args.outcome ?? null,
+            null, // transcript — deferred
+            null, // summary — deferred
+            null, // appointment_id — deferred
+          ]
+        );
+        return res.rows[0]?.ended ?? false;
+      });
+      return ok(reply, { ended });
+    },
+    'Failed to end voice session'
   );
 
   // save_customer_preference — persist a durable fact about a known caller

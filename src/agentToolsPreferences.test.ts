@@ -270,3 +270,71 @@ describe('tenant-config surfaces the preference config to the agent', () => {
     );
   });
 });
+
+describe('voice-session-start → -end against the real DB functions', () => {
+  it('HAPPY: start inserts an active row; end completes it with the duration', async () => {
+    // WHO: the LiveKit agent logging an inbound call start→end.
+    // WHAT: /voice-session-start INSERTs a voice_sessions row (status 'active')
+    //        and /voice-session-end UPDATEs it to 'completed' with the duration.
+    // WHEN: once per call — start fire-and-forget on connect, end awaited on
+    //        shutdown.
+    // WHERE: start_voice_session / end_voice_session, exercised through the
+    //        agent-tools routes against a real Postgres (mocked unit tests
+    //        can't catch a column/signature drift in these SECURITY DEFINER
+    //        functions — exactly the class of bug CLAUDE.md warns about).
+    // WHY: this is the path that makes the dashboard Calls tab populate; if the
+    //        function shape drifts from the route's args, every real call would
+    //        silently fail to log.
+    const callId = `e2e-call-${tenantId.slice(0, 8)}-1`;
+
+    const startRes = await post('/agent-tools/voice-session-start', {
+      tenant_id: tenantId,
+      call_id: callId,
+      caller_phone: CUSTOMER_PHONE_E164,
+    });
+    expect(startRes.statusCode).toBe(200);
+    expect(startRes.json().success).toBe(true);
+
+    const afterStart = await setup.query<{ status: string; duration_seconds: number | null }>(
+      `SELECT status, duration_seconds FROM voice_sessions WHERE tenant_id = $1 AND call_id = $2`,
+      [tenantId, callId]
+    );
+    expect(afterStart.rowCount).toBe(1);
+    expect(afterStart.rows[0].status).toBe('active');
+
+    const endRes = await post('/agent-tools/voice-session-end', {
+      tenant_id: tenantId,
+      call_id: callId,
+      duration_seconds: 142,
+    });
+    expect(endRes.statusCode).toBe(200);
+    expect(endRes.json()).toEqual({ success: true, result: { ended: true } });
+
+    const afterEnd = await setup.query<{ status: string; duration_seconds: number | null }>(
+      `SELECT status, duration_seconds FROM voice_sessions WHERE tenant_id = $1 AND call_id = $2`,
+      [tenantId, callId]
+    );
+    expect(afterEnd.rows[0].status).toBe('completed');
+    expect(afterEnd.rows[0].duration_seconds).toBe(142);
+
+    // Clean up this test's row (afterAll's tenant delete would cascade too,
+    // but keep the table bare-bones between tests per the isolation rule).
+    await setup.query(`DELETE FROM voice_sessions WHERE tenant_id = $1 AND call_id = $2`, [
+      tenantId,
+      callId,
+    ]);
+  });
+
+  it('HAPPY: end on an unknown call_id is a benign no-op (ended:false)', async () => {
+    // WHO: a late/duplicate shutdown for a call that was never started.
+    // WHAT: end_voice_session matches no row → FOUND false → ended:false at 200.
+    // WHY: teardown must never error on a missing row; the agent swallows it.
+    const res = await post('/agent-tools/voice-session-end', {
+      tenant_id: tenantId,
+      call_id: `e2e-call-${tenantId.slice(0, 8)}-never-started`,
+      duration_seconds: 1,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { ended: false } });
+  });
+});

@@ -2054,3 +2054,92 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(queries[1].text).toContain('book_with_scheduling_atomic');
   });
 });
+
+describe('agentTools /voice-session-start + /voice-session-end (call logging)', () => {
+  it('HAPPY: start creates the voice_sessions row via start_voice_session', async () => {
+    // WHO: the LiveKit agent on connect, after it resolves call_id + caller.
+    // WHAT: posts tenant_id/call_id/caller_phone → route calls
+    //        start_voice_session($1,$2,$3) with those exact values so the
+    //        dashboard Calls tab + customer history get a row.
+    // WHEN: once per inbound call, fire-and-forget (never blocks the greeting).
+    // WHERE: src/routes/agentTools.ts /agent-tools/voice-session-start.
+    // WHY: before this the agent never logged calls — the Calls tab stayed
+    //       empty because nothing in prod called start_voice_session.
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ context: { is_known_customer: false } }] }],
+    });
+    const res = await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      caller_phone: '+15551234567',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { started: true } });
+    expect(queries[0].text).toContain('start_voice_session');
+    expect(queries[0].params).toEqual([TENANT_ID, 'call-abc-123', '+15551234567']);
+  });
+
+  it('HAPPY: start tolerates a null caller_phone (caller-ID withheld)', async () => {
+    // WHO: a caller whose number the SIP leg never surfaced.
+    // WHAT: caller_phone omitted → route passes null to start_voice_session,
+    //        which still logs the call (unknown-customer context).
+    // WHY: a withheld caller-ID must not stop the call from being logged.
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ context: {} }] }] });
+    const res = await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-no-phone',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(queries[0].params).toEqual([TENANT_ID, 'call-no-phone', null]);
+  });
+
+  it('SAD: start with no call_id fails validation before any DB call', async () => {
+    // WHO: a malformed agent request (bug) with no call_id.
+    // WHAT: Zod rejects (call_id min 1) → success:false, zero queries.
+    // WHY: there's nothing to key a session on without a call_id; fail loud,
+    //       don't write a junk row.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TENANT_ID,
+    });
+    expectValidationFailure(res, queries);
+  });
+
+  it('HAPPY: end records duration via end_voice_session and returns ended', async () => {
+    // WHO: the agent's shutdown callback when the caller hangs up.
+    // WHAT: posts call_id + duration_seconds → end_voice_session($1..$7) with
+    //        duration set and transcript/summary/appointment NULL (deferred).
+    // WHEN: awaited inside addShutdownCallback so the row closes before the
+    //        job process tears down.
+    // WHERE: /agent-tools/voice-session-end.
+    // WHY: without the end call the row would sit "active" forever with no
+    //       duration — the Calls tab would show every call as never-ended.
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 142,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { ended: true } });
+    expect(queries[0].text).toContain('end_voice_session');
+    // duration set; outcome/transcript/summary/appointment_id deferred → null.
+    expect(queries[0].params).toEqual([TENANT_ID, 'call-abc-123', 142, null, null, null, null]);
+  });
+
+  it('HAPPY: end returns ended:false when no open session matches the call_id', async () => {
+    // WHO: a duplicate/late shutdown for a call_id with no open row.
+    // WHAT: end_voice_session returns false → route surfaces ended:false at
+    //        200 (not an error) so the agent's swallow-on-failure stays quiet.
+    // WHY: a missing row on teardown is benign, not a crash.
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: false }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-missing',
+      duration_seconds: 5,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { ended: false } });
+  });
+});
