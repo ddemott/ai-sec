@@ -310,13 +310,14 @@ export function registerAgentToolRoutes(
           name: string;
           timezone: string | null;
           system_prompt: string | null;
+          first_message: string | null;
           save_preferences_enabled: boolean | null;
           preferences_instructions: string | null;
           tts_voice: string | null;
           tts_speed: number | null;
           tts_soft: boolean | null;
         }>(
-          `SELECT name, timezone, system_prompt, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         return res.rows[0] ?? null;
@@ -332,6 +333,10 @@ export function registerAgentToolRoutes(
         // section. NULL means "use the agent's hardcoded fallback" — preserves
         // backwards compatibility with tenants that haven't customized.
         system_prompt: row.system_prompt,
+        // 2026-06-11: the owner-editable greeting (dashboard "First Message").
+        // NULL means the agent speaks its hardcoded "Thanks for calling…"
+        // fallback, so a tenant that never set one is unaffected.
+        first_message: row.first_message ?? null,
         // 2026-06-06: customer-preference capture config. When enabled, the
         // agent injects preferences_instructions into the prompt and is told
         // to call save_customer_preference. Default false / null is "off".

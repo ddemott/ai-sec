@@ -205,8 +205,13 @@ export default defineAgent({
         await session.start({ agent, room: ctx.room });
         callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
 
-        // 6. Greeting. Kept short — the LLM will warm up from here.
-        void session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
+        // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)
+        // is spoken verbatim when set; otherwise a short hardcoded fallback —
+        // the LLM warms up from there either way.
+        const greeting =
+          tenantConfig.firstMessage?.trim() ||
+          `Thanks for calling ${tenantConfig.name}. How can I help you today?`;
+        void session.say(greeting, {
           allowInterruptions: true,
         });
       } catch (err) {

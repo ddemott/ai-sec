@@ -53,12 +53,39 @@ describe('fetchTenantConfig', () => {
       name: 'DynaTire',
       timezone: 'America/Chicago',
       systemPrompt: null,
+      firstMessage: null,
       savePreferencesEnabled: false,
       preferencesInstructions: null,
       ttsVoice: null,
       ttsSpeed: null,
       ttsSoft: null,
     });
+  });
+
+  it('HAPPY: surfaces the owner greeting (first_message, snake → camel)', async () => {
+    // WHO: an owner who typed a custom greeting into the dashboard AI Persona
+    //       "First Message" box.
+    // WHAT: first_message converts snake → camel at the boundary so the agent
+    //       speaks it verbatim as the call's opening line.
+    // WHEN: every call for a tenant that set a greeting.
+    // WHERE: agent/src/tenantConfig.ts fetchTenantConfig success path →
+    //         agent/src/index.ts session.say(greeting).
+    // WHY: without this the dashboard greeting field is a silent no-op and the
+    //       caller always hears the hardcoded "Thanks for calling…" fallback.
+    const client = clientWith({
+      status: 200,
+      body: {
+        success: true,
+        result: {
+          name: 'DynaTire',
+          timezone: 'America/Chicago',
+          system_prompt: null,
+          first_message: "Hi, I'm Beth — business or personal?",
+        },
+      },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg.firstMessage).toBe("Hi, I'm Beth — business or personal?");
   });
 
   it('HAPPY: surfaces per-tenant Grok voice (tts_voice/speed/soft, snake → camel)', async () => {
