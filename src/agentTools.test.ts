@@ -291,6 +291,8 @@ describe('agentTools /tenant-config', () => {
       name: 'DynaTire',
       timezone: 'America/Chicago',
       system_prompt: null,
+      // 2026-06-11 greeting defaults null → agent speaks its hardcoded fallback.
+      first_message: null,
       // New 2026-06-06 fields default off when the row doesn't carry them.
       save_preferences_enabled: false,
       preferences_instructions: null,
@@ -342,6 +344,7 @@ describe('agentTools /tenant-config', () => {
       name: 'Legacy Co',
       timezone: 'America/Chicago',
       system_prompt: null,
+      first_message: null,
       save_preferences_enabled: false,
       preferences_instructions: null,
       tts_voice: null,

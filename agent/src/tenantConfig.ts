@@ -22,6 +22,12 @@ export interface TenantDisplayConfig {
    */
   systemPrompt: string | null;
   /**
+   * Owner-editable greeting (dashboard "First Message"). The agent speaks this
+   * as the literal opening line; NULL falls back to the hardcoded
+   * "Thanks for calling <name>…" so a tenant that never set one is unaffected.
+   */
+  firstMessage: string | null;
+  /**
    * Whether the owner turned on customer-preference capture. When true the
    * system prompt gains a "Customer preferences" section and the agent is
    * told to call save_customer_preference. Default false — preference capture
@@ -49,6 +55,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   name: 'this business',
   timezone: 'America/Chicago',
   systemPrompt: null,
+  firstMessage: null,
   savePreferencesEnabled: false,
   preferencesInstructions: null,
   ttsVoice: null,
@@ -66,6 +73,7 @@ export async function fetchTenantConfig(
     name: string;
     timezone: string;
     system_prompt: string | null;
+    first_message?: string | null;
     save_preferences_enabled?: boolean;
     preferences_instructions?: string | null;
     tts_voice?: string | null;
@@ -77,6 +85,7 @@ export async function fetchTenantConfig(
       name: res.result.name,
       timezone: res.result.timezone,
       systemPrompt: res.result.system_prompt ?? null,
+      firstMessage: res.result.first_message ?? null,
       savePreferencesEnabled: res.result.save_preferences_enabled ?? false,
       preferencesInstructions: res.result.preferences_instructions ?? null,
       ttsVoice: res.result.tts_voice ?? null,
