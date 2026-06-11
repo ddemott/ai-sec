@@ -148,6 +148,50 @@ export default defineAgent({
         backendUrl: config.BACKEND_URL,
         agentSecret: config.AGENT_SECRET,
       });
+
+      // Call logging (2026-06-11): persist a voice_sessions row so the
+      // dashboard Calls tab + customer call history populate. START is
+      // fire-and-forget — it must NEVER delay the greeting or risk dead air,
+      // so a failure is logged and swallowed. END is awaited inside the
+      // shutdown callback so duration lands before the job tears down.
+      // Skipped when callId is absent (nothing to key the session on).
+      if (sessionCtx.callId) {
+        const callId = sessionCtx.callId;
+        const startedAtMs = Date.now();
+        void client
+          .call('/agent-tools/voice-session-start', {
+            tenant_id: sessionCtx.tenantId,
+            call_id: callId,
+            caller_phone: sessionCtx.callerPhone ?? null,
+          })
+          .catch((e: unknown) =>
+            callLog.warn(
+              {
+                event: 'voice_session_start_failed',
+                error_message: e instanceof Error ? e.message : String(e),
+              },
+              'call-logging start failed (non-fatal)'
+            )
+          );
+        ctx.addShutdownCallback(async () => {
+          try {
+            await client.call('/agent-tools/voice-session-end', {
+              tenant_id: sessionCtx.tenantId,
+              call_id: callId,
+              duration_seconds: Math.round((Date.now() - startedAtMs) / 1000),
+            });
+          } catch (e) {
+            callLog.warn(
+              {
+                event: 'voice_session_end_failed',
+                error_message: e instanceof Error ? e.message : String(e),
+              },
+              'call-logging end failed (non-fatal)'
+            );
+          }
+        });
+      }
+
       const tools = buildTools(sessionCtx, client);
       tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
       callLog.info(
