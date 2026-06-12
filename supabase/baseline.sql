@@ -2,8 +2,10 @@
 -- PostgreSQL database dump
 --
 
+\restrict ZWgeFnCT9Tw7T5f0TP7YrzbBybcOVEOab3pdvke2CzPpB7L56CdFQLcwzCE8pJJ
+
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
--- Dumped by pg_dump version 15.4 (Debian 15.4-2.pgdg120+1)
+-- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -2308,6 +2310,93 @@ ALTER TABLE ONLY public.call_transcripts FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: communications_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.communications_history (
+    communications_history_id integer NOT NULL,
+    tenant_id uuid NOT NULL,
+    customer_id uuid,
+    channel character varying(10) NOT NULL,
+    direction character varying(10) DEFAULT 'outbound'::character varying NOT NULL,
+    recipient character varying(255) NOT NULL,
+    subject character varying(255),
+    body text,
+    status character varying(20) DEFAULT 'sent'::character varying NOT NULL,
+    provider_message_id character varying(255),
+    error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT communications_history_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying])::text[]))),
+    CONSTRAINT communications_history_direction_check CHECK (((direction)::text = ANY ((ARRAY['outbound'::character varying, 'inbound'::character varying])::text[]))),
+    CONSTRAINT communications_history_status_check CHECK (((status)::text = ANY ((ARRAY['sent'::character varying, 'failed'::character varying, 'queued'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.communications_history FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE communications_history; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.communications_history IS 'Append-only log of outbound (and optionally inbound) SMS/email communications, written on the send success path; backs GET /communications/history.';
+
+
+--
+-- Name: COLUMN communications_history.channel; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.communications_history.channel IS 'Communication channel: email or sms';
+
+
+--
+-- Name: COLUMN communications_history.direction; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.communications_history.direction IS 'Message direction: outbound (default) or inbound';
+
+
+--
+-- Name: COLUMN communications_history.recipient; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.communications_history.recipient IS 'Destination address (email address or E.164 phone number)';
+
+
+--
+-- Name: COLUMN communications_history.status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.communications_history.status IS 'Delivery disposition recorded at send time: sent, failed, or queued';
+
+
+--
+-- Name: COLUMN communications_history.provider_message_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.communications_history.provider_message_id IS 'Upstream provider message id (nodemailer messageId / Twilio SID) for cross-referencing';
+
+
+--
+-- Name: communications_history_communications_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.communications_history_communications_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: communications_history_communications_history_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.communications_history_communications_history_id_seq OWNED BY public.communications_history.communications_history_id;
+
+
+--
 -- Name: consent_records; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3166,6 +3255,13 @@ COMMENT ON TABLE public.voice_sessions IS 'Per-call voice session state. RLS for
 
 
 --
+-- Name: communications_history communications_history_id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communications_history ALTER COLUMN communications_history_id SET DEFAULT nextval('public.communications_history_communications_history_id_seq'::regclass);
+
+
+--
 -- Name: consent_records consent_record_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3263,6 +3359,14 @@ ALTER TABLE ONLY public.call_transcripts
 
 ALTER TABLE ONLY public.call_transcripts
     ADD CONSTRAINT call_transcripts_pkey PRIMARY KEY (call_transcript_id);
+
+
+--
+-- Name: communications_history communications_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communications_history
+    ADD CONSTRAINT communications_history_pkey PRIMARY KEY (communications_history_id);
 
 
 --
@@ -3606,6 +3710,20 @@ CREATE INDEX idx_audit_log_table_record ON public.audit_log USING btree (table_n
 --
 
 CREATE INDEX idx_audit_log_tenant ON public.audit_log USING btree (tenant_id);
+
+
+--
+-- Name: idx_communications_history_tenant_channel; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_communications_history_tenant_channel ON public.communications_history USING btree (tenant_id, channel);
+
+
+--
+-- Name: idx_communications_history_tenant_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_communications_history_tenant_created ON public.communications_history USING btree (tenant_id, created_at DESC);
 
 
 --
@@ -4153,6 +4271,22 @@ ALTER TABLE ONLY public.call_transcripts
 
 
 --
+-- Name: communications_history communications_history_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communications_history
+    ADD CONSTRAINT communications_history_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(customer_id) ON DELETE SET NULL;
+
+
+--
+-- Name: communications_history communications_history_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communications_history
+    ADD CONSTRAINT communications_history_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
 -- Name: consent_records consent_records_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4584,6 +4718,26 @@ ALTER TABLE public.call_summaries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.call_transcripts ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: communications_history; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.communications_history ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: communications_history communications_history_admin_bypass; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY communications_history_admin_bypass ON public.communications_history USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+
+
+--
+-- Name: communications_history communications_history_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY communications_history_tenant_isolation ON public.communications_history USING (((tenant_id)::text = current_setting('app.current_tenant_id'::text, true)));
+
+
+--
 -- Name: consent_records; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4919,4 +5073,6 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 --
 -- PostgreSQL database dump complete
 --
+
+\unrestrict ZWgeFnCT9Tw7T5f0TP7YrzbBybcOVEOab3pdvke2CzPpB7L56CdFQLcwzCE8pJJ
 

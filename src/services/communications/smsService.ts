@@ -3,6 +3,7 @@ import type { ConsentService } from '../consentService.js';
 import type { SMSMessage, CommunicationResult } from './types.js';
 import { providerRegistry } from './ProviderRegistry.js';
 import { smsRateLimiter, RateLimitedError } from './smsRateLimit.js';
+import { recordCommunicationHistory } from './communicationHistory.js';
 
 export class SMSService {
   private static simulationNoticeLogged = false;
@@ -85,6 +86,16 @@ export class SMSService {
       console.log(
         `✅ SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`
       );
+
+      // Record the send in communications_history (best-effort, never throws —
+      // a failed log must not turn a successful send into a failure).
+      await recordCommunicationHistory(tenantId, {
+        channel: 'sms',
+        recipient: message.to,
+        body,
+        status: 'sent',
+        providerMessageId: result.messageSid,
+      });
 
       return {
         success: true,
