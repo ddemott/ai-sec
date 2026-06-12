@@ -116,6 +116,8 @@ Sell the **receptionist first**, expand later. It's easier to sell, for structur
 
 ---
 
+- **Restaurant vertical add-on** — restaurant-specific vocabulary + reservation flow on top of the existing per-vertical template/vocabulary system (`src/templates/*`, which already remaps resource/employee/booking labels per industry). Mapping: **resource → table, employee → server/waitress, booking → reservation** (+ party size, time, table assignment). The receptionist takes "table for 4 at 7" as a reservation, not an appointment. Fits the food & beverage vertical. Competitor check before building: do OpenTable / Resy / Toast ship an AI phone receptionist? Demand-gated like the other ideas. (Origin: Dale, 2026-06-12.)
+
 ## Decisions (2026-06-12)
 
 ### Integrations
