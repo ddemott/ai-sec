@@ -95,6 +95,10 @@ Sell the **receptionist first**, expand later. It's easier to sell, for structur
   - **Cheap-ish:** LLM infra already runs for the receptionist.
   - **Build trigger:** when onboarding-friction / setup-drop-off data shows it's the bottleneck, or as a deliberate onboarding accelerant. Not before. (Origin: Dale liked Railway's in-app LLM assistant, 2026-06-12.)
 
+- **Website-scan onboarding** — instead of the owner answering setup questions, scan their existing website to auto-populate the knowledge base / RAG (services, hours, prices, policies, FAQ) → LLM-extract → structured KB + embeddings (reuses `knowledgeIngestion` + `getEmbedding` + `search_tenant_docs`). The ultimate "tiny yes": the owner does almost nothing; the system bootstraps from what they already published. Differentiator — incumbents make you fill forms.
+  - **Post-scan gap-fill:** the scan fills what it can; the owner then reviews, corrects, and adds anything missing. Human-in-the-loop so a partial/wrong scrape never silently produces a bad KB.
+  - **Hard dependency:** RAG-accuracy testing (below) — auto-populating from a scrape raises garbage-in risk, so accuracy measurement is a *guard* on this feature, not optional. The chain is scan → KB → RAG → accuracy. (Origin: Dale, 2026-06-12.)
+
 ---
 
 ## Decisions (2026-06-12)
