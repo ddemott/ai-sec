@@ -9,25 +9,32 @@ import {
   Repeat,
   UserX,
   TrendingUp,
+  ListChecks,
 } from 'lucide-react';
 import { Api } from '../lib/api';
+import type { AnalyticsCalls } from '../lib/types';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { formatHour } from '../lib/utils';
 import { EmptyState } from './ui/EmptyState';
 
 /**
- * Analytics — Rebuilt March 2026
+ * Analytics — call + booking patterns.
  *
  * Six metrics that answer real business questions:
- * 1. Call Volume Over Time — marketing effectiveness signal
- * 2. Call to Booking Conversion — by day and hour
- * 3. Busiest Hours — when is the phone ringing vs bookings made
- * 4. Caller Abandonment Point — where do people hang up
- * 5. Return Rate by First Service — which services drive loyalty
- * 6. No-Show Pattern — which days have the most no-shows
+ * 1. Call Volume Over Time — marketing effectiveness signal (from voice_sessions)
+ * 2. Call to Booking Conversion — booked calls / total calls (from voice_sessions)
+ * 3. Busiest Hours — when bookings are made (from appointments)
+ * 4. Caller Abandonment — calls that ended with no outcome + no booking (from voice_sessions)
+ * 5. Return Rate by First Service — which services drive loyalty (from appointments)
+ * 6. No-Show Pattern — which days have the most cancellations (from appointments)
  *
- * Phase 1: Structure + what we can measure from existing data.
- * Phase 2: LiveKit call log integration for call-specific metrics.
+ * Plus a "Why callers reached out" outcome breakdown — the first WHY cut we can
+ * surface from the call-level outcome data competitors don't capture. Richer WHY
+ * (price / no-availability / wrong-service reasons) needs structured outcome
+ * classification that isn't built yet — tracked as a follow-up.
+ *
+ * Call metrics come from voice_sessions via Api.analytics.getCalls; "booked" is
+ * keyed on appointment_id (the hard signal), not the freeform `outcome` text.
  */
 
 interface AppointmentSummary {
@@ -40,10 +47,26 @@ interface AppointmentSummary {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// Human-friendly labels for the freeform voice_sessions.outcome values the agent writes.
+const OUTCOME_LABELS: Record<string, string> = {
+  booked: 'Booked an appointment',
+  appointment_booked: 'Booked an appointment',
+  info_provided: 'Got information',
+  transferred: 'Transferred to a person',
+  message: 'Left a message',
+  voicemail: 'Left a voicemail',
+  no_outcome: 'No clear outcome',
+};
+
+function labelForOutcome(outcome: string): string {
+  return OUTCOME_LABELS[outcome] ?? outcome.replace(/_/g, ' ');
+}
+
 export default function AnalyticsView() {
   const tenantId = useActiveTenantId();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<AppointmentSummary | null>(null);
+  const [calls, setCalls] = useState<AnalyticsCalls | null>(null);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -54,8 +77,15 @@ export default function AnalyticsView() {
   async function loadData() {
     setLoading(true);
     try {
-      // Load appointments — the data we actually have
-      const appointments = await Api.appointments.list(tenantId);
+      // Load appointments (the hour/day/return patterns) and call analytics
+      // (volume/conversion/abandonment/outcome) in parallel.
+      const [appointments, callStats] = await Promise.all([
+        Api.appointments.list(tenantId),
+        Api.analytics.getCalls(tenantId).catch(() => null),
+      ]);
+
+      if (callStats) setCalls(callStats);
+
       if (Array.isArray(appointments)) {
         const byDay: Record<string, number> = {};
         const byHour: Record<number, number> = {};
@@ -151,25 +181,40 @@ export default function AnalyticsView() {
     );
   }
 
-  if (!summary || summary.total === 0) {
+  const hasCalls = !!calls && calls.totals.total > 0;
+  const hasAppointments = !!summary && summary.total > 0;
+
+  if (!hasCalls && !hasAppointments) {
     return (
       <div className="flex-1 flex" style={{ backgroundColor: 'var(--bg-base)' }}>
         <EmptyState
           icon={CalendarCheck}
-          title="No booking data yet"
-          description="Analytics will appear once appointments are booked."
+          title="No data yet"
+          description="Analytics will appear once calls come in and appointments are booked."
         />
       </div>
     );
   }
 
-  // Find busiest hour
-  const busiestHour = summary
-    ? Object.entries(summary.byHour).sort(([, a], [, b]) => b - a)[0]
-    : null;
-  const busiestDay = summary
-    ? Object.entries(summary.byDay).sort(([, a], [, b]) => b - a)[0]
-    : null;
+  // Find busiest hour / day from appointments
+  const busiestHour =
+    summary && hasAppointments
+      ? Object.entries(summary.byHour).sort(([, a], [, b]) => b - a)[0]
+      : null;
+  const busiestDay =
+    summary && hasAppointments
+      ? Object.entries(summary.byDay).sort(([, a], [, b]) => b - a)[0]
+      : null;
+
+  // Call analytics derivations (all keyed on appointment_id, never the outcome string).
+  const totalCalls = calls?.totals.total ?? 0;
+  const bookedCalls = calls?.totals.booked ?? 0;
+  const abandonedCalls = calls?.totals.abandoned ?? 0;
+  const conversionPct = totalCalls > 0 ? Math.round((bookedCalls / totalCalls) * 100) : 0;
+  const abandonmentPct = totalCalls > 0 ? Math.round((abandonedCalls / totalCalls) * 100) : 0;
+  const byDay = calls?.by_day ?? [];
+  const maxDayVolume = Math.max(...byDay.map((d) => d.total), 1);
+  const byOutcome = calls?.by_outcome ?? [];
 
   return (
     <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: 'var(--bg-base)' }}>
@@ -181,27 +226,87 @@ export default function AnalyticsView() {
           Analytics
         </h1>
         <p className="text-xs mb-6" style={{ color: 'var(--text-muted)' }}>
-          Patterns from your booking data. You know your business — these numbers help you see it.
+          Patterns from your calls and bookings. You know your business — these numbers help you see
+          it.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* 1. Call Volume Over Time */}
+          {/* 1. Call Volume Over Time — real, from voice_sessions */}
           <MetricCard
             icon={PhoneIncoming}
             title="Call Volume"
-            subtitle="Requires call log integration (Phase 2)"
-            placeholder
-          />
+            subtitle="Calls over the last 30 days"
+          >
+            {hasCalls ? (
+              <div>
+                <div className="font-display text-3xl" style={{ color: 'var(--text-primary)' }}>
+                  {totalCalls}
+                </div>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  {byDay.length > 0
+                    ? `Across ${byDay.length} active day${byDay.length === 1 ? '' : 's'}`
+                    : 'Total calls answered'}
+                </p>
+                {byDay.length > 0 && (
+                  <div className="flex items-end gap-1 mt-3 h-12">
+                    {byDay.slice(-21).map((d) => (
+                      <div
+                        key={d.day}
+                        className="flex-1 rounded-sm"
+                        title={`${d.day}: ${d.total} call${d.total === 1 ? '' : 's'}, ${d.booked} booked`}
+                        style={{
+                          height: `${Math.max(8, (d.total / maxDayVolume) * 100)}%`,
+                          backgroundColor: 'var(--accent)',
+                          opacity: 0.7,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No calls logged yet
+              </p>
+            )}
+          </MetricCard>
 
-          {/* 2. Call to Booking Conversion */}
+          {/* 2. Call to Booking Conversion — real, booked = appointment_id IS NOT NULL */}
           <MetricCard
             icon={CalendarCheck}
             title="Booking Conversion"
-            subtitle="Requires call log integration (Phase 2)"
-            placeholder
-          />
+            subtitle="Calls that ended in a booking"
+          >
+            {hasCalls ? (
+              <div>
+                <div className="font-display text-3xl" style={{ color: 'var(--text-primary)' }}>
+                  {conversionPct}%
+                </div>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  {bookedCalls} of {totalCalls} call{totalCalls === 1 ? '' : 's'} booked
+                </p>
+                <div
+                  className="h-1.5 rounded-full mt-3"
+                  style={{ backgroundColor: 'var(--border-soft)' }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${conversionPct}%`,
+                      backgroundColor: 'var(--accent)',
+                      opacity: 0.8,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No calls logged yet
+              </p>
+            )}
+          </MetricCard>
 
-          {/* 3. Busiest Hours */}
+          {/* 3. Busiest Hours — from appointments */}
           <MetricCard icon={Clock} title="Busiest Hours" subtitle="When bookings happen">
             {summary && busiestHour ? (
               <div>
@@ -236,20 +341,95 @@ export default function AnalyticsView() {
               </div>
             ) : (
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                No data yet
+                No booking data yet
               </p>
             )}
           </MetricCard>
 
-          {/* 4. Caller Abandonment Point */}
+          {/* 4. Caller Abandonment — real, from voice_sessions (no booking + no outcome) */}
           <MetricCard
             icon={PhoneOff}
             title="Caller Abandonment"
-            subtitle="Requires call log integration (Phase 2)"
-            placeholder
-          />
+            subtitle="Calls that ended with no booking and no outcome"
+          >
+            {hasCalls ? (
+              <div>
+                <div className="font-display text-3xl" style={{ color: 'var(--text-primary)' }}>
+                  {abandonmentPct}%
+                </div>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  {abandonedCalls} of {totalCalls} call{totalCalls === 1 ? '' : 's'} ended
+                  unresolved
+                </p>
+                <div
+                  className="h-1.5 rounded-full mt-3"
+                  style={{ backgroundColor: 'var(--border-soft)' }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${abandonmentPct}%`,
+                      backgroundColor: 'var(--danger, #e57373)',
+                      opacity: 0.7,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No calls logged yet
+              </p>
+            )}
+          </MetricCard>
 
-          {/* 5. Return Rate by First Service */}
+          {/* 5. Why callers reached out — outcome breakdown (the WHY cut) */}
+          <MetricCard
+            icon={ListChecks}
+            title="Why Callers Reached Out"
+            subtitle="What each call resulted in"
+          >
+            {hasCalls && byOutcome.length > 0 ? (
+              <div className="space-y-2">
+                {byOutcome.slice(0, 5).map((o) => {
+                  const pct = totalCalls > 0 ? Math.round((o.count / totalCalls) * 100) : 0;
+                  return (
+                    <div key={o.outcome}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span style={{ color: 'var(--text-secondary)' }} className="truncate mr-2">
+                          {labelForOutcome(o.outcome)}
+                        </span>
+                        <span
+                          style={{ color: 'var(--text-primary)' }}
+                          className="font-medium shrink-0"
+                        >
+                          {o.count} ({pct}%)
+                        </span>
+                      </div>
+                      <div
+                        className="h-1 rounded-full"
+                        style={{ backgroundColor: 'var(--border-soft)' }}
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: 'var(--accent-soft)',
+                            opacity: 0.7,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No calls logged yet
+              </p>
+            )}
+          </MetricCard>
+
+          {/* 6. Return Rate by First Service — from appointments */}
           <MetricCard
             icon={Repeat}
             title="Return Rate by First Service"
@@ -303,7 +483,7 @@ export default function AnalyticsView() {
             )}
           </MetricCard>
 
-          {/* 6. No-Show Pattern */}
+          {/* 7. No-Show Pattern — from appointments */}
           <MetricCard
             icon={UserX}
             title="No-Show Pattern"
@@ -341,7 +521,7 @@ export default function AnalyticsView() {
           </MetricCard>
         </div>
 
-        {/* Phase 2 notice */}
+        {/* Roadmap: richer WHY analysis still ahead */}
         <div
           className="mt-6 p-4 rounded-xl"
           style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-soft)' }}
@@ -349,13 +529,14 @@ export default function AnalyticsView() {
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} />
             <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-              Coming in Phase 2
+              Coming next
             </span>
           </div>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Call volume trends, booking conversion rates, and caller abandonment analysis require
-            call log integration. Staff request tracking requires structured data capture during
-            calls.
+            Deeper &ldquo;why&rdquo; analysis — when a caller doesn&rsquo;t book, was it price, no
+            availability, or the wrong service? — needs richer outcome tagging during the call.
+            That&rsquo;s on the roadmap. Today&rsquo;s panels are built from your real call and
+            booking history.
           </p>
         </div>
       </div>
@@ -367,13 +548,11 @@ function MetricCard({
   icon: Icon,
   title,
   subtitle,
-  placeholder,
   children,
 }: {
   icon: React.ElementType;
   title: string;
   subtitle: string;
-  placeholder?: boolean;
   children?: React.ReactNode;
 }) {
   return (
@@ -382,7 +561,6 @@ function MetricCard({
       style={{
         backgroundColor: 'var(--bg-card)',
         border: '1px solid var(--border-soft)',
-        opacity: placeholder ? 0.5 : 1,
       }}
     >
       <div className="flex items-center gap-2 mb-1">
@@ -394,18 +572,7 @@ function MetricCard({
       <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
         {subtitle}
       </p>
-      {placeholder ? (
-        <div
-          className="h-16 rounded-lg flex items-center justify-center"
-          style={{ backgroundColor: 'var(--bg-raised)' }}
-        >
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Coming in Phase 2 — available after call log integration
-          </span>
-        </div>
-      ) : (
-        children
-      )}
+      {children}
     </div>
   );
 }

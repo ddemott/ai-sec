@@ -258,6 +258,18 @@ export interface AnalyticsStats {
   recent_activity: Array<{ type: string; description: string; timestamp: string }>;
 }
 
+/**
+ * Call-level analytics derived from voice_sessions. "Booked" is keyed on
+ * appointment_id (the hard signal), not the freeform `outcome` text.
+ * - by_outcome powers the Conversion, Abandonment, and outcome-breakdown ("why") panels.
+ * - by_day powers the Call Volume sparkline + per-day conversion.
+ */
+export interface AnalyticsCalls {
+  totals: { total: number; booked: number; abandoned: number };
+  by_outcome: Array<{ outcome: string; count: number; booked: number }>;
+  by_day: Array<{ day: string; total: number; booked: number }>;
+}
+
 export interface Vocabulary {
   resource_label: string;
   resource_plural: string;

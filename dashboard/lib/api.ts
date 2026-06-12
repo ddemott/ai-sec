@@ -15,6 +15,7 @@ import type {
   Tenant,
   CalendarSettings,
   AnalyticsStats,
+  AnalyticsCalls,
   Vocabulary,
   CoverageItem,
   CallSummary,
@@ -606,6 +607,9 @@ export const Api = {
   analytics: {
     getStats: (tenantId: string | null) =>
       apiFetch<AnalyticsStats>(`/analytics/stats`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getCalls: (tenantId: string | null) =>
+      apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- MASTER SKILLS ---
