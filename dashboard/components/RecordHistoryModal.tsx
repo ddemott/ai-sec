@@ -38,10 +38,7 @@ interface RecordHistoryModalProps {
 function formatChangeSource(source: ChangeSource): string {
   const labels: Record<ChangeSource, string> = {
     local: 'Manual Edit',
-    hubspot: 'HubSpot Sync',
-    jobber: 'Jobber Sync',
     square: 'Square Sync',
-    servicetitan: 'ServiceTitan Sync',
     voice_call: 'Voice Call',
     system: 'System',
     api: 'API',

@@ -40,7 +40,7 @@ export interface OAuthProviderConfig {
  *
  * Usage in route file:
  *   app.get('/jobber/auth/callback', createOAuthCallbackHandler(pool, app, {
- *     provider: 'jobber',
+ *     provider: 'square',
  *     verifyState: jobberClient.verifyState,
  *     exchangeCodeForTokens: jobberClient.exchangeCodeForTokens,
  *   }));

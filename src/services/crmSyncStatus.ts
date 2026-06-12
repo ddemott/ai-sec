@@ -20,7 +20,7 @@ import type { PoolClient } from 'pg';
  * entity_sync_map. Calendar (Google/Outlook) lives in a different
  * table and has its own status surface.
  */
-export type CrmProvider = 'jobber' | 'hubspot' | 'square' | 'servicetitan';
+export type CrmProvider = 'square';
 
 export interface CrmSyncStatus {
   last_sync_at: string | null;

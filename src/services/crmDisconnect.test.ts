@@ -1,6 +1,7 @@
 /**
  * Tests for disconnectCrmIntegration — the shared disconnect helper used
- * by all four CRM provider routes (jobber, hubspot, square, servicetitan).
+ * by the Square CRM provider route. (Jobber/HubSpot/ServiceTitan removed
+ * 2026-06-12 as competitors; the helper stays provider-agnostic.)
  * Happy + sad paths with 5W diagnostic context.
  */
 import { describe, it, expect } from 'vitest';
@@ -27,26 +28,26 @@ describe('disconnectCrmIntegration — happy paths', () => {
     queryResponses.push({ rows: [], rowCount: 1 });
     queryResponses.push({ rows: [], rowCount: 3 });
 
-    await disconnectCrmIntegration(mockClient as never, TENANT_ID, 'jobber');
+    await disconnectCrmIntegration(mockClient as never, TENANT_ID, 'square');
 
     expect(queries).toHaveLength(2);
     expect(queries[0].text).toContain('DELETE FROM tenant_integration_settings');
-    expect(queries[0].params).toEqual([TENANT_ID, 'jobber']);
+    expect(queries[0].params).toEqual([TENANT_ID, 'square']);
     expect(queries[1].text).toContain('DELETE FROM entity_sync_map');
-    expect(queries[1].params).toEqual([TENANT_ID, 'jobber']);
+    expect(queries[1].params).toEqual([TENANT_ID, 'square']);
   });
 
   it('HAPPY: passes the provider literal verbatim to both DELETEs', async () => {
-    // WHO: the route handlers calling this helper for each provider
+    // WHO: the route handlers calling this helper for the provider
     // WHAT: provider param flows unchanged into both DELETE param arrays
-    // WHEN: every CRM disconnect — verifies all four provider names work
+    // WHEN: every CRM disconnect — verifies the provider name threads through
     // WHERE: same helper; this test exists to catch a typo in the helper
-    //       hardcoding the wrong provider literal (e.g., always 'jobber')
-    // WHY: a regression here would cross-disconnect tenants — clicking
-    //       "Disconnect HubSpot" would delete the Jobber settings row
-    //       instead. Pin via parameterized provider checks across all
-    //       four valid literals
-    for (const provider of ['jobber', 'hubspot', 'square', 'servicetitan'] as const) {
+    //       hardcoding the wrong provider literal
+    // WHY: a regression here would cross-disconnect tenants — the provider
+    //       arg must reach both DELETE param arrays unchanged. Pin via a
+    //       parameterized check (the helper is provider-agnostic, so the
+    //       loop also documents that contract for any future provider).
+    for (const provider of ['square'] as const) {
       const { mockClient, queries, queryResponses } = createMockClient();
       queryResponses.push({ rows: [], rowCount: 0 });
       queryResponses.push({ rows: [], rowCount: 0 });
@@ -101,7 +102,7 @@ describe('disconnectCrmIntegration — sad paths', () => {
     queryFn.mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     await expect(
-      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'jobber')
+      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'square')
     ).rejects.toThrow('lock_not_available');
 
     // The second DELETE must NOT have run
@@ -125,7 +126,7 @@ describe('disconnectCrmIntegration — sad paths', () => {
     queryFn.mockRejectedValueOnce(new Error('connection_terminated'));
 
     await expect(
-      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'hubspot')
+      disconnectCrmIntegration(mockClient as never, TENANT_ID, 'square')
     ).rejects.toThrow('connection_terminated');
 
     // Both queries were attempted; vi-mock tracks .calls regardless of

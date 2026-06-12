@@ -11,7 +11,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Framewo
 ## Architecture
 
 - **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + xAI Grok (TTS) → Fastify `/agent-tools/*`
-- **Backend**: Fastify (29 route modules under `src/routes/`) → Postgres (Railway)
+- **Backend**: Fastify (26 route modules under `src/routes/`) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `ai-sec-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind + TS
 - **Database**: Postgres + pgvector, RLS multi-tenancy, atomic booking RPCs
@@ -31,7 +31,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Framewo
 
 Items below capture hidden context — things you can't grep for. Everything else (flat service files, type definitions, doc tree) is derivable from the filesystem.
 
-- `/src` — Fastify backend (slim `index.ts` + 29 route modules)
+- `/src` — Fastify backend (slim `index.ts` + 26 route modules)
 - `/src/routes/routeHelpers.ts` — `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`
 - `/src/services/communications/` — CommunicationService + email/sms/appointment services + Handlebars templates + ProviderRegistry + Twilio/Mock adapters. Consent-gated.
 - `/src/services/reminders/` — ReminderService schedules; reminderProcessor delivers via CommunicationService; reminderRepository handles DB.
@@ -40,7 +40,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 - `/src/templates/` — 5 industry YAML bundles (automotive_v1, salon_v1, mobile_tire_v1, auto_bays_v1, ai_platform_v1). No HIPAA verticals.
 - `/shared` — Pure cross-runtime TypeScript modules (no Node/Next/framework deps) intended to be consumed from both the Fastify backend (`../shared/...` from `src/`) and the Next.js dashboard (`../../shared/...` from `dashboard/lib/`). Residents: `getEmbedding.ts`, `normalizeForEmbedding.ts`, `scheduling.ts`, `voiceCrm.ts` (2026-05), `appointmentValidation.ts` (2026-05, 15-min increment + duration rules), `phone.ts` (2026-05-27: normalizePhone + formatPhone + isValidPhone), and `name.ts` (2026-05-27: splitName, joinName, buildDisplayName, slugify). These were extracted to kill duplication between backend CRM sync / agent tools and dashboard forms/comboboxes.
 - `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation in two layers: (1) any non-public, non-tenant-exempt request with no authenticated session (`req.auth`) is rejected 401 before any tenant resolution — a user-supplied `tenant_id` is a selector within the JWT's permitted tenants, never a substitute for auth (added 2026-05-21 after an anonymous `?tenant_id=<uuid>` was found to return that tenant's data read+write+delete with zero auth; the 2026-05-06 guard only fired when a jwtTenant already existed); (2) for authenticated callers, any user-supplied `tenant_id` (query or body) not matching the JWT's is rejected 403 unless super-admin (added 2026-05-06). `requireTenantId` trusts only the middleware-validated `req.tenantId` (no body fallback). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
-- `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (12 tools), `transferClient` (live SIP cold-transfer to a human via REFER), `fallback` (OpenAI TTS dead-air guard).
+- `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (12 tools), `transferClient` (live SIP cold-transfer to a human via REFER), `transcript` (TranscriptRecorder → call transcript), `callOutcome` (CallOutcomeTracker → booked/transferred + appointment_id for the call→appointment link), `callSummary` (bounded/failsafe post-call OpenAI summary), `fallback` (OpenAI TTS dead-air guard). `agent/scripts/sim-*.mjs` are the simulation helpers (LiveKit dispatch + browser-call).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
 - `/supabase/migrations` — 131 SQL migrations.
 - `/scripts` — `simulate.sh` (system simulation/health harness; node helpers in `agent/scripts/sim-*.mjs` for LiveKit + `scripts/sim-tools.mjs` for the agent-tools journey), `verify-claude-md.ts` drift detector
@@ -124,7 +124,7 @@ Durable rules-of-engagement that override "build for the future":
 
 **Backend**
 
-- Slim `index.ts` registers 29 route modules. Tenant-scoped routes use `withTenantClient()` for RLS.
+- Slim `index.ts` registers 26 route modules. Tenant-scoped routes use `withTenantClient()` for RLS.
 - All mutations: Zod-validated, response shape `{ success, error?, details? }`, `assertRowAffected()` returns 404 on zero-row UPDATE/DELETE (never silent success).
 - Production env validation: refuses to start without `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`.
 - Graceful shutdown on SIGTERM/SIGINT (closes Fastify + drains pool — required for Railway).
@@ -153,7 +153,7 @@ Durable rules-of-engagement that override "build for the future":
 
 ## Project Status
 
-**Phase 13 (Production Readiness) in progress.** 2,017 backend + 744 dashboard = 2,761 tests passing (verified 2026-06-11 against real test_db / vitest; 0 skips, 0 failures). 122 agent tests, 111 Playwright e2e passing (7 skipped, intentional; suite repaired 2026-06-03 after a seed-strip regression), 29 live QA tool calls. Zero TS errors across backend / agent / dashboard. (Counts include the live call-transfer feature built 2026-06-11 — still uncommitted on `feat/tenant-first-message`, pending prod migration + push.) Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + Sentry + Better Stack setup in `docs/DEPLOYMENT.md`.
+**Phase 13 (Production Readiness) in progress.** ~1,770 backend + 747 dashboard + 141 agent tests passing (verified 2026-06-12 against real test_db / vitest; backend count dropped from ~2,028 after the 2026-06-12 removal of the Jobber/HubSpot/ServiceTitan CRM integrations). 26 Playwright e2e specs (~212 tests) incl. `analytics.spec.ts`; CI runs them on every PR. Zero TS errors across backend / agent / dashboard. **Shipped + deployed to main this session (2026-06-12):** live call-transfer + transcript capture, the `scripts/simulate.sh` system harness, the `baseline.sql` drift fix + guard, gap #1 (call outcome + appointment link + post-call summary), gap #2 (real call analytics: `/analytics/stats` + `/analytics/calls` + dashboard panels). **On branch `feat/remove-competitor-crms` (unmerged):** the competitor-CRM removal. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + Sentry + Better Stack setup in `docs/DEPLOYMENT.md`. Session handoff: `HANDOFF.md`.
 
 **All 3 Railway services (ai-sec backend, ai-sec-agent, dashboard) deploy from `main`** (verified 2026-06-12 via Railway GraphQL — each service's latest deployment `meta.branch = "main"`). **Shipping = MERGE to main via PR**, not a branch push. A `git push` to a feature branch deploys NOTHING. Earlier features (greeting #5, call-logging #6) reached prod because their PRs were merged. Railway deploy is NOT gated on CI, so wait for green CI before merging. Apply prod DB migrations BEFORE the merge.
 

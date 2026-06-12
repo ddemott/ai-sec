@@ -121,10 +121,10 @@ Sell the **receptionist first**, expand later. It's easier to sell, for structur
 ## Decisions (2026-06-12)
 
 ### Integrations
-- **Freeze Jobber, ServiceTitan, Housecall Pro.** All three are direct competitors. Stop investing — do **not** fix the Jobber appointment-update no-op. Keep the existing code (optionality, low carrying cost) but no new work.
+- **REMOVED Jobber, ServiceTitan, HubSpot (2026-06-12).** All three ship their own AI receptionists — direct competitors. The integration code (clients, sync services, routes, OAuth, webhooks) was deleted from the repo; only Square remains. Housecall Pro was never coded. The generic/provider-agnostic CRM layer (`tenant_integrations` tables, `crmRouteScaffold`, `oauthCallbackFactory`, `tokenManagement`, `syncOrchestrator`) was kept — it now drives Square only and is ready for any future non-competitor partner.
 - **Keep + prioritize Square.** Payments/booking platform with huge non-trades reach; not a phone-answering competitor. A genuine partner.
 - **Keep calendar sync (Google / Outlook).** Vendors not in the receptionist business — always safe.
-- **Freeze is reversible.** These are focus calls. Re-open any of them when a *real beta customer who cannot use the incumbent's native receptionist* asks, or the market shifts.
+- **Reversible.** Removing the three was a focus call. Re-add an integration (off the kept generic layer) when a *real beta customer who cannot use the incumbent's native receptionist* asks, or the market shifts.
 
 ### CRM scope ("build our own CRM" — sharpened)
 - We are **~60% of a light CRM already**: customers, appointments, employees, resources, services, skills, a real scheduling engine (employee_schedule + atomic booking RPCs), customer history/preferences/notes, voice/call records, reminders + communications.

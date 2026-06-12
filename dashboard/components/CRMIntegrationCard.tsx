@@ -15,7 +15,7 @@ interface CRMProvider {
   getAuthUrl: (tenantId: string | null) => Promise<{ success: boolean; authUrl: string }>;
   disconnect: (tenantId: string | null) => Promise<{ success: boolean }>;
   triggerSync: (tenantId: string | null) => Promise<unknown>;
-  connectedParam: string; // URL param to check (e.g. 'jobberConnected')
+  connectedParam: string; // URL param to check (e.g. 'squareConnected')
 }
 
 interface CRMIntegrationCardProps {

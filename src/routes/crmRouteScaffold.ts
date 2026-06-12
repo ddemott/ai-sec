@@ -17,7 +17,7 @@
  *
  * Usage:
  *   registerCrmScaffoldRoutes(app, pool, withTenantClient, {
- *     provider: 'jobber',
+ *     provider: 'square',
  *     displayName: 'Jobber',
  *     isEnabled: jobberClient.isJobberEnabled,
  *     getAuthUrl: jobberClient.getAuthUrl,

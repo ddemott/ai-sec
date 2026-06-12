@@ -10,15 +10,7 @@
 
 export type ChangeType = 'create' | 'update' | 'delete' | 'restore' | 'sync' | 'merge';
 
-export type ChangeSource =
-  | 'local'
-  | 'hubspot'
-  | 'jobber'
-  | 'square'
-  | 'servicetitan'
-  | 'voice_call'
-  | 'system'
-  | 'api';
+export type ChangeSource = 'local' | 'square' | 'voice_call' | 'system' | 'api';
 
 export type VersionedTable =
   | 'customers'
@@ -151,10 +143,7 @@ export interface RecentChangesResponse {
 export function formatChangeSource(source: ChangeSource): string {
   const labels: Record<ChangeSource, string> = {
     local: 'Manual Edit',
-    hubspot: 'HubSpot Sync',
-    jobber: 'Jobber Sync',
     square: 'Square Sync',
-    servicetitan: 'ServiceTitan Sync',
     voice_call: 'Voice Call',
     system: 'System',
     api: 'API',
