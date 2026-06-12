@@ -206,9 +206,9 @@ captures or sends them**, so every logged call is duration-only.
 
 ### Analytics (`AnalyticsView.tsx`)
 
-- [ ] **Implement `GET /analytics/stats`** — `dashboard/lib/api.ts:607` calls it and expects `{ calls, appointments, customers, recent_activity }`, but **no backend route exists** (only `src/routes/analytics.ts` aggregations). Frontend currently falls back to manual appointment aggregation with no call data.
-- [ ] **Wire the 3 stubbed call-based panels** — `AnalyticsView.tsx` marks "Call Volume Over Time", "Call → Booking Conversion", and "Caller Abandonment Point" as *"Requires call log integration Phase 2"*. Now that inbound calls ARE logged to `voice_sessions`, these can be built from real data (depends on outcome capture above for conversion/abandonment).
-- [ ] **(Optional) Owner-facing reliability tiles** — `booking_attempts_total`, `tool_calls_total` (`src/services/metrics.ts:284,291`) are Prometheus-only (`/metrics`, token-gated). Consider a lightweight owner view of booking success rate + agent tool success rate (or leave to ops dashboards — decide).
+- [x] **Implement `GET /analytics/stats`** — Backend route + `AnalyticsStats` shape implemented (and `/analytics/calls` for the call-based panels). Wired into `DashboardHome.tsx` (top-line snapshot with recent activity feed) and `AnalyticsView.tsx` (reliability note + fetch). See `feat/analytics-reliability-tiles`. The top-level Gap #2 work already marked the route + panels as shipped.
+- [x] **Wire the 3 stubbed call-based panels** — Completed as part of Gap #2 (2026-06-12): real data from `voice_sessions` (booked keyed on appointment_id) powers Call Volume, Booking Conversion, Caller Abandonment in `AnalyticsView.tsx` + E2E. Richer WHY from post-call classifier also wired.
+- [x] **(Optional) Owner-facing reliability tiles** — Added explicit "Analytics data (reliable aggregates)" snapshot in DashboardHome (calls week/upcoming/customers new, recent activity) with note on source (voice_sessions + appointments server aggregates). Similar reliability note in AnalyticsView. (Prometheus metrics for booking/tool success rates remain ops-only for now.)
 
 ### Reminder delivery monitoring (Phase 5 — never built)
 
