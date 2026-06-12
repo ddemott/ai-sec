@@ -636,6 +636,12 @@ export const Api = {
       ),
   },
 
+  // --- REMINDERS (delivery monitoring) ---
+  reminders: {
+    deliveryStats: (tenantId: string | null) =>
+      apiFetch(`/reminders/delivery-stats`, tenantId ? { tenant_id: tenantId } : undefined),
+  },
+
   // --- MASTER SKILLS ---
   skills: {
     list: (tenantId: string | null) =>
