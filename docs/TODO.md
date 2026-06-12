@@ -13,6 +13,11 @@ Everything else complete or tracked below.
 
 ---
 
+## Active build queue (2026-06-12)
+
+- [ ] **Gap #2: Analytics (IN PROGRESS)** — `GET /analytics/stats` + wire the 3 stubbed call panels (volume / conversion / abandonment) from real `voice_sessions`. Level-up requirement (`docs/COMPETITOR_WEAKPOINTS.md`): reporting must answer **WHY**, not just WHAT — needs **rich outcome classification** (booked / abandoned-at-price / no-availability / wrong-service / after-hours), surfaced conversationally later via the owner copilot. Build the counts first, then the WHY layer.
+- [ ] **Stripe — incorporate + verify ALL paths.** Built (`src/routes/billing.ts`), never tested live. Verify against **Stripe test mode** (test keys + Stripe CLI webhook replay — no real money): checkout → session/customer created; webhook signature verifies (`STRIPE_WEBHOOK_SECRET`); `checkout.session.completed` → subscription activates (tenant gate flips); `invoice.payment_failed` handled; `customer.subscription.deleted` revokes access; plan gating (Solo/Growth/Pro) enforces; 5 env vars set on Railway + webhook registered. Add a Stripe path-check to `simulate` so it's a one-command answer.
+
 ## 🚀 Production Wiring Checklist (backend audit 2026-06-12)
 
 Full backend wiring audit (3 parallel investigators over `src/` + `agent/src/`).
