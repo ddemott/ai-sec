@@ -64,9 +64,7 @@ export function registerHealthRoutes(app: AppFastifyInstance, pool: Pool): void 
     withHandler(async (_req, reply) => {
       const client = await pool.connect();
       try {
-        const res = await client.query(
-          'SELECT purge_expired_soft_reservations() as deleted_count'
-        );
+        const res = await client.query('SELECT purge_expired_soft_reservations() as deleted_count');
         const row = res.rows[0] as { deleted_count: number };
         return reply.send({ success: true, deleted_count: row.deleted_count });
       } finally {

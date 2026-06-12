@@ -29,18 +29,13 @@ export function isAllowedExtension(ext: string): boolean {
 
 // ── File content extraction ───────────────────────────────────────────────────
 
-export type ExtractResult =
-  | { success: true; text: string }
-  | { success: false; error: string };
+export type ExtractResult = { success: true; text: string } | { success: false; error: string };
 
 /**
  * Extract plain text from an uploaded file buffer.
  * PDF files are parsed via pdf-parse; all other types are decoded as UTF-8.
  */
-export async function extractFileContent(
-  buffer: Buffer,
-  filename: string
-): Promise<ExtractResult> {
+export async function extractFileContent(buffer: Buffer, filename: string): Promise<ExtractResult> {
   let text = '';
 
   if (filename.toLowerCase().endsWith('.pdf')) {
@@ -70,10 +65,7 @@ export type ChunkResult =
  * Split document text into chunks on double-newlines, filtering blanks.
  * Returns an error result when the chunk count exceeds maxChunks.
  */
-export function splitIntoChunks(
-  text: string,
-  maxChunks: number = MAX_CHUNKS
-): ChunkResult {
+export function splitIntoChunks(text: string, maxChunks: number = MAX_CHUNKS): ChunkResult {
   const chunks = text.split('\n\n').filter((c) => c.trim().length > MIN_CHUNK_LENGTH);
   if (chunks.length > maxChunks) {
     return {

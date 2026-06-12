@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { Client, Pool } from 'pg';
+import { type Client, Pool } from 'pg';
 import { getRootClient, skipIfDbDown, ROOT_DB_URL } from './test-utils';
 import { seedDemoTenant } from './services/demoSeed';
 import { cleanupExpiredDemoTenants } from './workers/reminderScheduler';
@@ -161,10 +161,9 @@ describe('seedDemoTenant', () => {
     // WHEN: after seed
     // WHERE: customers table
     // WHY: empty CRM looks broken for a demo — visitors need data to explore
-    const res = await client.query(
-      'SELECT COUNT(*) AS cnt FROM customers WHERE tenant_id = $1',
-      [tenantId]
-    );
+    const res = await client.query('SELECT COUNT(*) AS cnt FROM customers WHERE tenant_id = $1', [
+      tenantId,
+    ]);
     expect(parseInt((res.rows[0] as { cnt: string }).cnt, 10)).toBe(5);
   });
 

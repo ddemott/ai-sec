@@ -142,7 +142,10 @@ export function registerProvisioningRoutes(
               tenant_id,
             });
           }
-          logEvent(req, 'phone_deprovisioned', { tenant_id, warnings_count: result.warnings.length });
+          logEvent(req, 'phone_deprovisioned', {
+            tenant_id,
+            warnings_count: result.warnings.length,
+          });
           return reply.send({
             success: true,
             ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),

@@ -138,7 +138,10 @@ export function registerKnowledgeRoutes(
 
       const { question, answer, category, source } = parsed.data;
       const { combined, normalizedText, embedding } = await prepareQADocument(
-        question, answer, getEmbedding, normalizeForEmbedding
+        question,
+        answer,
+        getEmbedding,
+        normalizeForEmbedding
       );
 
       const res = await withTenantClient(tenantId, async (client) => {
@@ -177,7 +180,10 @@ export function registerKnowledgeRoutes(
 
       const { question, answer, category, source } = parsed.data;
       const { combined, normalizedText, embedding } = await prepareQADocument(
-        question, answer, getEmbedding, normalizeForEmbedding
+        question,
+        answer,
+        getEmbedding,
+        normalizeForEmbedding
       );
 
       const res = await withTenantClient(tenantId, async (client) => {
