@@ -35,7 +35,6 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 - [ ] **[prod]** **Email silently runs mock transporter** — without `EMAIL_USER`/`EMAIL_PASS`, `emailService.ts:22` installs a mock returning a fake messageId → confirmation/notification emails never send, no error. Set Gmail app-password env on Railway.
 - [ ] **[prod]** **Agent `BACKEND_URL` defaults to `http://localhost:4001`** (`agent/src/config.ts:17`, a `.default()` — no fail-fast). If unset on `ai-sec-agent`, the agent calls localhost → **every `/agent-tools/*` request misroutes silently**. MUST confirm set in prod.
 - [ ] **[prod]** **`STRIPE_WEBHOOK_SECRET` empty → every webhook 400s** (`billing.ts:133`) → subscriptions never activate even though checkout works. Distinct from `STRIPE_SECRET_KEY`.
-- [ ] **[prod] (security)** **`SERVICETITAN_WEBHOOK_SECRET` unset → webhook auth SKIPPED** (`servicetitan.ts:32`) — accepts unauthenticated payloads. Set it before exposing the ServiceTitan webhook, or leave the integration off.
 - [ ] **[prod] (security)** **`CORS_ORIGIN` unset reflects ANY origin** (`index.ts:134` `|| true`). Set the dashboard origin in prod.
 - [ ] **[prod]** **`DASHBOARD_URL` defaults to `https://localhost:4000`** → prod emails / OAuth redirects / Stripe success+cancel URLs point at localhost (`constants.ts:2`, `billing.ts:91`, `calendar.ts:56`, `auth.ts:185`). Already on the env-var list below — flagged here for blast radius.
 
@@ -50,7 +49,7 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 
 - [ ] **[prod]** Google Calendar — `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` + GCP OAuth app + redirect URI. Code complete (`googleCalendar.ts`); `/calendar` route 503s until set.
 - [ ] **[prod]** Outlook Calendar — `OUTLOOK_CLIENT_ID/SECRET/CALLBACK_URL` + Azure app.
-- [ ] **[prod]** CRM — Jobber / HubSpot / Square / ServiceTitan: each needs `<PROVIDER>_CLIENT_ID/SECRET/CALLBACK_URL` (+ Square/ServiceTitan webhook signature keys) + an OAuth app registered provider-side. All four are real implementations (`src/services/crm/`), no-op safely until configured.
+- [ ] **[prod]** CRM — Square: needs `SQUARE_CLIENT_ID/SECRET/CALLBACK_URL` + `SQUARE_WEBHOOK_SIGNATURE_KEY` + an OAuth app registered provider-side. Real implementation (`src/services/crm/squareClient.ts`/`squareSync.ts`), no-ops safely until configured. (Jobber/HubSpot/ServiceTitan removed 2026-06-12 as competitors — see `docs/STRATEGY.md`.)
 
 ### `[dev]` — NOT wired anywhere, needs code
 
@@ -59,7 +58,6 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 - [ ] **[dev]** **`GET /analytics/stats` missing** — dashboard `api.ts:607` calls it, no backend handler exists (`analytics.ts` has only `/coverage`, `/call-summaries`, `/feedback`). Also unblocks the 3 stubbed analytics panels (Call Volume / Conversion / Abandonment). Needs the route returning the `AnalyticsStats` shape.
 - [ ] **[dev]** **Twilio delivery monitoring absent** — `TwilioAdapter.ts:25` sends fire-and-forget with no `statusCallback`; nothing ingests carrier delivery receipts, so "sent" ≠ "delivered" and retry logic only sees send-time exceptions. Needs a `StatusCallback` URL + webhook route. (Lower priority than the mock-vs-real decision above.)
 - [ ] **[dev]** **`GET /communications/history` is a stub** — returns `{history:[], note:'not yet implemented'}` (`communications.ts:189`). No live UI consumer today. Needs a `communications_history` table + query if/when surfaced.
-- [ ] **[dev]** **Jobber appointment-update push is a no-op** — create + pull work, update logs "not yet implemented" (`jobberSync.ts:287`). Edits to a booked appointment don't re-push to Jobber.
 - [ ] **[dev]** **Stripe tax not collected** — no `automatic_tax` in checkout (`billing.ts`). Needs the line + Stripe Tax enabled + nexus registration (already noted in Phase 13 user-action list).
 
 ### `[dev]` — test/build infra (surfaced by `simulate tools` 2026-06-12)
@@ -216,7 +214,7 @@ captures or sends them**, so every logged call is duration-only.
 
 ### CRM sync status (`CRMIntegrationCard.tsx`)
 
-- [ ] **Surface pending/error sync counts** — `GET /{jobber,hubspot,square,servicetitan}/sync/status` returns `pending_count`, `error_count`, `total_mapped`, but the card (`CRMIntegrationCard.tsx:27`) shows only `last_sync_at` + connection status. Add the pending/error breakdown so owners see sync health, not just "connected". `sync_dispatches_total` (`metrics.ts:299`) is also Prometheus-only.
+- [ ] **Surface pending/error sync counts** — `GET /square/sync/status` returns `pending_count`, `error_count`, `total_mapped`, but the card (`CRMIntegrationCard.tsx:27`) shows only `last_sync_at` + connection status. Add the pending/error breakdown so owners see sync health, not just "connected". `sync_dispatches_total` (`metrics.ts:299`) is also Prometheus-only.
 
 ---
 

@@ -437,34 +437,6 @@ export default function BusinessSettingsView() {
         <CRMIntegrationCard
           tenantId={tenantId}
           provider={{
-            name: 'Jobber',
-            color: 'green',
-            icon: 'J',
-            description: 'Sync customers and appointments with your Jobber account.',
-            getSettings: Api.jobber.getSettings,
-            getAuthUrl: Api.jobber.getAuthUrl,
-            disconnect: Api.jobber.disconnect,
-            triggerSync: Api.jobber.triggerSync,
-            connectedParam: 'jobberConnected',
-          }}
-        />
-        <CRMIntegrationCard
-          tenantId={tenantId}
-          provider={{
-            name: 'HubSpot',
-            color: 'orange',
-            icon: 'H',
-            description: 'Sync customers and appointments with your HubSpot account.',
-            getSettings: Api.hubspot.getSettings,
-            getAuthUrl: Api.hubspot.getAuthUrl,
-            disconnect: Api.hubspot.disconnect,
-            triggerSync: Api.hubspot.triggerSync,
-            connectedParam: 'hubspotConnected',
-          }}
-        />
-        <CRMIntegrationCard
-          tenantId={tenantId}
-          provider={{
             name: 'Square',
             color: 'blue',
             icon: 'S',
@@ -474,20 +446,6 @@ export default function BusinessSettingsView() {
             disconnect: Api.square.disconnect,
             triggerSync: Api.square.triggerSync,
             connectedParam: 'squareConnected',
-          }}
-        />
-        <CRMIntegrationCard
-          tenantId={tenantId}
-          provider={{
-            name: 'ServiceTitan',
-            color: 'purple',
-            icon: 'ST',
-            description: 'Sync customers and jobs with your ServiceTitan account.',
-            getSettings: Api.servicetitan.getSettings,
-            getAuthUrl: Api.servicetitan.getAuthUrl,
-            disconnect: Api.servicetitan.disconnect,
-            triggerSync: Api.servicetitan.triggerSync,
-            connectedParam: 'servicetitanConnected',
           }}
         />
 

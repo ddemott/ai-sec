@@ -509,10 +509,7 @@ describe('tenantMiddleware', () => {
     for (const path of [
       '/calendar/auth/google/callback',
       '/calendar/auth/outlook/callback',
-      '/hubspot/auth/callback',
-      '/jobber/auth/callback',
       '/square/auth/callback',
-      '/servicetitan/auth/callback',
     ]) {
       const req = createMockRequest({ url: path });
       await hook(req, {});
@@ -522,23 +519,11 @@ describe('tenantMiddleware', () => {
 
   it('skips webhook routes (WHO: external CRM | WHAT: webhook paths skipped | WHERE: tenantMiddleware isTenantExempt | WHY: webhooks use HMAC auth, not JWT)', async () => {
     const hook = setupMiddleware();
-    for (const path of [
-      '/hubspot/webhook',
-      '/square/webhook',
-      '/servicetitan/webhook',
-      '/billing/webhook',
-    ]) {
+    for (const path of ['/square/webhook', '/billing/webhook']) {
       const req = createMockRequest({ url: path });
       await hook(req, {});
       expect(req.tenantId).toBeUndefined();
     }
-  });
-
-  it('skips Jobber webhook with tenant ID in path (WHO: Jobber webhook | WHAT: /jobber/webhook/xxx skipped | WHERE: tenantMiddleware isTenantExempt | WHY: Jobber uses tenant ID in URL path)', async () => {
-    const hook = setupMiddleware();
-    const req = createMockRequest({ url: '/jobber/webhook/abc-123' });
-    await hook(req, {});
-    expect(req.tenantId).toBeUndefined();
   });
 
   it('enriches logger with tenant context (WHO: tenant-scoped request | WHAT: req.log gets tenantId+userId child | WHERE: tenantMiddleware preHandler | WHY: structured logging for log aggregation)', async () => {

@@ -2,23 +2,23 @@
  * E2E coverage for the calendar + CRM sync orchestration layer.
  *
  * Why this exists: TEST_COVERAGE.md flagged "Calendar sync (Google +
- * Outlook OAuth)" + the four CRM bidirectional flows as having zero
+ * Outlook OAuth)" + the CRM bidirectional flows as having zero
  * e2e coverage. The unit tests in src/calendar-sync.test.ts and the
- * four src/<crm>-sync.test.ts files mock the provider modules and
+ * src/square-sync.test.ts file mock the provider modules and
  * prove the conversion logic; what was missing is "do the routes
  * actually invoke the orchestrator on every appointment and customer
  * lifecycle event."
  *
  * What's covered:
- *   - POST /appointments/create → 5 sync dispatches (calendar + 4 CRMs)
- *   - POST /appointments/:id/update → 5 dispatches with action='update'
- *   - DELETE /appointments/:id → 5 dispatches with action='delete'
- *   - POST /customers/create → 4 CRM dispatches (calendars don't get
+ *   - POST /appointments/create → 2 sync dispatches (calendar + Square)
+ *   - POST /appointments/:id/update → 2 dispatches with action='update'
+ *   - DELETE /appointments/:id → 2 dispatches with action='delete'
+ *   - POST /customers/create → 1 CRM dispatch (calendars don't get
  *     customer events — that's part of the contract)
- *   - PUT  /customers/:id  → 4 dispatches with action='update'
- *   - DELETE /customers/:id → 4 dispatches with action='delete'
+ *   - PUT  /customers/:id  → 1 dispatch with action='update'
+ *   - DELETE /customers/:id → 1 dispatch with action='delete'
  *   - Fire-and-forget: HTTP response returns within ~3s even with all
- *     5 provider promises in flight
+ *     provider promises in flight
  *
  * What's NOT covered:
  *   - Whether each provider's actual outbound HTTP request is well-formed
@@ -182,7 +182,7 @@ test.beforeEach(async ({ request }, testInfo) => {
 // Appointment lifecycle dispatch
 // ────────────────────────────────────────────────────────────────────────────
 
-test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', async ({
+test('appointment-create dispatches all sync providers (calendar + Square)', async ({
   request,
 }) => {
   // WHO: front-desk creates a normal appointment via the API
@@ -253,14 +253,8 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
     const matching = events.filter(
       (e) => e.entity === 'appointment' && e.action === 'create' && e.entityId === appointmentId
     );
-    expect(matching).toHaveLength(5);
-    expect(matching.map((e) => e.provider).sort()).toEqual([
-      'calendar',
-      'hubspot',
-      'jobber',
-      'servicetitan',
-      'square',
-    ]);
+    expect(matching).toHaveLength(2);
+    expect(matching.map((e) => e.provider).sort()).toEqual(['calendar', 'square']);
     for (const e of matching) {
       expect(e.tenantId).toBe(DYNATIRE_ID);
     }
@@ -276,7 +270,7 @@ test('appointment-create dispatches all 5 sync providers (calendar + 4 CRMs)', a
   }
 });
 
-test('appointment-update dispatches all 5 providers with action=update', async ({ request }) => {
+test('appointment-update dispatches all providers with action=update', async ({ request }) => {
   // WHO: operator drags an appointment to a new time on the scheduler
   // WHAT: POST /appointments/:id/update fires 5 'update' dispatches
   // WHY: route appointments.ts:369 must call syncAppointmentToAll on
@@ -308,7 +302,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     );
     scheduleSeeded = true;
 
-    // Pre-insert directly so creation doesn't dispatch 5 sync events
+    // Pre-insert directly so creation doesn't dispatch sync events
     // and pollute the assertion below.
     const aIns = await pool.query(
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
@@ -346,14 +340,8 @@ test('appointment-update dispatches all 5 providers with action=update', async (
     const matching = events.filter(
       (e) => e.entity === 'appointment' && e.action === 'update' && e.entityId === apptId
     );
-    expect(matching).toHaveLength(5);
-    expect(matching.map((e) => e.provider).sort()).toEqual([
-      'calendar',
-      'hubspot',
-      'jobber',
-      'servicetitan',
-      'square',
-    ]);
+    expect(matching).toHaveLength(2);
+    expect(matching.map((e) => e.provider).sort()).toEqual(['calendar', 'square']);
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
     if (scheduleSeeded && mikeId)
@@ -365,7 +353,7 @@ test('appointment-update dispatches all 5 providers with action=update', async (
   }
 });
 
-test('appointment-delete dispatches all 5 providers with action=delete', async ({ request }) => {
+test('appointment-delete dispatches all providers with action=delete', async ({ request }) => {
   // WHO: customer cancels and operator hard-deletes the appointment
   // WHAT: DELETE /appointments/:id fires 5 'delete' dispatches so the
   //        external calendar event is removed and CRMs flip their
@@ -430,14 +418,8 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
     const matching = events.filter(
       (e) => e.entity === 'appointment' && e.action === 'delete' && e.entityId === apptId
     );
-    expect(matching).toHaveLength(5);
-    expect(matching.map((e) => e.provider).sort()).toEqual([
-      'calendar',
-      'hubspot',
-      'jobber',
-      'servicetitan',
-      'square',
-    ]);
+    expect(matching).toHaveLength(2);
+    expect(matching.map((e) => e.provider).sort()).toEqual(['calendar', 'square']);
     apptId = null; // already deleted
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
@@ -454,14 +436,14 @@ test('appointment-delete dispatches all 5 providers with action=delete', async (
 // Customer lifecycle dispatch — only 4 providers, no calendar
 // ────────────────────────────────────────────────────────────────────────────
 
-test('customer-create dispatches to 4 CRMs (no calendar — by contract)', async ({ request }) => {
+test('customer-create dispatches to Square (no calendar — by contract)', async ({ request }) => {
   // WHO: operator adds a new walk-in customer via the Customers tab
-  // WHAT: /customers/create fires 4 'create' dispatches — Jobber +
-  //        HubSpot + Square + ServiceTitan. Calendars are not in the
-  //        customer dispatch list because they don't store contacts.
+  // WHAT: /customers/create fires 1 'create' dispatch — Square only.
+  //        Calendars are not in the customer dispatch list because they
+  //        don't store contacts.
   // WHY: pin the customer-side contract. If a refactor accidentally
   //        adds calendar to syncCustomerToAll, this test fails (count
-  //        becomes 5) — would mean we tried to push contacts to Google
+  //        becomes 2) — would mean we tried to push contacts to Google
   //        Calendar, which has no concept of contact records.
   const tag = uniqueTag();
   let customerId: string | null = null;
@@ -490,13 +472,8 @@ test('customer-create dispatches to 4 CRMs (no calendar — by contract)', async
     const matching = events.filter(
       (e) => e.entity === 'customer' && e.action === 'create' && e.entityId === customerId
     );
-    expect(matching).toHaveLength(4);
-    expect(matching.map((e) => e.provider).sort()).toEqual([
-      'hubspot',
-      'jobber',
-      'servicetitan',
-      'square',
-    ]);
+    expect(matching).toHaveLength(1);
+    expect(matching.map((e) => e.provider).sort()).toEqual(['square']);
     expect(
       matching.find((e) => e.provider === 'calendar'),
       'calendars must NOT receive customer events'
@@ -506,9 +483,9 @@ test('customer-create dispatches to 4 CRMs (no calendar — by contract)', async
   }
 });
 
-test('customer-update + customer-delete each dispatch all 4 CRMs', async ({ request }) => {
+test('customer-update + customer-delete each dispatch to Square', async ({ request }) => {
   // WHO: operator updates a customer's name, then later deletes the record
-  // WHAT: both lifecycle events fire 4 'update' / 'delete' dispatches
+  // WHAT: both lifecycle events fire 1 'update' / 'delete' dispatch
   // WHY: collapse two related assertions into one test to keep the
   //        spec count manageable — the dispatch contract is identical
   //        between update and delete, only the action label differs
@@ -541,7 +518,7 @@ test('customer-update + customer-delete each dispatch all 4 CRMs', async ({ requ
     let matching = events.filter(
       (e) => e.entity === 'customer' && e.action === 'update' && e.entityId === customerId
     );
-    expect(matching).toHaveLength(4);
+    expect(matching).toHaveLength(1);
 
     // Delete phase — clear and re-assert.
     await clearSyncEvents(request);
@@ -555,7 +532,7 @@ test('customer-update + customer-delete each dispatch all 4 CRMs', async ({ requ
     matching = events.filter(
       (e) => e.entity === 'customer' && e.action === 'delete' && e.entityId === customerId
     );
-    expect(matching).toHaveLength(4);
+    expect(matching).toHaveLength(1);
     customerId = null; // already deleted
   } finally {
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
@@ -568,12 +545,12 @@ test('customer-update + customer-delete each dispatch all 4 CRMs', async ({ requ
 
 test('fire-and-forget: HTTP response does not wait for sync provider work', async ({ request }) => {
   // WHO: any operator booking an appointment under a slow CRM
-  // WHAT: /appointments/create returns within 3s even though 5 sync
+  // WHAT: /appointments/create returns within 3s even though sync
   //        provider promises are still in flight
   // WHY: the orchestrator IS fire-and-forget by contract. If a future
   //        refactor accidentally awaits the dispatch promises, every
   //        booking call latency would balloon by Σ(provider latency).
-  //        For 4 CRMs over WAN that's easily 8-20 seconds — completely
+  //        For CRMs over WAN that's easily 8-20 seconds — completely
   //        unacceptable for a phone-call use case.
   const tag = uniqueTag();
   const apptIdsToCleanup: string[] = [];

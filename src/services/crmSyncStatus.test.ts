@@ -64,7 +64,7 @@ describe('getCrmSyncStatus — happy paths', () => {
       },
     ]);
 
-    const result = await getCrmSyncStatus(client, TENANT_ID, 'jobber');
+    const result = await getCrmSyncStatus(client, TENANT_ID, 'square');
 
     expect(result).toEqual({
       last_sync_at: '2026-04-30T12:00:00Z',
@@ -72,11 +72,11 @@ describe('getCrmSyncStatus — happy paths', () => {
       error_count: 5,
       total_mapped: { customers: 104, appointments: 56 },
     });
-    expect(queries[0].params).toEqual([TENANT_ID, 'jobber']);
-    expect(queries[1].params).toEqual([TENANT_ID, 'jobber']);
+    expect(queries[0].params).toEqual([TENANT_ID, 'square']);
+    expect(queries[1].params).toEqual([TENANT_ID, 'square']);
   });
 
-  it('2. threads provider name into both queries (hubspot)', async () => {
+  it('2. threads provider name into both queries (square)', async () => {
     // WHO: HubSpot route handler.
     // WHAT: the provider arg must be the second parameter on BOTH the
     //       settings SELECT and the entity_sync_map SELECT — a typo in
@@ -86,12 +86,12 @@ describe('getCrmSyncStatus — happy paths', () => {
     //      one of the two by provider would mix counts.
     const { queries, client } = buildClient([{ rows: [{ last_sync_at: null }] }, { rows: [] }]);
 
-    await getCrmSyncStatus(client, TENANT_ID, 'hubspot');
+    await getCrmSyncStatus(client, TENANT_ID, 'square');
 
     expect(queries[0].text).toContain('FROM tenant_integration_settings');
-    expect(queries[0].params[1]).toBe('hubspot');
+    expect(queries[0].params[1]).toBe('square');
     expect(queries[1].text).toContain('FROM entity_sync_map');
-    expect(queries[1].params[1]).toBe('hubspot');
+    expect(queries[1].params[1]).toBe('square');
   });
 
   it('3. returns null last_sync_at when no settings row exists', async () => {
@@ -132,7 +132,7 @@ describe('getCrmSyncStatus — happy paths', () => {
       },
     ]);
 
-    const result = await getCrmSyncStatus(client, TENANT_ID, 'servicetitan');
+    const result = await getCrmSyncStatus(client, TENANT_ID, 'square');
 
     expect(result.total_mapped).toEqual({ customers: 5, appointments: 0 });
     // pending_count is axis-independent of entity_type — the employee
@@ -156,7 +156,7 @@ describe('getCrmSyncStatus — sad paths', () => {
       release: vi.fn(),
     } as unknown as PoolClient;
 
-    await expect(getCrmSyncStatus(failingClient, TENANT_ID, 'jobber')).rejects.toThrow(
+    await expect(getCrmSyncStatus(failingClient, TENANT_ID, 'square')).rejects.toThrow(
       /connection terminated/
     );
   });

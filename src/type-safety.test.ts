@@ -1,7 +1,7 @@
 /**
  * Tests for type safety improvements:
  * - catch (err: unknown) error narrowing (replaces catch (err: any))
- * - FastifyInstance typing on all 25 route modules
+ * - FastifyInstance typing on all 21 route modules
  * - OAuth callback factory handler compatibility
  *
  * Happy + sad paths with 5W diagnostic context.
@@ -83,7 +83,7 @@ describe('Error narrowing (catch unknown)', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// 2. FastifyInstance typing: all 25 route modules accept typed app
+// 2. FastifyInstance typing: all 21 route modules accept typed app
 // ═══════════════════════════════════════════════════════════════
 
 describe('FastifyInstance typing on route modules', () => {
@@ -100,15 +100,12 @@ describe('FastifyInstance typing on route modules', () => {
     communications: 'registerCommunicationRoutes',
     customers: 'registerCustomerRoutes',
     employees: 'registerEmployeeRoutes',
-    hubspot: 'registerHubSpotRoutes',
-    jobber: 'registerJobberRoutes',
     knowledge: 'registerKnowledgeRoutes',
     mappings: 'registerMappingRoutes',
     provisioning: 'registerProvisioningRoutes',
     reminders: 'registerReminderRoutes',
     resources: 'registerResourceRoutes',
     services: 'registerServiceRoutes',
-    servicetitan: 'registerServiceTitanRoutes',
     shifts: 'registerShiftRoutes',
     skills: 'registerSkillRoutes',
     square: 'registerSquareRoutes',
@@ -122,7 +119,7 @@ describe('FastifyInstance typing on route modules', () => {
     it(`HAPPY: ${mod}.ts exports ${fnName} with typed app param`, async () => {
       // WHO: developer adding routes to the Fastify app
       // WHAT: route registration function must exist and be a function
-      // WHEN: server starts up and registers all 25 route modules
+      // WHEN: server starts up and registers all 21 route modules
       // WHERE: src/routes/${mod}.ts
       // WHY: if the export is missing or misnamed, the server silently skips routes
       const module = await import(`./routes/${mod}`);
@@ -131,13 +128,13 @@ describe('FastifyInstance typing on route modules', () => {
     });
   }
 
-  it('SAD: route count matches expected 24 (catches forgotten registration)', () => {
+  it('SAD: route count matches expected 21 (catches forgotten registration)', () => {
     // WHO: developer adding a new route module
-    // WHAT: total route module count must match the expected 24
+    // WHAT: total route module count must match the expected 21
     // WHEN: new route file added but not registered in index.ts
     // WHERE: src/routes/ directory
     // WHY: if a route module exists but isn't in this list, it won't be tested for typing
-    expect(Object.keys(routeModules).length).toBe(24);
+    expect(Object.keys(routeModules).length).toBe(21);
   });
 });
 
@@ -147,7 +144,7 @@ describe('FastifyInstance typing on route modules', () => {
 
 describe('OAuth callback factory type compatibility', () => {
   it('HAPPY: createOAuthCallbackHandler returns a function', async () => {
-    // WHO: CRM integration routes (jobber, hubspot, square, servicetitan)
+    // WHO: CRM integration routes (Square)
     // WHAT: factory must return an async function usable as Fastify route handler
     // WHEN: route registration at server startup
     // WHERE: src/services/oauthCallbackFactory.ts
@@ -179,7 +176,7 @@ describe('OAuth callback factory type compatibility', () => {
     const redirectedTo: string[] = [];
 
     const handler = createOAuthCallbackHandler(mockPool, mockApp, {
-      provider: 'hubspot',
+      provider: 'square',
       verifyState: () => null,
       exchangeCodeForTokens: vi.fn(),
     });
@@ -194,13 +191,13 @@ describe('OAuth callback factory type compatibility', () => {
     );
 
     expect(redirectedTo.length).toBe(1);
-    expect(redirectedTo[0]).toContain('hubspotError=missing_params');
+    expect(redirectedTo[0]).toContain('squareError=missing_params');
   });
 
   it('SAD: callback handler redirects on OAuth error param', async () => {
     // WHO: user who denied CRM OAuth consent
     // WHAT: CRM provider sends ?error=access_denied, handler must redirect gracefully
-    // WHEN: user clicks "Deny" on HubSpot/Jobber/Square consent screen
+    // WHEN: user clicks "Deny" on the Square consent screen
     // WHERE: createOAuthCallbackHandler return function
     // WHY: without this, the handler would try to exchange code that doesn't exist
     const { createOAuthCallbackHandler } = await import('./services/oauthCallbackFactory');
@@ -210,7 +207,7 @@ describe('OAuth callback factory type compatibility', () => {
     const redirectedTo: string[] = [];
 
     const handler = createOAuthCallbackHandler(mockPool, mockApp, {
-      provider: 'jobber',
+      provider: 'square',
       verifyState: () => null,
       exchangeCodeForTokens: vi.fn(),
     });
@@ -225,7 +222,7 @@ describe('OAuth callback factory type compatibility', () => {
     );
 
     expect(redirectedTo.length).toBe(1);
-    expect(redirectedTo[0]).toContain('jobberError=access_denied');
+    expect(redirectedTo[0]).toContain('squareError=access_denied');
   });
 
   it('SAD: callback handler redirects on invalid state (forged/expired JWT)', async () => {

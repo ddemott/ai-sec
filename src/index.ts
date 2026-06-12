@@ -40,10 +40,7 @@ import { registerAnalyticsRoutes } from './routes/analytics';
 import { registerVocabularyRoutes } from './routes/vocabulary';
 import { registerBillingRoutes, subscriptionGate } from './routes/billing';
 import { registerProvisioningRoutes } from './routes/provisioning';
-import { registerJobberRoutes } from './routes/jobber';
-import { registerHubSpotRoutes } from './routes/hubspot';
 import { registerSquareRoutes } from './routes/square';
-import { registerServiceTitanRoutes } from './routes/servicetitan';
 import { registerAgentToolRoutes } from './routes/agentTools';
 import { registerDemoRoutes } from './routes/demo';
 import { registerVoiceRoutes } from './routes/voice';
@@ -254,10 +251,7 @@ const telnyxProvisioning =
     ? { client: new TelnyxNumbersClient(TELNYX_API_KEY), sipConnectionId: TELNYX_SIP_CONNECTION_ID }
     : null;
 registerProvisioningRoutes(app, pool, telnyxProvisioning);
-registerJobberRoutes(app, pool, withTenantClient);
-registerHubSpotRoutes(app, pool, withTenantClient);
 registerSquareRoutes(app, pool, withTenantClient);
-registerServiceTitanRoutes(app, pool, withTenantClient);
 registerVoiceRoutes(app, pool, withTenantClient);
 registerVersionHistoryRoutes(app, pool, withTenantClient);
 registerCommunicationRoutes(app, pool, withTenantClient);

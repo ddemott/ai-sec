@@ -73,7 +73,7 @@ export function syncCtx(
  *
  * @param pool - Database connection pool
  * @param tenantId - Tenant UUID
- * @param provider - Integration provider name ('jobber', 'hubspot', 'square', 'servicetitan')
+ * @param provider - Integration provider name (e.g. 'square')
  * @param refreshFn - Provider-specific token refresh function
  * @param bufferMs - How far before expiry to trigger refresh (default: 5 minutes)
  * @param logger - Optional structured logger
@@ -169,10 +169,7 @@ export async function getIntegrationTokens(
  */
 export type ChangeSource =
   | 'local'
-  | 'hubspot'
-  | 'jobber'
   | 'square'
-  | 'servicetitan'
   | 'voice_call'
   | 'system'
   | 'google_calendar'
@@ -189,15 +186,15 @@ export type ChangeSource =
  * that should be tracked with a specific source.
  *
  * @param client - Database client (from pool.connect())
- * @param changeSource - The source of the change (e.g., 'hubspot', 'jobber')
+ * @param changeSource - The source of the change (e.g., 'square')
  * @param changedBy - Optional identifier for who/what made the change
  *
  * @example
  * ```typescript
  * const client = await pool.connect();
  * try {
- *   await setSyncContext(client, 'hubspot', 'sync-hubspot');
- *   // All subsequent changes will have change_source='hubspot'
+ *   await setSyncContext(client, 'square', 'sync-square');
+ *   // All subsequent changes will have change_source='square'
  *   await client.query('UPDATE customers SET name = $1 WHERE customer_id = $2', [name, id]);
  * } finally {
  *   await clearSyncContext(client);
@@ -238,7 +235,7 @@ export async function clearSyncContext(client: {
  *
  * @example
  * ```typescript
- * await withSyncContext(client, 'hubspot', 'sync-hubspot', async () => {
+ * await withSyncContext(client, 'square', 'sync-square', async () => {
  *   await client.query('INSERT INTO customers ...');
  * });
  * ```

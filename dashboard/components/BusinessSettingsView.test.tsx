@@ -99,25 +99,7 @@ vi.mock('../lib/api', () => ({
         forDate: (...args: unknown[]) => mockGetShiftSchedule(...args),
       },
     },
-    jobber: {
-      getSettings: vi.fn(),
-      getAuthUrl: vi.fn(),
-      disconnect: vi.fn(),
-      triggerSync: vi.fn(),
-    },
-    hubspot: {
-      getSettings: vi.fn(),
-      getAuthUrl: vi.fn(),
-      disconnect: vi.fn(),
-      triggerSync: vi.fn(),
-    },
     square: {
-      getSettings: vi.fn(),
-      getAuthUrl: vi.fn(),
-      disconnect: vi.fn(),
-      triggerSync: vi.fn(),
-    },
-    servicetitan: {
       getSettings: vi.fn(),
       getAuthUrl: vi.fn(),
       disconnect: vi.fn(),
@@ -258,10 +240,7 @@ describe('BusinessSettingsView', () => {
     test('displays CRM integration cards', async () => {
       render(<BusinessSettingsView />);
       await waitFor(() => {
-        expect(screen.getByTestId('crm-card-Jobber')).toBeInTheDocument();
-        expect(screen.getByTestId('crm-card-HubSpot')).toBeInTheDocument();
         expect(screen.getByTestId('crm-card-Square')).toBeInTheDocument();
-        expect(screen.getByTestId('crm-card-ServiceTitan')).toBeInTheDocument();
       });
       // WHO: users | WHAT: CRM integration options
       // WHEN: viewing settings | WHERE: CRM section

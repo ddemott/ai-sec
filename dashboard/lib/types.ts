@@ -203,18 +203,8 @@ export interface CalendarSettings {
   updated_at?: string;
 }
 
-export interface JobberSettings {
-  tenant_id: string;
-  provider: 'jobber';
-  is_active: boolean;
-  last_sync_at?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 /**
- * Sync-status shape returned by /jobber/sync/status, /hubspot/sync/status,
- * /square/sync/status, and /servicetitan/sync/status. Backend builds it
+ * Sync-status shape returned by /square/sync/status. Backend builds it
  * via `getCrmSyncStatus()` in src/services/crmSyncStatus.ts.
  */
 export interface CrmSyncStatus {
@@ -224,27 +214,9 @@ export interface CrmSyncStatus {
   total_mapped: { customers: number; appointments: number };
 }
 
-export interface HubSpotSettings {
-  tenant_id: string;
-  provider: 'hubspot';
-  is_active: boolean;
-  last_sync_at?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 export interface SquareSettings {
   tenant_id: string;
   provider: 'square';
-  is_active: boolean;
-  last_sync_at?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export interface ServiceTitanSettings {
-  tenant_id: string;
-  provider: 'servicetitan';
   is_active: boolean;
   last_sync_at?: string;
   created_at?: string;
@@ -352,10 +324,7 @@ export type ChangeType = 'create' | 'update' | 'delete' | 'restore' | 'sync' | '
 
 export type ChangeSource =
   | 'local'
-  | 'hubspot'
-  | 'jobber'
   | 'square'
-  | 'servicetitan'
   | 'voice_call'
   | 'system'
   | 'api';

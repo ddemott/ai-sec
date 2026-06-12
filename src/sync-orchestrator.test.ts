@@ -12,27 +12,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { Pool } from 'pg';
 
-// Mock all 5 provider modules so the orchestrator's `.catch()` never runs
+// Mock all provider modules so the orchestrator's `.catch()` never runs
 // against a real DB pool. Each fn returns Promise<void> — the orchestrator
 // only needs them to be thenable.
 vi.mock('./services/calendarSync', () => ({
   syncAppointmentToCalendar: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('./services/crm/jobberSync', () => ({
-  syncAppointmentToJobber: vi.fn().mockResolvedValue(undefined),
-  syncCustomerToJobber: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock('./services/crm/hubspotSync', () => ({
-  syncAppointmentToHubSpot: vi.fn().mockResolvedValue(undefined),
-  syncCustomerToHubSpot: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock('./services/crm/squareSync', () => ({
   syncAppointmentToSquare: vi.fn().mockResolvedValue(undefined),
   syncCustomerToSquare: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock('./services/crm/servicetitanSync', () => ({
-  syncAppointmentToServiceTitan: vi.fn().mockResolvedValue(undefined),
-  syncCustomerToServiceTitan: vi.fn().mockResolvedValue(undefined),
 }));
 
 import {
@@ -69,10 +57,11 @@ describe('syncOrchestrator recorder', () => {
     clearSyncRecorder();
   });
 
-  it('HAPPY: enabled → records 5 appointment events on syncAppointmentToAll', () => {
+  it('HAPPY: enabled → records 2 appointment events on syncAppointmentToAll', () => {
     // WHO: backend running with SYNC_TEST_RECORDER=1 (Playwright e2e mode)
-    // WHAT: orchestrator dispatches to all 5 providers — each appears in
-    //       the recorder with the right tenantId/entityId/action
+    // WHAT: orchestrator dispatches to all providers (calendar + Square) —
+    //       each appears in the recorder with the right
+    //       tenantId/entityId/action
     // WHEN: test boot sets the env, then a route triggers an appointment
     //       create (or the test harness calls the orchestrator directly)
     // WHERE: in-memory recorder buffer in syncOrchestrator.ts
@@ -84,14 +73,8 @@ describe('syncOrchestrator recorder', () => {
     syncAppointmentToAll(FAKE_POOL, TENANT_ID, APPT_ID, 'create');
 
     const events = getSyncRecorder();
-    expect(events).toHaveLength(5);
-    expect(events.map((e: SyncEvent) => e.provider).sort()).toEqual([
-      'calendar',
-      'hubspot',
-      'jobber',
-      'servicetitan',
-      'square',
-    ]);
+    expect(events).toHaveLength(2);
+    expect(events.map((e: SyncEvent) => e.provider).sort()).toEqual(['calendar', 'square']);
     for (const e of events) {
       expect(e.entity).toBe('appointment');
       expect(e.action).toBe('create');
@@ -102,25 +85,20 @@ describe('syncOrchestrator recorder', () => {
     }
   });
 
-  it('HAPPY: enabled → records 4 customer events on syncCustomerToAll (no calendar)', () => {
+  it('HAPPY: enabled → records 1 customer event on syncCustomerToAll (no calendar)', () => {
     // WHO: orchestrator dispatched a customer-create
-    // WHAT: only the 4 CRMs receive customer events — calendars don't
-    //       store contacts, so the customer dispatch list is shorter
+    // WHAT: only the CRMs (Square) receive customer events — calendars
+    //       don't store contacts, so the customer dispatch list is shorter
     // WHEN: test mode, route calls syncCustomerToAll
     // WHY: regression-pin the contract between routes and providers —
     //       if calendar is ever added to syncCustomerToAll the recorder
-    //       count goes 4→5 and this test fails loudly
+    //       count grows and this test fails loudly
     process.env.SYNC_TEST_RECORDER = '1';
     syncCustomerToAll(FAKE_POOL, TENANT_ID, CUST_ID, 'update');
 
     const events = getSyncRecorder();
-    expect(events).toHaveLength(4);
-    expect(events.map((e: SyncEvent) => e.provider).sort()).toEqual([
-      'hubspot',
-      'jobber',
-      'servicetitan',
-      'square',
-    ]);
+    expect(events).toHaveLength(1);
+    expect(events.map((e: SyncEvent) => e.provider).sort()).toEqual(['square']);
     for (const e of events) {
       expect(e.entity).toBe('customer');
       expect(e.action).toBe('update');
@@ -160,14 +138,14 @@ describe('syncOrchestrator recorder', () => {
     //       and "5 events" creeps to "10, 15, 20...".
     process.env.SYNC_TEST_RECORDER = '1';
     syncAppointmentToAll(FAKE_POOL, TENANT_ID, APPT_ID, 'create');
-    expect(getSyncRecorder()).toHaveLength(5);
+    expect(getSyncRecorder()).toHaveLength(2);
 
     clearSyncRecorder();
     expect(getSyncRecorder()).toHaveLength(0);
 
     // Recorder still works after clearing (not a destructive operation)
     syncAppointmentToAll(FAKE_POOL, TENANT_ID, APPT_ID, 'update');
-    expect(getSyncRecorder()).toHaveLength(5);
+    expect(getSyncRecorder()).toHaveLength(2);
   });
 
   it('HAPPY: ring-buffer caps at 500 events, drops oldest', () => {
@@ -176,8 +154,8 @@ describe('syncOrchestrator recorder', () => {
     //       you only ever see recent events, so the e2e must clear
     //       before the assertion (which it does, see above).
     process.env.SYNC_TEST_RECORDER = '1';
-    // 120 appointment dispatches × 5 providers each = 600 events
-    for (let i = 0; i < 120; i++) {
+    // 300 appointment dispatches × 2 providers each = 600 events
+    for (let i = 0; i < 300; i++) {
       syncAppointmentToAll(FAKE_POOL, TENANT_ID, APPT_ID, 'create');
     }
     const events = getSyncRecorder();
@@ -186,7 +164,7 @@ describe('syncOrchestrator recorder', () => {
 
   it('HAPPY: events appear in dispatch order across multiple calls', () => {
     // WHY: the e2e wants to assert "the appointment-create that just
-    //       happened produced 5 events" — order matters because we
+    //       happened produced its events" — order matters because we
     //       slice by timestamp window. Pin that the recorder is
     //       append-only (FIFO), not a set/reorder.
     process.env.SYNC_TEST_RECORDER = '1';
@@ -194,9 +172,9 @@ describe('syncOrchestrator recorder', () => {
     syncCustomerToAll(FAKE_POOL, TENANT_ID, CUST_ID, 'create');
 
     const events = getSyncRecorder();
-    expect(events).toHaveLength(9);
-    // First 5 are appointment events, next 4 are customer events
-    expect(events.slice(0, 5).every((e) => e.entity === 'appointment')).toBe(true);
-    expect(events.slice(5, 9).every((e) => e.entity === 'customer')).toBe(true);
+    expect(events).toHaveLength(3);
+    // First 2 are appointment events, next 1 is the customer event
+    expect(events.slice(0, 2).every((e) => e.entity === 'appointment')).toBe(true);
+    expect(events.slice(2, 3).every((e) => e.entity === 'customer')).toBe(true);
   });
 });
