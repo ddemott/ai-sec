@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { llm } from '@livekit/agents';
 import { buildTools } from './tools.js';
+import { CallOutcomeTracker } from './callOutcome.js';
 import type { ToolsClient, ToolResponse } from './toolsClient.js';
 import type { SessionContext } from './sessionContext.js';
 
@@ -202,6 +203,71 @@ describe('book_appointment', () => {
     const parsed = JSON.parse(result);
     expect(parsed.error).toBe('That time slot is already booked.');
     expect(parsed.error_code).toBe('TIMESLOT_OCCUPIED');
+  });
+});
+
+describe('CallOutcomeTracker wiring (call -> appointment link + outcome)', () => {
+  // WHO: the booking/transfer tools recording what happened for session-end.
+  // WHAT: a successful booking records outcome='booked' + the appointment_id;
+  //        a successful transfer records 'transferred'; failures record nothing.
+  // WHEN: during the call, read by the shutdown hook.
+  // WHERE: buildTools 4th param -> tools.ts extractAppointmentId/recordBooking.
+  // WHY: this is the exact link that was hardcoded null before — the harness
+  //        (HTTP-only) can't prove the AGENT sends it, so it's pinned here.
+  it('book_appointment success records outcome=booked + appointment_id', async () => {
+    const tracker = new CallOutcomeTracker();
+    const { client } = makeClient([
+      { ok: true, result: { success: true, appointment_id: 'appt-xyz' } },
+    ]);
+    const tools = buildTools(makeCtx(), client, undefined, tracker);
+    await exec(tools.book_appointment, {
+      resource_id: RESOURCE_ID,
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+      phone: '+15559998888',
+    });
+    expect(tracker.result()).toEqual({ outcome: 'booked', appointmentId: 'appt-xyz' });
+  });
+
+  it('book_with_scheduling success records the appointment_id', async () => {
+    const tracker = new CallOutcomeTracker();
+    const { client } = makeClient([
+      { ok: true, result: { success: true, appointment_id: 'appt-sched' } },
+    ]);
+    const tools = buildTools(makeCtx(), client, undefined, tracker);
+    await exec(tools.book_with_scheduling, {
+      service_type: 'Oil Change',
+      window_from: '2026-05-01T13:00:00Z',
+      window_to: '2026-05-08T13:00:00Z',
+      phone: '+15559998888',
+    });
+    expect(tracker.result().appointmentId).toBe('appt-sched');
+  });
+
+  it('a failed booking records NOTHING (no appointment_id present)', async () => {
+    const tracker = new CallOutcomeTracker();
+    const { client } = makeClient([{ ok: false, error: 'taken', errorCode: 'TIMESLOT_OCCUPIED' }]);
+    const tools = buildTools(makeCtx(), client, undefined, tracker);
+    await exec(tools.book_appointment, {
+      resource_id: RESOURCE_ID,
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+      phone: '+15559998888',
+    });
+    expect(tracker.result()).toEqual({ outcome: null, appointmentId: null });
+  });
+
+  it('a successful transfer records outcome=transferred', async () => {
+    const tracker = new CallOutcomeTracker();
+    const { client } = makeClient([]);
+    const tools = buildTools(
+      makeCtx(),
+      client,
+      { forwardPhone: '+16085551212', execute: async () => ({ ok: true }) },
+      tracker
+    );
+    await exec(tools.transfer_call, {});
+    expect(tracker.result()).toEqual({ outcome: 'transferred', appointmentId: null });
   });
 });
 

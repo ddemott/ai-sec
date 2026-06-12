@@ -2163,6 +2163,55 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     ]);
   });
 
+  it('HAPPY: end forwards outcome, summary, and appointment_id (params 4,6,7)', async () => {
+    // WHO: the agent shutdown callback after a call that booked an appointment.
+    // WHAT: outcome='booked', a post-call summary, and the booked appointment_id
+    //        land in end_voice_session params 4, 6, 7 — closing the call->
+    //        appointment back-link the Calls tab deep-links on.
+    // WHEN: once at teardown, after the booking tool recorded the id.
+    // WHERE: /agent-tools/voice-session-end → end_voice_session($1..$7).
+    // WHY: these three were hardcoded null before (Calls tab was duration-only);
+    //       this pins that a real payload reaches the RPC in the right slots.
+    const apptId = '11111111-2222-4333-8444-555555555555';
+    const summary = 'Caller booked an oil change for Thursday.';
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 120,
+      outcome: 'booked',
+      transcript: 'Caller: oil change please.',
+      summary,
+      appointment_id: apptId,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(queries[0].params).toEqual([
+      TENANT_ID,
+      'call-abc-123',
+      120,
+      'booked',
+      'Caller: oil change please.',
+      summary,
+      apptId,
+    ]);
+  });
+
+  it('SAD: end rejects a malformed appointment_id before any DB call', async () => {
+    // WHO: a buggy/hostile caller sending a non-UUID appointment_id.
+    // WHAT: appointment_id not a UUID → Zod rejects → success:false, zero queries.
+    // WHY: the RPC casts param 7 to ::uuid; an invalid id would 500 the RPC and
+    //       lose the whole session-end write. Validating at the edge keeps the
+    //       duration/transcript write safe and the error a clean 400-shape.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 5,
+      appointment_id: 'not-a-uuid',
+    });
+    expectValidationFailure(res, queries);
+  });
+
   it('SAD: end rejects an over-length transcript before any DB call', async () => {
     // WHO: a pathological / abusive call producing a multi-MB transcript.
     // WHAT: transcript > 100k chars → Zod max(100_000) rejects → success:false,

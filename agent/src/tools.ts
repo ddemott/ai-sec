@@ -20,6 +20,14 @@ import { llm } from '@livekit/agents';
 import type { SessionContext } from './sessionContext.js';
 import type { ToolResponse, ToolsClient } from './toolsClient.js';
 import type { TransferResult } from './transferClient.js';
+import type { CallOutcomeTracker } from './callOutcome.js';
+
+/** Pull a UUID appointment_id out of a successful booking response, if present. */
+function extractAppointmentId(res: ToolResponse): string | null {
+  if (!res.ok || typeof res.result !== 'object' || res.result === null) return null;
+  const id = (res.result as { appointment_id?: unknown }).appointment_id;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
 
 /**
  * Live-transfer capability handed to buildTools. `forwardPhone` is the
@@ -48,7 +56,8 @@ function formatResponse(res: ToolResponse): string {
 export function buildTools(
   ctx: SessionContext,
   client: ToolsClient,
-  transfer?: TransferCapability
+  transfer?: TransferCapability,
+  outcome?: CallOutcomeTracker
 ): llm.ToolContext {
   return {
     get_customer_context: llm.tool({
@@ -223,7 +232,7 @@ export function buildTools(
         employee_id?: string;
         description?: string;
       }) => {
-        const res = await client.call('/agent-tools/book-appointment', {
+        const bookRes = await client.call('/agent-tools/book-appointment', {
           tenant_id: ctx.tenantId,
           resource_id: args.resource_id,
           start_time: args.start_time,
@@ -234,7 +243,9 @@ export function buildTools(
           description: args.description ?? 'Booking via SecretaryHQ',
           call_id: ctx.callId ?? '',
         });
-        return formatResponse(res);
+        const bookedId = extractAppointmentId(bookRes);
+        if (bookedId) outcome?.recordBooking(bookedId);
+        return formatResponse(bookRes);
       },
     }),
 
@@ -282,6 +293,8 @@ export function buildTools(
           },
           window: { from: args.window_from, to: args.window_to },
         });
+        const bookedId = extractAppointmentId(res);
+        if (bookedId) outcome?.recordBooking(bookedId);
         return formatResponse(res);
       },
     }),
@@ -415,6 +428,7 @@ export function buildTools(
         }
         const result = await transfer.execute(transfer.forwardPhone);
         if (result.ok) {
+          outcome?.recordTransfer();
           return 'Transfer started — the caller is being connected to a team member now. Do not keep talking; the call is leaving this assistant.';
         }
         if (result.reason === 'not_configured') {

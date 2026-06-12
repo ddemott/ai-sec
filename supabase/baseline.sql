@@ -2,9 +2,10 @@
 -- PostgreSQL database dump
 --
 
+\restrict YKjfsfCH3I1qu6XmwdQkVG9dbFeaYI9iJfbKiZ6FKE3sWjc7BKbnmnLaQjT4tzW
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
--- Dumped by pg_dump version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
+-- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -21,19 +22,42 @@ SET row_security = off;
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA IF NOT EXISTS public;
+-- *not* creating schema, since initdb creates it
+
 
 --
--- Extensions used by the schema. Schema-scoped — DROP SCHEMA public
--- CASCADE drops these too, so the rebuild path must reinstall them
--- before any type they provide (vector, btree_gist) is referenced.
--- Manually added 2026-05-18 — pg_dump --schema-only doesn't capture
--- extension installations because they're owned by the database, not
--- the schema, but the migration history shows the project requires
--- them inside public.
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
 --
-CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
+
+COMMENT ON SCHEMA public IS '';
+
+
+--
+-- Name: btree_gist; Type: EXTENSION; Schema: -; Owner: -
+--
+
 CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION btree_gist; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION btree_gist IS 'support for indexing common datatypes in GiST';
+
+
+--
+-- Name: vector; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION vector; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION vector IS 'vector data type and ivfflat and hnsw access methods';
 
 
 --
@@ -2908,8 +2932,14 @@ CREATE TABLE public.tenants (
     telnyx_phone_number_id text,
     sms_enabled boolean DEFAULT true NOT NULL,
     email_enabled boolean DEFAULT true NOT NULL,
+    is_demo boolean DEFAULT false NOT NULL,
+    demo_expires_at timestamp with time zone,
     save_preferences_enabled boolean DEFAULT false NOT NULL,
-    preferences_instructions text
+    preferences_instructions text,
+    tts_voice text,
+    tts_speed real,
+    tts_soft boolean,
+    forward_phone text
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -2955,6 +2985,34 @@ COMMENT ON COLUMN public.tenants.save_preferences_enabled IS 'Opt-in gate for AI
 --
 
 COMMENT ON COLUMN public.tenants.preferences_instructions IS 'Owner-authored guidance injected into the AI system prompt: what customer preferences to save, why, when, and how to use them. NULL = use the agent built-in default guidance.';
+
+
+--
+-- Name: COLUMN tenants.tts_voice; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.tts_voice IS 'xAI Grok TTS voice_id (eve/ara/rex/sal/leo or a custom clone id). NULL = agent XAI_TTS_VOICE default.';
+
+
+--
+-- Name: COLUMN tenants.tts_speed; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.tts_speed IS 'Grok TTS speech pace multiplier 0.7–1.5. NULL = agent XAI_TTS_SPEED default.';
+
+
+--
+-- Name: COLUMN tenants.tts_soft; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.tts_soft IS 'Wrap TTS text in xAI <soft> prosody tag for a softer delivery. NULL = agent XAI_TTS_SOFT default.';
+
+
+--
+-- Name: COLUMN tenants.forward_phone; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.forward_phone IS 'E.164 PSTN number the agent cold-transfers live calls to (owner cell). NULL = transfer disabled, agent takes a message.';
 
 
 --
@@ -3171,6 +3229,14 @@ ALTER TABLE ONLY public.customers
 
 
 --
+-- Name: employee_schedule employee_schedule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_schedule
+    ADD CONSTRAINT employee_schedule_pkey PRIMARY KEY (tenant_id, employee_id, shift_date);
+
+
+--
 -- Name: employees employees_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3288,14 +3354,6 @@ ALTER TABLE ONLY public.service_resource
 
 ALTER TABLE ONLY public.services
     ADD CONSTRAINT services_pkey PRIMARY KEY (service_id);
-
-
---
--- Name: employee_schedule employee_schedule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.employee_schedule
-    ADD CONSTRAINT employee_schedule_pkey PRIMARY KEY (tenant_id, employee_id, shift_date);
 
 
 --
@@ -3702,6 +3760,13 @@ CREATE INDEX idx_services_tenant_id ON public.services USING btree (tenant_id);
 --
 
 CREATE INDEX idx_soft_reservations_expires_at ON public.soft_reservations USING btree (expires_at);
+
+
+--
+-- Name: idx_tenants_demo_expires; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tenants_demo_expires ON public.tenants USING btree (demo_expires_at) WHERE (is_demo = true);
 
 
 --
@@ -4763,57 +4828,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
+\unrestrict YKjfsfCH3I1qu6XmwdQkVG9dbFeaYI9iJfbKiZ6FKE3sWjc7BKbnmnLaQjT4tzW
 
-
-
---
--- Configuration data: business_templates.
--- Schema-essential rows seeded by historical migrations (notably
--- 20260228000006, 20260317000002, 20260321000001). Captured here so
--- the baseline path includes them — without these, vocabulary
--- overrides + template-driven setup-wizard flows fall back to
--- generic "Employee"/"Resource" labels.
--- Source-of-truth: this block. If you change template content here,
--- ALSO update any migration that re-inserts the same row (search
--- for INSERT INTO business_templates).
---
-INSERT INTO public.business_templates VALUES ('auto-shop', 'Auto Repair Shop', 'You are a professional service advisor for an auto repair shop called {{business_name}}. Your goal is to schedule repairs and maintenance. Collect the customer''s name, vehicle year/make/model, and the issue they are experiencing.', 'Thanks for calling the auto shop! How can we help with your vehicle today?', 'pNInz6ovDWjNkhCspfAY', 'Service Bay 1', 'Standard repair and maintenance bay', 'elevenlabs', 'Josh', 'Bay', 'Bays', 'Mechanic', 'Mechanics', 'Appointment', '{Diagnostics,Inspections,"Basic Service",Brakes,"Suspension & Steering","Engine Repair","A/C & Heating"}', 'Auto & Vehicle', 1);
-INSERT INTO public.business_templates VALUES ('mobile-tire', 'Mobile Tire Shop', 'You are a professional secretary for a mobile tire repair shop called {{business_name}}. Your goal is to help customers book appointments for tire services. Collect their name, vehicle info, and tire issue. Check availability before confirming.', 'Thanks for calling! This is your mobile tire assistant. How can I help you today?', 'ba124806-6962-4354-94a0-7607775952f4', 'Service Truck 1', 'Main mobile unit for tire repairs', 'cartesia', 'Default Male', 'Truck', 'Trucks', 'Technician', 'Technicians', 'Appointment', '{"Tire Rotation","Flat Tire Repair","Mobile Tire Install","Tire Balancing"}', 'Auto & Vehicle', 1);
-INSERT INTO public.business_templates VALUES ('salon', 'Hair Salon', 'You are a professional receptionist for a hair salon called {{business_name}}. Your goal is to book appointments for haircuts, coloring, and styling. Collect the customer''s name and the specific service they need. Check stylist availability.', 'Welcome to the salon! This is your booking assistant. Would you like to schedule a haircut or coloring today?', '21m00Tcm4llvDq8ikWAM', 'Styling Station 1', 'Main chair for hair services', 'elevenlabs', 'Rachel', 'Chair', 'Chairs', 'Stylist', 'Stylists', 'Appointment', '{Haircut,Coloring,Blowout,"Deep Conditioning",Highlights}', 'Beauty & Personal Care', 2);
-INSERT INTO public.business_templates VALUES ('barbershop', 'Barbershop', 'You are a professional receptionist for a barbershop called {{business_name}}. Your goal is to book appointments for haircuts, shaves, and beard trims. Collect the customer''s name and preferred service.', 'Thanks for calling! Would you like to book a haircut or shave?', 'pNInz6ovDWjNkhCspfAY', 'Chair 1', 'Main barber chair', NULL, NULL, 'Chair', 'Chairs', 'Barber', 'Barbers', 'Appointment', '{Haircut,"Beard Trim","Hot Shave","Kids Cut"}', 'Beauty & Personal Care', 2);
-INSERT INTO public.business_templates VALUES ('nail-salon', 'Nail Salon', 'You are a professional receptionist for a nail salon called {{business_name}}. Your goal is to book appointments for manicures, pedicures, and nail treatments. Collect the customer''s name and preferred service.', 'Welcome! Would you like to schedule a manicure or pedicure?', '21m00Tcm4llvDq8ikWAM', 'Station 1', 'Nail technician station', NULL, NULL, 'Station', 'Stations', 'Nail Tech', 'Nail Techs', 'Appointment', '{Manicure,Pedicure,"Gel Nails","Acrylic Full Set","Nail Art"}', 'Beauty & Personal Care', 2);
-INSERT INTO public.business_templates VALUES ('spa', 'Spa & Wellness', 'You are a professional receptionist for a spa called {{business_name}}. Your goal is to book sessions for massages, facials, and body treatments. Collect the customer''s name and preferred treatment.', 'Welcome to the spa! How can we help you relax today?', '21m00Tcm4llvDq8ikWAM', 'Treatment Room 1', 'Main treatment room', NULL, NULL, 'Treatment Room', 'Treatment Rooms', 'Therapist', 'Therapists', 'Session', '{"Swedish Massage","Deep Tissue Massage",Facial,"Body Wrap","Hot Stone Therapy"}', 'Beauty & Personal Care', 2);
-INSERT INTO public.business_templates VALUES ('plumber', 'Plumbing Service', 'You are a professional dispatcher for a plumbing company called {{business_name}}. Your goal is to schedule service calls for leak repairs, drain cleaning, and installations. Collect the customer''s name, address, and a description of the issue.', 'Thanks for calling! What plumbing issue can we help you with?', 'pNInz6ovDWjNkhCspfAY', 'Van 1', 'Main service van', NULL, NULL, 'Van', 'Vans', 'Plumber', 'Plumbers', 'Service Call', '{"Leak Repair","Drain Cleaning","Toilet Install","Water Heater Service","Pipe Inspection"}', 'Home Services', 3);
-INSERT INTO public.business_templates VALUES ('electrician', 'Electrical Service', 'You are a professional dispatcher for an electrical company called {{business_name}}. Your goal is to schedule service calls for wiring, panel upgrades, and inspections. Collect the customer''s name, address, and a description of the issue.', 'Thanks for calling! What electrical work do you need done?', 'pNInz6ovDWjNkhCspfAY', 'Van 1', 'Main service van', NULL, NULL, 'Van', 'Vans', 'Electrician', 'Electricians', 'Service Call', '{"Outlet Install","Panel Upgrade","Wiring Repair","Lighting Install","Safety Inspection"}', 'Home Services', 3);
-INSERT INTO public.business_templates VALUES ('hvac', 'HVAC Service', 'You are a professional dispatcher for an HVAC company called {{business_name}}. Your goal is to schedule service calls for AC repair, furnace tune-ups, and installations. Collect the customer''s name, address, and a description of the issue.', 'Thanks for calling! Is this for heating, cooling, or a general HVAC concern?', 'pNInz6ovDWjNkhCspfAY', 'Van 1', 'Main service van', NULL, NULL, 'Van', 'Vans', 'Technician', 'Technicians', 'Service Call', '{"AC Repair","Furnace Tune-up","Duct Cleaning","Thermostat Install","Full System Install"}', 'Home Services', 3);
-INSERT INTO public.business_templates VALUES ('pest-control', 'Pest Control', 'You are a professional dispatcher for a pest control company called {{business_name}}. Your goal is to schedule inspections and treatments. Collect the customer''s name, address, and the type of pest issue.', 'Thanks for calling! What kind of pest issue are you dealing with?', 'pNInz6ovDWjNkhCspfAY', 'Van 1', 'Main service van', NULL, NULL, 'Van', 'Vans', 'Technician', 'Technicians', 'Service Call', '{"Initial Inspection","Interior Treatment","Exterior Treatment","Rodent Control","Termite Inspection"}', 'Home Services', 3);
-INSERT INTO public.business_templates VALUES ('cleaning', 'Cleaning Service', 'You are a professional receptionist for a cleaning company called {{business_name}}. Your goal is to schedule cleanings for homes and offices. Collect the customer''s name, address, property size, and preferred date.', 'Thanks for calling! Would you like to schedule a cleaning?', '21m00Tcm4llvDq8ikWAM', 'Team A', 'Cleaning crew', NULL, NULL, 'Team', 'Teams', 'Cleaner', 'Cleaners', 'Booking', '{"Regular Cleaning","Deep Clean","Move-in/Move-out Clean","Office Cleaning","Window Cleaning"}', 'Home Services', 3);
-INSERT INTO public.business_templates VALUES ('landscaping', 'Landscaping Service', 'You are a professional dispatcher for a landscaping company called {{business_name}}. Your goal is to schedule lawn care, trimming, and seasonal cleanup jobs. Collect the customer''s name, address, and what work they need.', 'Thanks for calling! What landscaping work can we help with?', 'pNInz6ovDWjNkhCspfAY', 'Crew A', 'Landscaping crew', NULL, NULL, 'Crew', 'Crews', 'Crew Lead', 'Crew Leads', 'Job', '{"Lawn Mowing","Hedge Trimming","Leaf Removal",Mulching,"Spring Cleanup"}', 'Home Services', 3);
-INSERT INTO public.business_templates VALUES ('personal-trainer', 'Personal Training', 'You are a professional receptionist for a personal training studio called {{business_name}}. Your goal is to book training sessions and assessments. Collect the client''s name, fitness goals, and preferred schedule.', 'Thanks for calling! Are you looking to book a training session?', 'pNInz6ovDWjNkhCspfAY', 'Studio 1', 'Training studio', NULL, NULL, 'Studio', 'Studios', 'Trainer', 'Trainers', 'Session', '{"1-on-1 Session","Fitness Assessment","Group Training","Nutrition Consult"}', 'Fitness & Wellness', 4);
-INSERT INTO public.business_templates VALUES ('yoga-studio', 'Yoga Studio', 'You are a professional receptionist for a yoga studio called {{business_name}}. Your goal is to help students book classes and workshops. Collect the student''s name and preferred class type.', 'Namaste! Would you like to book a yoga class?', '21m00Tcm4llvDq8ikWAM', 'Studio 1', 'Main yoga studio', NULL, NULL, 'Studio', 'Studios', 'Instructor', 'Instructors', 'Class', '{"Vinyasa Flow","Hot Yoga","Beginner Basics",Meditation,"Private Session"}', 'Fitness & Wellness', 4);
-INSERT INTO public.business_templates VALUES ('tax-prep', 'Tax Preparation', 'You are a professional receptionist for a tax preparation office called {{business_name}}. Your goal is to schedule tax filing appointments and consultations. Collect the client''s name and what tax services they need.', 'Thanks for calling! Are you looking to schedule a tax appointment?', 'ErXwSzhRj4IW3zYCt9a2', 'Office 1', 'Tax preparation office', NULL, NULL, 'Office', 'Offices', 'Preparer', 'Preparers', 'Appointment', '{"Individual Tax Filing","Business Tax Filing","Tax Planning Consult","Audit Support"}', 'Professional Services', 5);
-INSERT INTO public.business_templates VALUES ('tutoring', 'Tutoring Service', 'You are a professional receptionist for a tutoring center called {{business_name}}. Your goal is to schedule tutoring sessions. Collect the student''s name, subject, grade level, and preferred schedule.', 'Thanks for calling! What subject does the student need help with?', '21m00Tcm4llvDq8ikWAM', 'Room 1', 'Tutoring room', NULL, NULL, 'Room', 'Rooms', 'Tutor', 'Tutors', 'Session', '{"Math Tutoring","Science Tutoring","SAT Prep","Essay Review","Study Skills Coaching"}', 'Professional Services', 5);
-INSERT INTO public.business_templates VALUES ('photography', 'Photography Studio', 'You are a professional receptionist for a photography studio called {{business_name}}. Your goal is to book photo sessions for portraits, events, and headshots. Collect the client''s name and the type of session they want.', 'Thanks for calling! What type of photo session are you interested in?', '21m00Tcm4llvDq8ikWAM', 'Studio 1', 'Main photography studio', NULL, NULL, 'Studio', 'Studios', 'Photographer', 'Photographers', 'Session', '{Headshots,"Family Portrait","Event Photography","Product Photography","Mini Session"}', 'Professional Services', 5);
-INSERT INTO public.business_templates VALUES ('car-detailing', 'Car Detailing', 'You are a professional receptionist for a car detailing shop called {{business_name}}. Help customers book detailing packages. Collect their name, vehicle make/model, and desired service level.', 'Thanks for calling! Would you like to schedule a detail?', 'pNInz6ovDWjNkhCspfAY', 'Detail Bay 1', 'Main detailing bay', NULL, NULL, 'Detail Bay', 'Detail Bays', 'Detailer', 'Detailers', 'Appointment', '{"Full Detail","Interior Only","Exterior Wash & Wax","Ceramic Coating","Paint Correction"}', 'Auto & Vehicle', 1);
-INSERT INTO public.business_templates VALUES ('body-shop', 'Body & Paint Shop', 'You are a professional receptionist for an auto body shop called {{business_name}}. Help customers schedule estimates and repairs for body damage, paint, and collision work. Collect their name, vehicle info, and damage description.', 'Thanks for calling! Do you need an estimate or schedule a repair?', 'pNInz6ovDWjNkhCspfAY', 'Paint Booth 1', 'Main paint and body bay', NULL, NULL, 'Booth', 'Booths', 'Body Tech', 'Body Techs', 'Appointment', '{"Collision Repair","Paint Job","Dent Removal","Bumper Repair","Insurance Estimate"}', 'Auto & Vehicle', 1);
-INSERT INTO public.business_templates VALUES ('oil-change', 'Quick Lube / Oil Change', 'You are a professional receptionist for a quick lube shop called {{business_name}}. Help customers schedule oil changes and fluid services. Collect their name, vehicle make/model, and preferred oil type.', 'Thanks for calling! Ready to schedule an oil change?', 'pNInz6ovDWjNkhCspfAY', 'Lane 1', 'Quick service lane', NULL, NULL, 'Lane', 'Lanes', 'Lube Tech', 'Lube Techs', 'Appointment', '{"Conventional Oil Change","Synthetic Oil Change","Transmission Fluid","Coolant Flush"}', 'Auto & Vehicle', 1);
-INSERT INTO public.business_templates VALUES ('car-wash', 'Car Wash', 'You are a professional receptionist for a car wash called {{business_name}}. Help customers book wash packages and memberships. Collect their name and vehicle type.', 'Welcome! Would you like to book a wash or ask about memberships?', 'pNInz6ovDWjNkhCspfAY', 'Wash Bay 1', 'Automated or hand wash bay', NULL, NULL, 'Wash Bay', 'Wash Bays', 'Washer', 'Washers', 'Appointment', '{"Basic Wash","Premium Wash","Full Detail Wash","Monthly Membership"}', 'Auto & Vehicle', 1);
-INSERT INTO public.business_templates VALUES ('med-spa', 'Med Spa / Aesthetics', 'You are a professional receptionist for a medical spa called {{business_name}}. Help clients book aesthetic treatments like facials, injectables, and laser services. Collect their name and desired treatment.', 'Welcome! Are you looking to book a treatment or consultation?', '21m00Tcm4llvDq8ikWAM', 'Treatment Room 1', 'Main treatment room', NULL, NULL, 'Treatment Room', 'Treatment Rooms', 'Aesthetician', 'Aestheticians', 'Appointment', '{Botox,Filler,"Chemical Peel","Laser Treatment",Microneedling}', 'Beauty & Personal Care', 2);
-INSERT INTO public.business_templates VALUES ('lash-studio', 'Lash & Brow Studio', 'You are a professional receptionist for a lash and brow studio called {{business_name}}. Help clients book lash extensions, lifts, brow shaping, and tinting. Collect their name and desired service.', 'Hi there! Would you like to book a lash or brow appointment?', '21m00Tcm4llvDq8ikWAM', 'Station 1', 'Lash application station', NULL, NULL, 'Station', 'Stations', 'Lash Artist', 'Lash Artists', 'Appointment', '{"Classic Lash Extensions","Volume Lash Extensions","Lash Lift","Brow Shaping","Brow Tinting"}', 'Beauty & Personal Care', 2);
-INSERT INTO public.business_templates VALUES ('garage-door', 'Garage Door Service', 'You are a professional dispatcher for a garage door company called {{business_name}}. Help customers schedule repairs, installations, and maintenance. Collect their name, address, and issue description.', 'Thanks for calling! Is your garage door stuck, or do you need a new installation?', 'pNInz6ovDWjNkhCspfAY', 'Van 1', 'Main service van', NULL, NULL, 'Van', 'Vans', 'Installer', 'Installers', 'Service Call', '{"Garage Door Repair","New Door Installation","Opener Replacement","Spring Repair","Annual Maintenance"}', 'Home Services', 3);
-INSERT INTO public.business_templates VALUES ('locksmith', 'Locksmith', 'You are a professional dispatcher for a locksmith called {{business_name}}. Help customers schedule lockouts, rekeying, and lock installations. Collect their name, address, and urgency.', 'Thanks for calling! Are you locked out or need a lock service scheduled?', 'pNInz6ovDWjNkhCspfAY', 'Van 1', 'Mobile locksmith van', NULL, NULL, 'Van', 'Vans', 'Locksmith', 'Locksmiths', 'Service Call', '{"Lockout Service","Rekey Locks","New Lock Install","Key Duplication","Safe Opening"}', 'Home Services', 3);
-INSERT INTO public.business_templates VALUES ('real-estate', 'Real Estate Showings', 'You are a professional assistant for a real estate agent at {{business_name}}. Help callers schedule property showings and consultations. Collect their name, phone, and which property they are interested in.', 'Hi! Are you calling about a property listing?', '21m00Tcm4llvDq8ikWAM', 'Office 1', 'Main showing office', NULL, NULL, 'Office', 'Offices', 'Agent', 'Agents', 'Showing', '{"Buyer Showing","Listing Consultation","Open House","Property Tour"}', 'Professional Services', 5);
-INSERT INTO public.business_templates VALUES ('insurance', 'Insurance Agency', 'You are a professional receptionist for an insurance agency called {{business_name}}. Help callers schedule consultations for auto, home, life, and business insurance. Collect their name and what type of coverage they need.', 'Thanks for calling! What type of insurance can we help you with?', 'ErXwSzhRj4IW3zYCt9a2', 'Office 1', 'Consultation office', NULL, NULL, 'Office', 'Offices', 'Agent', 'Agents', 'Consultation', '{"Auto Insurance Quote","Home Insurance Quote","Life Insurance Consult","Business Insurance Review"}', 'Professional Services', 5);
-INSERT INTO public.business_templates VALUES ('bakery', 'Bakery', 'You are a friendly receptionist for a bakery called {{business_name}}. Help customers place custom cake orders, schedule catering, and ask about daily specials. Collect their name and order details.', 'Hi! Are you calling to place an order or ask about today''s specials?', '21m00Tcm4llvDq8ikWAM', 'Counter 1', 'Main service counter', NULL, NULL, 'Counter', 'Counters', 'Baker', 'Bakers', 'Order', '{"Custom Cake Order","Cupcake Platter","Wedding Cake Consult","Daily Bread Order"}', 'Food & Beverage', 6);
-INSERT INTO public.business_templates VALUES ('catering', 'Catering Service', 'You are a professional receptionist for a catering company called {{business_name}}. Help customers plan events, get quotes, and schedule tastings. Collect their name, event date, guest count, and preferences.', 'Thanks for calling! Are you planning an event?', '21m00Tcm4llvDq8ikWAM', 'Kitchen 1', 'Main prep kitchen', NULL, NULL, 'Kitchen', 'Kitchens', 'Chef', 'Chefs', 'Event', '{"Event Catering Quote","Tasting Session","Corporate Lunch","Wedding Reception","Party Platter"}', 'Food & Beverage', 6);
-INSERT INTO public.business_templates VALUES ('answering-service', 'Answering & Scheduling Service', 'You are a friendly and professional virtual receptionist for {{business_name}}. Your role is to answer calls, schedule meetings, take messages, and help callers connect with the right person. You do not quote prices — all services are included. Be warm, efficient, and helpful. If the caller needs to schedule a meeting or appointment, check availability and book it. If the person they need is unavailable, offer to take a message.', 'Hi, thank you for calling {{business_name}}! How can I help you today?', 'clara', 'Main Office', 'Primary scheduling line', NULL, NULL, 'Line', 'Lines', 'Staff', 'Staff', 'Meeting', '{"Phone Consultation","In-Person Meeting","Video Call","Follow-Up Call","Message Taking"}', 'Professional Services', 0);
-
---
--- Populate example_resources from each row's resource_label. The
--- pg_dump captures the column but not the post-INSERT UPDATE, so
--- we append it here. See migration 20260518120000 for context.
---
-
-UPDATE public.business_templates
-SET example_resources = ARRAY[resource_label || ' 1', resource_label || ' 2', resource_label || ' 3']
-WHERE example_resources IS NULL OR example_resources = '{}';

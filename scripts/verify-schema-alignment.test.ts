@@ -1,8 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { checkCriticalIdColumns, CRITICAL_TABLES } from './verify-schema-alignment';
-import { readFileSync } from 'fs';
+import {
+  checkCriticalIdColumns,
+  checkMigrationColumnsInBaseline,
+  CRITICAL_TABLES,
+} from './verify-schema-alignment';
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
 
 const baseline = readFileSync('supabase/baseline.sql', 'utf8');
+const migrations = readdirSync('supabase/migrations')
+  .filter((f) => f.endsWith('.sql'))
+  .map((f) => readFileSync(join('supabase/migrations', f), 'utf8'));
 
 describe('verify-schema-alignment (REFACTORING_TODO #9)', () => {
   it('passes cleanly against current baseline.sql for all critical tables', () => {
@@ -26,5 +34,39 @@ describe('verify-schema-alignment (REFACTORING_TODO #9)', () => {
     expect(CRITICAL_TABLES.length).toBeGreaterThanOrEqual(6);
     expect(CRITICAL_TABLES.some((t) => t.table === 'customers')).toBe(true);
     expect(CRITICAL_TABLES.some((t) => t.table === 'appointments')).toBe(true);
+  });
+});
+
+describe('baseline ↔ migration drift guard', () => {
+  // WHO: a dev who adds a column via migration but forgets to regenerate baseline.sql.
+  // WHAT: every migration-added column (minus dropped/renamed) must appear in baseline.sql.
+  // WHEN: run in prepare-commit / CI on the committed baseline + migrations.
+  // WHERE: checkMigrationColumnsInBaseline.
+  // WHY: stale baseline silently ships DBs missing columns — is_demo/tts_*/forward_phone
+  //      drift broke /demo/start + the Playwright E2E foundation (found 2026-06-12).
+  it('passes: the committed baseline.sql contains every live migration column', () => {
+    const drifts = checkMigrationColumnsInBaseline(baseline, migrations);
+    expect(drifts).toEqual([]);
+  });
+
+  it('detects a column added by a migration but missing from baseline', () => {
+    // A migration adds zzz_drift_probe; baseline never gets it → drift.
+    const fakeMigration = 'ALTER TABLE tenants ADD COLUMN IF NOT EXISTS zzz_drift_probe TEXT;';
+    const drifts = checkMigrationColumnsInBaseline(baseline, [...migrations, fakeMigration]);
+    expect(drifts.length).toBeGreaterThan(0);
+    expect(drifts.some((d) => d.message.includes('zzz_drift_probe'))).toBe(true);
+  });
+
+  it('ignores a column that a later migration drops or renames away', () => {
+    // Added then dropped, and added then renamed — neither is expected in baseline.
+    const churn = [
+      'ALTER TABLE tenants ADD COLUMN tmp_a TEXT;',
+      'ALTER TABLE tenants DROP COLUMN tmp_a;',
+      'ALTER TABLE tenants ADD COLUMN tmp_b TEXT;',
+      'ALTER TABLE tenants RENAME COLUMN tmp_b TO tenant_real_col;',
+    ];
+    const drifts = checkMigrationColumnsInBaseline(baseline, [...migrations, ...churn]);
+    expect(drifts.some((d) => d.message.includes('tmp_a'))).toBe(false);
+    expect(drifts.some((d) => d.message.includes('tmp_b'))).toBe(false);
   });
 });

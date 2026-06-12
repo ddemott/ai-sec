@@ -177,6 +177,11 @@ const VoiceSessionEndSchema = z.object({
   // Rendered plain-text transcript (Caller:/Assistant: lines). Bound mirrors the
   // agent's MAX_TRANSCRIPT_CHARS so a pathological call can't write a huge row.
   transcript: z.string().max(100_000).nullable().optional(),
+  // Post-call LLM summary (1–2 sentences). Bounded so a model can't write a huge row.
+  summary: z.string().max(2000).nullable().optional(),
+  // The appointment booked during the call, if any. UUID-validated so a malformed
+  // id can't reach (and 500) the RPC's ::uuid cast — it just stays null.
+  appointment_id: z.string().uuid().nullable().optional(),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -402,9 +407,9 @@ export function registerAgentToolRoutes(
   );
 
   // voice-session-end — agent calls this from its shutdown callback when the
-  // call ends, recording duration (+ optional outcome) and the rendered call
-  // transcript. summary/appointment_id are still deferred (NULL). Returns
-  // ended:false if no open row matched.
+  // call ends, recording duration, outcome, the rendered transcript, a post-call
+  // summary, and the appointment_id booked during the call (all optional; the
+  // agent fills what it has). Returns ended:false if no open row matched.
   toolRoute(
     app,
     '/agent-tools/voice-session-end',
@@ -419,8 +424,8 @@ export function registerAgentToolRoutes(
             args.duration_seconds ?? null,
             args.outcome ?? null,
             args.transcript ?? null,
-            null, // summary — deferred
-            null, // appointment_id — deferred
+            args.summary ?? null,
+            args.appointment_id ?? null,
           ]
         );
         return res.rows[0]?.ended ?? false;
