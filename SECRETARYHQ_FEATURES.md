@@ -50,9 +50,9 @@
 
 ## 5. Analytics & Reporting
 
-- 🔨 Top-line stats — calls / appointments / customers (volume, today, week) + recent activity
-- 🔨 Call panels — call volume over time, call→booking conversion, caller abandonment
-- 💡 Reporting that answers **WHY**, not just WHAT — surface causation from call outcomes ("bookings down because N callers wanted X"); the differentiator competitors can't match (their receptionist never captures the why)
+- ✅ Top-line stats — calls / appointments / customers (volume, today, week) + recent activity (`/analytics/stats`)
+- ✅ Call panels — call volume over time, call→booking conversion, caller abandonment (`/analytics/calls`, from `voice_sessions`; gap #2 shipped 2026-06-12)
+- 🔨 Reporting that answers **WHY**, not just WHAT — a first WHY cut (outcome breakdown: booked/transferred/message/no-outcome) is live; the high-value version ("bookings down because N callers wanted X" — price / no-availability / wrong-service) needs richer outcome classification (next build). The differentiator competitors can't match (their receptionist never captures the why)
 - ✅ Coverage analysis (staffing vs demand)
 
 ## 6. Reminders & Communications
