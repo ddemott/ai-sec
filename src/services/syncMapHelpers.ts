@@ -7,8 +7,8 @@
 /**
  * Shared sync-map helpers for all CRM integrations.
  *
- * Eliminates duplication across jobberSync, hubspotSync, squareSync,
- * and servicetitanSync — all of which implemented identical patterns for:
+ * Eliminates duplication across the CRM sync modules (squareSync today;
+ * jobber/hubspot/servicetitan removed 2026-06-12) — identical patterns for:
  * - Sync map CRUD (upsert on create, update after push, delete)
  * - Timestamp-based freshness checks (skip already-synced versions)
  * - Timestamp-based merge decisions (remote vs local wins)
@@ -293,7 +293,7 @@ export async function syncMapUpdateAfterPull(
  * 3. If existing: skip if already synced, compare timestamps, update if remote newer
  *
  * @param updateColumns - SQL SET clause for updating existing customers (provider-specific,
- *   e.g. Jobber includes address, HubSpot doesn't). Placeholders start at $1.
+ *   e.g. some providers include address, others don't). Placeholders start at $1.
  * @param updateValues - Values for the update columns (before localId, tenantId which are appended)
  */
 export async function pullRemoteCustomer(opts: {

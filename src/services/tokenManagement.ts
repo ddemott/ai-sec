@@ -10,8 +10,8 @@
 /**
  * Shared token management for all OAuth-based integrations.
  *
- * Eliminates duplication across jobberSync, hubspotSync, squareSync,
- * servicetitanSync, and calendarSync — all of which implemented identical
+ * Eliminates duplication across the CRM sync modules (squareSync today;
+ * jobber/hubspot/servicetitan removed 2026-06-12) and calendarSync — all of which implemented identical
  * getTokensWithRefresh() logic.
  *
  * Pattern: SELECT FOR UPDATE → check expiry → refresh → update DB → handle failure
@@ -35,7 +35,7 @@ export const defaultSyncLogger: SyncLogger = {
 
 /** Token expiry buffer constants */
 export const TOKEN_BUFFER_MS = {
-  /** Standard 5-minute buffer for most integrations (Jobber, HubSpot, ServiceTitan, Calendar) */
+  /** Standard 5-minute buffer for most integrations (Calendar, and any future CRM) */
   STANDARD: 5 * 60 * 1000,
   /** 24-hour buffer for Square (tokens expire in ~30 days) */
   SQUARE: 24 * 60 * 60 * 1000,
@@ -77,7 +77,7 @@ export function syncCtx(
  * @param refreshFn - Provider-specific token refresh function
  * @param bufferMs - How far before expiry to trigger refresh (default: 5 minutes)
  * @param logger - Optional structured logger
- * @param extraColumns - Additional columns to SELECT (e.g., 'settings' for ServiceTitan)
+ * @param extraColumns - Additional columns to SELECT (e.g., a provider-specific 'settings' column)
  */
 export async function getIntegrationTokens(
   pool: Pool,
@@ -180,7 +180,7 @@ export type ChangeSource =
  *
  * The auto_version_trigger in the database reads these values:
  * - app.change_source: identifies the CRM/system making the change
- * - app.changed_by: identifies the user or process (e.g., "sync-hubspot")
+ * - app.changed_by: identifies the user or process (e.g., "sync-square")
  *
  * This function must be called on each connection before making changes
  * that should be tracked with a specific source.

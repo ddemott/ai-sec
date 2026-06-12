@@ -1,10 +1,10 @@
 /**
  * Shared paginated-sync loop for CRM full-sync passes.
  *
- * The 4 CRM sync modules (jobber, hubspot, square, servicetitan) each have
+ * The CRM sync modules (Square today; Jobber/HubSpot/ServiceTitan removed 2026-06-12) each have
  * 1–2 pagination loops in their fullSync() entry points. The cursor mechanism
- * differs per provider (Jobber GraphQL pageInfo, HubSpot paging.next.after,
- * Square result.cursor, ServiceTitan page-number with hasMore), but the loop
+ * differs per provider (Square uses result.cursor; the removed providers used
+ * GraphQL pageInfo / paging.next.after / page-number+hasMore), but the loop
  * shape is identical: fetch page → iterate items → catch per-item errors and
  * keep going → break on page-fetch error → terminate when no nextCursor.
  *
@@ -34,7 +34,7 @@ export interface PaginateSyncArgs<TItem, TCursor> {
   processItem: (item: TItem) => Promise<void>;
   /** Format an item identifier for the per-item error log line (typically `item.id`). */
   itemContext: (item: TItem) => string;
-  /** Log prefix — e.g. `[jobber-sync] tenant=XYZ`. The loop appends the message tail. */
+  /** Log prefix — e.g. `[square-sync] tenant=XYZ`. The loop appends the message tail. */
   contextLabel: string;
   /** Entity type for log lines — `client`, `contact`, `customer`, `visit`, `booking`, `job`. */
   entityType: string;

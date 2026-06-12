@@ -1,7 +1,7 @@
 /**
  * Shared sync-status reader for CRM provider routes.
  *
- * jobber, hubspot, square, and servicetitan each used to maintain a
+ * The CRM provider routes (Square today; Jobber/HubSpot/ServiceTitan removed 2026-06-12) each maintained a
  * near-identical 25-line GET /<provider>/sync/status handler that did
  * the same SELECT last_sync_at + entity_sync_map COUNT, then folded the
  * counts into pending/error totals split by entity type. Different
