@@ -25,7 +25,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Framewo
 - **Voice agent**: LiveKit Agents (Node), `@livekit/agents-plugin-{deepgram,openai}`, `livekit-server-sdk`
 - **DB**: PostgreSQL + pgvector (ankane/pgvector Docker)
 - **Voice stack**: Telnyx + LiveKit Cloud + Deepgram Nova-3 + OpenAI GPT-4o-mini + xAI Grok TTS (default voice `ara`; OpenAI TTS retained as fallback). Voice + delivery (speed, soft) are **per-tenant** via `tenants.tts_voice/tts_speed/tts_soft` (NULL = `XAI_TTS_*` env default), set on the dashboard Phone Assistant → AI Persona page
-- **Testing**: Vitest (backend + dashboard), Playwright (e2e), `scripts/qa-live-test.py` (29 tool calls, 88 assertions)
+- **Testing**: Vitest (backend + dashboard), Playwright (e2e), `scripts/simulate.sh` (on-demand system harness: `status` health board, `tools` agent-tools journey, `call` browser voice test — see Development)
 
 ## Key Directories
 
@@ -43,7 +43,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (12 tools), `transferClient` (live SIP cold-transfer to a human via REFER), `fallback` (OpenAI TTS dead-air guard).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
 - `/supabase/migrations` — 131 SQL migrations.
-- `/scripts` — `qa-live-test.py`, `verify-claude-md.ts` drift detector
+- `/scripts` — `simulate.sh` (system simulation/health harness; node helpers in `agent/scripts/sim-*.mjs` for LiveKit + `scripts/sim-tools.mjs` for the agent-tools journey), `verify-claude-md.ts` drift detector
 
 ## Development
 
@@ -64,6 +64,7 @@ Quick commands:
 - Rebuild from scratch: `npm run db:rebuild [-- --yes]` (DROP SCHEMA public + apply all migrations + seed). End-to-end validation of the migration chain. Refuses non-localhost URLs unless `--force`; refuses without confirmation unless `--yes`.
 - Start: `npm start` (Dashboard https://localhost:4000, Backend https://localhost:4001)
 - Test: `npm test` (backend), `cd dashboard && npm test`, `cd dashboard && npx playwright test` (e2e)
+- Simulate / health-check any time: `./scripts/simulate.sh status --env prod|local [--deep]` (HTTP board for backend/dashboard/agent; `--deep` dispatch-tests the LiveKit agent worker), `./scripts/simulate.sh tools [--env local] [--tenant <id>]` (realistic agent-tools journey — provisions an ephemeral `/demo/start` tenant, books, recalls a preference, maps unwired `[dev]` links as GAPs), `./scripts/simulate.sh call --tenant <id>` (dispatch agent + print a browser join URL to talk to it with a mic, no phone). Tiers: status=systems up · tools=brain works · call=voice works. Only real PSTN inbound can't be simulated.
 - Quality gates: `npm run checks` (format + lint + typecheck), `npm run pre-pr`
 - Heavy pre-commit automation: `npm run prepare-commit` (runs checks + tests + drift detector + more)
 - Create feature branch (recommended): `npm run create-branch feat/my-work` or `bash scripts/create-feature-branch.sh feat/my-work`

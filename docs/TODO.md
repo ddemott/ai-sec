@@ -13,6 +13,69 @@ Everything else complete or tracked below.
 
 ---
 
+## 🚀 Production Wiring Checklist (backend audit 2026-06-12)
+
+Full backend wiring audit (3 parallel investigators over `src/` + `agent/src/`).
+**Tag key:** `[prod]` = code works in dev, needs production config/creds to
+function · `[dev]` = NOT wired anywhere, needs code before it can work.
+
+> **Verification caveat:** which `[prod]` env vars are *actually set* in prod
+> needs a Railway env read (token burned 2026-06-12 — reissue to confirm).
+> Items below marked "unknown in prod" are code-complete; only the config state
+> is unconfirmed.
+
+### `[prod]` — code works, needs prod config — SILENT-DEGRADE (highest risk: no error, no startup warning)
+
+- [ ] **[prod]** **Reminder/comms SMS silently runs MockAdapter** — without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`, `ProviderRegistry.ts:43` selects the **mock**, so every reminder/`/communications` SMS reports success but **never sends**. No prod-validation, no boot warning. Project standardized on Telnyx for voice — **DECIDE:** set Twilio creds (+`TWILIO_PHONE_NUMBER`) OR refactor reminders onto the Telnyx path (`telnyxSms.ts`). Until then reminders are dead-in-prod with zero signal.
+- [ ] **[prod]** **Email silently runs mock transporter** — without `EMAIL_USER`/`EMAIL_PASS`, `emailService.ts:22` installs a mock returning a fake messageId → confirmation/notification emails never send, no error. Set Gmail app-password env on Railway.
+- [ ] **[prod]** **Agent `BACKEND_URL` defaults to `http://localhost:4001`** (`agent/src/config.ts:17`, a `.default()` — no fail-fast). If unset on `ai-sec-agent`, the agent calls localhost → **every `/agent-tools/*` request misroutes silently**. MUST confirm set in prod.
+- [ ] **[prod]** **`STRIPE_WEBHOOK_SECRET` empty → every webhook 400s** (`billing.ts:133`) → subscriptions never activate even though checkout works. Distinct from `STRIPE_SECRET_KEY`.
+- [ ] **[prod] (security)** **`SERVICETITAN_WEBHOOK_SECRET` unset → webhook auth SKIPPED** (`servicetitan.ts:32`) — accepts unauthenticated payloads. Set it before exposing the ServiceTitan webhook, or leave the integration off.
+- [ ] **[prod] (security)** **`CORS_ORIGIN` unset reflects ANY origin** (`index.ts:134` `|| true`). Set the dashboard origin in prod.
+- [ ] **[prod]** **`DASHBOARD_URL` defaults to `https://localhost:4000`** → prod emails / OAuth redirects / Stripe success+cancel URLs point at localhost (`constants.ts:2`, `billing.ts:91`, `calendar.ts:56`, `auth.ts:185`). Already on the env-var list below — flagged here for blast radius.
+
+### `[prod]` — required env for core launch (already tracked, consolidated)
+
+- [ ] **[prod]** Stripe live: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO/GROWTH/PRO_PRICE_ID` on Railway + webhook registered at `/billing/webhook` (3 events). Missing secret → billing 503; missing price → that plan's checkout 503.
+- [ ] **[prod]** `DASHBOARD_URL`, `SENTRY_DSN` (backend + agent), `METRICS_TOKEN`, `BETTER_STACK_TOKEN` (backend + agent) on Railway. Observability is dark until set (`/metrics` 404, no Sentry, stdout-only logs).
+- [ ] **[prod]** Telnyx voice OTP: confirm `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` set in prod — else `send_verification_code` fails (blocked-caller-ID bookings can't verify) + provisioning 503.
+- [ ] **[prod]** Telnyx call-transfer / REFER enabled on the SIP Connection + dashboard forward number (carried from the transfer ship list above).
+
+### `[prod]` — optional integrations (each needs env + external OAuth/webhook app; turn on per business need)
+
+- [ ] **[prod]** Google Calendar — `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` + GCP OAuth app + redirect URI. Code complete (`googleCalendar.ts`); `/calendar` route 503s until set.
+- [ ] **[prod]** Outlook Calendar — `OUTLOOK_CLIENT_ID/SECRET/CALLBACK_URL` + Azure app.
+- [ ] **[prod]** CRM — Jobber / HubSpot / Square / ServiceTitan: each needs `<PROVIDER>_CLIENT_ID/SECRET/CALLBACK_URL` (+ Square/ServiceTitan webhook signature keys) + an OAuth app registered provider-side. All four are real implementations (`src/services/crm/`), no-op safely until configured.
+
+### `[dev]` — NOT wired anywhere, needs code
+
+- [ ] **[dev]** **Voice-session capture incomplete** — `end_voice_session` passes hardcoded `null` for `summary` + `appointment_id`, and the agent never sends `outcome` (`agentTools.ts:415-423`; `agent/src/index.ts:191`). The Calls tab columns + RPC accept all three, but every logged call is duration+transcript only — no summary, no outcome, no call→appointment back-link (even when the call books). Needs: agent post-call summary (cheap GPT-4o-mini call), outcome classification, thread booking `appointment_id` into session-end.
+- [ ] **[dev]** **Transfers invisible in Calls tab** — `voice_sessions.status` supports `'transferred'` but `transferClient.ts` does no DB write and `tools.ts:400` `transfer_call` only returns LLM strings. A successful transfer shows in pino logs only. Needs: set `outcome/status='transferred'` on transfer success (ties into the outcome plumbing above).
+- [ ] **[dev]** **`GET /analytics/stats` missing** — dashboard `api.ts:607` calls it, no backend handler exists (`analytics.ts` has only `/coverage`, `/call-summaries`, `/feedback`). Also unblocks the 3 stubbed analytics panels (Call Volume / Conversion / Abandonment). Needs the route returning the `AnalyticsStats` shape.
+- [ ] **[dev]** **Twilio delivery monitoring absent** — `TwilioAdapter.ts:25` sends fire-and-forget with no `statusCallback`; nothing ingests carrier delivery receipts, so "sent" ≠ "delivered" and retry logic only sees send-time exceptions. Needs a `StatusCallback` URL + webhook route. (Lower priority than the mock-vs-real decision above.)
+- [ ] **[dev]** **`GET /communications/history` is a stub** — returns `{history:[], note:'not yet implemented'}` (`communications.ts:189`). No live UI consumer today. Needs a `communications_history` table + query if/when surfaced.
+- [ ] **[dev]** **Jobber appointment-update push is a no-op** — create + pull work, update logs "not yet implemented" (`jobberSync.ts:287`). Edits to a booked appointment don't re-push to Jobber.
+- [ ] **[dev]** **Stripe tax not collected** — no `automatic_tax` in checkout (`billing.ts`). Needs the line + Stripe Tax enabled + nexus registration (already noted in Phase 13 user-action list).
+
+### `[dev]` — test/build infra (surfaced by `simulate tools` 2026-06-12)
+
+- [ ] **[dev] — HIGH** **`supabase/baseline.sql` is stale** — it's missing `tenants.is_demo`, `demo_expires_at` (migration `20260529`, OLDER than the baseline file itself), plus `tts_voice`/`tts_speed`/`tts_soft` (`20260610`) and `forward_phone` (`20260611`). `npm run db:rebuild` and **Playwright's `globalSetup` build from this baseline**, so every rebuilt DB is missing columns → `/demo/start` 500s (`column "is_demo" does not exist`) and the voice/grok/transfer columns are absent. Regenerate `baseline.sql` from the full migration chain (or have rebuild apply migrations instead of the snapshot), then add a CI guard that fails if baseline drifts from `migrations/`. Found because the new `simulate tools` harness couldn't provision a demo tenant on a freshly rebuilt local DB.
+
+### Tooling — system simulation harness (built 2026-06-12)
+
+`scripts/simulate.sh` now provides on-demand verification at any time:
+- `status [--deep]` — health board (backend `/health`+`/ready`, dashboard, agent worker via LiveKit dispatch). **Verified prod 4/4 up incl. agent worker.**
+- `tools` — realistic agent-tools journey (demo tenant → catalog → book → preference → recall) that PASSES wired links and flags `[dev]` gaps. **Verified local: 9 links pass, 4 gaps mapped.**
+- `call` — dispatch agent + browser join URL (real voice, no phone).
+- [ ] Replace the dead `qa-live-test.py` references (done in CLAUDE.md; file deleted).
+- [ ] Add `simulate tools` (or an E2E equivalent) to CI once the `[dev]` links are wired, so journeys are regression-guarded.
+
+### Reassuring — audited and found FULLY wired (no action)
+
+CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry policy · calendar-sync orchestration · all 4 CRM client API/OAuth/webhook code · Telnyx agent OTP path · LiveKit/Deepgram/OpenAI/Grok voice stack. None are scaffold — all real code.
+
+---
+
 ## In-flight markers
 
 - **IN FLIGHT (external)**: Waiting on vendor/third party.
@@ -98,19 +161,22 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 - [ ] Reminder delivery monitoring dashboard
 - [ ] Add coverage for OTP + all 5 booking error codes in live QA
 
-### Live call-transfer (`transfer_call`) — built 2026-06-11, ship sequence
+### Live call-transfer (`transfer_call`) + transcript capture — SHIPPED 2026-06-12
 
-Built + green locally (backend 2017 · agent 122 · dashboard 744), uncommitted on
-`feat/tenant-first-message`. Agent cold-transfers the live PSTN leg to the owner's
+Code shipped to prod via **PR #7 merged to main** (`66adafe`); all 3 Railway
+services redeployed from main (backend cycled, verified `/health` `started_at
+2026-06-12T03:54:12Z`). Agent cold-transfers the live PSTN leg to the owner's
 cell via SIP REFER through the inbound trunk; NULL `forward_phone` → AI takes a
-message. **Prod deploys from this branch → push = deploy → migration-first.**
+message. Transcript capture also live (Calls tab now gets real transcripts).
+**Deploy = MERGE to main, not branch push (corrected 2026-06-12 — all 3 services
+track main; see CLAUDE.md Project Status).**
 
-- [x] **Apply `supabase/migrations/20260611000000_tenant_forward_phone.sql` to prod DB** — DONE 2026-06-11. `forward_phone` column now live in prod (verified `SELECT forward_phone FROM tenants`). Tracker records `20260611000000`. This satisfies the migration-before-push ordering; the push itself is still pending.
-- [ ] Commit + push the transfer feature (push = prod deploy; watch `/health` `started_at`).
-- [ ] **IN FLIGHT (user)** Enable call transfer / REFER on the Telnyx SIP Connection — else every transfer fails at runtime.
-- [ ] **IN FLIGHT (user)** Set the forward number on dashboard AI Persona → "Forward Calls to a Person" (Dale's cell `+1 608 217 5303`).
-- [ ] **IN FLIGHT (validation pending)** Different-carrier call → ask for a person → confirm the cell rings.
-- [ ] **Decide:** merge `feat/tenant-first-message` → main + repoint Railway, or keep branch-deploy (main has drifted 2+ commits).
+- [x] Apply migration `20260611000000_tenant_forward_phone.sql` to prod DB — DONE 2026-06-12 (column live, tracker records it).
+- [x] Commit + merge the transfer + transcript feature — DONE 2026-06-12 (PR #7 → main, CI green on all 4 checks, all 3 services deployed).
+- [ ] **IN FLIGHT (user) — REMAINING** Enable call transfer / REFER on the Telnyx SIP Connection — else every transfer fails at runtime.
+- [ ] **IN FLIGHT (user) — REMAINING** Set the forward number on dashboard AI Persona → "Forward Calls to a Person" (Dale's cell `+1 608 217 5303`).
+- [ ] **IN FLIGHT (validation — BLOCKED on a 2nd phone)** Different-carrier call to `+1 630-822-9086` → ask for a person → confirm the cell rings + Calls tab shows the transcript. Dale has no spare phone right now; do later. Also validates the still-open PSTN inbound path + the agent (`ai-sec-agent`) deploy.
+- [ ] **Housekeeping** Rotate the Railway team token created 2026-06-12 (`400a1ee0…`) — it was pasted into a Claude session; burn + reissue.
 
 ---
 
