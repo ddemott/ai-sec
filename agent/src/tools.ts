@@ -19,6 +19,19 @@
 import { llm } from '@livekit/agents';
 import type { SessionContext } from './sessionContext.js';
 import type { ToolResponse, ToolsClient } from './toolsClient.js';
+import type { TransferResult } from './transferClient.js';
+
+/**
+ * Live-transfer capability handed to buildTools. `forwardPhone` is the
+ * destination (owner cell, NULL = unconfigured); `execute` performs the SIP
+ * REFER and is null when the call lacks the room/participant context needed to
+ * transfer. Kept separate from SessionContext so tools.ts never imports the
+ * livekit-server-sdk and stays unit-testable with a plain mock.
+ */
+export interface TransferCapability {
+  forwardPhone: string | null;
+  execute: ((forwardPhone: string | null) => Promise<TransferResult>) | null;
+}
 
 /** Format a tool response for the LLM. Keeps success + error shapes uniform. */
 function formatResponse(res: ToolResponse): string {
@@ -32,7 +45,11 @@ function formatResponse(res: ToolResponse): string {
   return JSON.stringify({ error: res.error });
 }
 
-export function buildTools(ctx: SessionContext, client: ToolsClient): llm.ToolContext {
+export function buildTools(
+  ctx: SessionContext,
+  client: ToolsClient,
+  transfer?: TransferCapability
+): llm.ToolContext {
   return {
     get_customer_context: llm.tool({
       description:
@@ -377,6 +394,39 @@ export function buildTools(ctx: SessionContext, client: ToolsClient): llm.ToolCo
           value: args.value,
         });
         return formatResponse(res);
+      },
+    }),
+
+    transfer_call: llm.tool({
+      description:
+        'Transfer the live call to a real person (the business owner / staff cell). Use ONLY when the caller clearly needs a human — a personal call for the owner, an urgent issue you cannot handle, or an explicit request to be connected to someone. Before calling this, tell the caller you are connecting them (e.g. "One moment, connecting you now."). On success the call leaves this assistant; on failure or when transfer is unavailable, apologize briefly and offer to take a message.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      execute: async () => {
+        // No transfer wiring on this call (missing LiveKit creds or the SIP
+        // participant never joined) — tell the LLM to fall back to a message.
+        if (!transfer?.execute) {
+          return JSON.stringify({
+            error: 'Transfer is not available right now. Offer to take a message instead.',
+          });
+        }
+        const result = await transfer.execute(transfer.forwardPhone);
+        if (result.ok) {
+          return 'Transfer started — the caller is being connected to a team member now. Do not keep talking; the call is leaving this assistant.';
+        }
+        if (result.reason === 'not_configured') {
+          return JSON.stringify({
+            error:
+              'No transfer number is set up for this business, so you cannot connect the caller. Offer to take a message instead.',
+          });
+        }
+        return JSON.stringify({
+          error:
+            'The transfer did not go through. Apologize briefly and offer to take a message instead.',
+        });
       },
     }),
   };

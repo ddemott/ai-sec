@@ -269,6 +269,35 @@ describe('tenant-config surfaces the preference config to the agent', () => {
       [tenantId]
     );
   });
+
+  it('HAPPY: returns forward_phone so the agent can cold-transfer to a human', async () => {
+    // WHO: the agent worker fetching tenant config at call start.
+    // WHAT: tenant-config must surface tenants.forward_phone so transfer_call
+    //        knows the destination cell to SIP-REFER the live leg to.
+    // WHEN: every dispatched call; the value is read once into the executor.
+    // WHERE: src/routes/agentTools.ts tenant-config SELECT/response.
+    // WHY: a drop here makes the dashboard "forward to my cell" field a no-op —
+    //        the agent would always fall back to taking a message.
+    await setup.query(`UPDATE tenants SET forward_phone = $2 WHERE tenant_id = $1`, [
+      tenantId,
+      '+16082175303',
+    ]);
+
+    const res = await post('/agent-tools/tenant-config', { tenant_id: tenantId });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.forward_phone).toBe('+16082175303');
+
+    // Reset so it doesn't bleed into other tests' tenant state.
+    await setup.query(`UPDATE tenants SET forward_phone = NULL WHERE tenant_id = $1`, [tenantId]);
+  });
+
+  it('HAPPY: forward_phone defaults to null when unset', async () => {
+    // WHAT: an owner who never configured forwarding gets null back, so the
+    //        transfer_call tool reports "no number set" and takes a message.
+    const res = await post('/agent-tools/tenant-config', { tenant_id: tenantId });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.forward_phone).toBeNull();
+  });
 });
 
 describe('voice-session-start → -end against the real DB functions', () => {

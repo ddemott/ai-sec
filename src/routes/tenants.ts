@@ -50,6 +50,8 @@ const UpdateConfigSchema = z.object({
   tts_voice: z.string().max(100).optional().nullable(),
   tts_speed: z.number().min(0.7).max(1.5).optional().nullable(),
   tts_soft: z.boolean().optional().nullable(),
+  // Live-transfer destination (owner cell). NULL = no forwarding.
+  forward_phone: z.string().max(30).optional().nullable(),
 });
 
 const CreateTemplateSchema = z.object({
@@ -151,7 +153,7 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft FROM tenants WHERE tenant_id = $1',
+          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, forward_phone FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );
@@ -203,8 +205,9 @@ export function registerTenantRoutes(
             tts_voice: string | null;
             tts_speed: number | null;
             tts_soft: boolean | null;
+            forward_phone: string | null;
           }>(
-            'SELECT business_type, system_prompt, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            'SELECT business_type, system_prompt, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, forward_phone FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
           const prior = priorRes.rows[0];
@@ -234,9 +237,11 @@ export function registerTenantRoutes(
             body.tts_speed !== undefined ? body.tts_speed : (prior?.tts_speed ?? null);
           const finalTtsSoft =
             body.tts_soft !== undefined ? body.tts_soft : (prior?.tts_soft ?? null);
+          const finalForwardPhone =
+            body.forward_phone !== undefined ? body.forward_phone : (prior?.forward_phone ?? null);
 
           const updRes = await client.query(
-            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9 WHERE tenant_id = $10 RETURNING tenant_id',
+            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9, forward_phone = $10 WHERE tenant_id = $11 RETURNING tenant_id',
             [
               finalSystemPrompt,
               finalVoiceId,
@@ -247,6 +252,7 @@ export function registerTenantRoutes(
               finalTtsVoice,
               finalTtsSpeed,
               finalTtsSoft,
+              finalForwardPhone,
               id,
             ]
           );

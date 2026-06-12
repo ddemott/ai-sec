@@ -550,6 +550,51 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(updateQuery!.params[5]).toBe('Remember the stylist and last service.'); // from body
   });
 
+  it('HAPPY: forward_phone persists through update-config', async () => {
+    // WHO: owner setting the "forward calls to my cell" number on the AI config
+    //      page, then saving.
+    // WHAT: forward_phone is written to the UPDATE so the agent's tenant-config
+    //      fetch sees it next call and transfer_call can SIP-REFER to it.
+    // WHEN: body carries forward_phone.
+    // WHERE: src/routes/tenants.ts UPDATE tenants SET ... forward_phone = $10.
+    // WHY: without it in the UPDATE the dashboard field is cosmetic — it would
+    //      look saved but never reach the DB or the voice agent's transfer path.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'auto_shop',
+          system_prompt: 'You are a helpful assistant.',
+          voice_id: 'ara',
+          first_message: 'Hello!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          forward_phone: null,
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE — prior values
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { forward_phone: '+16082175303' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery!.text).toContain('forward_phone');
+    // Param order: [system_prompt, voice_id, business_type, first_message,
+    //   save_preferences_enabled, preferences_instructions, tts_voice,
+    //   tts_speed, tts_soft, forward_phone, tenant_id]
+    expect(updateQuery!.params[9]).toBe('+16082175303'); // from body
+  });
+
   it('HAPPY: omitting preference fields preserves their prior values', async () => {
     // WHY: a save from the Voice Settings page that only touches system_prompt
     //      must NOT silently disable an already-enabled preference toggle.

@@ -118,6 +118,7 @@ describe('buildSystemPrompt', () => {
       'get_company_policy_answer',
       'send_verification_code',
       'verify_phone_code',
+      'transfer_call',
     ]) {
       expect(prompt).toContain(toolName);
     }

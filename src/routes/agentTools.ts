@@ -174,6 +174,9 @@ const VoiceSessionEndSchema = z.object({
   call_id: z.string().min(1),
   duration_seconds: z.number().int().nonnegative().nullable().optional(),
   outcome: z.string().max(50).nullable().optional(),
+  // Rendered plain-text transcript (Caller:/Assistant: lines). Bound mirrors the
+  // agent's MAX_TRANSCRIPT_CHARS so a pathological call can't write a huge row.
+  transcript: z.string().max(100_000).nullable().optional(),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -334,8 +337,9 @@ export function registerAgentToolRoutes(
           tts_voice: string | null;
           tts_speed: number | null;
           tts_soft: boolean | null;
+          forward_phone: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, forward_phone FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         return res.rows[0] ?? null;
@@ -366,6 +370,10 @@ export function registerAgentToolRoutes(
         tts_voice: row.tts_voice ?? null,
         tts_speed: row.tts_speed ?? null,
         tts_soft: row.tts_soft ?? null,
+        // 2026-06-11: live-transfer destination (owner cell). NULL means no
+        // forwarding configured — the agent's transfer_call tool stays inert
+        // and falls back to taking a message.
+        forward_phone: row.forward_phone ?? null,
       });
     },
     'Failed to fetch tenant config'
@@ -394,8 +402,9 @@ export function registerAgentToolRoutes(
   );
 
   // voice-session-end — agent calls this from its shutdown callback when the
-  // call ends, recording duration (+ optional outcome). transcript/summary
-  // are deferred (NULL) for now. Returns ended:false if no open row matched.
+  // call ends, recording duration (+ optional outcome) and the rendered call
+  // transcript. summary/appointment_id are still deferred (NULL). Returns
+  // ended:false if no open row matched.
   toolRoute(
     app,
     '/agent-tools/voice-session-end',
@@ -409,7 +418,7 @@ export function registerAgentToolRoutes(
             args.call_id,
             args.duration_seconds ?? null,
             args.outcome ?? null,
-            null, // transcript — deferred
+            args.transcript ?? null,
             null, // summary — deferred
             null, // appointment_id — deferred
           ]
