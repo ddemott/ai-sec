@@ -49,6 +49,13 @@ export interface TenantDisplayConfig {
   ttsVoice: string | null;
   ttsSpeed: number | null;
   ttsSoft: boolean | null;
+  /**
+   * E.164 PSTN number the agent cold-transfers a live call to (owner cell),
+   * via SIP REFER through the inbound trunk. NULL means no forwarding is
+   * configured — the transfer_call tool reports it can't transfer and the
+   * agent takes a message instead. 2026-06-11.
+   */
+  forwardPhone: string | null;
 }
 
 export const TENANT_FALLBACK: TenantDisplayConfig = {
@@ -61,6 +68,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   ttsVoice: null,
   ttsSpeed: null,
   ttsSoft: null,
+  forwardPhone: null,
 };
 
 export async function fetchTenantConfig(
@@ -79,6 +87,7 @@ export async function fetchTenantConfig(
     tts_voice?: string | null;
     tts_speed?: number | null;
     tts_soft?: boolean | null;
+    forward_phone?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {
@@ -91,6 +100,7 @@ export async function fetchTenantConfig(
       ttsVoice: res.result.tts_voice ?? null,
       ttsSpeed: res.result.tts_speed ?? null,
       ttsSoft: res.result.tts_soft ?? null,
+      forwardPhone: res.result.forward_phone ?? null,
     };
   }
   return TENANT_FALLBACK;

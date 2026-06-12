@@ -300,6 +300,8 @@ describe('agentTools /tenant-config', () => {
       tts_voice: null,
       tts_speed: null,
       tts_soft: null,
+      // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
+      forward_phone: null,
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -350,6 +352,8 @@ describe('agentTools /tenant-config', () => {
       tts_voice: null,
       tts_speed: null,
       tts_soft: null,
+      // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
+      forward_phone: null,
     });
   });
 
@@ -2109,7 +2113,8 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
   it('HAPPY: end records duration via end_voice_session and returns ended', async () => {
     // WHO: the agent's shutdown callback when the caller hangs up.
     // WHAT: posts call_id + duration_seconds → end_voice_session($1..$7) with
-    //        duration set and transcript/summary/appointment NULL (deferred).
+    //        duration set; transcript omitted here → null, summary/appointment
+    //        still deferred (null).
     // WHEN: awaited inside addShutdownCallback so the row closes before the
     //        job process tears down.
     // WHERE: /agent-tools/voice-session-end.
@@ -2124,8 +2129,54 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true, result: { ended: true } });
     expect(queries[0].text).toContain('end_voice_session');
-    // duration set; outcome/transcript/summary/appointment_id deferred → null.
+    // duration set; outcome/transcript/summary/appointment_id absent → null.
     expect(queries[0].params).toEqual([TENANT_ID, 'call-abc-123', 142, null, null, null, null]);
+  });
+
+  it('HAPPY: end persists the call transcript into end_voice_session param 5', async () => {
+    // WHO: the agent shutdown callback after a real conversation — it renders
+    //        the accumulated Caller:/Assistant: turns and sends them.
+    // WHAT: transcript lands in the 5th positional arg (p_transcript); summary
+    //        + appointment_id (params 6,7) stay null (still deferred).
+    // WHERE: /agent-tools/voice-session-end → end_voice_session($1..$7).
+    // WHY: this is the write half of call-transcript capture — the Calls tab's
+    //       transcript section reads exactly this column back.
+    const transcript = 'Assistant: Thanks for calling.\nCaller: I need an oil change.';
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 88,
+      transcript,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { ended: true } });
+    // param order: tenant, call, duration, outcome, transcript, summary, appt.
+    expect(queries[0].params).toEqual([
+      TENANT_ID,
+      'call-abc-123',
+      88,
+      null,
+      transcript,
+      null,
+      null,
+    ]);
+  });
+
+  it('SAD: end rejects an over-length transcript before any DB call', async () => {
+    // WHO: a pathological / abusive call producing a multi-MB transcript.
+    // WHAT: transcript > 100k chars → Zod max(100_000) rejects → success:false,
+    //        zero queries (no giant row written).
+    // WHY: the column is unbounded TEXT; the schema bound is the guardrail that
+    //       mirrors the agent's MAX_TRANSCRIPT_CHARS truncation.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 5,
+      transcript: 'x'.repeat(100_001),
+    });
+    expectValidationFailure(res, queries);
   });
 
   it('HAPPY: end returns ended:false when no open session matches the call_id', async () => {

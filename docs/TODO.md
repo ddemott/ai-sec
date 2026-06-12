@@ -3,7 +3,7 @@
 **Status at a Glance** (as of 2026-05-28 — UX pass + solo-mode dedup shipped)
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
-- **CI**: green. Agent package gated in CI. Tests: backend 1,930 · dashboard 720 · agent 99. E2E: 3 flakes fixed 2026-05-28 (timing synchronization — see "E2E Known Issues"). New coverage added 2026-05-27: customer-notes.spec.ts (Gap 1), appointment-cancel-ui.spec.ts (Gap 2), owner-config-to-booking.spec.ts (Gap 3).
+- **CI**: green. Agent package gated in CI. Tests (2026-06-11): backend 2,017 · dashboard 744 · agent 122 · E2E 113 (CI green for the first time — getPool db-name bug + 9 other infra fixes in PR #4). Includes the uncommitted live call-transfer feature.
 - **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Replaced by **`+1 630-866-1960`** — DONE 2026-06-02: account funded + upgraded (trial cap lifted), number purchased (Telnyx id `2973794140900296302`), routed to SIP connection `livekit-outbound` (`2945038451784812111`), connection activated. **Remaining**: local `.env` LiveKit API key is dead (rotated at Railway) → need fresh creds → update LiveKit inbound trunk OLD→`+16308661960` → write tenant phone fields → live test. Full checklist: `docs/BETH_GO_LIVE_TODO.md`. Still zero inbound CDRs until trunk wired.
 - **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0: Railway deploy is NOT gated on CI** (deploys on push regardless of result).
 - **Browser validation**: Role gating + invite flow — DONE 2026-06-03, proven by green e2e (`auth-flows` route-gate 403, `workflows:630` front-desk nav-hide/snap-back, `workflows:676` owner invite).
@@ -45,7 +45,7 @@ Everything else complete or tracked below.
 
 - [ ] **IN FLIGHT (validation pending)** Manual conversation testing — exercise full voice calls (esp. booking + customer-preference capture) and confirm the AI follows a logical progression: asks the caller's preferred day/time, offers open slots, widens to the next window when none fit, confirms the caller's choice (never imposes a time), and saves/recalls preferences across calls. Code + unit/prompt tests are green; this is the human-in-the-loop check that the dialog actually flows naturally. Blocked on live inbound (Telnyx). See `agent/src/prompt.ts` "# Availability discipline" + "# Customer preferences".
 
-- [ ] **IN FLIGHT (prod-apply) — REQUIRED** Apply migration `20260606000000_tenants_customer_preferences.sql` to the prod DB (`npm run db:migrate -- "<PROD_DATABASE_URL>"`). Shipped to `main` 2026-06-07 (deploys via Railway), but the code's widened SELECTs (`GET /tenants/:id/config`, `/agent-tools/tenant-config`) **500 until the two columns exist in prod**. Additive + forward-only (`ADD COLUMN IF NOT EXISTS`, zero data loss) — safe to run anytime. Until applied, the AI-config page + every call's tenant-config fetch break in prod.
+- [x] **Apply migration `20260606000000_tenants_customer_preferences.sql` to prod DB** — DONE 2026-06-11. Audit found the two columns (`save_preferences_enabled`, `preferences_instructions`) were already present in prod (hand-applied, untracked), so the AI-config page was NOT broken. `npm run db:migrate` against prod reconciled the tracker (recorded `20260606000000` + `20260610000000_tenant_grok_voice` which was in the same untracked-gap) and the run was a safe no-op on the existing columns.
 
 Closed: prod migrations apply (36 applied 2026-05-17 → version `20260514000000`); first-run guided tour (`20838a4`).
 
@@ -97,6 +97,54 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 - [ ] Expanded live QA suite (`scripts/qa-live-test.py`)
 - [ ] Reminder delivery monitoring dashboard
 - [ ] Add coverage for OTP + all 5 booking error codes in live QA
+
+### Live call-transfer (`transfer_call`) — built 2026-06-11, ship sequence
+
+Built + green locally (backend 2017 · agent 122 · dashboard 744), uncommitted on
+`feat/tenant-first-message`. Agent cold-transfers the live PSTN leg to the owner's
+cell via SIP REFER through the inbound trunk; NULL `forward_phone` → AI takes a
+message. **Prod deploys from this branch → push = deploy → migration-first.**
+
+- [x] **Apply `supabase/migrations/20260611000000_tenant_forward_phone.sql` to prod DB** — DONE 2026-06-11. `forward_phone` column now live in prod (verified `SELECT forward_phone FROM tenants`). Tracker records `20260611000000`. This satisfies the migration-before-push ordering; the push itself is still pending.
+- [ ] Commit + push the transfer feature (push = prod deploy; watch `/health` `started_at`).
+- [ ] **IN FLIGHT (user)** Enable call transfer / REFER on the Telnyx SIP Connection — else every transfer fails at runtime.
+- [ ] **IN FLIGHT (user)** Set the forward number on dashboard AI Persona → "Forward Calls to a Person" (Dale's cell `+1 608 217 5303`).
+- [ ] **IN FLIGHT (validation pending)** Different-carrier call → ask for a person → confirm the cell rings.
+- [ ] **Decide:** merge `feat/tenant-first-message` → main + repoint Railway, or keep branch-deploy (main has drifted 2+ commits).
+
+---
+
+## Back-to-Front Wiring — backend built, dashboard not surfacing (audit 2026-06-10)
+
+Gap inventory: functionality the backend already captures or can produce, but the
+dashboard does not register/display. Grouped by surface. Each line cites where the
+gap lives.
+
+### Calls registration (Calls tab — `voice_sessions`)
+
+The Calls tab (`VoiceCallsView.tsx`) and the `end_voice_session` RPC already
+support transcript / summary / outcome / appointment link — the **agent never
+captures or sends them**, so every logged call is duration-only.
+
+- [x] **Capture + send transcript** — DONE 2026-06-10. New `agent/src/transcript.ts` `TranscriptRecorder` accumulates `conversation_item_added` turns (caller STT + agent replies incl. greeting); shutdown callback sends `transcript.render()` to `voice-session-end`; `agentTools.ts` schema gains `transcript` (max 100k) → `end_voice_session` param 5. DB column + `VoiceCallsView.tsx:611` display already existed. +5 agent + 2 backend tests; agent 127 / backend voice-session 7 green, both typecheck clean. **Validation pending: live call to confirm real transcript lands.**
+- [ ] **Generate + send call summary** — same path, `agentTools.ts:418` `null`, displayed at `VoiceCallsView.tsx:626` if present. Needs a post-call LLM summary (one cheap GPT-4o-mini call in the shutdown hook, like the post-call summary pattern used elsewhere).
+- [ ] **Set call outcome** — `end_voice_session` accepts `outcome` (`voice.ts:26`) and the tab renders it (`VoiceCallsView.tsx:42`), but the agent rarely/never sets it. Classify each call (booked / message-taken / transferred / info-only / abandoned) and send it.
+- [ ] **Link booked appointment to the call** — `end_voice_session` param 7 (`appointment_id`) is hardcoded `null` (`agentTools.ts:419`). When the booking tool succeeds during a call, thread the new `appointment_id` into session-end so the Calls tab can deep-link the call → appointment.
+- [ ] **Register transfer events in the call record** — live cold-transfer logs `call_transferred` / `call_transfer_failed` to **pino only** (`agent/src/transferClient.ts:80,87`); nothing reaches `voice_sessions`. A transferred call should land in the Calls tab as outcome `transferred` (+ optionally the `metadata` JSONB column, currently unused). Otherwise transfers are invisible in the dashboard.
+
+### Analytics (`AnalyticsView.tsx`)
+
+- [ ] **Implement `GET /analytics/stats`** — `dashboard/lib/api.ts:607` calls it and expects `{ calls, appointments, customers, recent_activity }`, but **no backend route exists** (only `src/routes/analytics.ts` aggregations). Frontend currently falls back to manual appointment aggregation with no call data.
+- [ ] **Wire the 3 stubbed call-based panels** — `AnalyticsView.tsx` marks "Call Volume Over Time", "Call → Booking Conversion", and "Caller Abandonment Point" as *"Requires call log integration Phase 2"*. Now that inbound calls ARE logged to `voice_sessions`, these can be built from real data (depends on outcome capture above for conversion/abandonment).
+- [ ] **(Optional) Owner-facing reliability tiles** — `booking_attempts_total`, `tool_calls_total` (`src/services/metrics.ts:284,291`) are Prometheus-only (`/metrics`, token-gated). Consider a lightweight owner view of booking success rate + agent tool success rate (or leave to ops dashboards — decide).
+
+### Reminder delivery monitoring (Phase 5 — never built)
+
+- [ ] **Reminder delivery dashboard** — `reminders_sent_total` / `reminders_skipped_total` (`src/services/metrics.ts:319,328`, labels = channel/outcome and skip-reason) exist; `metrics.ts:312` comment claims it "Closes Phase 5 monitoring dashboard" but **no dashboard was built**. Owners have zero visibility into delivery success or why reminders were skipped (no-consent, appt-cancelled). Already tracked under "Voice Validation → Reminder delivery monitoring dashboard".
+
+### CRM sync status (`CRMIntegrationCard.tsx`)
+
+- [ ] **Surface pending/error sync counts** — `GET /{jobber,hubspot,square,servicetitan}/sync/status` returns `pending_count`, `error_count`, `total_mapped`, but the card (`CRMIntegrationCard.tsx:27`) shows only `last_sync_at` + connection status. Add the pending/error breakdown so owners see sync health, not just "connected". `sync_dispatches_total` (`metrics.ts:299`) is also Prometheus-only.
 
 ---
 

@@ -55,6 +55,7 @@ The AI checks real-time availability and books directly into your schedule. No d
 When a customer books with the AI, the appointment appears in your dashboard instantly. Your staff sees it. Your calendar sees it.
 
 The AI handles:
+
 - Checking staff and resource availability against your actual schedule
 - Matching the right service to a qualified staff member
 - Collecting service-specific information (vehicle make/model, tire size, preferred stylist, etc.)
@@ -99,10 +100,12 @@ SecretaryHQ automatically sends SMS reminders to customers before their appointm
 SecretaryHQ connects to the tools you already use:
 
 **Calendars**
+
 - Google Calendar — appointments sync both ways so your personal calendar stays current
 - Microsoft Outlook — same bidirectional sync for Office 365 users
 
 **CRM and Field Service**
+
 - **Jobber** — popular with trades (plumbing, HVAC, landscaping); customer and job records stay in sync
 - **HubSpot** — full contact and deal sync for businesses using HubSpot as their CRM
 - **Square** — customer records sync with your Square account; works alongside Square's booking tools
@@ -182,4 +185,4 @@ The AI does not improvise. It works within the schedule you set, answers from th
 
 ---
 
-*SecretaryHQ — Your next call is about to get answered.*
+_SecretaryHQ — Your next call is about to get answered._

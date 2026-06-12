@@ -131,6 +131,8 @@ describe('buildSessionContext', () => {
       tenantId: TENANT_ID,
       callerPhone: '+15551234567',
       callId: 'abc-123',
+      roomName: null,
+      participantIdentity: null,
     });
   });
 
@@ -144,6 +146,33 @@ describe('buildSessionContext', () => {
     });
     expect(ctx?.tenantId).toBe(TENANT_ID);
     expect(ctx?.callerPhone).toBeNull();
+  });
+
+  it('HAPPY: roomName + participantIdentity pass through for live transfer', () => {
+    // WHO: entry point hands ctx.room.name + sipParticipant.identity in
+    // WHAT: both surface on the context so transfer_call can SIP-REFER the leg
+    // WHEN: every dispatched SIP call once the participant has joined
+    // WHERE: agent/src/index.ts buildSessionContext call
+    // WHY: cold transfer needs (roomName, participantIdentity) to target the caller
+    const ctx = buildSessionContext({
+      roomMetadata: JSON.stringify({ tenant_id: TENANT_ID }),
+      participantAttributes: { 'sip.phoneNumber': '+15551234567' },
+      roomName: 'sip-room-42',
+      participantIdentity: 'sip_caller_42',
+    });
+    expect(ctx?.roomName).toBe('sip-room-42');
+    expect(ctx?.participantIdentity).toBe('sip_caller_42');
+  });
+
+  it('HAPPY: omitted room/identity default to null (participant not yet joined)', () => {
+    // WHAT: the preliminary context (built before waitForParticipant) carries
+    //       nulls so a missing participant degrades transfer gracefully
+    const ctx = buildSessionContext({
+      roomMetadata: JSON.stringify({ tenant_id: TENANT_ID }),
+      participantAttributes: null,
+    });
+    expect(ctx?.roomName).toBeNull();
+    expect(ctx?.participantIdentity).toBeNull();
   });
 
   it('SAD: missing tenant_id → null so entry point can end the call', () => {

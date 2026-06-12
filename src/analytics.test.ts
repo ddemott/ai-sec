@@ -194,7 +194,7 @@ describe('GET /call-summaries', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json() as unknown[];
+    const body = res.json();
     expect(body).toHaveLength(1);
     expect(queries[0].text).toContain('tenant_id = $1');
     expect(queries[0].text).toContain('customer_id = $2');
@@ -226,7 +226,7 @@ describe('GET /feedback', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json() as unknown[];
+    const body = res.json();
     expect(body).toHaveLength(1);
     const dataQuery = queries.find((q) => q.text.includes('user_feedback'));
     expect(dataQuery).toBeDefined();
@@ -254,7 +254,7 @@ describe('GET /feedback', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json() as unknown[];
+    const body = res.json();
     expect(body).toHaveLength(2);
     const dataQuery = queries.find((q) => q.text.includes('user_feedback'));
     expect(dataQuery).toBeDefined();

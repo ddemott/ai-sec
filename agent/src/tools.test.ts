@@ -37,6 +37,8 @@ function makeCtx(overrides: Partial<SessionContext> = {}): SessionContext {
     tenantId: TENANT_ID,
     callerPhone: CALLER_PHONE,
     callId: CALL_ID,
+    roomName: 'sip-room-1',
+    participantIdentity: 'sip_participant_1',
     ...overrides,
   };
 }
@@ -52,7 +54,7 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 11 expected tool names', () => {
+  it('HAPPY: exposes exactly the 12 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
@@ -69,6 +71,7 @@ describe('buildTools', () => {
         'get_service_catalog',
         'save_customer_preference',
         'send_verification_code',
+        'transfer_call',
         'verify_phone_code',
       ].sort()
     );
@@ -354,5 +357,64 @@ describe('save_customer_preference', () => {
       value: 'Maria',
     });
     expect(JSON.parse(result).saved).toBe(true);
+  });
+});
+
+describe('transfer_call', () => {
+  // WHO: caller asks for a human / personal call for the owner
+  // WHAT: the tool invokes the SIP-REFER executor and maps its result to an
+  //        LLM-facing string. No backend HTTP call — transfer is LiveKit-side.
+  // WHEN: every time the LLM decides to connect the caller to a person
+  // WHERE: agent/src/tools.ts transfer_call → transferClient executor
+  // WHY: a transfer that silently fails would drop the caller into dead air;
+  //        each failure mode must steer the LLM to take a message instead.
+
+  it('HAPPY: successful transfer tells the LLM the call is leaving', async () => {
+    const execute = vi.fn(async () => ({ ok: true }) as const);
+    const tools = buildTools(makeCtx(), makeClient([]).client, {
+      forwardPhone: '+16082175303',
+      execute,
+    });
+    const result = await exec(tools.transfer_call, {});
+    expect(execute).toHaveBeenCalledWith('+16082175303');
+    expect(result).toContain('Transfer started');
+  });
+
+  it('SAD: no executor (missing room/participant) → take a message', async () => {
+    // execute null = the call lacked room/participant context to REFER
+    const tools = buildTools(makeCtx(), makeClient([]).client, {
+      forwardPhone: '+16082175303',
+      execute: null,
+    });
+    const result = await exec(tools.transfer_call, {});
+    expect(JSON.parse(result).error).toMatch(/not available/i);
+  });
+
+  it('SAD: no transfer capability passed at all → take a message', async () => {
+    // buildTools called without the 3rd arg (e.g. transfer wiring absent)
+    const tools = buildTools(makeCtx(), makeClient([]).client);
+    const result = await exec(tools.transfer_call, {});
+    expect(JSON.parse(result).error).toMatch(/not available/i);
+  });
+
+  it('SAD: forward number unconfigured → tells LLM no number is set', async () => {
+    const execute = vi.fn(async () => ({ ok: false, reason: 'not_configured' }) as const);
+    const tools = buildTools(makeCtx(), makeClient([]).client, {
+      forwardPhone: null,
+      execute,
+    });
+    const result = await exec(tools.transfer_call, {});
+    expect(execute).toHaveBeenCalledWith(null);
+    expect(JSON.parse(result).error).toMatch(/no transfer number/i);
+  });
+
+  it('SAD: REFER throws/fails → apologize and take a message', async () => {
+    const execute = vi.fn(async () => ({ ok: false, reason: 'transfer_failed' }) as const);
+    const tools = buildTools(makeCtx(), makeClient([]).client, {
+      forwardPhone: '+16082175303',
+      execute,
+    });
+    const result = await exec(tools.transfer_call, {});
+    expect(JSON.parse(result).error).toMatch(/did not go through/i);
   });
 });

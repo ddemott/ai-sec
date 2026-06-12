@@ -19,11 +19,7 @@ import multipart from '@fastify/multipart';
 import { getPool, closePool, createWithTenantClient } from './database';
 import { jsonContentTypeParser } from './jsonContentTypeParser';
 import { buildLogger } from './services/logger';
-import {
-  httpRequestsTotal,
-  httpRequestDurationMs,
-  errorsTotal,
-} from './services/metrics';
+import { httpRequestsTotal, httpRequestDurationMs, errorsTotal } from './services/metrics';
 import fs from 'node:fs';
 import path from 'node:path';
 

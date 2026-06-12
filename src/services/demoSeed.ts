@@ -127,7 +127,7 @@ async function insertDemoData(client: PoolClient, { tenantId }: DemoSeedParams):
   );
 
   // ── Shifts (Mon–Fri 8am–5pm, 4 weeks) ───────────────────────────────
-  await expandShifts(client, tenantId, alexId,   '08:00', '17:00', 28);
+  await expandShifts(client, tenantId, alexId, '08:00', '17:00', 28);
   await expandShifts(client, tenantId, jordanId, '08:00', '17:00', 28);
 
   // ── Customers ────────────────────────────────────────────────────────
@@ -182,10 +182,18 @@ async function insertDemoData(client: PoolClient, { tenantId }: DemoSeedParams):
         'scheduled', 'Demo: future tire rotation')`,
     [
       tenantId,
-      bay1Id, alexId,   cust1, svcOilId,
-      bay2Id, jordanId, cust2, svcTiresId,
-      cust3, svcBrakesId,
-      cust4, svcOilId,
+      bay1Id,
+      alexId,
+      cust1,
+      svcOilId,
+      bay2Id,
+      jordanId,
+      cust2,
+      svcTiresId,
+      cust3,
+      svcBrakesId,
+      cust4,
+      svcOilId,
       cust5,
     ]
   );

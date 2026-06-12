@@ -10,7 +10,8 @@
  *   - deactivatePhone happy path — release succeeds, DB cleared, warnings=[]
  *   - deactivatePhone partial cleanup — release throws → warnings + release_error in result
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/* eslint-disable @typescript-eslint/unbound-method -- mock method-reference assertions (telnyx.client.*) are a deliberate test pattern; see readinessHandler.test.ts / middleware.test.ts precedent */
+import { describe, it, expect, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 import type { TelnyxProvisioningConfig } from '../routes/provisioning';
 import { activatePhone, deactivatePhone } from './provisioningService';
@@ -193,8 +194,12 @@ describe('activatePhone', () => {
     const assignError = new Error('assign failed');
     const releaseError = new Error('release also failed');
     const telnyx = buildMockTelnyxClient({
-      assignToConnection: vi.fn(async () => { throw assignError; }),
-      release: vi.fn(async () => { throw releaseError; }),
+      assignToConnection: vi.fn(async () => {
+        throw assignError;
+      }),
+      release: vi.fn(async () => {
+        throw releaseError;
+      }),
     });
     const pool = buildMockPool([
       { rows: [{ tenant_id: TENANT_ID, name: 'Test Biz', phone_status: 'inactive' }] },
@@ -268,7 +273,9 @@ describe('deactivatePhone', () => {
     //      not stuck in 'active'. release_error drives the logError call in the route.
     const releaseError = new Error('Telnyx timeout');
     const telnyx = buildMockTelnyxClient({
-      release: vi.fn(async () => { throw releaseError; }),
+      release: vi.fn(async () => {
+        throw releaseError;
+      }),
     });
     const pool = buildMockPool([
       { rows: [{ telnyx_phone_number_id: 'pn-abc' }] },

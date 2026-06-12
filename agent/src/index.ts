@@ -33,6 +33,8 @@ import { buildSessionContext } from './sessionContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
+import { TranscriptRecorder } from './transcript.js';
+import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
 export default defineAgent({
@@ -80,6 +82,7 @@ export default defineAgent({
     //    Timeout is short — if it doesn't come in quickly the call is
     //    probably malformed and we should bail rather than hang silent.
     let participantAttributes: Record<string, string> | null = null;
+    let participantIdentity: string | null = null;
     try {
       const sipParticipant = await Promise.race([
         ctx.waitForParticipant(),
@@ -87,6 +90,9 @@ export default defineAgent({
       ]);
       if (sipParticipant) {
         participantAttributes = sipParticipant.attributes;
+        // Identity is the handle the SIP transfer (cold REFER) targets — capture
+        // it now so transfer_call can hand the live leg off to a human.
+        participantIdentity = sipParticipant.identity;
       }
     } catch {
       // Non-fatal — we can still greet without a caller phone
@@ -97,6 +103,8 @@ export default defineAgent({
       jobMetadata,
       roomMetadata,
       participantAttributes,
+      roomName: ctx.room.name,
+      participantIdentity,
     });
     if (!sessionCtx) {
       // Shouldn't happen — preliminaryCtx already succeeded — but be safe
@@ -143,6 +151,11 @@ export default defineAgent({
     //    catch degrades to a fallback message instead of silence.
     let client: ToolsClient;
     let tenantConfig: Awaited<ReturnType<typeof fetchTenantConfig>>;
+    // Accumulates the spoken conversation (caller STT + agent replies) so the
+    // shutdown callback can persist it as the call's transcript. Declared here
+    // — above both the shutdown registration and the session listener — so both
+    // close over the same recorder.
+    const transcript = new TranscriptRecorder();
     try {
       client = new ToolsClient({
         backendUrl: config.BACKEND_URL,
@@ -179,6 +192,10 @@ export default defineAgent({
               tenant_id: sessionCtx.tenantId,
               call_id: callId,
               duration_seconds: Math.round((Date.now() - startedAtMs) / 1000),
+              // null when nothing was spoken (e.g. silent hang-up) → SQL NULL,
+              // not an empty transcript. outcome/summary/appointment_id remain
+              // deferred (RPC defaults them to NULL).
+              transcript: transcript.render(),
             });
           } catch (e) {
             callLog.warn(
@@ -192,7 +209,8 @@ export default defineAgent({
         });
       }
 
-      const tools = buildTools(sessionCtx, client);
+      // Fetch tenant config first — the transfer destination (forward_phone)
+      // and the prompt both depend on it.
       tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
       callLog.info(
         {
@@ -202,6 +220,22 @@ export default defineAgent({
         },
         'tenant config resolved'
       );
+
+      // Live-transfer capability. The executor is null when the call lacks the
+      // room/participant context needed to REFER (SIP participant never joined),
+      // in which case transfer_call gracefully reports it can't transfer. The
+      // forward number comes from the tenant config (NULL = no destination).
+      const transferExecutor = createTransferExecutor({
+        livekitUrl: config.LIVEKIT_URL,
+        livekitApiKey: config.LIVEKIT_API_KEY,
+        livekitApiSecret: config.LIVEKIT_API_SECRET,
+        roomName: sessionCtx.roomName ?? undefined,
+        participantIdentity: sessionCtx.participantIdentity ?? undefined,
+      });
+      const tools = buildTools(sessionCtx, client, {
+        forwardPhone: tenantConfig.forwardPhone,
+        execute: transferExecutor,
+      });
 
       // 4. Build prompt with runtime context
       const instructions = buildSystemPrompt({
@@ -248,6 +282,14 @@ export default defineAgent({
 
         await session.start({ agent, room: ctx.room });
         callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
+
+        // Record every finalized turn (caller STT + agent replies) for the
+        // call transcript. Attached BEFORE the greeting `say()` below — which
+        // itself emits a `conversation_item_added` (addToChatCtx defaults true)
+        // — so the transcript opens with the actual first line, no manual add.
+        session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
+          transcript.add(ev.item.role, ev.item.textContent);
+        });
 
         // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)
         // is spoken verbatim when set; otherwise a short hardcoded fallback —

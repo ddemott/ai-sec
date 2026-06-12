@@ -59,7 +59,7 @@ export function resetDemoRateLimitForTesting(): void {
 export function registerDemoRoutes(
   app: AppFastifyInstance,
   pool: Pool,
-  generateToken: (payload: {
+  _generateToken: (payload: {
     tenant_id: string;
     user_id: string;
     email: string;
@@ -74,8 +74,7 @@ export function registerDemoRoutes(
       // behind Railway's reverse proxy. Falls back to req.ip for direct
       // connections and local dev.
       const xff = req.headers['x-forwarded-for'];
-      const ip =
-        (Array.isArray(xff) ? xff[0] : xff)?.split(',')[0]?.trim() ?? req.ip;
+      const ip = (Array.isArray(xff) ? xff[0] : xff)?.split(',')[0]?.trim() ?? req.ip;
 
       if (!checkIpRateLimit(ip)) {
         return reply.status(429).send({

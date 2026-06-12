@@ -97,6 +97,46 @@ describe('AIConfigView — Customer Preferences', () => {
     expect(payload.preferences_instructions).toBe('Offer the same stylist; ask about nails.');
   });
 
+  test('HAPPY: typing a forward number sends it to updateConfig', async () => {
+    // WHO: an owner who wants personal/handoff calls routed to their cell.
+    // WHAT: the forward_phone field value reaches Api.tenants.updateConfig so
+    //        the backend persists it and the agent can SIP-transfer to it.
+    // WHEN: clicking Save after entering a number.
+    // WHERE: AIConfigView Forward Calls section + handleSave.
+    // WHY: without it in the payload the field is cosmetic — the classic
+    //      silent-form-drop bug; the AI would always take a message.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
+    render(<AIConfigView />);
+
+    // Type the spaced/parenthesized format the placeholder itself invites —
+    // it must normalize to clean E.164 so the agent builds a valid tel: URI.
+    const input = await screen.findByPlaceholderText(/\+1 608 217 5303/i);
+    fireEvent.change(input, { target: { value: '+1 (608) 217-5303' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.forward_phone).toBe('+16082175303');
+  });
+
+  test('HAPPY: a blank forward number persists as null (forwarding off)', async () => {
+    // WHAT: an empty/whitespace field saves as null so the agent falls back to
+    //        taking a message rather than transferring to an empty tel: URI.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
+    render(<AIConfigView />);
+
+    // Type whitespace (also dirties the form so Save is enabled).
+    const input = await screen.findByPlaceholderText(/\+1 608 217 5303/i);
+    fireEvent.change(input, { target: { value: '   ' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.forward_phone).toBeNull();
+  });
+
   test('HAPPY: an already-enabled tenant renders its saved instructions', async () => {
     // WHO: an owner returning to a config they previously turned on.
     // WHAT: the saved instruction text is shown in the (enabled) textarea.

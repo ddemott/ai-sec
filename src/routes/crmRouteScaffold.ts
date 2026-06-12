@@ -46,7 +46,9 @@ export interface CrmRouteConfig {
   /** Verify OAuth state JWT; returns tenantId string or null */
   verifyState: (state: string) => string | null;
   /** Exchange auth code for tokens (code only — tenantId comes from verifyState) */
-  exchangeCodeForTokens: (code: string) => Promise<{ access_token: string; refresh_token: string; expiry_date: number }>;
+  exchangeCodeForTokens: (
+    code: string
+  ) => Promise<{ access_token: string; refresh_token: string; expiry_date: number }>;
   /** Run a full bidirectional sync; returns metadata spread into the response body */
   fullSync: (pool: Pool, tenantId: string) => Promise<Record<string, unknown>>;
   /** Optional extra query params to store in integration settings JSONB (e.g. tenant_sid for ServiceTitan) */

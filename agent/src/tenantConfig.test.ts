@@ -59,6 +59,7 @@ describe('fetchTenantConfig', () => {
       ttsVoice: null,
       ttsSpeed: null,
       ttsSoft: null,
+      forwardPhone: null,
     });
   });
 
