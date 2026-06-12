@@ -47,7 +47,8 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
       by_outcome: [
         { outcome: 'booked', count: 4, booked: 4 },
         { outcome: 'message', count: 3, booked: 0 },
-        { outcome: 'no_outcome', count: 3, booked: 0 },
+        { outcome: 'no_availability', count: 2, booked: 0 },
+        { outcome: 'no_outcome', count: 1, booked: 0 },
       ],
       by_day: [
         { day: '2026-06-10', total: 5, booked: 2 },
@@ -66,9 +67,11 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
     expect(screen.getByText('40%')).toBeInTheDocument();
     expect(screen.getByText('30%')).toBeInTheDocument();
 
-    // WHY breakdown shows human-friendly outcome labels.
+    // WHY breakdown shows human-friendly outcome labels — incl. the agent's
+    // richer WHY categories (no_availability → "Wanted a time we couldn't offer").
     expect(screen.getByText('Left a message')).toBeInTheDocument();
     expect(screen.getByText('No clear outcome')).toBeInTheDocument();
+    expect(screen.getByText("Wanted a time we couldn't offer")).toBeInTheDocument();
   });
 
   // A single booked appointment so the view renders its panels (the global
