@@ -75,6 +75,28 @@ receptionist + booking (now) → call analytics / owner insights → richer cust
 
 ---
 
+## Go-to-market: lead with the painkiller
+
+Sell the **receptionist first**, expand later. It's easier to sell, for structural reasons — this is *why* the wedge-first sequencing works, not just a preference:
+
+- **Urgent painkiller, not a vitamin.** "I'm missing calls = losing money right now" is felt by every owner today. Invoicing/dispatch/CRM is a "get organized someday" pain — real but not urgent. Always sell the painkiller first.
+- **Tiny yes.** "Keep your number, we answer it" is low-risk and fast to try. "Switch your whole back office to our platform" is a scary, high-commitment switch. Ask for the small yes first.
+- **Instant, audible ROI.** The first missed-call-turned-booking is proof on day one. A CRM/invoicing tool takes weeks to show value.
+- **Captures the money moment.** The inbound call is where the sale is won or lost. Own that and you own the most valuable point in the owner's day.
+- **Add-ons become warm expansions.** Once their customers + schedule live in us, selling the next feature is expansion revenue to someone who already trusts us — far cheaper than new acquisition. (Don't chase feature-parity; add only what fits the segment + deepens the moat. Build the safe parts, partner the regulated ones.)
+
+## Product ideas & differentiators (captured, demand-gated)
+
+- **Owner-facing AI copilot in the dashboard** (Railway-style side panel) — a natural-language assistant that helps the *owner* configure + operate + understand the product: "set my Saturday hours 9–2", "add an oil change for $50", "why did Tuesday's calls go to voicemail?", "what does this setting do?". Strategic fit:
+  - **On-brand:** caller-facing AI (receptionist) + owner-facing AI (copilot) is a coherent identity static-form incumbent dashboards can't match.
+  - **Kills onboarding friction** → directly serves the "tiny yes / instant ROI" GTM thesis (owner self-serves via chat instead of learning forms).
+  - **Drives the expansion path:** surfaces insight + suggests add-ons in context ("you missed 12 after-hours calls — turn on SMS follow-up?") = automated warm upsell.
+  - **Deepens the moat:** owner engages daily via chat, not just when something breaks.
+  - **Cheap-ish:** LLM infra already runs for the receptionist.
+  - **Build trigger:** when onboarding-friction / setup-drop-off data shows it's the bottleneck, or as a deliberate onboarding accelerant. Not before. (Origin: Dale liked Railway's in-app LLM assistant, 2026-06-12.)
+
+---
+
 ## Decisions (2026-06-12)
 
 ### Integrations
