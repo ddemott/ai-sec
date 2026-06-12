@@ -446,6 +446,7 @@ export default function BusinessSettingsView() {
             disconnect: Api.square.disconnect,
             triggerSync: Api.square.triggerSync,
             connectedParam: 'squareConnected',
+            getSyncStatus: Api.square.getSyncStatus,
           }}
         />
 
