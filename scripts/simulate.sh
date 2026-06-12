@@ -17,6 +17,11 @@
 #                                        hitting /agent-tools/* — no telephony.
 #                                        Defaults to a fresh /demo/start tenant
 #                                        (ephemeral, 30-min TTL, self-cleaning).
+#   rag    [--env local|prod]             RAG accuracy eval: seed a known KB into
+#                                        a demo tenant, ask paraphrased caller
+#                                        questions via /agent-tools/policy-answer,
+#                                        grade retrieval, report a hit-rate (exit
+#                                        non-zero below 80%). Real embeddings.
 #   call   [--env local|prod] --tenant <id>
 #                                        Dispatch the agent into a LiveKit room
 #                                        and print a browser join URL so you can
@@ -175,6 +180,22 @@ cmd_tools() {
     node "$ROOT_DIR/scripts/sim-tools.mjs"
 }
 
+# ── rag ─────────────────────────────────────────────────────────────────────
+cmd_rag() {
+  # Seeds a known KB into a demo tenant, asks paraphrased questions, grades
+  # retrieval accuracy. Needs the server's AGENT_SECRET (policy-answer) + OPENAI
+  # on the target backend (real embeddings).
+  local secret="${SIM_AGENT_SECRET:-$(env_get AGENT_SECRET)}"
+  if [ -z "$secret" ]; then
+    echo "  ${RED}AGENT_SECRET not found (.env) and SIM_AGENT_SECRET not set${RESET}" >&2
+    exit 1
+  fi
+  local tls=""
+  [ "$ENV" = "local" ] && tls="NODE_TLS_REJECT_UNAUTHORIZED=0"
+  env $tls SIM_BACKEND="$BACKEND" SIM_AGENT_SECRET="$secret" \
+    node "$ROOT_DIR/scripts/sim-rag.mjs"
+}
+
 # ── call ────────────────────────────────────────────────────────────────────
 cmd_call() {
   load_livekit_env || exit 1
@@ -186,8 +207,9 @@ cmd_call() {
 case "$SUBCMD" in
   status) cmd_status ;;
   tools)  cmd_tools ;;
+  rag)    cmd_rag ;;
   call)   cmd_call ;;
-  all)    cmd_status && echo "" && cmd_tools ;;
+  all)    cmd_status && echo "" && cmd_tools && echo "" && cmd_rag ;;
   ""|-h|--help) sed -n '3,40p' "$0" ;;
   *) echo "Unknown subcommand: $SUBCMD" >&2; exit 2 ;;
 esac

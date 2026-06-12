@@ -73,7 +73,8 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 - `call` — dispatch agent + browser join URL (real voice, no phone).
 - [ ] Replace the dead `qa-live-test.py` references (done in CLAUDE.md; file deleted).
 - [ ] Add `simulate tools` (or an E2E equivalent) to CI once the `[dev]` links are wired, so journeys are regression-guarded.
-- [ ] **[dev] Test RAG accuracy** — the receptionist answers callers from `search_tenant_docs` (pgvector cosine over the tenant KB). No accuracy measurement exists. Build a RAG eval: seed a known KB → ask a fixed set of caller questions (hours, prices, services, policies, edge phrasings) → assert the right doc is retrieved + the answer is grounded/correct; report a hit-rate. Natural fit as a `simulate` sub-mode (e.g. `simulate rag`). **Gates the website-scan onboarding idea** (`docs/STRATEGY.md`) — auto-populating the KB from a scrape raises garbage-in risk, so this accuracy guard must exist before/with that feature. Chain: scan → KB → RAG → accuracy.
+- [x] **Test RAG accuracy — DONE 2026-06-12.** `scripts/sim-rag.mjs` + `./scripts/simulate.sh rag` — seeds a known KB into a demo tenant (real embeddings via `/knowledge/add`), asks paraphrased caller questions through `/agent-tools/policy-answer`, grades retrieval (expected content present, + out-of-scope must fall back not hallucinate), reports a hit-rate and exits non-zero below 80%. On-demand quality tool (real OpenAI → not a CI gate; non-deterministic + costs). Run-verified: **5/6 (83%)**. **Gates the website-scan onboarding idea** (`docs/STRATEGY.md`).
+  - [ ] **Finding from the eval:** *"what's your address"* falls back instead of retrieving the location doc — the `address`↔`located` synonym doesn't clear the 0.5 similarity threshold. Investigate (threshold tuning / better `normalizeForEmbedding` / KB synonym coverage) before relying on RAG for address questions.
 
 ### Reassuring — audited and found FULLY wired (no action)
 
