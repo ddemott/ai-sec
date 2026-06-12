@@ -50,12 +50,25 @@ const CALL_IDS = [`e2e-analytics-${Date.now()}-a`, `e2e-analytics-${Date.now()}-
 test.beforeAll(async () => {
   // Seed two logged calls for the admin tenant so the call panels have data.
   const ctx = await request.newContext({ ignoreHTTPSErrors: true });
+  const headers = { 'x-agent-secret': AGENT_SECRET, 'content-type': 'application/json' };
   for (const callId of CALL_IDS) {
     await ctx.post(`${BACKEND_URL}/agent-tools/voice-session-start`, {
-      headers: { 'x-agent-secret': AGENT_SECRET, 'content-type': 'application/json' },
+      headers,
       data: { tenant_id: ADMIN_TENANT, call_id: callId, caller_phone: '+16305550000' },
     });
   }
+  // End one with a rich WHY outcome so the "Why Callers Reached Out" panel
+  // has a real category to render (exercises the agent's callClassify path).
+  await ctx.post(`${BACKEND_URL}/agent-tools/voice-session-end`, {
+    headers,
+    data: {
+      tenant_id: ADMIN_TENANT,
+      call_id: CALL_IDS[0],
+      duration_seconds: 30,
+      outcome: 'no_availability',
+      transcript: 'Caller: do you have Saturday? Agent: sorry, we are closed weekends.',
+    },
+  });
   await ctx.dispose();
 });
 
@@ -88,6 +101,10 @@ test.describe('Analytics view (gap #2)', () => {
     await expect(page.getByText('Booking Conversion')).toBeVisible();
     await expect(page.getByText('Caller Abandonment')).toBeVisible();
     await expect(page.getByText('Why Callers Reached Out')).toBeVisible();
+
+    // The WHY panel shows the agent's classified outcome as a friendly label
+    // (we seeded a 'no_availability' call → "Wanted a time we couldn't offer").
+    await expect(page.getByText("Wanted a time we couldn't offer")).toBeVisible();
 
     // The retired stub phrasing must be gone — its presence = a regression to
     // the pre-gap-#2 placeholders.

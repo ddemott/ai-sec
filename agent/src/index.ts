@@ -36,6 +36,7 @@ import { buildTools } from './tools.js';
 import { TranscriptRecorder } from './transcript.js';
 import { CallOutcomeTracker } from './callOutcome.js';
 import { summarizeCall } from './callSummary.js';
+import { classifyCallOutcome } from './callClassify.js';
 import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
@@ -194,11 +195,18 @@ export default defineAgent({
         ctx.addShutdownCallback(async () => {
           try {
             const rendered = transcript.render();
-            const { outcome, appointmentId } = outcomeTracker.result();
+            const { outcome: trackedOutcome, appointmentId } = outcomeTracker.result();
             // Post-call summary is best-effort: summarizeCall is bounded + never
             // throws (resolves null on timeout/error), so it can never drop the
             // duration/transcript/outcome write below.
             const summary = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
+            // If no booking/transfer tool already set the outcome, classify WHY
+            // the caller reached out (no_availability / wrong_service / price /
+            // message / info). classifyCallOutcome is bounded + failsafe and
+            // returns null when unclear — a null outcome stays 'no_outcome'
+            // server-side, i.e. counted as abandoned. So we never guess.
+            const outcome =
+              trackedOutcome ?? (await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY));
             await client.call('/agent-tools/voice-session-end', {
               tenant_id: sessionCtx.tenantId,
               call_id: callId,

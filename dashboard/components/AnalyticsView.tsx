@@ -56,6 +56,11 @@ const OUTCOME_LABELS: Record<string, string> = {
   message: 'Left a message',
   voicemail: 'Left a voicemail',
   no_outcome: 'No clear outcome',
+  // WHY categories from the agent's post-call classifier (callClassify.ts)
+  no_availability: "Wanted a time we couldn't offer",
+  wrong_service: "Wanted a service we don't offer",
+  price: 'Price concern',
+  info: 'Asked a question',
 };
 
 function labelForOutcome(outcome: string): string {

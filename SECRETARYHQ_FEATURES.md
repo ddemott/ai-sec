@@ -52,7 +52,7 @@
 
 - ✅ Top-line stats — calls / appointments / customers (volume, today, week) + recent activity (`/analytics/stats`)
 - ✅ Call panels — call volume over time, call→booking conversion, caller abandonment (`/analytics/calls`, from `voice_sessions`; gap #2 shipped 2026-06-12)
-- 🔨 Reporting that answers **WHY**, not just WHAT — a first WHY cut (outcome breakdown: booked/transferred/message/no-outcome) is live; the high-value version ("bookings down because N callers wanted X" — price / no-availability / wrong-service) needs richer outcome classification (next build). The differentiator competitors can't match (their receptionist never captures the why)
+- ✅ Reporting that answers **WHY**, not just WHAT — the agent classifies each non-booking call (`no_availability` / `wrong_service` / `price` / `message` / `info`), and the "Why Callers Reached Out" panel surfaces the breakdown. The differentiator competitors can't match (their receptionist never captures the why). 🔨 Next: the conversational cut ("bookings down because N callers wanted Saturday") via the owner copilot.
 - ✅ Coverage analysis (staffing vs demand)
 
 ## 6. Reminders & Communications
