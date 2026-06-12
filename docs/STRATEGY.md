@@ -85,6 +85,21 @@ Sell the **receptionist first**, expand later. It's easier to sell, for structur
 - **Captures the money moment.** The inbound call is where the sale is won or lost. Own that and you own the most valuable point in the owner's day.
 - **Add-ons become warm expansions.** Once their customers + schedule live in us, selling the next feature is expansion revenue to someone who already trusts us — far cheaper than new acquisition. (Don't chase feature-parity; add only what fits the segment + deepens the moat. Build the safe parts, partner the regulated ones.)
 
+## Pricing model — value-aligned volume (captured 2026-06-12; FINALIZE + BUILD AFTER THE BASE)
+
+**Direction locked, implementation deferred** — finish the core product first; build pricing/metering infra later, once real usage data exists to set the bands. (Dale 2026-06-12: capture it, but base product comes first.)
+
+**Meter on VALUE delivered — calls handled / appointments booked — NEVER on seats, NEVER on minutes.** "We scale as they scale; it goes up, but it should." This is the *good* kind of usage pricing (Stripe/Square per-transaction model — the aligned side of the money-model heuristic), and it structurally beats the most-hated thing across *every* competitor:
+
+- **Per-seat** (Jobber/HCP/ServiceTitan) punishes the business for hiring — a growth tax decoupled from value. We never charge per seat; adding staff never raises the bill.
+- **Per-minute overage** (pure-plays) = bill shock. We never meter minutes (punishes a chatty caller — not the shop's fault, not value-aligned).
+
+**Design rules:**
+1. **Strongest form: price tied to bookings.** A booking is worth $50–500 to the shop; a few dollars per booking reads as ROI, not a tax — they pay more *happily because they're earning more*. Incentives identical: we only make more when we make them more.
+2. **Predictability is non-negotiable** (the pure-plays' real sin is surprise, not scaling). Tiered **volume bands** — Solo/Growth/Pro become *volume* tiers (by calls/bookings/locations), not seat tiers — + a visible meter + caps + alerts (the owner copilot warns at ~80% of plan). No surprise bills.
+3. **Floor + usage:** a low flat base (covers the always-on receptionist) + value-metered usage on top. Predictable like flat, scales like usage.
+4. **Per-booking or per-call-band > per-minute**, always.
+
 ## Product ideas & differentiators (captured, demand-gated)
 
 - **Owner-facing AI copilot in the dashboard** (Railway-style side panel) — a natural-language assistant that helps the *owner* configure + operate + understand the product: "set my Saturday hours 9–2", "add an oil change for $50", "why did Tuesday's calls go to voicemail?", "what does this setting do?". Strategic fit:
