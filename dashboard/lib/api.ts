@@ -609,6 +609,12 @@ export const Api = {
       apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
+  // --- KNOWLEDGE WEBSITE IMPORT (item 10) ---
+  knowledge: {
+    importWebsite: (tenantId: string | null, url: string) =>
+      apiMutate(`/knowledge/import-website`, 'POST', { tenant_id: tenantId, url }),
+  },
+
   // --- MASTER SKILLS ---
   skills: {
     list: (tenantId: string | null) =>
