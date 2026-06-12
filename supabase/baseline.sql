@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict sir68WT5mUHtE4xl6Xr6mymf6Tq7K0W7dlnEfZkQcywagXt9A4P2ePSnGcvwdwa
+\restrict ZWgeFnCT9Tw7T5f0TP7YrzbBybcOVEOab3pdvke2CzPpB7L56CdFQLcwzCE8pJJ
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2624,6 +2624,62 @@ ALTER TABLE ONLY public.entity_sync_map FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: message_delivery_status; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.message_delivery_status (
+    message_delivery_status_id integer NOT NULL,
+    message_sid text NOT NULL,
+    message_status text NOT NULL,
+    error_code text,
+    tenant_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE message_delivery_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.message_delivery_status IS 'Latest Twilio SMS delivery status per message SID, recorded by POST /communications/twilio/status. Non-RLS event table (webhook is tenant-exempt, writes via shared pool).';
+
+
+--
+-- Name: COLUMN message_delivery_status.message_sid; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.message_delivery_status.message_sid IS 'Twilio Message SID (SMxxx). UNIQUE -- one row per message, upserted as status advances.';
+
+
+--
+-- Name: COLUMN message_delivery_status.message_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.message_delivery_status.message_status IS 'Latest Twilio MessageStatus (queued|sending|sent|delivered|undelivered|failed|received).';
+
+
+--
+-- Name: message_delivery_status_message_delivery_status_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.message_delivery_status_message_delivery_status_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: message_delivery_status_message_delivery_status_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.message_delivery_status_message_delivery_status_id_seq OWNED BY public.message_delivery_status.message_delivery_status_id;
+
+
+--
 -- Name: opt_out_records; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3213,6 +3269,13 @@ ALTER TABLE ONLY public.consent_records ALTER COLUMN consent_record_id SET DEFAU
 
 
 --
+-- Name: message_delivery_status message_delivery_status_id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_delivery_status ALTER COLUMN message_delivery_status_id SET DEFAULT nextval('public.message_delivery_status_message_delivery_status_id_seq'::regclass);
+
+
+--
 -- Name: opt_out_records opt_out_record_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3368,6 +3431,22 @@ ALTER TABLE ONLY public.entity_sync_map
 
 ALTER TABLE ONLY public.entity_sync_map
     ADD CONSTRAINT entity_sync_map_tenant_id_provider_entity_type_local_id_key UNIQUE (tenant_id, provider, entity_type, local_id);
+
+
+--
+-- Name: message_delivery_status message_delivery_status_message_sid_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_delivery_status
+    ADD CONSTRAINT message_delivery_status_message_sid_key UNIQUE (message_sid);
+
+
+--
+-- Name: message_delivery_status message_delivery_status_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_delivery_status
+    ADD CONSTRAINT message_delivery_status_pkey PRIMARY KEY (message_delivery_status_id);
 
 
 --
@@ -3743,6 +3822,13 @@ CREATE INDEX idx_entity_sync_map_local ON public.entity_sync_map USING btree (te
 --
 
 CREATE INDEX idx_entity_sync_map_pending ON public.entity_sync_map USING btree (sync_status) WHERE (sync_status <> 'synced'::text);
+
+
+--
+-- Name: idx_message_delivery_status_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_message_delivery_status_tenant ON public.message_delivery_status USING btree (tenant_id, updated_at DESC);
 
 
 --
@@ -4238,6 +4324,14 @@ ALTER TABLE ONLY public.employees
 
 ALTER TABLE ONLY public.entity_sync_map
     ADD CONSTRAINT entity_sync_map_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
+-- Name: message_delivery_status message_delivery_status_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_delivery_status
+    ADD CONSTRAINT message_delivery_status_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
 
 
 --
@@ -4980,5 +5074,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict sir68WT5mUHtE4xl6Xr6mymf6Tq7K0W7dlnEfZkQcywagXt9A4P2ePSnGcvwdwa
+\unrestrict ZWgeFnCT9Tw7T5f0TP7YrzbBybcOVEOab3pdvke2CzPpB7L56CdFQLcwzCE8pJJ
 

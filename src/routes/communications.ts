@@ -14,11 +14,42 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
+import twilio from 'twilio';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
 import { CommunicationService } from '../services/communications/index.js';
 import { ConsentService } from '../services/consentService.js';
 import { createDatabaseService } from '../database/index.js';
 import { createTenantConfigService } from '../services/tenants/index.js';
+import { messageDeliveryReceiptsTotal } from '../services/metrics.js';
+
+/**
+ * Record a Twilio SMS delivery-status callback.
+ *
+ * Exported (not inlined) so the unit test can drive the persistence path
+ * directly with a mock pool — the handler around it stays a thin HTTP shell.
+ * Upsert keyed on message_sid: Twilio fires the callback multiple times as
+ * the message advances (queued → sent → delivered), latest status wins.
+ */
+export async function recordTwilioDeliveryStatus(
+  pool: Pool,
+  params: {
+    messageSid: string;
+    messageStatus: string;
+    errorCode?: string | null;
+    tenantId?: string | null;
+  }
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO message_delivery_status (message_sid, message_status, error_code, tenant_id, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (message_sid)
+     DO UPDATE SET message_status = EXCLUDED.message_status,
+                   error_code = EXCLUDED.error_code,
+                   tenant_id = COALESCE(EXCLUDED.tenant_id, message_delivery_status.tenant_id),
+                   updated_at = now()`,
+    [params.messageSid, params.messageStatus, params.errorCode ?? null, params.tenantId ?? null]
+  );
+}
 
 // ── Validation Schemas ───────────────────────────────────────────────
 
@@ -348,4 +379,83 @@ export function registerCommunicationRoutes(
       });
     }, 'Failed to get opt-out records')
   );
+
+  /**
+   * POST /communications/twilio/status — Twilio SMS delivery-status webhook.
+   *
+   * Twilio POSTs the message lifecycle here (form-encoded: MessageSid +
+   * MessageStatus, plus optional ErrorCode) when statusCallback is set on
+   * messages.create() (see TwilioAdapter.sendSMS). PUBLIC + tenant-exempt:
+   * Twilio sends no JWT and no tenant_id in the body — the owning tenant is
+   * read back from the ?tenant_id= query param the adapter appended to the
+   * callback URL.
+   *
+   * Verification: if TWILIO_AUTH_TOKEN is set we validate the X-Twilio-Signature
+   * against the reconstructed request URL + form params (twilio.validateRequest).
+   * A bad signature → 403, nothing recorded. With no auth token configured we
+   * accept + log (helper-unavailable branch) so local/dev still works.
+   *
+   * Always replies 200 quickly on the happy path so Twilio doesn't retry a
+   * callback we've already ingested. Writes via the shared `pool` (the route
+   * has no RLS tenant context); message_delivery_status is a non-RLS event table.
+   */
+  app.post('/communications/twilio/status', async (req: AppRequest, reply) => {
+    const body = (req.body ?? {}) as Record<string, string | undefined>;
+    const messageSid = body.MessageSid;
+    const messageStatus = body.MessageStatus;
+    const errorCode = body.ErrorCode ?? null;
+
+    // Malformed callback: missing the two fields every Twilio status callback
+    // carries. Reject 400 (and record nothing) rather than persist a junk row.
+    if (!messageSid || !messageStatus) {
+      req.log.warn(
+        { event: 'twilio_status_callback_malformed' },
+        'Twilio status callback missing MessageSid or MessageStatus'
+      );
+      return reply
+        .status(400)
+        .send({ success: false, error: 'Missing MessageSid or MessageStatus' });
+    }
+
+    // Signature verification (when the auth token is available).
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    if (authToken) {
+      const signature = (req.headers['x-twilio-signature'] as string) || '';
+      // Twilio signs the full URL it POSTed to, including the query string,
+      // plus the sorted POST params. Reconstruct it the same way the Square
+      // webhook does (protocol + host + url).
+      const url = `${req.protocol}://${req.hostname}${req.url}`;
+      const valid = twilio.validateRequest(
+        authToken,
+        signature,
+        url,
+        body as Record<string, string>
+      );
+      if (!valid) {
+        req.log.warn(
+          { event: 'twilio_status_callback_invalid_signature', messageSid },
+          'Twilio status callback signature mismatch'
+        );
+        return reply.status(403).send({ success: false, error: 'Invalid Twilio signature' });
+      }
+    } else {
+      req.log.info(
+        { event: 'twilio_status_callback_unverified' },
+        'TWILIO_AUTH_TOKEN unset — accepting status callback without signature verification'
+      );
+    }
+
+    const tenantId = (req.query as Record<string, string | undefined>)?.tenant_id ?? null;
+
+    await recordTwilioDeliveryStatus(pool, {
+      messageSid,
+      messageStatus,
+      errorCode,
+      tenantId,
+    });
+
+    messageDeliveryReceiptsTotal.inc({ status: messageStatus });
+
+    return reply.send({ success: true });
+  });
 }
