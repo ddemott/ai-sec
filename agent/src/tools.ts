@@ -75,7 +75,7 @@ export function buildTools(
         const res = await client.call('/agent-tools/customer-context', {
           tenant_id: ctx.tenantId,
           phone: ctx.callerPhone,
-        });
+        }, { isReadOnly: true });
         return formatResponse(res);
       },
     }),
@@ -91,7 +91,7 @@ export function buildTools(
       execute: async () => {
         const res = await client.call('/agent-tools/service-catalog', {
           tenant_id: ctx.tenantId,
-        });
+        }, { isReadOnly: true });
         return formatResponse(res);
       },
     }),
@@ -120,7 +120,7 @@ export function buildTools(
           tenant_id: ctx.tenantId,
           service_type: args.service_type,
           date: args.date,
-        });
+        }, { isReadOnly: true });
         return formatResponse(res);
       },
     }),
@@ -170,7 +170,7 @@ export function buildTools(
             requiredEmployeeSkills: args.required_employee_skills,
           },
           window: { from: args.window_from, to: args.window_to },
-        });
+        }, { isReadOnly: true });
         return formatResponse(res);
       },
     }),
@@ -194,7 +194,7 @@ export function buildTools(
           resource_id: args.resource_id,
           start_time: args.start_time,
           end_time: args.end_time,
-        });
+        }, { isReadOnly: true });
         return formatResponse(res);
       },
     }),
@@ -317,7 +317,7 @@ export function buildTools(
         const res = await client.call('/agent-tools/policy-answer', {
           tenant_id: ctx.tenantId,
           question: args.question,
-        });
+        }, { isReadOnly: true });
         return formatResponse(res);
       },
     }),
