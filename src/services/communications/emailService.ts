@@ -9,6 +9,7 @@ import type { TenantConfigService } from '../tenants/index.js';
 import type { ConsentService } from '../consentService.js';
 import type { EmailMessage, CommunicationResult } from './types.js';
 import { EmailTemplateService, type EmailTemplateData } from './emailTemplates.js';
+import { recordCommunicationHistory } from './communicationHistory.js';
 
 export class EmailService {
   private transporter: nodemailer.Transporter;
@@ -94,6 +95,17 @@ export class EmailService {
       const result = await this.transporter.sendMail(mailOptions);
 
       console.log(`✅ Email sent to ${message.to} for tenant ${tenantId}`);
+
+      // Record the send in communications_history (best-effort, never throws —
+      // a failed log must not turn a successful send into a failure).
+      await recordCommunicationHistory(tenantId, {
+        channel: 'email',
+        recipient: message.to,
+        subject,
+        body: text,
+        status: 'sent',
+        providerMessageId: result.messageId,
+      });
 
       return {
         success: true,

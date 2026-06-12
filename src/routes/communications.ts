@@ -75,7 +75,7 @@ const HistoryQuerySchema = z.object({
 export function registerCommunicationRoutes(
   app: AppFastifyInstance,
   pool: Pool,
-  _withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   const db = createDatabaseService(pool);
   const configService = createTenantConfigService(pool);
@@ -167,9 +167,13 @@ export function registerCommunicationRoutes(
   );
 
   /**
-   * GET /communications/history - Get communication history
-   * Note: This requires a communications_history table to be implemented.
-   * For now, returns an empty placeholder.
+   * GET /communications/history - Get communication history (paginated)
+   *
+   * Tenant-scoped read of the communications_history table (written on the
+   * send success path of EmailService/SMSService). Filterable by channel via
+   * ?type=email|sms|all (default all); paginated via ?limit (1-100, default
+   * 50) + ?offset. `total` is the full filtered count, independent of the
+   * page window, so the dashboard can render pagination controls.
    */
   app.get(
     '/communications/history',
@@ -186,13 +190,46 @@ export function registerCommunicationRoutes(
         });
       }
 
-      // TODO: Implement communications_history table
-      // For now, return empty list with a note
+      const { type, limit, offset } = parsed.data;
+
+      const { history, total } = await withTenantClient(tenantId, async (client) => {
+        // COUNT(*) OVER() gives the full filtered count alongside the paged
+        // rows in a single round-trip; it is NULL only when zero rows match,
+        // which we coalesce to 0 below. Newest-first ordering matches the
+        // idx_communications_history_tenant_created index.
+        const result = await client.query(
+          `SELECT communications_history_id,
+                  tenant_id,
+                  customer_id,
+                  channel,
+                  direction,
+                  recipient,
+                  subject,
+                  body,
+                  status,
+                  provider_message_id,
+                  error,
+                  created_at,
+                  COUNT(*) OVER() AS total_count
+             FROM communications_history
+            WHERE tenant_id = $1
+              AND ($2 = 'all' OR channel = $2)
+            ORDER BY created_at DESC, communications_history_id DESC
+            LIMIT $3 OFFSET $4`,
+          [tenantId, type, limit, offset]
+        );
+
+        const rows = result.rows as Array<Record<string, unknown> & { total_count: string }>;
+        const totalCount = rows.length > 0 ? parseInt(rows[0].total_count, 10) : 0;
+        // Drop the window-function helper column from each returned row.
+        const history = rows.map(({ total_count: _ignored, ...rest }) => rest);
+        return { history, total: totalCount };
+      });
+
       return reply.send({
         success: true,
-        history: [],
-        total: 0,
-        note: 'Communication history tracking not yet implemented',
+        history,
+        total,
       });
     }, 'Failed to get communication history')
   );
