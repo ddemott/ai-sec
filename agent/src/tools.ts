@@ -177,7 +177,7 @@ export function buildTools(
 
     check_availability: llm.tool({
       description:
-        'Check whether a specific resource is available at a specific time. Use when you have both a resource_id and a concrete start/end.',
+        'Check whether a specific resource is available at a specific time. Use when you have both a resource_id and a concrete start/end. (SLOW lookup — 2-4s; a short filler like "one sec while I check that" is spoken automatically before the result.)',
       parameters: {
         type: 'object',
         properties: {
