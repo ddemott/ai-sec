@@ -124,8 +124,10 @@ async function main() {
     requirements: { serviceType: 'Oil Change' },
     window: { from: winFrom.toISOString(), to: winTo.toISOString() },
   });
+  let bookedApptId = null;
   if (book.json?.success) {
-    pass('book-with-scheduling', 'appointment booked');
+    bookedApptId = book.json.result?.appointment_id ?? null;
+    pass('book-with-scheduling', `appointment booked ${bookedApptId ? bookedApptId.slice(0, 8) + '…' : ''}`);
   } else {
     fail('book-with-scheduling', `status ${book.status} ${JSON.stringify(book.json)}`);
   }
@@ -140,20 +142,48 @@ async function main() {
   if (pref.json?.success) pass('save-customer-preference', "saved 'last_service'");
   else fail('save-customer-preference', `status ${pref.status} ${JSON.stringify(pref.json)}`);
 
-  // ── S8. Call ends — duration + transcript land; outcome/link are the gaps ──
+  // ── S8. Call ends — full payload: duration, transcript, outcome, the booked
+  //        appointment_id, and a summary (the agent now sends all of these). ──
+  const callSummary = 'Caller booked an oil change.';
   const end = await api('/agent-tools/voice-session-end', {
     tenant_id: TENANT,
     call_id: callId,
     duration_seconds: 95,
     transcript: 'Caller: I need an oil change.\nAgent: Booked you in. Anything else?',
     outcome: 'booked',
+    appointment_id: bookedApptId,
+    summary: callSummary,
   });
-  if (end.json?.success) pass('voice-session-end', 'duration + transcript stored');
+  if (end.json?.success) pass('voice-session-end', 'duration + transcript + outcome + link + summary sent');
   else fail('voice-session-end', `status ${end.status} ${JSON.stringify(end.json)}`);
-  // Known [dev] gaps the agent never populates on the real path:
-  gap('call → appointment link', 'agent sends appointment_id=null (agentTools.ts:419)');
-  gap('call outcome from agent', 'agent never sends outcome on the real call path');
-  gap('post-call summary', 'no LLM summary generated in shutdown hook');
+
+  // ── S8b. DB read-back — prove the link/outcome/summary actually PERSISTED,
+  //         not just that the endpoint returned ok (local only; needs SIM_DB_URL).
+  if (process.env.SIM_DB_URL) {
+    try {
+      const { default: pg } = await import('pg');
+      const c = new pg.Client({ connectionString: process.env.SIM_DB_URL });
+      await c.connect();
+      const r = await c.query(
+        'SELECT appointment_id, outcome, summary FROM voice_sessions WHERE tenant_id=$1 AND call_id=$2',
+        [TENANT, callId]
+      );
+      await c.end();
+      const row = r.rows[0];
+      if (row && row.appointment_id && row.outcome === 'booked' && row.summary === callSummary) {
+        pass('call → appointment link (DB)', `voice_session.appointment_id = ${String(row.appointment_id).slice(0, 8)}…, outcome=booked, summary stored`);
+        if (bookedApptId && row.appointment_id !== bookedApptId) {
+          fail('appointment_id matches booking', `session ${row.appointment_id} != booked ${bookedApptId}`);
+        }
+      } else {
+        fail('call → appointment link (DB)', `row=${JSON.stringify(row)}`);
+      }
+    } catch (e) {
+      gap('call → appointment link (DB)', `read-back skipped: ${e?.message ?? e}`);
+    }
+  } else {
+    gap('call → appointment link (DB)', 'set SIM_DB_URL to verify persistence');
+  }
 
   // ── S9. Returning caller is recognized + preference recalled ──
   const ctx2 = await api('/agent-tools/customer-context', { tenant_id: TENANT, phone });

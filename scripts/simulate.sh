@@ -163,9 +163,15 @@ cmd_tools() {
     echo "  ${YELLOW}      unless it matches prod's. Set SIM_AGENT_SECRET=<prod secret> to target prod.${RESET}" >&2
   fi
   # Local backend uses self-signed certs → let node fetch accept them.
-  local tls=""
-  [ "$ENV" = "local" ] && tls="NODE_TLS_REJECT_UNAUTHORIZED=0"
+  # Local also gets SIM_DB_URL so the journey can read voice_sessions back and
+  # prove the call->appointment link persisted (prod has no direct DB access here).
+  local tls="" dburl=""
+  if [ "$ENV" = "local" ]; then
+    tls="NODE_TLS_REJECT_UNAUTHORIZED=0"
+    dburl="$(env_get DATABASE_URL)"
+  fi
   env $tls SIM_BACKEND="$BACKEND" SIM_AGENT_SECRET="$secret" SIM_TENANT="${TENANT:-}" \
+    SIM_DB_URL="$dburl" \
     node "$ROOT_DIR/scripts/sim-tools.mjs"
 }
 

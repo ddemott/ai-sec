@@ -34,6 +34,8 @@ import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { TranscriptRecorder } from './transcript.js';
+import { CallOutcomeTracker } from './callOutcome.js';
+import { summarizeCall } from './callSummary.js';
 import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
@@ -156,6 +158,9 @@ export default defineAgent({
     // — above both the shutdown registration and the session listener — so both
     // close over the same recorder.
     const transcript = new TranscriptRecorder();
+    // Tracks what happened on the call (booked / transferred + appointment_id),
+    // mutated by the booking/transfer tools, read at shutdown for session-end.
+    const outcomeTracker = new CallOutcomeTracker();
     try {
       client = new ToolsClient({
         backendUrl: config.BACKEND_URL,
@@ -188,14 +193,21 @@ export default defineAgent({
           );
         ctx.addShutdownCallback(async () => {
           try {
+            const rendered = transcript.render();
+            const { outcome, appointmentId } = outcomeTracker.result();
+            // Post-call summary is best-effort: summarizeCall is bounded + never
+            // throws (resolves null on timeout/error), so it can never drop the
+            // duration/transcript/outcome write below.
+            const summary = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
             await client.call('/agent-tools/voice-session-end', {
               tenant_id: sessionCtx.tenantId,
               call_id: callId,
               duration_seconds: Math.round((Date.now() - startedAtMs) / 1000),
-              // null when nothing was spoken (e.g. silent hang-up) → SQL NULL,
-              // not an empty transcript. outcome/summary/appointment_id remain
-              // deferred (RPC defaults them to NULL).
-              transcript: transcript.render(),
+              // null when nothing was spoken (e.g. silent hang-up) → SQL NULL.
+              transcript: rendered,
+              outcome,
+              appointment_id: appointmentId,
+              summary,
             });
           } catch (e) {
             callLog.warn(
@@ -232,10 +244,15 @@ export default defineAgent({
         roomName: sessionCtx.roomName ?? undefined,
         participantIdentity: sessionCtx.participantIdentity ?? undefined,
       });
-      const tools = buildTools(sessionCtx, client, {
-        forwardPhone: tenantConfig.forwardPhone,
-        execute: transferExecutor,
-      });
+      const tools = buildTools(
+        sessionCtx,
+        client,
+        {
+          forwardPhone: tenantConfig.forwardPhone,
+          execute: transferExecutor,
+        },
+        outcomeTracker
+      );
 
       // 4. Build prompt with runtime context
       const instructions = buildSystemPrompt({
