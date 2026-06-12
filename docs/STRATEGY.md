@@ -1,0 +1,109 @@
+# SecretaryHQ — Product & Competitive Strategy
+
+> Living strategy doc. Captures positioning + integration decisions that aren't
+> derivable from the code. Started 2026-06-12. Revisit when a beta customer or a
+> market shift changes the inputs — these are focus decisions, not permanent
+> doors.
+
+## TL;DR
+
+- **What we are:** the best **AI receptionist** for service businesses — phone-first, cross-platform, vertical-focused on **non-trades** (salons, auto, tire, fitness, food & beverage).
+- **What we are NOT (yet):** a full field-service CRM, and not a payments processor for our customers' customers.
+- **Core moats:** (1) cross-platform freedom (works with whatever the business already runs, or nothing), (2) non-trades vertical focus where no platform bundles a receptionist, (3) solo-founder agility against slow incumbents.
+
+---
+
+## The competitive finding (2026-06-12)
+
+We audited our 4 CRM integrations for whether the *vendor itself* ships a native AI receptionist — i.e. whether integrating means feeding a direct competitor who can bundle us out and cut API access.
+
+| CRM (we integrate) | Native AI receptionist? | Verdict |
+|---|---|---|
+| **Jobber** | ✅ "AI Receptionist" (Aug 2025) — answers calls/texts, books | **Direct competitor** |
+| **ServiceTitan** | ✅ native AI Voice Agent + Contact Center Pro — answers, books, reschedules, transfers | **Direct competitor** |
+| **Housecall Pro** | ✅ "CSR AI" — answers calls/chats, books 24/7, discloses AI | **Direct competitor** |
+| **Square** | ⚠️ "Square Assistant" = SMS reminder bot only; **Square does not answer phone calls** | **Partner, not a voice competitor** |
+
+**3 of our 4 CRMs ship the exact product we build.** The home-services *trades* vertical is now red-ocean: the platform owns the customer, bundles the receptionist, and any integration we build there serves customers we'll lose and depends on a competitor's goodwill.
+
+Sources: getjobber.com/features/ai-receptionist · servicetitan.com/features/pro/voice-agent · housecallpro.com/features/ai-team/csr-ai · squareup.com (Square Assistant / App Marketplace).
+
+---
+
+## Heuristic: a vendor's business model predicts whether it competes with you
+
+The 4 calls above aren't ad-hoc — they follow from how each vendor makes money. Use this test on **any** future integration (Toast, Vagaro, Booksy, a new POS) instead of re-litigating each one.
+
+- **SaaS-seat vendors that monetize by bundling** (Jobber, ServiceTitan, Housecall Pro) grow revenue by raising ARPU — adding features per subscription. An AI receptionist is pure upsell, so they build it natively → **future competitor.** Don't integrate deep; they'll absorb the feature and can cut your API access.
+- **Transaction / volume vendors** (Square — earns on payment volume, not seats) and **infrastructure vendors** (Google / Microsoft calendars — ads/cloud revenue, not seats) want *more bookings / usage* and have no reason to answer phones → **safe partner.** A receptionist that fills their calendars / drives their transactions *feeds their core metric*.
+
+**Rule for any new integration:** ask "how does this vendor make money?" first.
+- Seat-bundler → treat as a future competitor; integrate shallowly or not at all.
+- Transaction / volume / infrastructure → safe to partner; integrate freely.
+
+This is exactly what separated **Square (keep)** from the **3 trades platforms (freeze)**.
+
+---
+
+## Strategic position
+
+**Don't fight the platform-bundlers head-on.** Win where they don't / can't:
+
+1. **Cross-platform & no-platform businesses.** A business not on a field-service platform (spreadsheets, paper, Google Calendar, a generic POS) has no native receptionist option. Jobber's own marketing concedes the gap: their receptionist "only works inside Jobber's ecosystem."
+2. **Non-trades verticals.** Salons, auto, tire, fitness, food — these run on Square / Toast / Vagaro / Booksy, **not** Jobber/ServiceTitan/HCP. No incumbent bundles a receptionist for them.
+3. **Solo-founder agility.** The incumbents bundling receptionists *validates the demand* — the category is proven. Their size makes them slow to serve edge segments and pivot. A solo team can chase the gaps they leave faster than they can close them. (Dale, 2026-06-12: being established cuts both ways — they're entrenched but rigid; we're small but quick to adjust to the market.)
+
+---
+
+## Expansion path (wedge → platform, in reverse of the incumbents)
+
+The incumbents went **heavy ops platform first → bolt on a receptionist** to upsell. We go the **reverse, stronger order**: receptionist wedge first, then expand into the money/ops side later, as opt-in add-ons, once we already own the phone + the customer list + the schedule. This is the Square/Toast pattern (card reader → payroll/banking/loans, *after* owning the merchant relationship).
+
+So the platform is the **destination, not the starting point** — and refusing to start there is the advantage. The incumbents are slow and bloated *because* they front-loaded everything; our edge is sequencing.
+
+**Three disciplines that keep "add-on later" a strength, not the bloat trap:**
+
+1. **"Later" + "per demand" are load-bearing.** Build each add-on when a real customer's behavior names the need — never speculatively now. (This is the CLAUDE.md build principle applied to the roadmap.)
+2. **Build vs. partner — run every add-on through the money-model heuristic above.** Not everything should be built:
+   - Service payments → **partner** (Square). PCI / Stripe Connect / payout liability — line already drawn.
+   - Payroll → **partner** (Gusto / ADP). Regulated, brutal, commoditized.
+   - Light invoicing / reporting / customer insights → **build** — close to data we already own, low liability.
+3. **Each add-on must deepen the moat, not just add a checkbox.** Prefer add-ons that increase switching cost (more of the business's operation living in us) over ones that only add feature count.
+
+**Rough sequence (illustrative, demand-gated — not a commitment):**
+receptionist + booking (now) → call analytics / owner insights → richer customer records + history → light reporting → light invoicing → *partner* for payments (Square) + payroll (Gusto). Each step earns the next; none is built ahead of a real ask.
+
+---
+
+## Decisions (2026-06-12)
+
+### Integrations
+- **Freeze Jobber, ServiceTitan, Housecall Pro.** All three are direct competitors. Stop investing — do **not** fix the Jobber appointment-update no-op. Keep the existing code (optionality, low carrying cost) but no new work.
+- **Keep + prioritize Square.** Payments/booking platform with huge non-trades reach; not a phone-answering competitor. A genuine partner.
+- **Keep calendar sync (Google / Outlook).** Vendors not in the receptionist business — always safe.
+- **Freeze is reversible.** These are focus calls. Re-open any of them when a *real beta customer who cannot use the incumbent's native receptionist* asks, or the market shifts.
+
+### CRM scope ("build our own CRM" — sharpened)
+- We are **~60% of a light CRM already**: customers, appointments, employees, resources, services, skills, a real scheduling engine (employee_schedule + atomic booking RPCs), customer history/preferences/notes, voice/call records, reminders + communications.
+- **Direction: own the operational system-of-record, receptionist-first — NOT a full CRM.** Surface and extend what we already have so a small non-trades business never *needs* a second tool. Do not chase feature-parity with ServiceTitan/Jobber (invoicing, dispatch, job costing, marketing) — that's a multi-year platform war on their turf that dilutes the sharp thing.
+- **Sequencing rule:** the next CRM slice is whatever ONE thing forces a beta customer to a second tool today — built as small as possible, per real demand. Not "what a CRM should have."
+
+### Money — two flows, keep them separate
+- **Stripe = OUR SaaS billing only.** We bill the *business* a monthly subscription (Solo/Growth/Pro) for using SecretaryHQ. This is our revenue. (`src/routes/billing.ts`.)
+- **We do NOT process the business's customers' payments** (the caller paying for an oil change / haircut). Deliberately out of scope — PCI scope, Stripe Connect/marketplace liability, payouts, refund disputes. Payment for services stays with whatever the shop already uses (their POS / Square / cash). **Not handling this is a feature**, not a gap.
+
+---
+
+## Open questions (decide with a clear head / real data)
+
+- Which non-trades vertical do we go deepest on first? (salon vs auto/tire vs fitness vs food)
+- What's the first concrete "operational system-of-record" slice a beta customer actually demands?
+- Square: how deep — booking sync only, or lean into it as the payments partner we point customers to?
+- Do we ever revisit a trades play *around* the incumbents (serve the businesses their bundled receptionist underserves), or stay out entirely?
+
+---
+
+## Related
+
+- Build principles: see `CLAUDE.md` → "Build Principles" (build for real customers, test it or delete it, working flat beats dormant abstraction). This strategy is an application of those.
+- The 21 dormant CRM adapters deleted 2026-05-02 were prescient — same lesson, earlier.
