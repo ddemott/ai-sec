@@ -30,6 +30,7 @@ function buildApp(opts: {
   queryResponses: Array<{ rows: unknown[]; rowCount?: number }>;
   embedding?: number[];
   normalizer?: (text: string) => Promise<string>;
+  expander?: (text: string) => Promise<string>;
 }): { app: FastifyInstance; queries: MockQuery[] } {
   const queries: MockQuery[] = [];
   const responses = [...opts.queryResponses];
@@ -50,7 +51,14 @@ function buildApp(opts: {
   const getEmbedding = async () => opts.embedding ?? new Array(1536).fill(0);
 
   const app = Fastify({ logger: false });
-  registerAgentToolRoutes(app, {} as never, withTenantClient, getEmbedding, opts.normalizer);
+  registerAgentToolRoutes(
+    app,
+    {} as never,
+    withTenantClient,
+    getEmbedding,
+    opts.normalizer,
+    opts.expander
+  );
   return { app, queries };
 }
 
@@ -599,20 +607,43 @@ describe('agentTools /policy-answer', () => {
     expect(queries.some((q) => q.text.includes('unanswered_questions'))).toBe(true);
   });
 
-  it('HAPPY: uses normalizer when provided', async () => {
-    // WHO: Phase 12E added a query normalizer in front of embedding gen
-    // WHAT: If the normalizer is passed, it transforms the question
-    //        before getEmbedding runs — proven by observing the fallback
-    //        path with an empty result set
+  it('HAPPY: expands the query (not normalizes) before embedding', async () => {
+    // WHO: The 2026-06-12 RAG address-gap fix replaced the reductive query
+    //       normalizer with an additive query EXPANDER on this path
+    // WHAT: If the expander is passed, it transforms the question before
+    //        getEmbedding runs (context = 'customer phone inquiry')
+    // WHEN: A policy-answer request with an expander wired in
+    // WHERE: policy-answer's pre-embedding step
+    // WHY: Reducing a terse query ("what's your address" → "Address inquiry")
+    //       collapsed its retrieval signal below out-of-scope questions;
+    //       expansion adds synonyms to bridge the vocabulary gap instead.
+    const expander = vi.fn(async (text: string) => `expanded:${text}`);
+    const { app } = buildApp({
+      queryResponses: [{ rows: [{ content: 'match', similarity: 0.9 }] }],
+      expander,
+    });
+    await post(app, '/agent-tools/policy-answer', { tenant_id: TENANT_ID, question: 'hours?' });
+    expect(expander).toHaveBeenCalledWith('hours?', {
+      context: 'customer phone inquiry',
+    });
+  });
+
+  it('HAPPY: does NOT call the normalizer on the policy-answer query path', async () => {
+    // WHO: A backend still passing a normalizer positionally (signature
+    //       stability) but on the post-fix code path
+    // WHAT: The normalizer must NOT be invoked for query embedding anymore
+    // WHEN: A policy-answer request with a normalizer (but no expander)
+    // WHERE: policy-answer's pre-embedding step
+    // WHY: Regression guard — the reductive normalizer is the exact thing
+    //       that broke address retrieval; it must stay off this path. With
+    //       no expander, the raw query is embedded directly.
     const normalizer = vi.fn(async (text: string) => `normalized:${text}`);
     const { app } = buildApp({
       queryResponses: [{ rows: [{ content: 'match', similarity: 0.9 }] }],
       normalizer,
     });
     await post(app, '/agent-tools/policy-answer', { tenant_id: TENANT_ID, question: 'hours?' });
-    expect(normalizer).toHaveBeenCalledWith('hours?', {
-      context: 'customer phone inquiry',
-    });
+    expect(normalizer).not.toHaveBeenCalled();
   });
 
   it('SAD: empty question fails validation', async () => {

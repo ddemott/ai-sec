@@ -53,6 +53,7 @@ import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
+import { createQueryExpander } from '../shared/expandQueryForEmbedding';
 import { tenantMiddleware, generateToken, registerJwtAuthHook } from './middleware';
 
 // --- Environment Validation ---
@@ -86,6 +87,7 @@ if (isProduction) {
 
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
+const expandQueryForEmbedding = createQueryExpander(OPENAI_API_KEY);
 
 // --- Server Setup ---
 
@@ -277,7 +279,14 @@ registerVoiceRoutes(app, pool, withTenantClient);
 registerVersionHistoryRoutes(app, pool, withTenantClient);
 registerCommunicationRoutes(app, pool, withTenantClient);
 registerReminderRoutes(app, pool, withTenantClient);
-registerAgentToolRoutes(app, pool, withTenantClient, getEmbedding, normalizeForEmbedding);
+registerAgentToolRoutes(
+  app,
+  pool,
+  withTenantClient,
+  getEmbedding,
+  normalizeForEmbedding,
+  expandQueryForEmbedding
+);
 registerDemoRoutes(app, pool, generateToken);
 
 // --- Start Reminder Scheduler ---
