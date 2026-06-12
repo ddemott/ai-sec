@@ -12,7 +12,7 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { Api } from '../lib/api';
-import type { AnalyticsCalls } from '../lib/types';
+import type { AnalyticsCalls, AnalyticsStats } from '../lib/types';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { formatHour } from '../lib/utils';
 import { EmptyState } from './ui/EmptyState';
@@ -72,6 +72,7 @@ export default function AnalyticsView() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<AppointmentSummary | null>(null);
   const [calls, setCalls] = useState<AnalyticsCalls | null>(null);
+  const [stats, setStats] = useState<AnalyticsStats | null>(null);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -84,12 +85,14 @@ export default function AnalyticsView() {
     try {
       // Load appointments (the hour/day/return patterns) and call analytics
       // (volume/conversion/abandonment/outcome) in parallel.
-      const [appointments, callStats] = await Promise.all([
+      const [appointments, callStats, statsData] = await Promise.all([
         Api.appointments.list(tenantId),
         Api.analytics.getCalls(tenantId).catch(() => null),
+        Api.analytics.getStats(tenantId).catch(() => null),
       ]);
 
       if (callStats) setCalls(callStats);
+      if (statsData) setStats(statsData);
 
       if (Array.isArray(appointments)) {
         const byDay: Record<string, number> = {};
@@ -234,6 +237,11 @@ export default function AnalyticsView() {
           Patterns from your calls and bookings. You know your business — these numbers help you see
           it.
         </p>
+        {stats && (
+          <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+            Reliability snapshot: {stats.calls.total} calls / {stats.appointments.total} appts tracked (server aggregates via /analytics/stats)
+          </p>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* 1. Call Volume Over Time — real, from voice_sessions */}
