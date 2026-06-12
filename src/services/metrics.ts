@@ -329,3 +329,18 @@ export const remindersSkippedTotal = registry.counter(
   'reminders_skipped_total',
   'Reminders that skipped delivery, partitioned by reason (appointment_not_found, appointment_cancelled, no_consent, processing_error)'
 );
+
+// Twilio SMS delivery receipts — the *carrier-confirmed* outcome, distinct
+// from reminders_sent_total (which counts send ATTEMPTS, i.e. "Twilio
+// accepted the request"). This counter increments when Twilio's
+// statusCallback fires; status is a bounded enum
+// (queued|sending|sent|delivered|undelivered|failed|received) so label
+// cardinality is safe. A reminder can be sent (success) yet later land here
+// as status="undelivered" — that gap is exactly the transient flake this
+// feature was built to surface. Plot
+// `rate(message_delivery_receipts_total{status="delivered"}[5m]) /
+//  rate(message_delivery_receipts_total[5m])` for true delivery rate.
+export const messageDeliveryReceiptsTotal = registry.counter(
+  'message_delivery_receipts_total',
+  'Twilio SMS delivery-status callbacks received, partitioned by status (queued|sending|sent|delivered|undelivered|failed|received)'
+);

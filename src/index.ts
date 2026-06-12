@@ -22,6 +22,7 @@ import { buildLogger } from './services/logger';
 import { httpRequestsTotal, httpRequestDurationMs, errorsTotal } from './services/metrics';
 import fs from 'node:fs';
 import path from 'node:path';
+import querystring from 'node:querystring';
 
 import { registerAuthRoutes } from './routes/auth';
 import { registerTenantRoutes } from './routes/tenants';
@@ -148,6 +149,26 @@ void app.register(multipart, {
 // parses JSON via done(). See src/jsonContentTypeParser.ts for the why
 // (and the unit test that pins the done()-callback contract).
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, jsonContentTypeParser);
+
+// --- Form-Encoded Body Parsing for Twilio Webhooks ---
+// Twilio POSTs its SMS delivery-status callbacks as
+// application/x-www-form-urlencoded (MessageSid=…&MessageStatus=…). Fastify
+// ships no parser for that content type by default, so without this the
+// webhook would 415 and req.body would be undefined. Parse into a plain
+// object via querystring so POST /communications/twilio/status reads the
+// fields off req.body. (No @fastify/formbody dependency added — the built-in
+// querystring module covers this single, simple webhook surface.)
+app.addContentTypeParser(
+  'application/x-www-form-urlencoded',
+  { parseAs: 'string' },
+  (_req, body, done) => {
+    try {
+      done(null, querystring.parse(body as string));
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  }
+);
 
 // --- Database Pool ---
 // Single shared pool (see src/database/index.ts) — same instance is used by
