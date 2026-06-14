@@ -19,6 +19,8 @@ import {
 import { Api } from '../lib/api';
 import { formatPhone } from '../lib/phone';
 import { useActiveTenantId } from '../lib/SessionContext';
+import { FolderTab, FolderTabBar } from './ui/FolderTabs';
+import AnalyticsView from './AnalyticsView';
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return '0:00';
@@ -190,8 +192,11 @@ function HistoryCallRow({ call, isSelected, onSelect }: HistoryCallRowProps) {
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
+type CallsSubTab = 'calls' | 'analytics';
+
 export default function VoiceCallsView() {
   const tenantId = useActiveTenantId();
+  const [activeSubTab, setActiveSubTab] = useState<CallsSubTab>('calls');
   const [activeCalls, setActiveCalls] = useState<VoiceSessionDisplay[]>([]);
   const [callHistory, setCallHistory] = useState<VoiceSession[]>([]);
   const [selectedCall, setSelectedCall] = useState<VoiceSession | null>(null);
@@ -263,7 +268,28 @@ export default function VoiceCallsView() {
   const customerContext = selectedCall?.customer_context;
 
   return (
-    <div className="flex h-full">
+    <div className="flex-1 flex flex-col overflow-hidden h-full">
+      <FolderTabBar size="sm" ariaLabel="Calls sections">
+        <FolderTab
+          label="Recent Calls"
+          size="sm"
+          isActive={activeSubTab === 'calls'}
+          onClick={() => setActiveSubTab('calls')}
+        />
+        <FolderTab
+          label="Analytics"
+          size="sm"
+          isActive={activeSubTab === 'analytics'}
+          onClick={() => setActiveSubTab('analytics')}
+        />
+      </FolderTabBar>
+      {activeSubTab === 'analytics' && (
+        <div className="flex-1 overflow-y-auto">
+          <AnalyticsView />
+        </div>
+      )}
+      {activeSubTab === 'calls' && (
+      <div className="flex h-full">
       {/* Left Panel: Call List */}
       <div
         className="w-80 border-r flex flex-col"
@@ -644,6 +670,8 @@ export default function VoiceCallsView() {
           </div>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }
