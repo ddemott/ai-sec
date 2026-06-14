@@ -3,7 +3,7 @@
   "//": "Commands run from the REPO ROOT (Railway Root Directory must be BLANK, not 'dashboard') so the build sees repo-root /shared/* that the dashboard imports. Standalone mode (next.config.mjs) bundles all server-side files into .next/standalone/. Static assets (.next/static/) and public/ are NOT traced by standalone and must be copied manually into the standalone tree so next/server serves them. server.js lives at .next/standalone/server.js (repo-root-relative: dashboard/.next/standalone/server.js).",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "cd dashboard && npm ci && npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
+    "buildCommand": "cd dashboard && npm ci && npm run build && cp -r .next/static .next/standalone/.next/static && ([ -d public ] && cp -r public .next/standalone/public || true)"
   },
   "deploy": {
     "startCommand": "HOSTNAME=0.0.0.0 node dashboard/.next/standalone/server.js",
