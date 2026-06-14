@@ -857,6 +857,17 @@ export default function KnowledgeBaseView() {
               </div>
             )}
 
+            {/* Website import as onboarding step (TODO item from list / design).
+                 The dedicated scan step is now in the SetupWizard (step 7, right before the questions step 8).
+                 This box in the full view can be used post-onboarding to re-scan.
+                 See the wizard implementation and docs/TODO.md for details. */}
+            <div className="mt-4 p-3 border rounded" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)' }}>
+              <div className="text-sm font-medium mb-1">Import policies from your website (beta / optional step)</div>
+              <div className="text-xs text-muted mb-2">Paste URL → AI extracts answers to your questionnaire. Review & approve to populate KB (reduces manual entry).</div>
+              {/* TODO: add <Input> for URL + Button calling Api.knowledge.importWebsite + display results / refresh list */}
+              <div className="text-[10px] text-muted">(UI wiring pending — backend endpoint + helpers + staging table ready)</div>
+            </div>
+
             {/* ── Documents Tab ── */}
             {tab === 'documents' && (
               <div className="max-w-2xl">

@@ -771,6 +771,13 @@ export const Api = {
         error?: string;
       }>;
     },
+
+    importWebsite: (tenantId: string | null, url: string) =>
+      apiMutate<{ success: boolean; extracted?: any[]; discovered?: any[]; error?: string }>(
+        `/knowledge/import-website`,
+        'POST',
+        { tenant_id: tenantId, url }
+      ),
   },
 
   // --- BILLING ---

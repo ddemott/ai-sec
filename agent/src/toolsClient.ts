@@ -41,79 +41,93 @@ export class ToolsClient {
     this.fetchImpl = cfg.fetchImpl ?? fetch;
   }
 
-  async call<T = unknown>(path: string, body: unknown): Promise<ToolResponse<T>> {
-    // Normalize path so callers can pass either "/agent-tools/x" or "agent-tools/x".
+  async call<T = unknown>(
+    path: string,
+    body: unknown,
+    opts: { isReadOnly?: boolean } = {}
+  ): Promise<ToolResponse<T>> {
     const fullPath = path.startsWith('/') ? path : `/${path}`;
+    const maxAttempts = opts.isReadOnly ? 2 : 1;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
-    try {
-      const res = await this.fetchImpl(`${this.backendUrl}${fullPath}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-agent-secret': this.agentSecret,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      try {
+        const res = await this.fetchImpl(`${this.backendUrl}${fullPath}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-agent-secret': this.agentSecret,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
 
-      // Parse body regardless of status so we can surface structured errors.
-      const data: unknown = await res.json().catch(() => null);
+        const data: unknown = await res.json().catch(() => null);
 
-      if (res.status === 401) {
-        return {
-          ok: false,
-          error: 'Agent not authorized — check AGENT_SECRET config',
-          status: 401,
-        };
-      }
-
-      // Backend uses HTTP 200 for conversational failures too; only 5xx /
-      // unexpected shapes count as real errors.
-      if (!res.ok && res.status >= 500) {
-        return {
-          ok: false,
-          error: `Backend returned ${res.status}`,
-          status: res.status,
-        };
-      }
-
-      // Expected envelope shape.
-      if (data && typeof data === 'object' && 'success' in data) {
-        const envelope = data as {
-          success: boolean;
-          result?: T;
-          error?: string;
-          error_code?: string;
-        };
-        if (envelope.success) {
-          return { ok: true, result: envelope.result as T };
+        if (res.status === 401) {
+          return {
+            ok: false,
+            error: 'Agent not authorized — check AGENT_SECRET config',
+            status: 401,
+          };
         }
+
+        if (!res.ok && res.status >= 500) {
+          if (attempt < maxAttempts) {
+            // transient 5xx on read — retry
+            clearTimeout(timer);
+            continue;
+          }
+          return {
+            ok: false,
+            error: `Backend returned ${res.status}${opts.isReadOnly ? ' (after 1 read retry)' : ''}`,
+            status: res.status,
+          };
+        }
+
+        if (data && typeof data === 'object' && 'success' in data) {
+          const envelope = data as {
+            success: boolean;
+            result?: T;
+            error?: string;
+            error_code?: string;
+          };
+          if (envelope.success) {
+            return { ok: true, result: envelope.result as T };
+          }
+          return {
+            ok: false,
+            error: envelope.error ?? 'Tool returned success:false with no message',
+            errorCode: envelope.error_code,
+            status: res.status,
+          };
+        }
+
         return {
           ok: false,
-          error: envelope.error ?? 'Tool returned success:false with no message',
-          errorCode: envelope.error_code,
+          error: 'Unexpected response shape from backend',
           status: res.status,
         };
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.name === 'AbortError'
+              ? `Tool call timed out after ${this.timeoutMs}ms${attempt > 1 ? ' (retry)' : ''}`
+              : err.message
+            : 'Unknown fetch error';
+        if (attempt < maxAttempts && opts.isReadOnly) {
+          clearTimeout(timer);
+          continue;
+        }
+        return { ok: false, error: message };
+      } finally {
+        clearTimeout(timer);
       }
-
-      return {
-        ok: false,
-        error: 'Unexpected response shape from backend',
-        status: res.status,
-      };
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.name === 'AbortError'
-            ? `Tool call timed out after ${this.timeoutMs}ms`
-            : err.message
-          : 'Unknown fetch error';
-      return { ok: false, error: message };
-    } finally {
-      clearTimeout(timer);
     }
+
+    // unreachable
+    return { ok: false, error: 'All attempts exhausted' };
   }
 }

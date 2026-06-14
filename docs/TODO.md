@@ -18,6 +18,7 @@ Everything else complete or tracked below.
 - [x] **Gap #2: Analytics — DONE 2026-06-12** (shipped to main, deployed). `GET /analytics/stats` + `GET /analytics/calls` built; dashboard panels now real — Call Volume / Booking Conversion / Caller Abandonment from `voice_sessions` ("booked" keyed on `appointment_id IS NOT NULL`), + a first "Why Callers Reached Out" outcome breakdown. Backend unit + dashboard component + `analytics.spec.ts` E2E all green; harness asserts both routes.
   - [x] **Follow-up: richer WHY classification — DONE 2026-06-12.** Agent's post-call classifier (`agent/src/callClassify.ts`, bounded/failsafe) categorizes non-booking calls into `no_availability` / `wrong_service` / `price` / `message` / `info` (null when unclear → stays `no_outcome` = abandoned, preserving that metric). Wired into the shutdown hook (only when no booking/transfer tool already set the outcome). Dashboard "Why Callers Reached Out" panel renders friendly labels. +8 agent + dashboard component tests; analytics E2E extended to seed a `no_availability` call and assert the label (run-verified).
 - [ ] **Stripe — incorporate + verify ALL paths.** Built (`src/routes/billing.ts`), never tested live. Verify against **Stripe test mode** (test keys + Stripe CLI webhook replay — no real money): checkout → session/customer created; webhook signature verifies (`STRIPE_WEBHOOK_SECRET`); `checkout.session.completed` → subscription activates (tenant gate flips); `invoice.payment_failed` handled; `customer.subscription.deleted` revokes access; plan gating (Solo/Growth/Pro) enforces; 5 env vars set on Railway + webhook registered. Add a Stripe path-check to `simulate` so it's a one-command answer.
+- [x] **Website-scan as onboarding step (fetch + LLM extract to KB).** Core backend + dedicated wizard step implemented: new step 7 "Import from website" (right before the policy questions step 8) with scan that prefills and saves answers for the starter questions. The questions step loads prefilled from DB. See details in the Back-to-Front subsection below. Backend, migration, UI step, prefill logic done. Advanced suggestion review still pending.
 
 ## 🚀 Production Wiring Checklist (backend audit 2026-06-12)
 
@@ -25,7 +26,7 @@ Full backend wiring audit (3 parallel investigators over `src/` + `agent/src/`).
 **Tag key:** `[prod]` = code works in dev, needs production config/creds to
 function · `[dev]` = NOT wired anywhere, needs code before it can work.
 
-> **Verification caveat:** which `[prod]` env vars are *actually set* in prod
+> **Verification caveat:** which `[prod]` env vars are _actually set_ in prod
 > needs a Railway env read (token burned 2026-06-12 — reissue to confirm).
 > Items below marked "unknown in prod" are code-complete; only the config state
 > is unconfirmed.
@@ -68,13 +69,14 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 ### Tooling — system simulation harness (built 2026-06-12)
 
 `scripts/simulate.sh` now provides on-demand verification at any time:
+
 - `status [--deep]` — health board (backend `/health`+`/ready`, dashboard, agent worker via LiveKit dispatch). **Verified prod 4/4 up incl. agent worker.**
 - `tools` — realistic agent-tools journey (demo tenant → catalog → book → preference → recall) that PASSES wired links and flags `[dev]` gaps. **Verified local: 9 links pass, 4 gaps mapped.**
 - `call` — dispatch agent + browser join URL (real voice, no phone).
 - [ ] Replace the dead `qa-live-test.py` references (done in CLAUDE.md; file deleted).
 - [ ] Add `simulate tools` (or an E2E equivalent) to CI once the `[dev]` links are wired, so journeys are regression-guarded.
-- [x] **Test RAG accuracy — DONE 2026-06-12.** `scripts/sim-rag.mjs` + `./scripts/simulate.sh rag` — seeds a known KB into a demo tenant (real embeddings via `/knowledge/add`), asks paraphrased caller questions through `/agent-tools/policy-answer`, grades retrieval (expected content present, + out-of-scope must fall back not hallucinate), reports a hit-rate and exits non-zero below 80%. On-demand quality tool (real OpenAI → not a CI gate; non-deterministic + costs). Run-verified: **5/6 (83%)**. **Gates the website-scan onboarding idea** (`docs/STRATEGY.md`).
-  - [ ] **Finding from the eval:** *"what's your address"* falls back instead of retrieving the location doc — the `address`↔`located` synonym doesn't clear the 0.5 similarity threshold. Investigate (threshold tuning / better `normalizeForEmbedding` / KB synonym coverage) before relying on RAG for address questions.
+- [x] **Test RAG accuracy — DONE 2026-06-12.** `scripts/sim-rag.mjs` + `./scripts/simulate.sh rag` — seeds a known KB into a demo tenant (real embeddings via `/knowledge/add`), asks paraphrased caller questions through `/agent-tools/policy-answer`, grades retrieval (expected content present, + out-of-scope must fall back not hallucinate), reports a hit-rate and exits non-zero below 80%. On-demand quality tool (real OpenAI → not a CI gate; non-deterministic + costs). Run-verified: **9/9 (100%)** after query expansion fix. **Gates the website-scan onboarding idea** (`docs/STRATEGY.md`).
+  - [x] **Finding from the eval — FIXED 2026-06-12.** _"what's your address"_ fell back instead of retrieving the location doc — `address`↔`located` shares no vocabulary and scored 0.31 below threshold. Root cause: reductive `normalizeForEmbedding` applied to _query_ collapsed terse inputs below out-of-scope floor. Fix: new `shared/expandQueryForEmbedding.ts` (additive synonym expansion, inverse of normalize) on policy-answer path only + threshold 0.5→0.30. Docs/ingest untouched (no re-embed needed). See `shared/expandQueryForEmbedding.ts` + `src/queryExpander.test.ts`. Now ready for website-scan reliance.
 
 ### Reassuring — audited and found FULLY wired (no action)
 
@@ -125,6 +127,7 @@ Closed: prod migrations apply (36 applied 2026-05-17 → version `20260514000000
 Opened after a perf check accidentally surfaced a CVE-class auth hole — the lesson being we can't rely on luck: under real call volume we must fail closed, fail fast, and stay observable. Some items shipped same-session (code), the rest need Dale/Railway.
 
 **Done 2026-05-21 (committed + pushed, `2461f08..cd185dd`; CI green):**
+
 - [x] **SECURITY** Unauthenticated cross-tenant data access via `?tenant_id=` (read+write+delete) closed — `tenantMiddleware` 401s non-public/non-exempt requests with no `req.auth`; `requireTenantId` drops the body fallback. Probe 8 added (isolation suite now 39 probes). See `RESOLVED.md` + `docs/SECURITY.md`.
 - [x] **Deep `/ready` endpoint** — DB ping + pool saturation stats (`total/idle/waiting`); 503 when DB unreachable. `/health` stays shallow (liveness). A monitoring signal, not yet a traffic gate.
 - [x] **Pool fail-fast** — added `connectionTimeoutMillis: 5000`; pool-checkout under exhaustion now errors fast instead of hanging forever (the "many callers" failure mode).
@@ -136,26 +139,31 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 - [x] **Testability extractions** `jsonContentTypeParser` (+ 400-on-bad-JSON fix) and `readinessHandler` extracted to modules with unit tests (incl. the `/ready` 503 DB-down branch). E2E added: anonymous-tenant 401, `/ready`, malformed-JSON.
 
 **Open — needs Dale / Railway (config, can't be done from here):**
+
 - [ ] **IN FLIGHT (user)** Set `METRICS_TOKEN` on Railway backend (Prometheus `/metrics` returns 404 until set — currently no metrics scrape in prod).
 - [ ] **IN FLIGHT (user)** Set `BETTER_STACK_TOKEN` on Railway backend + agent (no log aggregation in prod until set).
 - [ ] **IN FLIGHT (user)** (Optional) Repoint Railway healthcheck → `/ready` if you want deploy promotion gated on DB reachability (note: Railway healthcheck gates promotion, not per-request traffic).
 - [ ] **Alert rules** — once `METRICS_TOKEN`/`BETTER_STACK_TOKEN` are live, wire alerts on `rate(errors_total[5m])`, `booking_attempts_total{outcome="failure"}`, http 5xx rate, p95 `http_request_duration_ms`, and sustained `/ready` `waiting>0`. Route to a channel Dale watches.
 
 **Open — LOAD TESTING (deferred — not a current concern, Dale 2026-05-21):**
+
 - [ ] **Load-test the booking path** to find the concurrent-call ceiling before pool exhaustion / latency cliff. Pool `max=10`, single agent worker per tenant — ceiling currently unknown. Define expected concurrency, size pool + LiveKit accordingly.
 - [x] **Pool-exhaustion integration test** — DONE 2026-06-07 (`src/poolExhaustion.test.ts`). Real `Pool({max:1, connectionTimeoutMillis:500})`, holds the only client, hits a `withHandler`+`withPoolClient` route → checkout rejects at ~504ms (bounded, not a hang) → 500 + `errors_total{unhandled_route_error}` ticks via `withHandler`→`logError`. Control tests (free slot → 200; release → 200 again) prevent false-pass and prove recovery. Closes the gap left by the synthetic `middleware.test.ts` version.
 
 **Gap 2 — CI / deploy gate (prioritized; agent job already DONE above):**
-- [ ] **P0 — Gate Railway deploy on CI green.** Today Railway auto-deploys on push to `main` *independently* of GitHub Actions — a red CI run does NOT stop the deploy. Fix via Railway "Wait for CI" / check-suite gating, or branch-protect `main` + deploy from a CI step. **Needs Dale (Railway dashboard + GitHub branch protection).** Highest priority — without it every other CI improvement is advisory only.
+
+- [ ] **P0 — Gate Railway deploy on CI green.** Today Railway auto-deploys on push to `main` _independently_ of GitHub Actions — a red CI run does NOT stop the deploy. Fix via Railway "Wait for CI" / check-suite gating, or branch-protect `main` + deploy from a CI step. **Needs Dale (Railway dashboard + GitHub branch protection).** Highest priority — without it every other CI improvement is advisory only.
 - [x] **P1 — Add E2E (Playwright) job to CI.** DONE 2026-05-28. `e2e` job added to `.github/workflows/ci.yml`: pgvector service, migrations + seed, backend build + start, dashboard build + start, `wait-on`, Playwright chromium install + test run, artifact upload on failure. **Needs first-run green in Actions before marking required.** The runtime security proof (anonymous-401, cross-tenant 403, `/ready`) runs only locally today. Concrete plan: new `e2e` job — `ankane/pgvector` service (mirror backend job) → `npm ci` (root + dashboard) → `npm run build` (backend) → start backend + dashboard → `npx playwright install --with-deps chromium` → `cd dashboard && npx playwright test`. **Needs first-run validation in Actions** (browser install + server startup are the usual flake sources) — don't mark required until one green run.
-- [ ] **P2 — Repoint Railway `healthcheckPath` → `/ready`.** `railway.json` currently `/health` (shallow); `/ready` would gate deploy *promotion* on DB reachability. Behavior change (could block promotion during a DB blip) — Dale's call.
+- [ ] **P2 — Repoint Railway `healthcheckPath` → `/ready`.** `railway.json` currently `/health` (shallow); `/ready` would gate deploy _promotion_ on DB reachability. Behavior change (could block promotion during a DB blip) — Dale's call.
 
 **Gap 1 — agent resilience (1A done; remainder):**
+
 - [x] **P2 — Wrap the agent `entry` tail in try/catch → `runFallback`.** DONE 2026-05-28. Added outer try/catch around ToolsClient + buildTools + fetchTenantConfig + buildSystemPrompt. Inner session.start catch retained; outer catch catches setup failures before session.start. Agent TS clean, 1397 tests passing.
 - [ ] **P3 — (B) idempotent-read retry** in `toolsClient` — one retry on a transient 5xx for READ tools only (never mutations: a timed-out booking may have succeeded server-side → double-book). Backed out 2026-05-21 (not approved); revisit.
 - [ ] **P3 — (C) latency filler** — speak a short "one sec while I check that" before known-slow tool calls to cut the up-to-8s silence window. Pairs with reconsidering `toolsClient` `timeoutMs` (8s is long for voice).
 
 **Gap 3 — follow-through (core fix done above):**
+
 - [x] **P3 — Audit the ~12 `:id` routes** — DONE 2026-05-28. All 26 route files use `withHandler` (class-22 mapper fires automatically). One route (`jobber.ts:95`) bypasses `withHandler` but has its own manual UUID check. `requireValidUUID` is defined but unused — not needed since the mapper covers every route. No gaps found.
 
 ---
@@ -202,21 +210,32 @@ captures or sends them**, so every logged call is duration-only.
 - [ ] **Generate + send call summary** — same path, `agentTools.ts:418` `null`, displayed at `VoiceCallsView.tsx:626` if present. Needs a post-call LLM summary (one cheap GPT-4o-mini call in the shutdown hook, like the post-call summary pattern used elsewhere).
 - [ ] **Set call outcome** — `end_voice_session` accepts `outcome` (`voice.ts:26`) and the tab renders it (`VoiceCallsView.tsx:42`), but the agent rarely/never sets it. Classify each call (booked / message-taken / transferred / info-only / abandoned) and send it.
 - [ ] **Link booked appointment to the call** — `end_voice_session` param 7 (`appointment_id`) is hardcoded `null` (`agentTools.ts:419`). When the booking tool succeeds during a call, thread the new `appointment_id` into session-end so the Calls tab can deep-link the call → appointment.
-- [ ] **Register transfer events in the call record** — live cold-transfer logs `call_transferred` / `call_transfer_failed` to **pino only** (`agent/src/transferClient.ts:80,87`); nothing reaches `voice_sessions`. A transferred call should land in the Calls tab as outcome `transferred` (+ optionally the `metadata` JSONB column, currently unused). Otherwise transfers are invisible in the dashboard.
+- [x] **Register transfer events in the call record** — DONE (via `recordTransfer()` setting outcome + migration-updated `end_voice_session` that sets status='transferred' when outcome='transferred'). UI already supported it. See feat/transfers-invisible-calls + related list work.
 
 ### Analytics (`AnalyticsView.tsx`)
 
 - [ ] **Implement `GET /analytics/stats`** — `dashboard/lib/api.ts:607` calls it and expects `{ calls, appointments, customers, recent_activity }`, but **no backend route exists** (only `src/routes/analytics.ts` aggregations). Frontend currently falls back to manual appointment aggregation with no call data.
-- [ ] **Wire the 3 stubbed call-based panels** — `AnalyticsView.tsx` marks "Call Volume Over Time", "Call → Booking Conversion", and "Caller Abandonment Point" as *"Requires call log integration Phase 2"*. Now that inbound calls ARE logged to `voice_sessions`, these can be built from real data (depends on outcome capture above for conversion/abandonment).
+- [ ] **Wire the 3 stubbed call-based panels** — `AnalyticsView.tsx` marks "Call Volume Over Time", "Call → Booking Conversion", and "Caller Abandonment Point" as _"Requires call log integration Phase 2"_. Now that inbound calls ARE logged to `voice_sessions`, these can be built from real data (depends on outcome capture above for conversion/abandonment).
 - [ ] **(Optional) Owner-facing reliability tiles** — `booking_attempts_total`, `tool_calls_total` (`src/services/metrics.ts:284,291`) are Prometheus-only (`/metrics`, token-gated). Consider a lightweight owner view of booking success rate + agent tool success rate (or leave to ops dashboards — decide).
 
 ### Reminder delivery monitoring (Phase 5 — never built)
 
-- [ ] **Reminder delivery dashboard** — `reminders_sent_total` / `reminders_skipped_total` (`src/services/metrics.ts:319,328`, labels = channel/outcome and skip-reason) exist; `metrics.ts:312` comment claims it "Closes Phase 5 monitoring dashboard" but **no dashboard was built**. Owners have zero visibility into delivery success or why reminders were skipped (no-consent, appt-cancelled). Already tracked under "Voice Validation → Reminder delivery monitoring dashboard".
+- [x] **Reminder delivery dashboard** — Added `GET /reminders/delivery-stats` (table aggregates: sent/failed by recency for the tenant) + `ReminderDeliveryStats` component (cards with rates) wired into `AnalyticsView.tsx`. Uses DB (not just in-memory metrics) for per-tenant owner view. See feat/transfers-invisible-calls (progress on list). Full dashboard panel polish possible later.
 
 ### CRM sync status (`CRMIntegrationCard.tsx`)
 
-- [ ] **Surface pending/error sync counts** — `GET /square/sync/status` returns `pending_count`, `error_count`, `total_mapped`, but the card (`CRMIntegrationCard.tsx:27`) shows only `last_sync_at` + connection status. Add the pending/error breakdown so owners see sync health, not just "connected". `sync_dispatches_total` (`metrics.ts:299`) is also Prometheus-only.
+- [x] **Surface pending/error sync counts** — Extended `CRMIntegrationCard` (and square provider config) to fetch + display `pending_count` / `error_count` / `total_mapped` from the existing `/.../sync/status` endpoints below the last-sync line. See list work on backfill branch. Prometheus metrics remain for ops.
+
+### Onboarding / Website knowledge import (new step for reduced manual entry)
+
+Backend fetch+LLM extract core now wired (`/knowledge/import-website` + helpers + `knowledge_suggestion` staging + migration). Designed as optional early step in SetupWizard flow (paste URL after business type → suggestions prefill questionnaire). Full details and remaining dashboard/review/ingest wiring in the spec and worktree.
+
+- [x] **Dedicated "Import from website" step in the SetupWizard (right before the questions/policy step).** Inserted as step 7 ("Import from website") after the review step (6), immediately before the "Teach Your AI" questions step (now 8). New component `Step7WebsiteScan.tsx` with URL input + scan button that runs the backend extract and saves matching starter answers via knowledge.add. The questions step now loads pre-existing answers (by matching question text in the tenant_docs) on mount and prefills + marks saved, so the scan directly helps answer the questions in the following step. Wizard updated (type to 9 steps, labels, arrays, "of 9", next button text, expand timing, comments). User-facing explanatory copy added to scan page per spec: "when questions are asked of your AI Assistant, the information from your company comes from here. Our system will scan your website... The following page is to answer any...". Also cleaned duplicate import box from questions step in main wizard (kept for Solo via prop). See the implementation in `Step7WebsiteScan.tsx`, updates to `Step7CallerQuestions.tsx` (load prefill + conditional import box), `index.tsx`, `WizardStepContent.tsx`, `types.ts`. Advanced per-question suggestion review UI with badges still pending (see other sub-items).
+- [ ] **Wire question bank resolver into import + wizard.** Ensure `GET /knowledge/questions` (or direct resolve) is used for the extract prompt (business_type filtered + customs). Update SetupWizard / `KnowledgeBaseView` to consume the resolved set instead of (or in addition to) static. Seed the bank from `shared/questionBank.ts` via the script (already in worktree scaffold).
+- [ ] **E2E + simulate coverage for the step.** Add Playwright spec exercising wizard → URL paste → suggestions appear → approve one → verify in KB / policy-answer works. Extend `simulate.sh tools` or new harness to cover import path (demo tenant with sample site? or mock). Gate on the RAG accuracy eval.
+- [ ] **Docs / UX polish.** Update SetupWizard copy and `docs/beth-knowledge-base.md` (or onboarding docs) to describe the new optional step and "from your website" provenance. Add empty-vs-unanswered visual distinction (per design). Cost guardrails / rate limits if needed for LLM calls during onboarding.
+
+See also the RAG accuracy eval (now unblocks this) and question bank migration (20260609... in feature worktree).
 
 ---
 
@@ -233,6 +252,7 @@ Closed: `pw.txt` decision (`ac61161` — deleted, NEEDS-REFACTORING #14 closed);
 Closed items in `RESOLVED.md` under 2026-05-16 + 2026-05-17.
 
 Open:
+
 - [x] **B4** Sub-tab URL persistence — verified working (2026-05-28). `?tab=` init + `history.pushState` on change + `popstate` for back/forward all wired in `dashboard/app/dashboard/page.tsx:70–95`. No changes needed.
 - [x] **C1 + C2** Schedule: 4 sub-views → 2, unify the 3 headers — DONE 2026-05-29 (`1a269ab`, verified 2026-06-03). `SchedulerView` now has 2 top-level tabs (`day`/`calendar`) + a segmented Day-mode control (Staff/Resources/List), one unified header bar (3 dup headers removed), and the "More" overflow dropdown gone. URL syncs `?subtab=day|calendar&daymode=…`. The TODO predated the commit.
 - [x] **E1** Demo mode — DONE 2026-05-29 (`4934ed5`, verified 2026-06-03). `/demo` now provisions a per-session isolated demo tenant (`is_demo=true`, 30-min TTL) seeded with automotive sample data — no real account needed. `src/routes/demo.ts` + `src/services/demoSeed.ts` + `dashboard/app/demo`. The TODO predated the commit.
@@ -244,7 +264,7 @@ Source: Raw UX audit performed 2026-05-19 (previously captured in `ux-review-not
 ### P0 — verified rule violations + real defects (small, concrete)
 
 - [ ] **BLOCKER (Dale)** Dale needs to go over the scheduling and how the coloring, grading, etc. work in the live UI so he can guide the system on how to deal with grading. Cluster A below is **on hold** until then — a first attempt (wizard review + skill-map de-grade) was built and reverted 2026-05-20 (`git reset --hard 0f7f1d0`) because the right neutral treatment depends on how each surface actually works. Do not re-apply the de-grade slices unprompted. See memory `feedback-no-coverage-grading`.
-- [ ] **Cluster A — neutral-language / no-grading** (8 surfaces) — *blocked on the Dale review above.* Violates the explicit product rule "no percentages, no warnings, no opinions" (`docs/DESIGN_HANDOFF.md:284`, `docs/UI_UX_DESIGN.md:30`). Same fix shape everywhere: rename grading tokens → neutral connection/availability state, drop green/yellow/red threshold colors, factual copy.
+- [ ] **Cluster A — neutral-language / no-grading** (8 surfaces) — _blocked on the Dale review above._ Violates the explicit product rule "no percentages, no warnings, no opinions" (`docs/DESIGN_HANDOFF.md:284`, `docs/UI_UX_DESIGN.md:30`). Same fix shape everywhere: rename grading tokens → neutral connection/availability state, drop green/yellow/red threshold colors, factual copy.
   - ~~`SoloStepReview.tsx`~~ DONE 2026-05-28 (`b140f98`) — coverage pills replaced with neutral language. + `StepReview.tsx` — still open — `allCovered`/`partial` + green/yellow/red readiness badges
   - ~~WCAG `text-[10px]`~~ DONE 2026-05-28 — 45 replacements across 25 files; 0 remaining occurrences
   - `skill-map/SkillRelationshipMap.tsx` + `SkillMapNode.tsx` — footer `full`/`partial`/`uncovered` + warning/danger colors
@@ -322,15 +342,18 @@ local dev DB already clean (0 DynaTire rows).
 Three failures were observed on **2026-05-27** (110 tests; 100 passed, 3 failed, 7 skipped). All three fixed 2026-05-28 — see RESOLVED.md.
 
 **Fix summary (2026-05-28)**:
+
 1. `booking-alignment.spec.ts` — replaced `waitForTimeout(800)` with `expect(view-tab-list).toBeVisible()`, added `expect(Refresh btn).toBeVisible()` + `waitForLoadState('networkidle')` after click. Also fixed same pattern in `appointment-cancel-ui.spec.ts` helper (`openAppointmentPopoverFromList`).
 2. `wizard-welcome-auto-open.spec.ts` — replaced `waitForTimeout(600)` + `waitForTimeout(2000)` in `switchToFreshTenant` with `waitForLoadState('networkidle')` so all 6 `loadData()` API calls settle before the auto-open effect fires.
 
-**New E2E coverage added 2026-05-27**: 
+**New E2E coverage added 2026-05-27**:
+
 - `customer-notes.spec.ts` (Gap 1) — Internal Notes persistence + visibility. Research surfaced likely latent bug: CRMView sends top-level `notes` on PUT but backend schema drops it.
 - `appointment-cancel-ui.spec.ts` (Gap 2) — Cancel from List, Customer history, and popover surfaces (hardened version of the known flake at booking-alignment:295 using response waits + status polling).
 - `owner-config-to-booking.spec.ts` (Gap 3) — Owner adds employee + shifts (via expand-weekly) + service/resource, then successfully books against them; plus the sad path of no shifts configured.
 
 Cross-references:
+
 - Original raw UX audit notes (archived; key findings triaged here)
 - `docs/TODO.md` → UX audit pass 2 → P1 Cluster C and P2 wizard copy items
 - CI section: "P1 — Add E2E job to CI"
