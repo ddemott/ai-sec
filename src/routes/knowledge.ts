@@ -42,7 +42,7 @@ async function fetchAndExtractSiteText(
         });
         if (!resp.ok) continue;
         const html = await resp.text();
-        let text = html
+        const text = html
           .replace(/<script[\s\S]*?<\/script>/gi, ' ')
           .replace(/<style[\s\S]*?<\/style>/gi, ' ')
           .replace(/<[^>]+>/g, ' ')
@@ -61,9 +61,13 @@ async function fetchAndExtractSiteText(
             ) {
               queue.push(abs);
             }
-          } catch {}
+          } catch {
+            // skip malformed href
+          }
         }
-      } catch (e) {}
+      } catch {
+        // skip unreachable page
+      }
     }
     if (pages.length === 0)
       return {
