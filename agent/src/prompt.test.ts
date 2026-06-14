@@ -461,6 +461,189 @@ describe('buildSystemPrompt', () => {
   });
 });
 
+describe('buildSystemPrompt — voice style injection', () => {
+  it('HAPPY: ttsFormal=true injects # Voice style section with formal instruction', () => {
+    // WHO: tenant with the Formal voice style checkbox checked
+    // WHAT: the prompt gains a "# Voice style" section containing the formal
+    //        language instruction (no contractions, precise sentences)
+    // WHEN: every call session for that tenant
+    // WHERE: buildSystemPrompt styleSection branch — ttsFormal guard
+    // WHY: the LLM must read the instruction to apply it; without the section
+    //       the "Formal" checkbox on the dashboard has zero runtime effect
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsFormal: true });
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toContain('formal language');
+    expect(prompt).toContain('no contractions');
+  });
+
+  it('HAPPY: ttsWarm=true injects warm instruction', () => {
+    // WHO: tenant with the Warm voice style checkbox checked
+    // WHAT: the # Voice style section includes the warm-and-caring delivery note
+    // WHEN: every call session for that tenant
+    // WHERE: buildSystemPrompt styleSection branch — ttsWarm guard
+    // WHY: without the instruction, the toggle is cosmetic and the LLM
+    //       continues its default neutral delivery regardless of the setting
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsWarm: true });
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toContain('warm and caring');
+  });
+
+  it('HAPPY: ttsConcise=true injects concise instruction', () => {
+    // WHO: tenant with the Concise voice style checkbox checked
+    // WHAT: the # Voice style section includes the brevity instruction
+    // WHEN: every call session for that tenant
+    // WHERE: buildSystemPrompt styleSection branch — ttsConcise guard
+    // WHY: brevity must be explicitly instructed; the LLM's default verbosity
+    //       doesn't change unless it reads the instruction at call time
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsConcise: true });
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toContain('one sentence is better than two');
+  });
+
+  it('HAPPY: all three flags true — all three instructions present, header appears once', () => {
+    // WHO: tenant with Formal + Warm + Concise all checked
+    // WHAT: the # Voice style section contains all three instruction bullets
+    //        and the section header appears exactly once (no duplication)
+    // WHEN: every call session for that tenant
+    // WHERE: buildSystemPrompt styleSection — three-item styleLines array
+    // WHY: if each flag independently injected the header, the LLM would
+    //       see "# Voice style" three times which could confuse parsing
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: true,
+      ttsWarm: true,
+      ttsConcise: true,
+    });
+    expect(prompt).toContain('formal language');
+    expect(prompt).toContain('warm and caring');
+    expect(prompt).toContain('one sentence is better than two');
+    // Header appears exactly once.
+    const occurrences = (prompt.match(/# Voice style/g) ?? []).length;
+    expect(occurrences).toBe(1);
+  });
+
+  it('HAPPY: no style flags — no # Voice style section injected', () => {
+    // WHO: tenant with no voice style checkboxes checked (the default)
+    // WHAT: the prompt is byte-for-byte unchanged — no # Voice style section
+    // WHEN: every call for a tenant who hasn't enabled any style flag
+    // WHERE: buildSystemPrompt — styleLines.length === 0 → styleSection = ''
+    // WHY: the feature must be strictly opt-in; a blank tenant must not see
+    //       any style instructions in their prompt
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).not.toContain('# Voice style');
+  });
+
+  it('HAPPY: null style flags treated as off — no style section', () => {
+    // WHO: tenant whose DB columns are NULL (never set — the DB default)
+    // WHAT: null values must behave identically to false — no style section
+    // WHEN: a brand-new tenant who has never visited the AI Persona page
+    // WHERE: buildSystemPrompt styleLines — falsy-check on null
+    // WHY: DB nullable booleans arrive as null in JS; treating null as true
+    //       would inject style instructions for every new tenant by default
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: null,
+      ttsWarm: null,
+      ttsConcise: null,
+    });
+    expect(prompt).not.toContain('# Voice style');
+  });
+
+  it('HAPPY: false style flags treated as off — no style section', () => {
+    // WHO: tenant who explicitly unchecked all style checkboxes and saved
+    // WHAT: explicit false values produce no style section (same as null)
+    // WHEN: after an owner visits AI Persona and saves with all boxes unchecked
+    // WHERE: buildSystemPrompt styleLines — falsy-check on false
+    // WHY: regression guard; a change to the if-condition must not treat
+    //       false as truthy and accidentally re-enable style injection
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: false,
+      ttsWarm: false,
+      ttsConcise: false,
+    });
+    expect(prompt).not.toContain('# Voice style');
+  });
+
+  it('HAPPY: two of three flags — only those two instructions appear', () => {
+    // WHO: tenant with Formal and Warm checked, Concise unchecked
+    // WHAT: exactly two instructions are injected; the concise instruction
+    //        is absent so the LLM has no brevity directive
+    // WHEN: every call for that tenant
+    // WHERE: buildSystemPrompt styleLines — flag-by-flag push
+    // WHY: each flag must be independently controlled; checking Formal must
+    //       not silently enable Concise as a side-effect
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: true,
+      ttsWarm: true,
+      ttsConcise: false,
+    });
+    expect(prompt).toContain('formal language');
+    expect(prompt).toContain('warm and caring');
+    expect(prompt).not.toContain('one sentence is better than two');
+  });
+
+  it('HAPPY: style section appears AFTER # Conversation style, BEFORE # Today\'s context', () => {
+    // WHO: any tenant with at least one style flag enabled
+    // WHAT: the # Voice style section is positioned inside the conversation
+    //        style block — after # Conversation style content, before # Today's context
+    // WHEN: every call for a tenant with style flags set
+    // WHERE: buildSystemPrompt template — styleSection injected at end of
+    //         Conversation style bullet list, before Today's context header
+    // WHY: section order affects LLM attention; putting voice style AFTER the
+    //       conversation-style rules and BEFORE the call-specific context
+    //       keeps it near peer instructions and away from factual data blocks
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsFormal: true });
+    const convStyleIdx = prompt.indexOf('# Conversation style');
+    const voiceStyleIdx = prompt.indexOf('# Voice style');
+    const todaysCtxIdx = prompt.indexOf("# Today's context");
+    expect(convStyleIdx).toBeGreaterThan(-1);
+    expect(voiceStyleIdx).toBeGreaterThan(convStyleIdx);
+    expect(voiceStyleIdx).toBeLessThan(todaysCtxIdx);
+  });
+
+  it('SAD: style flags present but identity section still correct', () => {
+    // WHO: tenant with Formal checked and a custom persona prompt
+    // WHAT: the identity section (Clara line or custom prompt) is not
+    //        corrupted by the presence of style flags
+    // WHEN: any call where both a custom prompt and style flags are set
+    // WHERE: buildSystemPrompt — identitySection built independently of styleSection
+    // WHY: the two features operate on different output regions; a merge
+    //       conflict or code reorder could accidentally overwrite the identity
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsFormal: true });
+    // Default identity is present and correct.
+    expect(prompt).toContain('You are Clara, the AI receptionist for DynaTire.');
+    // Style section is also present.
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toContain('formal language');
+  });
+
+  it('SAD: style section does not bleed into preference section', () => {
+    // WHO: tenant with Formal checked and Customer Preferences enabled
+    // WHAT: both the # Customer preferences section and # Voice style section
+    //        appear separately — the style injection must not corrupt or
+    //        replace the preferences block
+    // WHEN: any call where both features are active simultaneously
+    // WHERE: buildSystemPrompt — preferencesSection and styleSection are
+    //         independently constructed strings appended at different points
+    // WHY: two independent prompt features must be additive; enabling one
+    //       must not suppress or garble the other
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: true,
+      savePreferencesEnabled: true,
+      preferencesInstructions: 'Note preferred stylist.',
+    });
+    expect(prompt).toContain('# Customer preferences');
+    expect(prompt).toContain('# Voice style');
+    // Both sections exist and are distinct.
+    expect(prompt.indexOf('# Customer preferences')).not.toBe(
+      prompt.indexOf('# Voice style')
+    );
+  });
+});
+
 describe('formatDateForPrompt', () => {
   it('HAPPY: renders a full weekday+month+day+year string in the tenant timezone', () => {
     // WHO: Scheduler said "book me Tuesday" — the LLM needs to know
