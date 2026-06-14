@@ -375,6 +375,33 @@ export function buildTools(
       },
     }),
 
+    identify_caller: llm.tool({
+      description:
+        "Save or update the caller's contact record (phone + name). Call this as soon as the caller gives you their name — even if they're not booking. Keeps the address book current without duplicating records.",
+      parameters: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: "The caller's full name as they stated it, e.g. \"Dale DeMott\".",
+          },
+        },
+        required: ['name'],
+        additionalProperties: false,
+      },
+      execute: async (args: { name: string }) => {
+        if (!ctx.callerPhone) {
+          return 'No caller-ID phone available — contact not saved.';
+        }
+        const res = await client.call('/agent-tools/identify-caller', {
+          tenant_id: ctx.tenantId,
+          phone: ctx.callerPhone,
+          name: args.name,
+        });
+        return formatResponse(res);
+      },
+    }),
+
     save_customer_preference: llm.tool({
       description:
         "Remember a durable fact about the caller for future calls — preferred staff member, the service they just had, a like/dislike, an allergy, a standing request. Only use when the business has asked you to track preferences and the fact will still matter next time. Saving is silent; don't announce it. No-op if the caller isn't a known customer yet.",
