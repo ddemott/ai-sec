@@ -277,6 +277,9 @@ export default defineAgent({
         // prompt gains a "Customer preferences" section + save tool guidance.
         savePreferencesEnabled: tenantConfig.savePreferencesEnabled,
         preferencesInstructions: tenantConfig.preferencesInstructions,
+        ttsFormal: tenantConfig.ttsFormal,
+        ttsWarm: tenantConfig.ttsWarm,
+        ttsConcise: tenantConfig.ttsConcise,
       });
 
       // 5. Start the voice session. Wrapped in try/catch → runFallback: a
@@ -297,6 +300,7 @@ export default defineAgent({
             voice: tenantConfig.ttsVoice ?? config.XAI_TTS_VOICE,
             speed: tenantConfig.ttsSpeed ?? config.XAI_TTS_SPEED,
             soft: tenantConfig.ttsSoft ?? config.XAI_TTS_SOFT,
+            cheerful: tenantConfig.ttsCheerful ?? false,
           }),
         });
 

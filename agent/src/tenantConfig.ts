@@ -49,6 +49,10 @@ export interface TenantDisplayConfig {
   ttsVoice: string | null;
   ttsSpeed: number | null;
   ttsSoft: boolean | null;
+  ttsCheerful: boolean | null;
+  ttsFormal: boolean | null;
+  ttsWarm: boolean | null;
+  ttsConcise: boolean | null;
   /**
    * E.164 PSTN number the agent cold-transfers a live call to (owner cell),
    * via SIP REFER through the inbound trunk. NULL means no forwarding is
@@ -68,6 +72,10 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   ttsVoice: null,
   ttsSpeed: null,
   ttsSoft: null,
+  ttsCheerful: null,
+  ttsFormal: null,
+  ttsWarm: null,
+  ttsConcise: null,
   forwardPhone: null,
 };
 
@@ -87,6 +95,10 @@ export async function fetchTenantConfig(
     tts_voice?: string | null;
     tts_speed?: number | null;
     tts_soft?: boolean | null;
+    tts_cheerful?: boolean | null;
+    tts_formal?: boolean | null;
+    tts_warm?: boolean | null;
+    tts_concise?: boolean | null;
     forward_phone?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
@@ -100,6 +112,10 @@ export async function fetchTenantConfig(
       ttsVoice: res.result.tts_voice ?? null,
       ttsSpeed: res.result.tts_speed ?? null,
       ttsSoft: res.result.tts_soft ?? null,
+      ttsCheerful: res.result.tts_cheerful ?? null,
+      ttsFormal: res.result.tts_formal ?? null,
+      ttsWarm: res.result.tts_warm ?? null,
+      ttsConcise: res.result.tts_concise ?? null,
       forwardPhone: res.result.forward_phone ?? null,
     };
   }

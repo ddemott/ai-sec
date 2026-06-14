@@ -69,6 +69,10 @@ export interface Tenant {
   tts_voice?: string | null;
   tts_speed?: number | null;
   tts_soft?: boolean | null;
+  tts_cheerful?: boolean | null;
+  tts_formal?: boolean | null;
+  tts_warm?: boolean | null;
+  tts_concise?: boolean | null;
   // Live-transfer destination (2026-06-11). E.164 cell the AI cold-transfers a
   // caller to when they need a human. null = no forwarding; the AI takes a
   // message instead.

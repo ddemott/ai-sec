@@ -57,6 +57,12 @@ export interface PromptContext {
    * back to a sensible built-in default so the toggle is useful immediately.
    */
   preferencesInstructions?: string | null;
+  /** When true, inject formal-language style instructions (no contractions, precise sentences). */
+  ttsFormal?: boolean | null;
+  /** When true, inject warm/empathetic style instructions. */
+  ttsWarm?: boolean | null;
+  /** When true, inject concise style instructions (shorter replies). */
+  ttsConcise?: boolean | null;
 }
 
 /**
@@ -109,13 +115,19 @@ How to apply this:
     ? `\n- save_customer_preference(phone, key, value) — remember a durable fact about this customer (preferred staff, last service, likes/dislikes) for future calls.`
     : '';
 
+  const styleLines: string[] = [];
+  if (ctx.ttsFormal) styleLines.push('Use formal language — no contractions (say "I am" not "I\'m", "cannot" not "can\'t"). Crisp, precise sentences. Professional tone throughout.');
+  if (ctx.ttsWarm) styleLines.push('Sound genuinely warm and caring. Acknowledge the caller\'s situation briefly before giving the answer. Unhurried, attentive tone.');
+  if (ctx.ttsConcise) styleLines.push('Be concise — one sentence is better than two. Cut filler, get directly to the answer.');
+  const styleSection = styleLines.length > 0 ? `\n\n# Voice style\n${styleLines.map(l => `- ${l}`).join('\n')}` : '';
+
   return `${identitySection}
 
 # Conversation style
 - This is a PHONE CALL. Speak naturally — no markdown, no bullet points, no formatting, no "as an AI" disclaimers.
 - Keep replies SHORT. One or two sentences usually. Long answers become awkward silences on the phone.
 - If the caller interrupts, stop immediately and listen.
-- Do NOT invent service names, prices, hours, or policies. Always use a tool to look things up. If a tool doesn't have the answer, say so honestly and offer to take a message.
+- Do NOT invent service names, prices, hours, or policies. Always use a tool to look things up. If a tool doesn't have the answer, say so honestly and offer to take a message.${styleSection}
 
 # Today's context
 - Today is ${ctx.currentDate} (${ctx.timezone}).
@@ -123,6 +135,7 @@ How to apply this:
 
 # Available tools
 - get_customer_context(phone) — call once at the start if a phone is available; greets returning customers by name.
+- identify_caller(name) — call as soon as the caller tells you their name; saves them to the address book even if they don't book. Silent — don't announce it.
 - get_service_catalog() — list the services this business offers.
 - get_available_slots(service_type, date) — spoken description of open times for a service on a given date.
 - get_scheduling_options(requirements, window) — returns valid (resource, employee) combinations for a service within a time window. Use when the caller hasn't specified a day yet.

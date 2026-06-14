@@ -141,6 +141,12 @@ const SaveCustomerPreferenceSchema = z.object({
   value: z.string().min(1).max(500),
 });
 
+const IdentifyCallerSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  name: z.string().min(1).max(200).optional(),
+});
+
 const GetAvailableSlotsSchema = z.object({
   tenant_id: z.string().uuid(),
   service_type: z.string().min(1),
@@ -342,9 +348,13 @@ export function registerAgentToolRoutes(
           tts_voice: string | null;
           tts_speed: number | null;
           tts_soft: boolean | null;
+          tts_cheerful: boolean | null;
+          tts_formal: boolean | null;
+          tts_warm: boolean | null;
+          tts_concise: boolean | null;
           forward_phone: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, forward_phone FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         return res.rows[0] ?? null;
@@ -375,6 +385,10 @@ export function registerAgentToolRoutes(
         tts_voice: row.tts_voice ?? null,
         tts_speed: row.tts_speed ?? null,
         tts_soft: row.tts_soft ?? null,
+        tts_cheerful: row.tts_cheerful ?? null,
+        tts_formal: row.tts_formal ?? null,
+        tts_warm: row.tts_warm ?? null,
+        tts_concise: row.tts_concise ?? null,
         // 2026-06-11: live-transfer destination (owner cell). NULL means no
         // forwarding configured — the agent's transfer_call tool stays inert
         // and falls back to taking a message.
@@ -495,6 +509,37 @@ export function registerAgentToolRoutes(
       return ok(reply, { saved: true, key });
     },
     'Failed to save customer preference'
+  );
+
+  // identify_caller — upsert caller as a customer by phone. Creates the row
+  // if unknown; updates name when the stored name is blank or "Valued Customer".
+  // Called by the agent as soon as the caller gives their name, even without booking,
+  // so every call leaves a contact record behind.
+  toolRoute(
+    app,
+    '/agent-tools/identify-caller',
+    IdentifyCallerSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!isValidPhone(normalized)) {
+        return fail(reply, 'Invalid phone number — cannot create contact.');
+      }
+      await withTenantClient(args.tenant_id, async (client) => {
+        await client.query(
+          `INSERT INTO customers (tenant_id, phone, name)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (tenant_id, phone) DO UPDATE
+             SET name = CASE
+               WHEN customers.name IS NULL OR customers.name = '' OR customers.name = 'Valued Customer'
+               THEN EXCLUDED.name
+               ELSE customers.name
+             END`,
+          [args.tenant_id, normalized, args.name ?? null]
+        );
+      });
+      return ok(reply, { saved: true });
+    },
+    'Failed to identify caller'
   );
 
   // get_service_catalog — list public services for the tenant.

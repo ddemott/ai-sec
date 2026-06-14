@@ -90,6 +90,10 @@ export default function AIConfigView() {
         tts_voice: config.tts_voice ?? null,
         tts_speed: config.tts_speed ?? null,
         tts_soft: config.tts_soft ?? null,
+        tts_cheerful: config.tts_cheerful ?? null,
+        tts_formal: config.tts_formal ?? null,
+        tts_warm: config.tts_warm ?? null,
+        tts_concise: config.tts_concise ?? null,
         // Normalize to clean E.164 for storage so the agent builds a valid
         // tel: URI. Blank/invalid → null (forwarding off → AI takes a message).
         forward_phone: normalizePhone(config.forward_phone),
@@ -298,51 +302,73 @@ export default function AIConfigView() {
             ))}
           </div>
 
-          {/* Delivery — speed + soft. Affect HOW the chosen voice speaks, not
-              who it is. Over a phone the accent is fixed to the voice. */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <div>
-              <label
-                htmlFor="tts-speed"
-                className="block text-sm font-semibold mb-1"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                Speaking pace — {(config?.tts_speed ?? 0.85).toFixed(2)}×
-              </label>
-              <input
-                id="tts-speed"
-                type="range"
-                min={0.7}
-                max={1.5}
-                step={0.05}
-                value={config?.tts_speed ?? 0.85}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  setConfig((prev) => (prev ? { ...prev, tts_speed: v } : null));
-                  setDirty(true);
-                }}
-                className="w-full"
-                aria-label="Speaking pace"
-              />
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                Lower = slower, calmer. 0.85 is an unhurried, caring pace.
-              </p>
-            </div>
-            <label className="flex items-center gap-3 cursor-pointer self-end pb-6">
-              <input
-                type="checkbox"
-                checked={config?.tts_soft ?? true}
-                onChange={(e) => {
-                  const v = e.target.checked;
-                  setConfig((prev) => (prev ? { ...prev, tts_soft: v } : null));
-                  setDirty(true);
-                }}
-                aria-label="Soft, soothing delivery"
-              />
-              <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                Soft, soothing delivery
-              </span>
+          {/* Delivery — speed slider */}
+          <div className="pt-2">
+            <label
+              htmlFor="tts-speed"
+              className="block text-sm font-semibold mb-1"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Speaking pace — {(config?.tts_speed ?? 0.85).toFixed(2)}×
             </label>
+            <input
+              id="tts-speed"
+              type="range"
+              min={0.7}
+              max={1.5}
+              step={0.05}
+              value={config?.tts_speed ?? 0.85}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                setConfig((prev) => (prev ? { ...prev, tts_speed: v } : null));
+                setDirty(true);
+              }}
+              className="w-full"
+              aria-label="Speaking pace"
+            />
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              Lower = slower, calmer. 0.85 is an unhurried, caring pace.
+            </p>
+          </div>
+
+          {/* Voice style checkboxes */}
+          <div className="pt-2">
+            <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+              Voice style
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(
+                [
+                  { key: 'tts_soft', label: 'Soft', description: 'Soothing, gentle delivery' },
+                  { key: 'tts_cheerful', label: 'Cheerful', description: 'Upbeat, positive tone' },
+                  { key: 'tts_formal', label: 'Formal', description: 'Professional, no contractions' },
+                  { key: 'tts_warm', label: 'Warm', description: 'Empathetic, caring' },
+                  { key: 'tts_concise', label: 'Concise', description: 'Fewer words, faster to the point' },
+                ] as { key: keyof typeof config; label: string; description: string }[]
+              ).map(({ key, label, description }) => (
+                <label
+                  key={key}
+                  className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border"
+                  style={{ borderColor: config?.[key] ? 'var(--accent)' : 'var(--border-soft)', backgroundColor: config?.[key] ? 'var(--accent-muted)' : 'transparent' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!(config?.[key])}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setConfig((prev) => (prev ? { ...prev, [key]: v } : null));
+                      setDirty(true);
+                    }}
+                    aria-label={label}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{label}</span>
+                    <span className="block text-xs" style={{ color: 'var(--text-secondary)' }}>{description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
         </section>
 
