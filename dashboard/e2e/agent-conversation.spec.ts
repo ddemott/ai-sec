@@ -270,7 +270,8 @@ test('conversation: tire-rotation request books successfully via book_with_sched
     expect(res.body.success).toBe(true);
     const result = res.body.result as Record<string, unknown>;
     expect(result.appointment_id, 'appointment_id present in result').toBeTruthy();
-    expect(result.employee_name).toBeTruthy();
+    // MODE B (empty skills) — RPC picks a resource but leaves employee unassigned
+    expect(result.employee_name).toBeNull();
     expect(result.resource_name).toBeTruthy();
     apptIdsToCleanup.push(result.appointment_id as string);
 

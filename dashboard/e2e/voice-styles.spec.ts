@@ -201,10 +201,13 @@ test('HAPPY: uncheck all styles + save + reload — all unchecked', async ({ pag
   //       rather than leaving previously-true values in the DB
   await openAiPersona(page);
 
-  // First, check all 5 and save.
+  // First, ensure all 5 are checked. Toggle each one off+on so the form is
+  // always dirty (even when a prior test left them all checked already —
+  // a conditional `if (!isChecked) check()` is a no-op in that case).
   for (const name of [/Soft/i, /Cheerful/i, /Formal/i, /Warm/i, /Concise/i]) {
     const cb = page.getByRole('checkbox', { name });
-    if (!(await cb.isChecked())) await cb.check();
+    await cb.uncheck();
+    await cb.check();
   }
   await page.getByRole('button', { name: /Save Changes/i }).click();
   await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });

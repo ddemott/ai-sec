@@ -36,7 +36,10 @@ test.beforeAll(async () => {
     resources: ['Bay 1'],
     customer: 'E2E Fixture Customer',
     shiftDates: datesAhead,
-    shiftHours: { start: '06:00', end: '20:00' },
+    // Use 00:00–23:59 so the shift covers any UTC-equivalent booking time.
+    // Fresh tenants default to UTC; a 15:00 local (CDT = UTC-5) booking
+    // lands at 20:00 UTC, which would fall outside a 06:00–20:00 window.
+    shiftHours: { start: '00:00', end: '23:59' },
   });
 
   await ctx.dispose();
