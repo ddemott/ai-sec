@@ -184,7 +184,7 @@ test('customer-notes-sad: empty note does not crash and results in empty or null
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// 3. UI visibility smoke (DynaTire tenant) — proves the read path works
+// 3. UI visibility smoke (Bella's Hair Studio tenant) — proves the read path works
 // ────────────────────────────────────────────────────────────────────────────
 test('customer-notes-ui-visibility: notes created via API are visible in the Customers detail panel', async ({
   page,
@@ -200,11 +200,11 @@ test('customer-notes-ui-visibility: notes created via API are visible in the Cus
   // WHY: if a note is persisted but never rendered back to the operator,
   //      the feature is useless. This is the minimal UI contract.
 
-  // We use the pre-existing DynaTire tenant + a customer we create in the
-  // test (transactional data). This keeps the test independent while still
+  // We use Bella's Hair Studio (seeded demo tenant) + a customer we create in
+  // the test (transactional data). This keeps the test independent while still
   // exercising the real rendered UI.
-  const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
-  const ADMIN_EMAIL = 'admin@dynatire.com';
+  const BELLA_TENANT_ID = 'b3e1aaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const ADMIN_EMAIL = 'bella@bellashair.com';
   const ADMIN_PASSWORD = 'password';
 
   // Create a customer with a note directly in the DB for this UI smoke
@@ -217,7 +217,7 @@ test('customer-notes-ui-visibility: notes created via API are visible in the Cus
      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
      RETURNING customer_id`,
     [
-      DYNATIRE_ID,
+      BELLA_TENANT_ID,
       phone,
       'E2E Notes Visibility',
       'E2E',
@@ -230,7 +230,7 @@ test('customer-notes-ui-visibility: notes created via API are visible in the Cus
   try {
     await page.goto('/dashboard');
 
-    // If not already logged in as DynaTire admin, do a lightweight login.
+    // If not already logged in as Bella's admin, do a lightweight login.
     const loginLink = page.getByText('Log in', { exact: true }).first();
     if (await loginLink.isVisible({ timeout: 2000 }).catch(() => false)) {
       await loginLink.click();
@@ -240,10 +240,10 @@ test('customer-notes-ui-visibility: notes created via API are visible in the Cus
       await page.waitForLoadState('networkidle').catch(() => {});
     }
 
-    // Switch to DynaTire tenant if needed (super-admin landing)
-    const dynaCard = page.getByText('DynaTire').first();
-    if (await dynaCard.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await dynaCard.click();
+    // Switch to Bella's tenant if on super-admin landing
+    const bellaCard = page.getByText("Bella's Hair Studio").first();
+    if (await bellaCard.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await bellaCard.click();
     }
 
     // Navigate to Customers tab with strong wait

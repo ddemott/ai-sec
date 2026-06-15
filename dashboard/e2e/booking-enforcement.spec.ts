@@ -6,10 +6,10 @@
  * dashboard/e2e/helpers/fixtures.ts — registerFreshTenant + seedBookingScenario
  * + cleanTenantData (single-DELETE cascade). Each test owns its full data
  * lifecycle: setup → assert → teardown, runs independently of every other
- * test. No more DynaTire seed dependency, no more per-row cleanup. UI tests
- * (5: ui-conflict-modal, 6: 15min-form-rejection) still need the DynaTire
- * seed because they drive the dashboard's tenant-aware UI; their isolation
- * is governed by the auth-state setup project, not this slice's scope.
+ * test. No more per-row cleanup. UI tests (5: ui-conflict-modal,
+ * 6: 15min-form-rejection) use the module-level uiTenant fixture
+ * (registerFreshTenant + seeded employees/resources) so they are
+ * also independent of any fixed seed tenant.
  *
  * Scenarios:
  *   1. Out-of-hours blocked — booking outside the assigned employee's
@@ -45,12 +45,12 @@ import {
   bookAppointmentAs,
   updateAppointmentAs,
   isoDateDaysFromNow,
-  seedDynaTireBusinessConfig,
-  clearDynaTireBusinessConfig,
+  createEmployeeAs,
+  createResourceAs,
+  createCustomerAs,
   type RegisteredTenant,
 } from './helpers/fixtures';
 
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const ADMIN_EMAIL = 'admin@secretaryhq.com';
 const ADMIN_PASSWORD = 'password';
 
@@ -83,65 +83,75 @@ async function ensureLoggedIn(page: Page) {
   await expect(page.getByText('Home').first()).toBeVisible({ timeout: 15000 });
 }
 
-async function switchToDynaTireTenant(page: Page) {
+// ── Module-level fixture for UI tests (5 + 6) ──
+
+interface UiTenantFixture {
+  tenantId: string;
+  token: string;
+  email: string;
+  employeeId: string;
+  employee2Id: string;
+  resourceId: string;
+  resource2Id: string;
+  customerId: string;
+}
+let uiTenant: UiTenantFixture;
+
+async function switchToTestTenant(page: Page) {
   await page.evaluate((id) => {
     localStorage.setItem('managedTenantId', id);
-    localStorage.setItem('managedTenantName', 'DynaTire Mobile Service');
-  }, DYNATIRE_ID);
+    localStorage.setItem('managedTenantName', 'E2E UI Tenant');
+  }, uiTenant.tenantId);
   await page.reload();
   await page.waitForTimeout(1500);
-}
-
-async function findDynaTireEmployeeId(name: string): Promise<string | null> {
-  const r = await pool.query(
-    'SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
-    [DYNATIRE_ID, name]
-  );
-  return r.rows[0]?.employee_id ?? null;
-}
-
-async function findDynaTireResourceId(name: string): Promise<string | null> {
-  const r = await pool.query(
-    'SELECT resource_id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
-    [DYNATIRE_ID, name]
-  );
-  return r.rows[0]?.resource_id ?? null;
-}
-
-async function findDynaTireCustomerId(): Promise<string> {
-  const r = await pool.query('SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1', [
-    DYNATIRE_ID,
-  ]);
-  if (!r.rows[0]?.customer_id) throw new Error('No DynaTire customer found in seed');
-  return r.rows[0].customer_id;
 }
 
 function uniqueTag(): string {
   return `e2e-enforce-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 }
 
-// Per-spec fixture customer — same rationale as workflows.spec.ts.
-// 2026-05-18 seed strip removed seeded customers; this spec's two
-// failing tests reach for one via `SELECT customer_id ... LIMIT 1`.
-let fixtureCustomerId: string | null = null;
-test.beforeAll(async () => {
+test.beforeAll(async ({ request }) => {
   pool = new Pool({ connectionString: PG_URL });
-  // 2026-05-18 seed-strip-stage-b: business config also moved out of
-  // the seed. The 2 UI tests in this spec still drive the dashboard
-  // and need DynaTire's services/employees/resources to be bookable.
-  await seedDynaTireBusinessConfig(pool);
-  const insert = await pool.query(
-    `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
-     VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
-    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture']
+
+  // Register a fresh tenant for the UI tests (5 + 6).
+  const ft = await registerFreshTenant(request);
+  const tid = ft.tenantId;
+  const tok = ft.token;
+
+  // Create 2 employees and 2 resources so the Quick Book dropdowns are populated.
+  const [emp1, emp2] = await Promise.all([
+    createEmployeeAs(request, tok, tid, 'Alex Smith'),
+    createEmployeeAs(request, tok, tid, 'Blake Jones'),
+  ]);
+  const [res1, res2] = await Promise.all([
+    createResourceAs(request, tok, tid, 'Bay 1'),
+    createResourceAs(request, tok, tid, 'Bay 2'),
+  ]);
+  const custId = await createCustomerAs(request, tok, tid, 'UI Test Customer');
+
+  // Seed shifts for both employees on the UI test date (7 days out).
+  const uiDate = isoDateDaysFromNow(7);
+  await pool.query(
+    `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+     VALUES ($1, $2, $3, '08:00', '20:00', false), ($1, $4, $3, '08:00', '20:00', false)
+     ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
+    [tid, emp1, uiDate, emp2]
   );
-  fixtureCustomerId = insert.rows[0].customer_id;
+
+  uiTenant = {
+    tenantId: tid,
+    token: tok,
+    email: ft.email,
+    employeeId: emp1,
+    employee2Id: emp2,
+    resourceId: res1,
+    resource2Id: res2,
+    customerId: custId,
+  };
 });
+
 test.afterAll(async () => {
-  if (fixtureCustomerId) {
-    await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
-  }
-  await clearDynaTireBusinessConfig(pool);
+  if (uiTenant) await cleanTenantData(pool, uiTenant.tenantId);
   await pool.end();
 });
 
@@ -447,33 +457,25 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
   //        wiring end-to-end. A regression that, e.g., dropped the
   //        ConflictModal from the JSX or stopped reading res.conflict
   //        would slip past the API tests but fail here.
-  // NOTE: this UI test still uses DynaTire seed (Mike Rivera, Truck 2)
-  //        because the dashboard's tenant-aware UI needs a real tenant
-  //        with populated dropdowns. The Slice 3 fresh-tenant pattern
-  //        is for the API contract tests above.
   const tag = uniqueTag();
   const apptIdsToCleanup: string[] = [];
-  // Pilot #3 (2026-05-18): composite key (tenant_id, employee_id, shift_date).
-  // mikeId is hoisted out of `try` so the `finally` cleanup can reference
-  // it for the composite-PK DELETE.
   let scheduleSeeded = false;
-  let mikeId: string | null = null;
+
+  // employeeId (Alex Smith) + resource2Id (Bay 2) are used for the blocker;
+  // the modal must surface those exact names.
+  const empId = uiTenant.employeeId;
+  const res2Id = uiTenant.resource2Id;
+  const customerId = uiTenant.customerId;
+  const tid = uiTenant.tenantId;
+  const UI_TEST_DATE = isoDateDaysFromNow(7);
 
   try {
-    mikeId = await findDynaTireEmployeeId('Mike Rivera');
-    // Use Truck 2 + a far-future date completely outside seed and any
-    // other E2E's range. UI test uses '2026-06-22' (Monday, no seed conflicts).
-    const truckId = await findDynaTireResourceId('Truck 2');
-    const customerId = await findDynaTireCustomerId();
-    expect(mikeId).toBeTruthy();
-    expect(truckId, 'Truck 2 must exist in DynaTire seed').toBeTruthy();
-
-    const UI_TEST_DATE = '2026-06-22';
+    // Ensure Alex Smith has a shift on the UI test date.
     await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-       VALUES ($1, $2, $3, '09:00', '17:00', false)
+       VALUES ($1, $2, $3, '08:00', '20:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
-      [DYNATIRE_ID, mikeId, UI_TEST_DATE]
+      [tid, empId, UI_TEST_DATE]
     );
     scheduleSeeded = true;
 
@@ -482,7 +484,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
       `DELETE FROM appointments
         WHERE tenant_id = $1 AND resource_id = $2
           AND start_time = $3::timestamptz`,
-      [DYNATIRE_ID, truckId, `${UI_TEST_DATE}T14:00:00.000Z`]
+      [tid, res2Id, `${UI_TEST_DATE}T14:00:00.000Z`]
     );
 
     // Existing 14:00-14:30 UTC booking that we'll try to overlap from the UI.
@@ -493,10 +495,10 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
        RETURNING appointment_id`,
       [
-        DYNATIRE_ID,
-        truckId,
+        tid,
+        res2Id,
         customerId,
-        mikeId,
+        empId,
         existingStart.toISOString(),
         existingEnd.toISOString(),
         `${tag}-blocker`,
@@ -505,7 +507,7 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     apptIdsToCleanup.push(existing.rows[0].appointment_id);
 
     await ensureLoggedIn(page);
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
 
     // Open the Schedule tab + Quick Book panel.
     await page
@@ -530,16 +532,16 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     await customerSelect.selectOption(customerId);
 
     const resourceSelect = page.getByTestId('quick-book-resource');
-    await expect(resourceSelect.locator(`option[value="${truckId}"]`)).toHaveCount(1, {
+    await expect(resourceSelect.locator(`option[value="${res2Id}"]`)).toHaveCount(1, {
       timeout: 10000,
     });
-    await resourceSelect.selectOption(truckId);
+    await resourceSelect.selectOption(res2Id);
 
     const employeeSelect = page.getByTestId('quick-book-employee');
-    await expect(employeeSelect.locator(`option[value="${mikeId}"]`)).toHaveCount(1, {
+    await expect(employeeSelect.locator(`option[value="${empId}"]`)).toHaveCount(1, {
       timeout: 10000,
     });
-    await employeeSelect.selectOption(mikeId);
+    await employeeSelect.selectOption(empId);
 
     const localDateTime = (d: Date) => {
       const offset = d.getTimezoneOffset() * 60000;
@@ -557,8 +559,8 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('That time is already booked')).toBeVisible({ timeout: 5000 });
     const dialog = page.getByRole('dialog');
-    await expect(dialog).toContainText('Mike Rivera');
-    await expect(dialog).toContainText('Truck 2');
+    await expect(dialog).toContainText('Alex Smith');
+    await expect(dialog).toContainText('Bay 2');
 
     // No second row in DB (only the blocker we seeded).
     const dbRes = await pool.query(
@@ -570,10 +572,10 @@ test('ui-conflict-modal: dashboard surfaces ConflictModal with existing appointm
     for (const id of apptIdsToCleanup) {
       await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
     }
-    if (scheduleSeeded && mikeId) {
+    if (scheduleSeeded) {
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, mikeId, '2026-06-22']
+        [tid, empId, UI_TEST_DATE]
       );
     }
   }
@@ -603,16 +605,8 @@ test('15min-form-rejection: off-grid time entered in QuickBook surfaces inline e
 
   await page.goto('/dashboard');
   await page.waitForTimeout(500);
-  // Switch to DynaTire so the Quick Book has populated dropdowns.
-  await page.evaluate(
-    ({ id, name }) => {
-      localStorage.setItem('managedTenantId', id);
-      localStorage.setItem('managedTenantName', name);
-    },
-    { id: DYNATIRE_ID, name: 'DynaTire Mobile Service' }
-  );
-  await page.reload();
-  await page.waitForTimeout(1500);
+  // Switch to the UI test tenant so the Quick Book has populated dropdowns.
+  await switchToTestTenant(page);
 
   // Open Schedule tab + Quick Book panel.
   await page

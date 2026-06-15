@@ -21,8 +21,8 @@
  *     vs viewport width. A few pixels of tolerance is allowed for
  *     subpixel rendering on retina-density screens.
  *   - Tests share the admin storage state set up by auth.setup.ts. We
- *     switch to the DynaTire tenant via localStorage so the seeded data
- *     is reachable.
+ *     switch to a fresh test tenant via localStorage so the data path
+ *     is exercised without depending on any static seed tenant.
  *   - These are *audit* tests — they assert the affordance EXISTS and is
  *     reachable, not that the underlying business action succeeded
  *     (the booking-/customer-/scheduler-spec files own those contracts).
@@ -31,13 +31,26 @@
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+import { registerFreshTenant, cleanTenantData } from './helpers/fixtures';
+
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 let pool: Pool;
-test.beforeAll(() => {
+let freshTenantId: string;
+let freshTenantToken: string;
+
+test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
+
+  const { request: pr } = await import('@playwright/test');
+  const ctx = await pr.newContext({ ignoreHTTPSErrors: true });
+  const tenant = await registerFreshTenant(ctx);
+  freshTenantId = tenant.tenantId;
+  freshTenantToken = tenant.token;
+  await ctx.dispose();
 });
+
 test.afterAll(async () => {
+  await cleanTenantData(pool, freshTenantId);
   await pool.end();
 });
 
@@ -52,11 +65,11 @@ test.afterAll(async () => {
 const IPHONE_14 = { width: 390, height: 844 };
 const PIXEL_7 = { width: 412, height: 915 };
 
-async function switchToDynaTireTenant(page: Page) {
+async function switchToTestTenant(page: Page) {
   await page.evaluate((id) => {
     localStorage.setItem('managedTenantId', id);
-    localStorage.setItem('managedTenantName', 'DynaTire Mobile Service');
-  }, DYNATIRE_ID);
+    localStorage.setItem('managedTenantName', 'E2E Test Business');
+  }, freshTenantId);
   await page.reload();
   await page.waitForTimeout(1500);
 }
@@ -107,7 +120,7 @@ test.describe('iPhone 14 viewport', () => {
     //        contract (no overflow) on one viewport so a regression
     //        surfaces here before a beta customer reports it.
     await page.goto('/dashboard');
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
 
     // Mobile bottom nav renders below md breakpoint
     const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
@@ -143,7 +156,7 @@ test.describe('iPhone 14 viewport', () => {
     //        (the workflows.spec.ts quick-book test owns submission);
     //        just prove the operator can REACH the form.
     await page.goto('/dashboard');
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
 
     // Navigate via mobile nav
     const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
@@ -197,7 +210,7 @@ test.describe('iPhone 14 viewport', () => {
         `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
          VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
         [
-          DYNATIRE_ID,
+          freshTenantId,
           `+1${String(Date.now()).slice(-10)}`,
           customerName,
           'MR-Test',
@@ -207,7 +220,7 @@ test.describe('iPhone 14 viewport', () => {
       createdId = insert.rows[0].customer_id;
 
       await page.goto('/dashboard');
-      await switchToDynaTireTenant(page);
+      await switchToTestTenant(page);
 
       const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
       await mobileNav.getByRole('button', { name: /Customers/i }).click();
@@ -252,7 +265,7 @@ test.describe('Pixel 7 viewport', () => {
     //        component uses `max-w-[400px]` or similar that's safe at
     //        390 but cuts off at 412.
     await page.goto('/dashboard');
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
 
     const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
     await expect(mobileNav).toBeVisible({ timeout: 10_000 });

@@ -24,21 +24,18 @@
  * teardown. Any test runs independently in any order.
  */
 import { test, expect } from './helpers/test';
-import { type Page } from '@playwright/test';
+import { type Page, request as playwrightRequest } from '@playwright/test';
 import { Pool } from 'pg';
+import { registerFreshTenant, cleanTenantData } from './helpers/fixtures';
 
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const SUPER_ADMIN_ID = '00000000-0000-0000-0000-000000000000';
-// "Other tenant" ID is discovered at runtime — the seed creates Bella's
-// Hair Studio with a randomly-generated UUID inside a DO $$ block, so the
-// id varies per seed run (and with `ON CONFLICT DO NOTHING` on (id), two
-// seed runs can leave two Bella's tenants in the DB). Dynamic lookup
-// gives us a stable handle independent of seed history.
-let OTHER_TENANT_ID: string;
+// "Other tenant" is Bella's Hair Studio — always seeded, stable UUID.
+const OTHER_TENANT_ID = 'b3e1aaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 
 let pool: Pool;
+let attackerTenant: { tenantId: string; email: string };
 
 function uniqueTag(): string {
   return `e2e-iso-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -116,21 +113,15 @@ async function apiPost(
 
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
-  // Discover a non-DynaTire, non-super-admin tenant for the cross-tenant
-  // probe. Picks the first match by created_at to be deterministic across
-  // re-runs. Fails the spec early if there's only one tenant in the DB.
-  const r = await pool.query(
-    `SELECT tenant_id FROM tenants
-      WHERE tenant_id != $1 AND tenant_id != $2
-      ORDER BY created_at ASC LIMIT 1`,
-    [DYNATIRE_ID, SUPER_ADMIN_ID]
-  );
-  if (r.rowCount === 0) {
-    throw new Error('No second tenant exists for cross-tenant isolation probe — re-run seed-db.sh');
-  }
-  OTHER_TENANT_ID = r.rows[0].tenant_id;
+  // Register a fresh ephemeral tenant to serve as the "attacker" in
+  // cross-tenant isolation probes. Using a registered-fresh tenant
+  // means the test never depends on seed data and cleans up after itself.
+  const ctx = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+  attackerTenant = await registerFreshTenant(ctx);
+  await ctx.dispose();
 });
 test.afterAll(async () => {
+  await cleanTenantData(pool, attackerTenant.tenantId);
   await pool.end();
 });
 
@@ -138,7 +129,7 @@ test.afterAll(async () => {
 // 1. Query-string ?tenant_id=<other> override is rejected
 // ────────────────────────────────────────────────────────────────────────────
 test('isolation: ?tenant_id=<other tenant> on GET is rejected with 403', async ({ page }) => {
-  // WHO: malicious or curious DynaTire user trying to peek at Bella's
+  // WHO: malicious attacker tenant user trying to peek at Bella's
   //        customer list by URL-hacking the tenant_id query param
   // WHAT: the tenantMiddleware gate (src/middleware.ts, added 2026-05-06)
   //        must 403 any cross-tenant override unless the caller is super-admin
@@ -160,18 +151,18 @@ test('isolation: ?tenant_id=<other tenant> on GET is rejected with 403', async (
     );
     bellaCustomerId = ins.rows[0].customer_id;
 
-    // Login as DynaTire user — gets JWT scoped to DynaTire.
-    const auth = await loginAs(page, 'admin@dynatire.com', 'password');
-    expect(auth.tenant_id).toBe(DYNATIRE_ID);
+    // Login as the attacker tenant — gets JWT scoped to that tenant.
+    const auth = await loginAs(page, attackerTenant.email, 'password123');
+    expect(auth.tenant_id).toBe(attackerTenant.tenantId);
 
-    // Sanity: same call WITHOUT the override returns DynaTire's customers.
+    // Sanity: same call WITHOUT the override returns the attacker's own customers.
     const ownTenant = await apiGet(page, auth.token, '/customers');
     expect(ownTenant.status).toBe(200);
     expect(Array.isArray(ownTenant.body)).toBe(true);
-    const dynatireNames = (ownTenant.body as Array<{ name?: string }>).map((c) => c.name);
+    const attackerNames = (ownTenant.body as Array<{ name?: string }>).map((c) => c.name);
     expect(
-      dynatireNames,
-      "DynaTire user must NOT see Bella's customer in their own list"
+      attackerNames,
+      "Attacker tenant user must NOT see Bella's customer in their own list"
     ).not.toContain(`${tag}-other-secret`);
 
     // Attack: same user tries ?tenant_id=<Bella> override.
@@ -196,7 +187,7 @@ test('isolation: ?tenant_id=<other tenant> on GET is rejected with 403', async (
 test('isolation: body.tenant_id=<other tenant> on POST /customers/create is rejected', async ({
   page,
 }) => {
-  // WHO: malicious DynaTire user trying to inject a customer row under
+  // WHO: malicious attacker tenant user trying to inject a customer row under
   //        Bella's tenant_id (ghost-write attack)
   // WHAT: the same tenantMiddleware gate must 403 a cross-tenant body
   //        override; mismatched query-vs-body returns 400
@@ -216,8 +207,8 @@ test('isolation: body.tenant_id=<other tenant> on POST /customers/create is reje
   );
   const beforeCount = beforeRes.rows[0].n;
 
-  const auth = await loginAs(page, 'admin@dynatire.com', 'password');
-  expect(auth.tenant_id).toBe(DYNATIRE_ID);
+  const auth = await loginAs(page, attackerTenant.email, 'password123');
+  expect(auth.tenant_id).toBe(attackerTenant.tenantId);
 
   // Attack: try to inject a customer into Bella's tenant.
   const inject = await apiPost(page, auth.token, '/customers/create', {
@@ -246,7 +237,7 @@ test('isolation: body.tenant_id=<other tenant> on POST /customers/create is reje
 // 3. Non-super-admin GET /tenants is rejected
 // ────────────────────────────────────────────────────────────────────────────
 test('isolation: non-super-admin GET /tenants is rejected (no enumeration)', async ({ page }) => {
-  // WHO: any tenant user (DynaTire owner) trying to enumerate every
+  // WHO: any tenant user (attacker tenant owner) trying to enumerate every
   //        tenant on the platform
   // WHAT: GET /tenants must 403 unless the caller is super-admin
   // WHEN: requireSuperAdmin gate (added 2026-05-06) is applied to /tenants
@@ -256,8 +247,8 @@ test('isolation: non-super-admin GET /tenants is rejected (no enumeration)', asy
   //        on the platform — full customer list, voice config, billing
   //        tier visible to anyone with a JWT. Critical breach in a paying-
   //        tenant SaaS. This test pins the gate at runtime.
-  const auth = await loginAs(page, 'admin@dynatire.com', 'password');
-  expect(auth.tenant_id).toBe(DYNATIRE_ID);
+  const auth = await loginAs(page, attackerTenant.email, 'password123');
+  expect(auth.tenant_id).toBe(attackerTenant.tenantId);
 
   const res = await apiGet(page, auth.token, '/tenants');
   expect(res.status, 'tenant enumeration must be 403 for non-super-admin').toBe(403);
@@ -288,7 +279,7 @@ test('isolation: super-admin CAN read across tenants (positive control)', async 
   // here would silently produce an array of undefineds and the
   // .toContain() below would fail. Origin: 2026-05-13 audit.
   const ids = (tenants.body as Array<{ tenant_id: string }>).map((t) => t.tenant_id);
-  expect(ids, 'super-admin sees DynaTire').toContain(DYNATIRE_ID);
+  expect(ids, 'super-admin sees the attacker tenant').toContain(attackerTenant.tenantId);
   expect(ids, 'super-admin sees other tenant').toContain(OTHER_TENANT_ID);
 
   // Cross-tenant query override is allowed for super-admin.
