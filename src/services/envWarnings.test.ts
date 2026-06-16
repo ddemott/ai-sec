@@ -24,6 +24,8 @@ function baseCtx(
       TELNYX_PHONE_NUMBER: '+16308661960',
       EMAIL_USER: 'test@example.com',
       EMAIL_PASS: 'app-password',
+      CORS_ORIGIN: 'https://app.secretaryhq.com',
+      DASHBOARD_URL: 'https://app.secretaryhq.com',
       ...(overrides.env ?? {}),
     } as NodeJS.ProcessEnv,
     TELNYX_API_KEY: overrides.TELNYX_API_KEY ?? 'KEY01fake',
@@ -92,17 +94,7 @@ describe('collectStartupWarnings — AGENT_SECRET', () => {
 
 describe('collectStartupWarnings — GOOGLE_CLIENT_ID', () => {
   it('SAD: missing GOOGLE_CLIENT_ID → calendar-sync warning', () => {
-    const warnings = collectStartupWarnings(
-      baseCtx({
-        env: {
-          GOOGLE_CLIENT_ID: undefined,
-          AGENT_SECRET: 'a'.repeat(40),
-          TELNYX_PHONE_NUMBER: '+16308661960',
-          EMAIL_USER: 'test@example.com',
-          EMAIL_PASS: 'app-password',
-        },
-      })
-    );
+    const warnings = collectStartupWarnings(baseCtx({ env: { GOOGLE_CLIENT_ID: undefined } }));
     expect(warnings.find((w) => w.includes('GOOGLE_CLIENT_ID'))).toContain(
       'Google Calendar sync disabled'
     );
@@ -115,17 +107,7 @@ describe('collectStartupWarnings — TELNYX_PHONE_NUMBER', () => {
     // WHAT: Reminder and notification SMS will fail because the from field is invalid
     // WHY: ProviderRegistry now defaults to Telnyx; a missing from number is a silent
     //       delivery failure with no error at the route layer
-    const warnings = collectStartupWarnings(
-      baseCtx({
-        env: {
-          TELNYX_PHONE_NUMBER: undefined,
-          EMAIL_USER: 'u',
-          EMAIL_PASS: 'p',
-          GOOGLE_CLIENT_ID: 'g',
-          AGENT_SECRET: 'a'.repeat(40),
-        },
-      })
-    );
+    const warnings = collectStartupWarnings(baseCtx({ env: { TELNYX_PHONE_NUMBER: undefined } }));
     const w = warnings.find((x) => x.includes('TELNYX_PHONE_NUMBER'));
     expect(w).toBeDefined();
     expect(w).toContain('from number');
@@ -135,16 +117,7 @@ describe('collectStartupWarnings — TELNYX_PHONE_NUMBER', () => {
     // WHO: Operator with no Telnyx config at all
     // WHY: Phone number warning is irrelevant when the key itself is absent
     const warnings = collectStartupWarnings(
-      baseCtx({
-        TELNYX_API_KEY: '',
-        env: {
-          TELNYX_PHONE_NUMBER: undefined,
-          EMAIL_USER: 'u',
-          EMAIL_PASS: 'p',
-          GOOGLE_CLIENT_ID: 'g',
-          AGENT_SECRET: 'a'.repeat(40),
-        },
-      })
+      baseCtx({ TELNYX_API_KEY: '', env: { TELNYX_PHONE_NUMBER: undefined } })
     );
     expect(warnings.filter((w) => w.includes('TELNYX_PHONE_NUMBER'))).toHaveLength(0);
   });
@@ -156,32 +129,36 @@ describe('collectStartupWarnings — EMAIL_USER / EMAIL_PASS', () => {
     // WHAT: emailService falls back to mock transporter — all confirmation/reminder
     //       emails return a fake messageId but never send
     // WHY: This is a silent prod failure; the warning is the only signal
-    const warnings = collectStartupWarnings(
-      baseCtx({
-        env: {
-          EMAIL_USER: undefined,
-          EMAIL_PASS: 'p',
-          TELNYX_PHONE_NUMBER: '+1',
-          GOOGLE_CLIENT_ID: 'g',
-          AGENT_SECRET: 'a'.repeat(40),
-        },
-      })
-    );
+    const warnings = collectStartupWarnings(baseCtx({ env: { EMAIL_USER: undefined } }));
     expect(warnings.find((w) => w.includes('EMAIL_USER'))).toContain('mock mode');
   });
 
   it('SAD: EMAIL_PASS missing → email mock warning fires', () => {
-    const warnings = collectStartupWarnings(
-      baseCtx({
-        env: {
-          EMAIL_USER: 'u',
-          EMAIL_PASS: undefined,
-          TELNYX_PHONE_NUMBER: '+1',
-          GOOGLE_CLIENT_ID: 'g',
-          AGENT_SECRET: 'a'.repeat(40),
-        },
-      })
-    );
+    const warnings = collectStartupWarnings(baseCtx({ env: { EMAIL_PASS: undefined } }));
     expect(warnings.find((w) => w.includes('EMAIL_PASS'))).toContain('mock mode');
+  });
+});
+
+describe('collectStartupWarnings — CORS_ORIGIN', () => {
+  it('SAD: CORS_ORIGIN missing → open-CORS security warning', () => {
+    // WHO: Operator who hasn't pinned allowed origins
+    // WHAT: Fastify reflects any origin — cross-site requests from any domain succeed
+    // WHY: Silent security misconfiguration; warning at boot is the cheapest guard
+    const warnings = collectStartupWarnings(baseCtx({ env: { CORS_ORIGIN: undefined } }));
+    const w = warnings.find((x) => x.includes('CORS_ORIGIN'));
+    expect(w).toBeDefined();
+    expect(w).toContain('ANY origin');
+  });
+});
+
+describe('collectStartupWarnings — DASHBOARD_URL', () => {
+  it('SAD: DASHBOARD_URL missing → warning about localhost fallback', () => {
+    // WHO: Operator who hasn't set the public dashboard URL
+    // WHAT: Emails, OAuth redirects, Stripe success/cancel URLs all point at localhost
+    // WHY: Production OAuth flows and Stripe redirects silently break
+    const warnings = collectStartupWarnings(baseCtx({ env: { DASHBOARD_URL: undefined } }));
+    const w = warnings.find((x) => x.includes('DASHBOARD_URL'));
+    expect(w).toBeDefined();
+    expect(w).toContain('localhost');
   });
 });

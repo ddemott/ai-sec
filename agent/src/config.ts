@@ -14,7 +14,7 @@ const envSchema = z.object({
   LIVEKIT_API_SECRET: z.string().min(1),
 
   AGENT_SECRET: z.string().min(32),
-  BACKEND_URL: z.string().url().default('http://localhost:4001'),
+  BACKEND_URL: z.string().url(),
 
   OPENAI_API_KEY: z.string().min(1),
   DEEPGRAM_API_KEY: z.string().min(1),

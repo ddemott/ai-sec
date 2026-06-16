@@ -37,6 +37,16 @@ export function collectStartupWarnings(ctx: EnvWarningContext): string[] {
       'EMAIL_USER / EMAIL_PASS not set — email notifications are running in mock mode and will never deliver'
     );
   }
+  if (!env.CORS_ORIGIN) {
+    warnings.push(
+      'CORS_ORIGIN not set — server reflects ANY origin (open CORS); set to the dashboard URL in production'
+    );
+  }
+  if (!env.DASHBOARD_URL) {
+    warnings.push(
+      'DASHBOARD_URL not set — emails, OAuth redirects, and Stripe success/cancel URLs default to https://localhost:4000 (broken in production)'
+    );
+  }
   if (!env.GOOGLE_CLIENT_ID) {
     warnings.push('GOOGLE_CLIENT_ID not set — Google Calendar sync disabled');
   }
