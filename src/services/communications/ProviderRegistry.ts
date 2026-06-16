@@ -21,7 +21,7 @@ export class ProviderRegistry {
     if (this.shouldUseSimulationMode()) {
       this.defaultProviderName = 'mock';
     } else {
-      this.defaultProviderName = process.env.TELEPHONY_PROVIDER || 'twilio';
+      this.defaultProviderName = process.env.TELEPHONY_PROVIDER || 'telnyx';
     }
   }
 
@@ -43,11 +43,11 @@ export class ProviderRegistry {
     }
 
     // Fallback to mock if the selected provider has no credentials
-    const provider = process.env.TELEPHONY_PROVIDER || 'twilio';
-    if (provider === 'telnyx') {
-      return !process.env.TELNYX_API_KEY;
+    const provider = process.env.TELEPHONY_PROVIDER || 'telnyx';
+    if (provider === 'twilio') {
+      return !process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN;
     }
-    return !process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN;
+    return !process.env.TELNYX_API_KEY;
   }
 
   registerProvider(provider: TelephonyProvider): void {

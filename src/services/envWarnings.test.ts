@@ -21,6 +21,9 @@ function baseCtx(
     env: {
       GOOGLE_CLIENT_ID: 'google-client-id',
       AGENT_SECRET: 'a'.repeat(40),
+      TELNYX_PHONE_NUMBER: '+16308661960',
+      EMAIL_USER: 'test@example.com',
+      EMAIL_PASS: 'app-password',
       ...(overrides.env ?? {}),
     } as NodeJS.ProcessEnv,
     TELNYX_API_KEY: overrides.TELNYX_API_KEY ?? 'KEY01fake',
@@ -94,11 +97,91 @@ describe('collectStartupWarnings — GOOGLE_CLIENT_ID', () => {
         env: {
           GOOGLE_CLIENT_ID: undefined,
           AGENT_SECRET: 'a'.repeat(40),
+          TELNYX_PHONE_NUMBER: '+16308661960',
+          EMAIL_USER: 'test@example.com',
+          EMAIL_PASS: 'app-password',
         },
       })
     );
     expect(warnings.find((w) => w.includes('GOOGLE_CLIENT_ID'))).toContain(
       'Google Calendar sync disabled'
     );
+  });
+});
+
+describe('collectStartupWarnings — TELNYX_PHONE_NUMBER', () => {
+  it('SAD: TELNYX_API_KEY set but TELNYX_PHONE_NUMBER missing → SMS from-number warning', () => {
+    // WHO: Operator with Telnyx API key but no outbound phone number configured
+    // WHAT: Reminder and notification SMS will fail because the from field is invalid
+    // WHY: ProviderRegistry now defaults to Telnyx; a missing from number is a silent
+    //       delivery failure with no error at the route layer
+    const warnings = collectStartupWarnings(
+      baseCtx({
+        env: {
+          TELNYX_PHONE_NUMBER: undefined,
+          EMAIL_USER: 'u',
+          EMAIL_PASS: 'p',
+          GOOGLE_CLIENT_ID: 'g',
+          AGENT_SECRET: 'a'.repeat(40),
+        },
+      })
+    );
+    const w = warnings.find((x) => x.includes('TELNYX_PHONE_NUMBER'));
+    expect(w).toBeDefined();
+    expect(w).toContain('from number');
+  });
+
+  it('HAPPY: TELNYX_API_KEY missing suppresses TELNYX_PHONE_NUMBER warning', () => {
+    // WHO: Operator with no Telnyx config at all
+    // WHY: Phone number warning is irrelevant when the key itself is absent
+    const warnings = collectStartupWarnings(
+      baseCtx({
+        TELNYX_API_KEY: '',
+        env: {
+          TELNYX_PHONE_NUMBER: undefined,
+          EMAIL_USER: 'u',
+          EMAIL_PASS: 'p',
+          GOOGLE_CLIENT_ID: 'g',
+          AGENT_SECRET: 'a'.repeat(40),
+        },
+      })
+    );
+    expect(warnings.filter((w) => w.includes('TELNYX_PHONE_NUMBER'))).toHaveLength(0);
+  });
+});
+
+describe('collectStartupWarnings — EMAIL_USER / EMAIL_PASS', () => {
+  it('SAD: EMAIL_USER missing → email mock warning fires', () => {
+    // WHO: Operator who hasn't set Gmail app-password credentials
+    // WHAT: emailService falls back to mock transporter — all confirmation/reminder
+    //       emails return a fake messageId but never send
+    // WHY: This is a silent prod failure; the warning is the only signal
+    const warnings = collectStartupWarnings(
+      baseCtx({
+        env: {
+          EMAIL_USER: undefined,
+          EMAIL_PASS: 'p',
+          TELNYX_PHONE_NUMBER: '+1',
+          GOOGLE_CLIENT_ID: 'g',
+          AGENT_SECRET: 'a'.repeat(40),
+        },
+      })
+    );
+    expect(warnings.find((w) => w.includes('EMAIL_USER'))).toContain('mock mode');
+  });
+
+  it('SAD: EMAIL_PASS missing → email mock warning fires', () => {
+    const warnings = collectStartupWarnings(
+      baseCtx({
+        env: {
+          EMAIL_USER: 'u',
+          EMAIL_PASS: undefined,
+          TELNYX_PHONE_NUMBER: '+1',
+          GOOGLE_CLIENT_ID: 'g',
+          AGENT_SECRET: 'a'.repeat(40),
+        },
+      })
+    );
+    expect(warnings.find((w) => w.includes('EMAIL_PASS'))).toContain('mock mode');
   });
 });

@@ -27,6 +27,16 @@ export function collectStartupWarnings(ctx: EnvWarningContext): string[] {
       'TELNYX_SIP_CONNECTION_ID not set — phone provisioning will return 503 (purchased numbers cannot be routed to LiveKit)'
     );
   }
+  if (TELNYX_API_KEY && !env.TELNYX_PHONE_NUMBER) {
+    warnings.push(
+      'TELNYX_PHONE_NUMBER not set — reminder and notification SMS will be sent without a valid from number (messages will fail or be undeliverable)'
+    );
+  }
+  if (!env.EMAIL_USER || !env.EMAIL_PASS) {
+    warnings.push(
+      'EMAIL_USER / EMAIL_PASS not set — email notifications are running in mock mode and will never deliver'
+    );
+  }
   if (!env.GOOGLE_CLIENT_ID) {
     warnings.push('GOOGLE_CLIENT_ID not set — Google Calendar sync disabled');
   }
