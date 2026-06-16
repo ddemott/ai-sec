@@ -39,7 +39,7 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 - [ ] **[prod]** **Email silently runs mock transporter** — without `EMAIL_USER`/`EMAIL_PASS`, `emailService.ts:22` installs a mock returning a fake messageId → confirmation/notification emails never send, no error. Set Gmail app-password env on Railway.
 - [ ] **[prod]** **Agent `BACKEND_URL` defaults to `http://localhost:4001`** (`agent/src/config.ts:17`, a `.default()` — no fail-fast). If unset on `ai-sec-agent`, the agent calls localhost → **every `/agent-tools/*` request misroutes silently**. MUST confirm set in prod.
 - [ ] **[prod]** **`STRIPE_WEBHOOK_SECRET` empty → every webhook 400s** (`billing.ts:133`) → subscriptions never activate even though checkout works. Distinct from `STRIPE_SECRET_KEY`.
-- [ ] **[prod] (security)** **`CORS_ORIGIN` unset reflects ANY origin** (`index.ts:134` `|| true`). Set the dashboard origin in prod.
+- [x] **[prod] (security)** **`CORS_ORIGIN` unset reflects ANY origin** — FIXED 2026-06-16. `|| true` replaced with explicit allowlist: `CORS_ORIGIN` (comma-sep) or localhost fallback. Set `CORS_ORIGIN=https://dashboard-production-cee3.up.railway.app` on Railway `ai-sec`.
 - [ ] **[prod]** **`DASHBOARD_URL` defaults to `https://localhost:4000`** → prod emails / OAuth redirects / Stripe success+cancel URLs point at localhost (`constants.ts:2`, `billing.ts:91`, `calendar.ts:56`, `auth.ts:185`). Already on the env-var list below — flagged here for blast radius.
 
 ### `[prod]` — required env for core launch (already tracked, consolidated)

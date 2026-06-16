@@ -129,7 +129,12 @@ void app.register(helmet, {
 });
 
 void app.register(cors, {
-  origin: process.env.CORS_ORIGIN || true,
+  // Explicit allowlist — never reflect every origin.
+  // Prod: set CORS_ORIGIN=https://your-dashboard.up.railway.app (comma-sep for multiple).
+  // Dev/unset: falls back to localhost only.
+  origin: process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+    : ['http://localhost:4000', 'https://localhost:4000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 });
 
