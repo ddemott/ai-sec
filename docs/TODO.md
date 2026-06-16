@@ -162,7 +162,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 - [x] **P2 — Wrap the agent `entry` tail in try/catch → `runFallback`.** DONE 2026-05-28. Added outer try/catch around ToolsClient + buildTools + fetchTenantConfig + buildSystemPrompt. Inner session.start catch retained; outer catch catches setup failures before session.start. Agent TS clean, 1397 tests passing.
 - [ ] **P3 — (B) idempotent-read retry** in `toolsClient` — one retry on a transient 5xx for READ tools only (never mutations: a timed-out booking may have succeeded server-side → double-book). Backed out 2026-05-21 (not approved); revisit.
-- [ ] **P3 — (C) latency filler** — speak a short "one sec while I check that" before known-slow tool calls to cut the up-to-8s silence window. Pairs with reconsidering `toolsClient` `timeoutMs` (8s is long for voice).
+- [x] **P3 — (C) latency filler** — DONE 2026-06-16. `buildTools` accepts optional `speakFiller` callback; wired into `get_available_slots`, `book_appointment`, `book_appointment_with_scheduling`, `answer_policy_question`. `index.ts` passes `session.say` (builds tools inside session try-block). Also fixed pre-existing TS error (`AgentHandoffItem` type narrowing in transcript handler).
 
 **Gap 3 — follow-through (core fix done above):**
 
@@ -209,9 +209,9 @@ support transcript / summary / outcome / appointment link — the **agent never
 captures or sends them**, so every logged call is duration-only.
 
 - [x] **Capture + send transcript** — DONE 2026-06-10. New `agent/src/transcript.ts` `TranscriptRecorder` accumulates `conversation_item_added` turns (caller STT + agent replies incl. greeting); shutdown callback sends `transcript.render()` to `voice-session-end`; `agentTools.ts` schema gains `transcript` (max 100k) → `end_voice_session` param 5. DB column + `VoiceCallsView.tsx:611` display already existed. +5 agent + 2 backend tests; agent 127 / backend voice-session 7 green, both typecheck clean. **Validation pending: live call to confirm real transcript lands.**
-- [ ] **Generate + send call summary** — same path, `agentTools.ts:418` `null`, displayed at `VoiceCallsView.tsx:626` if present. Needs a post-call LLM summary (one cheap GPT-4o-mini call in the shutdown hook, like the post-call summary pattern used elsewhere).
-- [ ] **Set call outcome** — `end_voice_session` accepts `outcome` (`voice.ts:26`) and the tab renders it (`VoiceCallsView.tsx:42`), but the agent rarely/never sets it. Classify each call (booked / message-taken / transferred / info-only / abandoned) and send it.
-- [ ] **Link booked appointment to the call** — `end_voice_session` param 7 (`appointment_id`) is hardcoded `null` (`agentTools.ts:419`). When the booking tool succeeds during a call, thread the new `appointment_id` into session-end so the Calls tab can deep-link the call → appointment.
+- [x] **Generate + send call summary** — DONE (Gap #1, 2026-06-12). `callSummary.ts` post-call GPT-4o-mini summary in shutdown hook → `voice-session-end`.
+- [x] **Set call outcome** — DONE (Gap #1, 2026-06-12). `CallOutcomeTracker` set by booking + transfer + `callClassify.ts`; shutdown hook sends `outcome` to `voice-session-end`.
+- [x] **Link booked appointment to the call** — DONE (Gap #1, 2026-06-12). `recordBooking(appointment_id)` in tools → shutdown hook → `voice-session-end` param.
 - [x] **Register transfer events in the call record** — DONE (via `recordTransfer()` setting outcome + migration-updated `end_voice_session` that sets status='transferred' when outcome='transferred'). UI already supported it. See feat/transfers-invisible-calls + related list work.
 
 ### Analytics (`AnalyticsView.tsx`)

@@ -252,16 +252,6 @@ export default defineAgent({
         roomName: sessionCtx.roomName ?? undefined,
         participantIdentity: sessionCtx.participantIdentity ?? undefined,
       });
-      const tools = buildTools(
-        sessionCtx,
-        client,
-        {
-          forwardPhone: tenantConfig.forwardPhone,
-          execute: transferExecutor,
-        },
-        outcomeTracker
-      );
-
       // 4. Build prompt with runtime context
       const instructions = buildSystemPrompt({
         tenantName: tenantConfig.name,
@@ -304,6 +294,22 @@ export default defineAgent({
           }),
         });
 
+        // Tools built here so speakFiller can reference session.say —
+        // execute() closures fire only after session.start(), so session is
+        // always initialized by the time a filler phrase is spoken.
+        const tools = buildTools(
+          sessionCtx,
+          client,
+          {
+            forwardPhone: tenantConfig.forwardPhone,
+            execute: transferExecutor,
+          },
+          outcomeTracker,
+          (phrase) => {
+            void session.say(phrase, { allowInterruptions: true });
+          }
+        );
+
         const agent = new voice.Agent({
           instructions,
           tools,
@@ -317,6 +323,7 @@ export default defineAgent({
         // itself emits a `conversation_item_added` (addToChatCtx defaults true)
         // — so the transcript opens with the actual first line, no manual add.
         session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
+          if (ev.item.type !== 'message') return;
           transcript.add(ev.item.role, ev.item.textContent);
         });
 

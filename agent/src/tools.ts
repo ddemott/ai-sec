@@ -57,7 +57,8 @@ export function buildTools(
   ctx: SessionContext,
   client: ToolsClient,
   transfer?: TransferCapability,
-  outcome?: CallOutcomeTracker
+  outcome?: CallOutcomeTracker,
+  speakFiller?: (phrase: string) => void
 ): llm.ToolContext {
   return {
     get_customer_context: llm.tool({
@@ -116,6 +117,7 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { service_type: string; date: string }) => {
+        speakFiller?.('Let me check what we have open...');
         const res = await client.call('/agent-tools/available-slots', {
           tenant_id: ctx.tenantId,
           service_type: args.service_type,
@@ -232,6 +234,7 @@ export function buildTools(
         employee_id?: string;
         description?: string;
       }) => {
+        speakFiller?.('One moment while I get that booked...');
         const bookRes = await client.call('/agent-tools/book-appointment', {
           tenant_id: ctx.tenantId,
           resource_id: args.resource_id,
@@ -279,6 +282,7 @@ export function buildTools(
         name?: string;
         description?: string;
       }) => {
+        speakFiller?.('One moment while I find and book a slot...');
         const res = await client.call('/agent-tools/book-with-scheduling', {
           tenant_id: ctx.tenantId,
           phone: args.phone,
@@ -314,6 +318,7 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { question: string }) => {
+        speakFiller?.('Let me look that up for you...');
         const res = await client.call('/agent-tools/policy-answer', {
           tenant_id: ctx.tenantId,
           question: args.question,
