@@ -164,6 +164,23 @@ const VerifyPhoneCodeSchema = z.object({
   code: z.string().regex(/^\d+$/, 'Code must be numeric'),
 });
 
+// caller-appointments — upcoming appointments for the caller by phone.
+// Used by the agent to list what a caller has scheduled before offering
+// to cancel or reschedule. Only returns scheduled (non-cancelled) future appts.
+const CallerAppointmentsSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+});
+
+// cancel-appointment — soft-cancel a specific appointment. Phone is required
+// to verify the caller owns the appointment (prevents one caller cancelling
+// another's appointment by guessing an appointment_id).
+const CancelAppointmentSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  appointment_id: z.string().uuid(),
+});
+
 // voice-session-start / -end — the LiveKit agent logs a call so the dashboard
 // Calls tab + customer call history populate. These mirror the JWT-gated
 // /voice/session/{start,end} routes but use the agent-secret + body-tenant_id
@@ -1420,6 +1437,137 @@ export function registerAgentToolRoutes(
       );
     },
     'Failed to verify phone code'
+  );
+
+  // caller-appointments — list upcoming scheduled appointments for the caller.
+  // The agent uses this before cancelling to confirm which appointment the
+  // caller means ("I have you down for Tuesday at 2pm and Thursday at 10am").
+  toolRoute(
+    app,
+    '/agent-tools/caller-appointments',
+    CallerAppointmentsSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!isValidPhone(normalized)) {
+        return fail(reply, 'I need a valid phone number to look up your appointments.');
+      }
+      const rows = await withTenantClient(args.tenant_id, async (client) => {
+        const res = await client.query<{
+          appointment_id: string;
+          start_time: string;
+          end_time: string;
+          description: string | null;
+          status: string;
+        }>(
+          `SELECT a.appointment_id, a.start_time, a.end_time, a.description, a.status
+           FROM appointments a
+           JOIN customers c ON c.customer_id = a.customer_id
+          WHERE a.tenant_id = $1
+            AND c.phone = $2
+            AND a.status = 'scheduled'
+            AND a.start_time > now()
+            AND (a.is_deleted IS NULL OR a.is_deleted = false)
+          ORDER BY a.start_time ASC
+          LIMIT 5`,
+          [args.tenant_id, normalized]
+        );
+        return res.rows;
+      });
+      if (rows.length === 0) {
+        return ok(reply, {
+          appointments: [],
+          message: "I don't see any upcoming appointments for your number.",
+        });
+      }
+      const appointments = rows.map((r) => ({
+        appointment_id: r.appointment_id,
+        description: r.description ?? 'appointment',
+        start_time: r.start_time,
+        end_time: r.end_time,
+        // Human-readable for the LLM to speak aloud
+        readable: new Date(r.start_time).toLocaleString('en-US', {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        }),
+      }));
+      return ok(reply, { appointments });
+    },
+    'Failed to fetch caller appointments'
+  );
+
+  // cancel-appointment — soft-cancel a specific appointment. Phone must match
+  // the customer on the appointment — prevents cross-caller cancellation.
+  // Returns a conversational message the agent can relay verbatim.
+  toolRoute(
+    app,
+    '/agent-tools/cancel-appointment',
+    CancelAppointmentSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!isValidPhone(normalized)) {
+        return fail(reply, 'I need a valid phone number to cancel your appointment.');
+      }
+      const result = await withTenantClient(args.tenant_id, async (client) => {
+        // Verify the appointment belongs to this phone before cancelling.
+        const res = await client.query<{
+          appointment_id: string;
+          start_time: string;
+          description: string | null;
+          status: string;
+        }>(
+          `SELECT a.appointment_id, a.start_time, a.description, a.status
+           FROM appointments a
+           JOIN customers c ON c.customer_id = a.customer_id
+          WHERE a.appointment_id = $1
+            AND a.tenant_id = $2
+            AND c.phone = $3
+            AND (a.is_deleted IS NULL OR a.is_deleted = false)`,
+          [args.appointment_id, args.tenant_id, normalized]
+        );
+        if (res.rows.length === 0) return { kind: 'not_found' as const };
+        const appt = res.rows[0];
+        if (appt.status === 'canceled') return { kind: 'already_canceled' as const };
+        if (new Date(appt.start_time) <= new Date()) return { kind: 'past' as const };
+        await client.query(
+          `UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1`,
+          [args.appointment_id]
+        );
+        return {
+          kind: 'canceled' as const,
+          description: appt.description,
+          start_time: appt.start_time,
+        };
+      });
+      if (result.kind === 'not_found') {
+        return fail(
+          reply,
+          "I couldn't find that appointment on your account. Could you double-check which one you'd like to cancel?"
+        );
+      }
+      if (result.kind === 'already_canceled') {
+        return ok(reply, { canceled: false, message: 'That appointment is already cancelled.' });
+      }
+      if (result.kind === 'past') {
+        return fail(reply, "That appointment has already passed, so there's nothing to cancel.");
+      }
+      const readable = new Date(result.start_time).toLocaleString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      return ok(reply, {
+        canceled: true,
+        message: `Done — your ${result.description ?? 'appointment'} on ${readable} has been cancelled. Is there anything else I can help you with?`,
+      });
+    },
+    'Failed to cancel appointment'
   );
 
   // ── Test-only sync recorder readout ───────────────────────────────

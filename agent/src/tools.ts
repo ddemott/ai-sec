@@ -442,6 +442,54 @@ export function buildTools(
       },
     }),
 
+    get_my_appointments: llm.tool({
+      description:
+        "Look up the caller's upcoming scheduled appointments. Use when the caller asks what they have booked, or before offering to cancel so you know which appointment they mean. Requires caller-ID phone.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      execute: async () => {
+        if (!ctx.callerPhone) {
+          return 'No caller-ID phone available — cannot look up appointments.';
+        }
+        speakFiller?.('Let me pull up your appointments...');
+        const res = await client.call('/agent-tools/caller-appointments', {
+          tenant_id: ctx.tenantId,
+          phone: ctx.callerPhone,
+        }, { isReadOnly: true });
+        return formatResponse(res);
+      },
+    }),
+
+    cancel_appointment: llm.tool({
+      description:
+        "Cancel a specific appointment for the caller. Call get_my_appointments first to confirm which appointment they mean, then pass the appointment_id here. Requires caller-ID phone to verify ownership.",
+      parameters: {
+        type: 'object',
+        properties: {
+          appointment_id: {
+            type: 'string',
+            description: 'UUID of the appointment to cancel, from get_my_appointments.',
+          },
+        },
+        required: ['appointment_id'],
+        additionalProperties: false,
+      },
+      execute: async (args: { appointment_id: string }) => {
+        if (!ctx.callerPhone) {
+          return 'No caller-ID phone available — cannot verify appointment ownership.';
+        }
+        const res = await client.call('/agent-tools/cancel-appointment', {
+          tenant_id: ctx.tenantId,
+          phone: ctx.callerPhone,
+          appointment_id: args.appointment_id,
+        });
+        return formatResponse(res);
+      },
+    }),
+
     transfer_call: llm.tool({
       description:
         'Transfer the live call to a real person (the business owner / staff cell). Use ONLY when the caller clearly needs a human — a personal call for the owner, an urgent issue you cannot handle, or an explicit request to be connected to someone. Before calling this, tell the caller you are connecting them (e.g. "One moment, connecting you now."). On success the call leaves this assistant; on failure or when transfer is unavailable, apologize briefly and offer to take a message.',
