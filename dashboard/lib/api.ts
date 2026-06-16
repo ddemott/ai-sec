@@ -33,6 +33,7 @@ import type {
   RecordVersion,
   VersionComparison,
   TeamUser,
+  CustomerMessage,
 } from './types';
 
 export const API_BASE_URL =
@@ -906,6 +907,27 @@ export const Api = {
         `/voice/context/${encodeURIComponent(phone)}`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
+
+    // List caller messages left during voice calls (owner inbox)
+    listMessages: (
+      tenantId: string | null,
+      opts?: { status?: string; limit?: number; offset?: number }
+    ) =>
+      apiFetch<CustomerMessage[]>(
+        `/voice/messages`,
+        tenantId
+          ? {
+              tenant_id: tenantId,
+              ...(opts?.status ? { status: opts.status } : {}),
+              ...(opts?.limit !== undefined ? { limit: String(opts.limit) } : {}),
+              ...(opts?.offset !== undefined ? { offset: String(opts.offset) } : {}),
+            }
+          : undefined
+      ),
+
+    // Mark a message as read or actioned
+    updateMessageStatus: (messageId: string, status: 'new' | 'read' | 'actioned') =>
+      apiMutate<{ success: boolean }>(`/voice/messages/${messageId}`, 'PATCH', { status }),
   },
 
   // --- Version History API ---
