@@ -164,6 +164,19 @@ const VerifyPhoneCodeSchema = z.object({
   code: z.string().regex(/^\d+$/, 'Code must be numeric'),
 });
 
+// take-message — record a caller message + SMS-notify the owner.
+// "Take a message" was previously pure LLM theater — the agent would say it
+// but nothing was stored. Now it lands in customer_messages and the owner's
+// forward_phone gets a text so no message is silently lost.
+const TakeMessageSchema = z.object({
+  tenant_id: z.string().uuid(),
+  caller_name: z.string().min(1).max(200),
+  callback_phone: z.string().optional(),
+  caller_phone: z.string().optional(),
+  message: z.string().min(1).max(2000),
+  call_id: z.string().optional(),
+});
+
 // voice-session-start / -end — the LiveKit agent logs a call so the dashboard
 // Calls tab + customer call history populate. These mirror the JWT-gated
 // /voice/session/{start,end} routes but use the agent-secret + body-tenant_id
@@ -1420,6 +1433,86 @@ export function registerAgentToolRoutes(
       );
     },
     'Failed to verify phone code'
+  );
+
+  // take-message — persist caller message + optionally SMS-alert the owner.
+  // Up to now "I'll take a message" was pure LLM theater; this makes it real.
+  toolRoute(
+    app,
+    '/agent-tools/take-message',
+    TakeMessageSchema,
+    async (args, reply) => {
+      const callbackPhone = args.callback_phone ? normalizePhone(args.callback_phone) : null;
+      const callerPhone = args.caller_phone ? normalizePhone(args.caller_phone) : null;
+
+      const row = await withTenantClient(args.tenant_id, async (client) => {
+        // Resolve customer_id if we have a phone. Non-fatal if lookup fails.
+        let customerId: string | null = null;
+        const lookupPhone = callerPhone ?? callbackPhone;
+        if (lookupPhone && isValidPhone(lookupPhone)) {
+          const cust = await client.query<{ customer_id: string }>(
+            `SELECT customer_id FROM customers
+             WHERE tenant_id = $1 AND phone = $2
+               AND (is_deleted IS NULL OR is_deleted = false)
+             LIMIT 1`,
+            [args.tenant_id, lookupPhone]
+          );
+          customerId = cust.rows[0]?.customer_id ?? null;
+        }
+
+        const res = await client.query<{ message_id: string }>(
+          `INSERT INTO customer_messages
+             (tenant_id, customer_id, caller_phone, caller_name, callback_phone, message, call_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING message_id`,
+          [
+            args.tenant_id,
+            customerId,
+            callerPhone,
+            args.caller_name,
+            callbackPhone,
+            args.message,
+            args.call_id ?? null,
+          ]
+        );
+
+        // Fetch forward_phone + inbound_phone for owner notification.
+        const tenant = await client.query<{
+          forward_phone: string | null;
+          inbound_phone: string | null;
+        }>(`SELECT forward_phone, inbound_phone FROM tenants WHERE tenant_id = $1`, [
+          args.tenant_id,
+        ]);
+
+        return {
+          message_id: res.rows[0]?.message_id ?? null,
+          forwardPhone: tenant.rows[0]?.forward_phone ?? null,
+          inboundPhone: tenant.rows[0]?.inbound_phone ?? null,
+        };
+      });
+
+      // SMS the owner at forward_phone. Fire-and-forget; failure doesn't un-save the message.
+      let notified = false;
+      if (row.forwardPhone && row.inboundPhone) {
+        const callbackDisplay = callbackPhone ?? callerPhone ?? 'no number left';
+        const body =
+          `New message from ${args.caller_name} (${callbackDisplay}): ` +
+          `${args.message.slice(0, 300)}${args.message.length > 300 ? '…' : ''}` +
+          ' — via SecretaryHQ';
+        const sms = await sendSms({ from: row.inboundPhone, to: row.forwardPhone, body });
+        notified = sms.ok;
+      }
+
+      return ok(reply, {
+        saved: true,
+        message_id: row.message_id,
+        notified,
+        message: notified
+          ? 'Message saved and the owner has been notified by text.'
+          : 'Message saved. The owner will be able to see it in their dashboard.',
+      });
+    },
+    'Failed to save message'
   );
 
   // ── Test-only sync recorder readout ───────────────────────────────

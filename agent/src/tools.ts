@@ -442,6 +442,43 @@ export function buildTools(
       },
     }),
 
+    take_message: llm.tool({
+      description:
+        "Record a message from the caller for the business owner and send the owner an SMS alert. Use when the caller has a question you can't answer, wants a callback, or asks to leave a message. Always collect a name and the message content before calling this. A callback number is optional if you already have caller-ID.",
+      parameters: {
+        type: 'object',
+        properties: {
+          caller_name: {
+            type: 'string',
+            description: "The caller's name as they gave it.",
+          },
+          callback_phone: {
+            type: 'string',
+            description:
+              "Phone number the owner should call back. Omit if the caller didn't give one (caller-ID will be used).",
+          },
+          message: {
+            type: 'string',
+            description:
+              "The substance of what the caller wants the owner to know or do. Be specific — capture exactly what they said.",
+          },
+        },
+        required: ['caller_name', 'message'],
+        additionalProperties: false,
+      },
+      execute: async (args: { caller_name: string; callback_phone?: string; message: string }) => {
+        const res = await client.call('/agent-tools/take-message', {
+          tenant_id: ctx.tenantId,
+          caller_name: args.caller_name,
+          callback_phone: args.callback_phone,
+          caller_phone: ctx.callerPhone ?? undefined,
+          message: args.message,
+          call_id: ctx.callId ?? undefined,
+        });
+        return formatResponse(res);
+      },
+    }),
+
     transfer_call: llm.tool({
       description:
         'Transfer the live call to a real person (the business owner / staff cell). Use ONLY when the caller clearly needs a human — a personal call for the owner, an urgent issue you cannot handle, or an explicit request to be connected to someone. Before calling this, tell the caller you are connecting them (e.g. "One moment, connecting you now."). On success the call leaves this assistant; on failure or when transfer is unavailable, apologize briefly and offer to take a message.',
