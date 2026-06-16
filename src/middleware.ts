@@ -236,9 +236,10 @@ const TENANT_EXEMPT_ROUTES = [
   '/square/auth/callback',
   // CRM webhooks (authenticated via HMAC/signature, not JWT)
   '/square/webhook',
-  // Twilio SMS delivery-status callback (verified via X-Twilio-Signature, not JWT;
+  // SMS delivery-status callbacks (verified via provider signature, not JWT;
   // tenant_id rides on the query string, not the body)
   '/communications/twilio/status',
+  '/communications/telnyx/status',
   '/tenants',
   '/templates',
   '/templates/full',
@@ -532,8 +533,9 @@ const PUBLIC_ROUTES = [
   '/square/auth/callback',
   // CRM webhooks (authenticated via HMAC/signature, not JWT)
   '/square/webhook',
-  // Twilio SMS delivery-status callback (verified via X-Twilio-Signature, not JWT)
+  // SMS delivery-status callbacks (verified via provider signature, not JWT)
   '/communications/twilio/status',
+  '/communications/telnyx/status',
 ];
 
 /**
