@@ -78,9 +78,10 @@ done
 # ── Targets per env ─────────────────────────────────────────────────────────
 case "$ENV" in
   local)
-    BACKEND="https://localhost:4001"
-    DASHBOARD="https://localhost:4000"
-    CURL_OPTS="-sk"   # -k: local uses self-signed certs
+    BACKEND="${BACKEND_URL:-https://localhost:4001}"
+    DASHBOARD="${DASHBOARD_URL:-https://localhost:4000}"
+    # -k skips cert check for self-signed local TLS; harmless for plain HTTP
+    CURL_OPTS="-sk"
     ;;
   prod)
     BACKEND="https://ai-sec-production.up.railway.app"
