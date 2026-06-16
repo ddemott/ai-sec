@@ -10,6 +10,13 @@
 #                                        --deep also dispatch-tests the agent
 #                                        worker via LiveKit (spins a real
 #                                        session, ~5s, cleans up after).
+#   ci     [--watch]                     CI + local build status: GitHub Actions
+#                                        runs for .github/workflows/ci.yml (job
+#                                        stages, conclusions, per-job results)
+#                                        + local src vs dist/.next staleness.
+#                                        Requires 'gh' CLI + `gh auth login`
+#                                        (for private repos). --watch follows
+#                                        the latest run live in terminal.
 #   tools  [--env local|prod] [--tenant <id>]
 #                                        Functional simulation of everything the
 #                                        voice agent DOES on a call (lookup,
@@ -30,9 +37,9 @@
 #   all    [--env local|prod]            status --deep, then tools.
 #
 # Env/secrets are read from the repo .env (local) or passed in (prod). The
-# tiers map to: status = "systems up", tools = "brain works", call = "voice
-# works without a phone". The only thing this CANNOT simulate is real PSTN
-# inbound (Telnyx) — that needs a real carrier call.
+# tiers map to: status = "systems up", ci = "build/CI pipeline state + freshness",
+# tools = "brain works", call = "voice works without a phone". The only thing
+# this CANNOT simulate is real PSTN inbound (Telnyx) — that needs a real carrier call.
 
 set -euo pipefail
 
@@ -53,6 +60,7 @@ skip() { printf "  ${DIM}[--]   %-22s %s${RESET}\n" "$1" "$2"; }
 ENV="local"
 DEEP=0
 TENANT=""
+WATCH=0
 SUBCMD="${1:-}"
 shift || true
 
@@ -61,7 +69,8 @@ while [ $# -gt 0 ]; do
     --env)    ENV="$2"; shift 2 ;;
     --deep)   DEEP=1; shift ;;
     --tenant) TENANT="$2"; shift 2 ;;
-    -h|--help) sed -n '3,40p' "$0"; exit 0 ;;
+    --watch)  WATCH=1; shift ;;
+    -h|--help) sed -n '3,45p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -151,7 +160,121 @@ cmd_status() {
   fi
 
   printf "${BOLD}Result:${RESET} %s/%s core checks up\n" "$up" "$total"
+
+  # Quick local build staleness note (full details in `simulate ci`)
+  if [ "$ENV" = "local" ]; then
+    local src_newest dist_newest
+    src_newest=$(find "$ROOT_DIR/src" "$ROOT_DIR/dashboard" "$ROOT_DIR/shared" -type f \( -name '*.ts' -o -name '*.tsx' \) -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/.next/*' -printf '%T@\n' 2>/dev/null | sort -nr | head -1 || echo 0)
+    dist_newest=$(find "$ROOT_DIR/dist" "$ROOT_DIR/dashboard/.next" -type f 2>/dev/null -printf '%T@\n' | sort -nr | head -1 || echo 0)
+    if [ "${src_newest:-0}" -gt "${dist_newest:-0}" ] 2>/dev/null; then
+      echo "  ${YELLOW}[STALE]${RESET} build — run 'npm run build' before relying on running servers or tests (see 'simulate ci' for delta)"
+    fi
+  fi
+
   [ "$up" = "$total" ]
+}
+
+# ── ci (GitHub Actions + local build freshness) ─────────────────────────────
+cmd_ci() {
+  printf "${BOLD}SecretaryHQ — CI / Build Status${RESET} ${DIM}(env: %s)${RESET}\n" "$ENV"
+  echo ""
+
+  # Derive repo from git remote (fallback to known)
+  local repo="ddemott/ai-sec"
+  local remote_url
+  remote_url=$(git -C "$ROOT_DIR" remote get-url origin 2>/dev/null || echo "")
+  if echo "$remote_url" | grep -q 'github.com'; then
+    repo=$(echo "$remote_url" | sed -E 's|.*github.com[:/]||; s|\.git$||')
+  fi
+  echo "Repo: $repo"
+  echo "Workflow: .github/workflows/ci.yml (backend | dashboard | agent | e2e)"
+  echo ""
+
+  # 1. Local build staleness / freshness (addresses "must build + restart" rule)
+  echo ">>> Local build freshness (src vs artifacts)"
+  if [ "$ENV" = "local" ]; then
+    local src_newest dist_newest backend_ok dashboard_ok
+    # Newest source under our control (ignore node_modules, dist, .next)
+    src_newest=$(find "$ROOT_DIR/src" "$ROOT_DIR/dashboard" "$ROOT_DIR/shared" \
+      -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.mjs' \) \
+      -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/.next/*' \
+      -printf '%T@\n' 2>/dev/null | sort -nr | head -1 || echo 0)
+    # Newest built artifact (dist for backend, .next for dashboard)
+    dist_newest=$(find "$ROOT_DIR/dist" "$ROOT_DIR/dashboard/.next" -type f 2>/dev/null \
+      -printf '%T@\n' | sort -nr | head -1 || echo 0)
+
+    [ -z "$src_newest" ] && src_newest=0
+    [ -z "$dist_newest" ] && dist_newest=0
+
+    if [ "$src_newest" -gt "$dist_newest" ] 2>/dev/null; then
+      local delta_min=$(( (src_newest - dist_newest) / 60 ))
+      fail "build staleness" "source is newer than dist/.next by ~${delta_min}m — 'npm run build' (or 'npm start') is required"
+    else
+      ok "build freshness" "backend dist/ + dashboard .next/ up to date vs source"
+    fi
+
+    # Also give a quick note on running process (health has started_at)
+    echo "    (use ./scripts/simulate.sh status to see running server started_at)"
+  else
+    skip "build freshness" "only relevant for --env local (src mtimes vs built artifacts)"
+  fi
+  echo ""
+
+  # 2. GitHub Actions CI status
+  echo ">>> GitHub Actions CI runs"
+  if command -v gh >/dev/null 2>&1; then
+    if gh auth status --hostname github.com >/dev/null 2>&1; then
+      local cur_branch
+      cur_branch=$(git -C "$ROOT_DIR" branch --show-current 2>/dev/null || echo "")
+      echo "Recent runs (most recent first):"
+      # Pretty one-line per run. Columns chosen for scannability.
+      gh run list --repo "$repo" --workflow=ci.yml --limit=6 \
+        --json databaseId,status,conclusion,headBranch,displayTitle,updatedAt,url \
+        --jq '
+          .[] |
+          "  \(.status|ascii_upcase) \(.conclusion // "queued") | \(.headBranch) | \(.displayTitle | .[0:55]) | \(.updatedAt) | \(.url)"
+        ' 2>/dev/null || echo "  (failed to list runs — repo permissions or network)"
+
+      if [ -n "$cur_branch" ]; then
+        echo ""
+        echo "Runs on your branch ($cur_branch):"
+        gh run list --repo "$repo" --workflow=ci.yml --branch "$cur_branch" --limit=4 \
+          --json databaseId,status,conclusion,headBranch,displayTitle,updatedAt,url \
+          --jq '
+            .[] |
+            "  \(.status|ascii_upcase) \(.conclusion // "queued") | \(.displayTitle | .[0:55]) | \(.updatedAt) | \(.url)"
+          ' 2>/dev/null || echo "  (none or failed to query branch-specific runs)"
+      fi
+    else
+      fail "gh auth" "not logged in for GitHub"
+      echo "    Run: gh auth login"
+      echo "    Web: https://github.com/$repo/actions/workflows/ci.yml"
+    fi
+  else
+    fail "gh cli" "GitHub CLI not found on PATH"
+    echo "    Install: https://cli.github.com/"
+    echo "    Web UI:  https://github.com/$repo/actions/workflows/ci.yml"
+    echo "    Tip: after install + auth, re-run this for live job-by-job status"
+  fi
+  echo ""
+
+  if [ "$WATCH" = "1" ]; then
+    if command -v gh >/dev/null 2>&1 && gh auth status --hostname github.com >/dev/null 2>&1; then
+      echo ">>> Watching latest CI run (press Ctrl-C to stop)..."
+      gh run watch --repo "$repo" || true
+    else
+      echo "${YELLOW}Cannot watch — gh not available or not authenticated.${RESET}"
+    fi
+  else
+    echo "Tip: add --watch to tail the most recent run live (gh run watch under the hood)."
+  fi
+  echo ""
+  echo "Local equivalents while developing:"
+  echo "  npm run checks          # format + lint + typecheck (fast)"
+  echo "  npm run pre-pr          # checks + full unit tests"
+  echo "  npm run prepare-commit  # full automated gate (checks + tests + drift + more)"
+  echo "  npm test                # vitest (backend + shared)"
+  echo "  cd dashboard && npx playwright test --grep \"pattern\"   # targeted e2e"
 }
 
 # ── tools ───────────────────────────────────────────────────────────────────
@@ -206,10 +329,11 @@ cmd_call() {
 
 case "$SUBCMD" in
   status) cmd_status ;;
+  ci)     cmd_ci ;;
   tools)  cmd_tools ;;
   rag)    cmd_rag ;;
   call)   cmd_call ;;
   all)    cmd_status && echo "" && cmd_tools && echo "" && cmd_rag ;;
-  ""|-h|--help) sed -n '3,40p' "$0" ;;
+  ""|-h|--help) sed -n '3,50p' "$0" ;;
   *) echo "Unknown subcommand: $SUBCMD" >&2; exit 2 ;;
 esac

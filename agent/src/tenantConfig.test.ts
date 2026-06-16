@@ -46,19 +46,22 @@ describe('fetchTenantConfig', () => {
       },
     });
     const cfg = await fetchTenantConfig(client, TENANT_ID);
-    // Preference + Grok-voice fields absent from the response default to off
-    // (false/null) so an older backend that doesn't send them keeps the feature
-    // disabled and the agent falls back to its XAI_TTS_* env defaults.
+    // Preference field absent from the response defaults to true (on by default).
+    // Grok-voice fields absent default to null (agent uses XAI_TTS_* env defaults).
     expect(cfg).toEqual({
       name: 'DynaTire',
       timezone: 'America/Chicago',
       systemPrompt: null,
       firstMessage: null,
-      savePreferencesEnabled: false,
+      savePreferencesEnabled: true,
       preferencesInstructions: null,
       ttsVoice: null,
       ttsSpeed: null,
       ttsSoft: null,
+      ttsCheerful: null,
+      ttsFormal: null,
+      ttsWarm: null,
+      ttsConcise: null,
       forwardPhone: null,
     });
   });
@@ -116,14 +119,13 @@ describe('fetchTenantConfig', () => {
     expect(cfg.ttsSoft).toBe(true);
   });
 
-  it('HAPPY: surfaces save_preferences_enabled + preferences_instructions (snake → camel)', async () => {
-    // WHO: a salon that turned on preference capture and wrote guidance.
-    // WHAT: both fields convert snake_case → camelCase at the boundary and
-    //        reach the prompt builder so the "Customer preferences" section
-    //        renders with the owner's words.
-    // WHEN: every call for a tenant with the toggle on.
+  it('HAPPY: explicit save_preferences_enabled=false + preferences_instructions pass through (snake → camel)', async () => {
+    // WHO: a tenant that explicitly opted out of preference capture in the dashboard.
+    // WHAT: false passes through as-is; preferences_instructions also converts
+    //        snake → camel so an owner's custom guidance reaches the prompt builder.
+    // WHEN: every call for a tenant that set the toggle to off.
     // WHERE: agent/src/tenantConfig.ts fetchTenantConfig.
-    // WHY: if these don't pass through, the dashboard toggle silently no-ops.
+    // WHY: if false doesn't pass through, opt-out tenants keep capturing against their will.
     const client = clientWith({
       status: 200,
       body: {
@@ -132,13 +134,13 @@ describe('fetchTenantConfig', () => {
           name: 'Debbie Salon',
           timezone: 'America/Chicago',
           system_prompt: null,
-          save_preferences_enabled: true,
+          save_preferences_enabled: false,
           preferences_instructions: 'Remember the stylist and last service.',
         },
       },
     });
     const cfg = await fetchTenantConfig(client, TENANT_ID);
-    expect(cfg.savePreferencesEnabled).toBe(true);
+    expect(cfg.savePreferencesEnabled).toBe(false);
     expect(cfg.preferencesInstructions).toBe('Remember the stylist and last service.');
   });
 

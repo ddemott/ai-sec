@@ -46,10 +46,9 @@ export interface PromptContext {
    */
   customPrompt?: string | null;
   /**
-   * When true, the prompt gains a "Customer preferences" section telling the
-   * AI to use known preferences for upsells and to call
-   * save_customer_preference when it learns something durable. Default/false
-   * omits the section entirely (back-compat with tenants who never opted in).
+   * When false, the "Customer preferences" section and save_customer_preference
+   * tool are omitted from the prompt. Defaults to on (undefined/true both
+   * enable). Owners can opt out via the dashboard AI Persona page.
    */
   savePreferencesEnabled?: boolean;
   /**
@@ -88,19 +87,19 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     ? substitutePlaceholders(trimmedCustom, ctx)
     : `You are Clara, the AI receptionist for ${ctx.tenantName}.`;
 
-  // Customer-preference capture (opt-in per tenant). When on, owners may
-  // provide their own guidance; otherwise a sensible default tells the AI to
-  // both USE known preferences and SAVE durable new ones. The whole block is
-  // omitted when disabled so the prompt is unchanged for tenants who never
-  // turned it on.
+  // Customer-preference capture. On by default — owners can opt out via the
+  // dashboard AI Persona page (savePreferencesEnabled: false). Owner-authored
+  // guidance is injected when set; otherwise a sensible built-in default
+  // instructs the agent to save durable facts about returning callers.
   const ownerPrefGuidance = ctx.preferencesInstructions?.trim();
-  const preferencesSection = ctx.savePreferencesEnabled
+  const preferencesEnabled = ctx.savePreferencesEnabled !== false;
+  const preferencesSection = preferencesEnabled
     ? `
 
 # Customer preferences
 ${
   ownerPrefGuidance ||
-  `This business wants you to remember what each customer likes so future calls feel personal and you can suggest things they'd genuinely enjoy. Note the service they had and who served them — a returning customer is often a good moment for a friendly, relevant upsell (never pushy). Pay attention to what they say they like or dislike.`
+  `Remember what each customer likes so future calls feel personal and you can suggest things they'd genuinely enjoy. Note the service they had and who served them — a returning customer is often a good moment for a friendly, relevant upsell (never pushy). Pay attention to what they say they like or dislike.`
 }
 
 How to apply this:
@@ -110,8 +109,7 @@ How to apply this:
 - Saving is silent — don't announce "I'm saving that." Just weave it naturally into the conversation.`
     : '';
 
-  // Conditionally surface the save tool in the tool list only when enabled.
-  const preferenceToolLine = ctx.savePreferencesEnabled
+  const preferenceToolLine = preferencesEnabled
     ? `\n- save_customer_preference(phone, key, value) — remember a durable fact about this customer (preferred staff, last service, likes/dislikes) for future calls.`
     : '';
 

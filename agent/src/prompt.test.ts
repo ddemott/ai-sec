@@ -403,16 +403,14 @@ describe('buildSystemPrompt', () => {
     }
   });
 
-  it('PREFERENCES OFF: no "Customer preferences" section and no save tool when disabled', () => {
-    // WHO: a tenant who never opted into preference capture (the default).
-    // WHAT: the prompt must be byte-for-byte unchanged from the pre-feature
-    //        prompt — no preferences section, no save tool line.
+  it('PREFERENCES OFF: no "Customer preferences" section and no save tool when explicitly disabled', () => {
+    // WHO: a tenant owner who opted out of preference capture in the dashboard.
+    // WHAT: the prompt omits the preferences section + save tool.
     // WHEN: every call for a tenant with save_preferences_enabled = false.
-    // WHERE: buildSystemPrompt preferencesSection/preferenceToolLine branches.
-    // WHY: the feature is opt-in; a disabled tenant must not have their AI's
-    //      behavior or token budget changed by a feature they didn't enable.
+    // WHERE: buildSystemPrompt preferencesEnabled branch.
+    // WHY: an opt-out tenant must not have the agent saving data they didn't want captured.
+    // NOTE: undefined/null/true all ENABLE (default-on); only explicit false disables.
     for (const ctx of [
-      BASE_CTX,
       { ...BASE_CTX, savePreferencesEnabled: false },
       { ...BASE_CTX, savePreferencesEnabled: false, preferencesInstructions: 'ignored when off' },
     ]) {
@@ -422,18 +420,31 @@ describe('buildSystemPrompt', () => {
     }
   });
 
-  it('PREFERENCES ON: owner instructions are injected verbatim + save tool is offered', () => {
-    // WHO: a salon owner who turned the toggle on and wrote their own guidance.
-    // WHAT: their exact instruction text appears in the prompt, the section
-    //        header + the save tool both appear so the LLM knows to use it.
-    // WHEN: every call once save_preferences_enabled = true with instructions.
-    // WHERE: buildSystemPrompt preferences branches.
-    // WHY: the owner's words are the steering signal — if they don't reach the
-    //      LLM verbatim the feature silently does nothing.
+  it('PREFERENCES ON (default): section and save tool present when flag unset or true', () => {
+    // WHO: any tenant that hasn't explicitly opted out (the default state).
+    // WHAT: prompt includes the preferences section + save tool.
+    // WHEN: every call where savePreferencesEnabled is undefined, null, or true.
+    // WHERE: buildSystemPrompt preferencesEnabled = (ctx.savePreferencesEnabled !== false).
+    // WHY: preferences are on by default — returning callers should be recognized.
+    for (const ctx of [
+      BASE_CTX,
+      { ...BASE_CTX, savePreferencesEnabled: true },
+      { ...BASE_CTX, savePreferencesEnabled: undefined },
+    ]) {
+      const prompt = buildSystemPrompt(ctx);
+      expect(prompt).toContain('# Customer preferences');
+      expect(prompt).toContain('save_customer_preference(phone, key, value)');
+    }
+  });
+
+  it('PREFERENCES ON: owner instructions injected verbatim', () => {
+    // WHO: a salon owner who wrote their own preference guidance.
+    // WHAT: their exact text appears in the prompt's preferences section.
+    // WHY: the owner's words are the steering signal — generic defaults don't
+    //      know this business's nuances.
     const ownerText = 'Always offer the same stylist and ask about nails.';
     const prompt = buildSystemPrompt({
       ...BASE_CTX,
-      savePreferencesEnabled: true,
       preferencesInstructions: ownerText,
     });
     expect(prompt).toContain('# Customer preferences');
@@ -442,20 +453,17 @@ describe('buildSystemPrompt', () => {
   });
 
   it('PREFERENCES ON, no instructions: falls back to built-in default guidance', () => {
-    // WHO: an owner who flipped the toggle on but left the textarea blank.
-    // WHAT: the section still renders with sensible default guidance (so the
-    //        toggle is useful immediately) and still offers the save tool.
-    // WHEN: save_preferences_enabled = true, preferences_instructions null/blank.
+    // WHO: a tenant with preferences on but no custom instructions.
+    // WHAT: sensible default guidance renders so the tool is immediately useful.
     // WHERE: buildSystemPrompt ownerPrefGuidance `||` default branch.
     // WHY: a blank instruction box must not produce an empty, useless section.
     for (const preferencesInstructions of [null, undefined, '   ']) {
       const prompt = buildSystemPrompt({
         ...BASE_CTX,
-        savePreferencesEnabled: true,
         preferencesInstructions,
       });
       expect(prompt).toContain('# Customer preferences');
-      expect(prompt).toContain('remember what each customer likes');
+      expect(prompt).toContain('Remember what each customer likes');
       expect(prompt).toContain('save_customer_preference');
     }
   });
@@ -632,7 +640,6 @@ describe('buildSystemPrompt — voice style injection', () => {
     const prompt = buildSystemPrompt({
       ...BASE_CTX,
       ttsFormal: true,
-      savePreferencesEnabled: true,
       preferencesInstructions: 'Note preferred stylist.',
     });
     expect(prompt).toContain('# Customer preferences');
