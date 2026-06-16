@@ -95,7 +95,7 @@ esac
 json_get() { echo "$1" | grep -oE "\"$2\":\"?[^\",}]*\"?" | head -1 | sed -E "s/\"$2\"://; s/\"//g"; }
 
 # Read one var from the repo .env (cut -f2- so values with '=' survive; strip quotes).
-env_get() { grep -E "^$1=" "$ROOT_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'\'''; }
+env_get() { grep -E "^$1=" "$ROOT_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'\''' || true; }
 
 # Export LIVEKIT_* from .env for the node helpers.
 load_livekit_env() {
