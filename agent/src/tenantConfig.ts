@@ -28,10 +28,9 @@ export interface TenantDisplayConfig {
    */
   firstMessage: string | null;
   /**
-   * Whether the owner turned on customer-preference capture. When true the
-   * system prompt gains a "Customer preferences" section and the agent is
-   * told to call save_customer_preference. Default false — preference capture
-   * is opt-in (writes durable CRM data + steers upsells).
+   * Whether customer-preference capture is enabled. Default true — the agent
+   * saves durable facts about returning callers by default. Owners can opt out
+   * via the dashboard AI Persona page (sets column to false).
    */
   savePreferencesEnabled: boolean;
   /**
@@ -67,7 +66,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   timezone: 'America/Chicago',
   systemPrompt: null,
   firstMessage: null,
-  savePreferencesEnabled: false,
+  savePreferencesEnabled: true,
   preferencesInstructions: null,
   ttsVoice: null,
   ttsSpeed: null,
@@ -107,7 +106,7 @@ export async function fetchTenantConfig(
       timezone: res.result.timezone,
       systemPrompt: res.result.system_prompt ?? null,
       firstMessage: res.result.first_message ?? null,
-      savePreferencesEnabled: res.result.save_preferences_enabled ?? false,
+      savePreferencesEnabled: res.result.save_preferences_enabled ?? true,
       preferencesInstructions: res.result.preferences_instructions ?? null,
       ttsVoice: res.result.tts_voice ?? null,
       ttsSpeed: res.result.tts_speed ?? null,

@@ -151,7 +151,7 @@ test('HAPPY: customer visible via GET /customers after identify-caller', async (
   let token: string;
   try {
     // Login as Bella's owner to get a JWT
-    const loginRes = await request.post(`${BACKEND_URL}/auth/login`, {
+    const loginRes = await request.post(`${BACKEND_URL}/login`, {
       data: { email: 'bella@bellashair.com', password: 'password' },
       headers: { 'Content-Type': 'application/json' },
     });
@@ -161,14 +161,12 @@ test('HAPPY: customer visible via GET /customers after identify-caller', async (
     await callIdentifyCaller(request, phone, 'Visible Customer');
 
     const listRes = await request.get(
-      `${BACKEND_URL}/customers?search=${encodeURIComponent(phone)}`,
+      `${BACKEND_URL}/customers`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     expect(listRes.status()).toBe(200);
-    const list = await listRes.json();
-    const found = (list.customers as Array<{ name: string; phone: string }>).find(
-      (c) => c.phone === phone
-    );
+    const list = await listRes.json() as Array<{ name: string; phone: string }>;
+    const found = list.find((c) => c.phone === phone);
     expect(found).toBeDefined();
     expect(found?.name).toBe('Visible Customer');
   } finally {

@@ -83,6 +83,8 @@ Below is a full list of its features:
 
 ## Status
 
+[![CI](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml/badge.svg)](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml)
+
 |               |                                                                                                                                                                         |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Phase**     | 13 — Production Readiness                                                                                                                                               |
@@ -92,6 +94,15 @@ Below is a full list of its features:
 | **Phone**     | `+1 630-866-1960` purchased + routed via Telnyx (2026-06-02). Old `+1-630-937-9478` is dead.                                                                            |
 | **Tests**     | ~2,658 passing (~1,770 backend + 747 dashboard + 141 agent) + 0 skips, zero TypeScript errors                                                                           |
 | **E2e**       | 29 Playwright spec files (~212 tests)                                                                                                                                   |
+
+**Quick status commands** (see `scripts/simulate.sh`):
+
+- `npm run status` — runtime health board (backend /health + /ready pool, dashboard, deep agent worker)
+- `npm run ci:status` — CI runs (GitHub Actions job stages + conclusions) + local src vs built artifacts staleness
+- `npm run ci:watch` — live tail the latest CI run
+- `./scripts/simulate.sh ci --watch` (same)
+
+**CI gate**: GitHub branch protection on `main` (applied 2026-06-15) requires the 4 CI jobs to be green before merges (and thus Railway deploys from `main`) are allowed. Always run `npm run ci:status` before merging. (See `.github/BRANCH_PROTECTION.md` + root `TODO_GAPS.md`.)
 
 See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` for detailed historical session notes.
 

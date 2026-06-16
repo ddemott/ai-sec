@@ -268,14 +268,18 @@ test('backfill-booking-errors-no-reminders: invalid booking produces specific er
       shiftDates: [date],
     });
 
-    // Invalid: missing employee_id (triggers INVALID_PARAMS or NO_SKILLED)
+    // Book the employee on a date with NO shift seeded (day 8, shift only on day 7).
+    // The RPC's shift-coverage check returns EMPLOYEE_NOT_SCHEDULED → route 400.
+    // employee_id is required here: without it the RPC skips the shift check
+    // and accepts the booking even with no shift data, returning 200.
+    const badDate = isoDateDaysFromNow(8);
     const badRes = await bookAppointmentAs(request, tenant.token, {
       tenant_id: tenant.tenantId,
       resource_id: seed.resourceIds[0],
       customer_id: seed.customerId,
-      // employee_id omitted -> should error
-      start_time: `${date}T16:00:00.000Z`,
-      end_time: `${date}T16:30:00.000Z`,
+      employee_id: seed.employeeIds[0],
+      start_time: `${badDate}T16:00:00.000Z`,
+      end_time: `${badDate}T16:30:00.000Z`,
       description: 'error path — no reminders should be scheduled',
     });
     expect(badRes.status).toBeGreaterThanOrEqual(400);

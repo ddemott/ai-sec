@@ -162,11 +162,21 @@ After it finishes, review the output, fix anything it found, then proceed with t
 
 See the skill at `.claude/skills/commit-code/SKILL.md` for the exact expectations.
 
+**Build / CI status visibility**: At any moment you can ask "where is the build / tests / CI at?" with:
+
+- `npm run status` (or `./scripts/simulate.sh status --deep`) — runtime services + quick local build staleness (src newer than dist?)
+- `npm run ci:status` (or `./scripts/simulate.sh ci`) — lists recent GitHub Actions runs for the CI workflow (the 4 jobs: backend, dashboard, agent, e2e) with status/conclusion + detailed local build freshness report (mtime delta)
+- `npm run ci:watch` — live-follows the latest CI run using the gh CLI (great while waiting for a PR check)
+  These surface the exact stages (typecheck, migration apply, vitest, playwright, simulate tools gate in e2e, etc.) without leaving the terminal. See `scripts/simulate.sh` for implementation.
+
+**CI gate on merges**: As of 2026-06-15, branch protection on `main` requires all 4 CI jobs (plus PR + up-to-date + conversation resolution) before a merge is allowed. Use `npm run ci:status` before merging. This gates Railway deploys from `main`. (See `.github/BRANCH_PROTECTION.md` and root `TODO_GAPS.md`.)
+
 ## Branch & PR Hygiene (Critical Rule)
 
 **Work on one active PR at a time.**
 
 Before you create a new feature branch or open a new PR, the previous feature branch **must** have been:
+
 - Pushed to its remote
 - Merged into `main`
 - Deleted (both locally and on the remote)
@@ -174,6 +184,7 @@ Before you create a new feature branch or open a new PR, the previous feature br
 This rule prevents painful rebase conflicts and context loss when multiple long-lived branches exist in parallel.
 
 The rule is enforced in:
+
 - Output of `npm run prepare-commit`
 - The `BRANCH_CHECKLIST.md` (required checkbox when starting a new branch)
 

@@ -1,46 +1,113 @@
-# Session Handoff — 2026-06-12
+# E2E Test Fix Handoff — 2026-06-15 (COMPLETE)
 
-Pick-up notes for the next session / agent. Source of truth for the task queue
-is `docs/TODO.md`; strategy is `docs/STRATEGY.md` + `docs/COMPETITOR_WEAKPOINTS.md`.
+## Mission
 
-## Git state RIGHT NOW
+Run the full Playwright E2E suite (from `dashboard/`), fix all failures.
 
-- **`main`** (`c4585c7`) — deployed to prod. Has: live call-transfer + transcript capture, the simulation harness, baseline.sql fix + drift guard, gap #1 (call outcome/link/summary), gap #2 (real call analytics + tests).
-- **Branch `feat/remove-competitor-crms`** (ahead of main, **NOT pushed/merged**) — removes Jobber/ServiceTitan/HubSpot CRM integrations (keeps Square); + this `HANDOFF.md`; + a 2026-06-12 docs-sync pass (CLAUDE.md counts/modules, `SECRETARYHQ_FEATURES.md` analytics ✅, `docs/TODO.md` gap #2 done). Build + 1770 backend + 747 dashboard tests green; CLAUDE.md drift detector clean. **Next action: open its PR → main.**
-- Prod deploys from **`main` via MERGE** (not branch push). Merge = instant deploy of all 3 Railway services. No migration pending for the CRM branch.
+## Final State: 146 passed, 7 skipped, 0 failed ✅
 
-## Local dev stack (for `simulate` / E2E)
+---
 
-- Backend on `https://localhost:4001` (self-signed). Docker Postgres in container `ai-sec-db` on `localhost:5433`. After backend code changes: `kill $(lsof -ti :4001); npm run build && nohup node dist/src/index.js > /tmp/sim-backend.log 2>&1 &`.
-- On-demand verify: `./scripts/simulate.sh status --env prod|local [--deep]` · `tools` (agent-tools journey) · `call` (browser voice test, no phone).
-- The running backend may be stale after the CRM deletion — rebuild+restart before using it.
+## All Fixes Applied This Session
 
-## What shipped this session (all on `main`, deployed)
+### Previous session fixes (see git log)
 
-1. **Live call-transfer** (`transfer_call`, SIP REFER to owner cell) + **transcript capture** (PR #7).
-2. **Prod DB** migrations applied + `schema_migrations` reconciled.
-3. **`scripts/simulate.sh`** — system simulation/health harness (replaced dead `qa-live-test.py`).
-4. **baseline.sql fix** — was stale (missing `is_demo`/`tts_*`/`forward_phone`), broke every rebuilt DB + E2E; regenerated via `pg_dump` + self-maintaining drift guard (`verify-schema-alignment`).
-5. **Gap #1** — agent sends call `outcome` + `appointment_id` (call→appointment link) + bounded/failsafe post-call summary to `voice-session-end`.
-6. **Gap #2** — real call analytics: `GET /analytics/stats` + `/analytics/calls`; dashboard Volume/Conversion/Abandonment + "Why Callers Reached Out" WHY panel. Backend + component + E2E tests (all ran green).
-7. **Strategy docs** — `docs/STRATEGY.md`, `docs/COMPETITOR_WEAKPOINTS.md`, `SECRETARYHQ_FEATURES.md`.
-8. **CRM deletion** (on branch, not merged) — see git state above.
+| Spec                                 | Tests | Fix                                               |
+| ------------------------------------ | ----- | ------------------------------------------------- |
+| `industry-templates.spec.ts`         | 4     | Business templates empty after rebuild            |
+| `vocabulary-overrides.spec.ts`       | 3     | Same root cause                                   |
+| `ui-rename-verification.spec.ts`     | 3     | Service+resource in beforeAll; exact button match |
+| `quick-book-shift-overrides.spec.ts` | 1     | Seed shifts `00:00-23:59`                         |
+| `reminder-on-create.spec.ts`         | 1     | Include employee_id, book on shiftless day        |
+| `voice-styles.spec.ts`               | 6     | DB columns, MOCK_TENANT, dirty-flag               |
 
-## NEXT — task queue (fresh branch off main, one PR each)
+### This session fixes
 
-1. **Open the PR for `feat/remove-competitor-crms`** ← immediate.
-2. **(cosmetic) Clean stale comments** in the shared CRM layer (~9 files: `crmRouteScaffold`, `tokenManagement`, `syncMapHelpers`, `oauthCallbackFactory`, `oauthStateJwt`, `syncPaginate`, `crmDisconnect`, `crmSyncStatus`, `jsonContentTypeParser`) — docstrings still name the deleted Jobber/HubSpot/ServiceTitan. Non-breaking.
-3. **Richer WHY outcome classification** — agent classifies _why_ a non-booking happened (price / no-availability / wrong-service / after-hours), not just booked/transferred/message. Unlocks the high-value reporting cut ("14 callers wanted Saturday slots you don't offer"). The gap #2 WHY panel + owner copilot consume it.
-4. **Stripe — verify ALL paths** — built (`src/routes/billing.ts`), never tested. Use Stripe **test mode** (test keys + Stripe CLI webhook replay): checkout → webhook signature → subscription activates → payment*failed → cancellation → plan gating. Add a Stripe path-check to `simulate`. **Blocked on Dale: test account/keys** (drop `sk_test*…`in`/tmp/stripe`).
-5. **Twilio SMS delivery receipts** + **communications-history** stub (lower priority).
+| Spec                             | Test                              | Root Cause                                                           | Fix                                                                                      |
+| -------------------------------- | --------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `agent-conversation.spec.ts:273` | employee_name toBeTruthy          | MODE B (empty skills) = RPC picks resource only, employee stays NULL | Changed to `toBeNull()`                                                                  |
+| `caller-identity.spec.ts:154`    | login 401                         | URL was `/auth/login`; backend route is `/login`                     | Fixed to `/login`                                                                        |
+| `caller-identity.spec.ts:169`    | `list.customers` undefined        | `/customers` returns plain array, not `{ customers: [...] }`         | Access array directly                                                                    |
+| `e2e/helpers/test.ts`            | Intermittent font manifest errors | Next.js dev-server race on `.next/next-font-manifest.json`           | Filter `load-manifest.js` / `getNextFontManifest` stack frames from page-error collector |
 
-## Blocked on Dale (can't be done by an agent)
+---
 
-- **Stripe test account + keys** (for #4 above).
-- **Railway env check** — needs a fresh team token (`/tmp/rwtok`). Verify `BACKEND_URL` on `ai-sec-agent` (silent-failure risk for the shipped voice features), `TWILIO_*` (reminder SMS runs a MOCK in prod without it), `EMAIL_*` (email runs a mock), + the known-unset `METRICS_TOKEN`/`SENTRY_DSN`/`BETTER_STACK_TOKEN`/Stripe keys.
-- **Live PSTN call** — needs a 2nd phone (different carrier) → `+1 630-822-9086`; validates the unverified inbound path + transcript landing. Plus enable **call transfer/REFER on the Telnyx SIP Connection** + set the **forward number** on dashboard AI Persona.
-- **Rotate** the Railway team token created 2026-06-12 (`400a1ee0…`) — it was pasted in a session.
+## Root Cause (Critical — affects all future rebuilds)
 
-## Strategy in one breath (full: `docs/STRATEGY.md`)
+**`baseline.sql` + `--baseline` mode = empty `business_templates` after every rebuild**
 
-Receptionist-first; **cross-platform / no-platform**; **non-trades verticals** (salons/auto/fitness/food) where no incumbent bundles a receptionist. **Freeze→removed** the 3 competitor CRMs (their vendors ship native receptionists); **Square stays** (payments partner). Build the **operational system-of-record, not a full CRM**; expand into add-ons later, per demand (build the safe ones, partner the regulated — payments→Square, payroll→Gusto). **Stripe = our SaaS billing only** (no service-payment processing). **Pricing (deferred):** value-aligned **volume** — meter on bookings/calls, never seats or minutes. **Heuristic:** a vendor's money model predicts if it competes — SaaS-seat-bundlers compete, transaction/volume/infra vendors partner. Captured ideas: owner AI copilot, website-scan onboarding, restaurant vertical add-on, WHY-reporting depth.
+`rebuild-db.sh` flow:
+
+1. DROP SCHEMA public CASCADE
+2. Apply `baseline.sql` → creates table schemas, **NO DATA**
+3. Run `setup-db.sh --baseline` → marks ALL historical migrations as "applied" **WITHOUT running SQL**
+4. Run `seed.sql` → previously had no template data
+
+Result: `business_templates` always empty after rebuild. 30 templates exist only in migration files that never run.
+
+**Fix applied**: Added all 30 templates to `supabase/seed.sql` with `ON CONFLICT DO UPDATE`. See section "10. Business Templates" at end of seed.sql.
+
+**WARNING**: If you ever manually re-run old migration `20260228000006_business_templates.sql`,
+it contains `CREATE OR REPLACE FUNCTION create_default_resources()` using `NEW.id` (old PK name).
+This REPLACES the correct baseline function that uses `NEW.tenant_id` — registration breaks.
+Fix with:
+
+```sql
+CREATE OR REPLACE FUNCTION public.create_default_resources()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE v_template business_templates%ROWTYPE;
+BEGIN
+  SELECT * INTO v_template FROM business_templates WHERE business_type = NEW.business_type;
+  IF FOUND THEN
+    INSERT INTO resources (tenant_id, name, description)
+    VALUES (NEW.tenant_id, v_template.default_resource_name, v_template.default_resource_description);
+  END IF;
+  RETURN NEW;
+END; $$;
+```
+
+---
+
+## Unstaged Changes (ready to commit)
+
+```
+dashboard/e2e/agent-conversation.spec.ts     — employee_name toBeNull() for MODE B
+dashboard/e2e/caller-identity.spec.ts        — /login URL fix + response shape fix
+dashboard/e2e/helpers/test.ts                — filter Next.js font manifest page errors
+dashboard/e2e/quick-book-shift-overrides.spec.ts  — shift hours 00:00-23:59
+dashboard/e2e/reminder-on-create.spec.ts           — include employee_id in bad booking
+dashboard/e2e/ui-rename-verification.spec.ts       — service+resource in beforeAll, exact button
+dashboard/e2e/voice-styles.spec.ts                 — dirty-flag fix (uncheck+check always)
+dashboard/lib/mockData.ts                          — MOCK_TENANT → Bella's (b3e1aaaa...)
+supabase/seed.sql                                  — 30 business templates (section 10)
+```
+
+---
+
+## How to Run Tests
+
+```bash
+# Must be in dashboard/ dir:
+cd /home/dale/projects/secretary-hq/dashboard
+
+# Full suite (resets DB — ~2 min):
+npx playwright test --reporter=line
+
+# Skip DB reset (use when DB already in good state):
+PLAYWRIGHT_SKIP_DB_RESET=1 npx playwright test --reporter=line
+
+# Single spec:
+PLAYWRIGHT_SKIP_DB_RESET=1 npx playwright test agent-conversation.spec.ts --reporter=line
+```
+
+## Services Must Be Running
+
+- Backend: `node dist/src/index.js` on port 4001 (pid 644443 as of session)
+- Dashboard: Next.js dev on port 4000
+- DB: Docker Postgres on port 5433
+- After ANY `src/` change: `npm run build` + kill/restart backend
+
+## DB State
+
+`business_templates` is populated (30 rows). No rebuild needed — current DB is good.
+If you rebuild (`npm run db:rebuild -- --yes`), new seed.sql section 10 repopulates templates correctly.

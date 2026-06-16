@@ -36,9 +36,19 @@ test.beforeAll(async () => {
   const ft = await registerFreshTenant(ctx);
   freshTenantId = ft.tenantId;
   const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${ft.token}` };
+  // Seed one employee, service, and resource so the Home "Create a new booking"
+  // button is enabled (DashboardHome disables it when any of the three is empty).
   await ctx.post(`${BACKEND_URL}/employees/create`, {
     headers: hdr,
     data: { tenant_id: freshTenantId, first_name: 'Test', last_name: 'Employee' },
+  });
+  await ctx.post(`${BACKEND_URL}/services/create`, {
+    headers: hdr,
+    data: { tenant_id: freshTenantId, name: 'Test Service', duration_minutes: 60 },
+  });
+  await ctx.post(`${BACKEND_URL}/resources/create`, {
+    headers: hdr,
+    data: { tenant_id: freshTenantId, name: 'Test Resource' },
   });
   await ctx.dispose();
 });
@@ -156,7 +166,7 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
     // The Setup Assistant button lives in the FolderTabBar right slot.
     // When launched from My Business it intentionally skips the welcome
     // screen and goes straight to the mode chooser (see MyBusinessView).
-    await page.getByRole('button', { name: /Setup Assistant/i }).click();
+    await page.getByRole('button', { name: 'Setup Assistant', exact: true }).click();
     await page.waitForTimeout(500);
 
     // Mode chooser visible immediately (no welcome gate from this launch point).
@@ -183,7 +193,7 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
       .click();
     await page.waitForTimeout(500);
 
-    await page.getByRole('button', { name: /Setup Assistant/i }).click();
+    await page.getByRole('button', { name: 'Setup Assistant', exact: true }).click();
     await page.waitForTimeout(500);
 
     await expect(page.getByText('How is your business set up?')).toBeVisible();

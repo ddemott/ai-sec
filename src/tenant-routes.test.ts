@@ -572,6 +572,10 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
           tts_voice: null,
           tts_speed: null,
           tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
           forward_phone: null,
         },
       ],
@@ -591,8 +595,9 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(updateQuery!.text).toContain('forward_phone');
     // Param order: [system_prompt, voice_id, business_type, first_message,
     //   save_preferences_enabled, preferences_instructions, tts_voice,
-    //   tts_speed, tts_soft, forward_phone, tenant_id]
-    expect(updateQuery!.params[9]).toBe('+16082175303'); // from body
+    //   tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise,
+    //   forward_phone, tenant_id]
+    expect(updateQuery!.params[13]).toBe('+16082175303'); // from body
   });
 
   it('HAPPY: omitting preference fields preserves their prior values', async () => {

@@ -1,5 +1,7 @@
 # Branch Protection Recommendations
 
+**Status (2026-06-15)**: The rule has been applied to `main` via `gh api` using the settings below (verified live). This file now serves as the source of truth and audit record.
+
 This document describes the recommended branch protection rules for the `main` branch. Even as a solo developer, these rules provide safety and enforce the development workflow.
 
 ## Recommended Settings for `main`
@@ -14,9 +16,11 @@ Go to **Settings → Branches → Branch protection rules → Add rule** for the
   - Require review from Code Owners (optional, useful later)
 
 - [x] **Require status checks to pass before merging**
-  - **Required status checks** (at minimum):
+  - **Required status checks** (select _all_ of these for the full CI gate):
     - `Backend (typecheck + tests + integration)` (from `.github/workflows/ci.yml`)
-    - `Dashboard (typecheck + tests)` (add this job to CI if not already present)
+    - `Dashboard (typecheck + tests)`
+    - `Agent (typecheck + tests)`
+    - `E2E (Playwright)`
   - Require branches to be up to date before merging (recommended)
 
 - [x] **Require branches to be up to date before merging**
@@ -49,12 +53,15 @@ Go to **Settings → Branches → Branch protection rules → Add rule** for the
 
 ## How to Set This Up
 
+**Applied**: 2026-06-15 (via `gh api` using the payload matching the "Required settings" below). To re-apply or audit:
+
 1. Go to the repository on GitHub.
 2. **Settings** → **Branches**.
-3. Under "Branch protection rules", click **Add branch protection rule**.
-4. Branch name pattern: `main`
-5. Check the boxes listed above.
-6. Save changes.
+3. Under "Branch protection rules", edit the rule for `main` (or use `gh api repos/ddemott/ai-sec/branches/main/protection` to inspect).
+4. Ensure the boxes and required status checks listed above are selected.
+5. Save changes.
+
+To verify live: `gh api repos/ddemott/ai-sec/branches/main/protection` (should show the 4 contexts + enforce_admins true). Use `./scripts/simulate.sh ci` before any merge to `main`.
 
 ## Enforcement Alignment with Our Workflow
 

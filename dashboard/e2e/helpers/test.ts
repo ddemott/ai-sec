@@ -97,6 +97,13 @@ export const test = base.extend({
     const errors: string[] = [];
 
     page.on('pageerror', (err) => {
+      // Filter out Next.js dev-server internal errors that are not app bugs.
+      // The font manifest file (.next/next-font-manifest.json) can be read
+      // while the dev server is still writing it, producing a truncated JSON
+      // parse error. This is a dev-server race, not a code defect.
+      if (err.stack?.includes('load-manifest.js') || err.stack?.includes('getNextFontManifest')) {
+        return;
+      }
       errors.push(`pageerror: ${err.message}\n${err.stack ?? '(no stack)'}`);
     });
 

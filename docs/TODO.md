@@ -1,11 +1,13 @@
 # TODO
 
+**See also**: root `GAPS.md` (2026-06-15) for the full deep-dive inventory of missing pieces across every angle (product, integrations, billing, ops, security, scaling, etc.). This file remains the active execution queue.
+
 **Status at a Glance** (as of 2026-05-28 — UX pass + solo-mode dedup shipped)
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
 - **CI**: green. Agent package gated in CI. Tests (2026-06-11): backend 2,017 · dashboard 744 · agent 122 · E2E 113 (CI green for the first time — getPool db-name bug + 9 other infra fixes in PR #4). Includes the uncommitted live call-transfer feature.
 - **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Replaced by **`+1 630-866-1960`** — DONE 2026-06-02: account funded + upgraded (trial cap lifted), number purchased (Telnyx id `2973794140900296302`), routed to SIP connection `livekit-outbound` (`2945038451784812111`), connection activated. **Remaining**: local `.env` LiveKit API key is dead (rotated at Railway) → need fresh creds → update LiveKit inbound trunk OLD→`+16308661960` → write tenant phone fields → live test. Full checklist: `docs/BETH_GO_LIVE_TODO.md`. Still zero inbound CDRs until trunk wired.
-- **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0: Railway deploy is NOT gated on CI** (deploys on push regardless of result).
+- **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See root `TODO_GAPS.md` subtasks.
 - **Browser validation**: Role gating + invite flow — DONE 2026-06-03, proven by green e2e (`auth-flows` route-gate 403, `workflows:630` front-desk nav-hide/snap-back, `workflows:676` owner invite).
 - **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (now archived/reduced). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
 
@@ -152,7 +154,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 **Gap 2 — CI / deploy gate (prioritized; agent job already DONE above):**
 
-- [ ] **P0 — Gate Railway deploy on CI green.** Today Railway auto-deploys on push to `main` _independently_ of GitHub Actions — a red CI run does NOT stop the deploy. Fix via Railway "Wait for CI" / check-suite gating, or branch-protect `main` + deploy from a CI step. **Needs Dale (Railway dashboard + GitHub branch protection).** Highest priority — without it every other CI improvement is advisory only.
+- [ ] **P0 — Gate Railway deploy on CI green.** GitHub branch protection applied 2026-06-15 (exact 4 jobs from ci.yml + enforce admins + required PR + strict checks + conversation resolution). This blocks merges to `main` (and thus deploys) on red CI. **Still needed**: Enable "Wait for CI" toggle on the 3 Railway services (see root TODO_GAPS.md for full subtask list). Update: use `npm run ci:status` / `./scripts/simulate.sh ci` before merging. Highest priority.
 - [x] **P1 — Add E2E (Playwright) job to CI.** DONE 2026-05-28. `e2e` job added to `.github/workflows/ci.yml`: pgvector service, migrations + seed, backend build + start, dashboard build + start, `wait-on`, Playwright chromium install + test run, artifact upload on failure. **Needs first-run green in Actions before marking required.** The runtime security proof (anonymous-401, cross-tenant 403, `/ready`) runs only locally today. Concrete plan: new `e2e` job — `ankane/pgvector` service (mirror backend job) → `npm ci` (root + dashboard) → `npm run build` (backend) → start backend + dashboard → `npx playwright install --with-deps chromium` → `cd dashboard && npx playwright test`. **Needs first-run validation in Actions** (browser install + server startup are the usual flake sources) — don't mark required until one green run.
 - [ ] **P2 — Repoint Railway `healthcheckPath` → `/ready`.** `railway.json` currently `/health` (shallow); `/ready` would gate deploy _promotion_ on DB reachability. Behavior change (could block promotion during a DB blip) — Dale's call.
 

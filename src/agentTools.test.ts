@@ -300,6 +300,11 @@ describe('agentTools /tenant-config', () => {
       tts_voice: null,
       tts_speed: null,
       tts_soft: null,
+      // 2026-06-14 voice style booleans default null → agent uses env defaults.
+      tts_cheerful: null,
+      tts_formal: null,
+      tts_warm: null,
+      tts_concise: null,
       // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
       forward_phone: null,
     });
@@ -352,6 +357,10 @@ describe('agentTools /tenant-config', () => {
       tts_voice: null,
       tts_speed: null,
       tts_soft: null,
+      tts_cheerful: null,
+      tts_formal: null,
+      tts_warm: null,
+      tts_concise: null,
       // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
       forward_phone: null,
     });

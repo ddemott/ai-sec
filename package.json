@@ -30,7 +30,10 @@
     "remove-hooks": "bash scripts/remove-hooks.sh",
     "prepare": "husky",
     "prepare-commit": "bash scripts/prepare-commit.sh",
-    "generate-kit": "bash scripts/generate-portable-kit.sh"
+    "generate-kit": "bash scripts/generate-portable-kit.sh",
+    "status": "bash scripts/simulate.sh status --deep",
+    "ci:status": "bash scripts/simulate.sh ci",
+    "ci:watch": "bash scripts/simulate.sh ci --watch"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
