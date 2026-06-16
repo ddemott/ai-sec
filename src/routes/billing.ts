@@ -91,6 +91,11 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
         success_url: `${process.env.DASHBOARD_URL || 'https://localhost:4000'}?billing=success`,
         cancel_url: `${process.env.DASHBOARD_URL || 'https://localhost:4000'}?billing=cancel`,
         metadata: { tenant_id, plan },
+        // Requires Stripe Tax enabled in dashboard + nexus registered.
+        // Set STRIPE_AUTO_TAX=true on Railway once both are configured.
+        ...(process.env.STRIPE_AUTO_TAX === 'true' && {
+          automatic_tax: { enabled: true },
+        }),
       });
 
       logEvent(req, 'checkout_session_created', { tenantId: tenant_id, plan });
