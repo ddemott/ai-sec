@@ -21,6 +21,12 @@ function baseCtx(
     env: {
       GOOGLE_CLIENT_ID: 'google-client-id',
       AGENT_SECRET: 'a'.repeat(40),
+      STRIPE_WEBHOOK_SECRET: 'whsec_fake',
+      EMAIL_USER: 'bot@example.com',
+      EMAIL_PASS: 'app-password',
+      TELEPHONY_PROVIDER: 'telnyx',
+      TELNYX_PHONE_NUMBER: '+16308229086',
+      CORS_ORIGIN: 'https://dashboard-production-cee3.up.railway.app',
       ...(overrides.env ?? {}),
     } as NodeJS.ProcessEnv,
     TELNYX_API_KEY: overrides.TELNYX_API_KEY ?? 'KEY01fake',
@@ -100,5 +106,78 @@ describe('collectStartupWarnings — GOOGLE_CLIENT_ID', () => {
     expect(warnings.find((w) => w.includes('GOOGLE_CLIENT_ID'))).toContain(
       'Google Calendar sync disabled'
     );
+  });
+});
+
+describe('collectStartupWarnings — STRIPE_WEBHOOK_SECRET', () => {
+  it('SAD: missing STRIPE_WEBHOOK_SECRET → subscription-activation warning', () => {
+    // WHO: Operator who set STRIPE_SECRET_KEY but forgot the webhook secret
+    // WHAT: Checkout works but webhooks 400 → subscriptions never flip active
+    // WHY: Silent — no boot error, successful checkout, zero activations
+    const warnings = collectStartupWarnings(baseCtx({ env: { STRIPE_WEBHOOK_SECRET: undefined } }));
+    const w = warnings.find((x) => x.includes('STRIPE_WEBHOOK_SECRET'));
+    expect(w).toBeDefined();
+    expect(w).toContain('400');
+    expect(w).toContain('never activate');
+  });
+});
+
+describe('collectStartupWarnings — email credentials', () => {
+  it('SAD: missing EMAIL_USER → mock-transporter warning', () => {
+    // WHO: Operator who hasn't set up the Gmail app password yet
+    // WHAT: emailService.ts installs a mock — sends succeed in code, no mail delivered
+    // WHY: Silent failure — callers get no confirmation email with zero log noise
+    const warnings = collectStartupWarnings(baseCtx({ env: { EMAIL_USER: undefined } }));
+    const w = warnings.find((x) => x.includes('EMAIL_USER'));
+    expect(w).toBeDefined();
+    expect(w).toContain('mock transporter');
+  });
+
+  it('SAD: missing EMAIL_PASS → mock-transporter warning', () => {
+    const warnings = collectStartupWarnings(baseCtx({ env: { EMAIL_PASS: undefined } }));
+    expect(warnings.find((x) => x.includes('EMAIL_USER'))).toBeDefined();
+  });
+});
+
+describe('collectStartupWarnings — SMS from-number', () => {
+  it('SAD: TELEPHONY_PROVIDER=telnyx but TELNYX_PHONE_NUMBER missing → send-failure warning', () => {
+    // WHO: Operator who wired Telnyx for voice but didn't set the SMS from number
+    // WHAT: smsService.ts falls back to "AI_SECRETARY" which Telnyx rejects
+    // WHY: Reminder SMS appear to succeed in code but all fail at the Telnyx API
+    const warnings = collectStartupWarnings(
+      baseCtx({ env: { TELEPHONY_PROVIDER: 'telnyx', TELNYX_PHONE_NUMBER: undefined } })
+    );
+    const w = warnings.find((x) => x.includes('TELNYX_PHONE_NUMBER'));
+    expect(w).toBeDefined();
+    expect(w).toContain('E.164');
+  });
+
+  it('SAD: Twilio provider missing credentials → mock-adapter warning', () => {
+    // WHO: Operator on the default Twilio path without creds configured
+    // WHAT: ProviderRegistry falls back to MockAdapter — SMS reported sent, nothing delivered
+    const warnings = collectStartupWarnings(
+      baseCtx({
+        env: {
+          TELEPHONY_PROVIDER: 'twilio',
+          TWILIO_ACCOUNT_SID: undefined,
+          TWILIO_AUTH_TOKEN: undefined,
+        },
+      })
+    );
+    const w = warnings.find((x) => x.includes('TWILIO_ACCOUNT_SID'));
+    expect(w).toBeDefined();
+    expect(w).toContain('mock adapter');
+  });
+});
+
+describe('collectStartupWarnings — CORS_ORIGIN', () => {
+  it('SAD: missing CORS_ORIGIN → browser-blocked warning', () => {
+    // WHO: Operator who deployed without setting CORS_ORIGIN
+    // WHAT: CORS defaults to localhost — prod dashboard requests rejected
+    // WHY: The fix (replacing || true) is correct but still requires the env var in prod
+    const warnings = collectStartupWarnings(baseCtx({ env: { CORS_ORIGIN: undefined } }));
+    const w = warnings.find((x) => x.includes('CORS_ORIGIN'));
+    expect(w).toBeDefined();
+    expect(w).toContain('localhost');
   });
 });

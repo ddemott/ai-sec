@@ -36,5 +36,39 @@ export function collectStartupWarnings(ctx: EnvWarningContext): string[] {
     );
   }
 
+  // Billing: missing webhook secret means checkout works but subscriptions never activate
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    warnings.push(
+      'STRIPE_WEBHOOK_SECRET not set — all Stripe billing webhooks will return 400 and subscriptions will never activate after checkout'
+    );
+  }
+
+  // Email: missing creds silently install a mock transporter (no mail sent, no error)
+  if (!env.EMAIL_USER || !env.EMAIL_PASS) {
+    warnings.push(
+      'EMAIL_USER/EMAIL_PASS not set — email notifications disabled (mock transporter active, no mail will be sent)'
+    );
+  }
+
+  // SMS: provider-specific from-number must be set or sends fail / use wrong sender
+  const telephonyProvider = env.TELEPHONY_PROVIDER || 'twilio';
+  if (telephonyProvider === 'telnyx' && !env.TELNYX_PHONE_NUMBER) {
+    warnings.push(
+      "TELNYX_PHONE_NUMBER not set — SMS reminders will fail (Telnyx requires a valid E.164 from number; fallback is 'AI_SECRETARY' which the API rejects)"
+    );
+  }
+  if (telephonyProvider !== 'telnyx' && (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN)) {
+    warnings.push(
+      'TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN not set — SMS reminders routed to mock adapter (no SMS sent, no error)'
+    );
+  }
+
+  // CORS: without CORS_ORIGIN the backend defaults to localhost — prod dashboard requests blocked
+  if (!env.CORS_ORIGIN) {
+    warnings.push(
+      'CORS_ORIGIN not set — CORS defaults to localhost only; set it to the dashboard URL or browser requests from prod will be blocked'
+    );
+  }
+
   return warnings;
 }

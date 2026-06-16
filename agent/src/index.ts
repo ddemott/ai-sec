@@ -40,6 +40,14 @@ import { classifyCallOutcome } from './callClassify.js';
 import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
+// Startup check: BACKEND_URL defaulting to localhost silently misroutes all
+// agent-tools calls in prod. Log at boot so Railway surfaces it immediately.
+if (config.BACKEND_URL === 'http://localhost:4001') {
+  console.warn(
+    'WARNING: BACKEND_URL defaults to http://localhost:4001 — set BACKEND_URL on the ai-sec-agent Railway service or every /agent-tools/* call will misroute'
+  );
+}
+
 export default defineAgent({
   prewarm: async (proc) => {
     proc.userData.vad = await silero.VAD.load();
