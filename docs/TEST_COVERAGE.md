@@ -95,7 +95,7 @@ the test still passes.
 
 ### Not covered by any e2e
 
-- Voice/AI loop (Telnyx → LiveKit → tools → booking) — covered by `scripts/qa-live-test.py`, not Playwright
+- Voice/AI loop (Telnyx → LiveKit → tools → booking) — covered by `./scripts/simulate.sh tools` (on-demand system harness), not Playwright
 - ~~Calendar sync (Google + Outlook OAuth)~~ — orchestration layer covered by `calendar-sync.spec.ts` (2026-05-08); actual outbound HTTP shape still only at unit level
 - ~~CRM sync (Jobber / HubSpot / Square / ServiceTitan, bidirectional)~~ — dispatch covered by `calendar-sync.spec.ts`; bidirectional read paths (CRM → us) still uncovered
 - ~~Setup wizard end-to-end (8 steps from business-type pick to first booking)~~ — finalize → first-booking path now covered by `setup-wizard-to-booking.spec.ts` (2026-05-08); 8-step UI walkthrough still uncovered, deferred (driving the modal's nested step state through Playwright is heavy for what unit-tests of `useWizardCrud` already cover)

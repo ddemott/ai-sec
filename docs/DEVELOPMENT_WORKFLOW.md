@@ -87,7 +87,7 @@ npm run create-branch feat/your-descriptive-name
     ```bash
     cd dashboard && npx playwright test --grep "owner-config|booking"
     ```
-- **Live QA** (`scripts/qa-live-test.py`): Use for voice/agent tool flows when E2E is not practical.
+- **Live QA** (`./scripts/simulate.sh tools`): Use for voice/agent tool flows when E2E is not practical. Runs the full agent-tools journey end-to-end against a demo tenant.
 - Every new or meaningfully changed test file **must** contain 5W diagnostic comments (WHO / WHAT / WHEN / WHERE / WHY). See existing good examples in `appointment-cancel-restore.spec.ts`.
 
 **Rule of thumb**: If a user or the voice agent could experience different behavior, there should be a test (unit, E2E, or live QA) that would catch the regression.
