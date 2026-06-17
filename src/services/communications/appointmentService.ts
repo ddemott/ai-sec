@@ -6,12 +6,14 @@ import { SMSService } from './smsService.js';
 import { generateSelfServiceToken } from '../selfServiceToken.js';
 
 /** Build a one-tap cancel link for SMS. Returns null when either appointmentId
- *  or BACKEND_PUBLIC_URL is absent — callers omit the link gracefully. */
+ *  or BACKEND_PUBLIC_URL is absent/blank — callers omit the link gracefully. */
 function buildCancelLink(appointmentId: string | undefined, tenantId: string): string | null {
-  if (!appointmentId || !process.env.BACKEND_PUBLIC_URL) return null;
+  if (!appointmentId) return null;
+  const baseUrl = (process.env.BACKEND_PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
+  if (!baseUrl) return null;
   const token = generateSelfServiceToken(appointmentId, tenantId, 'cancel');
   if (!token) return null;
-  return `${process.env.BACKEND_PUBLIC_URL}/self/cancel?token=${token}`;
+  return `${baseUrl}/self/cancel?token=${encodeURIComponent(token)}`;
 }
 
 export class AppointmentCommunicationService {

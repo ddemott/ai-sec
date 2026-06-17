@@ -39,11 +39,15 @@ export function generateSelfServiceToken(
 /**
  * Verify and decode a self-service token.
  * Returns the payload when valid, null on bad signature / expiry / wrong action.
+ *
+ * Empty JWT_SECRET returns null immediately — an empty string is a valid HMAC
+ * key so jwt.verify would accept ANY token signed with an empty string.
  */
 export function verifySelfServiceToken(
   token: string,
   expectedAction: SelfServiceAction
 ): SelfServiceTokenPayload | null {
+  if (!JWT_SECRET) return null;
   try {
     const payload = jwt.verify(token, JWT_SECRET) as SelfServiceTokenPayload;
     if (payload.action !== expectedAction) return null;

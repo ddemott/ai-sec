@@ -280,7 +280,7 @@ registerCommunicationRoutes(app, pool, withTenantClient);
 registerReminderRoutes(app, pool, withTenantClient);
 registerAgentToolRoutes(app, pool, withTenantClient, getEmbedding, normalizeForEmbedding);
 registerDemoRoutes(app, pool, generateToken);
-registerSelfServiceRoutes(app, pool);
+registerSelfServiceRoutes(app, withTenantClient);
 
 // --- Start Reminder Scheduler ---
 // Only start in production or if explicitly enabled

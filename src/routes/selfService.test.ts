@@ -4,7 +4,8 @@
  * WHEN:  customer taps the cancel link in an appointment-confirmation SMS
  * WHERE: src/routes/selfService.ts
  * WHY:   token IS the auth; route must gate on signature + scope to tenant;
- *        must be idempotent (already-canceled → 200, not 400)
+ *        must be idempotent (already-canceled → 200, not 400);
+ *        uses withTenantClient so FORCE RLS on appointments table passes.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -16,16 +17,18 @@ import { buildRouteTestApp, type RouteTestAppHandle } from '../test-utils-mock.j
 const APPT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 const TENANT_ID = 'ffffffff-eeee-4ddd-8ccc-bbbbbbbbbbbb';
 
-beforeAll(() => {
-  process.env.JWT_SECRET = 'test-secret-self-service-route';
-});
+// Note: selfServiceToken.ts reads JWT_SECRET at module-load time.
+// In the test environment NODE_ENV=test, the module falls back to
+// 'dev-jwt-secret-change-in-production'. generateSelfServiceToken and
+// verifySelfServiceToken both use that same constant, so tokens round-trip
+// correctly without any per-test environment overrides.
 
 let handle: RouteTestAppHandle;
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  handle = buildRouteTestApp((a, pool) => {
-    registerSelfServiceRoutes(a, pool);
+  handle = buildRouteTestApp((a, _pool, withTenantClient) => {
+    registerSelfServiceRoutes(a, withTenantClient);
   });
   app = handle.app;
   await app.ready();

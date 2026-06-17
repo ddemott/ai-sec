@@ -6,17 +6,25 @@
  * hook never fires; the token's `tenant_id` + `appointment_id` claims scope
  * every DB write.
  *
+ * RLS note: appointments uses FORCE ROW LEVEL SECURITY. We must use
+ * withTenantClient (which sets app.current_tenant_id) rather than pool.query
+ * directly — bare pool queries see every row blocked by RLS even with an
+ * explicit WHERE tenant_id = $n clause.
+ *
  * Currently supported:
  *   GET /self/cancel?token=... — cancel a single appointment
  */
 
-import type { Pool } from 'pg';
+import type { PoolClient } from 'pg';
 import type { AppFastifyInstance } from '../types/fastify.js';
 import { withHandler } from '../middleware.js';
 import { verifySelfServiceToken } from '../services/selfServiceToken.js';
 import { logEvent } from '../middleware.js';
 
-export function registerSelfServiceRoutes(app: AppFastifyInstance, pool: Pool) {
+export function registerSelfServiceRoutes(
+  app: AppFastifyInstance,
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+) {
   /**
    * GET /self/cancel?token=...
    *
@@ -45,32 +53,34 @@ export function registerSelfServiceRoutes(app: AppFastifyInstance, pool: Pool) {
 
       const { appointment_id, tenant_id } = payload;
 
-      // Scope the update to both appointment_id AND tenant_id — token claims
-      // provide both; cross-tenant cancel is structurally impossible even if
-      // somehow a valid token were replayed against a different tenant.
-      const result = await pool.query(
-        `UPDATE appointments
-         SET status = 'canceled'
-         WHERE appointment_id = $1
-           AND tenant_id = $2
-           AND status != 'canceled'
-         RETURNING appointment_id`,
-        [appointment_id, tenant_id]
-      );
-
-      if (result.rowCount === 0) {
-        // Either not found (wrong tenant) or already canceled — both idempotent
-        const check = await pool.query(
-          `SELECT status FROM appointments WHERE appointment_id = $1 AND tenant_id = $2`,
+      // withTenantClient sets app.current_tenant_id so FORCE RLS passes.
+      // Token claims scope the write to this specific tenant — cross-tenant
+      // cancel is structurally impossible even with a replayed token.
+      const result = await withTenantClient(tenant_id, async (client) => {
+        return client.query(
+          `UPDATE appointments
+           SET status = 'canceled'
+           WHERE appointment_id = $1
+             AND tenant_id = $2
+             AND status != 'canceled'
+           RETURNING appointment_id`,
           [appointment_id, tenant_id]
         );
+      });
+
+      if (result.rowCount === 0) {
+        const check = await withTenantClient(tenant_id, async (client) => {
+          return client.query(
+            `SELECT status FROM appointments WHERE appointment_id = $1 AND tenant_id = $2`,
+            [appointment_id, tenant_id]
+          );
+        });
         if (check.rows.length === 0) {
           return reply.status(404).send({
             success: false,
             error: 'Appointment not found. It may have already been removed.',
           });
         }
-        // Already canceled — idempotent success
         return reply.send({
           success: true,
           message: 'Your appointment has already been canceled.',
