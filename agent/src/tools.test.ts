@@ -55,7 +55,7 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 13 expected tool names', () => {
+  it('HAPPY: exposes exactly the 14 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
@@ -64,15 +64,18 @@ describe('buildTools', () => {
       [
         'book_appointment',
         'book_with_scheduling',
+        'cancel_appointment',
         'check_availability',
         'get_available_slots',
         'get_company_policy_answer',
         'get_customer_context',
+        'get_my_appointments',
         'get_scheduling_options',
         'get_service_catalog',
         'identify_caller',
         'save_customer_preference',
         'send_verification_code',
+        'take_message',
         'transfer_call',
         'verify_phone_code',
       ].sort()

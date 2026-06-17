@@ -490,4 +490,67 @@ export function registerVoiceRoutes(
       );
     }, 'Failed to get customer context')
   );
+
+  /**
+   * GET /voice/messages
+   * List customer messages left during voice calls. Owner-facing inbox.
+   * Sorted newest-first; optional ?status=new|read|actioned filter.
+   */
+  app.get(
+    '/voice/messages',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const query = req.query as Record<string, string | undefined>;
+      const status = query['status'] ?? null;
+      const limit = Math.min(parseInt(query['limit'] ?? '') || 50, 200);
+      const offset = parseInt(query['offset'] ?? '') || 0;
+
+      const rows = await withTenantClient(tenantId, (client) =>
+        client.query(
+          `SELECT message_id, caller_name, caller_phone, callback_phone, message,
+                  status, call_id, created_at
+           FROM customer_messages
+          WHERE tenant_id = $1
+            ${status ? 'AND status = $4' : ''}
+          ORDER BY created_at DESC
+          LIMIT $2 OFFSET $3`,
+          status ? [tenantId, limit, offset, status] : [tenantId, limit, offset]
+        )
+      );
+      return reply.send(rows.rows);
+    }, 'Failed to fetch messages')
+  );
+
+  /**
+   * PATCH /voice/messages/:id
+   * Update message status (new → read → actioned).
+   */
+  app.patch(
+    '/voice/messages/:id',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const { id } = req.params as { id: string };
+      const body = req.body as { status?: string };
+      const VALID = ['new', 'read', 'actioned'];
+      if (!body.status || !VALID.includes(body.status)) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'status must be new, read, or actioned' });
+      }
+      const res = await withTenantClient(tenantId, (client) =>
+        client.query(
+          `UPDATE customer_messages SET status = $1
+           WHERE message_id = $2 AND tenant_id = $3
+           RETURNING message_id`,
+          [body.status, id, tenantId]
+        )
+      );
+      if ((res.rowCount ?? 0) === 0) {
+        return reply.status(404).send({ success: false, error: 'Message not found' });
+      }
+      return reply.send({ success: true });
+    }, 'Failed to update message status')
+  );
 }

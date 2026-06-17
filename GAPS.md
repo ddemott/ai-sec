@@ -32,13 +32,13 @@ From `docs/TODO.md` + `BETH_GO_LIVE_TODO.md` + source:
 
 - **PSTN inbound path unverified** for the live number (`+1 630-866-1960` and test `+1 630-822-9086`). Different-carrier dial + `listRooms()` monitoring still required. Carrier propagation / recycled-DID issues diagnosed; Telnyx ticket escalated. Agent + LiveKit + Telnyx SIP config proven in isolation, but real voice is the blocker for Beth (tenant `d5e3c6a1...`) and any paying customer.
 - **Telnyx REFER / call transfer not enabled** on the SIP Connection. `transfer_call` tool (shipped) degrades to "take a message" when `forward_phone` is set.
-- **Many `[prod]` silent-degrade risks** (code works in dev, no error, no startup warning, prod is dead):
-  - Reminders/comms SMS → `ProviderRegistry.ts` selects `MockAdapter` without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` (or explicit Telnyx SMS decision). Every reminder reports success but never sends.
-  - Email → mock transporter without `EMAIL_USER`/`EMAIL_PASS`.
-  - Agent `BACKEND_URL` defaults to `http://localhost:4001` (`agent/src/config.ts:17`).
-  - `STRIPE_WEBHOOK_SECRET` empty → every webhook 400s (`billing.ts:133`).
-  - `CORS_ORIGIN` unset reflects ANY origin (`index.ts`).
-  - `DASHBOARD_URL` defaults to `https://localhost:4000` → all emails, OAuth, Stripe URLs, provisioning links point wrong in prod.
+- **`[prod]` silent-degrade risks — code fixes shipped 2026-06-16/17** (boot warnings now fire for all of these; prod env vars still need to be set):
+  - ~~Reminders/comms SMS → MockAdapter~~ — FIXED: `ProviderRegistry` defaults to Telnyx. Set `TELNYX_PHONE_NUMBER=+16308661960` on Railway.
+  - Email → mock transporter without `EMAIL_USER`/`EMAIL_PASS` — boot warning fires; set Gmail app-password on Railway.
+  - ~~Agent `BACKEND_URL` defaults to localhost~~ — FIXED: config validation now fails at startup if unset. Set `BACKEND_URL` on `ai-sec-agent`.
+  - ~~`STRIPE_WEBHOOK_SECRET` empty → webhooks 400~~ — boot warning fires; set on Railway.
+  - ~~`CORS_ORIGIN` unset reflects ANY origin~~ — boot warning fires; set on Railway.
+  - ~~`DASHBOARD_URL` defaults to localhost~~ — boot warning fires; set on Railway.
 - **Observability completely dark in prod**: `METRICS_TOKEN`, `BETTER_STACK_TOKEN` (backend + agent), `SENTRY_DSN` (backend + agent) not set on Railway. `/metrics` 404s; logs are stdout-only; no error grouping or alerts.
 - **Railway deploy gated on CI green via GitHub** (progress 2026-06-15): branch protection applied on `main` requiring the 4 CI jobs (Backend, Dashboard, Agent, E2E) + PR + enforce admins. Auto-deploys from `main` now blocked on red CI. **Remaining**: Enable "Wait for CI" on Railway services. (See TODO_GAPS.md subtasks.)
 - **Stripe never verified live** (test mode + CLI webhook replay outstanding per TODO). Checkout + 3-event webhook + `/billing/status` + `subscriptionGate` exist, but automatic tax missing, price IDs not on prod, no owner-facing flow.
@@ -62,7 +62,7 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - **No rich media during calls** (e.g., photo of tire damage for auto shops).
 - **Outcome classification is good** (`callClassify.ts`: booked / no_availability / wrong_service / price / message / info + abandoned) but not yet driving automations (e.g., price-sensitive follow-up SMS).
 
-**Agent tools** (`agent/src/tools.ts` — exactly 11 tools, see full definitions lines 63-472):
+**Agent tools** (`agent/src/tools.ts` — 14 tools as of 2026-06-16):
 
 - `get_customer_context`: CRM lookup + history + preferences (called early when caller ID present).
 - `get_service_catalog`: list services with duration/price.
@@ -76,6 +76,7 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - `identify_caller`: upsert customer by phone+name (non-booking capture).
 - `save_customer_preference`: durable facts (preferred_stylist etc.) for future calls.
 - `transfer_call`: SIP REFER to `tenants.forward_phone` (or message fallback); records outcome.
+- `take_message`: collect caller name + message + optional callback phone, persist to `customer_messages`, SMS-notify owner. (Added 2026-06-16.)
 
 Current vs. desired for a complete receptionist:
 
@@ -396,7 +397,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 **P0 — Unblock any real customer / Beth go-live**
 
 - Complete BETH checklist (different-carrier PSTN test + Telnyx REFER enable + forward_phone set on dashboard).
-- Fix all `[prod]` silent-degrade items (comms providers, agent BACKEND_URL, STRIPE_WEBHOOK_SECRET, CORS, DASHBOARD_URL, etc.).
+- Set remaining Railway env vars (TELNYX*PHONE_NUMBER, DASHBOARD_URL, CORS_ORIGIN, STRIPE*\* vars, EMAIL_USER/PASS, BACKEND_URL on agent) — code fixes shipped, boot warns on missing.
 - Set Railway observability tokens + basic alerts (`errors_total`, booking failures, pool waiting, etc.).
 - Gate Railway deploys on CI green (branch protection or Railway "wait for CI").
 - Stripe live verification (test keys + CLI replay + full owner checkout → webhook → status → gate).

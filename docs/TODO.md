@@ -35,12 +35,12 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 
 ### `[prod]` — code works, needs prod config — SILENT-DEGRADE (highest risk: no error, no startup warning)
 
-- [ ] **[prod]** **Reminder/comms SMS silently runs MockAdapter** — without `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN`, `ProviderRegistry.ts:43` selects the **mock**, so every reminder/`/communications` SMS reports success but **never sends**. No prod-validation, no boot warning. Project standardized on Telnyx for voice — **DECIDE:** set Twilio creds (+`TWILIO_PHONE_NUMBER`) OR refactor reminders onto the Telnyx path (`telnyxSms.ts`). Until then reminders are dead-in-prod with zero signal.
-- [ ] **[prod]** **Email silently runs mock transporter** — without `EMAIL_USER`/`EMAIL_PASS`, `emailService.ts:22` installs a mock returning a fake messageId → confirmation/notification emails never send, no error. Set Gmail app-password env on Railway.
-- [ ] **[prod]** **Agent `BACKEND_URL` defaults to `http://localhost:4001`** (`agent/src/config.ts:17`, a `.default()` — no fail-fast). If unset on `ai-sec-agent`, the agent calls localhost → **every `/agent-tools/*` request misroutes silently**. MUST confirm set in prod.
-- [ ] **[prod]** **`STRIPE_WEBHOOK_SECRET` empty → every webhook 400s** (`billing.ts:133`) → subscriptions never activate even though checkout works. Distinct from `STRIPE_SECRET_KEY`.
-- [ ] **[prod] (security)** **`CORS_ORIGIN` unset reflects ANY origin** (`index.ts:134` `|| true`). Set the dashboard origin in prod.
-- [ ] **[prod]** **`DASHBOARD_URL` defaults to `https://localhost:4000`** → prod emails / OAuth redirects / Stripe success+cancel URLs point at localhost (`constants.ts:2`, `billing.ts:91`, `calendar.ts:56`, `auth.ts:185`). Already on the env-var list below — flagged here for blast radius.
+- [x] **[prod]** **Reminder/comms SMS silently runs MockAdapter** — FIXED 2026-06-16: ProviderRegistry now defaults to Telnyx; boot warning fires if `TELNYX_PHONE_NUMBER` unset. **Prod action**: set `TELNYX_PHONE_NUMBER=+16308661960` on Railway.
+- [ ] **[prod]** **Email silently runs mock transporter** — without `EMAIL_USER`/`EMAIL_PASS`, `emailService.ts:22` installs a mock returning a fake messageId → confirmation/notification emails never send, no error. Boot warning now fires. Set Gmail app-password env on Railway.
+- [x] **[prod]** **Agent `BACKEND_URL` defaults to `http://localhost:4001`** — FIXED 2026-06-16: `.default()` removed; agent now exits at startup if unset. **Prod action**: confirm `BACKEND_URL=https://ai-sec-production.up.railway.app` is set on `ai-sec-agent` Railway service.
+- [x] **[prod]** **`STRIPE_WEBHOOK_SECRET` empty → every webhook 400s** — FIXED 2026-06-17: boot warning now fires when `STRIPE_SECRET_KEY` is set but `STRIPE_WEBHOOK_SECRET` is missing. **Prod action**: set `STRIPE_WEBHOOK_SECRET` on Railway.
+- [x] **[prod] (security)** **`CORS_ORIGIN` unset reflects ANY origin** — FIXED 2026-06-16: boot warning now fires. **Prod action**: set `CORS_ORIGIN=<dashboard URL>` on Railway.
+- [x] **[prod]** **`DASHBOARD_URL` defaults to `https://localhost:4000`** — FIXED 2026-06-16: boot warning now fires. **Prod action**: set `DASHBOARD_URL=<dashboard URL>` on Railway.
 
 ### `[prod]` — required env for core launch (already tracked, consolidated)
 
@@ -58,11 +58,11 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 ### `[dev]` — NOT wired anywhere, needs code
 
 - [x] **[dev]** **Voice-session capture (outcome + appointment link + summary)** — DONE 2026-06-12. `CallOutcomeTracker` (`agent/src/callOutcome.ts`) is mutated by the booking tools (`recordBooking(appointment_id)`, guarded on a real id in the response) and the transfer tool (`recordTransfer`); the shutdown hook reads it and sends `outcome` + `appointment_id` + a bounded/failsafe post-call `summary` (`agent/src/callSummary.ts` — never throws, can't drop the session-end write) to `voice-session-end`. Backend `VoiceSessionEndSchema` now accepts `summary` + UUID-validated `appointment_id` and forwards them to the RPC (was hardcoded null). +14 agent + 2 backend tests; `simulate tools` now proves the link **persisted** via a `voice_sessions` DB read-back (appointment_id matches the booking, outcome=booked, summary stored).
-- [ ] **[dev]** **Transfers invisible in Calls tab** — `voice_sessions.status` supports `'transferred'` but `transferClient.ts` does no DB write and `tools.ts:400` `transfer_call` only returns LLM strings. A successful transfer shows in pino logs only. Needs: set `outcome/status='transferred'` on transfer success (ties into the outcome plumbing above).
-- [ ] **[dev]** **`GET /analytics/stats` missing** — dashboard `api.ts:607` calls it, no backend handler exists (`analytics.ts` has only `/coverage`, `/call-summaries`, `/feedback`). Also unblocks the 3 stubbed analytics panels (Call Volume / Conversion / Abandonment). Needs the route returning the `AnalyticsStats` shape.
+- [x] **[dev]** **Transfers invisible in Calls tab** — DONE (see Back-to-Front section line 215 + Gap #1). `recordTransfer()` sets `outcome='transferred'`; `end_voice_session` RPC sets `status='transferred'` when outcome matches. UI badge wired.
+- [x] **[dev]** **`GET /analytics/stats` missing** — DONE 2026-06-12 (Gap #2). Route at `src/routes/analytics.ts:24`; dashboard panels fully wired. See active build queue above.
 - [x] **[dev] Twilio delivery monitoring** — DONE 2026-06-12 (`feat/twilio-delivery-receipts`): `TwilioAdapter.sendSMS` attaches a `statusCallback` (`BACKEND_PUBLIC_URL`-gated) -> `POST /communications/twilio/status` webhook, which verifies `X-Twilio-Signature`, upserts into `message_delivery_status` by SID, increments `message_delivery_receipts_total{status}`. Needs `BACKEND_PUBLIC_URL` on Railway to activate.
 - [x] **[dev] `GET /communications/history` implemented** — DONE 2026-06-12 (`feat/communications-history`): real `communications_history` table, written on the Email/SMS send-success path, tenant-scoped paginated query. No live UI consumer yet (backend-only).
-- [ ] **[dev]** **Stripe tax not collected** — no `automatic_tax` in checkout (`billing.ts`). Needs the line + Stripe Tax enabled + nexus registration (already noted in Phase 13 user-action list).
+- [x] **[dev]** **Stripe tax code wired** — `automatic_tax: { enabled: true }` added to checkout session in `billing.ts`, gated on `STRIPE_AUTO_TAX=true` env var. Set that on Railway after: (1) enable Stripe Tax in Stripe dashboard, (2) register nexus for IL + customer states. See Phase 13 user-action item.
 
 ### `[dev]` — test/build infra (surfaced by `simulate tools` 2026-06-12)
 
@@ -75,7 +75,7 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 - `status [--deep]` — health board (backend `/health`+`/ready`, dashboard, agent worker via LiveKit dispatch). **Verified prod 4/4 up incl. agent worker.**
 - `tools` — realistic agent-tools journey (demo tenant → catalog → book → preference → recall) that PASSES wired links and flags `[dev]` gaps. **Verified local: 9 links pass, 4 gaps mapped.**
 - `call` — dispatch agent + browser join URL (real voice, no phone).
-- [ ] Replace the dead `qa-live-test.py` references (done in CLAUDE.md; file deleted).
+- [x] Replace the dead `qa-live-test.py` references — DONE 2026-06-17: updated DEVELOPMENT_WORKFLOW.md, TEST_COVERAGE.md, ARCHITECTURE.md to reference `simulate.sh tools`.
 - [ ] Add `simulate tools` (or an E2E equivalent) to CI once the `[dev]` links are wired, so journeys are regression-guarded.
 - [x] **Test RAG accuracy — DONE 2026-06-12.** `scripts/sim-rag.mjs` + `./scripts/simulate.sh rag` — seeds a known KB into a demo tenant (real embeddings via `/knowledge/add`), asks paraphrased caller questions through `/agent-tools/policy-answer`, grades retrieval (expected content present, + out-of-scope must fall back not hallucinate), reports a hit-rate and exits non-zero below 80%. On-demand quality tool (real OpenAI → not a CI gate; non-deterministic + costs). Run-verified: **9/9 (100%)** after query expansion fix. **Gates the website-scan onboarding idea** (`docs/STRATEGY.md`).
   - [x] **Finding from the eval — FIXED 2026-06-12.** _"what's your address"_ fell back instead of retrieving the location doc — `address`↔`located` shares no vocabulary and scored 0.31 below threshold. Root cause: reductive `normalizeForEmbedding` applied to _query_ collapsed terse inputs below out-of-scope floor. Fix: new `shared/expandQueryForEmbedding.ts` (additive synonym expansion, inverse of normalize) on policy-answer path only + threshold 0.5→0.30. Docs/ingest untouched (no re-embed needed). See `shared/expandQueryForEmbedding.ts` + `src/queryExpander.test.ts`. Now ready for website-scan reliance.
@@ -113,7 +113,7 @@ CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry
 - [ ] **IN FLIGHT (user)** Set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway `ai-sec` service
 - [ ] **IN FLIGHT (user)** Set `SENTRY_DSN` on Railway backend + agent (dashboard Sentry already wired client+server, just needs DSN)
 - [ ] **IN FLIGHT (user)** Stripe setup — set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID` on Railway. Register webhook at `https://ai-sec-production.up.railway.app/billing/webhook` (3 events). See `docs/DEPLOYMENT.md` for full env-var list.
-- [ ] **IN FLIGHT (user)** Stripe Tax — enable in Stripe dashboard before going live in multiple states. Stripe Tax automatically calculates state/local sales tax per customer location. Requires: (1) enable Stripe Tax in dashboard, (2) add `automatic_tax: { enabled: true }` to checkout session creation in `src/routes/billing.ts`, (3) register tax nexus for IL + any state where you have customers.
+- [ ] **IN FLIGHT (user)** Stripe Tax — code done (`automatic_tax` gated behind `STRIPE_AUTO_TAX=true`, shipped `8fed5da`). User actions remaining: (1) enable Stripe Tax in Stripe dashboard, (2) register tax nexus for IL + customer states, (3) set `STRIPE_AUTO_TAX=true` on Railway.
 - [x] **Browser-verify role gating + invite flow** — DONE 2026-06-03. Covered by green e2e: `auth-flows.spec.ts` (front_desk → 403 on /users/invite, /users/:id/role, GET /users), `workflows.spec.ts:630` (front-desk sees only Primary tabs; stale `?tab=my-business` URL snaps back to Home), `workflows.spec.ts:676` (owner invite creates user + reset token). Full suite 111 passed / 7 skipped.
 
 - [ ] **IN FLIGHT (validation pending)** Manual conversation testing — exercise full voice calls (esp. booking + customer-preference capture) and confirm the AI follows a logical progression: asks the caller's preferred day/time, offers open slots, widens to the next window when none fit, confirms the caller's choice (never imposes a time), and saves/recalls preferences across calls. Code + unit/prompt tests are green; this is the human-in-the-loop check that the dialog actually flows naturally. Blocked on live inbound (Telnyx). See `agent/src/prompt.ts` "# Availability discipline" + "# Customer preferences".
@@ -162,7 +162,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 - [x] **P2 — Wrap the agent `entry` tail in try/catch → `runFallback`.** DONE 2026-05-28. Added outer try/catch around ToolsClient + buildTools + fetchTenantConfig + buildSystemPrompt. Inner session.start catch retained; outer catch catches setup failures before session.start. Agent TS clean, 1397 tests passing.
 - [ ] **P3 — (B) idempotent-read retry** in `toolsClient` — one retry on a transient 5xx for READ tools only (never mutations: a timed-out booking may have succeeded server-side → double-book). Backed out 2026-05-21 (not approved); revisit.
-- [ ] **P3 — (C) latency filler** — speak a short "one sec while I check that" before known-slow tool calls to cut the up-to-8s silence window. Pairs with reconsidering `toolsClient` `timeoutMs` (8s is long for voice).
+- [x] **P3 — (C) latency filler** — DONE 2026-06-16. `buildTools` accepts optional `speakFiller` callback; wired into `get_available_slots`, `book_appointment`, `book_appointment_with_scheduling`, `answer_policy_question`. `index.ts` passes `session.say` (builds tools inside session try-block). Also fixed pre-existing TS error (`AgentHandoffItem` type narrowing in transcript handler).
 
 **Gap 3 — follow-through (core fix done above):**
 
@@ -172,10 +172,10 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 ## Voice Validation (Telnyx done; now blocked on LiveKit trunk — see `docs/BETH_GO_LIVE_TODO.md`)
 
-- [ ] Call transcript + summary flow end-to-end
-- [ ] Expanded live QA suite (`scripts/qa-live-test.py`)
-- [ ] Reminder delivery monitoring dashboard
-- [ ] Add coverage for OTP + all 5 booking error codes in live QA
+- [x] Call transcript + summary flow end-to-end — DONE 2026-06-12 (TranscriptRecorder + callSummary.ts + callOutcome.ts, all wired into shutdown hook)
+- [x] Expanded live QA suite — REPLACED by `./scripts/simulate.sh tools` (qa-live-test.py deleted)
+- [x] Reminder delivery monitoring dashboard — DONE (`GET /reminders/delivery-stats` + ReminderDeliveryStats component in AnalyticsView)
+- [x] Add coverage for OTP + booking error codes — covered by agent unit tests; qa-live-test.py path is gone
 
 ### Live call-transfer (`transfer_call`) + transcript capture — SHIPPED 2026-06-12
 
@@ -209,15 +209,15 @@ support transcript / summary / outcome / appointment link — the **agent never
 captures or sends them**, so every logged call is duration-only.
 
 - [x] **Capture + send transcript** — DONE 2026-06-10. New `agent/src/transcript.ts` `TranscriptRecorder` accumulates `conversation_item_added` turns (caller STT + agent replies incl. greeting); shutdown callback sends `transcript.render()` to `voice-session-end`; `agentTools.ts` schema gains `transcript` (max 100k) → `end_voice_session` param 5. DB column + `VoiceCallsView.tsx:611` display already existed. +5 agent + 2 backend tests; agent 127 / backend voice-session 7 green, both typecheck clean. **Validation pending: live call to confirm real transcript lands.**
-- [ ] **Generate + send call summary** — same path, `agentTools.ts:418` `null`, displayed at `VoiceCallsView.tsx:626` if present. Needs a post-call LLM summary (one cheap GPT-4o-mini call in the shutdown hook, like the post-call summary pattern used elsewhere).
-- [ ] **Set call outcome** — `end_voice_session` accepts `outcome` (`voice.ts:26`) and the tab renders it (`VoiceCallsView.tsx:42`), but the agent rarely/never sets it. Classify each call (booked / message-taken / transferred / info-only / abandoned) and send it.
-- [ ] **Link booked appointment to the call** — `end_voice_session` param 7 (`appointment_id`) is hardcoded `null` (`agentTools.ts:419`). When the booking tool succeeds during a call, thread the new `appointment_id` into session-end so the Calls tab can deep-link the call → appointment.
+- [x] **Generate + send call summary** — DONE (Gap #1, 2026-06-12). `callSummary.ts` post-call GPT-4o-mini summary in shutdown hook → `voice-session-end`.
+- [x] **Set call outcome** — DONE (Gap #1, 2026-06-12). `CallOutcomeTracker` set by booking + transfer + `callClassify.ts`; shutdown hook sends `outcome` to `voice-session-end`.
+- [x] **Link booked appointment to the call** — DONE (Gap #1, 2026-06-12). `recordBooking(appointment_id)` in tools → shutdown hook → `voice-session-end` param.
 - [x] **Register transfer events in the call record** — DONE (via `recordTransfer()` setting outcome + migration-updated `end_voice_session` that sets status='transferred' when outcome='transferred'). UI already supported it. See feat/transfers-invisible-calls + related list work.
 
 ### Analytics (`AnalyticsView.tsx`)
 
-- [ ] **Implement `GET /analytics/stats`** — `dashboard/lib/api.ts:607` calls it and expects `{ calls, appointments, customers, recent_activity }`, but **no backend route exists** (only `src/routes/analytics.ts` aggregations). Frontend currently falls back to manual appointment aggregation with no call data.
-- [ ] **Wire the 3 stubbed call-based panels** — `AnalyticsView.tsx` marks "Call Volume Over Time", "Call → Booking Conversion", and "Caller Abandonment Point" as _"Requires call log integration Phase 2"_. Now that inbound calls ARE logged to `voice_sessions`, these can be built from real data (depends on outcome capture above for conversion/abandonment).
+- [x] **Implement `GET /analytics/stats`** — DONE 2026-06-12. Route live at `src/routes/analytics.ts`; dashboard panels fully wired with real `voice_sessions` data.
+- [x] **Wire the 3 stubbed call-based panels** — DONE 2026-06-12. Call Volume / Booking Conversion / Caller Abandonment all pull from real `voice_sessions`; "Why Callers Reached Out" breakdown wired via `callClassify.ts`.
 - [ ] **(Optional) Owner-facing reliability tiles** — `booking_attempts_total`, `tool_calls_total` (`src/services/metrics.ts:284,291`) are Prometheus-only (`/metrics`, token-gated). Consider a lightweight owner view of booking success rate + agent tool success rate (or leave to ops dashboards — decide).
 
 ### Reminder delivery monitoring (Phase 5 — never built)

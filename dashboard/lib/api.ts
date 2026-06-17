@@ -33,6 +33,7 @@ import type {
   RecordVersion,
   VersionComparison,
   TeamUser,
+  CustomerMessage,
 } from './types';
 
 export const API_BASE_URL =
@@ -782,7 +783,7 @@ export const Api = {
 
   // --- BILLING ---
   billing: {
-    checkout: (tenantId: string, plan: 'solo' | 'growth') =>
+    checkout: (tenantId: string, plan: 'solo' | 'growth' | 'professional') =>
       apiMutate<{ url: string }>(`/billing/checkout`, 'POST', { tenant_id: tenantId, plan }),
 
     status: (tenantId: string) =>
@@ -790,6 +791,9 @@ export const Api = {
         `/billing/status`,
         { tenant_id: tenantId }
       ),
+
+    portal: (tenantId: string) =>
+      apiMutate<{ url: string }>(`/billing/portal`, 'POST', { tenant_id: tenantId }),
   },
 
   // --- PHONE PROVISIONING ---
@@ -906,6 +910,27 @@ export const Api = {
         `/voice/context/${encodeURIComponent(phone)}`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
+
+    // List caller messages left during voice calls (owner inbox)
+    listMessages: (
+      tenantId: string | null,
+      opts?: { status?: string; limit?: number; offset?: number }
+    ) =>
+      apiFetch<CustomerMessage[]>(
+        `/voice/messages`,
+        tenantId
+          ? {
+              tenant_id: tenantId,
+              ...(opts?.status ? { status: opts.status } : {}),
+              ...(opts?.limit !== undefined ? { limit: String(opts.limit) } : {}),
+              ...(opts?.offset !== undefined ? { offset: String(opts.offset) } : {}),
+            }
+          : undefined
+      ),
+
+    // Mark a message as read or actioned
+    updateMessageStatus: (messageId: string, status: 'new' | 'read' | 'actioned') =>
+      apiMutate<{ success: boolean }>(`/voice/messages/${messageId}`, 'PATCH', { status }),
   },
 
   // --- Version History API ---

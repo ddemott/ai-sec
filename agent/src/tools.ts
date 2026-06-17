@@ -57,7 +57,8 @@ export function buildTools(
   ctx: SessionContext,
   client: ToolsClient,
   transfer?: TransferCapability,
-  outcome?: CallOutcomeTracker
+  outcome?: CallOutcomeTracker,
+  speakFiller?: (phrase: string) => void
 ): llm.ToolContext {
   return {
     get_customer_context: llm.tool({
@@ -116,6 +117,7 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { service_type: string; date: string }) => {
+        speakFiller?.('Let me check what we have open...');
         const res = await client.call('/agent-tools/available-slots', {
           tenant_id: ctx.tenantId,
           service_type: args.service_type,
@@ -232,6 +234,7 @@ export function buildTools(
         employee_id?: string;
         description?: string;
       }) => {
+        speakFiller?.('One moment while I get that booked...');
         const bookRes = await client.call('/agent-tools/book-appointment', {
           tenant_id: ctx.tenantId,
           resource_id: args.resource_id,
@@ -279,6 +282,7 @@ export function buildTools(
         name?: string;
         description?: string;
       }) => {
+        speakFiller?.('One moment while I find and book a slot...');
         const res = await client.call('/agent-tools/book-with-scheduling', {
           tenant_id: ctx.tenantId,
           phone: args.phone,
@@ -314,6 +318,7 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { question: string }) => {
+        speakFiller?.('Let me look that up for you...');
         const res = await client.call('/agent-tools/policy-answer', {
           tenant_id: ctx.tenantId,
           question: args.question,
@@ -432,6 +437,98 @@ export function buildTools(
           phone: args.phone,
           key: args.key,
           value: args.value,
+        });
+        return formatResponse(res);
+      },
+    }),
+
+    take_message: llm.tool({
+      description:
+        "Record a message from the caller for the business owner and send the owner an SMS alert. Use when the caller has a question you can't answer, wants a callback, or asks to leave a message. Always collect a name and the message content before calling this. A callback number is optional if you already have caller-ID.",
+      parameters: {
+        type: 'object',
+        properties: {
+          caller_name: {
+            type: 'string',
+            description: "The caller's name as they gave it.",
+          },
+          callback_phone: {
+            type: 'string',
+            description:
+              "Phone number the owner should call back. Omit if the caller didn't give one (caller-ID will be used).",
+          },
+          message: {
+            type: 'string',
+            description:
+              "The substance of what the caller wants the owner to know or do. Be specific — capture exactly what they said.",
+          },
+        },
+        required: ['caller_name', 'message'],
+        additionalProperties: false,
+      },
+      execute: async (args: { caller_name: string; callback_phone?: string; message: string }) => {
+        speakFiller?.('One moment while I pass that along...');
+        const res = await client.call('/agent-tools/take-message', {
+          tenant_id: ctx.tenantId,
+          caller_name: args.caller_name,
+          callback_phone: args.callback_phone,
+          caller_phone: ctx.callerPhone ?? undefined,
+          message: args.message,
+          call_id: ctx.callId ?? undefined,
+        });
+        return formatResponse(res);
+      },
+    }),
+
+    get_my_appointments: llm.tool({
+      description:
+        "Fetch the caller's upcoming scheduled appointments. Call this when the caller says they want to cancel or reschedule — show them their appointments before acting. Does not require any input from the caller; phone is from caller-ID.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      execute: async () => {
+        if (!ctx.callerPhone) {
+          return JSON.stringify({
+            error:
+              "I can't look up appointments without caller-ID. If you'd like help canceling or rescheduling, I can transfer you or take a message.",
+          });
+        }
+        const res = await client.call(
+          '/agent-tools/my-appointments',
+          { tenant_id: ctx.tenantId, phone: ctx.callerPhone },
+          { isReadOnly: true }
+        );
+        return formatResponse(res);
+      },
+    }),
+
+    cancel_appointment: llm.tool({
+      description:
+        "Cancel one of the caller's upcoming appointments. ALWAYS call get_my_appointments first and read the result back so the caller can confirm which appointment they want to cancel. Ask them to confirm BEFORE calling this. If they want to reschedule, book the new slot with book_with_scheduling FIRST, then cancel the old one — that way the caller keeps their spot if the new time doesn't work out.",
+      parameters: {
+        type: 'object',
+        properties: {
+          appointment_id: {
+            type: 'string',
+            description: 'UUID of the appointment to cancel, exactly as returned by get_my_appointments.',
+          },
+        },
+        required: ['appointment_id'],
+        additionalProperties: false,
+      },
+      execute: async (args: { appointment_id: string }) => {
+        if (!ctx.callerPhone) {
+          return JSON.stringify({
+            error:
+              "I can't cancel without caller-ID to verify ownership. Offer to transfer or take a message.",
+          });
+        }
+        const res = await client.call('/agent-tools/cancel-appointment', {
+          tenant_id: ctx.tenantId,
+          phone: ctx.callerPhone,
+          appointment_id: args.appointment_id,
         });
         return formatResponse(res);
       },

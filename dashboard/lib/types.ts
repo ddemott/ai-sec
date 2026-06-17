@@ -439,3 +439,14 @@ export interface TeamUser {
   created_at: string;
   is_self: boolean;
 }
+
+export interface CustomerMessage {
+  message_id: string;
+  caller_name: string | null;
+  caller_phone: string | null;
+  callback_phone: string | null;
+  message: string;
+  status: 'new' | 'read' | 'actioned';
+  call_id: string | null;
+  created_at: string;
+}

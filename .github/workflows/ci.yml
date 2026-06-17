@@ -206,8 +206,13 @@ jobs:
           # self-signed cert and every probe/request fails the TLS handshake.
           USE_HTTPS: 'false'
 
-      - name: Build and start dashboard
-        run: cd dashboard && npm run build && npm run start &
+      - name: Build dashboard
+        run: cd dashboard && npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
+
+      - name: Start dashboard
+        run: cd dashboard && npm run start > /tmp/dashboard.log 2>&1 &
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
           PORT: 4000
