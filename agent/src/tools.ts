@@ -479,6 +479,60 @@ export function buildTools(
       },
     }),
 
+    get_my_appointments: llm.tool({
+      description:
+        "Fetch the caller's upcoming scheduled appointments. Call this when the caller says they want to cancel or reschedule — show them their appointments before acting. Does not require any input from the caller; phone is from caller-ID.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      execute: async () => {
+        if (!ctx.callerPhone) {
+          return JSON.stringify({
+            error:
+              "I can't look up appointments without caller-ID. If you'd like help canceling or rescheduling, I can transfer you or take a message.",
+          });
+        }
+        const res = await client.call(
+          '/agent-tools/my-appointments',
+          { tenant_id: ctx.tenantId, phone: ctx.callerPhone },
+          { isReadOnly: true }
+        );
+        return formatResponse(res);
+      },
+    }),
+
+    cancel_appointment: llm.tool({
+      description:
+        "Cancel one of the caller's upcoming appointments. ALWAYS call get_my_appointments first and read the result back so the caller can confirm which appointment they want to cancel. Ask them to confirm BEFORE calling this. If they want to reschedule, book the new slot with book_with_scheduling FIRST, then cancel the old one — that way the caller keeps their spot if the new time doesn't work out.",
+      parameters: {
+        type: 'object',
+        properties: {
+          appointment_id: {
+            type: 'string',
+            description: 'UUID of the appointment to cancel, exactly as returned by get_my_appointments.',
+          },
+        },
+        required: ['appointment_id'],
+        additionalProperties: false,
+      },
+      execute: async (args: { appointment_id: string }) => {
+        if (!ctx.callerPhone) {
+          return JSON.stringify({
+            error:
+              "I can't cancel without caller-ID to verify ownership. Offer to transfer or take a message.",
+          });
+        }
+        const res = await client.call('/agent-tools/cancel-appointment', {
+          tenant_id: ctx.tenantId,
+          phone: ctx.callerPhone,
+          appointment_id: args.appointment_id,
+        });
+        return formatResponse(res);
+      },
+    }),
+
     transfer_call: llm.tool({
       description:
         'Transfer the live call to a real person (the business owner / staff cell). Use ONLY when the caller clearly needs a human — a personal call for the owner, an urgent issue you cannot handle, or an explicit request to be connected to someone. Before calling this, tell the caller you are connecting them (e.g. "One moment, connecting you now."). On success the call leaves this assistant; on failure or when transfer is unavailable, apologize briefly and offer to take a message.',

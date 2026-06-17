@@ -35,7 +35,11 @@ import {
   type AppointmentConflict,
 } from '../services/conflictLookup';
 import { sendSms, generateVerificationCode } from '../services/telnyxSms';
-import { getSyncRecorder, clearSyncRecorder } from '../services/syncOrchestrator';
+import {
+  getSyncRecorder,
+  clearSyncRecorder,
+  syncAppointmentToAll,
+} from '../services/syncOrchestrator';
 import { toolCallsTotal, bookingAttemptsTotal } from '../services/metrics';
 import {
   selectAssignments,
@@ -203,6 +207,17 @@ const VoiceSessionEndSchema = z.object({
   appointment_id: z.string().uuid().nullable().optional(),
 });
 
+const MyAppointmentsSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+});
+
+const CancelAppointmentSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  appointment_id: z.string().uuid(),
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function ok(reply: FastifyReply, result: unknown) {
@@ -294,7 +309,7 @@ function toolRoute<T>(
 
 export function registerAgentToolRoutes(
   app: AppFastifyInstance,
-  _pool: Pool,
+  pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
   getEmbedding: (text: string) => Promise<number[]>,
   normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
@@ -1513,6 +1528,82 @@ export function registerAgentToolRoutes(
       });
     },
     'Failed to save message'
+  );
+
+  // my-appointments — return upcoming scheduled appointments for the calling phone.
+  // Phone is server-injected (never from LLM) to prevent cross-caller enumeration.
+  toolRoute(
+    app,
+    '/agent-tools/my-appointments',
+    MyAppointmentsSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!normalized) return fail(reply, 'Invalid phone number');
+
+      const rows = await withTenantClient(args.tenant_id, async (client) => {
+        return client.query<{
+          appointment_id: string;
+          start_time: string;
+          end_time: string;
+          description: string | null;
+          status: string;
+        }>(
+          `SELECT a.appointment_id, a.start_time, a.end_time, a.description, a.status
+           FROM appointments a
+           JOIN customers c ON a.customer_id = c.customer_id
+           WHERE c.tenant_id = $1 AND c.phone = $2
+             AND a.status = 'scheduled' AND a.start_time > NOW()
+             AND (c.is_deleted IS NULL OR c.is_deleted = false)
+           ORDER BY a.start_time
+           LIMIT 5`,
+          [args.tenant_id, normalized]
+        );
+      });
+
+      return ok(reply, { appointments: rows.rows });
+    },
+    'Failed to fetch appointments'
+  );
+
+  // cancel-appointment — soft-cancel a scheduled appointment owned by the caller.
+  // Ownership verified by phone match so the LLM can never cancel another caller's
+  // appointment even if it hallucinates a UUID.
+  toolRoute(
+    app,
+    '/agent-tools/cancel-appointment',
+    CancelAppointmentSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!normalized) return fail(reply, 'Invalid phone number');
+
+      const result = await withTenantClient(args.tenant_id, async (client) => {
+        return client.query<{ appointment_id: string }>(
+          `UPDATE appointments a SET status = 'canceled'
+           FROM customers c
+           WHERE a.appointment_id = $1
+             AND a.tenant_id = $2
+             AND a.customer_id = c.customer_id
+             AND c.phone = $3
+             AND a.status = 'scheduled'
+             AND a.start_time > NOW()
+           RETURNING a.appointment_id`,
+          [args.appointment_id, args.tenant_id, normalized]
+        );
+      });
+
+      if (result.rows.length === 0) {
+        return fail(
+          reply,
+          "I couldn't find that appointment under your number, or it may already be past or canceled."
+        );
+      }
+
+      // Fire-and-forget calendar sync so the slot opens up immediately.
+      syncAppointmentToAll(pool, args.tenant_id, args.appointment_id, 'delete', app.log);
+
+      return ok(reply, { cancelled: true, appointment_id: args.appointment_id });
+    },
+    'Failed to cancel appointment'
   );
 
   // ── Test-only sync recorder readout ───────────────────────────────
