@@ -60,7 +60,10 @@ export class SMSService {
       const provider = providerRegistry.getDefaultProvider();
 
       const fromNumber =
-        process.env.TELNYX_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || 'AI_SECRETARY';
+        tenantConfig.inboundPhone ||
+        process.env.TELNYX_PHONE_NUMBER ||
+        process.env.TWILIO_PHONE_NUMBER ||
+        'AI_SECRETARY';
 
       // Validate phone number format (basic validation)
       if (provider.getName() !== 'mock' && !this.isValidPhoneNumber(message.to)) {
@@ -129,8 +132,12 @@ export class SMSService {
   async sendSystemSMS(tenantId: string, message: SMSMessage): Promise<CommunicationResult> {
     try {
       const provider = providerRegistry.getDefaultProvider();
+      const tenantConfig = await this.configService.getTenantConfig(tenantId);
       const fromNumber =
-        process.env.TELNYX_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || 'AI_SECRETARY';
+        tenantConfig?.inboundPhone ||
+        process.env.TELNYX_PHONE_NUMBER ||
+        process.env.TWILIO_PHONE_NUMBER ||
+        'AI_SECRETARY';
 
       const body = message.body || '';
       if (!body) {

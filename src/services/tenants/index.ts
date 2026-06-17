@@ -36,6 +36,7 @@ export interface TenantConfig {
   tenantId: string | number;
   name: string;
   phone?: string;
+  inboundPhone?: string;
   timezone?: string;
   settings?: {
     smsEnabled?: boolean;
@@ -181,6 +182,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
     tenant_id: string;
     name: string;
     owner_phone: string | null;
+    inbound_phone: string | null;
     timezone: string | null;
     sms_enabled: boolean;
     email_enabled: boolean;
@@ -189,12 +191,13 @@ export class PostgresTenantConfigService implements TenantConfigService {
       tenantId: row.tenant_id,
       name: row.name,
       phone: row.owner_phone ?? undefined,
+      inboundPhone: row.inbound_phone ?? undefined,
       timezone: row.timezone || 'America/Chicago',
       settings: {
-        smsEnabled: row.sms_enabled !== false, // Default true
-        emailEnabled: row.email_enabled !== false, // Default true
-        reminderHours: [72, 24, 2], // Default reminder schedule
-        defaultProvider: 'twilio',
+        smsEnabled: row.sms_enabled !== false,
+        emailEnabled: row.email_enabled !== false,
+        reminderHours: [72, 24, 2],
+        defaultProvider: 'telnyx',
       },
     };
   }
@@ -207,7 +210,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
 
     return this.withClient(async (client) => {
       const result = await client.query(
-        `SELECT tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled
+        `SELECT tenant_id, name, owner_phone, inbound_phone, timezone, sms_enabled, email_enabled
          FROM tenants WHERE tenant_id = $1`,
         [tenantId]
       );
@@ -226,7 +229,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
   async getTenantConfigs(): Promise<TenantConfig[]> {
     return this.withClient(async (client) => {
       const result = await client.query(
-        `SELECT tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled
+        `SELECT tenant_id, name, owner_phone, inbound_phone, timezone, sms_enabled, email_enabled
          FROM tenants ORDER BY name`
       );
 
@@ -270,7 +273,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
       const result = await client.query(
         `UPDATE tenants SET ${fields.join(', ')}
          WHERE tenant_id = $${paramIndex}
-         RETURNING tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled`,
+         RETURNING tenant_id, name, owner_phone, inbound_phone, timezone, sms_enabled, email_enabled`,
         values
       );
 
