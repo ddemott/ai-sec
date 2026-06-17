@@ -783,7 +783,7 @@ export const Api = {
 
   // --- BILLING ---
   billing: {
-    checkout: (tenantId: string, plan: 'solo' | 'growth') =>
+    checkout: (tenantId: string, plan: 'solo' | 'growth' | 'professional') =>
       apiMutate<{ url: string }>(`/billing/checkout`, 'POST', { tenant_id: tenantId, plan }),
 
     status: (tenantId: string) =>
@@ -791,6 +791,9 @@ export const Api = {
         `/billing/status`,
         { tenant_id: tenantId }
       ),
+
+    portal: (tenantId: string) =>
+      apiMutate<{ url: string }>(`/billing/portal`, 'POST', { tenant_id: tenantId }),
   },
 
   // --- PHONE PROVISIONING ---
