@@ -27,10 +27,11 @@ import { getPool } from '../../database/index.js';
  *
  * Field set mirrors the real `tenants` table schema. There is no separate
  * `business_name` or `owner_email` column today — `name` is the business's
- * display name and the only contact channel stored at tenant level is
- * `owner_phone` (surfaced here as `phone`). Adding either would require a
- * schema migration AND a UI to populate it; until that ships, dropping the
- * fields here is the honest shape.
+ * display name. Two phone fields live at tenant level: `owner_phone` (the
+ * owner's personal number, surfaced as `phone`) and `inbound_phone` (the
+ * Telnyx-provisioned PSTN number, surfaced as `inboundPhone`). Adding email
+ * would require a schema migration AND a UI; until that ships, omitting it
+ * here is the honest shape.
  */
 export interface TenantConfig {
   tenantId: string | number;
@@ -259,6 +260,10 @@ export class PostgresTenantConfigService implements TenantConfigService {
       if (updates.phone !== undefined) {
         fields.push(`owner_phone = $${paramIndex++}`);
         values.push(updates.phone);
+      }
+      if (updates.inboundPhone !== undefined) {
+        fields.push(`inbound_phone = $${paramIndex++}`);
+        values.push(updates.inboundPhone);
       }
       if (updates.timezone !== undefined) {
         fields.push(`timezone = $${paramIndex++}`);

@@ -59,11 +59,11 @@ export class SMSService {
       // Use tenant's provider if configured, otherwise use default
       const provider = providerRegistry.getDefaultProvider();
 
-      const fromNumber =
-        tenantConfig.inboundPhone ||
-        process.env.TELNYX_PHONE_NUMBER ||
-        process.env.TWILIO_PHONE_NUMBER ||
-        'AI_SECRETARY';
+      const providerPhoneEnv =
+        provider.getName() === 'twilio'
+          ? process.env.TWILIO_PHONE_NUMBER
+          : process.env.TELNYX_PHONE_NUMBER;
+      const fromNumber = tenantConfig.inboundPhone || providerPhoneEnv || 'AI_SECRETARY';
 
       // Validate phone number format (basic validation)
       if (provider.getName() !== 'mock' && !this.isValidPhoneNumber(message.to)) {
@@ -133,11 +133,11 @@ export class SMSService {
     try {
       const provider = providerRegistry.getDefaultProvider();
       const tenantConfig = await this.configService.getTenantConfig(tenantId);
-      const fromNumber =
-        tenantConfig?.inboundPhone ||
-        process.env.TELNYX_PHONE_NUMBER ||
-        process.env.TWILIO_PHONE_NUMBER ||
-        'AI_SECRETARY';
+      const providerPhoneEnv =
+        provider.getName() === 'twilio'
+          ? process.env.TWILIO_PHONE_NUMBER
+          : process.env.TELNYX_PHONE_NUMBER;
+      const fromNumber = tenantConfig?.inboundPhone || providerPhoneEnv || 'AI_SECRETARY';
 
       const body = message.body || '';
       if (!body) {
