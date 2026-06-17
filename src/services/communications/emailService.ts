@@ -24,8 +24,12 @@ export class EmailService {
     const hasCreds = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 
     if (isTest || !hasCreds) {
-      // Test-mode stub satisfying just the `sendMail` slot we exercise;
-      // the rest of nodemailer.Transporter isn't reachable in tests.
+      // Stub transporter — active in two cases:
+      //   (a) NODE_ENV=test: correct, tests never send real email.
+      //   (b) EMAIL_USER/EMAIL_PASS missing in prod/dev: simulation mode —
+      //       emails appear to succeed but are never delivered.
+      // Satisfies just the `sendMail` slot we exercise; the rest of
+      // nodemailer.Transporter isn't reachable via this path.
       this.transporter = {
         sendMail: () => Promise.resolve({ messageId: 'test-message-id' }),
       } as unknown as nodemailer.Transporter;
