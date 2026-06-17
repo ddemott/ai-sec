@@ -8,7 +8,7 @@ import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
-import { assertRowAffected } from './routeHelpers';
+import { assertRowAffected, requireValidUUID } from './routeHelpers';
 import {
   getFileExtension,
   isAllowedExtension,
@@ -435,16 +435,28 @@ export function registerKnowledgeRoutes(
       }
 
       // Persist extracted (matched) + discovered items to knowledge_suggestion for review.
-      // Matched items (question_id set) are pre-confirmed so the wizard can skip KB review.
-      // Discovered items start as 'suggested' and appear in the KB Suggestions tab.
-      const allItems = [
-        ...extract.answers.map((a: any) => ({ ...a, status: 'confirmed' })),
-        ...(extract.discovered || []).map((d: any) => ({
-          ...d,
-          question_id: null,
-          status: 'suggested',
-        })),
-      ];
+      // extractAnswersWithLLM returns camelCase (questionId, sourceUrl) — map to snake_case here.
+      // Skip matched items with null answers — they carry no KB value and inflate the count.
+      // Matched items (questionId set) are pre-confirmed; discovered items start as 'suggested'.
+      const confirmedItems = extract.answers
+        .filter((a: any) => a.answer != null && (a.answer as string).trim().length > 0)
+        .map((a: any) => ({
+          question_id: a.questionId || null,
+          question: a.question || '',
+          answer: a.answer as string,
+          source_url: a.sourceUrl || url,
+          confidence: a.confidence ?? null,
+          status: 'confirmed' as const,
+        }));
+      const suggestedItems = (extract.discovered || []).map((d: any) => ({
+        question_id: null,
+        question: d.question || '',
+        answer: d.answer || '',
+        source_url: d.sourceUrl || url,
+        confidence: d.confidence ?? null,
+        status: 'suggested' as const,
+      }));
+      const allItems = [...confirmedItems, ...suggestedItems];
 
       if (allItems.length > 0) {
         await withTenantClient(tenantId, async (client) => {
@@ -452,15 +464,14 @@ export function registerKnowledgeRoutes(
             await client.query(
               `INSERT INTO knowledge_suggestion
                  (tenant_id, question_id, question, answer, source_url, confidence, status)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               ON CONFLICT DO NOTHING`,
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
               [
                 tenantId,
-                item.question_id || null,
-                item.question || '',
-                item.answer || '',
-                url,
-                item.confidence ?? null,
+                item.question_id,
+                item.question,
+                item.answer,
+                item.source_url,
+                item.confidence,
                 item.status,
               ]
             );
@@ -468,8 +479,8 @@ export function registerKnowledgeRoutes(
         });
       }
 
-      const confirmed = extract.answers.length;
-      const suggestions = (extract.discovered || []).length;
+      const confirmed = confirmedItems.length;
+      const suggestions = suggestedItems.length;
 
       logEvent(req, 'website_knowledge_import', { url, confirmed, suggestions, tenantId });
       return reply.send({
@@ -513,6 +524,7 @@ export function registerKnowledgeRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
       const { id } = req.params as { id: string };
+      if (!requireValidUUID(id, reply, 'Suggestion ID')) return;
 
       const parsed = z.object({ status: z.enum(['confirmed', 'rejected']) }).safeParse(req.body);
       if (!parsed.success) {
@@ -522,7 +534,7 @@ export function registerKnowledgeRoutes(
       }
       const { status } = parsed.data;
 
-      // Fetch the suggestion first (RLS-scoped)
+      // Fetch the suggestion first (RLS-scoped, status guard prevents double-review)
       const fetchRes = await withTenantClient(tenantId, async (client) => {
         return client.query(
           `SELECT question, answer FROM knowledge_suggestion
@@ -539,7 +551,9 @@ export function registerKnowledgeRoutes(
       const { question, answer } = fetchRes.rows[0] as { question: string; answer: string };
 
       if (status === 'confirmed') {
-        // Ingest into live KB (same path as knowledge.add)
+        // Ingest into live KB (same path as knowledge.add).
+        // Both writes are in one withTenantClient call with an explicit transaction so
+        // a partial failure can't leave a doc ingested but the suggestion still 'suggested'.
         const { combined, normalizedText, embedding } = await prepareQADocument(
           question,
           answer,
@@ -548,6 +562,7 @@ export function registerKnowledgeRoutes(
         );
 
         await withTenantClient(tenantId, async (client) => {
+          await client.query('BEGIN');
           await client.query(
             `INSERT INTO tenant_docs (tenant_id, title, content, source, normalized_text, embedding)
              VALUES ($1, $2, $3, $4, $5, $6::vector)`,
@@ -560,18 +575,20 @@ export function registerKnowledgeRoutes(
               JSON.stringify(embedding),
             ]
           );
+          // Guard status='suggested' so a concurrent or retried approve can't re-confirm
           await client.query(
             `UPDATE knowledge_suggestion SET status = 'confirmed', updated_at = now()
-             WHERE id = $1 AND tenant_id = $2`,
+             WHERE id = $1 AND tenant_id = $2 AND status = 'suggested'`,
             [id, tenantId]
           );
+          await client.query('COMMIT');
         });
         logEvent(req, 'knowledge_suggestion_approved', { suggestionId: id, tenantId });
       } else {
         await withTenantClient(tenantId, async (client) => {
           await client.query(
             `UPDATE knowledge_suggestion SET status = 'rejected', updated_at = now()
-             WHERE id = $1 AND tenant_id = $2`,
+             WHERE id = $1 AND tenant_id = $2 AND status = 'suggested'`,
             [id, tenantId]
           );
         });

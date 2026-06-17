@@ -74,7 +74,13 @@ export function createMockClient(): MockClientHandle {
   const mockClient: MockClient = {
     query: vi.fn(async (text: string, params?: unknown[]) => {
       queries.push({ text, params: params || [] });
-      if (text.startsWith('SET LOCAL') || text.startsWith('RESET')) {
+      if (
+        text.startsWith('SET LOCAL') ||
+        text.startsWith('RESET') ||
+        text === 'BEGIN' ||
+        text === 'COMMIT' ||
+        text === 'ROLLBACK'
+      ) {
         return { rows: [], rowCount: 0 };
       }
       return queryResponses.shift() || { rows: [], rowCount: 0 };

@@ -479,6 +479,15 @@ export default function KnowledgeBaseView() {
     void fetchDocs();
   }, [fetchDocs]);
 
+  // Load suggestion count on mount so the Suggestions tab badge appears
+  // without requiring the user to click into the tab first.
+  useEffect(() => {
+    if (!tenantId) return;
+    void Api.knowledge.suggestions(tenantId).then((res) => {
+      if (res?.success) setSuggestionCount(res.suggestions?.length ?? 0);
+    });
+  }, [tenantId]);
+
   async function handleSaveAnswer(
     question: string,
     answer: string,

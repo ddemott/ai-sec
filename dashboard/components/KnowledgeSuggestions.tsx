@@ -34,6 +34,9 @@ export function KnowledgeSuggestions({ tenantId, onCountChange }: Props) {
       if (res?.success) {
         setSuggestions(res.suggestions ?? []);
         onCountChange?.(res.suggestions?.length ?? 0);
+      } else {
+        setError('Failed to load suggestions.');
+        setSuggestions([]);
       }
     } catch {
       setError('Failed to load suggestions.');

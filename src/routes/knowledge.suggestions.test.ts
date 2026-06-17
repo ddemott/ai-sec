@@ -13,7 +13,7 @@ import { registerKnowledgeRoutes } from './knowledge';
 import { buildRouteTestApp, type RouteTestAppHandle } from '../test-utils-mock';
 
 const TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
-const SUGGESTION_ID = '1';
+const SUGGESTION_ID = '11111111-2222-4333-8444-555555555555';
 
 // Lightweight stubs — suggestions routes only call getEmbedding on approve
 const mockGetEmbedding = vi.fn().mockResolvedValue(Array(1536).fill(0));
@@ -79,15 +79,14 @@ describe('PATCH /knowledge/suggestions/:id', () => {
   describe('Approve (confirmed)', () => {
     it('ingests to KB and marks suggestion confirmed', async () => {
       // WHO: owner approving a discovered topic
-      // WHAT: inserts to tenant_docs + marks suggestion confirmed in one transaction
-      // WHY:  approved knowledge must be live-searchable immediately
+      // WHAT: fetch suggestion → BEGIN → INSERT tenant_docs → UPDATE suggestion → COMMIT
+      // WHY:  explicit transaction keeps KB and staging table consistent under failures/retries
       handle.queryResponses.push({
         rows: [{ question: 'Walk-ins?', answer: 'Yes, welcome.' }],
         rowCount: 1,
       });
-      // INSERT tenant_docs
+      // BEGIN/COMMIT auto-handled by mock; INSERT + UPDATE consume queue
       handle.queryResponses.push({ rows: [], rowCount: 1 });
-      // UPDATE knowledge_suggestion status
       handle.queryResponses.push({ rows: [], rowCount: 1 });
 
       const res = await app.inject({
@@ -135,7 +134,7 @@ describe('PATCH /knowledge/suggestions/:id', () => {
 
       const res = await app.inject({
         method: 'PATCH',
-        url: '/knowledge/suggestions/999',
+        url: '/knowledge/suggestions/99999999-9999-4999-8999-999999999999',
         headers: { ...AUTH, 'content-type': 'application/json' },
         body: JSON.stringify({ status: 'confirmed' }),
       });
