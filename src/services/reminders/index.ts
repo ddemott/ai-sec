@@ -361,6 +361,7 @@ export class ReminderService {
           dateTime: normalizedAppointment.dateTime,
           duration: normalizedAppointment.duration,
           notes: normalizedAppointment.notes,
+          appointmentId: reminder.appointment_id?.toString() || reminder.appointmentId?.toString(),
         }
       );
       return result?.email?.success === true;
@@ -379,6 +380,7 @@ export class ReminderService {
           staffName: normalizedAppointment.staffName,
           dateTime: normalizedAppointment.dateTime,
           duration: normalizedAppointment.duration,
+          appointmentId: reminder.appointment_id?.toString() || reminder.appointmentId?.toString(),
         },
         hours
       );

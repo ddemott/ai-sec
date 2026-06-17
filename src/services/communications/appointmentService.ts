@@ -3,6 +3,18 @@ import type { ConsentService } from '../consentService.js';
 import type { CommunicationResult, AppointmentData } from './types.js';
 import { EmailService } from './emailService.js';
 import { SMSService } from './smsService.js';
+import { generateSelfServiceToken } from '../selfServiceToken.js';
+
+/** Build a one-tap cancel link for SMS. Returns null when either appointmentId
+ *  or BACKEND_PUBLIC_URL is absent/blank — callers omit the link gracefully. */
+function buildCancelLink(appointmentId: string | undefined, tenantId: string): string | null {
+  if (!appointmentId) return null;
+  const baseUrl = (process.env.BACKEND_PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
+  if (!baseUrl) return null;
+  const token = generateSelfServiceToken(appointmentId, tenantId, 'cancel');
+  if (!token) return null;
+  return `${baseUrl}/self/cancel?token=${encodeURIComponent(token)}`;
+}
 
 export class AppointmentCommunicationService {
   private emailService: EmailService;
@@ -142,6 +154,7 @@ export class AppointmentCommunicationService {
     appointmentDetails: AppointmentData
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
+    const cancelLink = buildCancelLink(appointmentDetails.appointmentId, tenantId);
     const templateData = {
       serviceName: appointmentDetails.serviceName,
       staffName: appointmentDetails.staffName,
@@ -149,6 +162,7 @@ export class AppointmentCommunicationService {
         dateTime.toLocaleDateString() +
         ' at ' +
         dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      cancelLink,
     };
 
     return this.smsService.sendSMSTemplate(
@@ -194,6 +208,7 @@ export class AppointmentCommunicationService {
     hoursUntilAppointment: number
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
+    const cancelLink = buildCancelLink(appointmentDetails.appointmentId, tenantId);
     const templateData = {
       serviceName: appointmentDetails.serviceName,
       staffName: appointmentDetails.staffName,
@@ -202,6 +217,7 @@ export class AppointmentCommunicationService {
         dateTime.toLocaleDateString() +
         ' at ' +
         dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      cancelLink,
     };
 
     return this.smsService.sendSMSTemplate(
