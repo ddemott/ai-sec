@@ -34,12 +34,17 @@
 #                                        and print a browser join URL so you can
 #                                        talk to the agent with a mic — real
 #                                        STT/LLM/TTS/booking, NO phone needed.
+#   stripe [--env local|prod]             Stripe billing path check: verifies
+#                                        routes are reachable, webhook sig gate
+#                                        rejects bad sigs, checkout reports key
+#                                        configured or GAP (never charges anyone).
 #   all    [--env local|prod]            status --deep, then tools.
 #
 # Env/secrets are read from the repo .env (local) or passed in (prod). The
 # tiers map to: status = "systems up", ci = "build/CI pipeline state + freshness",
-# tools = "brain works", call = "voice works without a phone". The only thing
-# this CANNOT simulate is real PSTN inbound (Telnyx) — that needs a real carrier call.
+# tools = "brain works", stripe = "billing wired", call = "voice works without a phone".
+# The only thing this CANNOT simulate is real PSTN inbound (Telnyx) — that needs a
+# real carrier call.
 
 set -euo pipefail
 
@@ -320,6 +325,14 @@ cmd_rag() {
     node "$ROOT_DIR/scripts/sim-rag.mjs"
 }
 
+# ── stripe ──────────────────────────────────────────────────────────────────
+cmd_stripe() {
+  local tls=""
+  [ "$ENV" = "local" ] && tls="NODE_TLS_REJECT_UNAUTHORIZED=0"
+  env $tls SIM_BACKEND="$BACKEND" \
+    node "$ROOT_DIR/scripts/sim-stripe.mjs"
+}
+
 # ── call ────────────────────────────────────────────────────────────────────
 cmd_call() {
   load_livekit_env || exit 1
@@ -333,6 +346,7 @@ case "$SUBCMD" in
   ci)     cmd_ci ;;
   tools)  cmd_tools ;;
   rag)    cmd_rag ;;
+  stripe) cmd_stripe ;;
   call)   cmd_call ;;
   all)    cmd_status && echo "" && cmd_tools && echo "" && cmd_rag ;;
   ""|-h|--help) sed -n '3,50p' "$0" ;;
