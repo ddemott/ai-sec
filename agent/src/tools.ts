@@ -467,6 +467,7 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { caller_name: string; callback_phone?: string; message: string }) => {
+        speakFiller?.('One moment while I pass that along...');
         const res = await client.call('/agent-tools/take-message', {
           tenant_id: ctx.tenantId,
           caller_name: args.caller_name,

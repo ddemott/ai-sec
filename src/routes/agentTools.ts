@@ -1508,14 +1508,36 @@ export function registerAgentToolRoutes(
 
       // SMS the owner at forward_phone. Fire-and-forget; failure doesn't un-save the message.
       let notified = false;
-      if (row.forwardPhone && row.inboundPhone) {
+      const normalizedForward = row.forwardPhone ? normalizePhone(row.forwardPhone) : null;
+      const normalizedInbound = row.inboundPhone ? normalizePhone(row.inboundPhone) : null;
+      if (
+        normalizedForward &&
+        normalizedInbound &&
+        isValidPhone(normalizedForward) &&
+        isValidPhone(normalizedInbound)
+      ) {
         const callbackDisplay = callbackPhone ?? callerPhone ?? 'no number left';
         const body =
           `New message from ${args.caller_name} (${callbackDisplay}): ` +
           `${args.message.slice(0, 300)}${args.message.length > 300 ? '…' : ''}` +
           ' — via SecretaryHQ';
-        const sms = await sendSms({ from: row.inboundPhone, to: row.forwardPhone, body });
+        const sms = await sendSms({ from: normalizedInbound, to: normalizedForward, body });
         notified = sms.ok;
+        if (!sms.ok) {
+          app.log.warn(
+            { tenantId: args.tenant_id, forwardPhone: normalizedForward, error: sms.error },
+            'take_message: owner SMS notification failed — message saved but owner not alerted'
+          );
+        }
+      } else if (row.forwardPhone || row.inboundPhone) {
+        app.log.warn(
+          {
+            tenantId: args.tenant_id,
+            forwardPhone: row.forwardPhone,
+            inboundPhone: row.inboundPhone,
+          },
+          'take_message: owner SMS skipped — forward_phone or inbound_phone is invalid/unnormalizable'
+        );
       }
 
       return ok(reply, {
