@@ -536,6 +536,8 @@ const PUBLIC_ROUTES = [
   // SMS delivery-status callbacks (verified via provider signature, not JWT)
   '/communications/twilio/status',
   '/communications/telnyx/status',
+  // Self-service appointment actions — token-gated, no session JWT
+  '/self/cancel',
 ];
 
 /**

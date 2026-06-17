@@ -207,13 +207,22 @@ export class SMSService {
       hoursUntil?: number;
       availableTime?: string;
       message?: string;
+      cancelLink?: string | null;
     };
     switch (template) {
       case 'appointment-confirmation':
-        return `✅ Confirmed: ${d.serviceName} with ${d.staffName} on ${d.dateTime}. Reply STOP to opt out.`;
+        return (
+          `✅ Confirmed: ${d.serviceName} with ${d.staffName} on ${d.dateTime}.` +
+          (d.cancelLink ? ` Cancel: ${d.cancelLink}` : '') +
+          ' Reply STOP to opt out.'
+        );
 
       case 'appointment-reminder':
-        return `🔔 Reminder: ${d.serviceName} with ${d.staffName} in ${d.hoursUntil}h at ${d.dateTime}. Reply STOP to opt out.`;
+        return (
+          `🔔 Reminder: ${d.serviceName} with ${d.staffName} in ${d.hoursUntil}h at ${d.dateTime}.` +
+          (d.cancelLink ? ` Cancel: ${d.cancelLink}` : '') +
+          ' Reply STOP to opt out.'
+        );
 
       case 'appointment-cancellation':
         return `❌ Cancelled: ${d.serviceName} on ${d.dateTime} has been cancelled. Reply STOP to opt out.`;
