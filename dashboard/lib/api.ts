@@ -774,11 +774,41 @@ export const Api = {
     },
 
     importWebsite: (tenantId: string | null, url: string) =>
-      apiMutate<{ success: boolean; extracted?: any[]; discovered?: any[]; error?: string }>(
-        `/knowledge/import-website`,
-        'POST',
-        { tenant_id: tenantId, url }
-      ),
+      apiMutate<{
+        success: boolean;
+        extracted?: any[];
+        discovered?: any[];
+        confirmed?: number;
+        suggestions?: number;
+        error?: string;
+      }>(`/knowledge/import-website`, 'POST', { tenant_id: tenantId, url }),
+
+    suggestions: (tenantId: string | null) =>
+      apiFetch<{
+        success: boolean;
+        suggestions: Array<{
+          id: string;
+          question_id: string | null;
+          question: string;
+          answer: string;
+          source_url: string | null;
+          confidence: number | null;
+          status: string;
+          created_at: string;
+        }>;
+      }>(`/knowledge/suggestions`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    approveSuggestion: (id: string, tenantId: string | null) =>
+      apiMutate<{ success: boolean }>(`/knowledge/suggestions/${id}`, 'PATCH', {
+        tenant_id: tenantId,
+        status: 'confirmed',
+      }),
+
+    rejectSuggestion: (id: string, tenantId: string | null) =>
+      apiMutate<{ success: boolean }>(`/knowledge/suggestions/${id}`, 'PATCH', {
+        tenant_id: tenantId,
+        status: 'rejected',
+      }),
   },
 
   // --- BILLING ---

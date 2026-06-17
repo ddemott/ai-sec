@@ -434,13 +434,151 @@ export function registerKnowledgeRoutes(
         return reply.status(500).send({ success: false, error: extract.error });
       }
 
-      // For now, just return the extracted (staging table added via migration; full ingest on approve later)
-      logEvent(req, 'website_knowledge_import', { url, answers: extract.answers.length, tenantId });
+      // Persist extracted (matched) + discovered items to knowledge_suggestion for review.
+      // Matched items (question_id set) are pre-confirmed so the wizard can skip KB review.
+      // Discovered items start as 'suggested' and appear in the KB Suggestions tab.
+      const allItems = [
+        ...extract.answers.map((a: any) => ({ ...a, status: 'confirmed' })),
+        ...(extract.discovered || []).map((d: any) => ({
+          ...d,
+          question_id: null,
+          status: 'suggested',
+        })),
+      ];
+
+      if (allItems.length > 0) {
+        await withTenantClient(tenantId, async (client) => {
+          for (const item of allItems) {
+            await client.query(
+              `INSERT INTO knowledge_suggestion
+                 (tenant_id, question_id, question, answer, source_url, confidence, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               ON CONFLICT DO NOTHING`,
+              [
+                tenantId,
+                item.question_id || null,
+                item.question || '',
+                item.answer || '',
+                url,
+                item.confidence ?? null,
+                item.status,
+              ]
+            );
+          }
+        });
+      }
+
+      const confirmed = extract.answers.length;
+      const suggestions = (extract.discovered || []).length;
+
+      logEvent(req, 'website_knowledge_import', { url, confirmed, suggestions, tenantId });
       return reply.send({
         success: true,
         extracted: extract.answers,
         discovered: extract.discovered,
+        confirmed,
+        suggestions,
       });
     }, 'Failed to import from website')
+  );
+
+  // ── Knowledge Suggestions (website-scan staging) ──────────────────────
+
+  /** GET /knowledge/suggestions — list pending suggestions for review */
+  app.get(
+    '/knowledge/suggestions',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          `SELECT id, question_id, question, answer, source_url, confidence, status, created_at
+           FROM knowledge_suggestion
+           WHERE tenant_id = $1 AND status = 'suggested'
+           ORDER BY created_at DESC
+           LIMIT 100`,
+          [tenantId]
+        );
+      });
+
+      return reply.send({ success: true, suggestions: res.rows });
+    }, 'Failed to fetch knowledge suggestions')
+  );
+
+  /** PATCH /knowledge/suggestions/:id — approve (→ ingest) or reject */
+  app.patch(
+    '/knowledge/suggestions/:id',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const { id } = req.params as { id: string };
+
+      const parsed = z.object({ status: z.enum(['confirmed', 'rejected']) }).safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'status must be confirmed or rejected' });
+      }
+      const { status } = parsed.data;
+
+      // Fetch the suggestion first (RLS-scoped)
+      const fetchRes = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          `SELECT question, answer FROM knowledge_suggestion
+           WHERE id = $1 AND tenant_id = $2 AND status = 'suggested'`,
+          [id, tenantId]
+        );
+      });
+      if (fetchRes.rows.length === 0) {
+        return reply
+          .status(404)
+          .send({ success: false, error: 'Suggestion not found or already reviewed' });
+      }
+
+      const { question, answer } = fetchRes.rows[0] as { question: string; answer: string };
+
+      if (status === 'confirmed') {
+        // Ingest into live KB (same path as knowledge.add)
+        const { combined, normalizedText, embedding } = await prepareQADocument(
+          question,
+          answer,
+          getEmbedding,
+          normalizeForEmbedding
+        );
+
+        await withTenantClient(tenantId, async (client) => {
+          await client.query(
+            `INSERT INTO tenant_docs (tenant_id, title, content, source, normalized_text, embedding)
+             VALUES ($1, $2, $3, $4, $5, $6::vector)`,
+            [
+              tenantId,
+              question,
+              combined,
+              'website-scan',
+              normalizedText,
+              JSON.stringify(embedding),
+            ]
+          );
+          await client.query(
+            `UPDATE knowledge_suggestion SET status = 'confirmed', updated_at = now()
+             WHERE id = $1 AND tenant_id = $2`,
+            [id, tenantId]
+          );
+        });
+        logEvent(req, 'knowledge_suggestion_approved', { suggestionId: id, tenantId });
+      } else {
+        await withTenantClient(tenantId, async (client) => {
+          await client.query(
+            `UPDATE knowledge_suggestion SET status = 'rejected', updated_at = now()
+             WHERE id = $1 AND tenant_id = $2`,
+            [id, tenantId]
+          );
+        });
+        logEvent(req, 'knowledge_suggestion_rejected', { suggestionId: id, tenantId });
+      }
+
+      return reply.send({ success: true });
+    }, 'Failed to update knowledge suggestion')
   );
 }

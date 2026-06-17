@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Plus,
   X,
+  Globe,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Api } from '../lib/api';
@@ -28,9 +29,10 @@ import { ConfirmModal } from './ui/ConfirmModal';
 import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
 import type { KnowledgeEntry } from '../lib/types';
+import { KnowledgeSuggestions } from './KnowledgeSuggestions';
 
-type Tab = 'questionnaire' | 'documents' | 'entries';
-const VALID_TABS: Tab[] = ['questionnaire', 'documents', 'entries'];
+type Tab = 'questionnaire' | 'documents' | 'entries' | 'suggestions';
+const VALID_TABS: Tab[] = ['questionnaire', 'documents', 'entries', 'suggestions'];
 
 const CUSTOM_QUESTION_SOURCE = 'custom-question';
 
@@ -405,6 +407,7 @@ export default function KnowledgeBaseView() {
 
   const [tab, setTabState] = useState<Tab>(initialTab);
   const [searchTerm, setSearchTermState] = useState(initialSearch);
+  const [suggestionCount, setSuggestionCount] = useState(0);
 
   const setTab = useCallback((next: Tab) => {
     setTabState(next);
@@ -653,6 +656,12 @@ export default function KnowledgeBaseView() {
             label: 'Review Everything',
             icon: FileText,
             badge: String(docs.length),
+          },
+          {
+            key: 'suggestions' as Tab,
+            label: 'Suggestions',
+            icon: Globe,
+            badge: suggestionCount > 0 ? String(suggestionCount) : undefined,
           },
         ].map((t) => (
           <button
@@ -1058,6 +1067,14 @@ export default function KnowledgeBaseView() {
                   </div>
                 )}
               </>
+            )}
+
+            {/* ── Suggestions Tab ── */}
+            {tab === 'suggestions' && (
+              <KnowledgeSuggestions
+                tenantId={tenantId}
+                onCountChange={setSuggestionCount}
+              />
             )}
           </>
         )}
