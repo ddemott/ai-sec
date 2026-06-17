@@ -6,14 +6,14 @@
 // not — it doesn't actually charge anyone.
 //
 // Checks:
-//   1. /demo/start   — ephemeral tenant + JWT (prerequisite for auth'd routes)
+//   1. /demo/start        — ephemeral tenant + JWT (prerequisite for auth'd routes)
 //   2. GET  /billing/status   — route reachable, returns plan state
-//   3. POST /billing/webhook  — no signature → 400 (sig gate works, not 503)
+//   3. POST /billing/webhook  — no sig: 400 means sig gate works; 503 means no Stripe key (GAP)
 //   4. POST /billing/checkout — Stripe key configured? → OK / GAP
-//   5. POST /billing/portal   — route reachable (expects no-customer 400-ish)
+//   5. POST /billing/portal   — route reachable (503 = key missing GAP, else FAIL)
 //
 // Exit 0 = all wired checks pass (GAPs allowed). Exit 1 = hard FAIL (route
-// broken / unexpected 500 / checkout returns 503 "not configured").
+// broken / unexpected 5xx / 404 / checkout returns 503 "not configured").
 
 const BACKEND = process.env.SIM_BACKEND;
 
@@ -89,54 +89,66 @@ async function main() {
     fail('GET /billing/status', `status ${status.status}`);
   }
 
-  // ── 3. POST /billing/webhook — no sig → must 400, not 500/503 ────────────
+  // ── 3. POST /billing/webhook — no sig ────────────────────────────────────
+  // Backend checks for Stripe key first (→ 503), then checks for sig (→ 400).
+  // 503 = key not configured (GAP). 400 = key present, sig gate works (OK).
+  // Anything else is a real failure.
   const wh = await req('/billing/webhook', { method: 'POST', body: {} });
   if (wh.status === 400) {
-    pass('webhook sig gate', '400 on missing signature ✓');
+    pass('webhook sig gate', 'Stripe key present; 400 on missing signature ✓');
   } else if (wh.status === 503) {
-    gap('webhook sig gate', '503 — STRIPE_WEBHOOK_SECRET not configured');
+    gap('webhook sig gate', 'STRIPE_SECRET_KEY not set — billing inactive on this env');
+  } else if (wh.status === 404) {
+    fail('webhook sig gate', '404 — route not registered');
   } else if (wh.status === 500) {
-    fail('webhook sig gate', `500 unexpected error`);
+    fail('webhook sig gate', '500 unexpected server error');
   } else {
-    gap('webhook sig gate', `status ${wh.status} (expected 400)`);
+    fail('webhook sig gate', `status ${wh.status} (expected 400 or 503)`);
   }
 
   // ── 4. POST /billing/checkout — detects key presence ────────────────────
+  // Backend field is `plan`, not `planId`. Send intentionally invalid plan name
+  // so we get a predictable 400 if the key is present (the key check happens
+  // first, so a 503 means key missing and a 400 means key present).
   const co = await req('/billing/checkout', {
     method: 'POST',
-    body: { planId: 'solo' },
+    body: { plan: '__probe__' },
     auth: jwt,
   });
   if (co.status === 200 && co.json?.url) {
-    pass('checkout session', `Stripe key works, session URL returned`);
+    pass('checkout session', 'Stripe key works, session URL returned');
+  } else if (co.status === 503) {
+    gap('checkout session', 'STRIPE_SECRET_KEY not set on this env — billing inactive');
+  } else if (co.status === 400) {
+    // 400 = key present (got past the key check), schema/plan rejected — expected for probe input
+    pass('checkout session', 'Stripe key present; 400 on invalid plan ✓');
   } else if (co.status === 200 && co.json?.success === false) {
-    // Key is configured but something else went wrong (price ID, customer, etc.)
     const err = co.json?.error ?? 'unknown error';
-    if (err.toLowerCase().includes('price') || err.toLowerCase().includes('not configured')) {
+    if (err.toLowerCase().includes('price')) {
       gap('checkout session', `key present but price ID missing — ${err}`);
     } else {
       fail('checkout session', `200 but failed: ${err}`);
     }
-  } else if (co.status === 503) {
-    gap('checkout session', 'STRIPE_SECRET_KEY not set on this env — billing inactive');
-  } else if (co.status === 400) {
-    // Validation error means Stripe key is there (got past key check), schema rejected input
-    pass('checkout session', `400 validation — Stripe key present, route reachable`);
+  } else if (co.status === 404) {
+    fail('checkout session', '404 — route not registered');
   } else {
     fail('checkout session', `status ${co.status} ${co.json?.error ?? ''}`);
   }
 
   // ── 5. POST /billing/portal — route reachable ────────────────────────────
+  // 503 = no Stripe key (GAP). 404 = route missing (FAIL). Anything else unexpected = FAIL.
   const portal = await req('/billing/portal', { method: 'POST', body: {}, auth: jwt });
   if (portal.status === 200 || portal.status === 400) {
     const detail = portal.json?.error ?? `status ${portal.status}`;
     pass('portal route reachable', detail);
   } else if (portal.status === 503) {
-    gap('portal route reachable', 'Stripe not configured');
+    gap('portal route reachable', 'STRIPE_SECRET_KEY not set — expected GAP');
+  } else if (portal.status === 404) {
+    fail('portal route reachable', '404 — route not registered');
   } else if (portal.status === 500) {
-    fail('portal route reachable', '500 unexpected');
+    fail('portal route reachable', '500 unexpected server error');
   } else {
-    gap('portal route reachable', `status ${portal.status}`);
+    fail('portal route reachable', `status ${portal.status}`);
   }
 
   // ── Summary ──────────────────────────────────────────────────────────────

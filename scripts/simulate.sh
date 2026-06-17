@@ -325,7 +325,7 @@ cmd_rag() {
     node "$ROOT_DIR/scripts/sim-rag.mjs"
 }
 
-# ── call ────────────────────────────────────────────────────────────────────
+# ── stripe ──────────────────────────────────────────────────────────────────
 cmd_stripe() {
   local tls=""
   [ "$ENV" = "local" ] && tls="NODE_TLS_REJECT_UNAUTHORIZED=0"
