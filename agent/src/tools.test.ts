@@ -64,10 +64,12 @@ describe('buildTools', () => {
       [
         'book_appointment',
         'book_with_scheduling',
+        'cancel_appointment',
         'check_availability',
         'get_available_slots',
         'get_company_policy_answer',
         'get_customer_context',
+        'get_my_appointments',
         'get_scheduling_options',
         'get_service_catalog',
         'identify_caller',
