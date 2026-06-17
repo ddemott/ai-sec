@@ -26,6 +26,8 @@ function baseCtx(
       EMAIL_PASS: 'app-password',
       CORS_ORIGIN: 'https://app.secretaryhq.com',
       DASHBOARD_URL: 'https://app.secretaryhq.com',
+      STRIPE_SECRET_KEY: 'sk_test_fake',
+      STRIPE_WEBHOOK_SECRET: 'whsec_fake',
       ...(overrides.env ?? {}),
     } as NodeJS.ProcessEnv,
     TELNYX_API_KEY: overrides.TELNYX_API_KEY ?? 'KEY01fake',
@@ -160,5 +162,40 @@ describe('collectStartupWarnings — DASHBOARD_URL', () => {
     const w = warnings.find((x) => x.includes('DASHBOARD_URL'));
     expect(w).toBeDefined();
     expect(w).toContain('localhost');
+  });
+});
+
+describe('collectStartupWarnings — Stripe', () => {
+  it('SAD: STRIPE_SECRET_KEY missing → billing disabled warning', () => {
+    // WHO: Operator who hasn't configured Stripe
+    // WHAT: All /billing/* routes return 503 — no checkout, no subscription management
+    // WHY: Silent for operators who assume billing works because the UI exists
+    const warnings = collectStartupWarnings(
+      baseCtx({ env: { STRIPE_SECRET_KEY: undefined, STRIPE_WEBHOOK_SECRET: undefined } })
+    );
+    const w = warnings.find((x) => x.includes('STRIPE_SECRET_KEY'));
+    expect(w).toBeDefined();
+    expect(w).toContain('503');
+  });
+
+  it('SAD: STRIPE_SECRET_KEY set but STRIPE_WEBHOOK_SECRET missing → webhooks fail warning', () => {
+    // WHO: Operator who set the API key but not the webhook signing secret
+    // WHAT: constructEvent throws on every inbound webhook → subscriptions never activate
+    //       even though checkout sessions complete successfully
+    // WHY: The gap between "checkout works" and "subscription activates" is invisible
+    //       without this warning — looks like a billing integration bug
+    const warnings = collectStartupWarnings(baseCtx({ env: { STRIPE_WEBHOOK_SECRET: undefined } }));
+    const w = warnings.find((x) => x.includes('STRIPE_WEBHOOK_SECRET'));
+    expect(w).toBeDefined();
+    expect(w).toContain('subscriptions never activate');
+  });
+
+  it('HAPPY: STRIPE_SECRET_KEY missing suppresses webhook-secret warning', () => {
+    // WHO: Operator with no Stripe config at all
+    // WHY: Webhook-secret warning is noise when the key itself is absent
+    const warnings = collectStartupWarnings(
+      baseCtx({ env: { STRIPE_SECRET_KEY: undefined, STRIPE_WEBHOOK_SECRET: undefined } })
+    );
+    expect(warnings.filter((w) => w.includes('STRIPE_WEBHOOK_SECRET'))).toHaveLength(0);
   });
 });

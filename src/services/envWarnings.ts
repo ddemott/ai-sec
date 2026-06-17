@@ -37,6 +37,16 @@ export function collectStartupWarnings(ctx: EnvWarningContext): string[] {
       'EMAIL_USER / EMAIL_PASS not set — email notifications are running in mock mode and will never deliver'
     );
   }
+  if (!env.STRIPE_SECRET_KEY) {
+    warnings.push(
+      'STRIPE_SECRET_KEY not set — billing and subscription management disabled (all /billing/* routes return 503)'
+    );
+  }
+  if (env.STRIPE_SECRET_KEY && !env.STRIPE_WEBHOOK_SECRET) {
+    warnings.push(
+      'STRIPE_WEBHOOK_SECRET not set — Stripe webhook signature verification will fail; checkout.session.completed events are ignored and subscriptions never activate'
+    );
+  }
   if (!env.CORS_ORIGIN) {
     warnings.push(
       'CORS_ORIGIN not set — server reflects ANY origin (open CORS); set to the dashboard URL in production'
