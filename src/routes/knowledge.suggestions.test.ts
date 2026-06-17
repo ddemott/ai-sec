@@ -79,15 +79,16 @@ describe('PATCH /knowledge/suggestions/:id', () => {
   describe('Approve (confirmed)', () => {
     it('ingests to KB and marks suggestion confirmed', async () => {
       // WHO: owner approving a discovered topic
-      // WHAT: fetch suggestion → BEGIN → INSERT tenant_docs → UPDATE suggestion → COMMIT
+      // WHAT: fetch → BEGIN → INSERT tenant_docs → UPDATE suggestion (status guard) → COMMIT
       // WHY:  explicit transaction keeps KB and staging table consistent under failures/retries
       handle.queryResponses.push({
         rows: [{ question: 'Walk-ins?', answer: 'Yes, welcome.' }],
         rowCount: 1,
       });
-      // BEGIN/COMMIT auto-handled by mock; INSERT + UPDATE consume queue
-      handle.queryResponses.push({ rows: [], rowCount: 1 });
-      handle.queryResponses.push({ rows: [], rowCount: 1 });
+      handle.queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+      handle.queryResponses.push({ rows: [], rowCount: 1 }); // INSERT tenant_docs
+      handle.queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE knowledge_suggestion
+      handle.queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
 
       const res = await app.inject({
         method: 'PATCH',
