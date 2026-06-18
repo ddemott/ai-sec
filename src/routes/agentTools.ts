@@ -218,6 +218,14 @@ const CancelAppointmentSchema = z.object({
   appointment_id: z.string().uuid(),
 });
 
+const RescheduleAppointmentSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  appointment_id: z.string().uuid(),
+  new_start_time: z.string().min(1),
+  new_end_time: z.string().min(1),
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────
 
 function ok(reply: FastifyReply, result: unknown) {
@@ -1626,6 +1634,81 @@ export function registerAgentToolRoutes(
       return ok(reply, { cancelled: true, appointment_id: args.appointment_id });
     },
     'Failed to cancel appointment'
+  );
+
+  // reschedule-appointment — update start/end on an appointment owned by the
+  // caller. Ownership is verified via phone-join (same guard as cancel).
+  // An UPDATE-in-place keeps the same appointment_id so history stays intact;
+  // the GiST exclusion constraints reject the update if the new slot conflicts.
+  toolRoute(
+    app,
+    '/agent-tools/reschedule-appointment',
+    RescheduleAppointmentSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!normalized) return fail(reply, 'Invalid phone number');
+
+      const newStart = new Date(args.new_start_time);
+      const newEnd = new Date(args.new_end_time);
+      if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime())) {
+        return fail(reply, 'Invalid date format for new appointment time.');
+      }
+      if (newStart <= new Date()) {
+        return fail(reply, 'New appointment time must be in the future.');
+      }
+      if (newEnd <= newStart) {
+        return fail(reply, 'End time must be after start time.');
+      }
+
+      try {
+        const result = await withTenantClient(args.tenant_id, async (client) => {
+          return client.query<{ appointment_id: string; start_time: string; end_time: string }>(
+            `UPDATE appointments a
+             SET start_time = $4, end_time = $5
+             FROM customers c
+             WHERE a.appointment_id = $1
+               AND a.tenant_id = $2
+               AND a.customer_id = c.customer_id
+               AND c.phone = $3
+               AND a.status = 'scheduled'
+               AND a.start_time > NOW()
+             RETURNING a.appointment_id, a.start_time, a.end_time`,
+            [
+              args.appointment_id,
+              args.tenant_id,
+              normalized,
+              newStart.toISOString(),
+              newEnd.toISOString(),
+            ]
+          );
+        });
+
+        if (result.rows.length === 0) {
+          return fail(
+            reply,
+            "I couldn't find that appointment under your number, or it may already be past or canceled."
+          );
+        }
+
+        const updated = result.rows[0];
+        syncAppointmentToAll(pool, args.tenant_id, args.appointment_id, 'update', app.log);
+
+        return ok(reply, {
+          rescheduled: true,
+          appointment_id: updated.appointment_id,
+          new_start_time: updated.start_time,
+          new_end_time: updated.end_time,
+        });
+      } catch (err: unknown) {
+        // GiST exclusion constraint violation — the new slot overlaps an existing booking
+        const pg = err as { code?: string };
+        if (pg?.code === '23P01') {
+          return fail(reply, 'That time slot is already booked. Please choose a different time.');
+        }
+        throw err;
+      }
+    },
+    'Failed to reschedule appointment'
   );
 
   // ── Test-only sync recorder readout ───────────────────────────────

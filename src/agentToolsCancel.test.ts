@@ -227,3 +227,106 @@ describe('/agent-tools/cancel-appointment', () => {
     expect(queries).toHaveLength(0);
   });
 });
+
+// ── /agent-tools/reschedule-appointment ──────────────────────────────────────
+
+const NEW_START = '2026-07-10T14:00:00.000Z';
+const NEW_END = '2026-07-10T15:00:00.000Z';
+
+describe('/agent-tools/reschedule-appointment', () => {
+  it('HAPPY: updates appointment times and returns rescheduled:true', async () => {
+    // WHO: Caller A moving their own upcoming appointment to a new slot
+    // WHAT: UPDATE sets start_time/end_time, RETURNING the new values
+    // WHEN: Called with valid phone ownership + future new times
+    // WHERE: src/routes/agentTools.ts reschedule-appointment toolRoute
+    // WHY: Core reschedule flow — ownership verified, times updated in one query
+    const { app, queries } = buildApp({
+      queryResponses: [
+        {
+          rows: [{ appointment_id: APPT_ID_A, start_time: NEW_START, end_time: NEW_END }],
+        },
+      ],
+    });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_A_PHONE,
+      appointment_id: APPT_ID_A,
+      new_start_time: NEW_START,
+      new_end_time: NEW_END,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      success: boolean;
+      result: { rescheduled: boolean; appointment_id: string; new_start_time: string };
+    }>();
+    expect(body.success).toBe(true);
+    expect(body.result.rescheduled).toBe(true);
+    expect(body.result.appointment_id).toBe(APPT_ID_A);
+    expect(body.result.new_start_time).toBe(NEW_START);
+    // Phone is the ownership guard — must be param[2] in the UPDATE
+    expect(queries[0].params[2]).toBe(CALLER_A_PHONE);
+  });
+
+  it("SAD (CRITICAL): caller B cannot reschedule caller A's appointment", async () => {
+    // WHO: Caller B supplying caller A's appointment_id
+    // WHAT: UPDATE returns zero rows because phone=$3 doesn't match customer join
+    // WHEN: Ownership phone mismatch on the appointments+customers join
+    // WHERE: src/routes/agentTools.ts reschedule-appointment — phone ownership gate
+    // WHY: Same auth boundary as cancel — phone-injected by server, never from LLM
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [] }] });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_B_PHONE,
+      appointment_id: APPT_ID_A,
+      new_start_time: NEW_START,
+      new_end_time: NEW_END,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ success: boolean; error?: string }>();
+    expect(body.success).toBe(false);
+    expect(body.error).toBeTruthy();
+    expect(queries[0].params[2]).toBe(CALLER_B_PHONE);
+  });
+
+  it('SAD: rejects new_end_time before new_start_time (no DB call)', async () => {
+    // WHO: Agent sending inverted times
+    // WHAT: Route validates end > start before hitting DB
+    // WHY: Malformed time range would produce a zero-duration or negative appointment
+    const { app, queries } = buildApp({ queryResponses: [] });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_A_PHONE,
+      appointment_id: APPT_ID_A,
+      new_start_time: NEW_END,
+      new_end_time: NEW_START,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ success: boolean }>().success).toBe(false);
+    expect(queries).toHaveLength(0);
+  });
+
+  it('SAD: rejects non-UUID appointment_id before DB call', async () => {
+    // WHO: Malformed agent request
+    // WHAT: Zod uuid() rejects before any DB query
+    // WHY: Prevents bad id crashing ::uuid cast in Postgres
+    const { app, queries } = buildApp({ queryResponses: [] });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_A_PHONE,
+      appointment_id: 'not-a-uuid',
+      new_start_time: NEW_START,
+      new_end_time: NEW_END,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ success: boolean }>().success).toBe(false);
+    expect(queries).toHaveLength(0);
+  });
+});
