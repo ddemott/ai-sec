@@ -2,7 +2,7 @@
 
 Derived from `GAPS.md` (2026-06-15 deep dive). Each item maps back to a GAPS.md section.  
 **Key rule**: Ship = merge to main via PR + apply prod DB migration + validate with `./scripts/simulate.sh`.  
-**Last synced**: 2026-06-18 against commits through PR #31.
+**Last synced**: 2026-06-18 against commits through PR #31 + prod env audit.
 
 ---
 
@@ -12,22 +12,22 @@ Derived from `GAPS.md` (2026-06-15 deep dive). Each item maps back to a GAPS.md 
 
 - [ ] Dial `+1 630-866-1960` from a **different carrier** while watching `listRooms()` — confirm inbound PSTN path end-to-end
 - [ ] Enable **Telnyx REFER / call transfer** on the SIP Connection (`livekit-outbound`) so `transfer_call` tool works live
-- [ ] Set `forward_phone` on Beth's tenant dashboard (Phone Assistant → AI Persona) so live transfer has a destination
+- [ ] Set `forward_phone` on Beth's tenant dashboard (Phone Assistant → AI Persona) so live transfer has a destination. Verified 2026-06-18: `null`/`""` already handled — agent falls back to `take_message` when unset (`transferClient.ts:62`).
 
 ### Silent-Degrade Prod Fixes
 
-- [x] **SMS mock → Telnyx** — DONE 2026-06-16 (PR #23). `ProviderRegistry` defaults to Telnyx; boot warning fires if `TELNYX_PHONE_NUMBER` unset. **Prod action**: set `TELNYX_PHONE_NUMBER=+16308661960` on Railway.
-- [ ] **Email mock** — boot warning fires (PR #25 / `fix(email): warn when EmailService falls back to mock transporter`). Code done. **User action**: set `EMAIL_USER` / `EMAIL_PASS` (Gmail app-password) on Railway.
-- [x] **Agent `BACKEND_URL`** — DONE 2026-06-16. Agent now exits at startup if `BACKEND_URL` unset (no default). Confirm `BACKEND_URL=https://ai-sec-production.up.railway.app` is set on `ai-sec-agent` Railway service.
-- [x] **`STRIPE_WEBHOOK_SECRET`** — DONE 2026-06-17. Boot warning fires when `STRIPE_SECRET_KEY` is set but `STRIPE_WEBHOOK_SECRET` is missing. **User action**: set `STRIPE_WEBHOOK_SECRET` on Railway.
-- [x] **`CORS_ORIGIN`** — DONE 2026-06-16. Boot warning fires. **User action**: set `CORS_ORIGIN=https://dashboard-production-cee3.up.railway.app` on Railway.
-- [x] **`DASHBOARD_URL`** — DONE 2026-06-16. Boot warning fires. **User action**: set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway.
+- [x] **SMS mock → Telnyx** — DONE 2026-06-16 (PR #23). `ProviderRegistry` defaults to Telnyx. `TELNYX_PHONE_NUMBER` confirmed set prod 2026-06-18 (corrected from wrong `+16308229086` to `+16308661960`). Dead vars `VAPI_API_KEY` + `SUPABASE_ACCESS_TOKEN` removed from prod.
+- [x] **Email mock** — DONE. Boot warning fires (PR #25). `EMAIL_USER=daledemott@gmail.com` + `EMAIL_PASS` confirmed set prod 2026-06-18.
+- [x] **Agent `BACKEND_URL`** — DONE 2026-06-16. Agent exits at startup if unset. `BACKEND_URL=https://ai-sec-production.up.railway.app` confirmed set prod. Typo duplicate `BACKND_URL` removed from agent service 2026-06-18.
+- [x] **`STRIPE_WEBHOOK_SECRET`** — DONE. Boot warning fires (PR #22 bundle). `STRIPE_WEBHOOK_SECRET` confirmed set prod 2026-06-18.
+- [x] **`CORS_ORIGIN`** — DONE. Boot warning fires. `CORS_ORIGIN=https://www.secretaryhq.com` confirmed set prod 2026-06-18.
+- [x] **`DASHBOARD_URL`** — DONE. Boot warning fires. `DASHBOARD_URL=https://www.secretaryhq.com` confirmed set prod 2026-06-18.
 
 ### Observability
 
-- [ ] Set `METRICS_TOKEN` on Railway — `/metrics` returns 404 without it
-- [ ] Set `BETTER_STACK_TOKEN` on Railway (backend + agent services) — logs are stdout-only
-- [ ] Set `SENTRY_DSN` on Railway (backend + agent services) — no error grouping or alerts
+- [x] `METRICS_TOKEN` — confirmed set prod 2026-06-18. `/metrics` endpoint live.
+- [ ] Set `BETTER_STACK_TOKEN` on Railway (backend + agent services) — logs are stdout-only; non-blocking
+- [ ] Set `SENTRY_DSN` on Railway (backend + agent services) — no error grouping; non-blocking
 
 ### CI / Deploy Gate
 
@@ -44,7 +44,7 @@ Derived from `GAPS.md` (2026-06-15 deep dive). Each item maps back to a GAPS.md 
 - [x] **`automatic_tax`** — DONE 2026-06-16. Gated on `STRIPE_AUTO_TAX=true` env var. **User actions**: enable Stripe Tax in Stripe dashboard, register IL nexus, set `STRIPE_AUTO_TAX=true` on Railway.
 - [x] **`simulate stripe`** — DONE 2026-06-16 (PR #24). `./scripts/simulate.sh stripe` checks checkout + webhook + subscription gate.
 - [ ] Run Stripe in test mode + `stripe listen` — full round-trip: owner checkout → webhook → `subscription_status` set → `subscriptionGate` allows access
-- [ ] Confirm prod price IDs (`STRIPE_SOLO/GROWTH/PRO_PRICE_ID`) set in Railway env vars
+- [x] Prod price IDs — `STRIPE_SOLO_PRICE_ID` + `STRIPE_GROWTH_PRICE_ID` confirmed set prod 2026-06-18. `STRIPE_PRO_PRICE_ID` not needed (Pro tier not in UI yet).
 
 ### Legal / Ops (user actions — not code)
 
