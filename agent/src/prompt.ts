@@ -114,10 +114,20 @@ How to apply this:
     : '';
 
   const styleLines: string[] = [];
-  if (ctx.ttsFormal) styleLines.push('Use formal language — no contractions (say "I am" not "I\'m", "cannot" not "can\'t"). Crisp, precise sentences. Professional tone throughout.');
-  if (ctx.ttsWarm) styleLines.push('Sound genuinely warm and caring. Acknowledge the caller\'s situation briefly before giving the answer. Unhurried, attentive tone.');
-  if (ctx.ttsConcise) styleLines.push('Be concise — one sentence is better than two. Cut filler, get directly to the answer.');
-  const styleSection = styleLines.length > 0 ? `\n\n# Voice style\n${styleLines.map(l => `- ${l}`).join('\n')}` : '';
+  if (ctx.ttsFormal)
+    styleLines.push(
+      'Use formal language — no contractions (say "I am" not "I\'m", "cannot" not "can\'t"). Crisp, precise sentences. Professional tone throughout.'
+    );
+  if (ctx.ttsWarm)
+    styleLines.push(
+      "Sound genuinely warm and caring. Acknowledge the caller's situation briefly before giving the answer. Unhurried, attentive tone."
+    );
+  if (ctx.ttsConcise)
+    styleLines.push(
+      'Be concise — one sentence is better than two. Cut filler, get directly to the answer.'
+    );
+  const styleSection =
+    styleLines.length > 0 ? `\n\n# Voice style\n${styleLines.map((l) => `- ${l}`).join('\n')}` : '';
 
   return `${identitySection}
 

@@ -70,7 +70,9 @@ export class GrokTTS extends tts.TTS {
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
-  updateOptions(opts: Partial<Pick<GrokTTSOptions, 'voice' | 'language' | 'speed' | 'soft' | 'cheerful'>>): void {
+  updateOptions(
+    opts: Partial<Pick<GrokTTSOptions, 'voice' | 'language' | 'speed' | 'soft' | 'cheerful'>>
+  ): void {
     this.opts = { ...this.opts, ...opts };
   }
 

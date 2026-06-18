@@ -592,7 +592,7 @@ describe('buildSystemPrompt — voice style injection', () => {
     expect(prompt).not.toContain('one sentence is better than two');
   });
 
-  it('HAPPY: style section appears AFTER # Conversation style, BEFORE # Today\'s context', () => {
+  it("HAPPY: style section appears AFTER # Conversation style, BEFORE # Today's context", () => {
     // WHO: any tenant with at least one style flag enabled
     // WHAT: the # Voice style section is positioned inside the conversation
     //        style block — after # Conversation style content, before # Today's context
@@ -645,9 +645,7 @@ describe('buildSystemPrompt — voice style injection', () => {
     expect(prompt).toContain('# Customer preferences');
     expect(prompt).toContain('# Voice style');
     // Both sections exist and are distinct.
-    expect(prompt.indexOf('# Customer preferences')).not.toBe(
-      prompt.indexOf('# Voice style')
-    );
+    expect(prompt.indexOf('# Customer preferences')).not.toBe(prompt.indexOf('# Voice style'));
   });
 });
 

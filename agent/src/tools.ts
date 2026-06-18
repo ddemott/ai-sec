@@ -73,10 +73,14 @@ export function buildTools(
         if (!ctx.callerPhone) {
           return 'New caller - no history found.';
         }
-        const res = await client.call('/agent-tools/customer-context', {
-          tenant_id: ctx.tenantId,
-          phone: ctx.callerPhone,
-        }, { isReadOnly: true });
+        const res = await client.call(
+          '/agent-tools/customer-context',
+          {
+            tenant_id: ctx.tenantId,
+            phone: ctx.callerPhone,
+          },
+          { isReadOnly: true }
+        );
         return formatResponse(res);
       },
     }),
@@ -90,9 +94,13 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async () => {
-        const res = await client.call('/agent-tools/service-catalog', {
-          tenant_id: ctx.tenantId,
-        }, { isReadOnly: true });
+        const res = await client.call(
+          '/agent-tools/service-catalog',
+          {
+            tenant_id: ctx.tenantId,
+          },
+          { isReadOnly: true }
+        );
         return formatResponse(res);
       },
     }),
@@ -118,11 +126,15 @@ export function buildTools(
       },
       execute: async (args: { service_type: string; date: string }) => {
         speakFiller?.('Let me check what we have open...');
-        const res = await client.call('/agent-tools/available-slots', {
-          tenant_id: ctx.tenantId,
-          service_type: args.service_type,
-          date: args.date,
-        }, { isReadOnly: true });
+        const res = await client.call(
+          '/agent-tools/available-slots',
+          {
+            tenant_id: ctx.tenantId,
+            service_type: args.service_type,
+            date: args.date,
+          },
+          { isReadOnly: true }
+        );
         return formatResponse(res);
       },
     }),
@@ -164,15 +176,19 @@ export function buildTools(
         window_from: string;
         window_to: string;
       }) => {
-        const res = await client.call('/agent-tools/scheduling-options', {
-          tenant_id: ctx.tenantId,
-          requirements: {
-            serviceType: args.service_type,
-            requiredResourceCapabilities: args.required_resource_capabilities,
-            requiredEmployeeSkills: args.required_employee_skills,
+        const res = await client.call(
+          '/agent-tools/scheduling-options',
+          {
+            tenant_id: ctx.tenantId,
+            requirements: {
+              serviceType: args.service_type,
+              requiredResourceCapabilities: args.required_resource_capabilities,
+              requiredEmployeeSkills: args.required_employee_skills,
+            },
+            window: { from: args.window_from, to: args.window_to },
           },
-          window: { from: args.window_from, to: args.window_to },
-        }, { isReadOnly: true });
+          { isReadOnly: true }
+        );
         return formatResponse(res);
       },
     }),
@@ -191,12 +207,16 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { resource_id: string; start_time: string; end_time: string }) => {
-        const res = await client.call('/agent-tools/check-availability', {
-          tenant_id: ctx.tenantId,
-          resource_id: args.resource_id,
-          start_time: args.start_time,
-          end_time: args.end_time,
-        }, { isReadOnly: true });
+        const res = await client.call(
+          '/agent-tools/check-availability',
+          {
+            tenant_id: ctx.tenantId,
+            resource_id: args.resource_id,
+            start_time: args.start_time,
+            end_time: args.end_time,
+          },
+          { isReadOnly: true }
+        );
         return formatResponse(res);
       },
     }),
@@ -319,10 +339,14 @@ export function buildTools(
       },
       execute: async (args: { question: string }) => {
         speakFiller?.('Let me look that up for you...');
-        const res = await client.call('/agent-tools/policy-answer', {
-          tenant_id: ctx.tenantId,
-          question: args.question,
-        }, { isReadOnly: true });
+        const res = await client.call(
+          '/agent-tools/policy-answer',
+          {
+            tenant_id: ctx.tenantId,
+            question: args.question,
+          },
+          { isReadOnly: true }
+        );
         return formatResponse(res);
       },
     }),
@@ -388,7 +412,7 @@ export function buildTools(
         properties: {
           name: {
             type: 'string',
-            description: "The caller's full name as they stated it, e.g. \"Dale DeMott\".",
+            description: 'The caller\'s full name as they stated it, e.g. "Dale DeMott".',
           },
         },
         required: ['name'],
@@ -460,7 +484,7 @@ export function buildTools(
           message: {
             type: 'string',
             description:
-              "The substance of what the caller wants the owner to know or do. Be specific — capture exactly what they said.",
+              'The substance of what the caller wants the owner to know or do. Be specific — capture exactly what they said.',
           },
         },
         required: ['caller_name', 'message'],
@@ -512,7 +536,8 @@ export function buildTools(
         properties: {
           appointment_id: {
             type: 'string',
-            description: 'UUID of the appointment to cancel, exactly as returned by get_my_appointments.',
+            description:
+              'UUID of the appointment to cancel, exactly as returned by get_my_appointments.',
           },
         },
         required: ['appointment_id'],
@@ -542,7 +567,8 @@ export function buildTools(
         properties: {
           appointment_id: {
             type: 'string',
-            description: 'UUID of the appointment to reschedule, exactly as returned by get_my_appointments.',
+            description:
+              'UUID of the appointment to reschedule, exactly as returned by get_my_appointments.',
           },
           new_start_time: {
             type: 'string',
