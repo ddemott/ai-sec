@@ -60,9 +60,8 @@ Derived from `GAPS.md` (2026-06-15 deep dive). Each item maps back to a GAPS.md 
 ### Customer Self-Service Links
 
 - [x] **Cancel link in appointment confirmation SMS** — DONE 2026-06-16 (`feat/self-service`: signed JWT token, `/self-service/appointments/:id/cancel?token=`, wired into `smsService.ts` confirmation SMS template). Security review passed (Copilot thread resolved).
-- [ ] **Reschedule link** — cancel done; reschedule route + SMS template + token action still open
-- [ ] Extend `AppointmentData` interface with full `actionLinks?: { rescheduleUrl?, manageUrl? }` (cancelUrl done)
-- [ ] Update Handlebars **email** templates in `src/templates/` to include action link buttons (SMS done; email not yet)
+- [x] **Reschedule link** — DONE 2026-06-18 (PR #34). `GET /self/reschedule?token=` validates JWT, fires owner SMS, returns human-readable confirmation. `buildRescheduleLink()` in `appointmentService.ts`; reschedule link appended to SMS confirmation + reminder.
+- [x] **Email action links** — DONE 2026-06-18 (PR #34). `buildCancelLink()` + `buildRescheduleLink()` both injected into email confirmation + reminder templateData; HTML templates replaced `<a href="#">` placeholders with conditional real buttons; text version appends URLs.
 - [ ] Dashboard: "Send self-service links" button in `AppointmentDetailPanel.tsx` (shows which links were sent)
 - [ ] Tests: E2E "book → SMS with link → link reschedules", negative (expired, wrong tenant, double-use for reschedule)
 
@@ -71,7 +70,7 @@ Derived from `GAPS.md` (2026-06-15 deep dive). Each item maps back to a GAPS.md 
 - [x] **`take_message`** — DONE 2026-06-16 (PR #22). Collects caller name + message + callback phone, persists to `customer_messages`, SMS-notifies owner.
 - [x] **`get_my_appointments`** — DONE 2026-06-16 (PR #22 commit). Known caller lookup by verified phone.
 - [x] **`cancel_appointment`** — DONE 2026-06-16 (PR #22 commit). Voice-driven cancellation.
-- [ ] Add `reschedule_appointment` tool to `agent/src/tools.ts`
+- [x] **`reschedule_appointment`** — DONE 2026-06-18 (PR #34). `POST /agent-tools/reschedule-appointment` UPDATE-in-place with phone ownership guard; GiST exclusion catches slot conflicts (23P01); fires calendar sync. Agent tool in `agent/src/tools.ts` with filler phrase.
 
 ### Live Communications Providers
 
@@ -84,7 +83,7 @@ Derived from `GAPS.md` (2026-06-15 deep dive). Each item maps back to a GAPS.md 
 - [x] **`createPortalSession`** — DONE 2026-06-16 (PR #22 commit). `src/routes/billing.ts` gains `POST /billing/portal`; creates Stripe Billing Portal session.
 - [x] **api.ts billing namespace** — DONE 2026-06-16. Added `billing.portal()`, fixed `'professional'` missing from plan type union.
 - [x] **Billing UI component** — DONE 2026-06-16. Plan cards with current plan highlight, "Upgrade" → Stripe Checkout, "Manage Billing" → Stripe Portal. Wired into dashboard My Business / Settings.
-- [ ] Surface 402 subscription gate errors gracefully in UI (toast + upgrade CTA) — verify this path is handled
+- [x] **Surface 402 errors in UI** — DONE 2026-06-18 (PR #34). Module-level `subscriptionRequiredCallback` in `api.ts`; `DashboardPage` registers on mount → toast "Upgrade required" with "Go to Billing" action navigating to billing subtab.
 
 ### Owner Notification Phone
 
@@ -103,7 +102,7 @@ Derived from `GAPS.md` (2026-06-15 deep dive). Each item maps back to a GAPS.md 
 
 ### Outcome-Driven Automations
 
-- [ ] Wire `callClassify.ts` results (especially `price` + `no_availability` outcomes) into post-call comms (follow-up SMS offer)
+- [x] **Outcome-driven owner SMS** — DONE 2026-06-18 (PR #34). `voice-session-end` fires fire-and-forget owner SMS when outcome is `price` or `no_availability`, prompting follow-up on lost leads.
 
 ### Calendar Sync Live Proof
 
