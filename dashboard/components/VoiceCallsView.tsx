@@ -23,6 +23,7 @@ import { formatPhone } from '../lib/phone';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { FolderTab, FolderTabBar } from './ui/FolderTabs';
 import AnalyticsView from './AnalyticsView';
+import { CommsSentView } from './CommsSentView';
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return '0:00';
@@ -439,7 +440,7 @@ function MessagesInbox({ tenantId }: { tenantId: string | null }) {
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-type CallsSubTab = 'calls' | 'analytics' | 'messages';
+type CallsSubTab = 'calls' | 'analytics' | 'messages' | 'sent';
 
 export default function VoiceCallsView() {
   const tenantId = useActiveTenantId();
@@ -535,6 +536,12 @@ export default function VoiceCallsView() {
           isActive={activeSubTab === 'messages'}
           onClick={() => setActiveSubTab('messages')}
         />
+        <FolderTab
+          label="Sent"
+          size="sm"
+          isActive={activeSubTab === 'sent'}
+          onClick={() => setActiveSubTab('sent')}
+        />
       </FolderTabBar>
       {activeSubTab === 'analytics' && (
         <div className="flex-1 overflow-y-auto">
@@ -544,6 +551,11 @@ export default function VoiceCallsView() {
       {activeSubTab === 'messages' && (
         <div className="flex-1 overflow-hidden">
           <MessagesInbox tenantId={tenantId} />
+        </div>
+      )}
+      {activeSubTab === 'sent' && (
+        <div className="flex-1 overflow-hidden">
+          <CommsSentView tenantId={tenantId} />
         </div>
       )}
       {activeSubTab === 'calls' && (

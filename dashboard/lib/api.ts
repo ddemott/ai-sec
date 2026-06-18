@@ -1112,4 +1112,34 @@ export const Api = {
       );
     },
   },
+
+  communications: {
+    history: (
+      tenantId: string | null,
+      opts?: { type?: 'all' | 'sms' | 'email'; limit?: number; offset?: number }
+    ) => {
+      const params: Record<string, string> = {};
+      if (tenantId) params.tenant_id = tenantId;
+      if (opts?.type) params.type = opts.type;
+      if (opts?.limit != null) params.limit = String(opts.limit);
+      if (opts?.offset != null) params.offset = String(opts.offset);
+      return apiFetch<{
+        success: boolean;
+        history: Array<{
+          communications_history_id: number;
+          customer_id: string | null;
+          channel: 'sms' | 'email';
+          direction: string;
+          recipient: string;
+          subject: string | null;
+          body: string;
+          status: string;
+          provider_message_id: string | null;
+          error: string | null;
+          created_at: string;
+        }>;
+        total: number;
+      }>('/communications/history', Object.keys(params).length > 0 ? params : undefined);
+    },
+  },
 };
