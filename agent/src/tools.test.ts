@@ -55,7 +55,7 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 15 expected tool names', () => {
+  it('HAPPY: exposes exactly the 17 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
@@ -487,5 +487,53 @@ describe('transfer_call', () => {
     });
     const result = await exec(tools.transfer_call, {});
     expect(JSON.parse(result).error).toMatch(/did not go through/i);
+  });
+});
+
+describe('reschedule_appointment', () => {
+  const APPT_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
+  const NEW_START = '2026-07-15T10:00:00';
+  const NEW_END = '2026-07-15T11:00:00';
+
+  it('HAPPY: injects phone from context and forwards appointment + times to backend', async () => {
+    // WHO: Caller with caller-ID wanting to move their appointment
+    // WHAT: Tool sends phone from SessionContext (never from LLM) + appointment_id + new times
+    // WHY: Phone ownership guard on the backend requires the server-injected
+    //      phone to match the appointment's customer — LLM must never supply it
+    const { client, calls } = makeClient([{ ok: true, result: { rescheduled: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.reschedule_appointment, {
+      appointment_id: APPT_ID,
+      new_start_time: NEW_START,
+      new_end_time: NEW_END,
+    });
+
+    expect(calls[0].path).toBe('/agent-tools/reschedule-appointment');
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: CALLER_PHONE,
+      appointment_id: APPT_ID,
+      new_start_time: NEW_START,
+      new_end_time: NEW_END,
+    });
+  });
+
+  it('SAD: no caller-ID → short-circuits, no backend call', async () => {
+    // WHO: Caller with blocked caller-ID
+    // WHAT: Tool returns error string without hitting backend
+    // WHY: Backend ownership guard requires a real phone; null would
+    //      fail validation and waste an HTTP round-trip mid-call
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    const result = await exec(tools.reschedule_appointment, {
+      appointment_id: APPT_ID,
+      new_start_time: NEW_START,
+      new_end_time: NEW_END,
+    });
+
+    expect(JSON.parse(result).error).toMatch(/without caller-ID/i);
+    expect(calls).toHaveLength(0);
   });
 });
