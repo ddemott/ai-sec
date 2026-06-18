@@ -317,7 +317,7 @@ export function registerAnalyticsRoutes(
 
       const total_estimated_cost_usd = breakdown.reduce((sum, r) => sum + r.estimated_cost_usd, 0);
 
-      return reply.send({ success: true, result: { breakdown, total_estimated_cost_usd } });
+      return reply.send({ breakdown, total_estimated_cost_usd });
     }, 'Failed to load AI cost data')
   );
 }

@@ -440,10 +440,9 @@ describe('GET /analytics/ai-cost', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ success: boolean; result: { breakdown: unknown[]; total_estimated_cost_usd: number } }>();
-    expect(body.success).toBe(true);
-    expect(body.result.breakdown).toHaveLength(2);
-    expect(body.result.breakdown[0]).toMatchObject({
+    const body = res.json<{ breakdown: unknown[]; total_estimated_cost_usd: number }>();
+    expect(body.breakdown).toHaveLength(2);
+    expect(body.breakdown[0]).toMatchObject({
       source: 'voice_call',
       provider: 'openai',
       model: 'gpt-4o-mini',
@@ -451,7 +450,7 @@ describe('GET /analytics/ai-cost', () => {
       output_tokens: 3100,
       estimated_cost_usd: expect.any(Number),
     });
-    expect(body.result.total_estimated_cost_usd).toBeCloseTo(0.04243500, 4);
+    expect(body.total_estimated_cost_usd).toBeCloseTo(0.042435, 4);
   });
 
   it('HAPPY: returns empty breakdown when no events this month', async () => {
@@ -466,9 +465,8 @@ describe('GET /analytics/ai-cost', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ success: boolean; result: { breakdown: unknown[]; total_estimated_cost_usd: number } }>();
-    expect(body.success).toBe(true);
-    expect(body.result.breakdown).toHaveLength(0);
-    expect(body.result.total_estimated_cost_usd).toBe(0);
+    const body = res.json<{ breakdown: unknown[]; total_estimated_cost_usd: number }>();
+    expect(body.breakdown).toHaveLength(0);
+    expect(body.total_estimated_cost_usd).toBe(0);
   });
 });

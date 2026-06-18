@@ -627,7 +627,7 @@ export const Api = {
       apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
 
     getAiCost: (tenantId: string | null) =>
-      apiFetch<{ result: AiCostSummary }>(
+      apiFetch<AiCostSummary>(
         `/analytics/ai-cost`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),

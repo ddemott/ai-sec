@@ -1735,12 +1735,14 @@ export function registerAgentToolRoutes(
         );
       }
 
-      await pool.query(
-        `INSERT INTO ai_cost_events
-           (tenant_id, call_id, source, provider, model,
-            input_tokens, output_tokens, characters_count, audio_duration_ms, estimated_cost_usd)
-         VALUES ${placeholders.join(', ')}`,
-        values
+      await withTenantClient(args.tenant_id, (client) =>
+        client.query(
+          `INSERT INTO ai_cost_events
+             (tenant_id, call_id, source, provider, model,
+              input_tokens, output_tokens, characters_count, audio_duration_ms, estimated_cost_usd)
+           VALUES ${placeholders.join(', ')}`,
+          values
+        )
       );
 
       return ok(reply, { recorded: rows.length });

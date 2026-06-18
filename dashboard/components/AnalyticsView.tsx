@@ -92,7 +92,7 @@ export default function AnalyticsView() {
       ]);
 
       if (callStats) setCalls(callStats);
-      if (aiCostRes?.result) setAiCost(aiCostRes.result);
+      if (aiCostRes) setAiCost(aiCostRes);
 
       if (Array.isArray(appointments)) {
         const byDay: Record<string, number> = {};
