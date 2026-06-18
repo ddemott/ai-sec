@@ -18,9 +18,8 @@
 
 import type { PoolClient } from 'pg';
 import type { AppFastifyInstance } from '../types/fastify.js';
-import { withHandler } from '../middleware.js';
+import { withHandler, logEvent } from '../middleware.js';
 import { verifySelfServiceToken } from '../services/selfServiceToken.js';
-import { logEvent } from '../middleware.js';
 import { sendSms } from '../services/telnyxSms.js';
 import { normalizePhone, isValidPhone } from '../services/phoneUtils.js';
 
@@ -183,7 +182,11 @@ export function registerSelfServiceRoutes(
             `Reschedule request from ${appt.customer_name} (${appt.customer_phone}) ` +
             `for ${appt.description} on ${new Date(appt.start_time).toLocaleDateString()}. ` +
             `Reply to schedule a new time.`;
-          sendSms({ from: normalizedInbound, to: normalizedForward, body }).catch(() => {});
+          sendSms({ from: normalizedInbound, to: normalizedForward, body }).catch(
+            (err: unknown) => {
+              req.log.error({ err }, 'Failed to send reschedule-request SMS to owner');
+            }
+          );
         }
       }
 

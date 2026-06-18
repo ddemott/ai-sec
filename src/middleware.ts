@@ -538,6 +538,7 @@ const PUBLIC_ROUTES = [
   '/communications/telnyx/status',
   // Self-service appointment actions — token-gated, no session JWT
   '/self/cancel',
+  '/self/reschedule',
 ];
 
 /**

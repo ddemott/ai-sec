@@ -489,7 +489,7 @@ export function registerAgentToolRoutes(
         }
       );
 
-      if (forwardPhone && inboundPhone) {
+      if (ended && forwardPhone && inboundPhone) {
         const normalizedForward = normalizePhone(forwardPhone);
         const normalizedInbound = normalizePhone(inboundPhone);
         if (
@@ -503,7 +503,11 @@ export function registerAgentToolRoutes(
               ? 'had concerns about pricing'
               : 'could not find an available time';
           const body = `SecretaryHQ: A recent caller ${outcomeMsg}. They may be worth a follow-up. — via SecretaryHQ`;
-          sendSms({ from: normalizedInbound, to: normalizedForward, body }).catch(() => {});
+          sendSms({ from: normalizedInbound, to: normalizedForward, body }).catch(
+            (err: unknown) => {
+              app.log.error({ err }, 'Failed to send outcome-follow-up SMS to owner');
+            }
+          );
         }
       }
 
