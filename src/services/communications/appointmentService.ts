@@ -16,6 +16,17 @@ function buildCancelLink(appointmentId: string | undefined, tenantId: string): s
   return `${baseUrl}/self/cancel?token=${encodeURIComponent(token)}`;
 }
 
+/** Build a one-tap reschedule request link for SMS/email. Returns null when either
+ *  appointmentId or BACKEND_PUBLIC_URL is absent/blank — callers omit the link gracefully. */
+function buildRescheduleLink(appointmentId: string | undefined, tenantId: string): string | null {
+  if (!appointmentId) return null;
+  const baseUrl = (process.env.BACKEND_PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
+  if (!baseUrl) return null;
+  const token = generateSelfServiceToken(appointmentId, tenantId, 'reschedule');
+  if (!token) return null;
+  return `${baseUrl}/self/reschedule?token=${encodeURIComponent(token)}`;
+}
+
 export class AppointmentCommunicationService {
   private emailService: EmailService;
   private smsService: SMSService;
@@ -136,6 +147,8 @@ export class AppointmentCommunicationService {
       dateTime: new Date(appointmentDetails.dateTime).toLocaleString(),
       duration: appointmentDetails.duration,
       notes: appointmentDetails.notes || '',
+      cancelLink: buildCancelLink(appointmentDetails.appointmentId, tenantId),
+      rescheduleLink: buildRescheduleLink(appointmentDetails.appointmentId, tenantId),
     };
 
     return this.emailService.sendEmail(tenantId, {
@@ -155,6 +168,7 @@ export class AppointmentCommunicationService {
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
     const cancelLink = buildCancelLink(appointmentDetails.appointmentId, tenantId);
+    const rescheduleLink = buildRescheduleLink(appointmentDetails.appointmentId, tenantId);
     const templateData = {
       serviceName: appointmentDetails.serviceName,
       staffName: appointmentDetails.staffName,
@@ -163,6 +177,7 @@ export class AppointmentCommunicationService {
         ' at ' +
         dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cancelLink,
+      rescheduleLink,
     };
 
     return this.smsService.sendSMSTemplate(
@@ -189,6 +204,8 @@ export class AppointmentCommunicationService {
       dateTime: new Date(appointmentDetails.dateTime).toLocaleString(),
       duration: appointmentDetails.duration,
       hoursUntil: hoursUntilAppointment,
+      cancelLink: buildCancelLink(appointmentDetails.appointmentId, tenantId),
+      rescheduleLink: buildRescheduleLink(appointmentDetails.appointmentId, tenantId),
     };
 
     return this.emailService.sendEmail(tenantId, {
@@ -209,6 +226,7 @@ export class AppointmentCommunicationService {
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
     const cancelLink = buildCancelLink(appointmentDetails.appointmentId, tenantId);
+    const rescheduleLink = buildRescheduleLink(appointmentDetails.appointmentId, tenantId);
     const templateData = {
       serviceName: appointmentDetails.serviceName,
       staffName: appointmentDetails.staffName,
@@ -218,6 +236,7 @@ export class AppointmentCommunicationService {
         ' at ' +
         dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cancelLink,
+      rescheduleLink,
     };
 
     return this.smsService.sendSMSTemplate(

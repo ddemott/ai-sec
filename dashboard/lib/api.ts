@@ -79,6 +79,17 @@ export function getTargetTenantId(entityTenantId?: string) {
 }
 
 /**
+ * Module-level callback invoked when any API response returns 402 (subscription required).
+ * Registered once by the dashboard root on mount so the plain api.ts module can trigger
+ * a toast without importing React components.
+ */
+let subscriptionRequiredCallback: (() => void) | null = null;
+
+export function setSubscriptionRequiredCallback(cb: () => void): void {
+  subscriptionRequiredCallback = cb;
+}
+
+/**
  * Force logout: clear all auth state and redirect to login.
  * Single source of truth for auth cleanup — used by apiFetch, apiMutate, and hooks.
  */
@@ -162,12 +173,17 @@ async function ensureTokenFresh(): Promise<void> {
 
 /**
  * Check response for auth failures (401, tenant-not-found 404) and force logout if needed.
- * Returns an error message string if logout was triggered, or null if response is fine.
+ * Also handles 402 (subscription required) by firing the registered callback.
+ * Returns an error message string if a terminal condition was triggered, or null if fine.
  */
 async function checkAuthFailure(response: Response): Promise<string | null> {
   if (response.status === 401) {
     forceLogout();
     return 'Session expired. Please log in again.';
+  }
+  if (response.status === 402) {
+    subscriptionRequiredCallback?.();
+    return 'Upgrade required to access this feature.';
   }
   if (response.status === 404) {
     try {
