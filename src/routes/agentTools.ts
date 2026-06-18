@@ -457,21 +457,60 @@ export function registerAgentToolRoutes(
     '/agent-tools/voice-session-end',
     VoiceSessionEndSchema,
     async (args, reply) => {
-      const ended = await withTenantClient(args.tenant_id, async (client) => {
-        const res = await client.query<{ ended: boolean }>(
-          'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) AS ended',
-          [
+      const { ended, forwardPhone, inboundPhone } = await withTenantClient(
+        args.tenant_id,
+        async (client) => {
+          const res = await client.query<{ ended: boolean }>(
+            'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) AS ended',
+            [
+              args.tenant_id,
+              args.call_id,
+              args.duration_seconds ?? null,
+              args.outcome ?? null,
+              args.transcript ?? null,
+              args.summary ?? null,
+              args.appointment_id ?? null,
+            ]
+          );
+          if (!['price', 'no_availability'].includes(args.outcome ?? '')) {
+            return { ended: res.rows[0]?.ended ?? false, forwardPhone: null, inboundPhone: null };
+          }
+          const tenant = await client.query<{
+            forward_phone: string | null;
+            inbound_phone: string | null;
+          }>('SELECT forward_phone, inbound_phone FROM tenants WHERE tenant_id = $1', [
             args.tenant_id,
-            args.call_id,
-            args.duration_seconds ?? null,
-            args.outcome ?? null,
-            args.transcript ?? null,
-            args.summary ?? null,
-            args.appointment_id ?? null,
-          ]
-        );
-        return res.rows[0]?.ended ?? false;
-      });
+          ]);
+          return {
+            ended: res.rows[0]?.ended ?? false,
+            forwardPhone: tenant.rows[0]?.forward_phone ?? null,
+            inboundPhone: tenant.rows[0]?.inbound_phone ?? null,
+          };
+        }
+      );
+
+      if (ended && forwardPhone && inboundPhone) {
+        const normalizedForward = normalizePhone(forwardPhone);
+        const normalizedInbound = normalizePhone(inboundPhone);
+        if (
+          normalizedForward &&
+          normalizedInbound &&
+          isValidPhone(normalizedForward) &&
+          isValidPhone(normalizedInbound)
+        ) {
+          const outcomeMsg =
+            args.outcome === 'price'
+              ? 'had concerns about pricing'
+              : 'could not find an available time';
+          const body = `SecretaryHQ: A recent caller ${outcomeMsg}. They may be worth a follow-up. — via SecretaryHQ`;
+          sendSms({ from: normalizedInbound, to: normalizedForward, body }).catch(
+            (err: unknown) => {
+              app.log.error({ err }, 'Failed to send outcome-follow-up SMS to owner');
+            }
+          );
+        }
+      }
+
       return ok(reply, { ended });
     },
     'Failed to end voice session'

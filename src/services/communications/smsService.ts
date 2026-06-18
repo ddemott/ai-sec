@@ -208,12 +208,14 @@ export class SMSService {
       availableTime?: string;
       message?: string;
       cancelLink?: string | null;
+      rescheduleLink?: string | null;
     };
     switch (template) {
       case 'appointment-confirmation':
         return (
           `✅ Confirmed: ${d.serviceName} with ${d.staffName} on ${d.dateTime}.` +
           (d.cancelLink ? ` Cancel: ${d.cancelLink}` : '') +
+          (d.rescheduleLink ? ` Reschedule: ${d.rescheduleLink}` : '') +
           ' Reply STOP to opt out.'
         );
 
@@ -221,6 +223,7 @@ export class SMSService {
         return (
           `🔔 Reminder: ${d.serviceName} with ${d.staffName} in ${d.hoursUntil}h at ${d.dateTime}.` +
           (d.cancelLink ? ` Cancel: ${d.cancelLink}` : '') +
+          (d.rescheduleLink ? ` Reschedule: ${d.rescheduleLink}` : '') +
           ' Reply STOP to opt out.'
         );
 
