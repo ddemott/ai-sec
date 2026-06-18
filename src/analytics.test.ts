@@ -401,3 +401,74 @@ describe('GET /feedback', () => {
     expect(dataQuery!.text).not.toContain('WHERE f.tenant_id');
   });
 });
+
+describe('GET /analytics/ai-cost', () => {
+  it('HAPPY: returns monthly breakdown and total_estimated_cost_usd', async () => {
+    // WHO: Tenant owner checking AI usage in the Analytics tab
+    // WHAT: Route queries ai_cost_events grouped by source+provider+model for current month
+    // WHEN: Called with a valid tenant_id after voice calls have run
+    // WHERE: src/routes/analytics.ts GET /analytics/ai-cost
+    // WHY: Owner needs to understand AI spend without reading OpenAI/Deepgram dashboards
+    queryResponses.push({
+      rows: [
+        {
+          source: 'voice_call',
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          input_tokens: '12500',
+          output_tokens: '3100',
+          characters_count: '0',
+          audio_duration_ms: '0',
+          estimated_cost_usd: '0.00373500',
+        },
+        {
+          source: 'voice_call',
+          provider: 'deepgram',
+          model: 'nova-3',
+          input_tokens: '0',
+          output_tokens: '0',
+          characters_count: '0',
+          audio_duration_ms: '540000',
+          estimated_cost_usd: '0.03870000',
+        },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/ai-cost?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ success: boolean; result: { breakdown: unknown[]; total_estimated_cost_usd: number } }>();
+    expect(body.success).toBe(true);
+    expect(body.result.breakdown).toHaveLength(2);
+    expect(body.result.breakdown[0]).toMatchObject({
+      source: 'voice_call',
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      input_tokens: 12500,
+      output_tokens: 3100,
+      estimated_cost_usd: expect.any(Number),
+    });
+    expect(body.result.total_estimated_cost_usd).toBeCloseTo(0.04243500, 4);
+  });
+
+  it('HAPPY: returns empty breakdown when no events this month', async () => {
+    // WHO: New tenant who hasn't had any calls yet
+    // WHAT: ai_cost_events returns no rows → empty breakdown + $0 total
+    // WHY: Must render cleanly with empty state rather than error
+    queryResponses.push({ rows: [] });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/ai-cost?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ success: boolean; result: { breakdown: unknown[]; total_estimated_cost_usd: number } }>();
+    expect(body.success).toBe(true);
+    expect(body.result.breakdown).toHaveLength(0);
+    expect(body.result.total_estimated_cost_usd).toBe(0);
+  });
+});
