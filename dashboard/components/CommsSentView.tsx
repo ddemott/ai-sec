@@ -28,7 +28,12 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
 
   const load = useCallback(
     async (f: ChannelFilter, p: number) => {
-      if (!tenantId) return;
+      if (!tenantId) {
+        setRows([]);
+        setTotal(0);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
@@ -83,10 +88,12 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
         className="flex items-center justify-between px-4 py-2 border-b shrink-0"
         style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}
       >
-        <div className="flex gap-1">
+        <div className="flex gap-1" role="group" aria-label="Filter by channel">
           {(['all', 'sms', 'email'] as ChannelFilter[]).map((f) => (
             <button
               key={f}
+              type="button"
+              aria-pressed={filter === f}
               onClick={() => handleFilterChange(f)}
               className="px-3 py-1 rounded text-xs font-medium transition-colors"
               style={
@@ -100,9 +107,11 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
           ))}
         </div>
         <button
+          type="button"
           onClick={() => void load(filter, page)}
           className="p-1.5 rounded transition-colors"
           style={{ color: 'var(--text-secondary)' }}
+          aria-label="Refresh"
           title="Refresh"
         >
           <RefreshCw className="w-4 h-4" />
@@ -205,6 +214,8 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
           </span>
           <div className="flex gap-1">
             <button
+              type="button"
+              aria-label="Previous page"
               onClick={handlePrev}
               disabled={page === 0}
               className="p-1 rounded disabled:opacity-40"
@@ -212,6 +223,8 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
+              type="button"
+              aria-label="Next page"
               onClick={handleNext}
               disabled={page >= totalPages - 1}
               className="p-1 rounded disabled:opacity-40"
