@@ -162,6 +162,11 @@ export default defineAgent({
     // Tracks what happened on the call (booked / transferred + appointment_id),
     // mutated by the booking/transfer tools, read at shutdown for session-end.
     const outcomeTracker = new CallOutcomeTracker();
+    // Accumulates per-model AI usage (LLM tokens, STT audio, TTS chars) from
+    // LiveKit's SessionUsageUpdated events. Updated during the call; read once
+    // at shutdown to POST costs to /agent-tools/record-ai-cost.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let sessionModelUsage: any[] = [];
     try {
       client = new ToolsClient({
         backendUrl: config.BACKEND_URL,
@@ -217,6 +222,27 @@ export default defineAgent({
               appointment_id: appointmentId,
               summary,
             });
+            // Fire-and-forget: POST session AI usage to the cost ledger.
+            // sessionModelUsage is empty when the session never started (e.g.
+            // fallback path) — skip silently rather than inserting a zero row.
+            if (sessionModelUsage.length > 0) {
+              void client
+                .call('/agent-tools/record-ai-cost', {
+                  tenant_id: sessionCtx.tenantId,
+                  call_id: callId,
+                  source: 'voice_call',
+                  model_usage: sessionModelUsage,
+                })
+                .catch((e: unknown) =>
+                  callLog.warn(
+                    {
+                      event: 'ai_cost_record_failed',
+                      error_message: e instanceof Error ? e.message : String(e),
+                    },
+                    'AI cost record failed (non-fatal)'
+                  )
+                );
+            }
           } catch (e) {
             callLog.warn(
               {
@@ -325,6 +351,13 @@ export default defineAgent({
         session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
           if (ev.item.type !== 'message') return;
           transcript.add(ev.item.role, ev.item.textContent);
+        });
+
+        // Accumulate per-model usage so the shutdown callback can POST it.
+        // SessionUsageUpdated fires after each LLM/STT/TTS turn and carries
+        // the running totals — keeping the last snapshot is sufficient.
+        session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => {
+          sessionModelUsage = ev.usage.modelUsage;
         });
 
         // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)

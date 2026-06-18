@@ -1,113 +1,61 @@
-# E2E Test Fix Handoff — 2026-06-15 (COMPLETE)
+# HANDOFF — 2026-06-18
 
-## Mission
+## Deploy Rules (always)
 
-Run the full Playwright E2E suite (from `dashboard/`), fix all failures.
-
-## Final State: 146 passed, 7 skipped, 0 failed ✅
-
----
-
-## All Fixes Applied This Session
-
-### Previous session fixes (see git log)
-
-| Spec                                 | Tests | Fix                                               |
-| ------------------------------------ | ----- | ------------------------------------------------- |
-| `industry-templates.spec.ts`         | 4     | Business templates empty after rebuild            |
-| `vocabulary-overrides.spec.ts`       | 3     | Same root cause                                   |
-| `ui-rename-verification.spec.ts`     | 3     | Service+resource in beforeAll; exact button match |
-| `quick-book-shift-overrides.spec.ts` | 1     | Seed shifts `00:00-23:59`                         |
-| `reminder-on-create.spec.ts`         | 1     | Include employee_id, book on shiftless day        |
-| `voice-styles.spec.ts`               | 6     | DB columns, MOCK_TENANT, dirty-flag               |
-
-### This session fixes
-
-| Spec                             | Test                              | Root Cause                                                           | Fix                                                                                      |
-| -------------------------------- | --------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `agent-conversation.spec.ts:273` | employee_name toBeTruthy          | MODE B (empty skills) = RPC picks resource only, employee stays NULL | Changed to `toBeNull()`                                                                  |
-| `caller-identity.spec.ts:154`    | login 401                         | URL was `/auth/login`; backend route is `/login`                     | Fixed to `/login`                                                                        |
-| `caller-identity.spec.ts:169`    | `list.customers` undefined        | `/customers` returns plain array, not `{ customers: [...] }`         | Access array directly                                                                    |
-| `e2e/helpers/test.ts`            | Intermittent font manifest errors | Next.js dev-server race on `.next/next-font-manifest.json`           | Filter `load-manifest.js` / `getNextFontManifest` stack frames from page-error collector |
+- All 3 Railway services deploy from `main` only — branch push deploys nothing
+- Shipping = merge to main via PR with 4 CI jobs green
+- Merge command: `gh pr merge <N> --squash --delete-branch --admin`
 
 ---
 
-## Root Cause (Critical — affects all future rebuilds)
+## Open PR: #36 `feat/ai-cost-meter`
 
-**`baseline.sql` + `--baseline` mode = empty `business_templates` after every rebuild**
+**Status at handoff**: Backend ✅ Dashboard ✅ Agent ✅ E2E ⏳ IN_PROGRESS
 
-`rebuild-db.sh` flow:
+**What ships:**
 
-1. DROP SCHEMA public CASCADE
-2. Apply `baseline.sql` → creates table schemas, **NO DATA**
-3. Run `setup-db.sh --baseline` → marks ALL historical migrations as "applied" **WITHOUT running SQL**
-4. Run `seed.sql` → previously had no template data
+- `ai_cost_events` table (migration `20260618000001_ai_cost_events.sql` — **already applied to prod**)
+- Agent subscribes to `SessionUsageUpdated` → POSTs LLM/STT/TTS usage to `POST /agent-tools/record-ai-cost` at call end
+- `GET /analytics/ai-cost` — month-to-date aggregation by provider/model
+- Dashboard Analytics tab: "AI Usage (this month)" table card
 
-Result: `business_templates` always empty after rebuild. 30 templates exist only in migration files that never run.
-
-**Fix applied**: Added all 30 templates to `supabase/seed.sql` with `ON CONFLICT DO UPDATE`. See section "10. Business Templates" at end of seed.sql.
-
-**WARNING**: If you ever manually re-run old migration `20260228000006_business_templates.sql`,
-it contains `CREATE OR REPLACE FUNCTION create_default_resources()` using `NEW.id` (old PK name).
-This REPLACES the correct baseline function that uses `NEW.tenant_id` — registration breaks.
-Fix with:
-
-```sql
-CREATE OR REPLACE FUNCTION public.create_default_resources()
- RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE v_template business_templates%ROWTYPE;
-BEGIN
-  SELECT * INTO v_template FROM business_templates WHERE business_type = NEW.business_type;
-  IF FOUND THEN
-    INSERT INTO resources (tenant_id, name, description)
-    VALUES (NEW.tenant_id, v_template.default_resource_name, v_template.default_resource_description);
-  END IF;
-  RETURN NEW;
-END; $$;
-```
+**Action**: merge when all 4 CI green + no unresolved review threads
 
 ---
 
-## Unstaged Changes (ready to commit)
+## Next Code Items
 
-```
-dashboard/e2e/agent-conversation.spec.ts     — employee_name toBeNull() for MODE B
-dashboard/e2e/caller-identity.spec.ts        — /login URL fix + response shape fix
-dashboard/e2e/helpers/test.ts                — filter Next.js font manifest page errors
-dashboard/e2e/quick-book-shift-overrides.spec.ts  — shift hours 00:00-23:59
-dashboard/e2e/reminder-on-create.spec.ts           — include employee_id in bad booking
-dashboard/e2e/ui-rename-verification.spec.ts       — service+resource in beforeAll, exact button
-dashboard/e2e/voice-styles.spec.ts                 — dirty-flag fix (uncheck+check always)
-dashboard/lib/mockData.ts                          — MOCK_TENANT → Bella's (b3e1aaaa...)
-supabase/seed.sql                                  — 30 business templates (section 10)
-```
+**P1 (pick next):**
+
+1. Dashboard "Send self-service links" button — `dashboard/components/AppointmentDetailPanel.tsx`
+2. E2E: "book → SMS → link cancels/reschedules" + negative cases (expired token, wrong tenant)
+3. AI cost phase 2 — instrument `callSummary.ts` + `knowledgeIngestion.ts` + `knowledge.ts` for remaining token costs
+
+**P2:**
+
+- Deliberate-fail PR to verify CI gate blocks merge end-to-end
+- Load test booking path (`pool max=10`)
 
 ---
 
-## How to Run Tests
+## User Actions Pending (not code)
 
-```bash
-# Must be in dashboard/ dir:
-cd /home/dale/projects/secretary-hq/dashboard
+- Stripe bank account (weekend)
+- Stripe test round-trip: `stripe listen --forward-to localhost:4001/billing/webhook`
+- Dial `+1 630-866-1960` from different carrier while watching `listRooms()` — PSTN verify
+- Enable Telnyx REFER on SIP Connection `livekit-outbound`
+- Enable "Wait for CI" on 3 Railway services
+- Set `forward_phone` on Beth's tenant (Phone Assistant → AI Persona)
+- Set `BETTER_STACK_TOKEN` + `SENTRY_DSN` on Railway (non-blocking)
 
-# Full suite (resets DB — ~2 min):
-npx playwright test --reporter=line
+---
 
-# Skip DB reset (use when DB already in good state):
-PLAYWRIGHT_SKIP_DB_RESET=1 npx playwright test --reporter=line
+## Key Facts
 
-# Single spec:
-PLAYWRIGHT_SKIP_DB_RESET=1 npx playwright test agent-conversation.spec.ts --reporter=line
-```
-
-## Services Must Be Running
-
-- Backend: `node dist/src/index.js` on port 4001 (pid 644443 as of session)
-- Dashboard: Next.js dev on port 4000
-- DB: Docker Postgres on port 5433
-- After ANY `src/` change: `npm run build` + kill/restart backend
-
-## DB State
-
-`business_templates` is populated (30 rows). No rebuild needed — current DB is good.
-If you rebuild (`npm run db:rebuild -- --yes`), new seed.sql section 10 repopulates templates correctly.
+- Prod: `https://ai-sec-production.up.railway.app/`
+- Phone: `+1 630-866-1960` (Telnyx, tenant Thinking Hammer LLC `d5e3c6a1-…`)
+- Logins: `admin@secretaryhq.com` / `daledemott@gmail.com` / `bella@bellashair.com` — password `/ password`
+- Local DB: port 5433
+- Prod DB URL: encrypted at `~/.claude/projects/-home-dale-projects-secretary-hq/memory/db_url.enc`
+  - Decrypt: `openssl enc -d -aes-256-cbc -pbkdf2 -base64 -pass pass:PASSWORD -in <file>`
+- Full gap inventory: `GAPS.md` / `TODO_GAPS.md`

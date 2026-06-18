@@ -16,6 +16,7 @@ import type {
   CalendarSettings,
   AnalyticsStats,
   AnalyticsCalls,
+  AiCostSummary,
   Vocabulary,
   CoverageItem,
   CallSummary,
@@ -624,6 +625,12 @@ export const Api = {
 
     getCalls: (tenantId: string | null) =>
       apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getAiCost: (tenantId: string | null) =>
+      apiFetch<AiCostSummary>(
+        `/analytics/ai-cost`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- MASTER SKILLS ---

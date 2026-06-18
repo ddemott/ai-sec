@@ -250,6 +250,22 @@ export interface AnalyticsCalls {
   by_day: Array<{ day: string; total: number; booked: number }>;
 }
 
+export interface AiCostRow {
+  source: string;
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  characters_count: number;
+  audio_duration_ms: number;
+  estimated_cost_usd: number;
+}
+
+export interface AiCostSummary {
+  breakdown: AiCostRow[];
+  total_estimated_cost_usd: number;
+}
+
 export interface Vocabulary {
   resource_label: string;
   resource_plural: string;
@@ -330,12 +346,7 @@ export type {
 
 export type ChangeType = 'create' | 'update' | 'delete' | 'restore' | 'sync' | 'merge';
 
-export type ChangeSource =
-  | 'local'
-  | 'square'
-  | 'voice_call'
-  | 'system'
-  | 'api';
+export type ChangeSource = 'local' | 'square' | 'voice_call' | 'system' | 'api';
 
 export type VersionedTable =
   | 'customers'
