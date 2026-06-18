@@ -11,7 +11,7 @@
  */
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-const DEFAULT_TIMEOUT_MS = 3000;
+const DEFAULT_TIMEOUT_MS = 8000;
 
 export async function summarizeCall(
   transcript: string,

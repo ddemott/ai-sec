@@ -136,15 +136,26 @@ export default function ServiceAssignmentView() {
     setSaving(true);
     setActionError(null);
     try {
+      const duration = roundUpTo15(editForm.duration_minutes);
+      const price =
+        editForm.price === undefined || editForm.price === null || !Number.isFinite(editForm.price)
+          ? undefined
+          : editForm.price;
       const res = await Api.services.update(selectedService.service_id, tenantId, {
-        ...editForm,
-        duration_minutes: roundUpTo15(editForm.duration_minutes),
+        name: editForm.name,
+        description: editForm.description,
+        ...(duration >= 5 ? { duration_minutes: duration } : {}),
+        ...(price !== undefined ? { price } : {}),
       });
       if (res.success) {
         void refresh();
         setIsEditModalOpen(false);
       } else {
-        setActionError(res.error || 'Update failed');
+        const details = (res as Record<string, unknown>).details;
+        const extra = Array.isArray(details)
+          ? ` (${(details as Array<{ message: string }>).map((d) => d.message).join(', ')})`
+          : '';
+        setActionError((res.error || 'Update failed') + extra);
       }
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -406,15 +417,19 @@ export default function ServiceAssignmentView() {
                   step={15}
                   min={15}
                   value={editForm.duration_minutes}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, duration_minutes: parseInt(e.target.value) })
-                  }
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value);
+                    setEditForm({ ...editForm, duration_minutes: Number.isFinite(v) ? v : undefined });
+                  }}
                 />
                 <Input
                   label="Price ($)"
                   type="number"
                   value={editForm.price ?? ''}
-                  onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) })}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    setEditForm({ ...editForm, price: Number.isFinite(v) ? v : undefined });
+                  }}
                 />
               </div>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
