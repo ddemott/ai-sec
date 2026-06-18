@@ -235,6 +235,7 @@ export default function AIConfigView() {
           </p>
           <Input
             type="tel"
+            label="Forward calls to"
             value={config?.forward_phone || ''}
             onChange={(e) => {
               setConfig((prev) => (prev ? { ...prev, forward_phone: e.target.value } : null));
@@ -259,6 +260,7 @@ export default function AIConfigView() {
           </p>
           <Input
             type="tel"
+            label="Notification number"
             value={config?.owner_phone || ''}
             onChange={(e) => {
               setConfig((prev) => (prev ? { ...prev, owner_phone: e.target.value } : null));

@@ -137,6 +137,46 @@ describe('AIConfigView — Customer Preferences', () => {
     expect(payload.forward_phone).toBeNull();
   });
 
+  test('HAPPY: typing an owner notification number sends it normalized to updateConfig', async () => {
+    // WHO: owner setting SMS alert number on the AI Persona page.
+    // WHAT: owner_phone input value is E.164-normalized before reaching the backend.
+    // WHEN: clicking Save after entering a number in the Notification number field.
+    // WHERE: AIConfigView Owner Notification Phone section + handleSave.
+    // WHY: without normalization the agent's SMS call gets a malformed tel: URI and
+    //      silently fails to deliver the owner alert.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
+    render(<AIConfigView />);
+
+    const input = await screen.findByLabelText(/notification number/i);
+    fireEvent.change(input, { target: { value: '+1 (630) 555-0100' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.owner_phone).toBe('+16305550100');
+  });
+
+  test('HAPPY: blank owner notification number saves as null (alerts off)', async () => {
+    // WHO: owner removing their SMS alert number.
+    // WHAT: empty/whitespace owner_phone saves as null — disables owner SMS.
+    // WHEN: clicking Save with the Notification number field cleared.
+    // WHERE: AIConfigView handleSave normalizePhone guard.
+    // WHY: normalizePhone('') returns null; an empty string would cause the
+    //      SMS notifier to attempt delivery to a blank number.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
+    render(<AIConfigView />);
+
+    const input = await screen.findByLabelText(/notification number/i);
+    fireEvent.change(input, { target: { value: '   ' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.owner_phone).toBeNull();
+  });
+
   test('HAPPY: an already-enabled tenant renders its saved instructions', async () => {
     // WHO: an owner returning to a config they previously turned on.
     // WHAT: the saved instruction text is shown in the (enabled) textarea.
