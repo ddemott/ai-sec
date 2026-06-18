@@ -110,7 +110,7 @@ describe('AIConfigView — Customer Preferences', () => {
 
     // Type the spaced/parenthesized format the placeholder itself invites —
     // it must normalize to clean E.164 so the agent builds a valid tel: URI.
-    const input = await screen.findByPlaceholderText(/\+1 608 217 5303/i);
+    const input = await screen.findByPlaceholderText(/\+1 312 555 0100/i);
     fireEvent.change(input, { target: { value: '+1 (608) 217-5303' } });
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
@@ -127,7 +127,7 @@ describe('AIConfigView — Customer Preferences', () => {
     render(<AIConfigView />);
 
     // Type whitespace (also dirties the form so Save is enabled).
-    const input = await screen.findByPlaceholderText(/\+1 608 217 5303/i);
+    const input = await screen.findByPlaceholderText(/\+1 312 555 0100/i);
     fireEvent.change(input, { target: { value: '   ' } });
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
