@@ -77,6 +77,8 @@ export interface Tenant {
   // caller to when they need a human. null = no forwarding; the AI takes a
   // message instead.
   forward_phone?: string | null;
+  // SMS alert destination for the owner when a caller leaves a message.
+  owner_phone?: string | null;
 }
 
 export interface BusinessTemplate {
