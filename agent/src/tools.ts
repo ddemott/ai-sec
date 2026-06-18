@@ -506,7 +506,7 @@ export function buildTools(
 
     cancel_appointment: llm.tool({
       description:
-        "Cancel one of the caller's upcoming appointments. ALWAYS call get_my_appointments first and read the result back so the caller can confirm which appointment they want to cancel. Ask them to confirm BEFORE calling this. If they want to reschedule, book the new slot with book_with_scheduling FIRST, then cancel the old one — that way the caller keeps their spot if the new time doesn't work out.",
+        "Cancel one of the caller's upcoming appointments. ALWAYS call get_my_appointments first and read the result back so the caller can confirm which appointment they want to cancel. Ask them to confirm BEFORE calling this. For rescheduling use reschedule_appointment instead.",
       parameters: {
         type: 'object',
         properties: {
@@ -529,6 +529,51 @@ export function buildTools(
           tenant_id: ctx.tenantId,
           phone: ctx.callerPhone,
           appointment_id: args.appointment_id,
+        });
+        return formatResponse(res);
+      },
+    }),
+
+    reschedule_appointment: llm.tool({
+      description:
+        "Move an existing appointment to a new date and time. ALWAYS call get_my_appointments first so the caller can confirm which appointment to move. Confirm the new time verbally before calling this. Use book_with_scheduling to find an available slot if the caller doesn't have one yet.",
+      parameters: {
+        type: 'object',
+        properties: {
+          appointment_id: {
+            type: 'string',
+            description: 'UUID of the appointment to reschedule, exactly as returned by get_my_appointments.',
+          },
+          new_start_time: {
+            type: 'string',
+            description: 'New start time in ISO 8601 format (e.g. 2026-07-15T10:00:00).',
+          },
+          new_end_time: {
+            type: 'string',
+            description: 'New end time in ISO 8601 format (e.g. 2026-07-15T11:00:00).',
+          },
+        },
+        required: ['appointment_id', 'new_start_time', 'new_end_time'],
+        additionalProperties: false,
+      },
+      execute: async (args: {
+        appointment_id: string;
+        new_start_time: string;
+        new_end_time: string;
+      }) => {
+        if (!ctx.callerPhone) {
+          return JSON.stringify({
+            error:
+              "I can't reschedule without caller-ID to verify ownership. Offer to transfer or take a message.",
+          });
+        }
+        speakFiller?.('One moment while I move that for you...');
+        const res = await client.call('/agent-tools/reschedule-appointment', {
+          tenant_id: ctx.tenantId,
+          phone: ctx.callerPhone,
+          appointment_id: args.appointment_id,
+          new_start_time: args.new_start_time,
+          new_end_time: args.new_end_time,
         });
         return formatResponse(res);
       },
