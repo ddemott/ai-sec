@@ -159,7 +159,7 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone FROM tenants WHERE tenant_id = $1',
+          'SELECT tenant_id, name, business_type, system_prompt, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );

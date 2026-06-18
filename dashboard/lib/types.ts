@@ -79,6 +79,8 @@ export interface Tenant {
   forward_phone?: string | null;
   // SMS alert destination for the owner when a caller leaves a message.
   owner_phone?: string | null;
+  // Telnyx DID assigned to this tenant — the number callers dial to reach the AI.
+  inbound_phone?: string | null;
 }
 
 export interface BusinessTemplate {
