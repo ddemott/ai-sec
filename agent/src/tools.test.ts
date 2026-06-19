@@ -658,3 +658,37 @@ describe('take_message', () => {
     expect((calls[0].body as Record<string, unknown>).callback_phone).toBeUndefined();
   });
 });
+
+describe('identify_caller', () => {
+  it('HAPPY: injects tenant_id + phone from context, forwards LLM-supplied name', async () => {
+    // WHO: Caller who gives their name mid-call before or instead of booking
+    // WHAT: Tool posts tenant_id + callerPhone (from context) + name (from LLM) to identify-caller
+    // WHEN: Agent hears the caller say their name and calls identify_caller immediately
+    // WHERE: agent/src/tools.ts identify_caller → /agent-tools/identify-caller
+    // WHY: Phone and tenant must come from context; name is the only LLM-supplied arg
+    const { client, calls } = makeClient([{ ok: true, result: { identified: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.identify_caller, { name: 'Dale DeMott' });
+
+    expect(calls[0].path).toBe('/agent-tools/identify-caller');
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: CALLER_PHONE,
+      name: 'Dale DeMott',
+    });
+  });
+
+  it('SAD: anonymous caller → returns plain string, no backend call', async () => {
+    // WHO: Caller with blocked caller-ID who gives their name
+    // WHAT: Tool returns a plain string (not JSON) and skips the backend
+    // WHY: Backend requires a real phone to upsert; null phone would fail validation
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    const result = await exec(tools.identify_caller, { name: 'Jane Doe' });
+
+    expect(result).toContain('No caller-ID');
+    expect(calls).toHaveLength(0);
+  });
+});
