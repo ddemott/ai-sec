@@ -49,7 +49,10 @@ import {
   type ShiftOverride,
   type Shift,
 } from '../../shared/scheduling';
-import { rescheduleRemindersForAppointment } from '../services/reminders/scheduleForAppointment';
+import {
+  scheduleRemindersForAppointment,
+  rescheduleRemindersForAppointment,
+} from '../services/reminders/scheduleForAppointment';
 
 // ── SMS OTP config — decided 2026-04-23 ────────────────────────────────
 // 6-digit code (industry-standard), 10-min TTL (don't rush callers who are
@@ -887,6 +890,17 @@ export function registerAgentToolRoutes(
         return fail(reply, result?.error_message || 'Booking failed due to a scheduling conflict.');
       }
       bookingAttemptsTotal.inc({ outcome: 'success', source: 'agent' });
+      // Fire-and-forget: schedule confirmation SMS + reminders. Errors are
+      // swallowed inside scheduleRemindersForAppointment — a reminder failure
+      // must never fail the booking response.
+      if (result.appointment_id) {
+        void scheduleRemindersForAppointment(
+          withTenantClient,
+          args.tenant_id,
+          result.appointment_id,
+          app.log
+        );
+      }
       return ok(reply, {
         success: true,
         appointment_id: result.appointment_id,
@@ -1125,6 +1139,14 @@ export function registerAgentToolRoutes(
       }
 
       bookingAttemptsTotal.inc({ outcome: 'success', source: 'agent' });
+      if (result.appointment_id) {
+        void scheduleRemindersForAppointment(
+          withTenantClient,
+          args.tenant_id,
+          result.appointment_id,
+          app.log
+        );
+      }
       return ok(reply, {
         success: true,
         appointment_id: result.appointment_id,
