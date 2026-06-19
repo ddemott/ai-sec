@@ -136,6 +136,68 @@ export function checkMigrationColumnsInBaseline(
   return drifts;
 }
 
+/**
+ * Catch a NEW TABLE landing in a migration but not in baseline.sql.
+ *
+ * `checkMigrationColumnsInBaseline` only scans `ADD COLUMN`, so a table created
+ * via `CREATE TABLE foo (...)` — whose columns are declared inline, never via
+ * ADD COLUMN — escapes it entirely. That is exactly how knowledge_suggestion /
+ * customer_messages / ai_cost_events drifted out of the baseline (found
+ * 2026-06-19): the whole table was absent from every baseline-built DB while the
+ * column guard stayed green.
+ *
+ * Scans every migration for `CREATE TABLE [IF NOT EXISTS] <name>`, subtracts
+ * tables a later migration DROPs or RENAMEs away, and asserts each survivor has
+ * a CREATE TABLE in baseline.sql. Fix on failure: `npm run db:baseline`.
+ */
+export function checkMigrationTablesInBaseline(
+  baselineSql: string,
+  migrationsSql: string[]
+): Drift[] {
+  const created = new Set<string>();
+  const gone = new Set<string>(); // dropped OR renamed-away — not expected in final baseline
+  const createRe =
+    /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi;
+  const dropRe = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi;
+  // Capture BOTH sides of a rename: the old name is gone, the new name must exist.
+  const renameRe =
+    /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+RENAME\s+TO\s+(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi;
+
+  // Strip SQL comments first — a comment like "... CREATE TABLE IF NOT EXISTS,
+  // no backfill" otherwise mis-parses the keyword "if" as a table name.
+  const stripComments = (sql: string) =>
+    sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ');
+
+  for (const raw of migrationsSql) {
+    const sql = stripComments(raw);
+    for (const m of sql.matchAll(createRe)) created.add(m[1].toLowerCase());
+    for (const m of sql.matchAll(dropRe)) gone.add(m[1].toLowerCase());
+    for (const m of sql.matchAll(renameRe)) {
+      gone.add(m[1].toLowerCase()); // old name renamed away
+      created.add(m[2].toLowerCase()); // new name must exist in baseline
+    }
+  }
+  // schema_migrations is created by setup-db.sh, not a migration — and is always
+  // in the dump — so it never needs this guard either way.
+  created.delete('schema_migrations');
+
+  const drifts: Drift[] = [];
+  for (const table of created) {
+    if (gone.has(table)) continue; // created then later dropped or renamed away
+    const present = new RegExp(
+      `CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(?:public\\.)?${table}\\b`,
+      'i'
+    ).test(baselineSql);
+    if (!present) {
+      drifts.push({
+        check: 'baseline-migration-drift',
+        message: `Table "${table}" is created by a migration but missing from baseline.sql — regenerate the snapshot (npm run db:baseline).`,
+      });
+    }
+  }
+  return drifts;
+}
+
 function main(): number {
   const repoRoot = process.cwd();
   const baselinePath = join(repoRoot, 'supabase/baseline.sql');
@@ -156,6 +218,7 @@ function main(): number {
   const drifts = [
     ...checkCriticalIdColumns(baselineSql),
     ...checkMigrationColumnsInBaseline(baselineSql, migrationsSql),
+    ...checkMigrationTablesInBaseline(baselineSql, migrationsSql),
   ];
 
   if (drifts.length === 0) {
