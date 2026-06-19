@@ -49,6 +49,7 @@ import {
   type ShiftOverride,
   type Shift,
 } from '../../shared/scheduling';
+import { rescheduleRemindersForAppointment } from '../services/reminders/scheduleForAppointment';
 
 // ── SMS OTP config — decided 2026-04-23 ────────────────────────────────
 // 6-digit code (industry-standard), 10-min TTL (don't rush callers who are
@@ -216,6 +217,14 @@ const CancelAppointmentSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
   appointment_id: z.string().uuid(),
+});
+
+const RescheduleAppointmentSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  appointment_id: z.string().uuid(),
+  new_start_time: z.string().min(1),
+  new_end_time: z.string().min(1),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -1665,6 +1674,74 @@ export function registerAgentToolRoutes(
       return ok(reply, { cancelled: true, appointment_id: args.appointment_id });
     },
     'Failed to cancel appointment'
+  );
+
+  // reschedule-appointment — move a scheduled appointment to a new time.
+  // Phone ownership verified server-side (LLM can't move another caller's appointment).
+  // GiST exclusion constraints reject double-bookings at the DB layer (23P01).
+  toolRoute(
+    app,
+    '/agent-tools/reschedule-appointment',
+    RescheduleAppointmentSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!normalized) return fail(reply, 'Invalid phone number');
+
+      const timeError = validateAppointmentTimeRange(args.new_start_time, args.new_end_time);
+      if (timeError) return fail(reply, timeError.error);
+
+      if (new Date(args.new_start_time) <= new Date()) {
+        return fail(reply, 'New appointment time must be in the future.');
+      }
+
+      try {
+        const result = await withTenantClient(args.tenant_id, async (client) => {
+          return client.query<{ appointment_id: string }>(
+            `UPDATE appointments a SET start_time = $4, end_time = $5
+             FROM customers c
+             WHERE a.appointment_id = $1
+               AND a.tenant_id = $2
+               AND a.customer_id = c.customer_id
+               AND c.phone = $3
+               AND a.status = 'scheduled'
+               AND a.start_time > NOW()
+             RETURNING a.appointment_id`,
+            [
+              args.appointment_id,
+              args.tenant_id,
+              normalized,
+              args.new_start_time,
+              args.new_end_time,
+            ]
+          );
+        });
+
+        if (result.rows.length === 0) {
+          return fail(
+            reply,
+            "I couldn't find that appointment under your number, or it may already be past or canceled."
+          );
+        }
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === '23P01') {
+          return fail(reply, 'That time slot is already booked. Please choose a different time.');
+        }
+        throw err;
+      }
+
+      // Fire-and-forget: update calendar sync + reschedule reminders.
+      syncAppointmentToAll(pool, args.tenant_id, args.appointment_id, 'update', app.log);
+      void rescheduleRemindersForAppointment(
+        withTenantClient,
+        args.tenant_id,
+        args.appointment_id,
+        app.log
+      );
+
+      return ok(reply, { rescheduled: true, appointment_id: args.appointment_id });
+    },
+    'Failed to reschedule appointment'
   );
 
   // ── AI cost recording ─────────────────────────────────────────────
