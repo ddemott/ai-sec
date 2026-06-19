@@ -451,34 +451,6 @@ export default function BusinessSettingsView() {
             <CRMIntegrationCard
               tenantId={tenantId}
               provider={{
-                name: 'Jobber',
-                color: 'green',
-                icon: 'J',
-                description: 'Sync customers and appointments with your Jobber account.',
-                getSettings: Api.jobber.getSettings,
-                getAuthUrl: Api.jobber.getAuthUrl,
-                disconnect: Api.jobber.disconnect,
-                triggerSync: Api.jobber.triggerSync,
-                connectedParam: 'jobberConnected',
-              }}
-            />
-            <CRMIntegrationCard
-              tenantId={tenantId}
-              provider={{
-                name: 'HubSpot',
-                color: 'orange',
-                icon: 'H',
-                description: 'Sync customers and appointments with your HubSpot account.',
-                getSettings: Api.hubspot.getSettings,
-                getAuthUrl: Api.hubspot.getAuthUrl,
-                disconnect: Api.hubspot.disconnect,
-                triggerSync: Api.hubspot.triggerSync,
-                connectedParam: 'hubspotConnected',
-              }}
-            />
-            <CRMIntegrationCard
-              tenantId={tenantId}
-              provider={{
                 name: 'Square',
                 color: 'blue',
                 icon: 'S',
@@ -488,113 +460,9 @@ export default function BusinessSettingsView() {
                 disconnect: Api.square.disconnect,
                 triggerSync: Api.square.triggerSync,
                 connectedParam: 'squareConnected',
+                getSyncStatus: Api.square.getSyncStatus,
               }}
             />
-            <CRMIntegrationCard
-              tenantId={tenantId}
-              provider={{
-                name: 'ServiceTitan',
-                color: 'purple',
-                icon: 'ST',
-                description: 'Sync customers and jobs with your ServiceTitan account.',
-                getSettings: Api.servicetitan.getSettings,
-                getAuthUrl: Api.servicetitan.getAuthUrl,
-                disconnect: Api.servicetitan.disconnect,
-                triggerSync: Api.servicetitan.triggerSync,
-                connectedParam: 'servicetitanConnected',
-              }}
-            />
-          </div>
-
-          {!calendarSettings ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button
-                onClick={() => handleConnectCalendar('google')}
-                disabled={calLoading}
-                className="flex items-center justify-center gap-3 p-4 border rounded-2xl transition-all font-bold group"
-                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-soft)')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
-              >
-                <div className="w-8 h-8 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center text-red-600">
-                  G
-                </div>
-                <span>Connect Google Calendar</span>
-                <ExternalLink className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-              </button>
-              <button
-                onClick={() => handleConnectCalendar('outlook')}
-                disabled={calLoading}
-                className="flex items-center justify-center gap-3 p-4 border rounded-2xl transition-all font-bold group"
-                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-soft)')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-soft)')}
-              >
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
-                >
-                  O
-                </div>
-                <span>Connect Outlook Calendar</span>
-                <ExternalLink className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-all" />
-              </button>
-            </div>
-          ) : (
-            <div
-              className="p-4 border rounded-2xl flex items-center justify-between"
-              style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
-            >
-              <div className="flex items-center gap-4">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${calendarSettings.provider === 'google' ? 'bg-red-500 text-white' : ''}`}
-                  style={
-                    calendarSettings.provider !== 'google'
-                      ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
-                      : undefined
-                  }
-                >
-                  {calendarSettings.provider === 'google' ? 'G' : 'O'}
-                </div>
-                <div>
-                  <div className="font-bold capitalize">
-                    {calendarSettings.provider} Calendar Connected
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    ID: {calendarSettings.external_calendar_id}
-                  </div>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                onClick={handleDisconnectCalendar}
-                disabled={calLoading}
-                className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                icon={Unlink}
-              >
-                Disconnect
-              </Button>
-            </div>
-          )}
-        </Card>
-
-        {/* ─── CRM INTEGRATIONS ─── */}
-        <CRMIntegrationCard
-          tenantId={tenantId}
-          provider={{
-            name: 'Square',
-            color: 'blue',
-            icon: 'S',
-            description: 'Sync customers and bookings with your Square account.',
-            getSettings: Api.square.getSettings,
-            getAuthUrl: Api.square.getAuthUrl,
-            disconnect: Api.square.disconnect,
-            triggerSync: Api.square.triggerSync,
-            connectedParam: 'squareConnected',
-            getSyncStatus: Api.square.getSyncStatus,
-          }}
-        />
-
           </div>{/* end Connections space-y-4 */}
         </div>{/* end Connections section */}
 
