@@ -11,7 +11,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Full cr
 ## Architecture
 
 - **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + xAI Grok (TTS) → Fastify `/agent-tools/*`
-- **Backend**: Fastify (27 route modules under `src/routes/`) → Postgres (Railway)
+- **Backend**: Fastify (28 route modules under `src/routes/`) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `ai-sec-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind + TS
 - **Database**: Postgres + pgvector, RLS multi-tenancy, atomic booking RPCs
@@ -31,7 +31,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Full cr
 
 Items below capture hidden context — things you can't grep for. Everything else (flat service files, type definitions, doc tree) is derivable from the filesystem.
 
-- `/src` — Fastify backend (slim `index.ts` + 27 route modules)
+- `/src` — Fastify backend (slim `index.ts` + 28 route modules)
 - `/src/routes/routeHelpers.ts` — `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`
 - `/src/services/communications/` — CommunicationService + email/sms/appointment services + Handlebars templates + ProviderRegistry + Twilio/Mock adapters. Consent-gated.
 - `/src/services/reminders/` — ReminderService schedules; reminderProcessor delivers via CommunicationService; reminderRepository handles DB.
@@ -42,7 +42,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 - `/src/middleware.ts` — `withHandler`, `tenantMiddleware`, `registerJwtAuthHook`, `generateToken`, `AppError`, `requireTenantId`, `requireAuth`, `requireSuperAdmin`, `logEvent/Warning/Error`. JWT preHandler (PUBLIC_ROUTES bypass + password-rotation check) lives here. `tenantMiddleware` enforces tenant isolation in two layers: (1) any non-public, non-tenant-exempt request with no authenticated session (`req.auth`) is rejected 401 before any tenant resolution — a user-supplied `tenant_id` is a selector within the JWT's permitted tenants, never a substitute for auth (added 2026-05-21 after an anonymous `?tenant_id=<uuid>` was found to return that tenant's data read+write+delete with zero auth; the 2026-05-06 guard only fired when a jwtTenant already existed); (2) for authenticated callers, any user-supplied `tenant_id` (query or body) not matching the JWT's is rejected 403 unless super-admin (added 2026-05-06). `requireTenantId` trusts only the middleware-validated `req.tenantId` (no body fallback). Use `requireSuperAdmin` (not `requireAuth`) on `/tenants/*` and other cross-tenant admin operations.
 - `/agent` — LiveKit Agents worker (Node). Modules: `index`, `prompt`, `toolsClient`, `sessionContext`, `tools` (12 tools), `transferClient` (live SIP cold-transfer to a human via REFER), `transcript` (TranscriptRecorder → call transcript), `callOutcome` (CallOutcomeTracker → booked/transferred + appointment_id for the call→appointment link), `callSummary` (bounded/failsafe post-call OpenAI summary), `fallback` (OpenAI TTS dead-air guard). `agent/scripts/sim-*.mjs` are the simulation helpers (LiveKit dispatch + browser-call).
 - `/dashboard` — Next.js (components/, lib/, app/). Landing at `/`, dashboard at `/dashboard`.
-- `/supabase/migrations` — 139 SQL migrations (incl. 20260618 ai_cost_events + ai_cost_events_rls + 20260616 customer_messages + 20260615 preferences_default_true + 20260612 knowledge_suggestion + comms history + voice styles + forward phone).
+- `/supabase/migrations` — 140 SQL migrations (incl. 20260619 accounting_addon + 20260618 ai_cost_events + ai_cost_events_rls + 20260616 customer_messages + 20260615 preferences_default_true + 20260612 knowledge_suggestion + comms history + voice styles + forward phone).
 - `/scripts` — `simulate.sh` (system simulation/health harness; subcommands: `status`, `ci`, `tools`, `stripe`, `rag`, `call`; node helpers in `agent/scripts/sim-*.mjs` for LiveKit + `scripts/sim-tools.mjs` + `scripts/sim-stripe.mjs`), `verify-claude-md.ts` drift detector
 
 ## Development
@@ -124,7 +124,7 @@ Durable rules-of-engagement that override "build for the future":
 
 **Backend**
 
-- Slim `index.ts` registers 27 route modules. Tenant-scoped routes use `withTenantClient()` for RLS.
+- Slim `index.ts` registers 28 route modules. Tenant-scoped routes use `withTenantClient()` for RLS.
 - All mutations: Zod-validated, response shape `{ success, error?, details? }`, `assertRowAffected()` returns 404 on zero-row UPDATE/DELETE (never silent success).
 - Production env validation: refuses to start without `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`.
 - Graceful shutdown on SIGTERM/SIGINT (closes Fastify + drains pool — required for Railway).
