@@ -26,7 +26,10 @@ export function KnowledgeSuggestions({ tenantId, onCountChange }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!tenantId) return;
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
