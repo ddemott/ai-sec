@@ -68,8 +68,12 @@ beforeEach(() => {
 
 describe('KnowledgeBaseView prefill + provenance', () => {
   test('HAPPY: both policy-questionnaire AND website-scan answers pre-fill', async () => {
-    // WHY: the regression — widening the scan source must not stop scanned
-    //      answers from pre-filling the questionnaire.
+    // WHO: an owner who ran the website scan during onboarding, now on the KB tab
+    // WHAT: the questionnaire pre-fills from BOTH source values
+    // WHEN: KnowledgeBaseView mounts and loads saved tenant_docs
+    // WHERE: KnowledgeBaseView fetchDocs() prefill loop (accepts both sources)
+    // WHY: the regression — widening the scan source to 'website-scan' must not
+    //      stop scanned answers from pre-filling the questions step (onboarding).
     render(<KnowledgeBaseView />);
     // Manual answer pre-fills (baseline behavior).
     await waitFor(() => expect(screen.getByDisplayValue('Open Mon–Fri 9 to 5.')).toBeInTheDocument());
@@ -78,7 +82,13 @@ describe('KnowledgeBaseView prefill + provenance', () => {
   });
 
   test('HAPPY: website-scanned answer shows "From your website"; manual shows "Answered"', async () => {
-    // WHY: the provenance feature — the owner can tell scan-sourced answers apart.
+    // WHO: the same owner reviewing pre-filled answers
+    // WHAT: the scan-sourced row shows a "From your website" marker; the manual
+    //       row shows "Answered"
+    // WHEN: after the prefill load resolves
+    // WHERE: PolicyQuestionField marker block (fromWebsite branch)
+    // WHY: the provenance feature — the owner can tell scan-sourced answers apart
+    //      from ones they typed, so they know what to double-check.
     render(<KnowledgeBaseView />);
     await waitFor(() => expect(screen.getByText('From your website')).toBeInTheDocument());
     expect(screen.getByText('Answered')).toBeInTheDocument();

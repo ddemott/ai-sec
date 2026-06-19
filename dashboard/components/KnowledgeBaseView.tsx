@@ -484,6 +484,10 @@ export default function KnowledgeBaseView() {
       const answers = new Map<string, { id: string; answer: string; source?: string }>();
       for (const doc of data) {
         if ((doc.source === 'policy-questionnaire' || doc.source === 'website-scan') && doc.title) {
+          // `data` is newest-first; if a title has multiple docs (e.g. a manual
+          // answer + a later website-scan for the same question) keep the FIRST
+          // seen = the newest, rather than letting an older row overwrite it.
+          if (answers.has(doc.title)) continue;
           const answerMatch = doc.content.match(/^Q: .+\nA: ([\s\S]+)$/);
           const answer = answerMatch ? answerMatch[1] : doc.content;
           answers.set(doc.title, { id: doc.tenant_doc_id, answer, source: doc.source });
