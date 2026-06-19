@@ -90,7 +90,7 @@ async function extractAnswersWithLLM(
   | {
       success: true;
       answers: Array<{
-        questionId: string;
+        questionId: string | null;
         question: string;
         answer: string | null;
         sourceUrl: string;
@@ -416,10 +416,14 @@ export function registerKnowledgeRoutes(
       // Resolve the questions to extract: the shared static policy bank plus this
       // tenant's owner-authored custom questions (tenant_docs source='custom-question'),
       // so the scan also targets what this owner specifically cares about.
+      // Bounded: cap how many custom questions feed the extract prompt so a tenant
+      // with a huge custom-question list can't blow up prompt size / OpenAI cost.
       const customRows = await withTenantClient(tenantId, async (client) =>
         client.query(
           `SELECT title FROM tenant_docs
-           WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL`,
+           WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL
+           ORDER BY created_at DESC
+           LIMIT 50`,
           [tenantId]
         )
       );

@@ -39,12 +39,16 @@ const AUTH = { 'x-tenant-id': TENANT_ID, authorization: 'Bearer test-token' };
 
 // Capture every OpenAI extraction prompt the handler sends.
 let openAiPrompts: string[] = [];
+// Preserve the ambient key so we don't leak 'test-key' into other test files
+// that assert the missing-key behavior.
+let savedOpenAiKey: string | undefined;
 
 beforeEach(() => {
   handle.queries.length = 0;
   handle.queryResponses.length = 0;
   mockGetEmbedding.mockClear();
   openAiPrompts = [];
+  savedOpenAiKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = 'test-key';
 
   // Mock fetch for BOTH the site scrape and the OpenAI extraction call.
@@ -92,6 +96,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  if (savedOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = savedOpenAiKey;
 });
 
 describe('POST /knowledge/import-website', () => {
