@@ -28,7 +28,7 @@
  *   - Full sync-fan-out behavior (covered by services/syncOrchestrator
  *     tests; here we only assert that it's invoked with the right args).
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 
 // Mock the sync orchestrator so the fire-and-forget calls inside route
@@ -41,6 +41,9 @@ vi.mock('../services/reminders/scheduleForAppointment', () => ({
   scheduleRemindersForAppointment: vi.fn(),
   rescheduleRemindersForAppointment: vi.fn(),
 }));
+vi.mock('../services/telnyxSms', () => ({
+  sendSms: vi.fn().mockResolvedValue({ ok: true }),
+}));
 
 import { registerAppointmentRoutes } from './appointments';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
@@ -48,6 +51,7 @@ import {
   scheduleRemindersForAppointment,
   rescheduleRemindersForAppointment,
 } from '../services/reminders/scheduleForAppointment';
+import { sendSms } from '../services/telnyxSms';
 import { buildRouteTestApp, type RouteTestAppHandle } from '../test-utils-mock';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
@@ -1545,5 +1549,141 @@ describe('POST /appointments/:id/update', () => {
 
     expect(res.statusCode).toBe(200);
     expect(rescheduleRemindersForAppointment).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// POST /appointments/:id/send-self-service-links
+// ────────────────────────────────────────────────────────────────────
+
+describe('POST /appointments/:id/send-self-service-links', () => {
+  const OLD_DASHBOARD_URL = process.env.DASHBOARD_URL;
+  const OLD_BACKEND_PUBLIC_URL = process.env.BACKEND_PUBLIC_URL;
+
+  beforeEach(() => {
+    process.env.DASHBOARD_URL = 'https://example.secretaryhq.com';
+    delete process.env.BACKEND_PUBLIC_URL;
+  });
+
+  afterEach(() => {
+    if (OLD_DASHBOARD_URL === undefined) {
+      delete process.env.DASHBOARD_URL;
+    } else {
+      process.env.DASHBOARD_URL = OLD_DASHBOARD_URL;
+    }
+    if (OLD_BACKEND_PUBLIC_URL === undefined) {
+      delete process.env.BACKEND_PUBLIC_URL;
+    } else {
+      process.env.BACKEND_PUBLIC_URL = OLD_BACKEND_PUBLIC_URL;
+    }
+  });
+
+  it('HAPPY: sends SMS with cancel + reschedule links and returns 200', async () => {
+    // WHO: owner tapping "Send Links" button on a scheduled appointment
+    // WHAT: two self-service tokens generated; SMS body contains both links
+    // WHEN: appointment is scheduled and customer has a phone number
+    // WHERE: POST /appointments/:id/send-self-service-links
+    // WHY: customers need one-tap cancel/reschedule without a dashboard login
+    handle.queryResponses.push({
+      rows: [
+        {
+          start_time: '2026-07-10T14:00:00Z',
+          description: 'Haircut',
+          customer_phone: '+16305550199',
+          inbound_phone: '+16308229086',
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/appointments/${APPOINTMENT_ID}/send-self-service-links`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { success: boolean; message: string };
+    expect(body.success).toBe(true);
+    expect(body.message).toMatch(/sent/i);
+    expect(sendSms).toHaveBeenCalledOnce();
+    const callArgs = (sendSms as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
+      body: string;
+      from: string;
+      to: string;
+    };
+    expect(callArgs.body).toMatch(/cancel/i);
+    expect(callArgs.body).toMatch(/reschedule/i);
+    expect(callArgs.to).toBe('+16305550199');
+  });
+
+  it('SAD: returns 404 when appointment not found or not scheduled', async () => {
+    // WHO: owner clicking "Send Links" on a stale/deleted appointment
+    // WHAT: 404 with clear error message
+    handle.queryResponses.push({ rows: [], rowCount: 0 });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/appointments/${APPOINTMENT_ID}/send-self-service-links`,
+    });
+
+    expect(res.statusCode).toBe(404);
+    const body = JSON.parse(res.body) as { success: boolean };
+    expect(body.success).toBe(false);
+  });
+
+  it('SAD: returns 400 when customer has no phone number', async () => {
+    // WHO: owner clicking "Send Links" for a customer with no phone on file
+    // WHAT: 400 with descriptive error — no SMS attempted
+    handle.queryResponses.push({
+      rows: [
+        {
+          start_time: '2026-07-10T14:00:00Z',
+          description: 'Haircut',
+          customer_phone: null,
+          inbound_phone: '+16308229086',
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/appointments/${APPOINTMENT_ID}/send-self-service-links`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body) as { success: boolean; error: string };
+    expect(body.success).toBe(false);
+    expect(body.error).toMatch(/phone/i);
+    expect(sendSms).not.toHaveBeenCalled();
+  });
+
+  it('SAD: returns 503 when no public base URL is configured', async () => {
+    // WHO: owner on a deployment where neither DASHBOARD_URL nor BACKEND_PUBLIC_URL is set
+    // WHAT: 503 before any DB query — links can't be built without at least one base URL
+    delete process.env.DASHBOARD_URL;
+    delete process.env.BACKEND_PUBLIC_URL;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/appointments/${APPOINTMENT_ID}/send-self-service-links`,
+    });
+
+    expect(res.statusCode).toBe(503);
+    const body = JSON.parse(res.body) as { success: boolean };
+    expect(body.success).toBe(false);
+  });
+
+  it('SAD: returns 401 when unauthenticated', async () => {
+    // WHO: anonymous request (no JWT)
+    // WHAT: rejected before any DB call — JWT auth is required
+    handle.auth.current = null;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/appointments/${APPOINTMENT_ID}/send-self-service-links`,
+    });
+
+    expect(res.statusCode).toBe(401);
   });
 });

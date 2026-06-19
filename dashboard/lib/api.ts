@@ -403,6 +403,9 @@ export const Api = {
           description: string | null;
         };
       }>(`/appointments/${id}/reactivate`, 'POST', { tenant_id: tenantId }),
+
+    sendSelfServiceLinks: (id: string) =>
+      apiMutate<{ message?: string }>(`/appointments/${id}/send-self-service-links`, 'POST'),
   },
 
   // --- RESOURCES ---
