@@ -24,6 +24,10 @@
  *   8. resolve sad — wrong tenant cannot resolve another tenant's entry (404)
  *   9. website-import validation — invalid URL returns 400 (no OpenAI call)
  *  10. cross-tenant isolation — tenant A cannot read tenant B's KB entries
+ *  11. suggestion approve — seed knowledge_suggestion + PATCH confirmed ingests
+ *      it into the live KB (source='website-scan') and flips status
+ *  12. suggestion reject — PATCH rejected discards without touching the KB
+ *  13. suggestion isolation — tenant B cannot approve tenant A's suggestion (404)
  */
 
 import { test, expect } from './helpers/test';
@@ -521,6 +525,192 @@ test('kb-isolation: tenant B cannot read tenant A KB entries', async ({ request 
     );
     const aEntries = await aList.json();
     expect(aEntries.length).toBe(2);
+  } finally {
+    await Promise.all([
+      tenantA ? cleanTenantData(pool, tenantA.tenantId) : Promise.resolve(),
+      tenantB ? cleanTenantData(pool, tenantB.tenantId) : Promise.resolve(),
+    ]);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 11. Suggestion lifecycle — approve a website-scan suggestion → ingests to KB
+//
+// The OpenAI website-scan itself (POST /knowledge/import-website happy path) is
+// not CI-safe — it needs a real OpenAI call + a real external site fetch. So we
+// seed a knowledge_suggestion row directly (the same shape the scan produces)
+// and exercise the CI-safe half of the onboarding flow: the owner reviewing and
+// approving a staged suggestion, which must ingest it into the live RAG KB.
+// ────────────────────────────────────────────────────────────────────────────
+test('kb-suggestion-approve: PATCH confirmed ingests a staged suggestion into the live KB', async ({
+  request,
+}) => {
+  // WHO: owner reviewing AI-extracted Q&A after a website scan during onboarding
+  // WHAT: a 'suggested' knowledge_suggestion row, once PATCHed status=confirmed,
+  //       is written into tenant_docs (source='website-scan') AND its status flips
+  // WHEN: setup wizard "Import from website" step → review suggestions → approve
+  // WHERE: PATCH /knowledge/suggestions/:id (confirm branch) in knowledge.ts
+  // WHY: approval is the only path a scanned answer reaches the AI. Regression =
+  //      owner approves but the caller still gets "I don't know".
+  let tenant: RegisteredTenant | null = null;
+  try {
+    tenant = await registerFreshTenant(request);
+    const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` };
+
+    const question = 'Do you offer mobile service?';
+    const answer = 'Yes, we come to your home or office anywhere in the metro area for a small travel fee.';
+    const ins = await pool.query(
+      `INSERT INTO knowledge_suggestion
+         (tenant_id, question_id, question, answer, source_url, confidence, status)
+       VALUES ($1, NULL, $2, $3, $4, $5, 'suggested')
+       RETURNING id`,
+      [tenant.tenantId, question, answer, 'https://example-shop.com/services', 0.92]
+    );
+    const suggestionId = ins.rows[0].id as string;
+
+    // Owner sees it in the review queue
+    const listRes = await request.get(
+      `${BACKEND_URL}/knowledge/suggestions?tenant_id=${tenant.tenantId}`,
+      { headers: hdr }
+    );
+    expect(listRes.status()).toBe(200);
+    const listBody = await listRes.json();
+    expect(listBody.success).toBe(true);
+    expect(
+      listBody.suggestions.some((s: { id: string }) => s.id === suggestionId),
+      'seeded suggestion must appear in the review queue'
+    ).toBe(true);
+
+    // Approve → ingest
+    const patchRes = await request.patch(`${BACKEND_URL}/knowledge/suggestions/${suggestionId}`, {
+      headers: hdr,
+      data: { tenant_id: tenant.tenantId, status: 'confirmed' },
+    });
+    expect(patchRes.status()).toBe(200);
+    expect((await patchRes.json()).success).toBe(true);
+
+    // It now lives in the KB with source='website-scan'
+    const kbRes = await request.get(`${BACKEND_URL}/knowledge?tenant_id=${tenant.tenantId}`, {
+      headers: hdr,
+    });
+    const entries = await kbRes.json();
+    const ingested = entries.find((e: { title: string }) => e.title === question);
+    expect(ingested, 'approved suggestion must appear in the live KB').toBeTruthy();
+    expect(ingested.source).toBe('website-scan');
+
+    // And it is no longer in the 'suggested' queue
+    const queueAfter = await (
+      await request.get(`${BACKEND_URL}/knowledge/suggestions?tenant_id=${tenant.tenantId}`, {
+        headers: hdr,
+      })
+    ).json();
+    expect(queueAfter.suggestions.some((s: { id: string }) => s.id === suggestionId)).toBe(false);
+
+    // DB confirms the status flip
+    const statusRow = await pool.query(
+      `SELECT status FROM knowledge_suggestion WHERE id = $1`,
+      [suggestionId]
+    );
+    expect(statusRow.rows[0].status).toBe('confirmed');
+  } finally {
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 12. Suggestion lifecycle — reject discards without ingesting
+// ────────────────────────────────────────────────────────────────────────────
+test('kb-suggestion-reject: PATCH rejected discards a suggestion without touching the KB', async ({
+  request,
+}) => {
+  // WHO: owner declining an off-base AI-extracted suggestion
+  // WHAT: a rejected suggestion flips to status='rejected', leaves the queue, and
+  //       is NOT written into the live KB
+  // WHEN: review step — owner sees a wrong/irrelevant scanned answer
+  // WHERE: PATCH /knowledge/suggestions/:id (reject branch) in knowledge.ts
+  // WHY: rejection must never pollute the KB; a rejected answer reaching the AI
+  //      would have the owner's voice say something they explicitly declined
+  let tenant: RegisteredTenant | null = null;
+  try {
+    tenant = await registerFreshTenant(request);
+    const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` };
+
+    const question = 'Do you sell extended warranties?';
+    const ins = await pool.query(
+      `INSERT INTO knowledge_suggestion
+         (tenant_id, question_id, question, answer, source_url, confidence, status)
+       VALUES ($1, NULL, $2, $3, $4, $5, 'suggested')
+       RETURNING id`,
+      [tenant.tenantId, question, 'Some hallucinated answer.', 'https://example-shop.com', 0.4]
+    );
+    const suggestionId = ins.rows[0].id as string;
+
+    const patchRes = await request.patch(`${BACKEND_URL}/knowledge/suggestions/${suggestionId}`, {
+      headers: hdr,
+      data: { tenant_id: tenant.tenantId, status: 'rejected' },
+    });
+    expect(patchRes.status()).toBe(200);
+
+    // Not in the KB
+    const entries = await (
+      await request.get(`${BACKEND_URL}/knowledge?tenant_id=${tenant.tenantId}`, { headers: hdr })
+    ).json();
+    expect(entries.some((e: { title: string }) => e.title === question)).toBe(false);
+
+    // Status flipped to rejected
+    const statusRow = await pool.query(
+      `SELECT status FROM knowledge_suggestion WHERE id = $1`,
+      [suggestionId]
+    );
+    expect(statusRow.rows[0].status).toBe('rejected');
+  } finally {
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 13. Suggestion isolation — cannot approve another tenant's suggestion
+// ────────────────────────────────────────────────────────────────────────────
+test('kb-suggestion-sad-wrong-tenant: cannot approve another tenant suggestion (404, no ingest)', async ({
+  request,
+}) => {
+  // WHO: tenant B attempting to act on tenant A's staged suggestion
+  // WHAT: PATCH with B's auth on A's suggestion id returns 404 and ingests nothing
+  // WHEN: any multi-tenant deployment
+  // WHERE: RLS-scoped SELECT in PATCH /knowledge/suggestions/:id
+  // WHY: one business approving/ingesting into another's KB would be a breach
+  let tenantA: RegisteredTenant | null = null;
+  let tenantB: RegisteredTenant | null = null;
+  try {
+    [tenantA, tenantB] = await Promise.all([
+      registerFreshTenant(request),
+      registerFreshTenant(request),
+    ]);
+    const hdrB = { 'Content-Type': 'application/json', Authorization: `Bearer ${tenantB.token}` };
+
+    const ins = await pool.query(
+      `INSERT INTO knowledge_suggestion
+         (tenant_id, question_id, question, answer, source_url, confidence, status)
+       VALUES ($1, NULL, $2, $3, $4, $5, 'suggested')
+       RETURNING id`,
+      [tenantA.tenantId, 'Tenant A private question?', 'Tenant A private answer.', '', 0.9]
+    );
+    const suggestionId = ins.rows[0].id as string;
+
+    // Tenant B tries to approve A's suggestion (B's tenant_id matches B's JWT, so
+    // middleware passes; the RLS-scoped fetch finds 0 rows → 404)
+    const patchRes = await request.patch(`${BACKEND_URL}/knowledge/suggestions/${suggestionId}`, {
+      headers: hdrB,
+      data: { tenant_id: tenantB.tenantId, status: 'confirmed' },
+    });
+    expect(patchRes.status()).toBe(404);
+
+    // A's suggestion remains untouched (still 'suggested', not ingested)
+    const statusRow = await pool.query(
+      `SELECT status FROM knowledge_suggestion WHERE id = $1`,
+      [suggestionId]
+    );
+    expect(statusRow.rows[0].status).toBe('suggested');
   } finally {
     await Promise.all([
       tenantA ? cleanTenantData(pool, tenantA.tenantId) : Promise.resolve(),
