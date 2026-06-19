@@ -86,6 +86,8 @@ describe('/agent-tools/my-appointments', () => {
       end_time: '2026-07-01T15:00:00Z',
       description: 'Oil Change',
       status: 'scheduled',
+      service_name: 'Full Oil Change',
+      employee_name: 'Mike',
     };
     const { app, queries } = buildApp({ queryResponses: [{ rows: [mockAppt] }] });
 
@@ -98,7 +100,11 @@ describe('/agent-tools/my-appointments', () => {
     const body = res.json<{ success: boolean; result: { appointments: unknown[] } }>();
     expect(body.success).toBe(true);
     expect(body.result.appointments).toHaveLength(1);
-    expect(body.result.appointments[0]).toMatchObject({ appointment_id: APPT_ID_A });
+    expect(body.result.appointments[0]).toMatchObject({
+      appointment_id: APPT_ID_A,
+      service_name: 'Full Oil Change',
+      employee_name: 'Mike',
+    });
     // Verify phone was normalized before DB query
     expect(queries[0].params[1]).toBe(CALLER_A_PHONE);
   });
@@ -220,6 +226,182 @@ describe('/agent-tools/cancel-appointment', () => {
     const res = await post(app, '/agent-tools/cancel-appointment', {
       phone: CALLER_A_PHONE,
       appointment_id: APPT_ID_B,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ success: boolean }>().success).toBe(false);
+    expect(queries).toHaveLength(0);
+  });
+});
+
+// ── /agent-tools/reschedule-appointment ───────────────────────────────────
+
+describe('/agent-tools/reschedule-appointment', () => {
+  const FUTURE_START = '2099-08-01T10:00:00';
+  const FUTURE_END = '2099-08-01T11:00:00';
+
+  it('HAPPY: reschedules own appointment and returns rescheduled:true', async () => {
+    // WHO: Caller A moving their scheduled appointment to a new future slot
+    // WHAT: UPDATE sets new start_time + end_time, returns appointment_id;
+    //        GiST constraints enforce no overlap at the DB layer
+    // WHEN: Phone matches appointment owner and new time is valid + in the future
+    // WHERE: src/routes/agentTools.ts reschedule-appointment toolRoute
+    // WHY: Voice receptionist must be able to move an appointment for the caller
+    const { app, queries } = buildApp({
+      // UPDATE returning the rescheduled row, then empty responses for fire-and-forget reminders
+      queryResponses: [
+        { rows: [{ appointment_id: APPT_ID_A }] },
+        { rows: [] }, // reminder cancel
+        { rows: [] }, // reminder schedule (no schedules configured is fine)
+      ],
+    });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_A_PHONE,
+      appointment_id: APPT_ID_A,
+      new_start_time: FUTURE_START,
+      new_end_time: FUTURE_END,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      success: boolean;
+      result: { rescheduled: boolean; appointment_id: string };
+    }>();
+    expect(body.success).toBe(true);
+    expect(body.result.rescheduled).toBe(true);
+    expect(body.result.appointment_id).toBe(APPT_ID_A);
+    // Phone was passed as the ownership guard
+    expect(queries[0].params[2]).toBe(CALLER_A_PHONE);
+    // New times were passed correctly
+    expect(queries[0].params[3]).toBe(FUTURE_START);
+    expect(queries[0].params[4]).toBe(FUTURE_END);
+  });
+
+  it("SAD (CRITICAL): caller B cannot reschedule caller A's appointment", async () => {
+    // WHO: Caller B attempting to move caller A's appointment
+    // WHAT: UPDATE finds zero rows because phone (caller B) doesn't match customer on appt A
+    // WHEN: appointment_id is valid but phone doesn't match ownership
+    // WHERE: src/routes/agentTools.ts reschedule-appointment — phone ownership gate
+    // WHY: Same ownership boundary as cancel. Without this, any caller could move
+    //        any appointment by supplying an arbitrary UUID.
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [] }], // zero rows = ownership mismatch
+    });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_B_PHONE,
+      appointment_id: APPT_ID_A,
+      new_start_time: FUTURE_START,
+      new_end_time: FUTURE_END,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ success: boolean; error?: string }>();
+    expect(body.success).toBe(false);
+    expect(body.error).toBeTruthy();
+    expect(queries[0].params[2]).toBe(CALLER_B_PHONE);
+  });
+
+  it('SAD: rejects new_start_time in the past', async () => {
+    // WHO: Caller trying to move appointment to a past time (e.g. yesterday)
+    // WHAT: Route validates new time is in the future before any DB call
+    // WHY: Must reject past times before the UPDATE so the DB never sees them
+    const { app, queries } = buildApp({ queryResponses: [] });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_A_PHONE,
+      appointment_id: APPT_ID_A,
+      new_start_time: '2020-01-01T10:00:00',
+      new_end_time: '2020-01-01T11:00:00',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ success: boolean; error?: string }>();
+    expect(body.success).toBe(false);
+    expect(body.error).toMatch(/future/i);
+    expect(queries).toHaveLength(0);
+  });
+
+  it('SAD: rejects when new_end_time is before new_start_time', async () => {
+    // WHO: Malformed reschedule request with inverted times
+    // WHAT: validateAppointmentTimeRange rejects before DB call
+    // WHY: Prevents invalid appointment windows from reaching Postgres
+    const { app, queries } = buildApp({ queryResponses: [] });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_A_PHONE,
+      appointment_id: APPT_ID_A,
+      new_start_time: '2099-08-01T11:00:00',
+      new_end_time: '2099-08-01T10:00:00', // end before start
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ success: boolean }>().success).toBe(false);
+    expect(queries).toHaveLength(0);
+  });
+
+  it('SAD: DB conflict (23P01 exclusion) returns slot-busy message', async () => {
+    // WHO: Caller trying to move to a slot already occupied by another appointment
+    // WHAT: Postgres throws code 23P01 (exclusion_violation) — GiST constraint fires
+    // WHEN: New [start,end) overlaps an existing appointment for same employee/resource
+    // WHERE: src/routes/agentTools.ts reschedule-appointment — exclusion catch block
+    // WHY: Must surface a human-readable "slot is busy" instead of a 500
+    const conflictErr = Object.assign(new Error('exclusion constraint violation'), {
+      code: '23P01',
+    });
+
+    // Build a dedicated app whose DB client always throws 23P01
+    const throwClient = {
+      query: vi.fn(async () => {
+        throw conflictErr;
+      }),
+      release: vi.fn(),
+    } as unknown as PoolClient;
+
+    const throwWithClient = async <T>(
+      _tenantId: string,
+      fn: (client: PoolClient) => Promise<T>
+    ): Promise<T> => fn(throwClient);
+
+    const getEmbedding = async () => new Array(1536).fill(0);
+    const conflictApp = Fastify({ logger: false });
+    registerAgentToolRoutes(conflictApp, {} as never, throwWithClient, getEmbedding);
+
+    const res = await conflictApp.inject({
+      method: 'POST',
+      url: '/agent-tools/reschedule-appointment',
+      headers: { 'x-agent-secret': SECRET },
+      payload: {
+        tenant_id: TENANT_ID,
+        phone: CALLER_A_PHONE,
+        appointment_id: APPT_ID_A,
+        new_start_time: FUTURE_START,
+        new_end_time: FUTURE_END,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ success: boolean; error?: string }>();
+    expect(body.success).toBe(false);
+    expect(body.error).toMatch(/already booked/i);
+  });
+
+  it('SAD: rejects non-UUID appointment_id before DB call', async () => {
+    // WHO: Malformed agent request with invalid appointment_id
+    // WHAT: Zod uuid() rejects before any DB query
+    const { app, queries } = buildApp({ queryResponses: [] });
+
+    const res = await post(app, '/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT_ID,
+      phone: CALLER_A_PHONE,
+      appointment_id: 'not-a-uuid',
+      new_start_time: FUTURE_START,
+      new_end_time: FUTURE_END,
     });
 
     expect(res.statusCode).toBe(200);

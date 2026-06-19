@@ -62,7 +62,7 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - **No rich media during calls** (e.g., photo of tire damage for auto shops).
 - **Outcome classification is good** (`callClassify.ts`: booked / no_availability / wrong_service / price / message / info + abandoned) but not yet driving automations (e.g., price-sensitive follow-up SMS).
 
-**Agent tools** (`agent/src/tools.ts` — 14 tools as of 2026-06-16):
+**Agent tools** (`agent/src/tools.ts` — 17 tools as of 2026-06-18):
 
 - `get_customer_context`: CRM lookup + history + preferences (called early when caller ID present).
 - `get_service_catalog`: list services with duration/price.
@@ -77,11 +77,14 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - `save_customer_preference`: durable facts (preferred_stylist etc.) for future calls.
 - `transfer_call`: SIP REFER to `tenants.forward_phone` (or message fallback); records outcome.
 - `take_message`: collect caller name + message + optional callback phone, persist to `customer_messages`, SMS-notify owner. (Added 2026-06-16.)
+- `get_my_appointments`: list caller's upcoming scheduled appointments by phone (server-injected — LLM never supplies it). Returns service_name + employee_name for natural voice ("your Oil Change with Mike"). (Added 2026-06-16.)
+- `cancel_appointment`: cancel caller's own appointment by UUID; phone ownership gate at backend — LLM can never cancel another caller's booking. (Added 2026-06-16.)
+- `reschedule_appointment`: move appointment to new start/end; same phone ownership gate; backend validates future time + non-overlap via GiST exclusion. (Backend endpoint + reminder reschedule added 2026-06-18.)
 
 Current vs. desired for a complete receptionist:
 
-- Have: book, lookup, policy, basic transfer, preference capture.
-- Missing (high value): `cancel_appointment`, `reschedule_appointment` (by id or "my Tuesday one"), `get_my_appointments` (for known caller), `take_structured_message` (with follow-up questions + owner notification), `page_owner_via_sms`, `get_detailed_customer_history` (beyond short context), real-time "is my tech running late?" status.
+- Have: book, lookup, policy, basic transfer, preference capture, cancel, reschedule, my-appointments, take message.
+- Missing (lower priority): `page_owner_via_sms`, `get_detailed_customer_history` (beyond short context), real-time "is my tech running late?" status, warm transfer.
 
 **Customer Self-Service Action Links (P1 highest-leverage gap — repeatedly surfaces in strategy as support reducer)**
 
