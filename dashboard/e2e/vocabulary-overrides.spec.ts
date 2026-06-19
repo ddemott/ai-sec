@@ -36,7 +36,7 @@ import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-const BACKEND_URL = 'https://localhost:4001';
+const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 
 let pool: Pool;
 
@@ -100,10 +100,10 @@ test('salon tenant resolves Stylist/Chair from the business-template tier', asyn
   //       this on tenant change, and every component using useVocabulary() reads the result.
   // WHERE: src/routes/vocabulary.ts → 3-tier COALESCE(t.resource_label, bt.resource_label, 'Resource').
   //        For a tenant whose own columns are NULL, the bt.* values win.
-  // WHY: pin the per-template tier explicitly. Today's automotive-only DynaTire seed exercises
-  //      tier 1 (when tenants.* is set by seed.sql) but NOT tier 2 via the real /register
+  // WHY: pin the per-template tier explicitly. A fresh registered tenant whose own
+  //      columns are NULL exercises tier 2 (business_templates JOIN) via the real /register
   //      path. A regression that drops the LEFT JOIN on business_templates (e.g., refactor
-  //      to a simpler SELECT) would silently degrade every non-DynaTire tenant to the
+  //      to a simpler SELECT) would silently degrade every tenant to the
   //      hardcoded 'Resource'/'Employee'/'Appointment' fallback.
   let tenant: RegisteredTenant | null = null;
   try {
@@ -128,16 +128,15 @@ test('salon tenant resolves Stylist/Chair from the business-template tier', asyn
 });
 
 test('mobile-tire tenant resolves Technician/Truck — cross-template guard', async ({ request }) => {
-  // WHO: a mobile-tire owner (DynaTire's category). Same NULL-per-tenant-override shape
-  //      as the salon test; only the business_type differs.
+  // WHO: a mobile-tire owner. Same NULL-per-tenant-override shape as the salon test;
+  //      only the business_type differs.
   // WHAT: GET /vocabulary returns Truck/Technician from business_templates.
-  // WHEN: the second-most-exercised template in our test fixtures; DynaTire seed.sql
-  //       hardcodes these values, but this test asserts they're served by the /vocabulary
-  //       route's JOIN-resolved path, not the seeded-tenant override.
+  // WHEN: a fresh mobile-tire tenant registered via /register — exercises the
+  //       JOIN-resolved path, not a per-tenant seed override.
   // WHERE: src/routes/vocabulary.ts JOIN to business_templates on business_type.
   // WHY: defense against a regression that hardcodes one industry's labels into the
   //      route. If a future cleanup pass replaces the JOIN with a SELECT against only
-  //      a single template (the seeded DynaTire row), this test will fail loud.
+  //      a single template, this test will fail loud.
   let tenant: RegisteredTenant | null = null;
   try {
     tenant = await registerFreshTenant(request, 'mobile-tire', 'Tire E2E');

@@ -19,6 +19,11 @@ export interface SessionContext {
   /** Carrier-assigned call identifier — carried into tool calls for later
    *  correlation (transcript linking, owner-notification SMS). */
   callId: string | null;
+  /** LiveKit room name — needed to cold-transfer the live call (SIP REFER). */
+  roomName: string | null;
+  /** SIP participant identity — the handle LiveKit's transferSipParticipant
+   *  uses to target the caller leg. Null when the participant never joined. */
+  participantIdentity: string | null;
 }
 
 /**
@@ -90,6 +95,8 @@ export function buildSessionContext(args: {
   jobMetadata?: string | null | undefined;
   roomMetadata: string | null | undefined;
   participantAttributes: Record<string, string> | null | undefined;
+  roomName?: string | null | undefined;
+  participantIdentity?: string | null | undefined;
 }): SessionContext | null {
   const meta = parseRoomMetadata(args.jobMetadata) ?? parseRoomMetadata(args.roomMetadata);
   if (!meta) return null;
@@ -98,5 +105,7 @@ export function buildSessionContext(args: {
     tenantId: meta.tenantId,
     callerPhone: caller.callerPhone,
     callId: caller.callId,
+    roomName: args.roomName ?? null,
+    participantIdentity: args.participantIdentity ?? null,
   };
 }

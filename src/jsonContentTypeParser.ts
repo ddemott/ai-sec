@@ -9,7 +9,7 @@
  *
  * Two responsibilities:
  *  1. Preserve the raw request buffer on `req.rawBody` so webhook routes
- *     (Stripe / HubSpot / Square / Jobber) can verify HMAC signatures
+ *     (Stripe / Square) can verify HMAC signatures
  *     against the exact bytes received — re-stringifying parsed JSON would
  *     change whitespace/key-order and break signature checks.
  *  2. Parse the JSON body and hand it back via the `done` callback.

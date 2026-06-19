@@ -28,6 +28,14 @@ export interface GrokTTSOptions {
   apiKey: string;
   voice: GrokVoice;
   language: string;
+  /** Speech pace multiplier (xAI `speed`, 0.7–1.5). 1.0 = normal. */
+  speed: number;
+  /** Wrap synthesized text in xAI's `<soft>` prosody tag for a softer,
+   *  soothing delivery. */
+  soft: boolean;
+  /** Wrap synthesized text in xAI's `<cheerful>` prosody tag for an upbeat,
+   *  positive delivery. */
+  cheerful: boolean;
   /** Injectable for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch;
 }
@@ -35,6 +43,9 @@ export interface GrokTTSOptions {
 const DEFAULT_OPTIONS: Omit<GrokTTSOptions, 'apiKey'> = {
   voice: 'ara',
   language: 'en',
+  speed: 1.0,
+  soft: false,
+  cheerful: false,
 };
 
 export class GrokTTS extends tts.TTS {
@@ -59,7 +70,9 @@ export class GrokTTS extends tts.TTS {
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
-  updateOptions(opts: Partial<Pick<GrokTTSOptions, 'voice' | 'language'>>): void {
+  updateOptions(
+    opts: Partial<Pick<GrokTTSOptions, 'voice' | 'language' | 'speed' | 'soft' | 'cheerful'>>
+  ): void {
     this.opts = { ...this.opts, ...opts };
   }
 
@@ -68,6 +81,11 @@ export class GrokTTS extends tts.TTS {
     connOptions?: APIConnectOptions,
     abortSignal?: AbortSignal
   ): GrokChunkedStream {
+    // Prosody tags wrap the utterance; xAI strips them from the spoken output.
+    // cheerful is applied first (outer), then soft (inner), so both can stack.
+    let spokenText = text;
+    if (this.opts.cheerful) spokenText = `<cheerful>${spokenText}</cheerful>`;
+    if (this.opts.soft) spokenText = `<soft>${spokenText}</soft>`;
     const responsePromise = this.fetchImpl(GROK_TTS_URL, {
       method: 'POST',
       headers: {
@@ -75,9 +93,10 @@ export class GrokTTS extends tts.TTS {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        text,
+        text: spokenText,
         voice_id: this.opts.voice,
         language: this.opts.language,
+        speed: this.opts.speed,
         output_format: {
           codec: 'pcm',
           sample_rate: GROK_TTS_SAMPLE_RATE,

@@ -1,7 +1,7 @@
 /**
  * Shared disconnect helper for CRM provider routes.
  *
- * jobber, hubspot, square, and servicetitan each used to maintain a
+ * The CRM provider routes (Square today; Jobber/HubSpot/ServiceTitan removed 2026-06-12) each maintained a
  * near-identical 16-line POST /<provider>/settings/disconnect handler
  * that ran the same two DELETE queries against tenant_integration_settings
  * and entity_sync_map, scoped to (tenant_id, provider). The provider name

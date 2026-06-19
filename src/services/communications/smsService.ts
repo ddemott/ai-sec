@@ -3,6 +3,7 @@ import type { ConsentService } from '../consentService.js';
 import type { SMSMessage, CommunicationResult } from './types.js';
 import { providerRegistry } from './ProviderRegistry.js';
 import { smsRateLimiter, RateLimitedError } from './smsRateLimit.js';
+import { recordCommunicationHistory } from './communicationHistory.js';
 
 export class SMSService {
   private static simulationNoticeLogged = false;
@@ -58,7 +59,11 @@ export class SMSService {
       // Use tenant's provider if configured, otherwise use default
       const provider = providerRegistry.getDefaultProvider();
 
-      const fromNumber = process.env.TWILIO_PHONE_NUMBER || 'AI_SECRETARY';
+      const providerPhoneEnv =
+        provider.getName() === 'twilio'
+          ? process.env.TWILIO_PHONE_NUMBER
+          : process.env.TELNYX_PHONE_NUMBER;
+      const fromNumber = tenantConfig.inboundPhone || providerPhoneEnv || 'AI_SECRETARY';
 
       // Validate phone number format (basic validation)
       if (provider.getName() !== 'mock' && !this.isValidPhoneNumber(message.to)) {
@@ -85,6 +90,16 @@ export class SMSService {
       console.log(
         `✅ SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`
       );
+
+      // Record the send in communications_history (best-effort, never throws —
+      // a failed log must not turn a successful send into a failure).
+      await recordCommunicationHistory(tenantId, {
+        channel: 'sms',
+        recipient: message.to,
+        body,
+        status: 'sent',
+        providerMessageId: result.messageSid,
+      });
 
       return {
         success: true,
@@ -117,7 +132,12 @@ export class SMSService {
   async sendSystemSMS(tenantId: string, message: SMSMessage): Promise<CommunicationResult> {
     try {
       const provider = providerRegistry.getDefaultProvider();
-      const fromNumber = process.env.TWILIO_PHONE_NUMBER || 'AI_SECRETARY';
+      const tenantConfig = await this.configService.getTenantConfig(tenantId);
+      const providerPhoneEnv =
+        provider.getName() === 'twilio'
+          ? process.env.TWILIO_PHONE_NUMBER
+          : process.env.TELNYX_PHONE_NUMBER;
+      const fromNumber = tenantConfig?.inboundPhone || providerPhoneEnv || 'AI_SECRETARY';
 
       const body = message.body || '';
       if (!body) {
@@ -187,13 +207,25 @@ export class SMSService {
       hoursUntil?: number;
       availableTime?: string;
       message?: string;
+      cancelLink?: string | null;
+      rescheduleLink?: string | null;
     };
     switch (template) {
       case 'appointment-confirmation':
-        return `✅ Confirmed: ${d.serviceName} with ${d.staffName} on ${d.dateTime}. Reply STOP to opt out.`;
+        return (
+          `✅ Confirmed: ${d.serviceName} with ${d.staffName} on ${d.dateTime}.` +
+          (d.cancelLink ? ` Cancel: ${d.cancelLink}` : '') +
+          (d.rescheduleLink ? ` Reschedule: ${d.rescheduleLink}` : '') +
+          ' Reply STOP to opt out.'
+        );
 
       case 'appointment-reminder':
-        return `🔔 Reminder: ${d.serviceName} with ${d.staffName} in ${d.hoursUntil}h at ${d.dateTime}. Reply STOP to opt out.`;
+        return (
+          `🔔 Reminder: ${d.serviceName} with ${d.staffName} in ${d.hoursUntil}h at ${d.dateTime}.` +
+          (d.cancelLink ? ` Cancel: ${d.cancelLink}` : '') +
+          (d.rescheduleLink ? ` Reschedule: ${d.rescheduleLink}` : '') +
+          ' Reply STOP to opt out.'
+        );
 
       case 'appointment-cancellation':
         return `❌ Cancelled: ${d.serviceName} on ${d.dateTime} has been cancelled. Reply STOP to opt out.`;

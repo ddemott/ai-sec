@@ -34,6 +34,19 @@ Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 >   while monitoring LiveKit `listRooms()`. Room appears → pipe works, wait for
 >   carrier propagation. Nothing → investigate UDP transport to LiveKit Cloud.
 
+> ## 🔁 2026-06-11 — Live call-transfer (transfer_call) shipped; needs Telnyx REFER enabled
+> Built `transfer_call`: when a caller needs a human, the agent cold-transfers the
+> live PSTN leg off LiveKit to `tenants.forward_phone` (owner cell) via SIP REFER
+> (`SipClient.transferSipParticipant` → `tel:<E.164>`). Set the number on the
+> dashboard AI Persona page ("Forward Calls to a Person"). Code + tests green; NULL
+> = no forwarding (agent takes a message).
+> **RUNTIME DEPENDENCY — not solvable in code:** LiveKit's transfer rides a SIP
+> REFER back through the **inbound trunk**, so the **Telnyx SIP Connection must
+> have call transfer / REFER enabled**. Until that's turned on Telnyx-side, every
+> transfer fails at runtime (the agent degrades to taking a message). Verify on the
+> same different-carrier test call as the inbound-path check below.
+> Caller ID on the transferred leg shows the trunk number (can't be set per-transfer).
+
 ---
 
 ## DONE (verified)

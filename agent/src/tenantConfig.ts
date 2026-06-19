@@ -22,10 +22,15 @@ export interface TenantDisplayConfig {
    */
   systemPrompt: string | null;
   /**
-   * Whether the owner turned on customer-preference capture. When true the
-   * system prompt gains a "Customer preferences" section and the agent is
-   * told to call save_customer_preference. Default false — preference capture
-   * is opt-in (writes durable CRM data + steers upsells).
+   * Owner-editable greeting (dashboard "First Message"). The agent speaks this
+   * as the literal opening line; NULL falls back to the hardcoded
+   * "Thanks for calling <name>…" so a tenant that never set one is unaffected.
+   */
+  firstMessage: string | null;
+  /**
+   * Whether customer-preference capture is enabled. Default true — the agent
+   * saves durable facts about returning callers by default. Owners can opt out
+   * via the dashboard AI Persona page (sets column to false).
    */
   savePreferencesEnabled: boolean;
   /**
@@ -34,14 +39,43 @@ export interface TenantDisplayConfig {
    * toggle works before the owner writes anything.
    */
   preferencesInstructions: string | null;
+  /**
+   * Per-tenant xAI Grok TTS settings (2026-06-10). NULL means "use the agent's
+   * XAI_TTS_VOICE / XAI_TTS_SPEED / XAI_TTS_SOFT env default", so a tenant that
+   * hasn't picked a voice keeps the platform default. ttsVoice is a Grok
+   * voice_id (eve/ara/rex/sal/leo or a custom clone id).
+   */
+  ttsVoice: string | null;
+  ttsSpeed: number | null;
+  ttsSoft: boolean | null;
+  ttsCheerful: boolean | null;
+  ttsFormal: boolean | null;
+  ttsWarm: boolean | null;
+  ttsConcise: boolean | null;
+  /**
+   * E.164 PSTN number the agent cold-transfers a live call to (owner cell),
+   * via SIP REFER through the inbound trunk. NULL means no forwarding is
+   * configured — the transfer_call tool reports it can't transfer and the
+   * agent takes a message instead. 2026-06-11.
+   */
+  forwardPhone: string | null;
 }
 
 export const TENANT_FALLBACK: TenantDisplayConfig = {
   name: 'this business',
   timezone: 'America/Chicago',
   systemPrompt: null,
-  savePreferencesEnabled: false,
+  firstMessage: null,
+  savePreferencesEnabled: true,
   preferencesInstructions: null,
+  ttsVoice: null,
+  ttsSpeed: null,
+  ttsSoft: null,
+  ttsCheerful: null,
+  ttsFormal: null,
+  ttsWarm: null,
+  ttsConcise: null,
+  forwardPhone: null,
 };
 
 export async function fetchTenantConfig(
@@ -54,16 +88,34 @@ export async function fetchTenantConfig(
     name: string;
     timezone: string;
     system_prompt: string | null;
+    first_message?: string | null;
     save_preferences_enabled?: boolean;
     preferences_instructions?: string | null;
+    tts_voice?: string | null;
+    tts_speed?: number | null;
+    tts_soft?: boolean | null;
+    tts_cheerful?: boolean | null;
+    tts_formal?: boolean | null;
+    tts_warm?: boolean | null;
+    tts_concise?: boolean | null;
+    forward_phone?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {
       name: res.result.name,
       timezone: res.result.timezone,
       systemPrompt: res.result.system_prompt ?? null,
-      savePreferencesEnabled: res.result.save_preferences_enabled ?? false,
+      firstMessage: res.result.first_message ?? null,
+      savePreferencesEnabled: res.result.save_preferences_enabled ?? true,
       preferencesInstructions: res.result.preferences_instructions ?? null,
+      ttsVoice: res.result.tts_voice ?? null,
+      ttsSpeed: res.result.tts_speed ?? null,
+      ttsSoft: res.result.tts_soft ?? null,
+      ttsCheerful: res.result.tts_cheerful ?? null,
+      ttsFormal: res.result.tts_formal ?? null,
+      ttsWarm: res.result.tts_warm ?? null,
+      ttsConcise: res.result.tts_concise ?? null,
+      forwardPhone: res.result.forward_phone ?? null,
     };
   }
   return TENANT_FALLBACK;

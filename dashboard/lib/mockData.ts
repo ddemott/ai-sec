@@ -9,10 +9,13 @@ const getFixedDate = (daysOut: number, hours: number, minutes: number) => {
 };
 
 export const MOCK_TENANT = {
-  tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
-  name: 'Demo Tire Co',
-  business_type: 'mobile-tire',
-  system_prompt: 'You are a professional, helpful secretary for Demo Tire Co...',
+  // Bella's Hair Studio — always present after DB seed; safe fallback when
+  // the real tenant config fetch fails. Previously pointed at DynaTire
+  // (removed 2026-06-03), which caused a 404 → forceLogout cascade.
+  tenant_id: 'b3e1aaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+  name: "Bella's Hair Studio",
+  business_type: 'salon_v1',
+  system_prompt: "You are a professional, helpful secretary for Bella's Hair Studio...",
   first_message: null,
   voice_id: 'ba124806-6962-4354-94a0-7607775952f4',
 };

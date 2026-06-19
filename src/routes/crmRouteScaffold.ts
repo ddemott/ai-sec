@@ -2,7 +2,8 @@
 /**
  * Shared route scaffold for CRM OAuth providers.
  *
- * Each provider (Jobber, HubSpot, Square, ServiceTitan) exposes the same
+ * Each CRM provider (Square today; Jobber/HubSpot/ServiceTitan were removed
+ * 2026-06-12 as competitors — see docs/STRATEGY.md) exposes the same
  * six HTTP endpoints:
  *   GET  /<provider>/auth               — initiate OAuth
  *   GET  /<provider>/auth/callback      — OAuth callback
@@ -17,13 +18,13 @@
  *
  * Usage:
  *   registerCrmScaffoldRoutes(app, pool, withTenantClient, {
- *     provider: 'jobber',
- *     displayName: 'Jobber',
- *     isEnabled: jobberClient.isJobberEnabled,
- *     getAuthUrl: jobberClient.getAuthUrl,
- *     verifyState: jobberClient.verifyState,
- *     exchangeCodeForTokens: jobberClient.exchangeCodeForTokens,
- *     fullSync: (pool, tenantId) => jobberSync.fullSync(pool, tenantId),
+ *     provider: 'square',
+ *     displayName: 'Square',
+ *     isEnabled: squareClient.isSquareEnabled,
+ *     getAuthUrl: squareClient.getAuthUrl,
+ *     verifyState: squareClient.verifyState,
+ *     exchangeCodeForTokens: squareClient.exchangeCodeForTokens,
+ *     fullSync: (pool, tenantId) => squareSync.fullSync(pool, tenantId),
  *   });
  */
 
@@ -35,9 +36,9 @@ import { getCrmSyncStatus } from '../services/crmSyncStatus';
 import { disconnectCrmIntegration, type CrmProvider } from '../services/crmDisconnect';
 
 export interface CrmRouteConfig {
-  /** Short provider key used in DB + URL prefix (e.g. 'jobber') */
+  /** Short provider key used in DB + URL prefix (e.g. 'square') */
   provider: CrmProvider;
-  /** Human-readable label for error messages (e.g. 'Jobber') */
+  /** Human-readable label for error messages (e.g. 'Square') */
   displayName: string;
   /** Returns false when required env vars are absent */
   isEnabled: () => boolean;
@@ -51,7 +52,7 @@ export interface CrmRouteConfig {
   ) => Promise<{ access_token: string; refresh_token: string; expiry_date: number }>;
   /** Run a full bidirectional sync; returns metadata spread into the response body */
   fullSync: (pool: Pool, tenantId: string) => Promise<Record<string, unknown>>;
-  /** Optional extra query params to store in integration settings JSONB (e.g. tenant_sid for ServiceTitan) */
+  /** Optional extra query params to store in integration settings JSONB (a provider-specific id captured at connect time) */
   buildExtraSettings?: (query: Record<string, string>) => Record<string, unknown> | null;
 }
 

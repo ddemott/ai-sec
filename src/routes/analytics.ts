@@ -14,6 +14,135 @@ export function registerAnalyticsRoutes(
   pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
+  // Top-line stats for the dashboard Home + Analytics views. Returns the
+  // AnalyticsStats shape (dashboard/lib/types.ts) directly (not the
+  // {success,result} envelope) — apiFetch<AnalyticsStats> consumes it raw.
+  // Registered at the full path '/analytics/stats' because these analytics
+  // routes are mounted without an '/analytics' prefix (coverage/feedback are
+  // root-level), but the dashboard calls '/analytics/stats'.
+  app.get(
+    '/analytics/stats',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const stats = await withTenantClient(tenantId, async (client) => {
+        const [calls, appts, custs, activity] = await Promise.all([
+          client.query<{ total: number; today: number; week: number }>(
+            `SELECT count(*)::int AS total,
+                    count(*) FILTER (WHERE started_at >= date_trunc('day', now()))::int AS today,
+                    count(*) FILTER (WHERE started_at >= now() - interval '7 days')::int AS week
+             FROM voice_sessions WHERE tenant_id = $1 AND is_deleted = false`,
+            [tenantId]
+          ),
+          client.query<{ total: number; today: number; week: number; upcoming: number }>(
+            `SELECT count(*)::int AS total,
+                    count(*) FILTER (WHERE start_time >= date_trunc('day', now())
+                                       AND start_time < date_trunc('day', now()) + interval '1 day')::int AS today,
+                    count(*) FILTER (WHERE start_time >= now() - interval '7 days')::int AS week,
+                    count(*) FILTER (WHERE start_time >= now())::int AS upcoming
+             FROM appointments WHERE tenant_id = $1 AND is_deleted = false`,
+            [tenantId]
+          ),
+          client.query<{ total: number; new_this_week: number }>(
+            `SELECT count(*)::int AS total,
+                    count(*) FILTER (WHERE created_at >= now() - interval '7 days')::int AS new_this_week
+             FROM customers WHERE tenant_id = $1 AND is_deleted = false`,
+            [tenantId]
+          ),
+          client.query<{ type: string; description: string; timestamp: string }>(
+            `(SELECT 'appointment' AS type,
+                     'Appointment booked: ' || coalesce(description, 'appointment') AS description,
+                     created_at AS timestamp
+              FROM appointments WHERE tenant_id = $1 AND is_deleted = false
+              ORDER BY created_at DESC LIMIT 10)
+             UNION ALL
+             (SELECT 'call', 'Call from ' || coalesce(caller_phone, 'unknown'), created_at
+              FROM voice_sessions WHERE tenant_id = $1 AND is_deleted = false
+              ORDER BY created_at DESC LIMIT 10)
+             UNION ALL
+             (SELECT 'customer', 'New customer: ' || coalesce(name, 'unknown'), created_at
+              FROM customers WHERE tenant_id = $1 AND is_deleted = false
+              ORDER BY created_at DESC LIMIT 10)
+             ORDER BY timestamp DESC LIMIT 15`,
+            [tenantId]
+          ),
+        ]);
+
+        return {
+          calls: calls.rows[0] ?? { total: 0, today: 0, week: 0 },
+          appointments: appts.rows[0] ?? { total: 0, today: 0, week: 0, upcoming: 0 },
+          customers: custs.rows[0] ?? { total: 0, new_this_week: 0 },
+          recent_activity: activity.rows,
+        };
+      });
+
+      return reply.send(stats);
+    }, 'Failed to load analytics stats')
+  );
+
+  // Call-analytics cut for the Analytics view: outcome breakdown (the "why")
+  // + per-day call volume with a booked count. Built entirely from
+  // voice_sessions — "booked" is keyed on appointment_id IS NOT NULL (the hard
+  // signal), NOT the freeform `outcome` text. The dashboard derives conversion
+  // (booked/total), abandonment (no_outcome share) and the volume sparkline
+  // from these two arrays. Returns the AnalyticsCalls shape directly (raw, no
+  // {success,result} envelope) like /analytics/stats above.
+  app.get(
+    '/analytics/calls',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const data = await withTenantClient(tenantId, async (client) => {
+        const [byOutcome, byDay, totals] = await Promise.all([
+          // Outcome breakdown — powers Conversion, Abandonment, and the WHY cut.
+          // NULL/empty outcome collapses to 'no_outcome' (an abandoned/unclassified call).
+          client.query<{ outcome: string; count: number; booked: number }>(
+            `SELECT coalesce(nullif(outcome, ''), 'no_outcome') AS outcome,
+                    count(*)::int AS count,
+                    count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked
+             FROM voice_sessions
+             WHERE tenant_id = $1 AND is_deleted = false
+             GROUP BY 1
+             ORDER BY count DESC`,
+            [tenantId]
+          ),
+          // Per-day call volume over the last 30 days, with booked count.
+          client.query<{ day: string; total: number; booked: number }>(
+            `SELECT to_char(date_trunc('day', started_at), 'YYYY-MM-DD') AS day,
+                    count(*)::int AS total,
+                    count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked
+             FROM voice_sessions
+             WHERE tenant_id = $1 AND is_deleted = false
+               AND started_at >= now() - interval '30 days'
+             GROUP BY 1
+             ORDER BY 1 ASC`,
+            [tenantId]
+          ),
+          // Top-line totals so the dashboard never has to re-derive the denominator.
+          client.query<{ total: number; booked: number; abandoned: number }>(
+            `SELECT count(*)::int AS total,
+                    count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked,
+                    count(*) FILTER (WHERE appointment_id IS NULL
+                                       AND coalesce(nullif(outcome, ''), 'no_outcome') = 'no_outcome')::int AS abandoned
+             FROM voice_sessions
+             WHERE tenant_id = $1 AND is_deleted = false`,
+            [tenantId]
+          ),
+        ]);
+
+        return {
+          totals: totals.rows[0] ?? { total: 0, booked: 0, abandoned: 0 },
+          by_outcome: byOutcome.rows,
+          by_day: byDay.rows,
+        };
+      });
+
+      return reply.send(data);
+    }, 'Failed to load call analytics')
+  );
+
   // Coverage gap detection — returns per-service coverage status for a date range
   app.get(
     '/coverage',
@@ -137,5 +266,58 @@ export function registerAnalyticsRoutes(
       });
       return reply.send(res.rows);
     }, 'Failed to fetch feedback')
+  );
+
+  // GET /analytics/ai-cost — month-to-date AI usage aggregated by provider + model.
+  app.get(
+    '/analytics/ai-cost',
+    withHandler(async (req, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query<{
+          source: string;
+          provider: string;
+          model: string;
+          input_tokens: string;
+          output_tokens: string;
+          characters_count: string;
+          audio_duration_ms: string;
+          estimated_cost_usd: string;
+        }>(
+          `SELECT
+             source,
+             provider,
+             model,
+             SUM(input_tokens)::bigint        AS input_tokens,
+             SUM(output_tokens)::bigint       AS output_tokens,
+             SUM(characters_count)::bigint    AS characters_count,
+             SUM(audio_duration_ms)::bigint   AS audio_duration_ms,
+             SUM(estimated_cost_usd)          AS estimated_cost_usd
+           FROM ai_cost_events
+           WHERE tenant_id = $1
+             AND created_at >= date_trunc('month', now())
+           GROUP BY source, provider, model
+           ORDER BY SUM(estimated_cost_usd) DESC`,
+          [tenantId]
+        );
+      });
+
+      const breakdown = res.rows.map((r) => ({
+        source: r.source,
+        provider: r.provider,
+        model: r.model,
+        input_tokens: Number(r.input_tokens),
+        output_tokens: Number(r.output_tokens),
+        characters_count: Number(r.characters_count),
+        audio_duration_ms: Number(r.audio_duration_ms),
+        estimated_cost_usd: Number(r.estimated_cost_usd),
+      }));
+
+      const total_estimated_cost_usd = breakdown.reduce((sum, r) => sum + r.estimated_cost_usd, 0);
+
+      return reply.send({ breakdown, total_estimated_cost_usd });
+    }, 'Failed to load AI cost data')
   );
 }

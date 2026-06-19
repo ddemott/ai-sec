@@ -569,6 +569,15 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
           save_preferences_enabled: false,
           preferences_instructions: null,
           default_buffer_minutes: 0,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
         },
       ],
       rowCount: 1,
@@ -585,7 +594,10 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(res.statusCode).toBe(200);
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.text).toContain('default_buffer_minutes');
-    expect(updateQuery!.params[6]).toBe(15); // from body, before tenant_id
+    // Param order: [system_prompt=$1, voice_id=$2, business_type=$3, first_message=$4,
+    //   save_preferences_enabled=$5, preferences_instructions=$6, default_buffer_minutes=$7,
+    //   tts_voice=$8, ..., forward_phone=$15, owner_phone=$16, tenant_id=$17]
+    expect(updateQuery!.params[6]).toBe(15); // default_buffer_minutes = $7 → index 6
   });
 
   it('SAD: a buffer above the 120-minute cap is rejected 400 (Zod), no UPDATE runs', async () => {
@@ -600,6 +612,58 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
 
     expect(res.statusCode).toBe(400);
     expect(queries.find((q) => q.text.includes('UPDATE tenants SET'))).toBeUndefined();
+  });
+
+  it('HAPPY: forward_phone persists through update-config', async () => {
+    // WHO: owner setting the "forward calls to my cell" number on the AI config
+    //      page, then saving.
+    // WHAT: forward_phone is written to the UPDATE so the agent's tenant-config
+    //      fetch sees it next call and transfer_call can SIP-REFER to it.
+    // WHEN: body carries forward_phone.
+    // WHERE: src/routes/tenants.ts UPDATE tenants SET ... forward_phone = $15.
+    // WHY: without it in the UPDATE the dashboard field is cosmetic — it would
+    //      look saved but never reach the DB or the voice agent's transfer path.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'auto_shop',
+          system_prompt: 'You are a helpful assistant.',
+          voice_id: 'ara',
+          first_message: 'Hello!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          default_buffer_minutes: 0,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE — prior values
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { forward_phone: '+16082175303' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery!.text).toContain('forward_phone');
+    // Param order: [system_prompt=$1, voice_id=$2, business_type=$3, first_message=$4,
+    //   save_preferences_enabled=$5, preferences_instructions=$6, default_buffer_minutes=$7,
+    //   tts_voice=$8, tts_speed=$9, tts_soft=$10, tts_cheerful=$11, tts_formal=$12,
+    //   tts_warm=$13, tts_concise=$14, forward_phone=$15, owner_phone=$16, tenant_id=$17]
+    expect(updateQuery!.params[14]).toBe('+16082175303'); // forward_phone = $15 → index 14
   });
 
   it('HAPPY: omitting preference fields preserves their prior values', async () => {
@@ -632,5 +696,98 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.params[4]).toBe(true); // preserved
     expect(updateQuery!.params[5]).toBe('Keep notes on regulars.'); // preserved
+  });
+
+  it('HAPPY: owner_phone persists through update-config', async () => {
+    // WHO: tenant owner setting their SMS alert number on the AI Persona page.
+    // WHAT: owner_phone reaches the UPDATE so the agent's SMS notifier fires to
+    //       the right number when a caller leaves a message.
+    // WHEN: body carries owner_phone.
+    // WHERE: src/routes/tenants.ts UPDATE tenants SET ... owner_phone = $15.
+    // WHY: without it in the UPDATE the field is cosmetic — the caller's message
+    //      would be saved but no SMS would ever reach the owner.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          system_prompt: 'You are helpful.',
+          voice_id: 'ara',
+          first_message: 'Hello!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE — prior values
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { owner_phone: '+16305550100' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery!.text).toContain('owner_phone');
+    // Param order: [system_prompt, voice_id, business_type, first_message,
+    //   save_preferences_enabled, preferences_instructions, tts_voice,
+    //   tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise,
+    //   forward_phone, owner_phone, tenant_id]
+    expect(updateQuery!.params[14]).toBe('+16305550100');
+  });
+
+  it('HAPPY: owner_phone explicit null clears the notification number', async () => {
+    // WHO: owner removing their SMS alert number.
+    // WHAT: null body value writes NULL to the column, disabling SMS alerts.
+    // WHEN: body carries owner_phone: null explicitly.
+    // WHERE: src/routes/tenants.ts finalOwnerPhone logic.
+    // WHY: undefined (omit field) must preserve prior; null must clear.
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          system_prompt: null,
+          voice_id: null,
+          first_message: null,
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: '+16305550100',
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { owner_phone: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery!.params[14]).toBeNull();
   });
 });

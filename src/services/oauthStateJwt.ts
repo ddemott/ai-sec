@@ -5,9 +5,9 @@
  *
  * Before this module landed, 6 files duplicated near-identical JWT sign +
  * verify logic with only the `purpose` string differing (`google-calendar-oauth`,
- * `outlook-calendar-oauth`, `jobber-oauth`, `hubspot-oauth`, `square-oauth`,
- * `servicetitan-oauth`). ~12 lines of duplicated machinery × 6 files =
- * ~72 lines, plus an identical JWT_SECRET fallback string repeated in each.
+ * `outlook-calendar-oauth`, `square-oauth`; the `jobber`/`hubspot`/`servicetitan`
+ * ones were removed 2026-06-12). ~12 lines of duplicated machinery per file,
+ * plus an identical JWT_SECRET fallback string repeated in each.
  *
  * The token refresh + code exchange logic is NOT extracted — Google uses the
  * `googleapis` SDK while Outlook uses raw `fetch`; the CRM clients each have
@@ -34,15 +34,15 @@ function resolveSecret(override?: string): string {
 /**
  * Sign an OAuth state JWT carrying the tenant id + a provider-specific
  * `purpose` discriminator. The `purpose` prevents a state token signed for
- * one provider from being accepted by another (e.g. a state from a Jobber
- * authorize round trip can't be replayed at the HubSpot callback).
+ * one provider from being accepted by another (e.g. a state minted for one
+ * provider's authorize round trip can't be replayed at another's callback).
  *
  * Used inside each provider's `getAuthUrl(tenantId)` to produce the `state`
  * URL parameter handed to the OAuth consent screen.
  */
 export function signOAuthState(args: {
   tenantId: string;
-  /** Provider-specific discriminator, e.g. `'jobber-oauth'`, `'google-calendar-oauth'`. */
+  /** Provider-specific discriminator, e.g. `'square-oauth'`, `'google-calendar-oauth'`. */
   purpose: string;
   /** Optional override; defaults to `JWT_SECRET` env or the dev fallback. */
   jwtSecret?: string;

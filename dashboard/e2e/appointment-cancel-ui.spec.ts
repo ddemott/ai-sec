@@ -110,7 +110,7 @@ async function loginAsFreshTenant(page: Page, email: string) {
 }
 
 // Switch the dashboard to the given tenant (sets the managed tenant localStorage key
-// that SessionContext and API calls read). Mirrors switchToDynaTireTenant in other specs.
+// that SessionContext and API calls read).
 async function switchToTenant(page: Page, tenantId: string, tenantName: string) {
   await page.evaluate(
     ({ id, name }) => {

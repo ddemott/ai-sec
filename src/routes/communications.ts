@@ -14,11 +14,43 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
+import { createHmac } from 'crypto';
+import twilio from 'twilio';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
 import { CommunicationService } from '../services/communications/index.js';
 import { ConsentService } from '../services/consentService.js';
 import { createDatabaseService } from '../database/index.js';
 import { createTenantConfigService } from '../services/tenants/index.js';
+import { messageDeliveryReceiptsTotal } from '../services/metrics.js';
+
+/**
+ * Record a Twilio SMS delivery-status callback.
+ *
+ * Exported (not inlined) so the unit test can drive the persistence path
+ * directly with a mock pool — the handler around it stays a thin HTTP shell.
+ * Upsert keyed on message_sid: Twilio fires the callback multiple times as
+ * the message advances (queued → sent → delivered), latest status wins.
+ */
+export async function recordTwilioDeliveryStatus(
+  pool: Pool,
+  params: {
+    messageSid: string;
+    messageStatus: string;
+    errorCode?: string | null;
+    tenantId?: string | null;
+  }
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO message_delivery_status (message_sid, message_status, error_code, tenant_id, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (message_sid)
+     DO UPDATE SET message_status = EXCLUDED.message_status,
+                   error_code = EXCLUDED.error_code,
+                   tenant_id = COALESCE(EXCLUDED.tenant_id, message_delivery_status.tenant_id),
+                   updated_at = now()`,
+    [params.messageSid, params.messageStatus, params.errorCode ?? null, params.tenantId ?? null]
+  );
+}
 
 // ── Validation Schemas ───────────────────────────────────────────────
 
@@ -75,7 +107,7 @@ const HistoryQuerySchema = z.object({
 export function registerCommunicationRoutes(
   app: AppFastifyInstance,
   pool: Pool,
-  _withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   const db = createDatabaseService(pool);
   const configService = createTenantConfigService(pool);
@@ -167,9 +199,13 @@ export function registerCommunicationRoutes(
   );
 
   /**
-   * GET /communications/history - Get communication history
-   * Note: This requires a communications_history table to be implemented.
-   * For now, returns an empty placeholder.
+   * GET /communications/history - Get communication history (paginated)
+   *
+   * Tenant-scoped read of the communications_history table (written on the
+   * send success path of EmailService/SMSService). Filterable by channel via
+   * ?type=email|sms|all (default all); paginated via ?limit (1-100, default
+   * 50) + ?offset. `total` is the full filtered count, independent of the
+   * page window, so the dashboard can render pagination controls.
    */
   app.get(
     '/communications/history',
@@ -186,13 +222,46 @@ export function registerCommunicationRoutes(
         });
       }
 
-      // TODO: Implement communications_history table
-      // For now, return empty list with a note
+      const { type, limit, offset } = parsed.data;
+
+      const { history, total } = await withTenantClient(tenantId, async (client) => {
+        // COUNT(*) OVER() gives the full filtered count alongside the paged
+        // rows in a single round-trip; it is NULL only when zero rows match,
+        // which we coalesce to 0 below. Newest-first ordering matches the
+        // idx_communications_history_tenant_created index.
+        const result = await client.query(
+          `SELECT communications_history_id,
+                  tenant_id,
+                  customer_id,
+                  channel,
+                  direction,
+                  recipient,
+                  subject,
+                  body,
+                  status,
+                  provider_message_id,
+                  error,
+                  created_at,
+                  COUNT(*) OVER() AS total_count
+             FROM communications_history
+            WHERE tenant_id = $1
+              AND ($2 = 'all' OR channel = $2)
+            ORDER BY created_at DESC, communications_history_id DESC
+            LIMIT $3 OFFSET $4`,
+          [tenantId, type, limit, offset]
+        );
+
+        const rows = result.rows as Array<Record<string, unknown> & { total_count: string }>;
+        const totalCount = rows.length > 0 ? parseInt(rows[0].total_count, 10) : 0;
+        // Drop the window-function helper column from each returned row.
+        const history = rows.map(({ total_count: _ignored, ...rest }) => rest);
+        return { history, total: totalCount };
+      });
+
       return reply.send({
         success: true,
-        history: [],
-        total: 0,
-        note: 'Communication history tracking not yet implemented',
+        history,
+        total,
       });
     }, 'Failed to get communication history')
   );
@@ -311,4 +380,164 @@ export function registerCommunicationRoutes(
       });
     }, 'Failed to get opt-out records')
   );
+
+  /**
+   * POST /communications/twilio/status — Twilio SMS delivery-status webhook.
+   *
+   * Twilio POSTs the message lifecycle here (form-encoded: MessageSid +
+   * MessageStatus, plus optional ErrorCode) when statusCallback is set on
+   * messages.create() (see TwilioAdapter.sendSMS). PUBLIC + tenant-exempt:
+   * Twilio sends no JWT and no tenant_id in the body — the owning tenant is
+   * read back from the ?tenant_id= query param the adapter appended to the
+   * callback URL.
+   *
+   * Verification: if TWILIO_AUTH_TOKEN is set we validate the X-Twilio-Signature
+   * against the reconstructed request URL + form params (twilio.validateRequest).
+   * A bad signature → 403, nothing recorded. With no auth token configured we
+   * accept + log (helper-unavailable branch) so local/dev still works.
+   *
+   * Always replies 200 quickly on the happy path so Twilio doesn't retry a
+   * callback we've already ingested. Writes via the shared `pool` (the route
+   * has no RLS tenant context); message_delivery_status is a non-RLS event table.
+   */
+  app.post('/communications/twilio/status', async (req: AppRequest, reply) => {
+    const body = (req.body ?? {}) as Record<string, string | undefined>;
+    const messageSid = body.MessageSid;
+    const messageStatus = body.MessageStatus;
+    const errorCode = body.ErrorCode ?? null;
+
+    // Malformed callback: missing the two fields every Twilio status callback
+    // carries. Reject 400 (and record nothing) rather than persist a junk row.
+    if (!messageSid || !messageStatus) {
+      req.log.warn(
+        { event: 'twilio_status_callback_malformed' },
+        'Twilio status callback missing MessageSid or MessageStatus'
+      );
+      return reply
+        .status(400)
+        .send({ success: false, error: 'Missing MessageSid or MessageStatus' });
+    }
+
+    // Signature verification (when the auth token is available).
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    if (authToken) {
+      const signature = (req.headers['x-twilio-signature'] as string) || '';
+      // Twilio signs the full URL it POSTed to, including the query string,
+      // plus the sorted POST params. Reconstruct it the same way the Square
+      // webhook does (protocol + host + url).
+      const url = `${req.protocol}://${req.hostname}${req.url}`;
+      const valid = twilio.validateRequest(
+        authToken,
+        signature,
+        url,
+        body as Record<string, string>
+      );
+      if (!valid) {
+        req.log.warn(
+          { event: 'twilio_status_callback_invalid_signature', messageSid },
+          'Twilio status callback signature mismatch'
+        );
+        return reply.status(403).send({ success: false, error: 'Invalid Twilio signature' });
+      }
+    } else {
+      req.log.info(
+        { event: 'twilio_status_callback_unverified' },
+        'TWILIO_AUTH_TOKEN unset — accepting status callback without signature verification'
+      );
+    }
+
+    const tenantId = (req.query as Record<string, string | undefined>)?.tenant_id ?? null;
+
+    await recordTwilioDeliveryStatus(pool, {
+      messageSid,
+      messageStatus,
+      errorCode,
+      tenantId,
+    });
+
+    messageDeliveryReceiptsTotal.inc({ status: messageStatus });
+
+    return reply.send({ success: true });
+  });
+
+  /**
+   * POST /communications/telnyx/status — Telnyx SMS delivery-status webhook.
+   *
+   * Telnyx POSTs JSON here when webhook_url is set on the message (see
+   * TelnyxSmsAdapter.sendSMS). PUBLIC + tenant-exempt: no JWT; tenant_id
+   * is read from ?tenant_id= on the URL the adapter appended.
+   *
+   * Verification: if TELNYX_WEBHOOK_SECRET is set we validate the
+   * telnyx-signature header (HMAC-SHA256 of timestamp|body). A bad signature
+   * → 403. Without the secret configured we accept + log (dev/staging).
+   *
+   * Payload shape (Telnyx v2):
+   *   data.event_type  — "message.finalized" | "message.sent" | "message.failed"
+   *   data.payload.id  — message ID (our messageSid)
+   *   data.payload.to[0].status — per-recipient delivery status
+   *   data.payload.errors[]    — error objects (optional)
+   */
+  app.post('/communications/telnyx/status', async (req: AppRequest, reply) => {
+    const rawBody = JSON.stringify(req.body ?? {});
+    const payload = (req.body ?? {}) as Record<string, unknown>;
+
+    const data = payload.data as Record<string, unknown> | undefined;
+    const innerPayload = data?.payload as Record<string, unknown> | undefined;
+    const messageSid = innerPayload?.id as string | undefined;
+    const toArray = innerPayload?.to as Array<{ status?: string }> | undefined;
+    const messageStatus = toArray?.[0]?.status ?? (data?.event_type as string | undefined);
+    const errors = innerPayload?.errors as Array<{ code?: string | number }> | undefined;
+    const errorCode = errors?.[0]?.code ? String(errors[0].code) : null;
+
+    if (!messageSid || !messageStatus) {
+      req.log.warn(
+        { event: 'telnyx_status_callback_malformed' },
+        'Telnyx status callback missing message id or status'
+      );
+      return reply
+        .status(400)
+        .send({ success: false, error: 'Missing message id or status in Telnyx payload' });
+    }
+
+    // Signature verification when TELNYX_WEBHOOK_SECRET is configured.
+    // Telnyx signs: HMAC-SHA256(secret, timestamp + "|" + rawBody).
+    // Header: telnyx-signature  value: t=<epoch>,v1=<hex>
+    const webhookSecret = process.env.TELNYX_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const sigHeader = (req.headers['telnyx-signature'] as string) || '';
+      const parts = Object.fromEntries(
+        sigHeader.split(',').map((p) => p.split('=') as [string, string])
+      );
+      const timestamp = parts['t'] ?? '';
+      const receivedSig = parts['v1'] ?? '';
+      const expected = createHmac('sha256', webhookSecret)
+        .update(`${timestamp}|${rawBody}`)
+        .digest('hex');
+      if (!receivedSig || receivedSig !== expected) {
+        req.log.warn(
+          { event: 'telnyx_status_callback_invalid_signature', messageSid },
+          'Telnyx status callback signature mismatch'
+        );
+        return reply.status(403).send({ success: false, error: 'Invalid Telnyx signature' });
+      }
+    } else {
+      req.log.info(
+        { event: 'telnyx_status_callback_unverified' },
+        'TELNYX_WEBHOOK_SECRET unset — accepting Telnyx status callback without signature verification'
+      );
+    }
+
+    const tenantId = (req.query as Record<string, string | undefined>)?.tenant_id ?? null;
+
+    await recordTwilioDeliveryStatus(pool, {
+      messageSid,
+      messageStatus,
+      errorCode,
+      tenantId,
+    });
+
+    messageDeliveryReceiptsTotal.inc({ status: messageStatus });
+
+    return reply.send({ success: true });
+  });
 }

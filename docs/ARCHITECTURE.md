@@ -75,7 +75,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── getEmbedding.ts           OpenAI text-embedding-3-small wrapper
 │   ├── normalizeForEmbedding.ts  gpt-4o-mini normalization before pgvector storage
 │   └── scheduling.ts             Core scheduling algorithm (shared between booking RPC caller and UI)
-├── scripts/                      bootstrap, setup-db, seed-db, preflight-cloud, deploy, qa-live-test.py
+├── scripts/                      bootstrap, setup-db, seed-db, simulate.sh (status/tools/rag/call harness)
 ├── docs/                         Architecture, deployment, UI/UX, TODO, migrations, bugs, plans
 ├── certs/                        Self-signed HTTPS certs for local dev
 ├── railway.json + nixpacks.toml  Backend deploy config
@@ -803,7 +803,7 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
                   ╱╲
                  ╱19╲        Playwright e2e (full-stack, browser)
                 ╱────╲
-               ╱ 29   ╲      Live QA (scripts/qa-live-test.py — real `/agent-tools/*` Fastify routes)
+               ╱  ●    ╲      simulate.sh tools (on-demand agent-tools journey — real `/agent-tools/*` routes)
               ╱────────╲
              ╱  1,977   ╲    Vitest unit + integration (real DB, real RLS)
             ╱────────────╲
@@ -825,9 +825,9 @@ Deno's built-in test runner. Covers dispatcher + service layer in the edge funct
 
 7 critical-fix tests (regression gates on toast, validation, unsaved-changes warning, NaN guards) + 12-step functional audit (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav).
 
-### 18.6 Live QA (`scripts/qa-live-test.py` — 29 tool calls, 88 assertions)
+### 18.6 Live QA (`./scripts/simulate.sh tools`)
 
-Hits the live Supabase edge function with the 29 voice-AI tool scenarios. Verifies DB side effects directly. Used as the pre-deploy integration check.
+Provisions an ephemeral demo tenant and runs the full agent-tools journey (catalog → availability → booking → preference recall → policy RAG). Verifies DB side effects directly. On-demand pre-deploy integration check; not a CI gate (real OpenAI embeddings, costs tokens per run).
 
 ### 18.7 Typecheck
 

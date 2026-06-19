@@ -66,6 +66,25 @@ export interface Tenant {
   // config). 0 = no buffer (default). Applies to AI/customer-facing bookings
   // only; owner manual dashboard bookings are unrestricted.
   default_buffer_minutes?: number;
+  // Per-tenant xAI Grok TTS voice + delivery (2026-06-10). `tts_voice` is a Grok
+  // voice_id (eve/ara/rex/sal/leo or a custom clone id). null = use the agent's
+  // platform default. These replace the dead legacy `voice_id` (Vapi/ElevenLabs)
+  // for the live Grok agent.
+  tts_voice?: string | null;
+  tts_speed?: number | null;
+  tts_soft?: boolean | null;
+  tts_cheerful?: boolean | null;
+  tts_formal?: boolean | null;
+  tts_warm?: boolean | null;
+  tts_concise?: boolean | null;
+  // Live-transfer destination (2026-06-11). E.164 cell the AI cold-transfers a
+  // caller to when they need a human. null = no forwarding; the AI takes a
+  // message instead.
+  forward_phone?: string | null;
+  // SMS alert destination for the owner when a caller leaves a message.
+  owner_phone?: string | null;
+  // Telnyx DID assigned to this tenant — the number callers dial to reach the AI.
+  inbound_phone?: string | null;
 }
 
 export interface BusinessTemplate {
@@ -196,18 +215,8 @@ export interface CalendarSettings {
   updated_at?: string;
 }
 
-export interface JobberSettings {
-  tenant_id: string;
-  provider: 'jobber';
-  is_active: boolean;
-  last_sync_at?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 /**
- * Sync-status shape returned by /jobber/sync/status, /hubspot/sync/status,
- * /square/sync/status, and /servicetitan/sync/status. Backend builds it
+ * Sync-status shape returned by /square/sync/status. Backend builds it
  * via `getCrmSyncStatus()` in src/services/crmSyncStatus.ts.
  */
 export interface CrmSyncStatus {
@@ -215,15 +224,6 @@ export interface CrmSyncStatus {
   pending_count: number;
   error_count: number;
   total_mapped: { customers: number; appointments: number };
-}
-
-export interface HubSpotSettings {
-  tenant_id: string;
-  provider: 'hubspot';
-  is_active: boolean;
-  last_sync_at?: string;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface SquareSettings {
@@ -235,20 +235,39 @@ export interface SquareSettings {
   updated_at?: string;
 }
 
-export interface ServiceTitanSettings {
-  tenant_id: string;
-  provider: 'servicetitan';
-  is_active: boolean;
-  last_sync_at?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 export interface AnalyticsStats {
   calls: { total: number; today: number; week: number };
   appointments: { total: number; today: number; week: number; upcoming: number };
   customers: { total: number; new_this_week: number };
   recent_activity: Array<{ type: string; description: string; timestamp: string }>;
+}
+
+/**
+ * Call-level analytics derived from voice_sessions. "Booked" is keyed on
+ * appointment_id (the hard signal), not the freeform `outcome` text.
+ * - by_outcome powers the Conversion, Abandonment, and outcome-breakdown ("why") panels.
+ * - by_day powers the Call Volume sparkline + per-day conversion.
+ */
+export interface AnalyticsCalls {
+  totals: { total: number; booked: number; abandoned: number };
+  by_outcome: Array<{ outcome: string; count: number; booked: number }>;
+  by_day: Array<{ day: string; total: number; booked: number }>;
+}
+
+export interface AiCostRow {
+  source: string;
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  characters_count: number;
+  audio_duration_ms: number;
+  estimated_cost_usd: number;
+}
+
+export interface AiCostSummary {
+  breakdown: AiCostRow[];
+  total_estimated_cost_usd: number;
 }
 
 export interface Vocabulary {
@@ -331,15 +350,7 @@ export type {
 
 export type ChangeType = 'create' | 'update' | 'delete' | 'restore' | 'sync' | 'merge';
 
-export type ChangeSource =
-  | 'local'
-  | 'hubspot'
-  | 'jobber'
-  | 'square'
-  | 'servicetitan'
-  | 'voice_call'
-  | 'system'
-  | 'api';
+export type ChangeSource = 'local' | 'square' | 'voice_call' | 'system' | 'api';
 
 export type VersionedTable =
   | 'customers'
@@ -446,4 +457,15 @@ export interface TeamUser {
   role: 'owner' | 'front_desk';
   created_at: string;
   is_self: boolean;
+}
+
+export interface CustomerMessage {
+  message_id: string;
+  caller_name: string | null;
+  caller_phone: string | null;
+  callback_phone: string | null;
+  message: string;
+  status: 'new' | 'read' | 'actioned';
+  call_id: string | null;
+  created_at: string;
 }

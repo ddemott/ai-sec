@@ -10,7 +10,7 @@
  *   - deactivatePhone happy path — release succeeds, DB cleared, warnings=[]
  *   - deactivatePhone partial cleanup — release throws → warnings + release_error in result
  */
-/* eslint-disable @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/unbound-method -- mock method-reference assertions (telnyx.client.*) are a deliberate test pattern; see readinessHandler.test.ts / middleware.test.ts precedent */
 import { describe, it, expect, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 import type { TelnyxProvisioningConfig } from '../routes/provisioning';

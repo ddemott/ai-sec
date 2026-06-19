@@ -11,21 +11,18 @@
  *      constructEvent with `JSON.parse(req.body)` for "convenience" would
  *      slip past the suite — production would happily accept any unsigned
  *      POST to /billing/webhook and update tenant subscriptions.
- *   2. HubSpot, Square, and Jobber all used `JSON.stringify(req.body)` for
- *      HMAC verification — fundamentally broken because providers sign the
- *      RAW BYTES they sent. Re-serializing through V8 drops/changes
- *      whitespace + key order vs the original payload, breaking the
- *      signature deterministically. Fixed in the same commit by switching
- *      to `req.rawBody` (already preserved by the global content-type
+ *   2. Square used `JSON.stringify(req.body)` for HMAC verification —
+ *      fundamentally broken because providers sign the RAW BYTES they
+ *      sent. Re-serializing through V8 drops/changes whitespace + key
+ *      order vs the original payload, breaking the signature
+ *      deterministically. Fixed in the same commit by switching to
+ *      `req.rawBody` (already preserved by the global content-type
  *      parser in src/index.ts).
  *
  * What this file covers:
  *   - Stripe /billing/webhook — missing sig (400), bad sig (400), valid sig
  *     drives the checkout.session.completed handler.
- *   - HubSpot /hubspot/webhook — bad sig (401), valid sig (200). Includes
- *     the timestamp-freshness check (replay protection).
  *   - Square /square/webhook — bad sig (401), valid sig (200).
- *   - Jobber /jobber/webhook/:tenantId — bad sig (401), valid sig (200).
  *
  * What this file does NOT cover:
  *   - Event-handler business logic (subscription state updates, customer
@@ -33,8 +30,8 @@
  *     live. This file's contract is "the route only proceeds past the
  *     signature gate when the bytes match."
  *   - The clients' verifyWebhookSignature unit tests
- *     (src/{hubspot,square,jobber}-client.test.ts) — those test the HMAC
- *     math against fixed inputs. This file pins the route's wiring of
+ *     (src/square-client.test.ts) — those test the HMAC math against
+ *     fixed inputs. This file pins the route's wiring of
  *     rawBody → verifyWebhookSignature → 401-or-proceed.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
@@ -44,28 +41,17 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 // Stamped via vi.hoisted() because Vitest hoists `import` statements above
 // any plain top-level code; the routes capture process.env.* into module-
 // level constants at first import, so env stamping must run BEFORE imports.
-const {
-  _STRIPE_SECRET_KEY,
-  STRIPE_WEBHOOK_SECRET,
-  HUBSPOT_CLIENT_SECRET,
-  SQUARE_SIGNATURE_KEY,
-  JOBBER_WEBHOOK_SECRET,
-} = vi.hoisted(() => {
+const { _STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SQUARE_SIGNATURE_KEY } = vi.hoisted(() => {
   const STRIPE_SECRET_KEY = 'sk_test_billing_webhook_test';
   const STRIPE_WEBHOOK_SECRET = 'whsec_test_billing_webhook_test';
-  const HUBSPOT_CLIENT_SECRET = 'hubspot-test-secret';
   const SQUARE_SIGNATURE_KEY = 'square-test-signature-key';
-  const JOBBER_WEBHOOK_SECRET = 'jobber-test-webhook-secret';
   process.env.STRIPE_SECRET_KEY = STRIPE_SECRET_KEY;
   process.env.STRIPE_WEBHOOK_SECRET = STRIPE_WEBHOOK_SECRET;
-  process.env.HUBSPOT_CLIENT_SECRET = HUBSPOT_CLIENT_SECRET;
   process.env.SQUARE_WEBHOOK_SIGNATURE_KEY = SQUARE_SIGNATURE_KEY;
   return {
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
-    HUBSPOT_CLIENT_SECRET,
     SQUARE_SIGNATURE_KEY,
-    JOBBER_WEBHOOK_SECRET,
   };
 });
 import type { FastifyInstance } from 'fastify';
@@ -73,9 +59,7 @@ import crypto from 'crypto';
 import Stripe from 'stripe';
 
 import { registerBillingRoutes } from './routes/billing';
-import { registerHubSpotRoutes } from './routes/hubspot';
 import { registerSquareRoutes } from './routes/square';
-import { registerJobberRoutes } from './routes/jobber';
 import { buildRouteTestApp, type RouteTestAppHandle } from './test-utils-mock';
 
 const TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -86,14 +70,8 @@ const TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 let stripeHandle: RouteTestAppHandle;
 let stripeApp: FastifyInstance;
 
-let hubspotHandle: RouteTestAppHandle;
-let hubspotApp: FastifyInstance;
-
 let squareHandle: RouteTestAppHandle;
 let squareApp: FastifyInstance;
-
-let jobberHandle: RouteTestAppHandle;
-let jobberApp: FastifyInstance;
 
 beforeAll(async () => {
   stripeHandle = buildRouteTestApp((app, pool) => {
@@ -102,31 +80,19 @@ beforeAll(async () => {
   stripeApp = stripeHandle.app;
   await stripeApp.ready();
 
-  hubspotHandle = buildRouteTestApp((app, pool, withTenantClient) => {
-    registerHubSpotRoutes(app, pool, withTenantClient);
-  });
-  hubspotApp = hubspotHandle.app;
-  await hubspotApp.ready();
-
   squareHandle = buildRouteTestApp((app, pool, withTenantClient) => {
     registerSquareRoutes(app, pool, withTenantClient);
   });
   squareApp = squareHandle.app;
   await squareApp.ready();
-
-  jobberHandle = buildRouteTestApp((app, pool, withTenantClient) => {
-    registerJobberRoutes(app, pool, withTenantClient);
-  });
-  jobberApp = jobberHandle.app;
-  await jobberApp.ready();
 });
 
 afterAll(async () => {
-  await Promise.all([stripeApp.close(), hubspotApp.close(), squareApp.close(), jobberApp.close()]);
+  await Promise.all([stripeApp.close(), squareApp.close()]);
 });
 
 beforeEach(() => {
-  [stripeHandle, hubspotHandle, squareHandle, jobberHandle].forEach((h) => {
+  [stripeHandle, squareHandle].forEach((h) => {
     h.queries.length = 0;
     h.queryResponses.length = 0;
   });
@@ -250,120 +216,6 @@ describe('Stripe /billing/webhook signature verification', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────
-// HubSpot — /hubspot/webhook
-// ────────────────────────────────────────────────────────────────────
-
-describe('HubSpot /hubspot/webhook signature verification', () => {
-  /**
-   * HubSpot v3 signature: HMAC-SHA256 over `${method}${uri}${body}${timestamp}`
-   * keyed with the app client secret. Output is base64.
-   */
-  function signHubSpot(
-    method: string,
-    uri: string,
-    body: string,
-    timestamp: string,
-    secret: string
-  ): string {
-    const data = `${method}${uri}${body}${timestamp}`;
-    return crypto.createHmac('sha256', secret).update(data, 'utf8').digest('base64');
-  }
-
-  const HUBSPOT_URI_PATH = '/hubspot/webhook';
-
-  it('SAD: bad signature returns 401, no DB activity', async () => {
-    // WHO: forged or replay-attacker webhook, OR a real HubSpot delivery
-    //       arriving with whitespace-different body bytes than the
-    //       signed bytes (the bug the route just fixed)
-    // WHAT: signature verification fails → 401, no event processing
-    // WHEN: POST /hubspot/webhook with a body whose bytes don't match
-    //        what the signature was computed over
-    // WHERE: src/routes/hubspot.ts L101-104
-    // WHY: pre-fix the route re-serialized req.body through V8's
-    //       JSON.stringify, dropping/changing whitespace from the
-    //       original HubSpot payload. The signature would never match
-    //       in production. Now that we use req.rawBody, this test
-    //       confirms the gate still rejects bad signatures.
-    const payload = JSON.stringify({ subscriptionType: 'contact.creation', objectId: 12345 });
-    const timestamp = String(Date.now());
-    const wrongSig = signHubSpot('POST', HUBSPOT_URI_PATH, payload, timestamp, 'wrong-secret');
-
-    const res = await hubspotApp.inject({
-      method: 'POST',
-      url: HUBSPOT_URI_PATH,
-      headers: {
-        'content-type': 'application/json',
-        'x-hubspot-signature-v3': wrongSig,
-        'x-hubspot-request-timestamp': timestamp,
-      },
-      payload,
-    });
-    expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ error: 'Invalid webhook signature' });
-    const dataQueries = hubspotHandle.queries.filter(
-      (q) => !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET')
-    );
-    expect(dataQueries).toHaveLength(0);
-  });
-
-  it('HAPPY: valid signature with fresh timestamp passes — fix-confirms rawBody-not-restringified', async () => {
-    // WHO: real HubSpot webhook delivery with byte-perfect signature
-    // WHAT: route reads req.rawBody (preserved by the content-type
-    //        parser) and the HMAC matches → route proceeds past the
-    //        gate.
-    // WHEN: POST /hubspot/webhook with HubSpot's exact payload bytes
-    // WHERE: src/routes/hubspot.ts (post-fix using req.rawBody)
-    // WHY: the WHOLE POINT of the fix. Pre-fix the route signed
-    //       JSON.stringify(req.body) which only matches HubSpot's
-    //       output by coincidence (compact JSON + same key order).
-    //       Post-fix the route signs the actual bytes HubSpot sent.
-    // NOTE: The route builds its URI as `${req.protocol}://${req.hostname}${req.url}` —
-    //       so for verification we must construct the same string
-    //       (Fastify reports protocol='http' and hostname='localhost' for app.inject).
-    const payload = JSON.stringify({ subscriptionType: 'contact.creation', objectId: 99999 });
-    const timestamp = String(Date.now());
-    const fullUri = `http://localhost${HUBSPOT_URI_PATH}`;
-    const sig = signHubSpot('POST', fullUri, payload, timestamp, HUBSPOT_CLIENT_SECRET);
-
-    const res = await hubspotApp.inject({
-      method: 'POST',
-      url: HUBSPOT_URI_PATH,
-      headers: {
-        'content-type': 'application/json',
-        'x-hubspot-signature-v3': sig,
-        'x-hubspot-request-timestamp': timestamp,
-      },
-      payload,
-    });
-
-    // Past the gate: 200 acknowledged. Event processing happens async.
-    expect(res.statusCode).toBe(200);
-  });
-
-  it('SAD: stale timestamp (>5 min) is rejected with replay-protection 401', async () => {
-    // WHY: pin that the timestamp-freshness window guards against
-    //       replay attacks even when the signature math itself works.
-    const payload = JSON.stringify({ subscriptionType: 'contact.creation', objectId: 1 });
-    const staleTimestamp = String(Date.now() - 6 * 60 * 1000); // 6 min ago
-    const fullUri = `http://localhost${HUBSPOT_URI_PATH}`;
-    const sig = signHubSpot('POST', fullUri, payload, staleTimestamp, HUBSPOT_CLIENT_SECRET);
-
-    const res = await hubspotApp.inject({
-      method: 'POST',
-      url: HUBSPOT_URI_PATH,
-      headers: {
-        'content-type': 'application/json',
-        'x-hubspot-signature-v3': sig,
-        'x-hubspot-request-timestamp': staleTimestamp,
-      },
-      payload,
-    });
-    expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ error: expect.stringMatching(/replay/i) });
-  });
-});
-
-// ────────────────────────────────────────────────────────────────────
 // Square — /square/webhook
 // ────────────────────────────────────────────────────────────────────
 
@@ -427,92 +279,5 @@ describe('Square /square/webhook signature verification', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true });
-  });
-});
-
-// ────────────────────────────────────────────────────────────────────
-// Jobber — /jobber/webhook/:tenantId
-// ────────────────────────────────────────────────────────────────────
-
-describe('Jobber /jobber/webhook/:tenantId signature verification', () => {
-  /**
-   * Jobber webhook signature: HMAC-SHA256 over the body, keyed with the
-   * per-tenant webhook secret stored in tenant_integration_settings.
-   * Output is hex.
-   */
-  function signJobber(body: string, secret: string): string {
-    return crypto.createHmac('sha256', secret).update(body, 'utf8').digest('hex');
-  }
-
-  it('SAD: bad signature returns 401, no event processing', async () => {
-    // The route looks up the per-tenant secret from
-    // tenant_integration_settings before verifying. Mock that lookup.
-    jobberHandle.queryResponses.push({ rows: [{ webhook_secret: JOBBER_WEBHOOK_SECRET }] });
-
-    const payload = JSON.stringify({
-      data: { webHookEvent: { itemType: 'CLIENT', action: 'CREATE', itemId: 'abc' } },
-    });
-    const wrongSig = signJobber(payload, 'wrong-secret');
-
-    const res = await jobberApp.inject({
-      method: 'POST',
-      url: `/jobber/webhook/${TENANT_ID}`,
-      headers: {
-        'content-type': 'application/json',
-        'x-jobber-hmac-sha256': wrongSig,
-      },
-      payload,
-    });
-    expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ error: 'Invalid webhook signature' });
-  });
-
-  it('HAPPY: valid signature passes — fix-confirms rawBody-not-restringified', async () => {
-    // Jobber requires looking up the per-tenant secret BEFORE the
-    // signature check. Mock returns the secret. Then the verify
-    // succeeds against req.rawBody.
-    jobberHandle.queryResponses.push({ rows: [{ webhook_secret: JOBBER_WEBHOOK_SECRET }] });
-
-    const payload = JSON.stringify({
-      data: { webHookEvent: { itemType: 'CLIENT', action: 'CREATE', itemId: 'abc' } },
-    });
-    const sig = signJobber(payload, JOBBER_WEBHOOK_SECRET);
-
-    const res = await jobberApp.inject({
-      method: 'POST',
-      url: `/jobber/webhook/${TENANT_ID}`,
-      headers: {
-        'content-type': 'application/json',
-        'x-jobber-hmac-sha256': sig,
-      },
-      payload,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ success: true });
-  });
-
-  it('SAD: tenant has no active Jobber integration → 404 before signature check', async () => {
-    // WHY: pin that the per-tenant secret lookup short-circuits with
-    //       a 404 when no active integration exists, before doing any
-    //       HMAC math. Otherwise we'd be HMAC-verifying against a
-    //       null/undefined key, which the verify helper handles but
-    //       the operator-facing error would be misleading ("invalid
-    //       signature" rather than "no integration set up").
-    jobberHandle.queryResponses.push({ rows: [] }); // no active integration
-
-    const payload = JSON.stringify({ data: {} });
-    const sig = signJobber(payload, 'whatever');
-
-    const res = await jobberApp.inject({
-      method: 'POST',
-      url: `/jobber/webhook/${TENANT_ID}`,
-      headers: {
-        'content-type': 'application/json',
-        'x-jobber-hmac-sha256': sig,
-      },
-      payload,
-    });
-    expect(res.statusCode).toBe(404);
-    expect(res.json()).toMatchObject({ error: expect.stringMatching(/integration/i) });
   });
 });

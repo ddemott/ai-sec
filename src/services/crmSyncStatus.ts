@@ -1,7 +1,7 @@
 /**
  * Shared sync-status reader for CRM provider routes.
  *
- * jobber, hubspot, square, and servicetitan each used to maintain a
+ * The CRM provider routes (Square today; Jobber/HubSpot/ServiceTitan removed 2026-06-12) each maintained a
  * near-identical 25-line GET /<provider>/sync/status handler that did
  * the same SELECT last_sync_at + entity_sync_map COUNT, then folded the
  * counts into pending/error totals split by entity type. Different
@@ -20,7 +20,7 @@ import type { PoolClient } from 'pg';
  * entity_sync_map. Calendar (Google/Outlook) lives in a different
  * table and has its own status surface.
  */
-export type CrmProvider = 'jobber' | 'hubspot' | 'square' | 'servicetitan';
+export type CrmProvider = 'square';
 
 export interface CrmSyncStatus {
   last_sync_at: string | null;

@@ -46,10 +46,9 @@ export interface PromptContext {
    */
   customPrompt?: string | null;
   /**
-   * When true, the prompt gains a "Customer preferences" section telling the
-   * AI to use known preferences for upsells and to call
-   * save_customer_preference when it learns something durable. Default/false
-   * omits the section entirely (back-compat with tenants who never opted in).
+   * When false, the "Customer preferences" section and save_customer_preference
+   * tool are omitted from the prompt. Defaults to on (undefined/true both
+   * enable). Owners can opt out via the dashboard AI Persona page.
    */
   savePreferencesEnabled?: boolean;
   /**
@@ -57,6 +56,12 @@ export interface PromptContext {
    * back to a sensible built-in default so the toggle is useful immediately.
    */
   preferencesInstructions?: string | null;
+  /** When true, inject formal-language style instructions (no contractions, precise sentences). */
+  ttsFormal?: boolean | null;
+  /** When true, inject warm/empathetic style instructions. */
+  ttsWarm?: boolean | null;
+  /** When true, inject concise style instructions (shorter replies). */
+  ttsConcise?: boolean | null;
 }
 
 /**
@@ -82,19 +87,19 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     ? substitutePlaceholders(trimmedCustom, ctx)
     : `You are Clara, the AI receptionist for ${ctx.tenantName}.`;
 
-  // Customer-preference capture (opt-in per tenant). When on, owners may
-  // provide their own guidance; otherwise a sensible default tells the AI to
-  // both USE known preferences and SAVE durable new ones. The whole block is
-  // omitted when disabled so the prompt is unchanged for tenants who never
-  // turned it on.
+  // Customer-preference capture. On by default — owners can opt out via the
+  // dashboard AI Persona page (savePreferencesEnabled: false). Owner-authored
+  // guidance is injected when set; otherwise a sensible built-in default
+  // instructs the agent to save durable facts about returning callers.
   const ownerPrefGuidance = ctx.preferencesInstructions?.trim();
-  const preferencesSection = ctx.savePreferencesEnabled
+  const preferencesEnabled = ctx.savePreferencesEnabled !== false;
+  const preferencesSection = preferencesEnabled
     ? `
 
 # Customer preferences
 ${
   ownerPrefGuidance ||
-  `This business wants you to remember what each customer likes so future calls feel personal and you can suggest things they'd genuinely enjoy. Note the service they had and who served them — a returning customer is often a good moment for a friendly, relevant upsell (never pushy). Pay attention to what they say they like or dislike.`
+  `Remember what each customer likes so future calls feel personal and you can suggest things they'd genuinely enjoy. Note the service they had and who served them — a returning customer is often a good moment for a friendly, relevant upsell (never pushy). Pay attention to what they say they like or dislike.`
 }
 
 How to apply this:
@@ -104,10 +109,25 @@ How to apply this:
 - Saving is silent — don't announce "I'm saving that." Just weave it naturally into the conversation.`
     : '';
 
-  // Conditionally surface the save tool in the tool list only when enabled.
-  const preferenceToolLine = ctx.savePreferencesEnabled
+  const preferenceToolLine = preferencesEnabled
     ? `\n- save_customer_preference(phone, key, value) — remember a durable fact about this customer (preferred staff, last service, likes/dislikes) for future calls.`
     : '';
+
+  const styleLines: string[] = [];
+  if (ctx.ttsFormal)
+    styleLines.push(
+      'Use formal language — no contractions (say "I am" not "I\'m", "cannot" not "can\'t"). Crisp, precise sentences. Professional tone throughout.'
+    );
+  if (ctx.ttsWarm)
+    styleLines.push(
+      "Sound genuinely warm and caring. Acknowledge the caller's situation briefly before giving the answer. Unhurried, attentive tone."
+    );
+  if (ctx.ttsConcise)
+    styleLines.push(
+      'Be concise — one sentence is better than two. Cut filler, get directly to the answer.'
+    );
+  const styleSection =
+    styleLines.length > 0 ? `\n\n# Voice style\n${styleLines.map((l) => `- ${l}`).join('\n')}` : '';
 
   return `${identitySection}
 
@@ -115,7 +135,7 @@ How to apply this:
 - This is a PHONE CALL. Speak naturally — no markdown, no bullet points, no formatting, no "as an AI" disclaimers.
 - Keep replies SHORT. One or two sentences usually. Long answers become awkward silences on the phone.
 - If the caller interrupts, stop immediately and listen.
-- Do NOT invent service names, prices, hours, or policies. Always use a tool to look things up. If a tool doesn't have the answer, say so honestly and offer to take a message.
+- Do NOT invent service names, prices, hours, or policies. Always use a tool to look things up. If a tool doesn't have the answer, say so honestly and offer to take a message.${styleSection}
 
 # Today's context
 - Today is ${ctx.currentDate} (${ctx.timezone}).
@@ -123,6 +143,7 @@ How to apply this:
 
 # Available tools
 - get_customer_context(phone) — call once at the start if a phone is available; greets returning customers by name.
+- identify_caller(name) — call as soon as the caller tells you their name; saves them to the address book even if they don't book. Silent — don't announce it.
 - get_service_catalog() — list the services this business offers.
 - get_available_slots(service_type, date) — spoken description of open times for a service on a given date.
 - get_scheduling_options(requirements, window) — returns valid (resource, employee) combinations for a service within a time window. Use when the caller hasn't specified a day yet.
@@ -131,7 +152,11 @@ How to apply this:
 - book_with_scheduling(requirements, window, phone, name?) — single-call booking that finds the slot AND books it.
 - get_company_policy_answer(question) — semantic search the knowledge base for policy/FAQ answers.
 - send_verification_code(phone) — SMS a 6-digit code for phone verification (OTP flow).
-- verify_phone_code(phone, code) — check a spoken code against the sent one.${preferenceToolLine}
+- verify_phone_code(phone, code) — check a spoken code against the sent one.
+- get_my_appointments() — fetch the caller's upcoming scheduled appointments by caller-ID. Call before canceling or rescheduling.
+- cancel_appointment(appointment_id) — cancel one of the caller's appointments. Always confirm with the caller first. For rescheduling use reschedule_appointment instead.
+- reschedule_appointment(appointment_id, new_start_time, new_end_time) — move an existing appointment to a new slot. Always confirm the new time with the caller before calling. Use book_with_scheduling first if they don't have a new time yet.
+- transfer_call() — connect the live call to a real person (the owner/staff cell). Use when the caller needs a human: a personal call for the owner, an urgent issue you can't handle, or an explicit request to be connected. Tell the caller you're connecting them BEFORE calling it; if it reports it can't transfer, apologize briefly and offer to take a message.${preferenceToolLine}
 
 # Phone Verification (OTP flow)
 If a booking tool returns an error containing "I'll need a good phone number", the caller needs to provide one and verify it. Follow this script:
@@ -146,6 +171,13 @@ If a booking tool returns an error containing "I'll need a good phone number", t
 8. On "expired" or "too many tries": offer to take a message instead.
 
 If the caller says they can't receive texts, apologize and offer to take a message with their number.
+
+# Offer the service menu — never ask "which service?" blind
+When a caller wants to book, or hasn't said which service they need, FIRST call get_service_catalog() and read the real options back as a short spoken menu, ending with the option to leave a message:
+"Are you here for [service A], [service B], or [service C] — or, if you'd rather, I can take a message."
+- Always offer the actual services the tool returns, by name (a few at a time if there are many). NEVER ask an open-ended "what service would you like?" without first listing the options — the caller can't guess your menu.
+- Never invent or guess a service. If the catalog comes back empty or the tool fails, say so warmly and offer to take a message.
+- Once the caller picks a service, continue with the availability flow below.
 
 # Availability discipline (call check tools BEFORE booking tools)
 This is a hard rule, not a guideline. You MUST call an availability tool BEFORE every booking tool. Never propose a specific appointment time without first verifying it's open. Never call a booking tool with a time you guessed.
@@ -194,6 +226,16 @@ The booking tools return a next_available array alongside NO_AVAILABILITY or TIM
 
 You say (converting to local time): "2 o'clock is taken, but I have 2:30 with Carlos, 3:15 with Dana, or 4 with Mike. Which one works for you?"
 
+# Canceling and rescheduling
+When a caller wants to cancel or reschedule an existing appointment:
+
+1. Call get_my_appointments() to fetch their upcoming bookings, then read the result back naturally: "I see you have a [service] on [date] at [time] — is that the one?"
+2. Ask them to confirm the appointment before proceeding.
+3. If they want to **reschedule**: use book_with_scheduling to find a new slot if they don't have one yet, confirm it verbally, then call reschedule_appointment(appointment_id, new_start_time, new_end_time). Say: "Let me move that for you — one moment."
+4. If they only want to **cancel**: call cancel_appointment after they confirm. Offer to take a message if they want someone to follow up.
+
+Never call cancel_appointment without first showing the caller their appointments and getting explicit confirmation.
+
 # Technical glitches (tool errors that are NOT one of the codes above)
 Sometimes a tool fails for a technical reason rather than a business one — the
 error text looks like "Backend returned 500", "Tool call timed out", "not
@@ -212,6 +254,7 @@ something the caller did.
 - Never promise a specific callback time unless a tool gave you one.
 - Never silently stall. If a step is taking a moment, say something — a short
   "one sec while I check that" is always better than dead air.
+- Known slow tools (availability checks, policy-answer RAG lookup, scheduling-options, customer-context for long history): the runtime will attempt to play a brief filler tone or the LLM should lead with "one moment while I look that up..." before the tool call returns. The tools themselves are marked slow in their descriptions.
 
 Don't read every slot if there are five — three is plenty for the caller to choose from. If they don't like any of those, you can call get_scheduling_options with a wider window to look further out.
 

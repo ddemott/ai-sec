@@ -305,7 +305,7 @@ describe('Version History Routes — Happy Paths', () => {
           record_id: RECORD_ID,
           version_number: 2,
           change_type: 'update',
-          change_source: 'hubspot',
+          change_source: 'square',
           changed_by: 'sync',
           change_summary: 'Email updated from sync',
           changed_at: '2026-04-09T12:00:00Z',
@@ -324,7 +324,7 @@ describe('Version History Routes — Happy Paths', () => {
     const body = res.json();
     expect(body.total).toBe(50);
     expect(body.changes).toHaveLength(1);
-    expect(body.changes[0].change_source).toBe('hubspot');
+    expect(body.changes[0].change_source).toBe('square');
   });
 
   it('10. GET /records/:table/:recordId/restore-preview returns field options', async () => {
@@ -346,7 +346,7 @@ describe('Version History Routes — Happy Paths', () => {
           version_number: 1,
           data: { name: 'John Doe', phone: '555-0000', email: 'john@old.com' },
           changed_at: '2026-04-08T10:00:00Z',
-          change_source: 'hubspot',
+          change_source: 'square',
         },
       ],
     });
@@ -652,7 +652,7 @@ describe('Version History Routes — Edge Cases', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: `/records/recent-changes?tenant_id=${TENANT_ID}&change_source=hubspot`,
+      url: `/records/recent-changes?tenant_id=${TENANT_ID}&change_source=square`,
     });
 
     expect(res.statusCode).toBe(200);
@@ -690,7 +690,7 @@ describe('Version History Routes — Edge Cases', () => {
       payload: {
         source_version: 1,
         fields: ['phone'],
-        change_source: 'hubspot',
+        change_source: 'square',
       },
     });
 
@@ -854,7 +854,7 @@ describe('Version History Routes — Additional Happy Paths', () => {
       url: `/records/customers/${RECORD_ID}/soft-delete?tenant_id=${TENANT_ID}`,
       payload: {
         deleted_by: 'sync-service',
-        change_source: 'hubspot',
+        change_source: 'square',
       },
     });
 
@@ -1195,7 +1195,7 @@ describe('Version History Routes — Boundary Conditions', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: `/records/recent-changes?tenant_id=${TENANT_ID}&table=customers&change_type=update&change_source=hubspot&limit=5&offset=0`,
+      url: `/records/recent-changes?tenant_id=${TENANT_ID}&table=customers&change_type=update&change_source=square&limit=5&offset=0`,
     });
 
     expect(res.statusCode).toBe(200);

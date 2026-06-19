@@ -27,15 +27,17 @@ import { getPool } from '../../database/index.js';
  *
  * Field set mirrors the real `tenants` table schema. There is no separate
  * `business_name` or `owner_email` column today — `name` is the business's
- * display name and the only contact channel stored at tenant level is
- * `owner_phone` (surfaced here as `phone`). Adding either would require a
- * schema migration AND a UI to populate it; until that ships, dropping the
- * fields here is the honest shape.
+ * display name. Two phone fields live at tenant level: `owner_phone` (the
+ * owner's personal number, surfaced as `phone`) and `inbound_phone` (the
+ * Telnyx-provisioned PSTN number, surfaced as `inboundPhone`). Adding email
+ * would require a schema migration AND a UI; until that ships, omitting it
+ * here is the honest shape.
  */
 export interface TenantConfig {
   tenantId: string | number;
   name: string;
   phone?: string;
+  inboundPhone?: string;
   timezone?: string;
   settings?: {
     smsEnabled?: boolean;
@@ -181,6 +183,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
     tenant_id: string;
     name: string;
     owner_phone: string | null;
+    inbound_phone: string | null;
     timezone: string | null;
     sms_enabled: boolean;
     email_enabled: boolean;
@@ -189,12 +192,13 @@ export class PostgresTenantConfigService implements TenantConfigService {
       tenantId: row.tenant_id,
       name: row.name,
       phone: row.owner_phone ?? undefined,
+      inboundPhone: row.inbound_phone ?? undefined,
       timezone: row.timezone || 'America/Chicago',
       settings: {
-        smsEnabled: row.sms_enabled !== false, // Default true
-        emailEnabled: row.email_enabled !== false, // Default true
-        reminderHours: [72, 24, 2], // Default reminder schedule
-        defaultProvider: 'twilio',
+        smsEnabled: row.sms_enabled !== false,
+        emailEnabled: row.email_enabled !== false,
+        reminderHours: [72, 24, 2],
+        defaultProvider: 'telnyx',
       },
     };
   }
@@ -207,7 +211,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
 
     return this.withClient(async (client) => {
       const result = await client.query(
-        `SELECT tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled
+        `SELECT tenant_id, name, owner_phone, inbound_phone, timezone, sms_enabled, email_enabled
          FROM tenants WHERE tenant_id = $1`,
         [tenantId]
       );
@@ -226,7 +230,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
   async getTenantConfigs(): Promise<TenantConfig[]> {
     return this.withClient(async (client) => {
       const result = await client.query(
-        `SELECT tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled
+        `SELECT tenant_id, name, owner_phone, inbound_phone, timezone, sms_enabled, email_enabled
          FROM tenants ORDER BY name`
       );
 
@@ -257,6 +261,10 @@ export class PostgresTenantConfigService implements TenantConfigService {
         fields.push(`owner_phone = $${paramIndex++}`);
         values.push(updates.phone);
       }
+      if (updates.inboundPhone !== undefined) {
+        fields.push(`inbound_phone = $${paramIndex++}`);
+        values.push(updates.inboundPhone);
+      }
       if (updates.timezone !== undefined) {
         fields.push(`timezone = $${paramIndex++}`);
         values.push(updates.timezone);
@@ -270,7 +278,7 @@ export class PostgresTenantConfigService implements TenantConfigService {
       const result = await client.query(
         `UPDATE tenants SET ${fields.join(', ')}
          WHERE tenant_id = $${paramIndex}
-         RETURNING tenant_id, name, owner_phone, timezone, sms_enabled, email_enabled`,
+         RETURNING tenant_id, name, owner_phone, inbound_phone, timezone, sms_enabled, email_enabled`,
         values
       );
 

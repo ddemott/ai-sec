@@ -52,21 +52,38 @@ function buildWithTenantClient(responses: Array<{ rows: unknown[] }>): {
 describe('getOrCreateCustomerByPhone', () => {
   it('HAPPY: existing live customer returns its id without INSERT', async () => {
     // WHO: Returning caller — same tenant + phone hits an existing row
-    // WHAT: Helper must short-circuit at the SELECT and skip INSERT
+    // WHAT: Helper short-circuits INSERT; fires a name UPDATE when the
+    //       caller supplies a real name and the stored name was a placeholder.
     // WHERE: src/services/customerLookup.ts
     // WHEN: Voice agent receives a call from a known number
-    // WHY: Inserting again would create a duplicate-customer row and
-    //       fail any future UNIQUE(tenant_id, phone) constraint
+    // WHY: Inserting again would duplicate; UPDATE fills in name when missing
     const { withTenantClient, queries } = buildWithTenantClient([
-      { rows: [{ customer_id: 'existing-id' }] },
+      { rows: [{ customer_id: 'existing-id' }] }, // SELECT
+      { rows: [] }, // UPDATE name (no-op if already set)
     ]);
 
     const id = await getOrCreateCustomerByPhone(withTenantClient, TENANT_ID, PHONE, 'Bob');
 
     expect(id).toBe('existing-id');
-    expect(queries).toHaveLength(1);
+    expect(queries).toHaveLength(2);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[0].params).toEqual([TENANT_ID, PHONE]);
+    expect(queries[1].text).toContain('UPDATE customers SET name');
+  });
+
+  it('HAPPY: existing customer with placeholder name is not re-queried', async () => {
+    // WHO: Booking path passes "Caller" / "Valued Customer" when no name known
+    // WHAT: Placeholder names skip the UPDATE so no extra query fires
+    // WHY: Avoids saving a useless placeholder over a real stored name
+    const { withTenantClient, queries } = buildWithTenantClient([
+      { rows: [{ customer_id: 'existing-id' }] }, // SELECT only
+    ]);
+
+    const id = await getOrCreateCustomerByPhone(withTenantClient, TENANT_ID, PHONE, 'Caller');
+
+    expect(id).toBe('existing-id');
+    expect(queries).toHaveLength(1);
+    expect(queries[0].text).toContain('SELECT customer_id FROM customers');
   });
 
   it('HAPPY: no match → INSERTs and returns the new id', async () => {

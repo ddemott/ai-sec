@@ -233,14 +233,13 @@ const TENANT_EXEMPT_ROUTES = [
   // OAuth callbacks (redirects from external providers)
   '/calendar/auth/google/callback',
   '/calendar/auth/outlook/callback',
-  '/hubspot/auth/callback',
-  '/jobber/auth/callback',
   '/square/auth/callback',
-  '/servicetitan/auth/callback',
   // CRM webhooks (authenticated via HMAC/signature, not JWT)
-  '/hubspot/webhook',
   '/square/webhook',
-  '/servicetitan/webhook',
+  // SMS delivery-status callbacks (verified via provider signature, not JWT;
+  // tenant_id rides on the query string, not the body)
+  '/communications/twilio/status',
+  '/communications/telnyx/status',
   '/tenants',
   '/templates',
   '/templates/full',
@@ -251,7 +250,6 @@ function isTenantExempt(url: string): boolean {
   const path = url.split('?')[0];
   return (
     TENANT_EXEMPT_ROUTES.some((r) => path === r || path.startsWith('/tenants/')) ||
-    path.startsWith('/jobber/webhook/') || // Jobber webhook uses tenantId in URL path
     path.startsWith('/agent-tools/')
   ); // LiveKit agent tool calls; tenant_id supplied in body
 }
@@ -298,7 +296,7 @@ export function tenantMiddleware(app: AppFastifyInstance) {
     // OAuth callbacks, HMAC-signed webhooks) are allowed through; everything
     // else fails closed.
     const urlPath = request.url.split('?')[0];
-    const isPublic = PUBLIC_ROUTES.includes(urlPath) || urlPath.startsWith('/jobber/webhook/');
+    const isPublic = PUBLIC_ROUTES.includes(urlPath);
     if (!isPublic && !request.auth) {
       request.log.warn(
         { event: 'unauthenticated_tenant_route', url: request.url, ip: request.ip },
@@ -532,21 +530,22 @@ const PUBLIC_ROUTES = [
   // OAuth callbacks (redirects from external providers — no JWT available)
   '/calendar/auth/google/callback',
   '/calendar/auth/outlook/callback',
-  '/hubspot/auth/callback',
-  '/jobber/auth/callback',
   '/square/auth/callback',
-  '/servicetitan/auth/callback',
   // CRM webhooks (authenticated via HMAC/signature, not JWT)
-  '/hubspot/webhook',
   '/square/webhook',
-  '/servicetitan/webhook',
+  // SMS delivery-status callbacks (verified via provider signature, not JWT)
+  '/communications/twilio/status',
+  '/communications/telnyx/status',
+  // Self-service appointment actions — token-gated, no session JWT
+  '/self/cancel',
+  '/self/reschedule',
 ];
 
 /**
  * Register the onRequest JWT verification hook.
  *
  * Behavior:
- *  - OPTIONS, public routes, and Jobber webhook subpaths bypass.
+ *  - OPTIONS and public routes bypass.
  *  - No Authorization header → request proceeds anonymously (downstream
  *    handlers can still gate via requireAuth()).
  *  - Invalid/expired token → 401.
@@ -560,7 +559,7 @@ export function registerJwtAuthHook(app: AppFastifyInstance, pool: Pool) {
   app.addHook('onRequest', async (request, reply) => {
     if (request.method === 'OPTIONS') return;
     const urlPath = request.url.split('?')[0];
-    if (PUBLIC_ROUTES.includes(urlPath) || urlPath.startsWith('/jobber/webhook/')) return;
+    if (PUBLIC_ROUTES.includes(urlPath)) return;
 
     const authHeader = request.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

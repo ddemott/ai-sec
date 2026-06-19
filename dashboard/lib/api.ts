@@ -15,14 +15,13 @@ import type {
   Tenant,
   CalendarSettings,
   AnalyticsStats,
+  AnalyticsCalls,
+  AiCostSummary,
   Vocabulary,
   CoverageItem,
   CallSummary,
-  JobberSettings,
   CrmSyncStatus,
-  HubSpotSettings,
   SquareSettings,
-  ServiceTitanSettings,
   VoiceSession,
   VoiceSessionDisplay,
   CustomerContext,
@@ -35,6 +34,7 @@ import type {
   RecordVersion,
   VersionComparison,
   TeamUser,
+  CustomerMessage,
 } from './types';
 
 export const API_BASE_URL =
@@ -77,6 +77,17 @@ export function getTargetTenantId(entityTenantId?: string) {
     return entityTenantId;
   }
   return currentTenantId;
+}
+
+/**
+ * Module-level callback invoked when any API response returns 402 (subscription required).
+ * Registered once by the dashboard root on mount so the plain api.ts module can trigger
+ * a toast without importing React components.
+ */
+let subscriptionRequiredCallback: (() => void) | null = null;
+
+export function setSubscriptionRequiredCallback(cb: () => void): void {
+  subscriptionRequiredCallback = cb;
 }
 
 /**
@@ -163,12 +174,17 @@ async function ensureTokenFresh(): Promise<void> {
 
 /**
  * Check response for auth failures (401, tenant-not-found 404) and force logout if needed.
- * Returns an error message string if logout was triggered, or null if response is fine.
+ * Also handles 402 (subscription required) by firing the registered callback.
+ * Returns an error message string if a terminal condition was triggered, or null if fine.
  */
 async function checkAuthFailure(response: Response): Promise<string | null> {
   if (response.status === 401) {
     forceLogout();
     return 'Session expired. Please log in again.';
+  }
+  if (response.status === 402) {
+    subscriptionRequiredCallback?.();
+    return 'Upgrade required to access this feature.';
   }
   if (response.status === 404) {
     try {
@@ -387,6 +403,9 @@ export const Api = {
           description: string | null;
         };
       }>(`/appointments/${id}/reactivate`, 'POST', { tenant_id: tenantId }),
+
+    sendSelfServiceLinks: (id: string) =>
+      apiMutate<{ message?: string }>(`/appointments/${id}/send-self-service-links`, 'POST'),
   },
 
   // --- RESOURCES ---
@@ -606,6 +625,15 @@ export const Api = {
   analytics: {
     getStats: (tenantId: string | null) =>
       apiFetch<AnalyticsStats>(`/analytics/stats`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getCalls: (tenantId: string | null) =>
+      apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getAiCost: (tenantId: string | null) =>
+      apiFetch<AiCostSummary>(
+        `/analytics/ai-cost`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- MASTER SKILLS ---
@@ -770,11 +798,48 @@ export const Api = {
         error?: string;
       }>;
     },
+
+    importWebsite: (tenantId: string | null, url: string) =>
+      apiMutate<{
+        success: boolean;
+        extracted?: any[];
+        discovered?: any[];
+        confirmed?: number;
+        suggestions?: number;
+        error?: string;
+      }>(`/knowledge/import-website`, 'POST', { tenant_id: tenantId, url }),
+
+    suggestions: (tenantId: string | null) =>
+      apiFetch<{
+        success: boolean;
+        suggestions: Array<{
+          id: string;
+          question_id: string | null;
+          question: string;
+          answer: string;
+          source_url: string | null;
+          confidence: number | null;
+          status: string;
+          created_at: string;
+        }>;
+      }>(`/knowledge/suggestions`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    approveSuggestion: (id: string, tenantId: string | null) =>
+      apiMutate<{ success: boolean }>(`/knowledge/suggestions/${id}`, 'PATCH', {
+        tenant_id: tenantId,
+        status: 'confirmed',
+      }),
+
+    rejectSuggestion: (id: string, tenantId: string | null) =>
+      apiMutate<{ success: boolean }>(`/knowledge/suggestions/${id}`, 'PATCH', {
+        tenant_id: tenantId,
+        status: 'rejected',
+      }),
   },
 
   // --- BILLING ---
   billing: {
-    checkout: (tenantId: string, plan: 'solo' | 'growth') =>
+    checkout: (tenantId: string, plan: 'solo' | 'growth' | 'professional') =>
       apiMutate<{ url: string }>(`/billing/checkout`, 'POST', { tenant_id: tenantId, plan }),
 
     status: (tenantId: string) =>
@@ -782,6 +847,9 @@ export const Api = {
         `/billing/status`,
         { tenant_id: tenantId }
       ),
+
+    portal: (tenantId: string) =>
+      apiMutate<{ url: string }>(`/billing/portal`, 'POST', { tenant_id: tenantId }),
   },
 
   // --- PHONE PROVISIONING ---
@@ -802,68 +870,6 @@ export const Api = {
         inbound_phone: string | null;
         telnyx_phone_number_id: string | null;
       }>(`/provisioning/status`, { tenant_id: tenantId }),
-  },
-
-  // --- JOBBER CRM ---
-  jobber: {
-    getSettings: (tenantId: string | null) =>
-      apiFetch<JobberSettings | null>(
-        `/jobber/settings`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
-
-    getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ success: boolean; authUrl: string }>(
-        `/jobber/auth`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
-
-    disconnect: (tenantId: string | null) =>
-      apiMutate(`/jobber/settings/disconnect`, 'POST', { tenant_id: tenantId }),
-
-    triggerSync: (tenantId: string | null) =>
-      apiMutate<{ clientsSynced: number; visitsSynced: number; errors: number }>(
-        `/jobber/sync`,
-        'POST',
-        { tenant_id: tenantId }
-      ),
-
-    getSyncStatus: (tenantId: string | null) =>
-      apiFetch<CrmSyncStatus>(
-        `/jobber/sync/status`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
-  },
-
-  // --- HUBSPOT CRM ---
-  hubspot: {
-    getSettings: (tenantId: string | null) =>
-      apiFetch<HubSpotSettings | null>(
-        `/hubspot/settings`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
-
-    getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ success: boolean; authUrl: string }>(
-        `/hubspot/auth`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
-
-    disconnect: (tenantId: string | null) =>
-      apiMutate(`/hubspot/settings/disconnect`, 'POST', { tenant_id: tenantId }),
-
-    triggerSync: (tenantId: string | null) =>
-      apiMutate<{ contactsSynced: number; meetingsSynced: number; errors: number }>(
-        `/hubspot/sync`,
-        'POST',
-        { tenant_id: tenantId }
-      ),
-
-    getSyncStatus: (tenantId: string | null) =>
-      apiFetch<CrmSyncStatus>(
-        `/hubspot/sync/status`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
   },
 
   // --- SQUARE CRM ---
@@ -893,37 +899,6 @@ export const Api = {
     getSyncStatus: (tenantId: string | null) =>
       apiFetch<CrmSyncStatus>(
         `/square/sync/status`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
-  },
-
-  // --- SERVICETITAN CRM ---
-  servicetitan: {
-    getSettings: (tenantId: string | null) =>
-      apiFetch<ServiceTitanSettings | null>(
-        `/servicetitan/settings`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
-
-    getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ success: boolean; authUrl: string }>(
-        `/servicetitan/auth`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
-
-    disconnect: (tenantId: string | null) =>
-      apiMutate(`/servicetitan/settings/disconnect`, 'POST', { tenant_id: tenantId }),
-
-    triggerSync: (tenantId: string | null) =>
-      apiMutate<{ customersSynced: number; appointmentsSynced: number; errors: number }>(
-        `/servicetitan/sync`,
-        'POST',
-        { tenant_id: tenantId }
-      ),
-
-    getSyncStatus: (tenantId: string | null) =>
-      apiFetch<CrmSyncStatus>(
-        `/servicetitan/sync/status`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
   },
@@ -991,6 +966,27 @@ export const Api = {
         `/voice/context/${encodeURIComponent(phone)}`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
+
+    // List caller messages left during voice calls (owner inbox)
+    listMessages: (
+      tenantId: string | null,
+      opts?: { status?: string; limit?: number; offset?: number }
+    ) =>
+      apiFetch<CustomerMessage[]>(
+        `/voice/messages`,
+        tenantId
+          ? {
+              tenant_id: tenantId,
+              ...(opts?.status ? { status: opts.status } : {}),
+              ...(opts?.limit !== undefined ? { limit: String(opts.limit) } : {}),
+              ...(opts?.offset !== undefined ? { offset: String(opts.offset) } : {}),
+            }
+          : undefined
+      ),
+
+    // Mark a message as read or actioned
+    updateMessageStatus: (messageId: string, status: 'new' | 'read' | 'actioned') =>
+      apiMutate<{ success: boolean }>(`/voice/messages/${messageId}`, 'PATCH', { status }),
   },
 
   // --- Version History API ---
@@ -1140,6 +1136,36 @@ export const Api = {
         `/records/recent-changes`,
         Object.keys(params).length > 0 ? params : undefined
       );
+    },
+  },
+
+  communications: {
+    history: (
+      tenantId: string | null,
+      opts?: { type?: 'all' | 'sms' | 'email'; limit?: number; offset?: number }
+    ) => {
+      const params: Record<string, string> = {};
+      if (tenantId) params.tenant_id = tenantId;
+      if (opts?.type) params.type = opts.type;
+      if (opts?.limit != null) params.limit = String(opts.limit);
+      if (opts?.offset != null) params.offset = String(opts.offset);
+      return apiFetch<{
+        success: boolean;
+        history: Array<{
+          communications_history_id: number;
+          customer_id: string | null;
+          channel: 'sms' | 'email';
+          direction: string;
+          recipient: string;
+          subject: string | null;
+          body: string;
+          status: string;
+          provider_message_id: string | null;
+          error: string | null;
+          created_at: string;
+        }>;
+        total: number;
+      }>('/communications/history', Object.keys(params).length > 0 ? params : undefined);
     },
   },
 };

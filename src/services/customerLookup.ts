@@ -37,7 +37,17 @@ export async function getOrCreateCustomerByPhone(
       [tenantId, phoneNormalized]
     );
     if (existing.rows.length > 0) {
-      return existing.rows[0].customer_id;
+      const customerId = existing.rows[0].customer_id;
+      // Update name if the new one is more complete than what's stored.
+      if (name && name !== 'Valued Customer' && name !== 'Caller') {
+        await client.query(
+          `UPDATE customers SET name = $1
+           WHERE customer_id = $2
+             AND (name IS NULL OR name = '' OR name = 'Valued Customer')`,
+          [name, customerId]
+        );
+      }
+      return customerId;
     }
     const inserted = await client.query<{ customer_id: string }>(
       `INSERT INTO customers (tenant_id, phone, name)

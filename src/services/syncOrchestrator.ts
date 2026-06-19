@@ -6,10 +6,7 @@
 
 import type { Pool } from 'pg';
 import { syncAppointmentToCalendar } from './calendarSync';
-import { syncAppointmentToJobber, syncCustomerToJobber } from './crm/jobberSync';
-import { syncAppointmentToHubSpot, syncCustomerToHubSpot } from './crm/hubspotSync';
 import { syncAppointmentToSquare, syncCustomerToSquare } from './crm/squareSync';
-import { syncAppointmentToServiceTitan, syncCustomerToServiceTitan } from './crm/servicetitanSync';
 import { syncDispatchesTotal } from './metrics';
 
 interface SyncLogger {
@@ -127,10 +124,7 @@ export function syncAppointmentToAll(
 ): void {
   const providers = [
     { name: 'calendar', fn: syncAppointmentToCalendar },
-    { name: 'jobber', fn: syncAppointmentToJobber },
-    { name: 'hubspot', fn: syncAppointmentToHubSpot },
     { name: 'square', fn: syncAppointmentToSquare },
-    { name: 'servicetitan', fn: syncAppointmentToServiceTitan },
   ];
 
   for (const { name } of providers) {
@@ -162,12 +156,7 @@ export function syncCustomerToAll(
   action: 'create' | 'update' | 'delete',
   logger: SyncLogger | null = null
 ): void {
-  const providers = [
-    { name: 'jobber', fn: syncCustomerToJobber },
-    { name: 'hubspot', fn: syncCustomerToHubSpot },
-    { name: 'square', fn: syncCustomerToSquare },
-    { name: 'servicetitan', fn: syncCustomerToServiceTitan },
-  ];
+  const providers = [{ name: 'square', fn: syncCustomerToSquare }];
 
   for (const { name } of providers) {
     record(name, 'customer', action, tenantId, customerId);

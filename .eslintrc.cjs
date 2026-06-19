@@ -39,6 +39,11 @@ module.exports = {
     '*.config.js',
     '*.config.cjs',
     '*.config.ts',
+    // Standalone node scripts (simulate harness helpers) aren't in the
+    // tsconfig.eslint project, so typed linting can't parse them. They're plain
+    // node ESM run directly, not part of the build.
+    '*.mjs',
+    'scripts/**/*.mjs',
   ],
   rules: {
     // ── In-progress cleanup: warn, not error ─────────────────────────

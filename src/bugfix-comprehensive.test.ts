@@ -931,16 +931,10 @@ describe('Source code correctness checks', () => {
   it('all CRM/calendar clients have fetch timeouts', () => {
     // WHO: CRM/calendar client services making external API calls
     // WHAT: every fetch() call must have AbortSignal.timeout(FETCH_TIMEOUT_MS)
-    // WHEN: any outbound HTTP request to Jobber, HubSpot, Square, ServiceTitan, Outlook
+    // WHEN: any outbound HTTP request to Square, Outlook
     // WHERE: src/services/*Client.ts and outlookCalendar.ts
     // WHY: without fetch timeouts, hung external APIs block the Node event loop indefinitely
-    const files = [
-      'src/services/crm/jobberClient.ts',
-      'src/services/crm/hubspotClient.ts',
-      'src/services/crm/squareClient.ts',
-      'src/services/crm/servicetitanClient.ts',
-      'src/services/outlookCalendar.ts',
-    ];
+    const files = ['src/services/crm/squareClient.ts', 'src/services/outlookCalendar.ts'];
     for (const file of files) {
       const src = fs.readFileSync(file, 'utf8');
       const fetchCount = (src.match(/res = await fetch\(/g) || []).length;
@@ -951,7 +945,7 @@ describe('Source code correctness checks', () => {
 
   it('shared tokenManagement uses FOR UPDATE and all sync services delegate to it', () => {
     // WHO: all CRM sync services refreshing OAuth tokens
-    // WHAT: tokenManagement uses FOR UPDATE lock, all 4 CRM syncs + calendar use shared helpers
+    // WHAT: tokenManagement uses FOR UPDATE lock, the Square sync + calendar use shared helpers
     // WHEN: any CRM sync operation that needs to refresh an expired OAuth token
     // WHERE: src/services/tokenManagement.ts and all *Sync.ts services
     // WHY: without FOR UPDATE, concurrent token refreshes cause race conditions and token invalidation
@@ -959,12 +953,7 @@ describe('Source code correctness checks', () => {
     expect(src).toContain('FOR UPDATE');
 
     // All CRM sync services delegate to getIntegrationTokens
-    for (const file of [
-      'src/services/crm/jobberSync.ts',
-      'src/services/crm/hubspotSync.ts',
-      'src/services/crm/squareSync.ts',
-      'src/services/crm/servicetitanSync.ts',
-    ]) {
+    for (const file of ['src/services/crm/squareSync.ts']) {
       expect(fs.readFileSync(file, 'utf8')).toContain('getIntegrationTokens');
     }
     // Calendar sync delegates token refresh to the shared helper too.
@@ -974,7 +963,7 @@ describe('Source code correctness checks', () => {
   });
 
   it('PUBLIC_ROUTES includes all OAuth callbacks and webhooks', () => {
-    // WHO: external services (Google, Outlook, HubSpot, Jobber, Square, ServiceTitan) calling back
+    // WHO: external services (Google, Outlook, Square) calling back
     // WHAT: all OAuth callback and webhook routes must be in PUBLIC_ROUTES (skip JWT auth)
     // WHEN: OAuth redirect after user authorizes, or CRM sends webhook event
     // WHERE: src/middleware.ts PUBLIC_ROUTES array (in registerJwtAuthHook).
@@ -984,13 +973,8 @@ describe('Source code correctness checks', () => {
     for (const route of [
       '/calendar/auth/google/callback',
       '/calendar/auth/outlook/callback',
-      '/hubspot/auth/callback',
-      '/jobber/auth/callback',
       '/square/auth/callback',
-      '/servicetitan/auth/callback',
-      '/hubspot/webhook',
       '/square/webhook',
-      '/servicetitan/webhook',
     ]) {
       expect(src).toContain(`'${route}'`);
     }

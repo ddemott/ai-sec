@@ -291,9 +291,22 @@ describe('agentTools /tenant-config', () => {
       name: 'DynaTire',
       timezone: 'America/Chicago',
       system_prompt: null,
+      // 2026-06-11 greeting defaults null → agent speaks its hardcoded fallback.
+      first_message: null,
       // New 2026-06-06 fields default off when the row doesn't carry them.
       save_preferences_enabled: false,
       preferences_instructions: null,
+      // 2026-06-10 Grok TTS fields default null → agent uses XAI_TTS_* env.
+      tts_voice: null,
+      tts_speed: null,
+      tts_soft: null,
+      // 2026-06-14 voice style booleans default null → agent uses env defaults.
+      tts_cheerful: null,
+      tts_formal: null,
+      tts_warm: null,
+      tts_concise: null,
+      // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
+      forward_phone: null,
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -338,8 +351,18 @@ describe('agentTools /tenant-config', () => {
       name: 'Legacy Co',
       timezone: 'America/Chicago',
       system_prompt: null,
+      first_message: null,
       save_preferences_enabled: false,
       preferences_instructions: null,
+      tts_voice: null,
+      tts_speed: null,
+      tts_soft: null,
+      tts_cheerful: null,
+      tts_formal: null,
+      tts_warm: null,
+      tts_concise: null,
+      // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
+      forward_phone: null,
     });
   });
 
@@ -472,6 +495,77 @@ describe('agentTools /customer-context', () => {
       phone: 'abc123',
     });
     expect(res.json().result).toBe('New caller - no history found.');
+    expect(queries).toHaveLength(0);
+  });
+});
+
+describe('agentTools /identify-caller', () => {
+  it('HAPPY: new phone creates a customer row', async () => {
+    // WHO: First-time caller who gives their name during a non-booking call
+    // WHAT: Route inserts a new customer row via ON CONFLICT upsert
+    // WHERE: src/routes/agentTools.ts /agent-tools/identify-caller
+    // WHEN: Agent calls identify_caller tool as soon as caller says their name
+    // WHY: Previously, callers who didn't book were never saved to the address book
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [] }], // INSERT (ON CONFLICT) returns nothing
+    });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      name: 'Dale DeMott',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true });
+    expect(queries).toHaveLength(1);
+    expect(queries[0].text).toContain('INSERT INTO customers');
+    expect(queries[0].text).toContain('ON CONFLICT');
+    expect(queries[0].params).toEqual([TENANT_ID, '+15551234567', 'Dale DeMott']);
+  });
+
+  it('HAPPY: existing customer with placeholder name gets name updated', async () => {
+    // WHO: Returning caller who finally gives their name
+    // WHAT: ON CONFLICT DO UPDATE SET name only when stored name is blank/placeholder
+    // WHY: The CASE expression in the upsert leaves real names untouched
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [] }], // upsert: UPDATE path, no row returned
+    });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      name: 'Bob Smith',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true });
+    // Same upsert query handles both create and name-update paths
+    expect(queries[0].text).toMatch(/ON CONFLICT.*DO UPDATE/s);
+    expect(queries[0].text).toMatch(/Valued Customer/); // CASE guard in SQL
+  });
+
+  it('HAPPY: phone normalized before upsert', async () => {
+    // WHO: Agent passes raw 10-digit phone; must reach DB as E.164
+    // WHAT: normalizePhone runs before the INSERT so "+1" prefix is added
+    // WHY: Consistent format required to match existing rows (same contract as booking)
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [] }] });
+    await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '5559876543',
+      name: 'Jane Doe',
+    });
+    expect(queries[0].params?.[1]).toBe('+15559876543');
+  });
+
+  it('SAD: invalid phone returns error without touching DB', async () => {
+    // WHO: Garbled caller-ID — too short to normalize
+    // WHAT: Route rejects before any DB query
+    // WHY: Avoids inserting a customer row with an unusable phone number
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: 'abc',
+      name: 'Bad Phone',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
     expect(queries).toHaveLength(0);
   });
 });
@@ -1149,8 +1243,11 @@ describe('agentTools /book-with-scheduling', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         // The customerLookup helper runs first (separate transaction) — an
-        // existing customer match short-circuits the INSERT branch.
-        { rows: [{ customer_id: 'cust-1' }] },
+        // existing customer match short-circuits the INSERT branch. Because
+        // 'Bob' is a real name, the helper also fires a name UPDATE in case
+        // the stored name was blank/placeholder.
+        { rows: [{ customer_id: 'cust-1' }] }, // SELECT
+        { rows: [] }, // UPDATE name
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes
         {
           rows: [
@@ -1187,9 +1284,9 @@ describe('agentTools /book-with-scheduling', () => {
     });
     // WHY: Normalized phone must reach the RPC so the customer upsert path
     //       inside it matches previously-stored records. Helper SELECT is
-    //       queries[0]; buffer lookup is queries[1]; RPC is queries[2].
+    //       queries[0]; name UPDATE is queries[1]; buffer lookup is queries[2]; RPC is queries[3].
     //       Param shape for the RPC: $1=tenant_id, $2=phone.
-    expect(queries[2].params?.[1]).toBe('+15551234567');
+    expect(queries[3].params?.[1]).toBe('+15551234567');
   });
 
   it('SAD: RPC error_code is surfaced so the agent can be specific', async () => {
@@ -2058,5 +2155,190 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(queries).toHaveLength(3);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[2].text).toContain('book_with_scheduling_atomic');
+  });
+});
+
+describe('agentTools /voice-session-start + /voice-session-end (call logging)', () => {
+  it('HAPPY: start creates the voice_sessions row via start_voice_session', async () => {
+    // WHO: the LiveKit agent on connect, after it resolves call_id + caller.
+    // WHAT: posts tenant_id/call_id/caller_phone → route calls
+    //        start_voice_session($1,$2,$3) with those exact values so the
+    //        dashboard Calls tab + customer history get a row.
+    // WHEN: once per inbound call, fire-and-forget (never blocks the greeting).
+    // WHERE: src/routes/agentTools.ts /agent-tools/voice-session-start.
+    // WHY: before this the agent never logged calls — the Calls tab stayed
+    //       empty because nothing in prod called start_voice_session.
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ context: { is_known_customer: false } }] }],
+    });
+    const res = await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      caller_phone: '+15551234567',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { started: true } });
+    expect(queries[0].text).toContain('start_voice_session');
+    expect(queries[0].params).toEqual([TENANT_ID, 'call-abc-123', '+15551234567']);
+  });
+
+  it('HAPPY: start tolerates a null caller_phone (caller-ID withheld)', async () => {
+    // WHO: a caller whose number the SIP leg never surfaced.
+    // WHAT: caller_phone omitted → route passes null to start_voice_session,
+    //        which still logs the call (unknown-customer context).
+    // WHY: a withheld caller-ID must not stop the call from being logged.
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ context: {} }] }] });
+    const res = await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-no-phone',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(queries[0].params).toEqual([TENANT_ID, 'call-no-phone', null]);
+  });
+
+  it('SAD: start with no call_id fails validation before any DB call', async () => {
+    // WHO: a malformed agent request (bug) with no call_id.
+    // WHAT: Zod rejects (call_id min 1) → success:false, zero queries.
+    // WHY: there's nothing to key a session on without a call_id; fail loud,
+    //       don't write a junk row.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TENANT_ID,
+    });
+    expectValidationFailure(res, queries);
+  });
+
+  it('HAPPY: end records duration via end_voice_session and returns ended', async () => {
+    // WHO: the agent's shutdown callback when the caller hangs up.
+    // WHAT: posts call_id + duration_seconds → end_voice_session($1..$7) with
+    //        duration set; transcript omitted here → null, summary/appointment
+    //        still deferred (null).
+    // WHEN: awaited inside addShutdownCallback so the row closes before the
+    //        job process tears down.
+    // WHERE: /agent-tools/voice-session-end.
+    // WHY: without the end call the row would sit "active" forever with no
+    //       duration — the Calls tab would show every call as never-ended.
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 142,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { ended: true } });
+    expect(queries[0].text).toContain('end_voice_session');
+    // duration set; outcome/transcript/summary/appointment_id absent → null.
+    expect(queries[0].params).toEqual([TENANT_ID, 'call-abc-123', 142, null, null, null, null]);
+  });
+
+  it('HAPPY: end persists the call transcript into end_voice_session param 5', async () => {
+    // WHO: the agent shutdown callback after a real conversation — it renders
+    //        the accumulated Caller:/Assistant: turns and sends them.
+    // WHAT: transcript lands in the 5th positional arg (p_transcript); summary
+    //        + appointment_id (params 6,7) stay null (still deferred).
+    // WHERE: /agent-tools/voice-session-end → end_voice_session($1..$7).
+    // WHY: this is the write half of call-transcript capture — the Calls tab's
+    //       transcript section reads exactly this column back.
+    const transcript = 'Assistant: Thanks for calling.\nCaller: I need an oil change.';
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 88,
+      transcript,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { ended: true } });
+    // param order: tenant, call, duration, outcome, transcript, summary, appt.
+    expect(queries[0].params).toEqual([
+      TENANT_ID,
+      'call-abc-123',
+      88,
+      null,
+      transcript,
+      null,
+      null,
+    ]);
+  });
+
+  it('HAPPY: end forwards outcome, summary, and appointment_id (params 4,6,7)', async () => {
+    // WHO: the agent shutdown callback after a call that booked an appointment.
+    // WHAT: outcome='booked', a post-call summary, and the booked appointment_id
+    //        land in end_voice_session params 4, 6, 7 — closing the call->
+    //        appointment back-link the Calls tab deep-links on.
+    // WHEN: once at teardown, after the booking tool recorded the id.
+    // WHERE: /agent-tools/voice-session-end → end_voice_session($1..$7).
+    // WHY: these three were hardcoded null before (Calls tab was duration-only);
+    //       this pins that a real payload reaches the RPC in the right slots.
+    const apptId = '11111111-2222-4333-8444-555555555555';
+    const summary = 'Caller booked an oil change for Thursday.';
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 120,
+      outcome: 'booked',
+      transcript: 'Caller: oil change please.',
+      summary,
+      appointment_id: apptId,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(queries[0].params).toEqual([
+      TENANT_ID,
+      'call-abc-123',
+      120,
+      'booked',
+      'Caller: oil change please.',
+      summary,
+      apptId,
+    ]);
+  });
+
+  it('SAD: end rejects a malformed appointment_id before any DB call', async () => {
+    // WHO: a buggy/hostile caller sending a non-UUID appointment_id.
+    // WHAT: appointment_id not a UUID → Zod rejects → success:false, zero queries.
+    // WHY: the RPC casts param 7 to ::uuid; an invalid id would 500 the RPC and
+    //       lose the whole session-end write. Validating at the edge keeps the
+    //       duration/transcript write safe and the error a clean 400-shape.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 5,
+      appointment_id: 'not-a-uuid',
+    });
+    expectValidationFailure(res, queries);
+  });
+
+  it('SAD: end rejects an over-length transcript before any DB call', async () => {
+    // WHO: a pathological / abusive call producing a multi-MB transcript.
+    // WHAT: transcript > 100k chars → Zod max(100_000) rejects → success:false,
+    //        zero queries (no giant row written).
+    // WHY: the column is unbounded TEXT; the schema bound is the guardrail that
+    //       mirrors the agent's MAX_TRANSCRIPT_CHARS truncation.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-abc-123',
+      duration_seconds: 5,
+      transcript: 'x'.repeat(100_001),
+    });
+    expectValidationFailure(res, queries);
+  });
+
+  it('HAPPY: end returns ended:false when no open session matches the call_id', async () => {
+    // WHO: a duplicate/late shutdown for a call_id with no open row.
+    // WHAT: end_voice_session returns false → route surfaces ended:false at
+    //        200 (not an error) so the agent's swallow-on-failure stays quiet.
+    // WHY: a missing row on teardown is benign, not a crash.
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: false }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-missing',
+      duration_seconds: 5,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { ended: false } });
   });
 });

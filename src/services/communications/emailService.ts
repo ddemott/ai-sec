@@ -9,23 +9,37 @@ import type { TenantConfigService } from '../tenants/index.js';
 import type { ConsentService } from '../consentService.js';
 import type { EmailMessage, CommunicationResult } from './types.js';
 import { EmailTemplateService, type EmailTemplateData } from './emailTemplates.js';
+import { recordCommunicationHistory } from './communicationHistory.js';
 
 export class EmailService {
   private transporter: nodemailer.Transporter;
   private templateService: EmailTemplateService;
+  private static simulationNoticeLogged = false;
 
   constructor(
     private configService: TenantConfigService,
     private consentService?: ConsentService
   ) {
-    // Initialize email transporter - skip in test environment
-    if (process.env.NODE_ENV === 'test' || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      // Create a mock transporter for testing
-      // Test-mode stub satisfying just the `sendMail` slot we exercise;
-      // the rest of nodemailer.Transporter isn't reachable in tests.
+    const isTest = process.env.NODE_ENV === 'test';
+    const hasCreds = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+
+    if (isTest || !hasCreds) {
+      // Stub transporter — active in two cases:
+      //   (a) NODE_ENV=test: correct, tests never send real email.
+      //   (b) EMAIL_USER/EMAIL_PASS missing in prod/dev: simulation mode —
+      //       emails appear to succeed but are never delivered.
+      // Satisfies just the `sendMail` slot we exercise; the rest of
+      // nodemailer.Transporter isn't reachable via this path.
       this.transporter = {
         sendMail: () => Promise.resolve({ messageId: 'test-message-id' }),
       } as unknown as nodemailer.Transporter;
+
+      if (!isTest && !hasCreds && !EmailService.simulationNoticeLogged) {
+        console.warn(
+          '📧 Email Service running in simulation mode — EMAIL_USER / EMAIL_PASS not set; emails will NOT be delivered.'
+        );
+        EmailService.simulationNoticeLogged = true;
+      }
     } else {
       this.transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -94,6 +108,17 @@ export class EmailService {
       const result = await this.transporter.sendMail(mailOptions);
 
       console.log(`✅ Email sent to ${message.to} for tenant ${tenantId}`);
+
+      // Record the send in communications_history (best-effort, never throws —
+      // a failed log must not turn a successful send into a failure).
+      await recordCommunicationHistory(tenantId, {
+        channel: 'email',
+        recipient: message.to,
+        subject,
+        body: text,
+        status: 'sent',
+        providerMessageId: result.messageId,
+      });
 
       return {
         success: true,

@@ -74,16 +74,7 @@ const PK_COLUMN_BY_TABLE: Record<string, string> = {
   services: 'service_id',
   resources: 'resource_id',
 };
-const ChangeSourceSchema = z.enum([
-  'local',
-  'hubspot',
-  'jobber',
-  'square',
-  'servicetitan',
-  'voice_call',
-  'system',
-  'api',
-]);
+const ChangeSourceSchema = z.enum(['local', 'square', 'voice_call', 'system', 'api']);
 
 /**
  * Create a standardized error response with the 5 Ws:

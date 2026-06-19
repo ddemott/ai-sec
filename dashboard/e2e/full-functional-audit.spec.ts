@@ -265,7 +265,7 @@ test.describe.serial('Full Functional Audit', () => {
     await page.goto('/dashboard');
     await navigateToTab(page, 'My Team');
 
-    // Give My Team plenty of time to mount its FolderTabBar + content (DynaTire is fully configured)
+    // Give My Team plenty of time to mount its FolderTabBar + content
     await page.waitForTimeout(1500);
 
     const teamTabs = page.getByRole('tablist', { name: /Team sections/i });

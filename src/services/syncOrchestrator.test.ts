@@ -7,29 +7,31 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 
 describe('syncOrchestrator', () => {
-  it('HAPPY: syncAppointmentToAll calls all 5 providers', () => {
+  it('HAPPY: syncAppointmentToAll calls all providers (calendar + Square)', () => {
     // WHO: Route handler creating an appointment
-    // WHAT: Should fire sync to calendar + 4 CRM providers
+    // WHAT: Should fire sync to calendar + the Square CRM
     // WHY: All connected providers need to know about the new appointment
     const src = fs.readFileSync('src/services/syncOrchestrator.ts', 'utf8');
 
     expect(src).toContain('syncAppointmentToCalendar');
-    expect(src).toContain('syncAppointmentToJobber');
-    expect(src).toContain('syncAppointmentToHubSpot');
     expect(src).toContain('syncAppointmentToSquare');
-    expect(src).toContain('syncAppointmentToServiceTitan');
+    // Competitor CRMs were removed 2026-06-12 — must NOT reappear
+    expect(src).not.toContain('syncAppointmentToJobber');
+    expect(src).not.toContain('syncAppointmentToHubSpot');
+    expect(src).not.toContain('syncAppointmentToServiceTitan');
   });
 
-  it('HAPPY: syncCustomerToAll calls all 4 CRM providers', () => {
+  it('HAPPY: syncCustomerToAll calls the Square CRM', () => {
     // WHO: Route handler creating/updating a customer
-    // WHAT: Should fire sync to 4 CRM providers (no calendar for customers)
+    // WHAT: Should fire sync to the Square CRM (no calendar for customers)
     // WHY: CRM providers need customer data synced
     const src = fs.readFileSync('src/services/syncOrchestrator.ts', 'utf8');
 
-    expect(src).toContain('syncCustomerToJobber');
-    expect(src).toContain('syncCustomerToHubSpot');
     expect(src).toContain('syncCustomerToSquare');
-    expect(src).toContain('syncCustomerToServiceTitan');
+    // Competitor CRMs were removed 2026-06-12 — must NOT reappear
+    expect(src).not.toContain('syncCustomerToJobber');
+    expect(src).not.toContain('syncCustomerToHubSpot');
+    expect(src).not.toContain('syncCustomerToServiceTitan');
     // Calendar sync is NOT called for customers
     expect(src).not.toContain('syncCustomerToCalendar');
   });

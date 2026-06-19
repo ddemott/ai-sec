@@ -26,6 +26,19 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('America/Chicago');
   });
 
+  it('HAPPY: instructs the agent to offer the service menu, not ask blind', () => {
+    // WHO: Caller wants to book but Beth previously asked "what service?"
+    //       without listing the options, so the caller couldn't answer.
+    // WHAT: The prompt must tell the agent to call get_service_catalog FIRST
+    //        and read the real options back, plus offer to take a message.
+    // WHY: An open-ended "which service?" with no menu is a dead end — the
+    //        caller can't guess what's on offer. Fix lives in the prompt.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toContain('get_service_catalog');
+    expect(prompt).toMatch(/never ask an open-ended/i);
+    expect(prompt).toMatch(/take a message/i);
+  });
+
   it('HAPPY: caller-ID present → includes the phone with a verified-by-caller-ID note', () => {
     // WHO: Normal inbound call, caller-ID came through clean
     // WHAT: Prompt tells the LLM the phone is trusted so it can skip
@@ -105,6 +118,7 @@ describe('buildSystemPrompt', () => {
       'get_company_policy_answer',
       'send_verification_code',
       'verify_phone_code',
+      'transfer_call',
     ]) {
       expect(prompt).toContain(toolName);
     }
@@ -389,16 +403,14 @@ describe('buildSystemPrompt', () => {
     }
   });
 
-  it('PREFERENCES OFF: no "Customer preferences" section and no save tool when disabled', () => {
-    // WHO: a tenant who never opted into preference capture (the default).
-    // WHAT: the prompt must be byte-for-byte unchanged from the pre-feature
-    //        prompt — no preferences section, no save tool line.
+  it('PREFERENCES OFF: no "Customer preferences" section and no save tool when explicitly disabled', () => {
+    // WHO: a tenant owner who opted out of preference capture in the dashboard.
+    // WHAT: the prompt omits the preferences section + save tool.
     // WHEN: every call for a tenant with save_preferences_enabled = false.
-    // WHERE: buildSystemPrompt preferencesSection/preferenceToolLine branches.
-    // WHY: the feature is opt-in; a disabled tenant must not have their AI's
-    //      behavior or token budget changed by a feature they didn't enable.
+    // WHERE: buildSystemPrompt preferencesEnabled branch.
+    // WHY: an opt-out tenant must not have the agent saving data they didn't want captured.
+    // NOTE: undefined/null/true all ENABLE (default-on); only explicit false disables.
     for (const ctx of [
-      BASE_CTX,
       { ...BASE_CTX, savePreferencesEnabled: false },
       { ...BASE_CTX, savePreferencesEnabled: false, preferencesInstructions: 'ignored when off' },
     ]) {
@@ -408,18 +420,31 @@ describe('buildSystemPrompt', () => {
     }
   });
 
-  it('PREFERENCES ON: owner instructions are injected verbatim + save tool is offered', () => {
-    // WHO: a salon owner who turned the toggle on and wrote their own guidance.
-    // WHAT: their exact instruction text appears in the prompt, the section
-    //        header + the save tool both appear so the LLM knows to use it.
-    // WHEN: every call once save_preferences_enabled = true with instructions.
-    // WHERE: buildSystemPrompt preferences branches.
-    // WHY: the owner's words are the steering signal — if they don't reach the
-    //      LLM verbatim the feature silently does nothing.
+  it('PREFERENCES ON (default): section and save tool present when flag unset or true', () => {
+    // WHO: any tenant that hasn't explicitly opted out (the default state).
+    // WHAT: prompt includes the preferences section + save tool.
+    // WHEN: every call where savePreferencesEnabled is undefined, null, or true.
+    // WHERE: buildSystemPrompt preferencesEnabled = (ctx.savePreferencesEnabled !== false).
+    // WHY: preferences are on by default — returning callers should be recognized.
+    for (const ctx of [
+      BASE_CTX,
+      { ...BASE_CTX, savePreferencesEnabled: true },
+      { ...BASE_CTX, savePreferencesEnabled: undefined },
+    ]) {
+      const prompt = buildSystemPrompt(ctx);
+      expect(prompt).toContain('# Customer preferences');
+      expect(prompt).toContain('save_customer_preference(phone, key, value)');
+    }
+  });
+
+  it('PREFERENCES ON: owner instructions injected verbatim', () => {
+    // WHO: a salon owner who wrote their own preference guidance.
+    // WHAT: their exact text appears in the prompt's preferences section.
+    // WHY: the owner's words are the steering signal — generic defaults don't
+    //      know this business's nuances.
     const ownerText = 'Always offer the same stylist and ask about nails.';
     const prompt = buildSystemPrompt({
       ...BASE_CTX,
-      savePreferencesEnabled: true,
       preferencesInstructions: ownerText,
     });
     expect(prompt).toContain('# Customer preferences');
@@ -428,22 +453,199 @@ describe('buildSystemPrompt', () => {
   });
 
   it('PREFERENCES ON, no instructions: falls back to built-in default guidance', () => {
-    // WHO: an owner who flipped the toggle on but left the textarea blank.
-    // WHAT: the section still renders with sensible default guidance (so the
-    //        toggle is useful immediately) and still offers the save tool.
-    // WHEN: save_preferences_enabled = true, preferences_instructions null/blank.
+    // WHO: a tenant with preferences on but no custom instructions.
+    // WHAT: sensible default guidance renders so the tool is immediately useful.
     // WHERE: buildSystemPrompt ownerPrefGuidance `||` default branch.
     // WHY: a blank instruction box must not produce an empty, useless section.
     for (const preferencesInstructions of [null, undefined, '   ']) {
       const prompt = buildSystemPrompt({
         ...BASE_CTX,
-        savePreferencesEnabled: true,
         preferencesInstructions,
       });
       expect(prompt).toContain('# Customer preferences');
-      expect(prompt).toContain('remember what each customer likes');
+      expect(prompt).toContain('Remember what each customer likes');
       expect(prompt).toContain('save_customer_preference');
     }
+  });
+});
+
+describe('buildSystemPrompt — voice style injection', () => {
+  it('HAPPY: ttsFormal=true injects # Voice style section with formal instruction', () => {
+    // WHO: tenant with the Formal voice style checkbox checked
+    // WHAT: the prompt gains a "# Voice style" section containing the formal
+    //        language instruction (no contractions, precise sentences)
+    // WHEN: every call session for that tenant
+    // WHERE: buildSystemPrompt styleSection branch — ttsFormal guard
+    // WHY: the LLM must read the instruction to apply it; without the section
+    //       the "Formal" checkbox on the dashboard has zero runtime effect
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsFormal: true });
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toContain('formal language');
+    expect(prompt).toContain('no contractions');
+  });
+
+  it('HAPPY: ttsWarm=true injects warm instruction', () => {
+    // WHO: tenant with the Warm voice style checkbox checked
+    // WHAT: the # Voice style section includes the warm-and-caring delivery note
+    // WHEN: every call session for that tenant
+    // WHERE: buildSystemPrompt styleSection branch — ttsWarm guard
+    // WHY: without the instruction, the toggle is cosmetic and the LLM
+    //       continues its default neutral delivery regardless of the setting
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsWarm: true });
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toContain('warm and caring');
+  });
+
+  it('HAPPY: ttsConcise=true injects concise instruction', () => {
+    // WHO: tenant with the Concise voice style checkbox checked
+    // WHAT: the # Voice style section includes the brevity instruction
+    // WHEN: every call session for that tenant
+    // WHERE: buildSystemPrompt styleSection branch — ttsConcise guard
+    // WHY: brevity must be explicitly instructed; the LLM's default verbosity
+    //       doesn't change unless it reads the instruction at call time
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsConcise: true });
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toContain('one sentence is better than two');
+  });
+
+  it('HAPPY: all three flags true — all three instructions present, header appears once', () => {
+    // WHO: tenant with Formal + Warm + Concise all checked
+    // WHAT: the # Voice style section contains all three instruction bullets
+    //        and the section header appears exactly once (no duplication)
+    // WHEN: every call session for that tenant
+    // WHERE: buildSystemPrompt styleSection — three-item styleLines array
+    // WHY: if each flag independently injected the header, the LLM would
+    //       see "# Voice style" three times which could confuse parsing
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: true,
+      ttsWarm: true,
+      ttsConcise: true,
+    });
+    expect(prompt).toContain('formal language');
+    expect(prompt).toContain('warm and caring');
+    expect(prompt).toContain('one sentence is better than two');
+    // Header appears exactly once.
+    const occurrences = (prompt.match(/# Voice style/g) ?? []).length;
+    expect(occurrences).toBe(1);
+  });
+
+  it('HAPPY: no style flags — no # Voice style section injected', () => {
+    // WHO: tenant with no voice style checkboxes checked (the default)
+    // WHAT: the prompt is byte-for-byte unchanged — no # Voice style section
+    // WHEN: every call for a tenant who hasn't enabled any style flag
+    // WHERE: buildSystemPrompt — styleLines.length === 0 → styleSection = ''
+    // WHY: the feature must be strictly opt-in; a blank tenant must not see
+    //       any style instructions in their prompt
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).not.toContain('# Voice style');
+  });
+
+  it('HAPPY: null style flags treated as off — no style section', () => {
+    // WHO: tenant whose DB columns are NULL (never set — the DB default)
+    // WHAT: null values must behave identically to false — no style section
+    // WHEN: a brand-new tenant who has never visited the AI Persona page
+    // WHERE: buildSystemPrompt styleLines — falsy-check on null
+    // WHY: DB nullable booleans arrive as null in JS; treating null as true
+    //       would inject style instructions for every new tenant by default
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: null,
+      ttsWarm: null,
+      ttsConcise: null,
+    });
+    expect(prompt).not.toContain('# Voice style');
+  });
+
+  it('HAPPY: false style flags treated as off — no style section', () => {
+    // WHO: tenant who explicitly unchecked all style checkboxes and saved
+    // WHAT: explicit false values produce no style section (same as null)
+    // WHEN: after an owner visits AI Persona and saves with all boxes unchecked
+    // WHERE: buildSystemPrompt styleLines — falsy-check on false
+    // WHY: regression guard; a change to the if-condition must not treat
+    //       false as truthy and accidentally re-enable style injection
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: false,
+      ttsWarm: false,
+      ttsConcise: false,
+    });
+    expect(prompt).not.toContain('# Voice style');
+  });
+
+  it('HAPPY: two of three flags — only those two instructions appear', () => {
+    // WHO: tenant with Formal and Warm checked, Concise unchecked
+    // WHAT: exactly two instructions are injected; the concise instruction
+    //        is absent so the LLM has no brevity directive
+    // WHEN: every call for that tenant
+    // WHERE: buildSystemPrompt styleLines — flag-by-flag push
+    // WHY: each flag must be independently controlled; checking Formal must
+    //       not silently enable Concise as a side-effect
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: true,
+      ttsWarm: true,
+      ttsConcise: false,
+    });
+    expect(prompt).toContain('formal language');
+    expect(prompt).toContain('warm and caring');
+    expect(prompt).not.toContain('one sentence is better than two');
+  });
+
+  it("HAPPY: style section appears AFTER # Conversation style, BEFORE # Today's context", () => {
+    // WHO: any tenant with at least one style flag enabled
+    // WHAT: the # Voice style section is positioned inside the conversation
+    //        style block — after # Conversation style content, before # Today's context
+    // WHEN: every call for a tenant with style flags set
+    // WHERE: buildSystemPrompt template — styleSection injected at end of
+    //         Conversation style bullet list, before Today's context header
+    // WHY: section order affects LLM attention; putting voice style AFTER the
+    //       conversation-style rules and BEFORE the call-specific context
+    //       keeps it near peer instructions and away from factual data blocks
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsFormal: true });
+    const convStyleIdx = prompt.indexOf('# Conversation style');
+    const voiceStyleIdx = prompt.indexOf('# Voice style');
+    const todaysCtxIdx = prompt.indexOf("# Today's context");
+    expect(convStyleIdx).toBeGreaterThan(-1);
+    expect(voiceStyleIdx).toBeGreaterThan(convStyleIdx);
+    expect(voiceStyleIdx).toBeLessThan(todaysCtxIdx);
+  });
+
+  it('SAD: style flags present but identity section still correct', () => {
+    // WHO: tenant with Formal checked and a custom persona prompt
+    // WHAT: the identity section (Clara line or custom prompt) is not
+    //        corrupted by the presence of style flags
+    // WHEN: any call where both a custom prompt and style flags are set
+    // WHERE: buildSystemPrompt — identitySection built independently of styleSection
+    // WHY: the two features operate on different output regions; a merge
+    //       conflict or code reorder could accidentally overwrite the identity
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsFormal: true });
+    // Default identity is present and correct.
+    expect(prompt).toContain('You are Clara, the AI receptionist for DynaTire.');
+    // Style section is also present.
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toContain('formal language');
+  });
+
+  it('SAD: style section does not bleed into preference section', () => {
+    // WHO: tenant with Formal checked and Customer Preferences enabled
+    // WHAT: both the # Customer preferences section and # Voice style section
+    //        appear separately — the style injection must not corrupt or
+    //        replace the preferences block
+    // WHEN: any call where both features are active simultaneously
+    // WHERE: buildSystemPrompt — preferencesSection and styleSection are
+    //         independently constructed strings appended at different points
+    // WHY: two independent prompt features must be additive; enabling one
+    //       must not suppress or garble the other
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      ttsFormal: true,
+      preferencesInstructions: 'Note preferred stylist.',
+    });
+    expect(prompt).toContain('# Customer preferences');
+    expect(prompt).toContain('# Voice style');
+    // Both sections exist and are distinct.
+    expect(prompt.indexOf('# Customer preferences')).not.toBe(prompt.indexOf('# Voice style'));
   });
 });
 

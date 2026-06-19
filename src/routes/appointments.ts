@@ -29,6 +29,9 @@ import {
 import { findNextAvailableSlots, type AvailableSlot } from '../services/availabilitySearch';
 import { bookingAttemptsTotal } from '../services/metrics';
 import { assertRowAffected } from './routeHelpers';
+import { generateSelfServiceToken } from '../services/selfServiceToken';
+import { sendSms } from '../services/telnyxSms';
+import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 
 /**
  * Map a book_with_scheduling_atomic error_message back to the canonical
@@ -634,5 +637,101 @@ export function registerAppointmentRoutes(
       }
       return reply.send({ success: true });
     }, 'Failed to update appointment')
+  );
+
+  // POST /appointments/:id/send-self-service-links
+  // Generates fresh cancel + reschedule tokens and SMSes them to the customer.
+  // Requires JWT auth (staff/owner). Only works for scheduled appointments.
+  app.post(
+    '/appointments/:id/send-self-service-links',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const { id } = req.params as { id: string };
+
+      const baseUrl = (process.env.DASHBOARD_URL ?? process.env.BACKEND_PUBLIC_URL ?? '')
+        .trim()
+        .replace(/\/+$/, '');
+      if (!baseUrl) {
+        return reply.status(503).send({
+          success: false,
+          error: 'Self-service links not configured (set DASHBOARD_URL or BACKEND_PUBLIC_URL).',
+        });
+      }
+
+      const row = await withTenantClient(tenantId, async (client) => {
+        const res = await client.query<{
+          start_time: string;
+          description: string;
+          customer_phone: string | null;
+          inbound_phone: string | null;
+        }>(
+          `SELECT a.start_time, a.description, c.phone AS customer_phone, t.inbound_phone
+             FROM appointments a
+             JOIN customers c ON a.customer_id = c.customer_id
+             JOIN tenants t ON t.tenant_id = a.tenant_id
+             WHERE a.appointment_id = $1
+               AND a.tenant_id = $2
+               AND a.status = 'scheduled'
+               AND a.is_deleted = false`,
+          [id, tenantId]
+        );
+        return res.rows[0] ?? null;
+      });
+
+      if (!row) {
+        return reply
+          .status(404)
+          .send({ success: false, error: 'Appointment not found or not scheduled.' });
+      }
+      if (!row.customer_phone) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Customer has no phone number on file.' });
+      }
+
+      const cancelToken = generateSelfServiceToken(id, tenantId, 'cancel');
+      const rescheduleToken = generateSelfServiceToken(id, tenantId, 'reschedule');
+      if (!cancelToken || !rescheduleToken) {
+        return reply
+          .status(503)
+          .send({ success: false, error: 'Failed to generate self-service tokens.' });
+      }
+
+      const cancelLink = `${baseUrl}/self/cancel?token=${encodeURIComponent(cancelToken)}`;
+      const rescheduleLink = `${baseUrl}/self/reschedule?token=${encodeURIComponent(rescheduleToken)}`;
+
+      const dateStr = new Date(row.start_time).toLocaleDateString();
+      const smsBody =
+        `Your ${row.description} on ${dateStr} — ` +
+        `Cancel: ${cancelLink} Reschedule: ${rescheduleLink} ` +
+        `Reply STOP to opt out.`;
+
+      const fromPhone = row.inbound_phone ?? process.env.TELNYX_PHONE_NUMBER ?? '';
+      const normalizedFrom = fromPhone ? normalizePhone(fromPhone) : null;
+      const normalizedTo = normalizePhone(row.customer_phone);
+
+      if (
+        !normalizedFrom ||
+        !normalizedTo ||
+        !isValidPhone(normalizedFrom) ||
+        !isValidPhone(normalizedTo)
+      ) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Invalid phone number — check customer phone and tenant inbound_phone.',
+        });
+      }
+
+      const smsResult = await sendSms({ from: normalizedFrom, to: normalizedTo, body: smsBody });
+      if (!smsResult.ok) {
+        return reply
+          .status(502)
+          .send({ success: false, error: smsResult.error ?? 'SMS send failed.' });
+      }
+
+      logEvent(req, 'self_service_links_sent', { appointmentId: id });
+      return reply.send({ success: true, message: `Links sent to ${normalizedTo}.` });
+    }, 'Failed to send self-service links')
   );
 }

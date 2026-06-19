@@ -7,56 +7,68 @@
  *  - No test relies on data created by another.
  *
  * Setup: backend on https://localhost:4001, dashboard on https://localhost:4000,
- * Postgres on localhost:5433 with DynaTire seed data.
+ * Postgres on localhost:5433.
  */
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import {
+  registerFreshTenant,
+  seedBookingScenario,
+  cleanTenantData,
+  BACKEND_URL,
+} from './helpers/fixtures';
 
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-// bcrypt of "password" — same hash used in supabase/seed.sql.
-const SEED_PASSWORD_HASH = '$2b$10$hUTzgdpUJwodudEw.p2SXu5.k60elGfP0NoTZ8ly2oj4xXaWfpKfK';
 
 let pool: Pool;
 
-// Per-spec fixture customer.
+// Per-spec fixture tenant + customer.
 //
-// Why this exists (UX audit session, 2026-05-18): the seed used to
-// include 5 hard-coded DynaTire customers so any test that opened
-// QuickBook could pick one via `selectOption({ index: 1 })`. The
-// 2026-05-18 seed strip removed all customers (transactional data
-// must be created+destroyed by the tests that need it — `feedback_
-// test_isolation.md`). Three tests in this spec all need *a*
-// customer to exercise booking; they don't care which. Create one
-// once for the whole spec and clean up after — owns its own data
-// lifecycle, no cross-spec contamination since each spec runs in
-// its own worker.
-//
-// Customer create + pool init combined into one beforeAll, and the
-// delete + pool.end combined into one afterAll, to avoid relying on
-// Playwright's hook-ordering semantics (which differ from Mocha's
-// LIFO afterEach/afterAll behavior).
-let fixtureCustomerId: string | null = null;
+// WHY: each spec owns its full data lifecycle. We register a fresh tenant
+// in beforeAll so all booking/customer/user tests work against isolated data.
+// cleanTenantData() in afterAll cascades-deletes everything via the tenants FK.
+let freshTenant: { tenantId: string; token: string; email: string };
+
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
-  // 2026-05-18 seed-strip-stage-b: DynaTire's business config is no
-  // longer pre-seeded. Bootstrap it here so the booking flows in this
-  // spec have something to book against.
-  await seedDynaTireBusinessConfig(pool);
-  const insert = await pool.query(
-    `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
-     VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
-    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture']
-  );
-  fixtureCustomerId = insert.rows[0].customer_id;
-});
-test.afterAll(async () => {
-  if (fixtureCustomerId) {
-    await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
+
+  // Register a fresh tenant via the real /register endpoint.
+  const { request: pr } = await import('@playwright/test');
+  const ctx = await pr.newContext({ ignoreHTTPSErrors: true });
+  const ft = await registerFreshTenant(ctx);
+  freshTenant = ft;
+
+  const tid = freshTenant.tenantId;
+  const tok = freshTenant.token;
+  const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` };
+
+  // Create a service so the QuickBook service dropdown has an option.
+  await ctx.post(`${BACKEND_URL}/services/create`, {
+    headers: hdr,
+    data: { tenant_id: tid, name: 'Test Service', duration_minutes: 30 },
+  });
+
+  // Seed 1 employee, 1 resource, 1 customer, shifts 1-14 days out.
+  const datesAhead: string[] = [];
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + i);
+    datesAhead.push(d.toISOString().slice(0, 10));
   }
-  await clearDynaTireBusinessConfig(pool);
+  await seedBookingScenario(ctx, pool, tok, tid, {
+    employees: ['Test Tech'],
+    resources: ['Bay 1'],
+    customer: 'E2E Fixture Customer',
+    shiftDates: datesAhead,
+    shiftHours: { start: '06:00', end: '20:00' },
+  });
+
+  await ctx.dispose();
+});
+
+test.afterAll(async () => {
+  await cleanTenantData(pool, freshTenant.tenantId);
   await pool.end();
 });
 
@@ -72,14 +84,13 @@ function _toLocalInput(d: Date): string {
 }
 
 /**
- * Set super-admin's "managed tenant" to DynaTire so tenant-scoped UI loads.
- * Mirrors the helper in quick-book-shift-overrides.spec.ts.
+ * Set super-admin's "managed tenant" to the fresh test tenant so tenant-scoped UI loads.
  */
-async function switchToDynaTireTenant(page: Page) {
+async function switchToTestTenant(page: Page) {
   await page.evaluate((id) => {
     localStorage.setItem('managedTenantId', id);
-    localStorage.setItem('managedTenantName', 'DynaTire Mobile Service');
-  }, DYNATIRE_ID);
+    localStorage.setItem('managedTenantName', 'E2E Test Tenant');
+  }, freshTenant.tenantId);
   await page.reload();
   await page.waitForTimeout(1500);
 }
@@ -112,15 +123,15 @@ async function loginAs(page: Page, email: string, password: string) {
 /** Login via API to get a JWT, then store it so page.evaluate(fetch) works. */
 async function getApiToken(page: Page, email: string, password: string): Promise<string> {
   const result = await page.evaluate(
-    async ({ email, password }) => {
-      const res = await fetch('https://localhost:4001/login', {
+    async ({ email, password, backendUrl }) => {
+      const res = await fetch(`${backendUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
       return await res.json();
     },
-    { email, password }
+    { email, password, backendUrl: BACKEND_URL }
   );
   if (!result?.token) throw new Error(`Login failed for ${email}: ${JSON.stringify(result)}`);
   return result.token as string;
@@ -133,7 +144,7 @@ test('smoke: admin can load dashboard and view the schedule', async ({ page }) =
   // WHO: super-admin | WHAT: navigate dashboard root → Schedule | WHERE: shell + SchedulerView
   // WHY: catches build/server drift like the stale-bundle issue we just hit
   await page.goto('/dashboard');
-  await switchToDynaTireTenant(page);
+  await switchToTestTenant(page);
 
   // Primary tabs visible
   await expect(page.getByRole('tab', { name: /^Home$/ }).first()).toBeVisible({ timeout: 10000 });
@@ -149,13 +160,7 @@ test('smoke: admin can load dashboard and view the schedule', async ({ page }) =
   await expect(page.locator('[data-testid="scheduler-view"]')).toBeVisible({ timeout: 10000 });
 
   // SchedulerView's date nav must also render — proves the sub-components
-  // mounted, not just the outer container. Previously this test asserted
-  // on seeded customer names being visible in the default calendar view,
-  // but that's date-dependent: the default view shows TODAY, and weekend
-  // runs (DynaTire seeds Mon-Fri only) had no appointments → no names
-  // rendered → false-failure on Sundays. The date-display testid is
-  // unconditional and still proves the build loaded cleanly, which is
-  // this test's WHY ("catches build/server drift").
+  // mounted, not just the outer container.
   await expect(page.locator('[data-testid="scheduler-date-display"]')).toBeVisible({
     timeout: 10000,
   });
@@ -174,7 +179,7 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
 
   try {
     await page.goto('/dashboard');
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
     await page
       .getByRole('tab', { name: /^Schedule$/ })
       .first()
@@ -198,36 +203,13 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
     // include a placeholder/prompt at index 0, so index 1 is the first
     // real option. Resource dropdown does NOT include a prompt — it lists
     // eligible resources directly (post-2026-05-07 alignment filter), so
-    // index 0 is the first real resource. Some services in the seed are
-    // mapped to a single resource (Balancing, New Tire Install → truck1
-    // only), and using index 1 there would fail because no second option
-    // exists. Pinning index 0 makes this work for any service.
+    // index 0 is the first real resource.
     await page.getByTestId('quick-book-customer').selectOption({ index: 1 });
     await page.getByTestId('quick-book-service').selectOption({ index: 1 });
     await page.getByTestId('quick-book-resource').selectOption({ index: 0 });
 
     // Pick a 30-min slot a few days out at a random grid-aligned hour
-    // within the SEED'S LOCAL business hours so the booking RPC's
-    // shift-coverage check would pass if employee is assigned.
-    //
-    // Two real subtleties this test got bitten by:
-    //
-    // 1. Date reach. The seed's `employee_schedule` only extends ~12
-    //    days from today (refresh-seed-data.sql, weekdays only). Booking
-    //    further out fails with EMPLOYEE_NOT_SCHEDULED. We walk forward
-    //    3 days, then skip Sat/Sun.
-    //
-    // 2. Local-vs-UTC. `<input type="datetime-local">` interprets the
-    //    string we fill as LOCAL time, so we must hand it a LOCAL
-    //    datetime string. `toISOString()` returns UTC, so calling it on
-    //    a Date built from setHours() shifts the rendered hour by the
-    //    machine's offset and silently pushes the booking outside the
-    //    shop's local shift window (Mike 07-16, Carlos 08-17, Dana
-    //    09-18). Format the string from the local components directly.
-    //
-    // Range 10-14 LOCAL gives us a safe corridor: even at the edges,
-    // every seed employee has overlap with at least the resource we
-    // pick, so the booking RPC's auto-assign always finds someone.
+    // within the seeded business hours (06:00-20:00).
     const future = new Date();
     future.setDate(future.getDate() + 3);
     while (future.getDay() === 0 || future.getDay() === 6) {
@@ -259,7 +241,7 @@ test('quick book: booking creates an appointment row and shows it in the DB', as
           AND is_deleted = false
         ORDER BY created_at DESC
         LIMIT 1`,
-      [DYNATIRE_ID, beforeClick.toISOString()]
+      [freshTenant.tenantId, beforeClick.toISOString()]
     );
     expect(
       dbRes.rowCount,
@@ -305,7 +287,7 @@ test('quick book real-time: new appointment appears in the scheduler grid withou
 
   try {
     await page.goto('/dashboard');
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
     await page
       .getByRole('tab', { name: /^Schedule$/ })
       .first()
@@ -338,6 +320,20 @@ test('quick book real-time: new appointment appears in the scheduler grid withou
       await nextDayBtn.click();
       await page.waitForTimeout(150);
     }
+
+    // Guarantee a bookable slot: give every tech a full-day shift on the
+    // target date via direct DB insert (the fixture seeded 14 days but the
+    // exact target date could fall outside at timezone edges).
+    const targetYmd = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+    await pool.query(
+      `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
+       SELECT tenant_id, employee_id, $2::date, '06:00', '20:00', false
+         FROM employees
+        WHERE tenant_id = $1 AND (is_deleted IS NULL OR is_deleted = false)
+       ON CONFLICT (tenant_id, employee_id, shift_date)
+         DO UPDATE SET start_time = '06:00', end_time = '20:00', is_off = false`,
+      [freshTenant.tenantId, targetYmd]
+    );
 
     // Capture URL before submission — assertion below confirms it didn't
     // change, i.e. no client-side route push and no reload.
@@ -445,26 +441,26 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
 
     const customer = await pool.query(
       `SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1`,
-      [DYNATIRE_ID]
+      [freshTenant.tenantId]
     );
     const resource = await pool.query(
       `SELECT resource_id FROM resources WHERE tenant_id = $1 LIMIT 1`,
-      [DYNATIRE_ID]
+      [freshTenant.tenantId]
     );
+    // Use the first active employee seeded for this tenant (no name dependency).
     const employee = await pool.query(
-      `SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = 'Mike Rivera' LIMIT 1`,
-      [DYNATIRE_ID]
+      `SELECT employee_id FROM employees WHERE tenant_id = $1 AND (is_deleted IS NULL OR is_deleted = false) LIMIT 1`,
+      [freshTenant.tenantId]
     );
-    expect(employee.rowCount, 'Mike Rivera must exist in DynaTire seed').toBe(1);
+    expect(employee.rowCount, 'at least one employee must exist in the test tenant').toBeGreaterThanOrEqual(1);
 
-    // Insert (or upsert) Mike's shift covering the test slot. ON CONFLICT
-    // guard against parallel-test residue or seed already having a row.
+    // Insert (or upsert) the employee's shift covering the test slot.
     await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '08:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
          SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false`,
-      [DYNATIRE_ID, employee.rows[0].employee_id, shiftDate]
+      [freshTenant.tenantId, employee.rows[0].employee_id, shiftDate]
     );
     shiftEmployeeId = employee.rows[0].employee_id;
     shiftDateForCleanup = shiftDate;
@@ -473,7 +469,7 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
       `INSERT INTO appointments (tenant_id, customer_id, resource_id, employee_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id`,
       [
-        DYNATIRE_ID,
+        freshTenant.tenantId,
         customer.rows[0].customer_id,
         resource.rows[0].resource_id,
         employee.rows[0].employee_id,
@@ -490,14 +486,14 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
     // z-index bug where react-big-calendar's date cells intercept clicks on
     // the confirmation modal. Both are tracked separately; the form path is
     // covered by appointment.test.tsx (component-level).
-    const token = await getApiToken(page, 'admin@dynatire.com', 'password');
+    const token = await getApiToken(page, freshTenant.email, 'password123');
     const newStart = new Date(future);
     newStart.setHours(13, 0, 0, 0);
     const newEnd = new Date(future);
     newEnd.setHours(14, 0, 0, 0);
     const updateResp = await page.evaluate(
-      async ({ token, id, tenantId, startIso, endIso }) => {
-        const res = await fetch(`https://localhost:4001/appointments/${id}/update`, {
+      async ({ token, id, tenantId, startIso, endIso, backendUrl }) => {
+        const res = await fetch(`${backendUrl}/appointments/${id}/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ tenant_id: tenantId, start_time: startIso, end_time: endIso }),
@@ -507,26 +503,27 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
       {
         token,
         id: apptId,
-        tenantId: DYNATIRE_ID,
+        tenantId: freshTenant.tenantId,
         startIso: newStart.toISOString(),
         endIso: newEnd.toISOString(),
+        backendUrl: BACKEND_URL,
       }
     );
     expect(updateResp.status, `update response: ${JSON.stringify(updateResp)}`).toBeLessThan(400);
 
     // SAD path: API rejects end <= start
     const badResp = await page.evaluate(
-      async ({ token, id, tenantId, startIso }) => {
+      async ({ token, id, tenantId, startIso, backendUrl }) => {
         const earlier = new Date(startIso);
         earlier.setHours(earlier.getHours() - 2);
-        const res = await fetch(`https://localhost:4001/appointments/${id}/update`, {
+        const res = await fetch(`${backendUrl}/appointments/${id}/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ tenant_id: tenantId, end_time: earlier.toISOString() }),
         });
         return { status: res.status, body: await res.json() };
       },
-      { token, id: apptId, tenantId: DYNATIRE_ID, startIso: newStart.toISOString() }
+      { token, id: apptId, tenantId: freshTenant.tenantId, startIso: newStart.toISOString(), backendUrl: BACKEND_URL }
     );
     expect(badResp.status, 'expected 400 from validator on end<=start').toBe(400);
     expect(String(badResp.body?.error || '')).toMatch(/End time must be after start time/i);
@@ -547,7 +544,7 @@ test('edit appointment: time changes persist to DB through PUT /appointments', a
     if (shiftEmployeeId && shiftDateForCleanup) {
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, shiftEmployeeId, shiftDateForCleanup]
+        [freshTenant.tenantId, shiftEmployeeId, shiftDateForCleanup]
       );
     }
   }
@@ -567,19 +564,19 @@ test('create customer: API insert renders in CRM list and is queryable', async (
 
   try {
     await page.goto('/dashboard');
-    await switchToDynaTireTenant(page);
-    const token = await getApiToken(page, 'admin@dynatire.com', 'password');
+    await switchToTestTenant(page);
+    const token = await getApiToken(page, freshTenant.email, 'password123');
 
     const created = await page.evaluate(
-      async ({ token, name, phone, tenantId }) => {
-        const res = await fetch('https://localhost:4001/customers/create', {
+      async ({ token, name, phone, tenantId, backendUrl }) => {
+        const res = await fetch(`${backendUrl}/customers/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ tenant_id: tenantId, name, phone }),
         });
         return { status: res.status, body: await res.json() };
       },
-      { token, name: customerName, phone, tenantId: DYNATIRE_ID }
+      { token, name: customerName, phone, tenantId: freshTenant.tenantId, backendUrl: BACKEND_URL }
     );
     expect(
       created.status,
@@ -603,7 +600,7 @@ test('create customer: API insert renders in CRM list and is queryable', async (
       .click();
     await page.waitForTimeout(1000);
     await page.reload(); // force list re-fetch
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
     await page
       .getByRole('tab', { name: /^Customers$/ })
       .first()
@@ -613,7 +610,7 @@ test('create customer: API insert renders in CRM list and is queryable', async (
     // DB verification
     const db = await pool.query(
       `SELECT phone FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
-      [customerId, DYNATIRE_ID]
+      [customerId, freshTenant.tenantId]
     );
     expect(db.rowCount).toBe(1);
     expect(db.rows[0].phone).toBe(phone);
@@ -636,14 +633,18 @@ test('front-desk role: cannot see Advanced tabs; stale URL redirects to Home', a
   let fdUserId: string | null = null;
 
   try {
+    // Hash 'password123' inline to avoid a precomputed hash dependency.
+    const bcrypt = await import('bcrypt');
+    const fdHash = await bcrypt.hash('password123', 10);
+
     const inserted = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
        VALUES ($1, $2, $3, $4, 'front_desk') RETURNING user_id`,
-      [DYNATIRE_ID, fdEmail, SEED_PASSWORD_HASH, `Front Desk ${tag}`]
+      [freshTenant.tenantId, fdEmail, fdHash, `Front Desk ${tag}`]
     );
     fdUserId = inserted.rows[0].user_id;
 
-    await loginAs(page, fdEmail, 'password');
+    await loginAs(page, fdEmail, 'password123');
 
     // Primary tabs visible
     await expect(page.getByRole('tab', { name: /^Home$/ }).first()).toBeVisible();
@@ -684,11 +685,11 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
 
   try {
     await page.goto('/dashboard');
-    const token = await getApiToken(page, 'admin@dynatire.com', 'password');
+    const token = await getApiToken(page, freshTenant.email, 'password123');
 
     const result = await page.evaluate(
-      async ({ token, email, tenantId }) => {
-        const res = await fetch('https://localhost:4001/users/invite', {
+      async ({ token, email, tenantId, backendUrl }) => {
+        const res = await fetch(`${backendUrl}/users/invite`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
@@ -700,7 +701,7 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
         });
         return { status: res.status, body: await res.json() };
       },
-      { token, email: inviteEmail, tenantId: DYNATIRE_ID }
+      { token, email: inviteEmail, tenantId: freshTenant.tenantId, backendUrl: BACKEND_URL }
     );
     expect(result.status, `expected 201 from /users/invite, got ${JSON.stringify(result)}`).toBe(
       201
@@ -709,7 +710,7 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
     // Verify user row + password_resets row exist
     const userRow = await pool.query(
       `SELECT user_id, role, password_hash FROM users WHERE email = $1 AND tenant_id = $2`,
-      [inviteEmail, DYNATIRE_ID]
+      [inviteEmail, freshTenant.tenantId]
     );
     expect(userRow.rowCount).toBe(1);
     expect(userRow.rows[0].role).toBe('front_desk');

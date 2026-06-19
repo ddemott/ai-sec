@@ -1,8 +1,9 @@
 /**
  * Generic OAuth callback handler factory.
  *
- * Eliminates duplication across jobber.ts, hubspot.ts, square.ts, and servicetitan.ts
- * which all implement identical OAuth callback flows:
+ * Used by the CRM + calendar OAuth callbacks (square.ts + the calendar routes;
+ * the Jobber/HubSpot/ServiceTitan callbacks were removed 2026-06-12). Kept
+ * generic — any future provider's callback is the same flow:
  *   1. Check for OAuth error param
  *   2. Validate code + state
  *   3. Verify state JWT → extract tenantId
@@ -23,13 +24,13 @@ interface TokenSet {
 
 /** Configuration for a specific OAuth provider */
 export interface OAuthProviderConfig {
-  /** Provider name used in DB and query params (e.g., 'jobber', 'hubspot') */
+  /** Provider name used in DB and query params (e.g., 'square') */
   provider: string;
   /** Function to verify JWT state and extract tenantId */
   verifyState: (state: string) => string | null;
   /** Function to exchange auth code for tokens */
   exchangeCodeForTokens: (code: string) => Promise<TokenSet>;
-  /** Extra query params to extract (e.g., tenant_sid for ServiceTitan) */
+  /** Extra query params to extract (a provider-specific id returned on the callback) */
   extraQueryParams?: string[];
   /** Extra data to store in the settings JSONB column (receives the req.query object) */
   buildExtraSettings?: (query: Record<string, string>) => Record<string, unknown> | null;
@@ -39,10 +40,10 @@ export interface OAuthProviderConfig {
  * Creates a Fastify route handler for an OAuth callback.
  *
  * Usage in route file:
- *   app.get('/jobber/auth/callback', createOAuthCallbackHandler(pool, app, {
- *     provider: 'jobber',
- *     verifyState: jobberClient.verifyState,
- *     exchangeCodeForTokens: jobberClient.exchangeCodeForTokens,
+ *   app.get('/square/auth/callback', createOAuthCallbackHandler(pool, app, {
+ *     provider: 'square',
+ *     verifyState: squareClient.verifyState,
+ *     exchangeCodeForTokens: squareClient.exchangeCodeForTokens,
  *   }));
  */
 export function createOAuthCallbackHandler(

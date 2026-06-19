@@ -15,16 +15,14 @@
  * deliver, just intercepted at the persistence layer.
  */
 import { test, expect } from './helpers/test';
-import { type APIRequestContext } from '@playwright/test';
+import { type APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Pool } from 'pg';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import { registerFreshTenant, cleanTenantData, BACKEND_URL } from './helpers/fixtures';
 import { createHash, randomUUID } from 'crypto'; // createHash for password-reset token (sha256), randomUUID for token plaintext
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-const BACKEND_URL = 'https://localhost:4001';
 
 // AGENT_SECRET read from the backend's .env so the test sends the same
 // value the running server expects. Falls back to env var if test is
@@ -44,6 +42,7 @@ function readAgentSecret(): string {
 const AGENT_SECRET = readAgentSecret();
 
 let pool: Pool;
+let freshTenant: { tenantId: string; email: string; token: string };
 
 function uniqueTag(): string {
   return `e2e-auth-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -115,16 +114,16 @@ async function apiGet(
   return { status: res.status() };
 }
 
-// The bare-bones seed (post seed-strip, commit 9e9f186) no longer ships the
-// DynaTire tenant — specs that need it self-bootstrap via the fixture helper.
-// Without this, every INSERT below hits users_tenant_id_fkey (DYNATIRE_ID
-// absent from `tenants`). Matches the pattern in the sibling specs.
+// Each run provisions a fresh ephemeral tenant for the tests below so they
+// never depend on seed data and clean up after themselves.
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
-  await seedDynaTireBusinessConfig(pool);
+  const ctx = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+  freshTenant = await registerFreshTenant(ctx);
+  await ctx.dispose();
 });
 test.afterAll(async () => {
-  await clearDynaTireBusinessConfig(pool);
+  await cleanTenantData(pool, freshTenant.tenantId);
   await pool.end();
 });
 
@@ -160,26 +159,26 @@ test('role-gate: front_desk user hitting owner-only routes is rejected with 403'
     const fd = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
        VALUES ($1, $2, $3, $4, 'front_desk') RETURNING user_id`,
-      [DYNATIRE_ID, `${tag}-fd@dynatire.com`, bcryptHash, 'Front Desk Test']
+      [freshTenant.tenantId, `${tag}-fd@example.test`, bcryptHash, 'Front Desk Test']
     );
     frontDeskUserId = fd.rows[0].user_id;
 
     const tt = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
        VALUES ($1, $2, $3, $4, 'owner') RETURNING user_id`,
-      [DYNATIRE_ID, `${tag}-target@dynatire.com`, bcryptHash, 'Target Owner']
+      [freshTenant.tenantId, `${tag}-target@example.test`, bcryptHash, 'Target Owner']
     );
     inviteeUserId = tt.rows[0].user_id;
 
     // Log in as the front_desk user.
-    const auth = await loginAs(request, `${tag}-fd@dynatire.com`, 'password');
+    const auth = await loginAs(request, `${tag}-fd@example.test`, 'password');
     expect(auth.token, `login should succeed: ${JSON.stringify(auth)}`).toBeTruthy();
     expect(auth.role).toBe('front_desk');
 
     // Attack 1: POST /users/invite — front_desk gets 403.
     const invite = await apiPost(request, auth.token!, '/users/invite', {
-      tenant_id: DYNATIRE_ID,
-      email: `${tag}-injected@dynatire.com`,
+      tenant_id: freshTenant.tenantId,
+      email: `${tag}-injected@example.test`,
       full_name: 'Injected User',
       role: 'owner',
     });
@@ -188,7 +187,7 @@ test('role-gate: front_desk user hitting owner-only routes is rejected with 403'
     // Attack 2: PATCH /users/:id/role — front_desk gets 403 trying to
     // demote another owner to front_desk (or promote themselves).
     const patch = await apiPatch(request, auth.token!, `/users/${inviteeUserId}/role`, {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       role: 'front_desk',
     });
     expect(patch.status, '/users/:id/role must reject front_desk').toBe(403);
@@ -233,7 +232,7 @@ test('password-reset: forgot-password → token persisted → reset-password →
   //        out permanently. Pin the round-trip end-to-end.
 
   const tag = uniqueTag();
-  const email = `${tag}-resetuser@dynatire.com`;
+  const email = `${tag}-resetuser@example.test`;
   const oldPassword = 'oldpassword';
   const newPassword = 'newsecurepassword';
   let userId: string | null = null;
@@ -245,7 +244,7 @@ test('password-reset: forgot-password → token persisted → reset-password →
     const u = await pool.query(
       `INSERT INTO users (tenant_id, email, password_hash, full_name, role)
        VALUES ($1, $2, $3, $4, 'owner') RETURNING user_id`,
-      [DYNATIRE_ID, email, oldHash, 'Reset Test User']
+      [freshTenant.tenantId, email, oldHash, 'Reset Test User']
     );
     userId = u.rows[0].user_id;
 
@@ -336,7 +335,7 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
       `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at)
        VALUES ($1, $2, $3, now() + interval '10 minutes')
        RETURNING phone_verification_id`,
-      [DYNATIRE_ID, phone, codeHash]
+      [freshTenant.tenantId, phone, codeHash]
     );
     phoneVerificationId = ins.rows[0].phone_verification_id;
 
@@ -345,7 +344,7 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
       request,
       null,
       '/agent-tools/verify-phone-code',
-      { tenant_id: DYNATIRE_ID, phone, code: '999999' },
+      { tenant_id: freshTenant.tenantId, phone, code: '999999' },
       { 'x-agent-secret': AGENT_SECRET }
     );
     expect(wrong.status).toBe(200); // route returns 200 + success:false (LLM relays naturally)
@@ -362,7 +361,7 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
       request,
       null,
       '/agent-tools/verify-phone-code',
-      { tenant_id: DYNATIRE_ID, phone, code: knownCode },
+      { tenant_id: freshTenant.tenantId, phone, code: knownCode },
       { 'x-agent-secret': AGENT_SECRET }
     );
     expect(right.status).toBe(200);
@@ -380,7 +379,7 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
       ]);
     }
     await pool.query(`DELETE FROM phone_verifications WHERE tenant_id = $1 AND phone = $2`, [
-      DYNATIRE_ID,
+      freshTenant.tenantId,
       phone,
     ]);
   }

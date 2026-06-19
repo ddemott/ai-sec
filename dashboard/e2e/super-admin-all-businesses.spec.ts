@@ -67,13 +67,13 @@ test('super-admin all-businesses: tenant cards render with name + truncated UUID
     'TenantCard must show a truncated UUID (8 hex chars) — regression to `tenant.id` would print "undefined" instead'
   ).toMatch(/[0-9a-f]{8}/i);
 
-  // At least the platform admin and DynaTire (from supabase/seed.sql)
+  // At least the platform admin and Bella's Hair Studio (from supabase/seed.sql)
   // should be visible. Cards beyond those vary across runs depending
   // on what previous tests left in the DB; counting >=2 is the stable
   // lower bound for a fresh-seeded DB.
   const cardCount = await cards.count();
   expect(
     cardCount,
-    'Expected at least 2 tenants (SecretaryHQ Platform + DynaTire from supabase/seed.sql)'
+    "Expected at least 2 tenants (SecretaryHQ Platform + Bella's Hair Studio from supabase/seed.sql)"
   ).toBeGreaterThanOrEqual(2);
 });

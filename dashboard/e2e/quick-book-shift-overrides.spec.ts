@@ -1,38 +1,55 @@
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import {
+  registerFreshTenant,
+  seedBookingScenario,
+  cleanTenantData,
+  BACKEND_URL,
+} from './helpers/fixtures';
 
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 
-// Per-spec fixture customer — same rationale as workflows.spec.ts.
-// 2026-05-18 seed strip removed seeded customers; the three failing
-// tests here open Quick Book which renders an empty customer dropdown
-// without one. Pool + customer create + delete combined into a single
-// before/after pair so we don't depend on hook-ordering semantics.
+// Per-spec fixture tenant — same rationale as workflows.spec.ts.
+// Pool + fresh tenant create + delete combined into a single before/after pair.
 let pool: Pool;
-let fixtureCustomerId: string | null = null;
+let freshTenant: { tenantId: string; token: string; email: string };
+
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
-  // 2026-05-18 seed-strip-stage-b: DynaTire's business config moved
-  // out of supabase/seed.sql. Bootstrap it so the seeded shift window
-  // (which this spec's tests assert against) exists.
-  await seedDynaTireBusinessConfig(pool);
-  const insert = await pool.query(
-    `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
-     VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
-    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture']
-  );
-  fixtureCustomerId = insert.rows[0].customer_id;
-});
-test.afterAll(async () => {
-  if (fixtureCustomerId) {
-    await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
+
+  const { request: pr } = await import('@playwright/test');
+  const ctx = await pr.newContext({ ignoreHTTPSErrors: true });
+  const ft = await registerFreshTenant(ctx);
+  freshTenant = ft;
+
+  // Seed the booking scenario: 1 employee, 1 resource, 1 customer, shifts
+  // for the next 14 days so the Quick Book tests have employees on-shift.
+  const datesAhead: string[] = [];
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + i);
+    datesAhead.push(d.toISOString().slice(0, 10));
   }
-  await clearDynaTireBusinessConfig(pool);
+  await seedBookingScenario(ctx, pool, ft.token, ft.tenantId, {
+    employees: ['Test Tech'],
+    resources: ['Bay 1'],
+    customer: 'E2E Fixture Customer',
+    shiftDates: datesAhead,
+    // Use 00:00–23:59 so the shift covers any UTC-equivalent booking time.
+    // Fresh tenants default to UTC; a 15:00 local (CDT = UTC-5) booking
+    // lands at 20:00 UTC, which would fall outside a 06:00–20:00 window.
+    shiftHours: { start: '00:00', end: '23:59' },
+  });
+
+  await ctx.dispose();
+});
+
+test.afterAll(async () => {
+  await cleanTenantData(pool, freshTenant.tenantId);
   await pool.end();
 });
+
 /**
  * E2E test: Quick Book should succeed when employees have employee_schedule for the day.
  *
@@ -65,11 +82,11 @@ async function ensureLoggedIn(page: Page) {
   await expect(page.getByText('Home').first()).toBeVisible({ timeout: 15000 });
 }
 
-async function switchToDynaTireTenant(page: Page) {
-  await page.evaluate(() => {
-    localStorage.setItem('managedTenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
-    localStorage.setItem('managedTenantName', 'DynaTire Mobile Service');
-  });
+async function switchToTestTenant(page: Page) {
+  await page.evaluate((id) => {
+    localStorage.setItem('managedTenantId', id);
+    localStorage.setItem('managedTenantName', 'E2E Test Tenant');
+  }, freshTenant.tenantId);
   await page.reload();
   await page.waitForTimeout(1500);
 
@@ -82,11 +99,12 @@ async function getScheduledEmployeeId(page: Page, dateStr: string): Promise<stri
   // returned HTML, `res.json()` threw, this function silently returned
   // null, and the test fell back to auto-assign, which picked an employee
   // that may not have been scheduled (causing "Employee is not on shift").
+  // tenantId is threaded via args (page.evaluate can't capture Node-scope vars).
   return page.evaluate(
-    async ({ dateStr }) => {
+    async ({ dateStr, backendUrl, tenantId }) => {
       const token = localStorage.getItem('authToken');
       const res = await fetch(
-        `https://localhost:4001/shifts/overrides?tenant_id=f234e471-0e60-4163-86c9-93cfd9338e3a&start_date=${dateStr}&end_date=${dateStr}`,
+        `${backendUrl}/shifts/overrides?tenant_id=${tenantId}&start_date=${dateStr}&end_date=${dateStr}`,
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
@@ -105,7 +123,7 @@ async function getScheduledEmployeeId(page: Page, dateStr: string): Promise<stri
         : null;
       return row?.employee_id ?? null;
     },
-    { dateStr }
+    { dateStr, backendUrl: BACKEND_URL, tenantId: freshTenant.tenantId }
   );
 }
 
@@ -122,7 +140,7 @@ test.describe('Quick Book with employee_schedule', () => {
     let createdId: string | null = null;
     try {
       await ensureLoggedIn(page);
-      await switchToDynaTireTenant(page);
+      await switchToTestTenant(page);
 
       // Navigate to Schedule
       await page.getByText('Schedule').first().click();
@@ -161,13 +179,11 @@ test.describe('Quick Book with employee_schedule', () => {
       const resourceSelect = page.getByTestId('quick-book-resource');
       await resourceSelect.selectOption({ index: 0 });
 
-      // Pick a target weekday with a seeded shift. DynaTire's seed populates
-      // employee_schedule Mon-Fri only; using `today` made this test fail on
-      // weekend runs with a legitimate "Employee is not on shift" — the test
-      // was effectively asserting `today is a weekday`, not the contract it
-      // describes. Walk forward to the next weekday so the booking RPC's
-      // shift-coverage check has data to find. The seed extends ~12 days, so
-      // +1 weekday is always inside the window.
+      // Pick a target weekday with a seeded shift. The fixture populates
+      // employee_schedule Mon-Fri for the next 14 days; using `today` made
+      // this test fail on weekend runs with a legitimate "Employee is not on
+      // shift". Walk forward to the next weekday so the booking RPC's
+      // shift-coverage check has data to find.
       const target = new Date();
       target.setDate(target.getDate() + 1);
       while (target.getDay() === 0 || target.getDay() === 6) {
@@ -229,20 +245,23 @@ test.describe('Quick Book with employee_schedule', () => {
       }
     } finally {
       if (createdId) {
-        await page.evaluate(async (id) => {
-          const token = localStorage.getItem('authToken');
-          await fetch(`https://localhost:4001/appointments/${id}`, {
-            method: 'DELETE',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
-        }, createdId);
+        await page.evaluate(
+          async ({ id, backendUrl }) => {
+            const token = localStorage.getItem('authToken');
+            await fetch(`${backendUrl}/appointments/${id}`, {
+              method: 'DELETE',
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+          },
+          { id: createdId, backendUrl: BACKEND_URL }
+        );
       }
     }
   });
 
   test('rejects an end time before the start time', async ({ page }) => {
     await ensureLoggedIn(page);
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
 
     await page.getByText('Schedule').first().click();
     await page.waitForTimeout(1500);
@@ -296,7 +315,7 @@ test.describe('Quick Book with employee_schedule', () => {
 
   test('rejects an appointment longer than 12 hours (same day)', async ({ page }) => {
     await ensureLoggedIn(page);
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
 
     await page.getByText('Schedule').first().click();
     await page.waitForTimeout(1500);
@@ -354,7 +373,7 @@ test.describe('Quick Book with employee_schedule', () => {
 
   test('Chairs view displays resource rows', async ({ page }) => {
     await ensureLoggedIn(page);
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
 
     // Navigate to Schedule
     await page.getByText('Schedule').first().click();

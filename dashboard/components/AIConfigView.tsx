@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { MOCK_TENANT } from '@/lib/mockData';
 import { type Tenant } from '@/lib/types';
-import { Settings, MessageSquare, Mic, Info, Sparkles, Clock } from 'lucide-react';
+import { Settings, MessageSquare, Mic, Info, Sparkles, Clock, PhoneForwarded, Bell } from 'lucide-react';
 import { Api } from '../lib/api';
+import { normalizePhone } from '../../shared/phone';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
@@ -87,6 +88,18 @@ export default function AIConfigView() {
         save_preferences_enabled: config.save_preferences_enabled ?? false,
         preferences_instructions: config.preferences_instructions ?? null,
         default_buffer_minutes: config.default_buffer_minutes ?? 0,
+        tts_voice: config.tts_voice ?? null,
+        tts_speed: config.tts_speed ?? null,
+        tts_soft: config.tts_soft ?? null,
+        tts_cheerful: config.tts_cheerful ?? null,
+        tts_formal: config.tts_formal ?? null,
+        tts_warm: config.tts_warm ?? null,
+        tts_concise: config.tts_concise ?? null,
+        // Normalize to clean E.164 for storage so the agent builds a valid
+        // tel: URI. Blank/invalid → null (forwarding off → AI takes a message).
+        forward_phone: normalizePhone(config.forward_phone),
+        // Normalize owner notification phone the same way.
+        owner_phone: normalizePhone(config.owner_phone),
       });
       setSuccess(res.success);
       if (res.success) {
@@ -208,6 +221,56 @@ export default function AIConfigView() {
           />
         </section>
 
+        {/* Forward Calls Section — live transfer to a human (owner cell). */}
+        <section className="space-y-4">
+          <h2
+            className="text-lg font-bold flex items-center"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            <PhoneForwarded className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
+            Forward Calls to a Person
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            When a caller needs a real person, the assistant can transfer the live call to this
+            number (e.g. your cell). Leave blank to have the assistant take a message instead.
+          </p>
+          <Input
+            type="tel"
+            label="Forward calls to"
+            value={config?.forward_phone || ''}
+            onChange={(e) => {
+              setConfig((prev) => (prev ? { ...prev, forward_phone: e.target.value } : null));
+              setDirty(true);
+            }}
+            placeholder="Ex: +1 312 555 0100"
+          />
+        </section>
+
+        {/* Owner Notification Phone — SMS alert when caller leaves a message */}
+        <section className="space-y-4">
+          <h2
+            className="text-lg font-bold flex items-center"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            <Bell className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
+            Owner Notification Phone
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            When a caller leaves a message, the AI will send you an SMS alert at this number. Leave
+            blank to disable SMS notifications.
+          </p>
+          <Input
+            type="tel"
+            label="Notification number"
+            value={config?.owner_phone || ''}
+            onChange={(e) => {
+              setConfig((prev) => (prev ? { ...prev, owner_phone: e.target.value } : null));
+              setDirty(true);
+            }}
+            placeholder="Ex: +1 630 555 0100"
+          />
+        </section>
+
         {/* Voice Selection Section */}
         <section className="space-y-4">
           <h2
@@ -217,38 +280,29 @@ export default function AIConfigView() {
             <Mic className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
             Voice Identity
           </h2>
+          {/* xAI Grok TTS voices — the actual voices the live agent uses.
+              Selection writes tts_voice; null = platform default (Eve). */}
           <div
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
             role="radiogroup"
             aria-label="Voice selection"
           >
             {[
-              {
-                id: 'ba124806-6962-4354-94a0-7607775952f4',
-                name: 'Cartesia - British Female',
-                desc: 'Professional, Calm, Clear',
-              },
-              {
-                id: '21m00Tcm4llvDq8ikWAM',
-                name: 'Rachel - US Female',
-                desc: 'Soft, Friendly, Warm',
-              },
-              { id: 'pNInz6ovDWjNkhCspfAY', name: 'Josh - US Male', desc: 'Deep, Trustworthy' },
-              {
-                id: 'ErXwSzhRj4IW3zYCt9a2',
-                name: 'Antoni - US Male',
-                desc: 'Casual, Conversational',
-              },
+              { id: 'eve', name: 'Eve — British Female', desc: 'Warm, calm, soothing (default)' },
+              { id: 'ara', name: 'Ara — Female', desc: 'Warm, friendly, conversational' },
+              { id: 'rex', name: 'Rex — Male', desc: 'Confident, clear — tuned for business' },
+              { id: 'sal', name: 'Sal — Neutral', desc: 'Smooth, balanced' },
+              { id: 'leo', name: 'Leo — British Male', desc: 'Authoritative, strong' },
             ].map((voice) => (
               <Card
                 key={voice.id}
                 onClick={() => {
-                  setConfig((prev) => (prev ? { ...prev, voice_id: voice.id } : null));
+                  setConfig((prev) => (prev ? { ...prev, tts_voice: voice.id } : null));
                   setDirty(true);
                 }}
-                className={`p-4 cursor-pointer flex items-center justify-between ${config?.voice_id === voice.id ? 'ring-1' : ''}`}
+                className={`p-4 cursor-pointer flex items-center justify-between ${config?.tts_voice === voice.id ? 'ring-1' : ''}`}
                 style={
-                  config?.voice_id === voice.id
+                  config?.tts_voice === voice.id
                     ? {
                         borderColor: 'var(--accent)',
                         ['--tw-ring-color' as string]: 'var(--accent)',
@@ -256,7 +310,7 @@ export default function AIConfigView() {
                     : undefined
                 }
                 role="radio"
-                aria-checked={config?.voice_id === voice.id}
+                aria-checked={config?.tts_voice === voice.id}
                 aria-label={voice.name}
               >
                 <div>
@@ -268,13 +322,82 @@ export default function AIConfigView() {
                 <div
                   className={`w-4 h-4 rounded-full border-2`}
                   style={
-                    config?.voice_id === voice.id
+                    config?.tts_voice === voice.id
                       ? { backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' }
                       : { borderColor: 'var(--border-soft)' }
                   }
                 />
               </Card>
             ))}
+          </div>
+
+          {/* Delivery — speed slider */}
+          <div className="pt-2">
+            <label
+              htmlFor="tts-speed"
+              className="block text-sm font-semibold mb-1"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Speaking pace — {(config?.tts_speed ?? 0.85).toFixed(2)}×
+            </label>
+            <input
+              id="tts-speed"
+              type="range"
+              min={0.7}
+              max={1.5}
+              step={0.05}
+              value={config?.tts_speed ?? 0.85}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                setConfig((prev) => (prev ? { ...prev, tts_speed: v } : null));
+                setDirty(true);
+              }}
+              className="w-full"
+              aria-label="Speaking pace"
+            />
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              Lower = slower, calmer. 0.85 is an unhurried, caring pace.
+            </p>
+          </div>
+
+          {/* Voice style checkboxes */}
+          <div className="pt-2">
+            <p className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+              Voice style
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(
+                [
+                  { key: 'tts_soft', label: 'Soft', description: 'Soothing, gentle delivery' },
+                  { key: 'tts_cheerful', label: 'Cheerful', description: 'Upbeat, positive tone' },
+                  { key: 'tts_formal', label: 'Formal', description: 'Professional, no contractions' },
+                  { key: 'tts_warm', label: 'Warm', description: 'Empathetic, caring' },
+                  { key: 'tts_concise', label: 'Concise', description: 'Fewer words, faster to the point' },
+                ] as { key: keyof typeof config; label: string; description: string }[]
+              ).map(({ key, label, description }) => (
+                <label
+                  key={key}
+                  className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border"
+                  style={{ borderColor: config?.[key] ? 'var(--accent)' : 'var(--border-soft)', backgroundColor: config?.[key] ? 'var(--accent-muted)' : 'transparent' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!(config?.[key])}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setConfig((prev) => (prev ? { ...prev, [key]: v } : null));
+                      setDirty(true);
+                    }}
+                    aria-label={label}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{label}</span>
+                    <span className="block text-xs" style={{ color: 'var(--text-secondary)' }}>{description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
         </section>
 

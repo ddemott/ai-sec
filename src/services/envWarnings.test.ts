@@ -21,6 +21,13 @@ function baseCtx(
     env: {
       GOOGLE_CLIENT_ID: 'google-client-id',
       AGENT_SECRET: 'a'.repeat(40),
+      TELNYX_PHONE_NUMBER: '+16308661960',
+      EMAIL_USER: 'test@example.com',
+      EMAIL_PASS: 'app-password',
+      CORS_ORIGIN: 'https://app.secretaryhq.com',
+      DASHBOARD_URL: 'https://app.secretaryhq.com',
+      STRIPE_SECRET_KEY: 'sk_test_fake',
+      STRIPE_WEBHOOK_SECRET: 'whsec_fake',
       ...(overrides.env ?? {}),
     } as NodeJS.ProcessEnv,
     TELNYX_API_KEY: overrides.TELNYX_API_KEY ?? 'KEY01fake',
@@ -89,16 +96,106 @@ describe('collectStartupWarnings — AGENT_SECRET', () => {
 
 describe('collectStartupWarnings — GOOGLE_CLIENT_ID', () => {
   it('SAD: missing GOOGLE_CLIENT_ID → calendar-sync warning', () => {
-    const warnings = collectStartupWarnings(
-      baseCtx({
-        env: {
-          GOOGLE_CLIENT_ID: undefined,
-          AGENT_SECRET: 'a'.repeat(40),
-        },
-      })
-    );
+    const warnings = collectStartupWarnings(baseCtx({ env: { GOOGLE_CLIENT_ID: undefined } }));
     expect(warnings.find((w) => w.includes('GOOGLE_CLIENT_ID'))).toContain(
       'Google Calendar sync disabled'
     );
+  });
+});
+
+describe('collectStartupWarnings — TELNYX_PHONE_NUMBER', () => {
+  it('SAD: TELNYX_API_KEY set but TELNYX_PHONE_NUMBER missing → SMS from-number warning', () => {
+    // WHO: Operator with Telnyx API key but no outbound phone number configured
+    // WHAT: Reminder and notification SMS will fail because the from field is invalid
+    // WHY: ProviderRegistry now defaults to Telnyx; a missing from number is a silent
+    //       delivery failure with no error at the route layer
+    const warnings = collectStartupWarnings(baseCtx({ env: { TELNYX_PHONE_NUMBER: undefined } }));
+    const w = warnings.find((x) => x.includes('TELNYX_PHONE_NUMBER'));
+    expect(w).toBeDefined();
+    expect(w).toContain('from number');
+  });
+
+  it('HAPPY: TELNYX_API_KEY missing suppresses TELNYX_PHONE_NUMBER warning', () => {
+    // WHO: Operator with no Telnyx config at all
+    // WHY: Phone number warning is irrelevant when the key itself is absent
+    const warnings = collectStartupWarnings(
+      baseCtx({ TELNYX_API_KEY: '', env: { TELNYX_PHONE_NUMBER: undefined } })
+    );
+    expect(warnings.filter((w) => w.includes('TELNYX_PHONE_NUMBER'))).toHaveLength(0);
+  });
+});
+
+describe('collectStartupWarnings — EMAIL_USER / EMAIL_PASS', () => {
+  it('SAD: EMAIL_USER missing → email mock warning fires', () => {
+    // WHO: Operator who hasn't set Gmail app-password credentials
+    // WHAT: emailService falls back to mock transporter — all confirmation/reminder
+    //       emails return a fake messageId but never send
+    // WHY: This is a silent prod failure; the warning is the only signal
+    const warnings = collectStartupWarnings(baseCtx({ env: { EMAIL_USER: undefined } }));
+    expect(warnings.find((w) => w.includes('EMAIL_USER'))).toContain('mock mode');
+  });
+
+  it('SAD: EMAIL_PASS missing → email mock warning fires', () => {
+    const warnings = collectStartupWarnings(baseCtx({ env: { EMAIL_PASS: undefined } }));
+    expect(warnings.find((w) => w.includes('EMAIL_PASS'))).toContain('mock mode');
+  });
+});
+
+describe('collectStartupWarnings — CORS_ORIGIN', () => {
+  it('SAD: CORS_ORIGIN missing → open-CORS security warning', () => {
+    // WHO: Operator who hasn't pinned allowed origins
+    // WHAT: Fastify reflects any origin — cross-site requests from any domain succeed
+    // WHY: Silent security misconfiguration; warning at boot is the cheapest guard
+    const warnings = collectStartupWarnings(baseCtx({ env: { CORS_ORIGIN: undefined } }));
+    const w = warnings.find((x) => x.includes('CORS_ORIGIN'));
+    expect(w).toBeDefined();
+    expect(w).toContain('ANY origin');
+  });
+});
+
+describe('collectStartupWarnings — DASHBOARD_URL', () => {
+  it('SAD: DASHBOARD_URL missing → warning about localhost fallback', () => {
+    // WHO: Operator who hasn't set the public dashboard URL
+    // WHAT: Emails, OAuth redirects, Stripe success/cancel URLs all point at localhost
+    // WHY: Production OAuth flows and Stripe redirects silently break
+    const warnings = collectStartupWarnings(baseCtx({ env: { DASHBOARD_URL: undefined } }));
+    const w = warnings.find((x) => x.includes('DASHBOARD_URL'));
+    expect(w).toBeDefined();
+    expect(w).toContain('localhost');
+  });
+});
+
+describe('collectStartupWarnings — Stripe', () => {
+  it('SAD: STRIPE_SECRET_KEY missing → billing disabled warning', () => {
+    // WHO: Operator who hasn't configured Stripe
+    // WHAT: All /billing/* routes return 503 — no checkout, no subscription management
+    // WHY: Silent for operators who assume billing works because the UI exists
+    const warnings = collectStartupWarnings(
+      baseCtx({ env: { STRIPE_SECRET_KEY: undefined, STRIPE_WEBHOOK_SECRET: undefined } })
+    );
+    const w = warnings.find((x) => x.includes('STRIPE_SECRET_KEY'));
+    expect(w).toBeDefined();
+    expect(w).toContain('503');
+  });
+
+  it('SAD: STRIPE_SECRET_KEY set but STRIPE_WEBHOOK_SECRET missing → webhooks fail warning', () => {
+    // WHO: Operator who set the API key but not the webhook signing secret
+    // WHAT: constructEvent throws on every inbound webhook → subscriptions never activate
+    //       even though checkout sessions complete successfully
+    // WHY: The gap between "checkout works" and "subscription activates" is invisible
+    //       without this warning — looks like a billing integration bug
+    const warnings = collectStartupWarnings(baseCtx({ env: { STRIPE_WEBHOOK_SECRET: undefined } }));
+    const w = warnings.find((x) => x.includes('STRIPE_WEBHOOK_SECRET'));
+    expect(w).toBeDefined();
+    expect(w).toContain('subscriptions never activate');
+  });
+
+  it('HAPPY: STRIPE_SECRET_KEY missing suppresses webhook-secret warning', () => {
+    // WHO: Operator with no Stripe config at all
+    // WHY: Webhook-secret warning is noise when the key itself is absent
+    const warnings = collectStartupWarnings(
+      baseCtx({ env: { STRIPE_SECRET_KEY: undefined, STRIPE_WEBHOOK_SECRET: undefined } })
+    );
+    expect(warnings.filter((w) => w.includes('STRIPE_WEBHOOK_SECRET'))).toHaveLength(0);
   });
 });

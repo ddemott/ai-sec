@@ -20,17 +20,16 @@ test('Dashboard Page Smoke Test', () => {
 });
 
 describe('Sad Paths', () => {
-  test('Dashboard Page renders without crashing when no SessionProvider wraps it', () => {
-    // Rendering without SessionProvider should not throw — component should
-    // fall back to default context values or render gracefully
-    let didThrow = false;
-    try {
-      render(<DashboardPage />);
-    } catch {
-      didThrow = true;
-    }
-    // Whether it throws or not, the test documents the behavior
-    expect(typeof didThrow).toBe('boolean');
-    // WHO: unauthenticated visitor | WHAT: loads dashboard without SessionProvider | WHEN: misconfigured app tree | WHERE: DashboardPage | WHY: missing provider should not produce a white screen crash
-  });
-});
+  test('Dashboard Page throws when no SessionProvider wraps it', () => {
+    // Rendering without SessionProvider throws because useSessionContext
+    // requires the provider. This test pins that exact contract so a future
+    // refactor that silently swallows the error (returning stale/undefined
+    // context instead of throwing) is caught immediately.
+    // WHO: misconfigured app tree | WHAT: DashboardPage rendered without SessionProvider
+    // WHEN: provider accidentally removed from layout | WHERE: useSessionContext
+    // WHY: a silent undefined-context is harder to debug than an explicit throw
+    expect(() => render(<DashboardPage />)).toThrow(
+      'useSessionContext must be used within a SessionProvider'
+    )
+  })
+})

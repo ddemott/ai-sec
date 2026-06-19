@@ -22,6 +22,7 @@ import { buildLogger } from './services/logger';
 import { httpRequestsTotal, httpRequestDurationMs, errorsTotal } from './services/metrics';
 import fs from 'node:fs';
 import path from 'node:path';
+import querystring from 'node:querystring';
 
 import { registerAuthRoutes } from './routes/auth';
 import { registerTenantRoutes } from './routes/tenants';
@@ -40,10 +41,7 @@ import { registerAnalyticsRoutes } from './routes/analytics';
 import { registerVocabularyRoutes } from './routes/vocabulary';
 import { registerBillingRoutes, subscriptionGate } from './routes/billing';
 import { registerProvisioningRoutes } from './routes/provisioning';
-import { registerJobberRoutes } from './routes/jobber';
-import { registerHubSpotRoutes } from './routes/hubspot';
 import { registerSquareRoutes } from './routes/square';
-import { registerServiceTitanRoutes } from './routes/servicetitan';
 import { registerAgentToolRoutes } from './routes/agentTools';
 import { registerDemoRoutes } from './routes/demo';
 import { registerVoiceRoutes } from './routes/voice';
@@ -51,6 +49,7 @@ import { registerVersionHistoryRoutes } from './routes/versionHistory';
 import { registerCommunicationRoutes } from './routes/communications';
 import { registerReminderRoutes } from './routes/reminders';
 import { registerHealthRoutes } from './routes/health';
+import { registerSelfServiceRoutes } from './routes/selfService';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { createGetEmbedding } from '../shared/getEmbedding';
@@ -91,7 +90,12 @@ const normalizeForEmbedding = createNormalizer(OPENAI_API_KEY);
 
 // --- Server Setup ---
 
-const useHttps = process.env.NODE_ENV !== 'production';
+// HTTPS for local dev (mkcert-trusted localhost certs); plain HTTP in
+// production (TLS terminated at the Railway proxy) and in CI, where the rest
+// of the E2E stack — wait-on, the dashboard's NEXT_PUBLIC_API_URL, Playwright —
+// all speak http://localhost:4001. CI sets USE_HTTPS=false so the backend
+// doesn't boot TLS the self-signed cert nobody else in the job trusts.
+const useHttps = process.env.NODE_ENV !== 'production' && process.env.USE_HTTPS !== 'false';
 const certDir = path.resolve(__dirname, '..', '..', 'certs');
 const logger = buildLogger({ service: 'ai-sec-backend' });
 const app = Fastify(
@@ -146,6 +150,26 @@ void app.register(multipart, {
 // parses JSON via done(). See src/jsonContentTypeParser.ts for the why
 // (and the unit test that pins the done()-callback contract).
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, jsonContentTypeParser);
+
+// --- Form-Encoded Body Parsing for Twilio Webhooks ---
+// Twilio POSTs its SMS delivery-status callbacks as
+// application/x-www-form-urlencoded (MessageSid=…&MessageStatus=…). Fastify
+// ships no parser for that content type by default, so without this the
+// webhook would 415 and req.body would be undefined. Parse into a plain
+// object via querystring so POST /communications/twilio/status reads the
+// fields off req.body. (No @fastify/formbody dependency added — the built-in
+// querystring module covers this single, simple webhook surface.)
+app.addContentTypeParser(
+  'application/x-www-form-urlencoded',
+  { parseAs: 'string' },
+  (_req, body, done) => {
+    try {
+      done(null, querystring.parse(body as string));
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  }
+);
 
 // --- Database Pool ---
 // Single shared pool (see src/database/index.ts) — same instance is used by
@@ -249,16 +273,14 @@ const telnyxProvisioning =
     ? { client: new TelnyxNumbersClient(TELNYX_API_KEY), sipConnectionId: TELNYX_SIP_CONNECTION_ID }
     : null;
 registerProvisioningRoutes(app, pool, telnyxProvisioning);
-registerJobberRoutes(app, pool, withTenantClient);
-registerHubSpotRoutes(app, pool, withTenantClient);
 registerSquareRoutes(app, pool, withTenantClient);
-registerServiceTitanRoutes(app, pool, withTenantClient);
 registerVoiceRoutes(app, pool, withTenantClient);
 registerVersionHistoryRoutes(app, pool, withTenantClient);
 registerCommunicationRoutes(app, pool, withTenantClient);
 registerReminderRoutes(app, pool, withTenantClient);
 registerAgentToolRoutes(app, pool, withTenantClient, getEmbedding, normalizeForEmbedding);
 registerDemoRoutes(app, pool, generateToken);
+registerSelfServiceRoutes(app, withTenantClient);
 
 // --- Start Reminder Scheduler ---
 // Only start in production or if explicitly enabled

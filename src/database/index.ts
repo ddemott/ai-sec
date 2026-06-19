@@ -52,7 +52,15 @@ const POOL_TIMEOUT_OPTIONS =
  */
 export function getPool(): Pool {
   if (!_pool) {
-    const isLocal = process.env.DATABASE_URL?.includes('localhost') || !process.env.DATABASE_URL;
+    // `isLocal` only decides SSL: a localhost Postgres (dev, CI) has no TLS,
+    // a managed one (prod) requires it. The connection STRING is always
+    // honored when DATABASE_URL is set — including its database name. The
+    // previous code hardcoded `database: 'postgres'` for the local branch,
+    // which silently ignored DATABASE_URL's db name: CI seeds `test_db` but
+    // the server connected to `postgres` → "relation users does not exist".
+    const databaseUrl =
+      process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
+    const isLocal = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
     // connectionTimeoutMillis bounds the CLIENT-side pool checkout wait.
     // POOL_TIMEOUT_OPTIONS above are Postgres server-side GUCs (statement /
     // lock / idle-in-txn) — they do NOT cap how long pool.connect() blocks
@@ -62,24 +70,14 @@ export function getPool(): Pool {
     // load rather than build an unbounded queue. A rejected checkout
     // surfaces as an error → Fastify error handler → errors_total, so
     // saturation is visible instead of invisible. (2026-05-21)
-    _pool = isLocal
-      ? new Pool({
-          user: 'postgres',
-          host: 'localhost',
-          database: 'postgres',
-          password: 'postgres',
-          port: 5433,
-          max: 10,
-          connectionTimeoutMillis: 5000,
-          options: POOL_TIMEOUT_OPTIONS,
-        })
-      : new Pool({
-          connectionString: process.env.DATABASE_URL,
-          ssl: { rejectUnauthorized: false },
-          max: 10,
-          connectionTimeoutMillis: 5000,
-          options: POOL_TIMEOUT_OPTIONS,
-        });
+    _pool = new Pool({
+      connectionString: databaseUrl,
+      // Local/CI Postgres serves plain TCP; managed Postgres requires TLS.
+      ssl: isLocal ? undefined : { rejectUnauthorized: false },
+      max: 10,
+      connectionTimeoutMillis: 5000,
+      options: POOL_TIMEOUT_OPTIONS,
+    });
   }
   return _pool;
 }

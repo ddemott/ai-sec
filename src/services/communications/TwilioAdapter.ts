@@ -37,10 +37,34 @@ export class TwilioAdapter implements TelephonyProvider {
       throw new Error('Twilio client not configured');
     }
 
+    // Twilio delivery-receipt wiring: when a backend public base URL is
+    // configured, attach a statusCallback so Twilio POSTs the message
+    // lifecycle (queued → sent → delivered, or → undelivered/failed) to our
+    // webhook. Without it, the system only ever learns "Twilio accepted the
+    // request" — never whether it actually reached the handset.
+    //
+    // Read at SEND TIME (not in the constructor) so per-tenant routing and
+    // tests can toggle the env var per call. BACKEND_PUBLIC_URL has NO
+    // default: unset → we omit the callback entirely (the "omit when not
+    // configured" contract). DASHBOARD_URL is deliberately NOT reused — it
+    // points at the Next.js dashboard, not this Fastify backend.
+    //
+    // tenant_id rides on the callback URL because Twilio's status callback
+    // carries only MessageSid + MessageStatus; the webhook reads it back to
+    // attribute the delivery row to a tenant.
+    const baseUrl = process.env.BACKEND_PUBLIC_URL;
+    const statusCallback =
+      baseUrl && baseUrl.trim() !== ''
+        ? `${baseUrl.replace(/\/$/, '')}/communications/twilio/status?tenant_id=${encodeURIComponent(
+            request.tenantId
+          )}`
+        : undefined;
+
     const result = await this.client.messages.create({
       to: request.to,
       from: request.from,
       body: request.body,
+      ...(statusCallback ? { statusCallback } : {}),
     });
 
     return { messageSid: result.sid };

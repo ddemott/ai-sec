@@ -527,17 +527,17 @@ describe('getCalendarTokens — sad paths', () => {
 describe('setSyncContext', () => {
   it('sets change_source session variable (WHO: sync service | WHAT: SET LOCAL app.change_source | WHERE: setSyncContext | WHY: version tracking records which CRM made the change)', async () => {
     const client = { query: vi.fn() };
-    await setSyncContext(client, 'hubspot');
+    await setSyncContext(client, 'square');
 
-    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'hubspot'");
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'square'");
   });
 
   it('sets changed_by when provided (WHO: sync service | WHAT: SET LOCAL app.changed_by | WHERE: setSyncContext | WHY: tracks which sync process made the change for audit)', async () => {
     const client = { query: vi.fn() };
-    await setSyncContext(client, 'jobber', 'sync-jobber');
+    await setSyncContext(client, 'square', 'sync-square');
 
-    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'jobber'");
-    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.changed_by = 'sync-jobber'");
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'square'");
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.changed_by = 'sync-square'");
   });
 
   it('skips changed_by when not provided (WHO: sync service | WHAT: only change_source set | WHERE: setSyncContext | WHY: changed_by is optional)', async () => {
@@ -561,11 +561,11 @@ describe('clearSyncContext', () => {
 describe('withSyncContext', () => {
   it('wraps operation with set+clear context (WHO: sync service | WHAT: set → operation → clear | WHERE: withSyncContext | WHY: ensures context is always cleaned up even on error)', async () => {
     const client = { query: vi.fn() };
-    const result = await withSyncContext(client, 'servicetitan', 'sync-st', async () => 'done');
+    const result = await withSyncContext(client, 'square', 'sync-sq', async () => 'done');
 
     expect(result).toBe('done');
-    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'servicetitan'");
-    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.changed_by = 'sync-st'");
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.change_source = 'square'");
+    expect(client.query).toHaveBeenCalledWith("SET LOCAL app.changed_by = 'sync-sq'");
     expect(client.query).toHaveBeenCalledWith('RESET app.change_source');
     expect(client.query).toHaveBeenCalledWith('RESET app.changed_by');
   });
@@ -574,7 +574,7 @@ describe('withSyncContext', () => {
     const client = { query: vi.fn() };
 
     await expect(
-      withSyncContext(client, 'hubspot', 'sync-hubspot', async () => {
+      withSyncContext(client, 'square', 'sync-square', async () => {
         throw new Error('sync failed');
       })
     ).rejects.toThrow('sync failed');

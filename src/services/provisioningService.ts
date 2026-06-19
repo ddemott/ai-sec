@@ -137,7 +137,6 @@ export async function activatePhone(
     ]);
 
     let purchasedId: string | null = null;
-    let _purchasedNumber: string | null = null;
 
     try {
       const available = await telnyx.client.searchAvailable(areaCode);
@@ -150,8 +149,6 @@ export async function activatePhone(
       }
 
       const ordered = await telnyx.client.orderNumber(available.phone_number);
-      _purchasedNumber = ordered.phone_number;
-
       // Resolve the canonical phone_numbers resource id. The order-line id from
       // number_orders is not guaranteed to equal it; using the wrong id makes
       // assign/release silently no-op. Set purchasedId to the resolved id so
@@ -214,8 +211,6 @@ export async function activatePhone(
         rolled_back: !!purchasedId,
         purchased_id: purchasedId,
         ...(cleanupError !== undefined ? { cleanup_error: cleanupError } : {}),
-        // purchasedNumber is informational context kept for callers that want it
-        // (currently unused by the route, but available for future logError fields)
       } satisfies ActivateResult & { status: 'failed' };
     }
   } finally {

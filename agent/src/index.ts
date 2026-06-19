@@ -33,6 +33,11 @@ import { buildSessionContext } from './sessionContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
+import { TranscriptRecorder } from './transcript.js';
+import { CallOutcomeTracker } from './callOutcome.js';
+import { summarizeCall } from './callSummary.js';
+import { classifyCallOutcome } from './callClassify.js';
+import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
 export default defineAgent({
@@ -80,6 +85,7 @@ export default defineAgent({
     //    Timeout is short — if it doesn't come in quickly the call is
     //    probably malformed and we should bail rather than hang silent.
     let participantAttributes: Record<string, string> | null = null;
+    let participantIdentity: string | null = null;
     try {
       const sipParticipant = await Promise.race([
         ctx.waitForParticipant(),
@@ -87,6 +93,9 @@ export default defineAgent({
       ]);
       if (sipParticipant) {
         participantAttributes = sipParticipant.attributes;
+        // Identity is the handle the SIP transfer (cold REFER) targets — capture
+        // it now so transfer_call can hand the live leg off to a human.
+        participantIdentity = sipParticipant.identity;
       }
     } catch {
       // Non-fatal — we can still greet without a caller phone
@@ -97,6 +106,8 @@ export default defineAgent({
       jobMetadata,
       roomMetadata,
       participantAttributes,
+      roomName: ctx.room.name,
+      participantIdentity,
     });
     if (!sessionCtx) {
       // Shouldn't happen — preliminaryCtx already succeeded — but be safe
@@ -143,12 +154,109 @@ export default defineAgent({
     //    catch degrades to a fallback message instead of silence.
     let client: ToolsClient;
     let tenantConfig: Awaited<ReturnType<typeof fetchTenantConfig>>;
+    // Accumulates the spoken conversation (caller STT + agent replies) so the
+    // shutdown callback can persist it as the call's transcript. Declared here
+    // — above both the shutdown registration and the session listener — so both
+    // close over the same recorder.
+    const transcript = new TranscriptRecorder();
+    // Tracks what happened on the call (booked / transferred + appointment_id),
+    // mutated by the booking/transfer tools, read at shutdown for session-end.
+    const outcomeTracker = new CallOutcomeTracker();
+    // Accumulates per-model AI usage (LLM tokens, STT audio, TTS chars) from
+    // LiveKit's SessionUsageUpdated events. Updated during the call; read once
+    // at shutdown to POST costs to /agent-tools/record-ai-cost.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let sessionModelUsage: any[] = [];
     try {
       client = new ToolsClient({
         backendUrl: config.BACKEND_URL,
         agentSecret: config.AGENT_SECRET,
       });
-      const tools = buildTools(sessionCtx, client);
+
+      // Call logging (2026-06-11): persist a voice_sessions row so the
+      // dashboard Calls tab + customer call history populate. START is
+      // fire-and-forget — it must NEVER delay the greeting or risk dead air,
+      // so a failure is logged and swallowed. END is awaited inside the
+      // shutdown callback so duration lands before the job tears down.
+      // Skipped when callId is absent (nothing to key the session on).
+      if (sessionCtx.callId) {
+        const callId = sessionCtx.callId;
+        const startedAtMs = Date.now();
+        void client
+          .call('/agent-tools/voice-session-start', {
+            tenant_id: sessionCtx.tenantId,
+            call_id: callId,
+            caller_phone: sessionCtx.callerPhone ?? null,
+          })
+          .catch((e: unknown) =>
+            callLog.warn(
+              {
+                event: 'voice_session_start_failed',
+                error_message: e instanceof Error ? e.message : String(e),
+              },
+              'call-logging start failed (non-fatal)'
+            )
+          );
+        ctx.addShutdownCallback(async () => {
+          try {
+            const rendered = transcript.render();
+            const { outcome: trackedOutcome, appointmentId } = outcomeTracker.result();
+            // Post-call summary is best-effort: summarizeCall is bounded + never
+            // throws (resolves null on timeout/error), so it can never drop the
+            // duration/transcript/outcome write below.
+            const summary = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
+            // If no booking/transfer tool already set the outcome, classify WHY
+            // the caller reached out (no_availability / wrong_service / price /
+            // message / info). classifyCallOutcome is bounded + failsafe and
+            // returns null when unclear — a null outcome stays 'no_outcome'
+            // server-side, i.e. counted as abandoned. So we never guess.
+            const outcome =
+              trackedOutcome ?? (await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY));
+            await client.call('/agent-tools/voice-session-end', {
+              tenant_id: sessionCtx.tenantId,
+              call_id: callId,
+              duration_seconds: Math.round((Date.now() - startedAtMs) / 1000),
+              // null when nothing was spoken (e.g. silent hang-up) → SQL NULL.
+              transcript: rendered,
+              outcome,
+              appointment_id: appointmentId,
+              summary,
+            });
+            // Fire-and-forget: POST session AI usage to the cost ledger.
+            // sessionModelUsage is empty when the session never started (e.g.
+            // fallback path) — skip silently rather than inserting a zero row.
+            if (sessionModelUsage.length > 0) {
+              void client
+                .call('/agent-tools/record-ai-cost', {
+                  tenant_id: sessionCtx.tenantId,
+                  call_id: callId,
+                  source: 'voice_call',
+                  model_usage: sessionModelUsage,
+                })
+                .catch((e: unknown) =>
+                  callLog.warn(
+                    {
+                      event: 'ai_cost_record_failed',
+                      error_message: e instanceof Error ? e.message : String(e),
+                    },
+                    'AI cost record failed (non-fatal)'
+                  )
+                );
+            }
+          } catch (e) {
+            callLog.warn(
+              {
+                event: 'voice_session_end_failed',
+                error_message: e instanceof Error ? e.message : String(e),
+              },
+              'call-logging end failed (non-fatal)'
+            );
+          }
+        });
+      }
+
+      // Fetch tenant config first — the transfer destination (forward_phone)
+      // and the prompt both depend on it.
       tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
       callLog.info(
         {
@@ -159,6 +267,17 @@ export default defineAgent({
         'tenant config resolved'
       );
 
+      // Live-transfer capability. The executor is null when the call lacks the
+      // room/participant context needed to REFER (SIP participant never joined),
+      // in which case transfer_call gracefully reports it can't transfer. The
+      // forward number comes from the tenant config (NULL = no destination).
+      const transferExecutor = createTransferExecutor({
+        livekitUrl: config.LIVEKIT_URL,
+        livekitApiKey: config.LIVEKIT_API_KEY,
+        livekitApiSecret: config.LIVEKIT_API_SECRET,
+        roomName: sessionCtx.roomName ?? undefined,
+        participantIdentity: sessionCtx.participantIdentity ?? undefined,
+      });
       // 4. Build prompt with runtime context
       const instructions = buildSystemPrompt({
         tenantName: tenantConfig.name,
@@ -174,6 +293,9 @@ export default defineAgent({
         // prompt gains a "Customer preferences" section + save tool guidance.
         savePreferencesEnabled: tenantConfig.savePreferencesEnabled,
         preferencesInstructions: tenantConfig.preferencesInstructions,
+        ttsFormal: tenantConfig.ttsFormal,
+        ttsWarm: tenantConfig.ttsWarm,
+        ttsConcise: tenantConfig.ttsConcise,
       });
 
       // 5. Start the voice session. Wrapped in try/catch → runFallback: a
@@ -187,8 +309,32 @@ export default defineAgent({
           vad: ctx.proc.userData.vad as silero.VAD,
           stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
           llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-          tts: new GrokTTS({ apiKey: config.XAI_API_KEY, voice: config.XAI_TTS_VOICE }),
+          tts: new GrokTTS({
+            apiKey: config.XAI_API_KEY,
+            // Per-tenant Grok voice + delivery (2026-06-10), falling back to the
+            // platform env defaults when the tenant hasn't picked one.
+            voice: tenantConfig.ttsVoice ?? config.XAI_TTS_VOICE,
+            speed: tenantConfig.ttsSpeed ?? config.XAI_TTS_SPEED,
+            soft: tenantConfig.ttsSoft ?? config.XAI_TTS_SOFT,
+            cheerful: tenantConfig.ttsCheerful ?? false,
+          }),
         });
+
+        // Tools built here so speakFiller can reference session.say —
+        // execute() closures fire only after session.start(), so session is
+        // always initialized by the time a filler phrase is spoken.
+        const tools = buildTools(
+          sessionCtx,
+          client,
+          {
+            forwardPhone: tenantConfig.forwardPhone,
+            execute: transferExecutor,
+          },
+          outcomeTracker,
+          (phrase) => {
+            void session.say(phrase, { allowInterruptions: true });
+          }
+        );
 
         const agent = new voice.Agent({
           instructions,
@@ -198,8 +344,29 @@ export default defineAgent({
         await session.start({ agent, room: ctx.room });
         callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
 
-        // 6. Greeting. Kept short — the LLM will warm up from here.
-        void session.say(`Thanks for calling ${tenantConfig.name}. How can I help you today?`, {
+        // Record every finalized turn (caller STT + agent replies) for the
+        // call transcript. Attached BEFORE the greeting `say()` below — which
+        // itself emits a `conversation_item_added` (addToChatCtx defaults true)
+        // — so the transcript opens with the actual first line, no manual add.
+        session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
+          if (ev.item.type !== 'message') return;
+          transcript.add(ev.item.role, ev.item.textContent);
+        });
+
+        // Accumulate per-model usage so the shutdown callback can POST it.
+        // SessionUsageUpdated fires after each LLM/STT/TTS turn and carries
+        // the running totals — keeping the last snapshot is sufficient.
+        session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => {
+          sessionModelUsage = ev.usage.modelUsage;
+        });
+
+        // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)
+        // is spoken verbatim when set; otherwise a short hardcoded fallback —
+        // the LLM warms up from there either way.
+        const greeting =
+          tenantConfig.firstMessage?.trim() ||
+          `Thanks for calling ${tenantConfig.name}. How can I help you today?`;
+        void session.say(greeting, {
           allowInterruptions: true,
         });
       } catch (err) {
