@@ -15,7 +15,12 @@ const ICONS: Record<string, string> = {
   default: '⬡',
 }
 
-const THEME_API = 'http://localhost:7000'
+// The cross-app launcher reads its app list from a sibling "apps" service
+// (the multi-app portal — e.g. MyAccountant federation). Configured via env so
+// there is NO hardcoded localhost: when NEXT_PUBLIC_APPS_API_URL is unset (the
+// default today, incl. prod until the portal ships) the bar renders nothing
+// instead of showing an empty "My Apps" strip from a failed fetch.
+const THEME_API = process.env.NEXT_PUBLIC_APPS_API_URL
 
 interface Props {
   currentAppId: string
@@ -27,11 +32,16 @@ export function AppShell({ currentAppId, userName, onSignOut }: Props) {
   const [apps, setApps] = useState<App[]>([])
 
   useEffect(() => {
+    if (!THEME_API) return
     fetch(`${THEME_API}/api/apps`)
       .then((r) => r.json())
-      .then(setApps)
+      .then((data) => setApps(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [])
+
+  // Render nothing until a real apps service is configured AND returns apps —
+  // no endpoint or no apps means no bar (keeps prod clean while the portal is WIP).
+  if (!THEME_API || apps.length === 0) return null
 
   return (
     <div style={{
