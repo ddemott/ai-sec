@@ -2,6 +2,7 @@ import { normalizePhone } from './phone';
 import type {
   Appointment,
   Customer,
+  ReminderDeliveryStats,
   Resource,
   Employee,
   Service,
@@ -632,6 +633,15 @@ export const Api = {
     getAiCost: (tenantId: string | null) =>
       apiFetch<AiCostSummary>(
         `/analytics/ai-cost`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
+  },
+
+  // --- REMINDERS (delivery monitoring) ---
+  reminders: {
+    deliveryStats: (tenantId: string | null) =>
+      apiFetch<ReminderDeliveryStats>(
+        `/reminders/delivery-stats`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
   },

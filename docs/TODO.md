@@ -57,6 +57,17 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 - [ ] **[prod]** Outlook Calendar — `OUTLOOK_CLIENT_ID/SECRET/CALLBACK_URL` + Azure app.
 - [ ] **[prod]** CRM — Square: needs `SQUARE_CLIENT_ID/SECRET/CALLBACK_URL` + `SQUARE_WEBHOOK_SIGNATURE_KEY` + an OAuth app registered provider-side. Real implementation (`src/services/crm/squareClient.ts`/`squareSync.ts`), no-ops safely until configured. (Jobber/HubSpot/ServiceTitan removed 2026-06-12 as competitors — see `docs/STRATEGY.md`.)
 
+### Future platform / CRM-sync candidates (backlog — BUILD DEFERRED until a real customer ask)
+
+Captured 2026-06-19 (Dale brainstorming migration targets). **Decision rule = the vendor-business-model heuristic from `docs/STRATEGY.md`:** integrate transaction/volume vendors (POS) + infra vendors (calendars) that want more bookings; integrate shallow-or-not the SaaS-seat bundlers that ship a native AI receptionist (they're competitors we'd feed). Ask "how does this vendor make money?" first. Each below stays unbuilt until a beta customer can't operate without it (build principle: no integrations on spec).
+
+- **Microsoft Teams** — NOT a calendar/CRM; chat+meetings. Only plausible use = "post new bookings to a Teams channel" (notification, not sync). Hold; cheap to add if a customer asks.
+- **QuickBooks / Xero (accounting)** — infra/transaction; safe partner; ties into the MyAccountant federation direction. Sync customers/appointments → invoices. Strong candidate when accounting demand is real.
+- **Toast (food & bev POS)** — transaction vendor (payment volume), safe partner; fits the non-trades vertical focus. Booking/customer sync.
+- **Vagaro / Mindbody (salon + fitness)** — POS BUT ship their own booking/front-desk → **partial competitors** by the heuristic; integrate shallow (read customers) or not. Evaluate per-customer.
+- **Acuity / Calendly (scheduling)** — overlap directly with our booking engine → competitor-ish; likely import-once (migration) rather than ongoing sync.
+- **Apple Calendar (iCloud / CalDAV)** — infra, safe; rounds out calendar coverage alongside Google + Outlook.
+
 ### `[dev]` — NOT wired anywhere, needs code
 
 - [x] **[dev]** **Voice-session capture (outcome + appointment link + summary)** — DONE 2026-06-12. `CallOutcomeTracker` (`agent/src/callOutcome.ts`) is mutated by the booking tools (`recordBooking(appointment_id)`, guarded on a real id in the response) and the transfer tool (`recordTransfer`); the shutdown hook reads it and sends `outcome` + `appointment_id` + a bounded/failsafe post-call `summary` (`agent/src/callSummary.ts` — never throws, can't drop the session-end write) to `voice-session-end`. Backend `VoiceSessionEndSchema` now accepts `summary` + UUID-validated `appointment_id` and forwards them to the RPC (was hardcoded null). +14 agent + 2 backend tests; `simulate tools` now proves the link **persisted** via a `voice_sessions` DB read-back (appointment_id matches the booking, outcome=booked, summary stored).
@@ -224,7 +235,7 @@ captures or sends them**, so every logged call is duration-only.
 
 ### Reminder delivery monitoring (Phase 5 — never built)
 
-- [x] **Reminder delivery dashboard** — Added `GET /reminders/delivery-stats` (table aggregates: sent/failed by recency for the tenant) + `ReminderDeliveryStats` component (cards with rates) wired into `AnalyticsView.tsx`. Uses DB (not just in-memory metrics) for per-tenant owner view. See feat/transfers-invisible-calls (progress on list). Full dashboard panel polish possible later.
+- [x] **Reminder delivery dashboard** — landing via PR #50 (`feat/reminder-delivery-stats`, cherry-picked from the never-merged `feat/transfers-invisible-calls`); mark fully done once #50 merges. `GET /reminders/delivery-stats` (tenant-isolated `reminder_schedules` aggregates: sent total/7d/30d, failed total/7d, scheduled, cancelled) + `ReminderDeliveryStats` cards wired into `AnalyticsView`. + route unit test (happy + empty/zeros, asserts tenant-scoped query). NOTE: the prior "[x] DONE" claims here and at the top of this file were premature — the code lived only on an unmerged branch and was absent from main until this cherry-pick (a baseline-drift-class bookkeeping gap). Now actually in main.
 
 ### CRM sync status (`CRMIntegrationCard.tsx`)
 

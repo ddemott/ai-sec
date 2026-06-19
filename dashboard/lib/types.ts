@@ -465,3 +465,15 @@ export interface CustomerMessage {
   call_id: string | null;
   created_at: string;
 }
+
+/** Reminder delivery aggregates for the owner-facing monitoring panel
+ *  (GET /reminders/delivery-stats — counts from reminder_schedules). */
+export interface ReminderDeliveryStats {
+  sent_total: number;
+  sent_7d: number;
+  sent_30d: number;
+  failed_total: number;
+  failed_7d: number;
+  scheduled: number;
+  cancelled: number;
+}

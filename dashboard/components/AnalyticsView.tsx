@@ -16,6 +16,7 @@ import type { AnalyticsCalls, AiCostSummary } from '../lib/types';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { formatHour } from '../lib/utils';
 import { EmptyState } from './ui/EmptyState';
+import ReminderDeliveryStats from './ReminderDeliveryStats';
 
 /**
  * Analytics — call + booking patterns.
@@ -527,6 +528,11 @@ export default function AnalyticsView() {
               </p>
             )}
           </MetricCard>
+        </div>
+
+        {/* Reminder delivery monitoring */}
+        <div className="mt-6">
+          <ReminderDeliveryStats />
         </div>
 
         {/* AI Usage (this month) */}

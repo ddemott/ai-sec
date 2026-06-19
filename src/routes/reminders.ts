@@ -237,6 +237,48 @@ export function registerReminderRoutes(
   );
 
   /**
+   * GET /reminders/delivery-stats - Owner-facing delivery monitoring stats (sent/failed/scheduled/cancelled counts by status + recency buckets).
+   * Uses table aggregates (tenant-isolated) rather than global in-memory metrics so owners see *their* numbers.
+   * Powers the reminder delivery monitoring view.
+   */
+  app.get(
+    '/reminders/delivery-stats',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const stats = await withTenantClient(tenantId, async (client) => {
+        const result = await client.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE status = 'sent')::int AS sent_total,
+             COUNT(*) FILTER (WHERE status = 'sent' AND sent_at > now() - interval '7 days')::int AS sent_7d,
+             COUNT(*) FILTER (WHERE status = 'sent' AND sent_at > now() - interval '30 days')::int AS sent_30d,
+             COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_total,
+             COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > now() - interval '7 days')::int AS failed_7d,
+             COUNT(*) FILTER (WHERE status = 'scheduled')::int AS scheduled,
+             COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled
+           FROM reminder_schedules
+           WHERE tenant_id = $1`,
+          [tenantId]
+        );
+        return (
+          result.rows[0] || {
+            sent_total: 0,
+            sent_7d: 0,
+            sent_30d: 0,
+            failed_total: 0,
+            failed_7d: 0,
+            scheduled: 0,
+            cancelled: 0,
+          }
+        );
+      });
+
+      return reply.send(stats);
+    }, 'Failed to load reminder delivery stats')
+  );
+
+  /**
    * GET /reminders/status - Get scheduler status (admin only)
    */
   app.get(
