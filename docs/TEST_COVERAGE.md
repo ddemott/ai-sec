@@ -61,9 +61,9 @@ purpose-built coverage build. Track e2e by **workflows covered** instead.
 | `quick-book-shift-overrides.spec.ts` | validator: end ≤ start | rejected |
 | `quick-book-shift-overrides.spec.ts` | validator: 23-hour appointment | rejected |
 | `quick-book-shift-overrides.spec.ts` | resources/chairs view | renders rows |
-| `calendar-sync.spec.ts` | appointment lifecycle dispatch | create/update/delete each fire all 5 providers (calendar + 4 CRMs) via `SYNC_TEST_RECORDER` recorder |
-| `calendar-sync.spec.ts` | customer lifecycle dispatch | create/update/delete each fire the 4 CRMs (no calendar — by contract) |
-| `calendar-sync.spec.ts` | fire-and-forget contract | HTTP returns in <3s even with 5 sync promises in flight |
+| `calendar-sync.spec.ts` | appointment lifecycle dispatch | create/update/delete each fire calendar + Square via `SYNC_TEST_RECORDER` recorder |
+| `calendar-sync.spec.ts` | customer lifecycle dispatch | create/update/delete each fire Square (no calendar — by contract) |
+| `calendar-sync.spec.ts` | fire-and-forget contract | HTTP returns in <3s even with sync promises in flight |
 | `setup-wizard-to-booking.spec.ts` | wizard finalize → first booking | `/register` → seed services/resource/employee → `/shifts/expand-weekly` → `/appointments/create` succeeds |
 | `setup-wizard-to-booking.spec.ts` | skip-fan-out sad path | same flow minus expand-weekly → booking returns `EMPLOYEE_NOT_SCHEDULED` |
 | `setup-wizard-to-booking.spec.ts` | range coverage | default `weeks_ahead=4` → 28 employee_schedule rows reaching ~27 days out |
@@ -97,7 +97,7 @@ the test still passes.
 
 - Voice/AI loop (Telnyx → LiveKit → tools → booking) — covered by `./scripts/simulate.sh tools` (on-demand system harness), not Playwright
 - ~~Calendar sync (Google + Outlook OAuth)~~ — orchestration layer covered by `calendar-sync.spec.ts` (2026-05-08); actual outbound HTTP shape still only at unit level
-- ~~CRM sync (Jobber / HubSpot / Square / ServiceTitan, bidirectional)~~ — dispatch covered by `calendar-sync.spec.ts`; bidirectional read paths (CRM → us) still uncovered
+- ~~CRM sync (Square, bidirectional)~~ — dispatch (us → Square) covered by `calendar-sync.spec.ts`; bidirectional read path (Square → us) still uncovered. (The Jobber / HubSpot / ServiceTitan integrations were removed 2026-06-12.)
 - ~~Setup wizard end-to-end (8 steps from business-type pick to first booking)~~ — finalize → first-booking path now covered by `setup-wizard-to-booking.spec.ts` (2026-05-08); 8-step UI walkthrough still uncovered, deferred (driving the modal's nested step state through Playwright is heavy for what unit-tests of `useWizardCrud` already cover)
 - Stripe billing flow / checkout / webhook
 - SMS OTP verification before booking

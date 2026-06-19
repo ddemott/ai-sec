@@ -275,7 +275,7 @@ test('SAD: no pending flag → tour renders nothing', ...)
 
 ### Independent test data lifecycle
 
-Every test owns its full data lifecycle: **setup → assert → teardown**, no shared state, no test depending on another's residue. See [`feedback_test_isolation.md`](./.claude/projects/-home-dale-projects-ai-sec/memory/feedback_test_isolation.md) for the rule's origin.
+Every test owns its full data lifecycle: **setup → assert → teardown**, no shared state, no test depending on another's residue. See `feedback_test_isolation.md` (project memory) for the rule's origin.
 
 For E2E: register a fresh tenant via `registerFreshTenant()`, run the scenario, `cleanTenantData()` in `finally`. Cascade-delete handles all dependent rows. See `dashboard/e2e/helpers/fixtures.ts`.
 
@@ -502,7 +502,7 @@ Return error info as data only when the caller genuinely needs to branch on the 
 
 ### Services: flat files until a third caller asks for shape
 
-From Build Principles: "Working flat code beats a dormant abstraction." `src/services/*.ts` is mostly flat files — each provider gets its own pair (e.g., `jobberClient.ts` + `jobberSync.ts`). Don't introduce a `ProviderRegistry` or `BaseSyncService` interface until a third real caller asks for the shared shape.
+From Build Principles: "Working flat code beats a dormant abstraction." `src/services/*.ts` is mostly flat files — each provider gets its own file (e.g., `googleCalendar.ts` + `outlookCalendar.ts` for calendar sync). Don't introduce a `ProviderRegistry` or `BaseSyncService` interface until a third real caller asks for the shared shape.
 
 When a shared shape DOES emerge (consent-gated communications got `CommunicationService` + `ProviderRegistry` at three+ providers), the abstraction lives in its own subdirectory (`src/services/communications/`) and the flat files migrate into it.
 

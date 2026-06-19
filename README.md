@@ -102,7 +102,7 @@ Below is a full list of its features:
 - `npm run ci:watch` — live tail the latest CI run
 - `./scripts/simulate.sh ci --watch` (same)
 
-**CI gate**: GitHub branch protection on `main` (applied 2026-06-15) requires the 4 CI jobs to be green before merges (and thus Railway deploys from `main`) are allowed. Always run `npm run ci:status` before merging. (See `.github/BRANCH_PROTECTION.md` + root `TODO_GAPS.md`.)
+**CI gate**: GitHub branch protection on `main` (applied 2026-06-15) requires the 4 CI jobs to be green before merges (and thus Railway deploys from `main`) are allowed. Always run `npm run ci:status` before merging. (See `.github/BRANCH_PROTECTION.md` + `docs/TODO.md`.)
 
 See `docs/TODO.md` for remaining work and `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` for detailed historical session notes.
 
@@ -316,21 +316,21 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 ## Documentation
 
-| Doc                                          | Purpose                                                                                                         |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `CLAUDE.md`                                  | Developer conventions, code patterns, project context                                                           |
-| `docs/TODO.md`                               | Unified task list — all remaining work                                                                          |
-| `docs/ARCHITECTURE.md`                       | Full technical architecture deep-dive                                                                           |
-| `docs/DIAGRAMS.md`                           | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.)                                                 |
-| `docs/DEPLOYMENT.md`                         | Step-by-step deployment guide                                                                                   |
-| `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` | Archived detailed historical session notes                                                                      |
-| `docs/DESIGN_HANDOFF.md`                     | Visual brand system + design decisions (frozen — March 24 session)                                              |
-| `docs/UI_UX_DESIGN.md`                       | Living design brief — interaction design + UX principles                                                        |
-| `docs/PLAN.md`                               | Historical phases (1-12) + post-launch backlog                                                                  |
-| `docs/BUGS.md`                               | Historical bug tracker (72 bugs + 47 UX items, all resolved)                                                    |
-| `docs/FRAMEWORK_MIGRATIONS.md`               | Migration index — Vapi→LiveKit (shipped), Edge→Fastify (shipped), OpenAI TTS→Grok (shipped)                     |
-| `NEEDS-REFACTORING.md`                       | Historical major structural refactor archive (mostly done; see REFACTORING_TODO.md for current mechanical work) |
-| `docs/IMPROVEMENT_IDEAS.md`                  | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11)                                             |
+| Doc                                          | Purpose                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `CLAUDE.md`                                  | Developer conventions, code patterns, project context                                       |
+| `docs/TODO.md`                               | Unified task list — all remaining work                                                      |
+| `docs/ARCHITECTURE.md`                       | Full technical architecture deep-dive                                                       |
+| `docs/DIAGRAMS.md`                           | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.)                             |
+| `docs/DEPLOYMENT.md`                         | Step-by-step deployment guide                                                               |
+| `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md` | Archived detailed historical session notes                                                  |
+| `docs/DESIGN_HANDOFF.md`                     | Visual brand system + design decisions (frozen — March 24 session)                          |
+| `docs/UI_UX_DESIGN.md`                       | Living design brief — interaction design + UX principles                                    |
+| `docs/PLAN.md`                               | Historical phases (1-12) + post-launch backlog                                              |
+| `docs/BUGS.md`                               | Historical bug tracker (72 bugs + 47 UX items, all resolved)                                |
+| `docs/FRAMEWORK_MIGRATIONS.md`               | Migration index — Vapi→LiveKit (shipped), Edge→Fastify (shipped), OpenAI TTS→Grok (shipped) |
+| `NEEDS-REFACTORING.md`                       | Historical major structural refactor archive (all mechanical/convention refactors complete) |
+| `docs/IMPROVEMENT_IDEAS.md`                  | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11)                         |
 
 ---
 

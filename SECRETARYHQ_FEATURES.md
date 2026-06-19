@@ -65,7 +65,7 @@
 ## 7. Integrations
 
 - ✅ Calendar sync — Google Calendar, Outlook (booking → owner's calendar)
-- ✅ CRM sync — Square _(Jobber, HubSpot, ServiceTitan **removed** 2026-06-12 as competitors — see `docs/STRATEGY.md`; the provider-agnostic sync layer was kept and drives Square)_
+- ✅ CRM sync — Square only (`src/services/crm/squareSync.ts` + `squareClient.ts`, route `src/routes/square.ts`). _(Jobber, HubSpot, ServiceTitan **removed** 2026-06-12 as competitors — see `docs/STRATEGY.md`; the provider-agnostic sync layer was kept and drives Square.)_
 - ✅ Voice + telephony stack — Telnyx (PSTN), LiveKit (media), Deepgram, OpenAI, xAI Grok
 - ✅ Phone provisioning — search / buy / route a phone number (Telnyx)
 

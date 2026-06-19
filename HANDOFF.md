@@ -58,4 +58,4 @@
 - Local DB: port 5433
 - Prod DB URL: encrypted at `~/.claude/projects/-home-dale-projects-secretary-hq/memory/db_url.enc`
   - Decrypt: `openssl enc -d -aes-256-cbc -pbkdf2 -base64 -pass pass:PASSWORD -in <file>`
-- Full gap inventory: `GAPS.md` / `TODO_GAPS.md`
+- Full gap inventory: `GAPS.md` (categories) + `docs/TODO.md` (actionable, folded from TODO_GAPS.md 2026-06-19)

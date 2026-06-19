@@ -15,7 +15,7 @@ The system should:
 
 Our initial focus is on **service businesses** that live and die by their schedule and inbound calls:
 
-- Mobile services (e.g., DynaTire – mobile tire repair).
+- Mobile services (e.g., mobile tire repair).
 - Salons and barbershops.
 - Auto shops and other appointment-based trades.
 - Trades and professional services (fitness, food & beverage, and more).
@@ -46,7 +46,7 @@ An internal customer relationship layer that:
 - Records communication preferences (SMS, email, call).
 - Provides a unified view of each customer across appointments.
 
-This CRM is the **default** for all tenants. Bidirectional sync with external CRMs is implemented: Jobber (GraphQL), HubSpot (REST v3), Square (REST v2), and ServiceTitan (REST v2). Timestamp-based merge resolves conflicts.
+This CRM is the **default** for all tenants and is the system of record. Bidirectional sync with **Square** (REST v2) is implemented; timestamp-based merge resolves conflicts. (The earlier Jobber/HubSpot/ServiceTitan CRM integrations were removed 2026-06-12 as competitor platforms — only Square sync ships today.)
 
 ### 3.3 Internal Calendar + External Sync
 
@@ -76,7 +76,7 @@ A templating system that makes the platform adaptable across industries:
   - Customers usually don’t care who does the work.
   - There may be a company-wide view of capacity.
 
-- For mobile services like DynaTire:
+- For mobile services like mobile tire repair:
   - Resource is a **mobile unit/owner** with on-site jobs.
   - Location and job type are critical to scheduling.
 
@@ -104,4 +104,4 @@ For customers calling in:
 - **Owner control**: Businesses control their hours, rules, and preferences.
 - **Data ownership**: Our backend remains the source of truth for CRM and scheduling.
 - **Pluggable stack**: Telephony, LLM, STT, TTS, and calendar providers are swappable behind clear interfaces.
-- **Gradual expansion**: Start with DynaTire, then salons/auto shops, then more complex verticals as templates mature.
+- **Gradual expansion**: Start with mobile services, then salons/auto shops, then more complex verticals as templates mature.

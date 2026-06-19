@@ -376,4 +376,55 @@ Cross-references:
 
 ---
 
+## Gap inventory — folded from `TODO_GAPS.md` (2026-06-19)
+
+`TODO_GAPS.md` was a derived checklist of `GAPS.md`; its closed items shipped and its
+go-live blockers (PSTN different-carrier dial, Telnyx REFER, "Wait for CI" toggle,
+`BETTER_STACK_TOKEN`/`SENTRY_DSN`, Stripe live round-trip) are already tracked above
+(Production Wiring Checklist + Voice Validation). The file was deleted 2026-06-19 after
+folding its still-open, not-otherwise-tracked items here. `GAPS.md` remains the
+category-completeness inventory ("did we miss a whole angle?").
+
+### P1 — customer success & trust
+
+- [ ] **AI cost / usage meter** — instrument AI spend at ~5 call sites (`agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` policy-answer path, `agent/src/grokTTS.ts`); pick data model (`cost_usd` on `voice_sessions` vs new `tenant_daily_usage` table); surface "Usage this month" card in Analytics (calls + estimated AI spend)
+- [ ] **Self-service links — dashboard surface** — "Send self-service links" button in `AppointmentDetailPanel.tsx` (shows which links were sent). _Backend cancel/reschedule/email links already shipped (PR #34); this is the dashboard trigger only._
+- [ ] **Self-service E2E** — "book → SMS with link → link reschedules" + negative paths (expired, wrong tenant, double-use)
+- [ ] **Calendar sync live proof** — set `GOOGLE_CLIENT_ID/SECRET/REDIRECT` on Railway for one tenant; prove a real Google round-trip via `calendarSync.ts` + `SYNC_TEST_RECORDER`
+- [ ] Verify reminder delivery stats in prod after Telnyx creds set
+
+### P2 — quality, scale & defensibility
+
+- [ ] **Load test booking path** to find pool-exhaustion cliff (pool `max=10`); document scaling knobs (pool size, agent worker count per tenant)
+- [ ] **Data portability & retention** — `GET /export/tenant-data` (ZIP of JSONL/CSV); GDPR/CCPA hard-purge (anonymize `voice_sessions` phone+transcript, delete notes/preferences, audit-write); automated retention/purge worker (configurable max age for `voice_sessions`, `communications_history`, soft-deleted rows); owner-facing audit-log view from `audit_log`
+- [ ] **Website scan polish** — E2E coverage for the scan flow; rate-limit / cost guardrails on repeated scans; periodic re-scan scheduler for stale KB entries
+- [ ] **Analytics depth** — source citations shown to caller when answering from KB; admin "explain this answer" KB-RAG debugger; cohort / CLV / service-specific abandonment drill-down
+- [ ] **Docs / runbooks** — owner admin guides ("how to read analytics", FAQ); telephony troubleshooting playbook (Telnyx/LiveKit/PSTN); prod incident runbook ("agent silent", "reminders not sending", "Stripe webhook 400")
+- [ ] Idempotent-read retry for transient agent-tools failures (backed out 2026-05-21; revisit)
+
+### P3 — moat & expansion (deferred until a customer asks)
+
+- [ ] Square CRM: deeper bidirectional reads (pull open jobs into voice context); real external OAuth + Stripe + live CRM round-trips in CI (currently recorder-only)
+- [ ] Customer self-service extended: public portal/login (manage all appointments); waitlist / callback-queue tool; no-show auto-marking + auto-rebook
+- [ ] Voice: post-call "how did we do?" SMS/NPS link; multi-language; real-time owner listen-in / barge
+- [ ] Product: public booking widget/embed; granular RBAC beyond owner/front_desk; white-label / reseller theming; public API; CSV/PDF export (calls/appointments/customers/analytics); SSO/SAML; international numbers (code is US-centric); multi-DID per tenant (one DID/tenant today)
+
+### Legal / ops (user actions — not code)
+
+- [ ] Bonterms ToS + Privacy Policy + DPA published and linked from dashboard
+- [ ] TCPA-compliant SMS opt-in language at booking time (consent design in `GAPS.md` §9)
+- [ ] E&O + Cyber Liability insurance
+- [ ] LLC bank account open (Stripe payouts)
+
+### Key files per gap
+
+| Gap | Primary files |
+| --- | --- |
+| Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts` |
+| AI cost meter | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts`, `agent/src/grokTTS.ts` |
+| Calendar sync live | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env |
+| Data export / GDPR | new `src/routes/export.ts` + DB migration for purge |
+
+---
+
 **Archived detailed history**: See `CURRENT_STATUS_ARCHIVED_2026-05-15.md` for previous session notes and long-form status.

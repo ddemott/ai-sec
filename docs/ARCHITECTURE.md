@@ -1,6 +1,8 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-05-15 (26 route modules, 122 migrations, 10 voice-AI tools — confirmed by `npm run verify:claude-md` drift detector, which checks the same route + migration counts referenced here)
+**Last verified:** 2026-06-19 (27 route modules, 140 migrations, 12 voice-AI tools — confirmed by `npm run verify:claude-md` drift detector, which checks the same route + migration counts referenced here)
+
+> **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
 > **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. The OpenAI TTS → xAI Grok swap is also code-complete (commit `f6cc1d4`, 2026-05-01) — see `docs/FRAMEWORK_MIGRATIONS.md` for the index.
 
@@ -18,7 +20,7 @@
 - [11. Scheduling Engine](#11-scheduling-engine)
 - [12. Knowledge Base (RAG)](#12-knowledge-base-rag)
 - [13. Calendar Sync (Push-only)](#13-calendar-sync-push-only)
-- [14. CRM Sync (Bidirectional)](#14-crm-sync-bidirectional)
+- [14. CRM Sync (Square only)](#14-crm-sync-square-only)
 - [15. Billing (Stripe Lite)](#15-billing-stripe-lite)
 - [16. Dashboard Architecture](#16-dashboard-architecture)
 - [17. Async Work (no n8n)](#17-async-work-no-n8n)
@@ -34,13 +36,13 @@
 
 Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). HIPAA verticals are permanently excluded.
 
-**Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars + CRM.
+**Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars.
 
 **Layering:**
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via xAI Grok with OpenAI TTS as the `runFallback()` dead-air guard)
-- **Tools**: 10 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
-- **API**: Fastify (26 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 122 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
+- **Tools**: 12 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
+- **API**: Fastify (27 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
+- **DB**: Postgres + pgvector on Supabase, 140 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — to be deployed on Vercel
 
 ---
@@ -50,10 +52,10 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 ```
 /
 ├── src/                          Fastify backend (Node)
-│   ├── index.ts                  Entry — registers 26 route modules (~280 lines)
+│   ├── index.ts                  Entry — registers 27 route modules (~280 lines)
 │   ├── middleware.ts             withHandler, tenantMiddleware, registerJwtAuthHook, generateToken, AppError, logEvent
-│   ├── routes/                   26 route modules + routeHelpers.ts
-│   ├── services/                 24 flat files (CRM clients + sync, calendar sync, OAuth, name/token/SMS utilities) + crm/, communications/, reminders/, tenants/, usage/ subdirs
+│   ├── routes/                   27 route modules + routeHelpers.ts
+│   ├── services/                 flat files (calendar sync, OAuth, name/token/SMS utilities) + communications/, reminders/, tenants/, usage/ subdirs
 │   └── database/                 getPool() singleton + createWithTenantClient(pool) factory + DatabaseService adapter
 ├── dashboard/                    Next.js 14 App Router
 │   ├── app/                      page.tsx (landing), dashboard/page.tsx (app shell), layout.tsx, globals.css
@@ -65,8 +67,8 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   └── 22 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/
 │   ├── functions/                Empty post-661d21d (former vapi-tools deleted with the Vapi rip-out)
-│   ├── migrations/               116 SQL migrations
-│   └── seed.sql                  Platform admin + DynaTire tenant
+│   ├── migrations/               140 SQL migrations
+│   └── seed.sql                  Platform admin + Bella's Hair Studio demo tenant
 ├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `ai-sec-agent`
 │   └── src/                      index.ts (entry), prompt.ts, toolsClient.ts, sessionContext.ts, tools.ts
 ├── shared/                       Cross-runtime code
@@ -83,7 +85,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 
 **Shipped in LiveKit migration (commit `661d21d`):**
 - `agent/` — separate Node.js package for the LiveKit agent worker (deployed as Railway service `ai-sec-agent`)
-- `src/routes/agentTools.ts` — 10 voice-AI tools (8 originals + 2 OTP helpers); replaced the deleted `supabase/functions/vapi-tools/`
+- `src/routes/agentTools.ts` — voice-AI tools (originals + OTP helpers); replaced the deleted `supabase/functions/vapi-tools/`
 
 ---
 
@@ -116,7 +118,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
                                 ▼
                     ┌─────────────────────┐
                     │  Fastify Backend    │  ai-sec-production.up.railway.app
-                    │  26 route modules   │  Railway (Nixpacks, Node 20)
+                    │  27 route modules   │  Railway (Nixpacks, Node 20)
                     └──────────┬──────────┘
                                │
           ┌────────────────────┼─────────────────────┐
@@ -125,10 +127,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
     │ Postgres │        │  OpenAI /  │        │ Integrations │
     │ Supabase │        │  Deepgram /│        │ Google /     │
     │ + vector │        │  xAI Grok  │        │ Outlook /    │
-    └──────────┘        └────────────┘        │ Jobber /     │
-                                              │ HubSpot /    │
-                                              │ Square / ST  │
-                                              │ Stripe       │
+    └──────────┘        └────────────┘        │ Stripe       │
                                               └──────────────┘
           ▲
           │
@@ -208,10 +207,10 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
        │         └──────────────────┘   └──────────────────┘
        │
        │         ┌──────────────────────────┐
-       ├────────►│tenant_integration_settings│ (OAuth tokens per CRM/calendar)
+       ├────────►│tenant_integration_settings│ (Square OAuth tokens; Jobber/HubSpot/ServiceTitan removed 2026-06-12)
        │         └──────────────────────────┘
        │         ┌────────────────────┐
-       ├────────►│  entity_sync_map   │ (local↔external ID mapping)
+       ├────────►│  entity_sync_map   │ (Square local↔external ID mapping; other CRMs removed 2026-06-12)
        │         └────────────────────┘
        │
        │         ┌─────────────────────┐  ┌──────────────────┐
@@ -295,7 +294,7 @@ Super-admin operations (cross-tenant queries, tenant listing, user registration)
 6. **Business logic** — Fastify route → `withTenantClient()` → Postgres RPCs and pgvector queries.
 7. **Response** — JSON `{ success: true, result: ... }` or `{ success: false, error: ... }` with HTTP 200 — the LLM relays both shapes naturally.
 8. **Call end** — LiveKit room close event → `src/routes/voice.ts` handles summary generation + embedding + `link_orphaned_transcripts()`.
-9. **Post-call async** — Appointment mutations trigger fire-and-forget sync to Google/Outlook/CRMs from route handlers.
+9. **Post-call async** — Appointment mutations trigger fire-and-forget sync (via `syncOrchestrator.ts`) to Google/Outlook calendars **and** Square from route handlers.
 
 ### 6.2 TTS swap — OpenAI TTS → xAI Grok (code-complete 2026-05-01)
 
@@ -305,7 +304,7 @@ Done in commit `f6cc1d4`. `agent/src/grokTTS.ts` implements the LiveKit `tts.TTS
 
 ## 7. Voice AI Tools Catalog
 
-10 tools exposed to the LLM. Implemented in `src/routes/agentTools.ts` as 10 POST routes. Verified against code 2026-04-30.
+The 10 core booking/knowledge tools below are exposed to the LLM, implemented in `src/routes/agentTools.ts` as POST routes (verified against code 2026-04-30). Two later additions — `transfer_call` (live SIP cold-transfer) and `identify_caller` (address-book capture) — bring the live total to 12 and are not catalogued in this table.
 
 ### 7.1 Auth contract
 
@@ -372,21 +371,16 @@ Releases the Telnyx number via the API and clears `telnyx_phone_number_id`, `inb
 
 ## 9. Backend API (Fastify)
 
-### 9.1 Route modules (25)
+### 9.1 Route modules (27)
 
-```
-auth, tenants, appointments, customers, employees, shifts, resources,
-services, mappings, skills, calendar, knowledge, analytics, vocabulary,
-billing, provisioning, jobber, hubspot, square, servicetitan, voice,
-communications, reminders, versionHistory, agentTools
-```
+27 route modules under `src/routes/` (each registered by `src/index.ts`), covering auth, tenants, users, appointments, customers, employees, shifts, resources, services, mappings, skills, calendar, square (the surviving external CRM sync), knowledge, analytics, vocabulary, billing, provisioning, demo, self-service, voice, communications, reminders, version history, health, and agent-tools. (The competitor-CRM route modules — jobber, hubspot, servicetitan, gohighlevel — were deleted 2026-06-12; Square's `src/routes/square.ts` remains live.)
 
 `src/index.ts` is slim — imports each `register*Routes(app, pool, withTenantClient)` and wires them. The `withTenantClient` it passes is built from `createWithTenantClient(pool)` (see `src/database/index.ts`); the pool itself comes from `getPool()` so the reminder scheduler and communications service share the same singleton.
 
 ### 9.2 Middleware layer (`src/middleware.ts`)
 
 - **`withHandler(fn)`** — Decorator wrapping every route handler. Catches thrown `AppError`, converts to consistent `{ success: false, error, details? }` response. Logs request + response with structured fields.
-- **`registerJwtAuthHook(app, pool)`** — onRequest hook that decodes Bearer tokens, rejects expired/forged ones with 401, and rejects tokens issued before the user's `password_changed_at` (so a password rotation invalidates outstanding sessions). Public routes + Jobber webhook subpaths bypass.
+- **`registerJwtAuthHook(app, pool)`** — onRequest hook that decodes Bearer tokens, rejects expired/forged ones with 401, and rejects tokens issued before the user's `password_changed_at` (so a password rotation invalidates outstanding sessions). Public routes bypass.
 - **`tenantMiddleware`** — Reads `tenant_id` from query/body/JWT, attaches it to `request.tenantId`, and enriches the request logger with `{ tenantId, userId }` so every downstream log line carries tenant context. The tenant existence check happens inside `withTenantClient` when the route runs (returns `TENANT_NOT_FOUND` → 404).
 - **`generateToken({ tenant_id, user_id, email })`** — Signs an 8h JWT. Used by the auth route on login/register.
 - **`AppError`** — Typed error class with HTTP status + error code. Preferred over `throw new Error()`.
@@ -465,7 +459,7 @@ Dashboard `SessionContext` watches token TTL and pre-emptively refreshes 10 minu
 
 ### 10.3 OAuth flows (integrations)
 
-All 6 external integrations (Google Calendar, Outlook, Jobber, HubSpot, Square, ServiceTitan) use the same OAuth 2.0 pattern via `src/services/oauthCallbackFactory.ts`:
+Both calendar integrations (Google Calendar, Outlook) use the same OAuth 2.0 pattern via `src/services/oauthCallbackFactory.ts`:
 
 ```
 GET /{provider}/auth/start
@@ -629,43 +623,15 @@ Fires from the 4 appointment mutation points (create, update, delete, cancel). C
 
 ---
 
-## 14. CRM Sync (Bidirectional)
+## 14. CRM Sync (Square only)
 
-| Provider | Client | Sync | Route | API |
+> **External CRM sync reduced to Square only (2026-06-12).** The bidirectional Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations were deleted from the codebase — their route files, sync services, OAuth, and webhooks. **Square is the one surviving external CRM sync provider** and is fully live.
+
+| Provider | Route | Service | Auth | Direction |
 |---|---|---|---|---|
-| Jobber | `jobberClient.ts` | `jobberSync.ts` | `jobber.ts` | GraphQL |
-| HubSpot | `hubspotClient.ts` | `hubspotSync.ts` | `hubspot.ts` | REST v3 |
-| Square | `squareClient.ts` | `squareSync.ts` | `square.ts` | REST v2 |
-| ServiceTitan | `servicetitanClient.ts` | `servicetitanSync.ts` | `servicetitan.ts` | REST v2 |
+| Square | `src/routes/square.ts` | `src/services/crm/squareClient.ts` + `squareSync.ts` | OAuth (`SQUARE_CLIENT_ID`/`SQUARE_CLIENT_SECRET`/`SQUARE_CALLBACK_URL`) + webhook HMAC-SHA256 (`SQUARE_WEBHOOK_SIGNATURE_KEY`) | Bidirectional (push appointments/customers out; pull via `/square/webhook`) |
 
-### 14.1 Merge strategy
-
-Timestamp-based merge. For each conflicting field, the row with the most recent `updated_at` wins. Non-conflicting fields merge via `COALESCE(local.field, external.field)`.
-
-### 14.2 Push triggers
-
-From 7 mutation points:
-
-| Event | Calendar | Jobber | HubSpot | Square | ServiceTitan |
-|---|---|---|---|---|---|
-| Appointment create | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Appointment update | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Appointment delete | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Appointment cancel | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Customer create | — | ✓ | ✓ | ✓ | ✓ |
-| Customer update | — | ✓ | ✓ | ✓ | ✓ |
-| Customer delete | — | ✓ | ✓ | ✓ | ✓ |
-
-`src/services/syncOrchestrator.ts` fans out. Each provider fails independently — one bad provider doesn't block the others.
-
-### 14.3 Pull triggers
-
-- **Webhook receivers**: `POST /jobber/webhook/:tenantId`, `POST /hubspot/webhook`, `POST /square/webhook`, `POST /servicetitan/webhook`. Webhook signatures verified per provider spec.
-- **Periodic full sync**: `POST /{provider}/sync` — manual or cron-triggered full reconciliation.
-
-### 14.4 Mapping
-
-`entity_sync_map` stores `(tenant_id, local_entity_type, local_id, provider, external_id, last_synced_at, external_updated_at)`. Shared helpers in `src/services/syncMapHelpers.ts`.
+`src/services/syncOrchestrator.ts` fans appointment mutations out to the connected calendars **and** Square (`{ name: 'square', fn: syncAppointmentToSquare }`); customer mutations fan out to Square (`syncCustomerToSquare`). Each provider fails independently (best-effort, fire-and-forget). Square's OAuth tokens live in `tenant_integration_settings`; its local↔external ID mappings live in `entity_sync_map` — both tables are actively written today. The in-app operational customer record (Customers view) and Google/Outlook calendar sync (§13) are independent of Square.
 
 ---
 
@@ -676,7 +642,7 @@ From 7 mutation points:
 | Plan | Price | Capabilities |
 |---|---|---|
 | Solo | $129/mo | 1 employee, core features |
-| Growth | $279/mo | Multi-employee, CRM integrations |
+| Growth | $279/mo | Multi-employee, calendar sync |
 | Professional | $449/mo | (defined, not yet gated) |
 | Enterprise | Custom | Not implemented |
 
@@ -781,9 +747,7 @@ Vitest + React Testing Library (jsdom). 22 test files, 465 tests. Contexts are p
 |---|---|---|
 | Post-call summary | LiveKit room close event → `POST /voice/session/end` | `src/routes/voice.ts` |
 | Call summary embedding | After summary insert | `src/routes/voice.ts` (OpenAI embedding call) |
-| Calendar sync | Appointment mutation routes | `src/services/calendarSync.ts` |
-| CRM push | Appointment + customer mutation routes | `src/services/syncOrchestrator.ts` |
-| CRM pull | `POST /{provider}/webhook` receivers | `src/routes/{provider}.ts` |
+| Calendar + Square CRM sync | Appointment / customer mutation routes | `src/services/syncOrchestrator.ts` → `calendarSync.ts` + `crm/squareSync.ts` |
 | SMS / reminders | Planned cron-based | `src/routes/reminders.ts` (stub; scheduler not yet wired) |
 | Orphaned transcript linking | After call end | `link_orphaned_transcripts()` RPC from dispatcher |
 
@@ -807,7 +771,7 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
 
 ### 18.2 Backend (`npm test` — 1,479 tests)
 
-Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, CRM sync clients, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: DynaTire caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
+Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, calendar sync, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: Bella's Hair Studio caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
 
 ### 18.3 Dashboard (`cd dashboard && npm test` — 498 tests, 23 files)
 
@@ -889,8 +853,7 @@ Planned once there's real call volume.
 ### 20.2 Retry strategy
 
 - **Token refresh**: automatic, 5-min buffer. On failure → mark integration inactive, no automatic retry.
-- **CRM sync**: fire-and-forget, no retry. Failures logged + visible in dashboard.
-- **Calendar sync**: same pattern.
+- **Calendar sync**: fire-and-forget, no retry. Failures logged + visible in dashboard.
 - **Stripe webhook**: idempotent by design (Stripe retries on non-2xx).
 - **Voice AI tool calls**: the LLM retries naturally (if the tool returns an error string, the LLM paraphrases and tries alternative tool or asks the caller).
 - **OpenAI/Deepgram API calls**: AbortController timeouts (10s embeddings, 15s normalization) — no retry, surface as upstream error.
