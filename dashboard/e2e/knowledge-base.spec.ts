@@ -28,6 +28,8 @@
  *      it into the live KB (source='website-scan') and flips status
  *  12. suggestion reject — PATCH rejected discards without touching the KB
  *  13. suggestion isolation — tenant B cannot approve tenant A's suggestion (404)
+ *  14. website-import (stubbed) — real resolver (bank + custom questions) →
+ *      staging INSERT; custom question reaches the DB (KNOWLEDGE_IMPORT_E2E_STUB)
  */
 
 import { test, expect } from './helpers/test';
@@ -716,5 +718,84 @@ test('kb-suggestion-sad-wrong-tenant: cannot approve another tenant suggestion (
       tenantA ? cleanTenantData(pool, tenantA.tenantId) : Promise.resolve(),
       tenantB ? cleanTenantData(pool, tenantB.tenantId) : Promise.resolve(),
     ]);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 14. Website-import happy path (stubbed extraction) — real resolver → staging
+//
+// The real OpenAI scan is not CI-safe (CI runs OPENAI_API_KEY=sk-dummy + no
+// external network). KNOWLEDGE_IMPORT_E2E_STUB=1 (set on the e2e backend in
+// ci.yml; export it for a local run) swaps the fetch + LLM for deterministic
+// canned output, leaving the REAL handler path under test: resolveQuestions()
+// (static bank + this tenant's custom questions) → the staging INSERT loop →
+// real knowledge_suggestion rows. The live OpenAI integration itself is proven
+// by an on-demand manual smoke (see docs/TODO.md), not here.
+// ────────────────────────────────────────────────────────────────────────────
+test('kb-import-website-stub: scan resolves bank + custom questions into staged suggestions', async ({
+  request,
+}) => {
+  // WHO: owner who added a custom question, then runs a website scan in onboarding
+  // WHAT: POST /knowledge/import-website (stubbed) stages confirmed suggestions
+  //       for the resolved questions — INCLUDING the owner's custom question —
+  //       plus a discovered topic, all as real knowledge_suggestion rows
+  // WHEN: setup wizard "Import from website" step
+  // WHERE: import-website handler → resolveQuestions → staging INSERT (knowledge.ts)
+  // WHY: guards the exact wiring shipped in feat/question-bank-shared — that the
+  //      shared resolver's custom-question merge actually reaches the DB via the
+  //      live endpoint. Skips cleanly if the stub env isn't enabled.
+  if (process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1') {
+    test.skip(true, 'requires KNOWLEDGE_IMPORT_E2E_STUB=1 on the backend');
+  }
+  let tenant: RegisteredTenant | null = null;
+  try {
+    tenant = await registerFreshTenant(request);
+    const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` };
+
+    // Owner first adds a custom question (stored in tenant_docs source=custom-question)
+    const customQuestion = 'Do you offer loaner cars while my car is serviced?';
+    const addRes = await request.post(`${BACKEND_URL}/knowledge/add`, {
+      headers: hdr,
+      data: {
+        tenant_id: tenant.tenantId,
+        question: customQuestion,
+        answer: 'Yes, we provide a complimentary loaner car for any service over two hours.',
+        source: 'custom-question',
+      },
+    });
+    expect(addRes.status()).toBe(200);
+
+    // Run the (stubbed) scan
+    const scanRes = await request.post(`${BACKEND_URL}/knowledge/import-website`, {
+      headers: hdr,
+      data: { tenant_id: tenant.tenantId, url: 'https://example-shop.com' },
+    });
+    expect(scanRes.status()).toBe(200);
+    const scan = await scanRes.json();
+    expect(scan.success).toBe(true);
+    // 2 bank questions + 1 custom = 3 confirmed; 1 discovered = 1 suggestion
+    expect(scan.confirmed).toBeGreaterThanOrEqual(3);
+    expect(scan.suggestions).toBeGreaterThanOrEqual(1);
+    // The owner's custom question made it into the extracted set via the resolver
+    expect(
+      scan.extracted.some((a: { question: string }) => a.question === customQuestion),
+      'custom question must flow through resolveQuestions into the scan'
+    ).toBe(true);
+
+    // Real DB: confirmed rows staged, including the custom question; discovered staged 'suggested'
+    const rows = await pool.query(
+      `SELECT question, status FROM knowledge_suggestion WHERE tenant_id = $1`,
+      [tenant.tenantId]
+    );
+    const confirmed = rows.rows.filter((r) => r.status === 'confirmed');
+    const suggested = rows.rows.filter((r) => r.status === 'suggested');
+    expect(confirmed.length).toBeGreaterThanOrEqual(3);
+    expect(suggested.length).toBeGreaterThanOrEqual(1);
+    expect(
+      confirmed.some((r) => r.question === customQuestion),
+      'custom question must be staged as a confirmed suggestion in the DB'
+    ).toBe(true);
+  } finally {
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
