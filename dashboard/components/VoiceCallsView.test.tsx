@@ -23,6 +23,7 @@ vi.mock('../lib/phone', () => ({
 const mockActiveCalls = vi.fn();
 const mockCallHistory = vi.fn();
 const mockGetSession = vi.fn();
+const mockCommsHistory = vi.fn();
 
 vi.mock('../lib/api', () => ({
   Api: {
@@ -30,6 +31,9 @@ vi.mock('../lib/api', () => ({
       getActiveCalls: (...args: unknown[]) => mockActiveCalls(...args),
       getHistory: (...args: unknown[]) => mockCallHistory(...args),
       getSession: (...args: unknown[]) => mockGetSession(...args),
+    },
+    communications: {
+      history: (...args: unknown[]) => mockCommsHistory(...args),
     },
   },
 }));
@@ -96,6 +100,7 @@ describe('VoiceCallsView', () => {
       has_more: false,
     });
     mockGetSession.mockResolvedValue(mockCall);
+    mockCommsHistory.mockResolvedValue({ success: true, history: [], total: 0 });
   });
 
   afterEach(() => {
@@ -429,6 +434,37 @@ describe('VoiceCallsView', () => {
       render(<VoiceCallsView />);
       await waitFor(() => {
         expect(screen.getByText('5 appointments')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Sent tab', () => {
+    test('clicking Sent tab mounts CommsSentView with channel filter buttons', async () => {
+      // WHO: owner reviewing outbound SMS/email | WHAT: Sent tab is reachable + renders filter UI
+      // WHEN: clicking the Sent sub-tab | WHERE: VoiceCallsView FolderTabBar
+      // WHY: prevents regression where a bad import or missing tab wiring causes a blank/crash
+      render(<VoiceCallsView />);
+
+      fireEvent.click(screen.getByText('Sent'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'SMS' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Email' })).toBeInTheDocument();
+      });
+    });
+
+    test('Sent tab shows empty state when history is empty', async () => {
+      // WHO: owner on fresh tenant | WHAT: empty-state copy visible via Sent tab
+      // WHEN: history returns zero rows | WHERE: CommsSentView via VoiceCallsView
+      // WHY: full render path test — tab switch → CommsSentView mount → API call → empty state
+      mockCommsHistory.mockResolvedValue({ success: true, history: [], total: 0 });
+
+      render(<VoiceCallsView />);
+      fireEvent.click(screen.getByText('Sent'));
+
+      await waitFor(() => {
+        expect(screen.getByText('No sent messages')).toBeInTheDocument();
       });
     });
   });

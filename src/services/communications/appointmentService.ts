@@ -5,15 +5,35 @@ import { EmailService } from './emailService.js';
 import { SMSService } from './smsService.js';
 import { generateSelfServiceToken } from '../selfServiceToken.js';
 
-/** Build a one-tap cancel link for SMS. Returns null when either appointmentId
- *  or BACKEND_PUBLIC_URL is absent/blank — callers omit the link gracefully. */
+// Links point at the dashboard's /self/cancel and /self/reschedule pages so
+// customers see a branded UI rather than raw JSON. Falls back to BACKEND_PUBLIC_URL
+// for environments that set only the backend URL (e.g. early staging).
+function selfServiceBaseUrl(): string {
+  return (process.env.DASHBOARD_URL ?? process.env.BACKEND_PUBLIC_URL ?? '')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
+/** Build a one-tap cancel link for SMS. Returns null when appointmentId is missing
+ *  or no public URL is configured. */
 function buildCancelLink(appointmentId: string | undefined, tenantId: string): string | null {
   if (!appointmentId) return null;
-  const baseUrl = (process.env.BACKEND_PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
+  const baseUrl = selfServiceBaseUrl();
   if (!baseUrl) return null;
   const token = generateSelfServiceToken(appointmentId, tenantId, 'cancel');
   if (!token) return null;
   return `${baseUrl}/self/cancel?token=${encodeURIComponent(token)}`;
+}
+
+/** Build a one-tap reschedule request link for SMS/email. Returns null when
+ *  appointmentId is missing or no public URL is configured. */
+function buildRescheduleLink(appointmentId: string | undefined, tenantId: string): string | null {
+  if (!appointmentId) return null;
+  const baseUrl = selfServiceBaseUrl();
+  if (!baseUrl) return null;
+  const token = generateSelfServiceToken(appointmentId, tenantId, 'reschedule');
+  if (!token) return null;
+  return `${baseUrl}/self/reschedule?token=${encodeURIComponent(token)}`;
 }
 
 export class AppointmentCommunicationService {
@@ -136,6 +156,8 @@ export class AppointmentCommunicationService {
       dateTime: new Date(appointmentDetails.dateTime).toLocaleString(),
       duration: appointmentDetails.duration,
       notes: appointmentDetails.notes || '',
+      cancelLink: buildCancelLink(appointmentDetails.appointmentId, tenantId),
+      rescheduleLink: buildRescheduleLink(appointmentDetails.appointmentId, tenantId),
     };
 
     return this.emailService.sendEmail(tenantId, {
@@ -155,6 +177,7 @@ export class AppointmentCommunicationService {
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
     const cancelLink = buildCancelLink(appointmentDetails.appointmentId, tenantId);
+    const rescheduleLink = buildRescheduleLink(appointmentDetails.appointmentId, tenantId);
     const templateData = {
       serviceName: appointmentDetails.serviceName,
       staffName: appointmentDetails.staffName,
@@ -163,6 +186,7 @@ export class AppointmentCommunicationService {
         ' at ' +
         dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cancelLink,
+      rescheduleLink,
     };
 
     return this.smsService.sendSMSTemplate(
@@ -189,6 +213,8 @@ export class AppointmentCommunicationService {
       dateTime: new Date(appointmentDetails.dateTime).toLocaleString(),
       duration: appointmentDetails.duration,
       hoursUntil: hoursUntilAppointment,
+      cancelLink: buildCancelLink(appointmentDetails.appointmentId, tenantId),
+      rescheduleLink: buildRescheduleLink(appointmentDetails.appointmentId, tenantId),
     };
 
     return this.emailService.sendEmail(tenantId, {
@@ -209,6 +235,7 @@ export class AppointmentCommunicationService {
   ): Promise<CommunicationResult> {
     const dateTime = new Date(appointmentDetails.dateTime);
     const cancelLink = buildCancelLink(appointmentDetails.appointmentId, tenantId);
+    const rescheduleLink = buildRescheduleLink(appointmentDetails.appointmentId, tenantId);
     const templateData = {
       serviceName: appointmentDetails.serviceName,
       staffName: appointmentDetails.staffName,
@@ -218,6 +245,7 @@ export class AppointmentCommunicationService {
         ' at ' +
         dateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cancelLink,
+      rescheduleLink,
     };
 
     return this.smsService.sendSMSTemplate(

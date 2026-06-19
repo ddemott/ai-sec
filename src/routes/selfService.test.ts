@@ -113,3 +113,91 @@ describe('GET /self/cancel', () => {
     });
   });
 });
+
+describe('GET /self/reschedule', () => {
+  describe('Happy Paths', () => {
+    it('returns 200 and attempts owner SMS when appointment found', async () => {
+      // WHO: customer tapping reschedule link in confirmation SMS
+      // WHAT: owner notified; appointment NOT mutated
+      // WHY: owner must confirm a new slot before any change lands;
+      //      SMS is fire-and-forget — route succeeds even if SMS fails
+      // appt + customer query
+      handle.queryResponses.push({
+        rows: [
+          {
+            start_time: '2026-07-10T14:00:00Z',
+            description: 'Haircut',
+            customer_name: 'Alice',
+            customer_phone: '+16305550199',
+          },
+        ],
+        rowCount: 1,
+      });
+      // tenant phones query — null phones so sendSms branch is skipped in tests
+      handle.queryResponses.push({
+        rows: [{ forward_phone: null, inbound_phone: null }],
+        rowCount: 1,
+      });
+
+      const token = generateSelfServiceToken(APPT_ID, TENANT_ID, 'reschedule')!;
+      const res = await app.inject({ method: 'GET', url: `/self/reschedule?token=${token}` });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { success: boolean; message: string };
+      expect(body.success).toBe(true);
+      expect(body.message).toMatch(/contact you shortly/i);
+    });
+  });
+
+  describe('Sad Paths', () => {
+    it('returns 400 when token is missing', async () => {
+      // WHO: bot/browser with no token
+      // WHAT: rejected before any DB query
+      const res = await app.inject({ method: 'GET', url: '/self/reschedule' });
+      expect(res.statusCode).toBe(400);
+      expect((JSON.parse(res.body) as { success: boolean }).success).toBe(false);
+    });
+
+    it('returns 400 for invalid/tampered token', async () => {
+      // WHO: customer with a corrupted or expired link
+      // WHAT: JWT verification fails before any DB call
+      const res = await app.inject({
+        method: 'GET',
+        url: '/self/reschedule?token=not.a.valid.jwt',
+      });
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.body) as { success: boolean; error: string };
+      expect(body.success).toBe(false);
+      expect(body.error).toMatch(/expired or is invalid/i);
+    });
+
+    it('returns 400 when a cancel token is used on reschedule route', async () => {
+      // WHO: customer with mismatched token action claim
+      // WHAT: verifySelfServiceToken('reschedule') rejects a 'cancel' token
+      // WHY: action-scoped tokens prevent a cancel token from triggering a reschedule notification
+      const cancelToken = generateSelfServiceToken(APPT_ID, TENANT_ID, 'cancel')!;
+      const res = await app.inject({
+        method: 'GET',
+        url: `/self/reschedule?token=${cancelToken}`,
+      });
+      expect(res.statusCode).toBe(400);
+      expect((JSON.parse(res.body) as { success: boolean }).success).toBe(false);
+    });
+
+    it('returns 404 when appointment is not found or already completed', async () => {
+      // WHO: customer with a valid token but appointment was deleted or already finished
+      // WHAT: DB returns no rows for the scheduled appointment lookup
+      handle.queryResponses.push({ rows: [], rowCount: 0 }); // appt query
+      handle.queryResponses.push({
+        rows: [{ forward_phone: null, inbound_phone: null }],
+        rowCount: 1,
+      }); // tenant query (always runs)
+
+      const token = generateSelfServiceToken(APPT_ID, TENANT_ID, 'reschedule')!;
+      const res = await app.inject({ method: 'GET', url: `/self/reschedule?token=${token}` });
+
+      expect(res.statusCode).toBe(404);
+      expect((JSON.parse(res.body) as { success: boolean }).success).toBe(false);
+    });
+  });
+});

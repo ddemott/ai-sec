@@ -16,6 +16,8 @@ export interface EmailTemplateData {
   logoUrl?: string;
   primaryColor?: string;
   secondaryColor?: string;
+  cancelLink?: string | null;
+  rescheduleLink?: string | null;
 }
 
 export class EmailTemplateService {
@@ -264,11 +266,15 @@ export class EmailTemplateService {
         <p class="highlight-text">💡 What to expect: Arrive 10 minutes early. Bring any relevant documents or photos.</p>
       </div>
 
-      <p>If you need to reschedule or cancel, please contact us at least 24 hours in advance.</p>
+      ${
+        data.cancelLink || data.rescheduleLink
+          ? ''
+          : '<p>If you need to reschedule or cancel, please contact us at least 24 hours in advance.</p>'
+      }
 
       <div style="text-align: center; margin: 30px 0;">
-        <a href="#" class="button">Add to Calendar</a>
-        <a href="#" class="button secondary">Reschedule</a>
+        ${data.cancelLink ? `<a href="${data.cancelLink}" class="button secondary" style="background: #64748B; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 10px 5px; display: inline-block;">Cancel Appointment</a>` : ''}
+        ${data.rescheduleLink ? `<a href="${data.rescheduleLink}" class="button secondary" style="background: #64748B; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 10px 5px; display: inline-block;">Request Reschedule</a>` : ''}
       </div>
 
       <p>We look forward to seeing you!</p>
@@ -289,8 +295,7 @@ ${data.notes ? `Notes: ${data.notes}` : ''}
 
 What to expect: Arrive 10 minutes early. Bring any relevant documents or photos.
 
-If you need to reschedule or cancel, please contact us at least 24 hours in advance.
-
+${data.cancelLink || data.rescheduleLink ? '' : 'If you need to reschedule or cancel, please contact us at least 24 hours in advance.\n'}${data.cancelLink ? `Cancel: ${data.cancelLink}\n` : ''}${data.rescheduleLink ? `Reschedule: ${data.rescheduleLink}\n` : ''}
 We look forward to seeing you!
 
 Best regards,
@@ -349,11 +354,15 @@ ${data.businessAddress ? `Address: ${data.businessAddress}` : ''}
         <p class="highlight-text">⏰ Your appointment is ${urgencyText}. Please arrive 10 minutes early.</p>
       </div>
 
-      <p>If you need to reschedule or cancel, please contact us immediately.</p>
+      ${
+        data.cancelLink || data.rescheduleLink
+          ? ''
+          : '<p>If you need to reschedule or cancel, please contact us immediately.</p>'
+      }
 
       <div style="text-align: center; margin: 30px 0;">
-        <a href="#" class="button">Call Now</a>
-        <a href="#" class="button secondary">Reschedule Online</a>
+        ${data.cancelLink ? `<a href="${data.cancelLink}" class="button secondary" style="background: #64748B; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 10px 5px; display: inline-block;">Cancel Appointment</a>` : ''}
+        ${data.rescheduleLink ? `<a href="${data.rescheduleLink}" class="button secondary" style="background: #64748B; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 10px 5px; display: inline-block;">Request Reschedule</a>` : ''}
       </div>
 
       <p>See you soon!</p>
@@ -373,8 +382,7 @@ Duration: ${data.duration} minutes
 
 Your appointment is ${urgencyText}. Please arrive 10 minutes early.
 
-If you need to reschedule or cancel, please contact us immediately.
-
+${data.cancelLink || data.rescheduleLink ? '' : 'If you need to reschedule or cancel, please contact us immediately.\n'}${data.cancelLink ? `Cancel: ${data.cancelLink}\n` : ''}${data.rescheduleLink ? `Reschedule: ${data.rescheduleLink}\n` : ''}
 See you soon!
 
 Best regards,

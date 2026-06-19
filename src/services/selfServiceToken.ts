@@ -14,7 +14,7 @@ const JWT_SECRET =
   process.env.JWT_SECRET ||
   (process.env.NODE_ENV === 'production' ? '' : 'dev-jwt-secret-change-in-production');
 
-export type SelfServiceAction = 'cancel';
+export type SelfServiceAction = 'cancel' | 'reschedule';
 
 export interface SelfServiceTokenPayload {
   appointment_id: string;

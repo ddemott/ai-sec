@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { MOCK_TENANT } from '@/lib/mockData';
 import { type Tenant } from '@/lib/types';
-import { Settings, MessageSquare, Mic, Info, Sparkles, PhoneForwarded } from 'lucide-react';
+import { Settings, MessageSquare, Mic, Info, Sparkles, PhoneForwarded, Bell } from 'lucide-react';
 import { Api } from '../lib/api';
 import { normalizePhone } from '../../shared/phone';
 import { useActiveTenantId } from '../lib/SessionContext';
@@ -97,6 +97,8 @@ export default function AIConfigView() {
         // Normalize to clean E.164 for storage so the agent builds a valid
         // tel: URI. Blank/invalid → null (forwarding off → AI takes a message).
         forward_phone: normalizePhone(config.forward_phone),
+        // Normalize owner notification phone the same way.
+        owner_phone: normalizePhone(config.owner_phone),
       });
       setSuccess(res.success);
       if (res.success) {
@@ -233,12 +235,38 @@ export default function AIConfigView() {
           </p>
           <Input
             type="tel"
+            label="Forward calls to"
             value={config?.forward_phone || ''}
             onChange={(e) => {
               setConfig((prev) => (prev ? { ...prev, forward_phone: e.target.value } : null));
               setDirty(true);
             }}
-            placeholder="Ex: +1 608 217 5303"
+            placeholder="Ex: +1 312 555 0100"
+          />
+        </section>
+
+        {/* Owner Notification Phone — SMS alert when caller leaves a message */}
+        <section className="space-y-4">
+          <h2
+            className="text-lg font-bold flex items-center"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            <Bell className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
+            Owner Notification Phone
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            When a caller leaves a message, the AI will send you an SMS alert at this number. Leave
+            blank to disable SMS notifications.
+          </p>
+          <Input
+            type="tel"
+            label="Notification number"
+            value={config?.owner_phone || ''}
+            onChange={(e) => {
+              setConfig((prev) => (prev ? { ...prev, owner_phone: e.target.value } : null));
+              setDirty(true);
+            }}
+            placeholder="Ex: +1 630 555 0100"
           />
         </section>
 

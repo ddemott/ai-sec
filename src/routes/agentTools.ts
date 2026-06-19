@@ -457,21 +457,60 @@ export function registerAgentToolRoutes(
     '/agent-tools/voice-session-end',
     VoiceSessionEndSchema,
     async (args, reply) => {
-      const ended = await withTenantClient(args.tenant_id, async (client) => {
-        const res = await client.query<{ ended: boolean }>(
-          'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) AS ended',
-          [
+      const { ended, forwardPhone, inboundPhone } = await withTenantClient(
+        args.tenant_id,
+        async (client) => {
+          const res = await client.query<{ ended: boolean }>(
+            'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) AS ended',
+            [
+              args.tenant_id,
+              args.call_id,
+              args.duration_seconds ?? null,
+              args.outcome ?? null,
+              args.transcript ?? null,
+              args.summary ?? null,
+              args.appointment_id ?? null,
+            ]
+          );
+          if (!['price', 'no_availability'].includes(args.outcome ?? '')) {
+            return { ended: res.rows[0]?.ended ?? false, forwardPhone: null, inboundPhone: null };
+          }
+          const tenant = await client.query<{
+            forward_phone: string | null;
+            inbound_phone: string | null;
+          }>('SELECT forward_phone, inbound_phone FROM tenants WHERE tenant_id = $1', [
             args.tenant_id,
-            args.call_id,
-            args.duration_seconds ?? null,
-            args.outcome ?? null,
-            args.transcript ?? null,
-            args.summary ?? null,
-            args.appointment_id ?? null,
-          ]
-        );
-        return res.rows[0]?.ended ?? false;
-      });
+          ]);
+          return {
+            ended: res.rows[0]?.ended ?? false,
+            forwardPhone: tenant.rows[0]?.forward_phone ?? null,
+            inboundPhone: tenant.rows[0]?.inbound_phone ?? null,
+          };
+        }
+      );
+
+      if (ended && forwardPhone && inboundPhone) {
+        const normalizedForward = normalizePhone(forwardPhone);
+        const normalizedInbound = normalizePhone(inboundPhone);
+        if (
+          normalizedForward &&
+          normalizedInbound &&
+          isValidPhone(normalizedForward) &&
+          isValidPhone(normalizedInbound)
+        ) {
+          const outcomeMsg =
+            args.outcome === 'price'
+              ? 'had concerns about pricing'
+              : 'could not find an available time';
+          const body = `SecretaryHQ: A recent caller ${outcomeMsg}. They may be worth a follow-up. — via SecretaryHQ`;
+          sendSms({ from: normalizedInbound, to: normalizedForward, body }).catch(
+            (err: unknown) => {
+              app.log.error({ err }, 'Failed to send outcome-follow-up SMS to owner');
+            }
+          );
+        }
+      }
+
       return ok(reply, { ended });
     },
     'Failed to end voice session'
@@ -1626,6 +1665,89 @@ export function registerAgentToolRoutes(
       return ok(reply, { cancelled: true, appointment_id: args.appointment_id });
     },
     'Failed to cancel appointment'
+  );
+
+  // ── AI cost recording ─────────────────────────────────────────────
+  // Called by the agent worker at the end of every voice call with the
+  // session's model usage (LLM tokens, STT audio, TTS characters).
+  // Also callable from backend KB routes for ingestion/query costs.
+  // Computes estimated_cost_usd using known published rates; xAI TTS
+  // pricing is not public so that row gets 0 (chars stored for later).
+
+  const COST_PER_INPUT_TOKEN: Record<string, number> = {
+    'gpt-4o-mini': 0.15e-6,
+    'text-embedding-3-small': 0.02e-6,
+  };
+  const COST_PER_OUTPUT_TOKEN: Record<string, number> = {
+    'gpt-4o-mini': 0.6e-6,
+  };
+  const DEEPGRAM_COST_PER_MS = 0.0043 / 60000; // $0.0043/min
+
+  const ModelUsageItemSchema = z.object({
+    type: z.enum(['llm_usage', 'tts_usage', 'stt_usage', 'interruption_usage']),
+    provider: z.string(),
+    model: z.string(),
+    inputTokens: z.number().int().default(0),
+    outputTokens: z.number().int().default(0),
+    charactersCount: z.number().int().default(0),
+    audioDurationMs: z.number().default(0),
+  });
+
+  const RecordAiCostSchema = z.object({
+    tenant_id: z.string().uuid(),
+    call_id: z.string().optional(),
+    source: z.enum(['voice_call', 'kb_ingestion', 'kb_query', 'call_summary']),
+    model_usage: z.array(ModelUsageItemSchema),
+  });
+
+  toolRoute(
+    app,
+    '/agent-tools/record-ai-cost',
+    RecordAiCostSchema,
+    async (args, reply) => {
+      const rows = args.model_usage.filter((u) => u.type !== 'interruption_usage');
+      if (rows.length === 0) return ok(reply, { recorded: 0 });
+
+      const values: unknown[] = [];
+      const placeholders: string[] = [];
+      let idx = 1;
+
+      for (const u of rows) {
+        const inputCost = (COST_PER_INPUT_TOKEN[u.model] ?? 0) * u.inputTokens;
+        const outputCost = (COST_PER_OUTPUT_TOKEN[u.model] ?? 0) * u.outputTokens;
+        const audioCost = u.type === 'stt_usage' ? DEEPGRAM_COST_PER_MS * u.audioDurationMs : 0;
+        const estimatedCost = inputCost + outputCost + audioCost;
+
+        placeholders.push(
+          `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`
+        );
+        values.push(
+          args.tenant_id,
+          args.call_id ?? null,
+          args.source,
+          u.provider,
+          u.model,
+          u.inputTokens,
+          u.outputTokens,
+          u.charactersCount,
+          Math.round(u.audioDurationMs),
+          estimatedCost.toFixed(8)
+        );
+      }
+
+      await withTenantClient(args.tenant_id, (client) =>
+        client.query(
+          `INSERT INTO ai_cost_events
+             (tenant_id, call_id, source, provider, model,
+              input_tokens, output_tokens, characters_count, audio_duration_ms, estimated_cost_usd)
+           VALUES ${placeholders.join(', ')}`,
+          values
+        )
+      );
+
+      return ok(reply, { recorded: rows.length });
+    },
+    'Failed to record AI cost'
   );
 
   // ── Test-only sync recorder readout ───────────────────────────────
