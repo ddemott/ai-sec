@@ -7,6 +7,7 @@ import { Step5Assignments } from './StepAssignments';
 import { Step6Review } from './StepReview';
 import { Step7GoLive } from './Step7GoLive';
 import { Step7CallerQuestions } from './Step7CallerQuestions';
+import { Step7WebsiteScan } from './Step7WebsiteScan';
 import type {
   WizardStep,
   ServiceForm,
@@ -232,8 +233,10 @@ export function WizardStepContent({
         />
       );
     case 7:
-      return <Step7CallerQuestions tenantId={tenantId} />;
+      return <Step7WebsiteScan tenantId={tenantId} />;
     case 8:
+      return <Step7CallerQuestions tenantId={tenantId} showWebsiteImport={false} />;
+    case 9:
       return <Step7GoLive phoneStatus={phoneStatus} inboundPhone={inboundPhone} />;
     default:
       return null;

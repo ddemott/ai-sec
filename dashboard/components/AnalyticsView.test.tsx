@@ -19,7 +19,7 @@ vi.mock('../lib/SessionContext', () => ({
 const { mockApi } = vi.hoisted(() => ({
   mockApi: {
     appointments: { list: vi.fn() },
-    analytics: { getCalls: vi.fn(), getStats: vi.fn() },
+    analytics: { getCalls: vi.fn(), getStats: vi.fn(), getAiCost: vi.fn() },
   },
 }));
 
@@ -31,6 +31,7 @@ beforeEach(() => {
   mockApi.appointments.list.mockReset().mockResolvedValue([]);
   mockApi.analytics.getCalls.mockReset().mockResolvedValue(null);
   mockApi.analytics.getStats.mockReset().mockResolvedValue(null);
+  mockApi.analytics.getAiCost.mockReset().mockResolvedValue(null);
 });
 
 describe('AnalyticsView — call analytics panels (gap #2)', () => {

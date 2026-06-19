@@ -7,8 +7,8 @@
  *
  * Four tests:
  *   1. UI alignment filter — picking a service narrows the employee
- *      dropdown to mapped staff (Carlos is missing from the Balancing
- *      dropdown because only Mike is in service_employee for it).
+ *      dropdown to mapped staff (Blake and Casey are missing from the
+ *      Balancing dropdown because only Alex is in service_employee for it).
  *   2. RPC enforcement — POST /appointments/create directly with a
  *      mismatched (service, employee) pair → 400 with "not assigned
  *      to perform this service" and zero rows inserted.
@@ -20,20 +20,28 @@
  *      overlap rejection — the canceled row doesn't block the slot).
  *
  * Setup: backend on https://localhost:4001, dashboard on
- * https://localhost:4000, Postgres on localhost:5433 with DynaTire
- * seed data. Each test cleans up after itself in a try/finally.
+ * https://localhost:4000, Postgres on localhost:5433. Each spec
+ * registers its own fresh tenant and cleans up in afterAll.
  */
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig, BACKEND_URL } from './helpers/fixtures';
+import { registerFreshTenant, cleanTenantData, BACKEND_URL } from './helpers/fixtures';
 
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 const ADMIN_EMAIL = 'admin@secretaryhq.com';
 const ADMIN_PASSWORD = 'password';
 
 let pool: Pool;
+
+// Module-level IDs populated in beforeAll and used across all four tests.
+let freshTenant: { tenantId: string; token: string; email: string };
+let employeeAId: string; // only qualified for "Balancing"
+let employeeBId: string; // NOT qualified for "Balancing"
+let employeeCId: string; // NOT qualified for "Balancing"
+let resourceId: string;
+let fixtureCustomerId: string;
+let serviceBalancingId: string;
 
 function uniqueTag(): string {
   return `e2e-align-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -57,11 +65,11 @@ async function ensureLoggedIn(page: Page) {
   await expect(page.getByText('Home').first()).toBeVisible({ timeout: 15000 });
 }
 
-async function switchToDynaTireTenant(page: Page) {
+async function switchToTestTenant(page: Page) {
   await page.evaluate((id) => {
     localStorage.setItem('managedTenantId', id);
-    localStorage.setItem('managedTenantName', 'DynaTire Mobile Service');
-  }, DYNATIRE_ID);
+    localStorage.setItem('managedTenantName', 'E2E Test Business');
+  }, freshTenant.tenantId);
   await page.reload();
   await page.waitForTimeout(1500);
 }
@@ -82,57 +90,103 @@ async function getApiToken(page: Page): Promise<string> {
   return result.token as string;
 }
 
-async function findEmployeeIdByName(name: string): Promise<string | null> {
-  const r = await pool.query(
-    'SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
-    [DYNATIRE_ID, name]
-  );
-  return r.rows[0]?.employee_id ?? null;
-}
-
-async function findServiceIdByName(name: string): Promise<string | null> {
-  const r = await pool.query(
-    'SELECT service_id FROM services WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
-    [DYNATIRE_ID, name]
-  );
-  return r.rows[0]?.service_id ?? null;
-}
-
-async function findResourceIdByName(name: string): Promise<string | null> {
-  const r = await pool.query(
-    'SELECT resource_id FROM resources WHERE tenant_id = $1 AND name = $2 AND (is_deleted IS NULL OR is_deleted = false)',
-    [DYNATIRE_ID, name]
-  );
-  return r.rows[0]?.resource_id ?? null;
-}
-
-// Per-spec fixture customer — same rationale as workflows.spec.ts.
-// 2026-05-18 seed strip removed seeded customers; this spec's three
-// failing tests all need *a* customer via `SELECT customer_id ...
-// LIMIT 1`. Create one, delete on teardown. Combined into a single
-// beforeAll/afterAll pair so we don't depend on Playwright's
-// hook-ordering semantics.
-let fixtureCustomerId: string | null = null;
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
-  // Bootstrap DynaTire business config (resources, services, employees,
-  // shifts, mappings) since 2026-05-18 seed-strip-stage-b dropped them
-  // from supabase/seed.sql. The seed only ships tenant + owner now.
-  await seedDynaTireBusinessConfig(pool);
-  const insert = await pool.query(
-    `INSERT INTO customers (tenant_id, phone, name, first_name, last_name)
-     VALUES ($1, $2, $3, $4, $5) RETURNING customer_id`,
-    [DYNATIRE_ID, `+1${String(Date.now()).slice(-10)}`, 'E2E Fixture Customer', 'E2E', 'Fixture']
-  );
-  fixtureCustomerId = insert.rows[0].customer_id;
-});
-test.afterAll(async () => {
-  if (fixtureCustomerId) {
-    await pool.query('DELETE FROM customers WHERE customer_id = $1', [fixtureCustomerId]);
+
+  // Need an APIRequestContext to call registerFreshTenant.
+  const { request: pr } = await import('@playwright/test');
+  const ctx = await pr.newContext({ ignoreHTTPSErrors: true });
+
+  freshTenant = await registerFreshTenant(ctx);
+  const tid = freshTenant.tenantId;
+  const tok = freshTenant.token;
+  const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` };
+
+  // Create 3 employees — only Alex will be mapped to the Balancing service.
+  const [eA, eB, eC] = await Promise.all([
+    ctx
+      .post(`${BACKEND_URL}/employees/create`, {
+        headers: hdr,
+        data: { tenant_id: tid, first_name: 'Alex', last_name: 'Smith' },
+      })
+      .then((r) => r.json())
+      .then((b) => b.employee.employee_id as string),
+    ctx
+      .post(`${BACKEND_URL}/employees/create`, {
+        headers: hdr,
+        data: { tenant_id: tid, first_name: 'Blake', last_name: 'Jones' },
+      })
+      .then((r) => r.json())
+      .then((b) => b.employee.employee_id as string),
+    ctx
+      .post(`${BACKEND_URL}/employees/create`, {
+        headers: hdr,
+        data: { tenant_id: tid, first_name: 'Casey', last_name: 'Lee' },
+      })
+      .then((r) => r.json())
+      .then((b) => b.employee.employee_id as string),
+  ]);
+  employeeAId = eA;
+  employeeBId = eB;
+  employeeCId = eC;
+
+  // Create resource (Bay 1) used across tests 2–4.
+  const rRes = await ctx.post(`${BACKEND_URL}/resources/create`, {
+    headers: hdr,
+    data: { tenant_id: tid, name: 'Bay 1' },
+  });
+  resourceId = (await rRes.json()).resource.resource_id as string;
+
+  // Create the "Balancing" service (30 min).
+  const sRes = await ctx.post(`${BACKEND_URL}/services/create`, {
+    headers: hdr,
+    data: { tenant_id: tid, name: 'Balancing', duration_minutes: 30 },
+  });
+  serviceBalancingId = (await sRes.json()).service.service_id as string;
+
+  // Map ONLY Alex and Bay 1 to Balancing — Blake and Casey are intentionally excluded.
+  await ctx.post(`${BACKEND_URL}/services/${serviceBalancingId}/employees/${employeeAId}/assign`, {
+    headers: hdr,
+    data: { tenant_id: tid },
+  });
+  await ctx.post(`${BACKEND_URL}/services/${serviceBalancingId}/resources/${resourceId}/assign`, {
+    headers: hdr,
+    data: { tenant_id: tid },
+  });
+
+  // Seed shifts for the next 14 days for all 3 employees so booking
+  // tests land within a known valid window. expand-weekly fans 4 weeks
+  // from today; 14 days is well inside that range.
+  for (const empId of [employeeAId, employeeBId, employeeCId]) {
+    await ctx.post(`${BACKEND_URL}/shifts/expand-weekly`, {
+      headers: hdr,
+      data: {
+        tenant_id: tid,
+        employee_id: empId,
+        pattern: Array.from({ length: 7 }, (_, dow) => ({
+          day_of_week: dow,
+          start_time: '08:00',
+          end_time: '17:00',
+        })),
+      },
+    });
   }
-  // Reverse-order teardown of the business config so the next spec
-  // starts from the bare-bones seed state.
-  await clearDynaTireBusinessConfig(pool);
+
+  // Create a fixture customer for tests 2–4.
+  const phone = `+1555${String(Date.now()).slice(-7)}`;
+  const cRes = await ctx.post(`${BACKEND_URL}/customers/create`, {
+    headers: hdr,
+    data: { tenant_id: tid, name: 'E2E Fixture Customer', phone },
+  });
+  fixtureCustomerId = (await cRes.json()).customer.customer_id as string;
+
+  await ctx.dispose();
+});
+
+test.afterAll(async () => {
+  // Single cascade DELETE removes all test data (employees, services,
+  // resources, appointments, customers, shifts, mappings).
+  await cleanTenantData(pool, freshTenant.tenantId);
   await pool.end();
 });
 
@@ -143,8 +197,8 @@ test('alignment: picking a service narrows the Tech dropdown to mapped staff onl
   page,
 }) => {
   // WHO: front-desk operator picking a service in Quick Book
-  // WHAT: after selecting "Balancing" (only Mike is mapped to it in seed
-  //        data), Carlos must NOT appear in the Tech dropdown but Mike
+  // WHAT: after selecting "Balancing" (only Alex is mapped to it),
+  //        Blake and Casey must NOT appear in the Tech dropdown but Alex
   //        and "Unassigned" must.
   // WHEN: every booking flow on every sub-tab
   // WHERE: QuickBookPanel.tsx → useServiceMappings + filterEmployeesByService
@@ -154,7 +208,7 @@ test('alignment: picking a service narrows the Tech dropdown to mapped staff onl
   //        same behavior runs end-to-end against a real backend with real
   //        service_employee rows.
   await ensureLoggedIn(page);
-  await switchToDynaTireTenant(page);
+  await switchToTestTenant(page);
 
   await page
     .getByRole('tab', { name: /^Schedule$/ })
@@ -173,26 +227,24 @@ test('alignment: picking a service narrows the Tech dropdown to mapped staff onl
   const panel = page.getByTestId('quick-book-panel');
   await expect(panel).toBeVisible({ timeout: 5000 });
 
-  // Pick the Balancing service (mapped only to Mike per seed.sql).
-  const balancingId = await findServiceIdByName('Balancing');
-  expect(balancingId, 'Balancing service must exist in DynaTire seed').toBeTruthy();
-  await page.getByTestId('quick-book-service').selectOption({ value: String(balancingId) });
+  // Pick the Balancing service (mapped only to Alex).
+  await page.getByTestId('quick-book-service').selectOption({ value: serviceBalancingId });
   await page.waitForTimeout(500); // let useEffect propagate the filter
 
   const techSelect = page.getByTestId('quick-book-employee');
   const techOptionTexts = await techSelect.locator('option').allTextContents();
 
-  // Mike IS qualified → should be in the list. Unassigned is always offered.
+  // Alex IS qualified → should be in the list. Unassigned is always offered.
   expect(techOptionTexts.some((t) => /unassigned/i.test(t))).toBe(true);
-  expect(techOptionTexts.some((t) => /\bMike\b/.test(t))).toBe(true);
-  // Carlos and Dana are NOT mapped to Balancing → must NOT appear.
+  expect(techOptionTexts.some((t) => /\bAlex\b/.test(t))).toBe(true);
+  // Blake and Casey are NOT mapped to Balancing → must NOT appear.
   expect(
-    techOptionTexts.some((t) => /\bCarlos\b/.test(t)),
-    `Carlos must be filtered out — not in service_employee for Balancing. Got: ${techOptionTexts.join(' | ')}`
+    techOptionTexts.some((t) => /\bBlake\b/.test(t)),
+    `Blake must be filtered out — not in service_employee for Balancing. Got: ${techOptionTexts.join(' | ')}`
   ).toBe(false);
   expect(
-    techOptionTexts.some((t) => /\bDana\b/.test(t)),
-    `Dana must be filtered out — not in service_employee for Balancing. Got: ${techOptionTexts.join(' | ')}`
+    techOptionTexts.some((t) => /\bCasey\b/.test(t)),
+    `Casey must be filtered out — not in service_employee for Balancing. Got: ${techOptionTexts.join(' | ')}`
   ).toBe(false);
 });
 
@@ -210,48 +262,36 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
   // WHEN: any caller bypasses the form's narrowed dropdown
   // WHERE: book_appointment_atomic — service_employee mapping check
   //        (migration 20260507000000)
-  // WHY: defense-in-depth — this is the test that the unit-level
-  //        book-appointment-mapping.test.ts pins against a real DB; the
-  //        e2e variant runs the same shape against the LIVE Fastify
-  //        server so route-level wiring drift surfaces too.
+  // WHY: defense-in-depth — the service_employee check fires BEFORE
+  //        the shift check in book_appointment_atomic, so booking at +7
+  //        days (within the seeded shift window) guarantees the mapping
+  //        error is the only rejection path exercised.
   await page.goto('/dashboard');
   await ensureLoggedIn(page);
 
   const token = await getApiToken(page);
-  const balancingId = await findServiceIdByName('Balancing');
-  const carlosId = await findEmployeeIdByName('Carlos Vega');
-  const truckId = await findResourceIdByName('Truck 1');
 
-  expect(balancingId, 'Balancing service expected in seed').toBeTruthy();
-  expect(carlosId, 'Carlos expected in seed').toBeTruthy();
-  expect(truckId, 'Truck resource expected in seed').toBeTruthy();
-
-  // Need a customer too — use the first one from the tenant.
-  const cust = await pool.query('SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1', [
-    DYNATIRE_ID,
-  ]);
-  const customerId = cust.rows[0]?.customer_id;
-  expect(customerId, 'At least one customer expected in DynaTire seed').toBeTruthy();
-
-  // Use a far-future timestamp (no possibility of overlap).
+  // Book inside the seeded shift window (+7 days, 14:00) so the shift gate
+  // is NOT the rejection cause. The service_employee mapping check fires
+  // first in book_appointment_atomic and is the sole gating condition here.
   const start = new Date();
-  start.setDate(start.getDate() + 60);
+  start.setDate(start.getDate() + 7);
   start.setHours(14, 0, 0, 0);
   const end = new Date(start);
   end.setMinutes(start.getMinutes() + 30);
 
   const beforeCount = await pool.query(
     `SELECT COUNT(*)::int AS n FROM appointments WHERE tenant_id = $1 AND start_time = $2`,
-    [DYNATIRE_ID, start.toISOString()]
+    [freshTenant.tenantId, start.toISOString()]
   );
 
   const result = await page.evaluate(
-    async ({ token, payload, backendUrl }) => {
+    async ({ token: tok, payload, backendUrl }) => {
       const res = await fetch(`${backendUrl}/appointments/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tok}`,
         },
         body: JSON.stringify(payload),
       });
@@ -262,11 +302,11 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
       token,
       backendUrl: BACKEND_URL,
       payload: {
-        tenant_id: DYNATIRE_ID,
-        resource_id: truckId,
-        customer_id: customerId,
-        employee_id: carlosId,
-        service_id: balancingId,
+        tenant_id: freshTenant.tenantId,
+        resource_id: resourceId,
+        customer_id: fixtureCustomerId,
+        employee_id: employeeBId, // Blake — NOT mapped to Balancing
+        service_id: serviceBalancingId,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
         description: 'e2e-align — should be rejected',
@@ -285,7 +325,7 @@ test('alignment: POST /appointments/create rejects an unmapped (service, employe
   // No row was inserted at this exact timestamp.
   const afterCount = await pool.query(
     `SELECT COUNT(*)::int AS n FROM appointments WHERE tenant_id = $1 AND start_time = $2`,
-    [DYNATIRE_ID, start.toISOString()]
+    [freshTenant.tenantId, start.toISOString()]
   );
   expect(afterCount.rows[0].n).toBe(beforeCount.rows[0].n);
 });
@@ -315,15 +355,6 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
   try {
     // Pre-INSERT an appointment far enough in the future that it sits
     // alone on its day (easier to find in the List view).
-    const customer = await pool.query(
-      'SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1',
-      [DYNATIRE_ID]
-    );
-    const truckId = await findResourceIdByName('Truck 1');
-    const customerId = customer.rows[0]?.customer_id;
-    expect(truckId).toBeTruthy();
-    expect(customerId).toBeTruthy();
-
     // Use TODAY's date with a non-seed minute offset — the List sub-tab
     // displays the scheduler's `selectedDate` (today by default), so a
     // far-future row would be off-screen. 13:45 is grid-aligned (DB CHECK
@@ -337,7 +368,7 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
     // Clean any leftover row at this exact slot from a previous failed run.
     await pool.query(
       'DELETE FROM appointments WHERE tenant_id = $1 AND resource_id = $2 AND start_time = $3',
-      [DYNATIRE_ID, truckId, start.toISOString()]
+      [freshTenant.tenantId, resourceId, start.toISOString()]
     );
 
     const ins = await pool.query(
@@ -345,9 +376,9 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
        VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
        RETURNING appointment_id`,
       [
-        DYNATIRE_ID,
-        truckId,
-        customerId,
+        freshTenant.tenantId,
+        resourceId,
+        fixtureCustomerId,
         start.toISOString(),
         end.toISOString(),
         `${tag}-cross-view-cancel`,
@@ -356,7 +387,7 @@ test('cross-view: appointment popover Cancel works from the List sub-tab and sof
     apptId = ins.rows[0].appointment_id;
 
     await ensureLoggedIn(page);
-    await switchToDynaTireTenant(page);
+    await switchToTestTenant(page);
 
     await page
       .getByRole('tab', { name: /^Schedule$/ })
@@ -442,15 +473,6 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
   const ids: string[] = [];
 
   try {
-    const customer = await pool.query(
-      'SELECT customer_id FROM customers WHERE tenant_id = $1 LIMIT 1',
-      [DYNATIRE_ID]
-    );
-    const truckId = await findResourceIdByName('Truck 1');
-    const customerId = customer.rows[0]?.customer_id;
-    expect(truckId).toBeTruthy();
-    expect(customerId).toBeTruthy();
-
     const start = new Date();
     start.setDate(start.getDate() + 50);
     start.setHours(15, 0, 0, 0);
@@ -464,7 +486,14 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
        RETURNING appointment_id`,
-      [DYNATIRE_ID, truckId, customerId, start.toISOString(), end.toISOString(), `${tag}-A`]
+      [
+        freshTenant.tenantId,
+        resourceId,
+        fixtureCustomerId,
+        start.toISOString(),
+        end.toISOString(),
+        `${tag}-A`,
+      ]
     );
     ids.push(insA.rows[0].appointment_id);
 
@@ -474,18 +503,23 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
 
     // Cancel A via the production API path.
     const cancelRes = await page.evaluate(
-      async ({ token, id, backendUrl }) => {
+      async ({ tok, id, tenantId, backendUrl }) => {
         const res = await fetch(`${backendUrl}/appointments/${id}/cancel`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${tok}`,
           },
-          body: JSON.stringify({ tenant_id: 'f234e471-0e60-4163-86c9-93cfd9338e3a' }),
+          body: JSON.stringify({ tenant_id: tenantId }),
         });
         return { status: res.status, body: await res.json() };
       },
-      { token, id: insA.rows[0].appointment_id, backendUrl: BACKEND_URL }
+      {
+        tok: token,
+        id: insA.rows[0].appointment_id,
+        tenantId: freshTenant.tenantId,
+        backendUrl: BACKEND_URL,
+      }
     );
     expect(cancelRes.status, `cancel must succeed; body=${JSON.stringify(cancelRes.body)}`).toBe(
       200
@@ -495,24 +529,24 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
     // the route's status='scheduled' filter the GiST exclusion would
     // reject the overlap. With it, B's INSERT lands cleanly.
     const bookRes = await page.evaluate(
-      async ({ token, payload, backendUrl }) => {
+      async ({ tok, payload, backendUrl }) => {
         const res = await fetch(`${backendUrl}/appointments/create`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${tok}`,
           },
           body: JSON.stringify(payload),
         });
         return { status: res.status, body: await res.json() };
       },
       {
-        token,
+        tok: token,
         backendUrl: BACKEND_URL,
         payload: {
-          tenant_id: DYNATIRE_ID,
-          resource_id: truckId,
-          customer_id: customerId,
+          tenant_id: freshTenant.tenantId,
+          resource_id: resourceId,
+          customer_id: fixtureCustomerId,
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           description: `${tag}-B`,
@@ -525,14 +559,14 @@ test('cancel-frees-slot: a canceled appointment does not block re-booking the sa
     );
     expect(bookRes.body?.success).toBe(true);
     expect(bookRes.body?.appointment_id).toBeTruthy();
-    ids.push(bookRes.body.appointment_id);
+    ids.push(bookRes.body.appointment_id as string);
 
     // Both rows exist: A canceled, B scheduled.
     const verify = await pool.query(
       `SELECT appointment_id, status, description FROM appointments
         WHERE tenant_id = $1 AND start_time = $2
         ORDER BY description`,
-      [DYNATIRE_ID, start.toISOString()]
+      [freshTenant.tenantId, start.toISOString()]
     );
     expect(verify.rowCount).toBe(2);
     const a = verify.rows.find((r) => r.description.endsWith('-A'));

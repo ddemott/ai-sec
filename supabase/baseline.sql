@@ -3082,6 +3082,10 @@ CREATE TABLE public.tenants (
     tts_voice text,
     tts_speed real,
     tts_soft boolean,
+    tts_cheerful boolean,
+    tts_formal boolean,
+    tts_warm boolean,
+    tts_concise boolean,
     forward_phone text
 );
 

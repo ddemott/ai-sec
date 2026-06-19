@@ -299,6 +299,41 @@ describe('BusinessSettingsView', () => {
       // WHY: show weekly schedule overview
     });
 
+    test('HAPPY: availability tiles render real day/number when shift_date is a full ISO timestamp', async () => {
+      // WHO: solo practitioner whose backend returns pg DATE as ISO timestamp string.
+      // WHAT: the tile must show a valid short day name ("Thu") and numeric day
+      //        (18) — not "NaN" / "undefined" — when shift_date arrives as
+      //        "2026-06-18T00:00:00.000Z" instead of bare "2026-06-18".
+      // WHEN: every page load after the backend serialises DATE via JSON.
+      // WHERE: BusinessSettingsView availability grid tiles.
+      // WHY: appending "T12:00:00" to the full ISO string produces an unparseable
+      //      date → NaN. The fix slices to YYYY-MM-DD first.
+      mockGetConfig.mockResolvedValue({ team_size: 1 });
+      mockGetShiftSchedule.mockResolvedValue([
+        {
+          shift_date: '2026-06-18T00:00:00.000Z',
+          start_time: '09:00:00',
+          end_time: '17:00:00',
+          is_off: false,
+        },
+      ]);
+
+      render(<BusinessSettingsView />);
+
+      await waitFor(() => {
+        expect(screen.getByText('My Availability')).toBeInTheDocument();
+      });
+
+      // Day name must be one of the known short labels — not "NaN" or "undefined".
+      const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dayNameEl = DAY_NAMES.map((d) => screen.queryByText(d)).find(Boolean);
+      expect(dayNameEl).toBeTruthy();
+
+      // Day number must be a parseable integer — not NaN.
+      const dayNumEl = screen.queryByText('18');
+      expect(dayNumEl).toBeInTheDocument();
+    });
+
     test('shows My Calendar in solo mode', async () => {
       render(<BusinessSettingsView />);
       await waitFor(() => {

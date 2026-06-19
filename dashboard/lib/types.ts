@@ -69,10 +69,18 @@ export interface Tenant {
   tts_voice?: string | null;
   tts_speed?: number | null;
   tts_soft?: boolean | null;
+  tts_cheerful?: boolean | null;
+  tts_formal?: boolean | null;
+  tts_warm?: boolean | null;
+  tts_concise?: boolean | null;
   // Live-transfer destination (2026-06-11). E.164 cell the AI cold-transfers a
   // caller to when they need a human. null = no forwarding; the AI takes a
   // message instead.
   forward_phone?: string | null;
+  // SMS alert destination for the owner when a caller leaves a message.
+  owner_phone?: string | null;
+  // Telnyx DID assigned to this tenant — the number callers dial to reach the AI.
+  inbound_phone?: string | null;
 }
 
 export interface BusinessTemplate {
@@ -242,6 +250,22 @@ export interface AnalyticsCalls {
   by_day: Array<{ day: string; total: number; booked: number }>;
 }
 
+export interface AiCostRow {
+  source: string;
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  characters_count: number;
+  audio_duration_ms: number;
+  estimated_cost_usd: number;
+}
+
+export interface AiCostSummary {
+  breakdown: AiCostRow[];
+  total_estimated_cost_usd: number;
+}
+
 export interface Vocabulary {
   resource_label: string;
   resource_plural: string;
@@ -322,12 +346,7 @@ export type {
 
 export type ChangeType = 'create' | 'update' | 'delete' | 'restore' | 'sync' | 'merge';
 
-export type ChangeSource =
-  | 'local'
-  | 'square'
-  | 'voice_call'
-  | 'system'
-  | 'api';
+export type ChangeSource = 'local' | 'square' | 'voice_call' | 'system' | 'api';
 
 export type VersionedTable =
   | 'customers'
@@ -434,4 +453,15 @@ export interface TeamUser {
   role: 'owner' | 'front_desk';
   created_at: string;
   is_self: boolean;
+}
+
+export interface CustomerMessage {
+  message_id: string;
+  caller_name: string | null;
+  caller_phone: string | null;
+  callback_phone: string | null;
+  message: string;
+  status: 'new' | 'read' | 'actioned';
+  call_id: string | null;
+  created_at: string;
 }

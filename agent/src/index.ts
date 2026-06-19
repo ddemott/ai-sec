@@ -162,6 +162,11 @@ export default defineAgent({
     // Tracks what happened on the call (booked / transferred + appointment_id),
     // mutated by the booking/transfer tools, read at shutdown for session-end.
     const outcomeTracker = new CallOutcomeTracker();
+    // Accumulates per-model AI usage (LLM tokens, STT audio, TTS chars) from
+    // LiveKit's SessionUsageUpdated events. Updated during the call; read once
+    // at shutdown to POST costs to /agent-tools/record-ai-cost.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let sessionModelUsage: any[] = [];
     try {
       client = new ToolsClient({
         backendUrl: config.BACKEND_URL,
@@ -217,6 +222,27 @@ export default defineAgent({
               appointment_id: appointmentId,
               summary,
             });
+            // Fire-and-forget: POST session AI usage to the cost ledger.
+            // sessionModelUsage is empty when the session never started (e.g.
+            // fallback path) — skip silently rather than inserting a zero row.
+            if (sessionModelUsage.length > 0) {
+              void client
+                .call('/agent-tools/record-ai-cost', {
+                  tenant_id: sessionCtx.tenantId,
+                  call_id: callId,
+                  source: 'voice_call',
+                  model_usage: sessionModelUsage,
+                })
+                .catch((e: unknown) =>
+                  callLog.warn(
+                    {
+                      event: 'ai_cost_record_failed',
+                      error_message: e instanceof Error ? e.message : String(e),
+                    },
+                    'AI cost record failed (non-fatal)'
+                  )
+                );
+            }
           } catch (e) {
             callLog.warn(
               {
@@ -252,16 +278,6 @@ export default defineAgent({
         roomName: sessionCtx.roomName ?? undefined,
         participantIdentity: sessionCtx.participantIdentity ?? undefined,
       });
-      const tools = buildTools(
-        sessionCtx,
-        client,
-        {
-          forwardPhone: tenantConfig.forwardPhone,
-          execute: transferExecutor,
-        },
-        outcomeTracker
-      );
-
       // 4. Build prompt with runtime context
       const instructions = buildSystemPrompt({
         tenantName: tenantConfig.name,
@@ -277,6 +293,9 @@ export default defineAgent({
         // prompt gains a "Customer preferences" section + save tool guidance.
         savePreferencesEnabled: tenantConfig.savePreferencesEnabled,
         preferencesInstructions: tenantConfig.preferencesInstructions,
+        ttsFormal: tenantConfig.ttsFormal,
+        ttsWarm: tenantConfig.ttsWarm,
+        ttsConcise: tenantConfig.ttsConcise,
       });
 
       // 5. Start the voice session. Wrapped in try/catch → runFallback: a
@@ -297,8 +316,25 @@ export default defineAgent({
             voice: tenantConfig.ttsVoice ?? config.XAI_TTS_VOICE,
             speed: tenantConfig.ttsSpeed ?? config.XAI_TTS_SPEED,
             soft: tenantConfig.ttsSoft ?? config.XAI_TTS_SOFT,
+            cheerful: tenantConfig.ttsCheerful ?? false,
           }),
         });
+
+        // Tools built here so speakFiller can reference session.say —
+        // execute() closures fire only after session.start(), so session is
+        // always initialized by the time a filler phrase is spoken.
+        const tools = buildTools(
+          sessionCtx,
+          client,
+          {
+            forwardPhone: tenantConfig.forwardPhone,
+            execute: transferExecutor,
+          },
+          outcomeTracker,
+          (phrase) => {
+            void session.say(phrase, { allowInterruptions: true });
+          }
+        );
 
         const agent = new voice.Agent({
           instructions,
@@ -313,7 +349,15 @@ export default defineAgent({
         // itself emits a `conversation_item_added` (addToChatCtx defaults true)
         // — so the transcript opens with the actual first line, no manual add.
         session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
+          if (ev.item.type !== 'message') return;
           transcript.add(ev.item.role, ev.item.textContent);
+        });
+
+        // Accumulate per-model usage so the shutdown callback can POST it.
+        // SessionUsageUpdated fires after each LLM/STT/TTS turn and carries
+        // the running totals — keeping the last snapshot is sufficient.
+        session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => {
+          sessionModelUsage = ev.usage.modelUsage;
         });
 
         // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)

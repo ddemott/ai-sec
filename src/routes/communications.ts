@@ -14,6 +14,7 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
+import { createHmac } from 'crypto';
 import twilio from 'twilio';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
 import { CommunicationService } from '../services/communications/index.js';
@@ -442,6 +443,87 @@ export function registerCommunicationRoutes(
       req.log.info(
         { event: 'twilio_status_callback_unverified' },
         'TWILIO_AUTH_TOKEN unset — accepting status callback without signature verification'
+      );
+    }
+
+    const tenantId = (req.query as Record<string, string | undefined>)?.tenant_id ?? null;
+
+    await recordTwilioDeliveryStatus(pool, {
+      messageSid,
+      messageStatus,
+      errorCode,
+      tenantId,
+    });
+
+    messageDeliveryReceiptsTotal.inc({ status: messageStatus });
+
+    return reply.send({ success: true });
+  });
+
+  /**
+   * POST /communications/telnyx/status — Telnyx SMS delivery-status webhook.
+   *
+   * Telnyx POSTs JSON here when webhook_url is set on the message (see
+   * TelnyxSmsAdapter.sendSMS). PUBLIC + tenant-exempt: no JWT; tenant_id
+   * is read from ?tenant_id= on the URL the adapter appended.
+   *
+   * Verification: if TELNYX_WEBHOOK_SECRET is set we validate the
+   * telnyx-signature header (HMAC-SHA256 of timestamp|body). A bad signature
+   * → 403. Without the secret configured we accept + log (dev/staging).
+   *
+   * Payload shape (Telnyx v2):
+   *   data.event_type  — "message.finalized" | "message.sent" | "message.failed"
+   *   data.payload.id  — message ID (our messageSid)
+   *   data.payload.to[0].status — per-recipient delivery status
+   *   data.payload.errors[]    — error objects (optional)
+   */
+  app.post('/communications/telnyx/status', async (req: AppRequest, reply) => {
+    const rawBody = JSON.stringify(req.body ?? {});
+    const payload = (req.body ?? {}) as Record<string, unknown>;
+
+    const data = payload.data as Record<string, unknown> | undefined;
+    const innerPayload = data?.payload as Record<string, unknown> | undefined;
+    const messageSid = innerPayload?.id as string | undefined;
+    const toArray = innerPayload?.to as Array<{ status?: string }> | undefined;
+    const messageStatus = toArray?.[0]?.status ?? (data?.event_type as string | undefined);
+    const errors = innerPayload?.errors as Array<{ code?: string | number }> | undefined;
+    const errorCode = errors?.[0]?.code ? String(errors[0].code) : null;
+
+    if (!messageSid || !messageStatus) {
+      req.log.warn(
+        { event: 'telnyx_status_callback_malformed' },
+        'Telnyx status callback missing message id or status'
+      );
+      return reply
+        .status(400)
+        .send({ success: false, error: 'Missing message id or status in Telnyx payload' });
+    }
+
+    // Signature verification when TELNYX_WEBHOOK_SECRET is configured.
+    // Telnyx signs: HMAC-SHA256(secret, timestamp + "|" + rawBody).
+    // Header: telnyx-signature  value: t=<epoch>,v1=<hex>
+    const webhookSecret = process.env.TELNYX_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const sigHeader = (req.headers['telnyx-signature'] as string) || '';
+      const parts = Object.fromEntries(
+        sigHeader.split(',').map((p) => p.split('=') as [string, string])
+      );
+      const timestamp = parts['t'] ?? '';
+      const receivedSig = parts['v1'] ?? '';
+      const expected = createHmac('sha256', webhookSecret)
+        .update(`${timestamp}|${rawBody}`)
+        .digest('hex');
+      if (!receivedSig || receivedSig !== expected) {
+        req.log.warn(
+          { event: 'telnyx_status_callback_invalid_signature', messageSid },
+          'Telnyx status callback signature mismatch'
+        );
+        return reply.status(403).send({ success: false, error: 'Invalid Telnyx signature' });
+      }
+    } else {
+      req.log.info(
+        { event: 'telnyx_status_callback_unverified' },
+        'TELNYX_WEBHOOK_SECRET unset — accepting Telnyx status callback without signature verification'
       );
     }
 

@@ -15,10 +15,20 @@
 
 const FETCH_TIMEOUT_MS = 10_000;
 
+// Dimension of text-embedding-3-small
+const EMBEDDING_DIM = 1536;
+
 export function createGetEmbedding(apiKey: string) {
   return async function getEmbedding(text: string): Promise<number[]> {
     if (!apiKey) {
       throw new Error('OPENAI_API_KEY is not configured in environment');
+    }
+
+    // CI / unit-test guard: sk-dummy signals "no real key available".
+    // Return a zero vector so DB inserts succeed and CRUD tests pass;
+    // RAG accuracy tests (simulate.sh rag) use a real key and run on-demand.
+    if (apiKey === 'sk-dummy' || apiKey.startsWith('sk-dummy-')) {
+      return new Array(EMBEDDING_DIM).fill(0) as number[];
     }
 
     const controller = new AbortController();

@@ -206,8 +206,13 @@ jobs:
           # self-signed cert and every probe/request fails the TLS handshake.
           USE_HTTPS: 'false'
 
-      - name: Build and start dashboard
-        run: cd dashboard && npm run build && npm run start &
+      - name: Build dashboard
+        run: cd dashboard && npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
+
+      - name: Start dashboard
+        run: cd dashboard && npm run start > /tmp/dashboard.log 2>&1 &
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
           PORT: 4000
@@ -248,6 +253,20 @@ jobs:
           # the stale baseline.sql snapshot that lacks recent migrations
           # (e.g. the tts_* columns).
           PLAYWRIGHT_SKIP_DB_RESET: '1'
+
+      - name: Run simulate tools (agent-tools journey as regression guard)
+        # Runs the realistic booking + recall journey against the live servers
+        # in this job. Flags [dev] gaps the same way `simulate.sh tools` does
+        # locally. Non-zero exit will fail the job (like other steps).
+        run: ./scripts/simulate.sh tools --env local
+        env:
+          BACKEND_URL: http://localhost:4001
+          # simulate.sh reads agent secret via env_get (from .env) with
+          # SIM_AGENT_SECRET as override — AGENT_SECRET alone is ignored.
+          SIM_AGENT_SECRET: ci-agent-secret
+          # simulate tools hits /demo/start which may use OPENAI for embeddings
+          # in some paths; dummy is tolerated (falls back or skips).
+          OPENAI_API_KEY: sk-dummy
 
       - name: Dump backend log on failure
         if: failure()

@@ -84,13 +84,19 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
         ]);
       }
 
+      const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         mode: 'subscription',
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${process.env.DASHBOARD_URL || 'https://localhost:4000'}?billing=success`,
-        cancel_url: `${process.env.DASHBOARD_URL || 'https://localhost:4000'}?billing=cancel`,
+        success_url: `${dashboardUrl}/dashboard?tab=setup&subtab=billing&billing=success`,
+        cancel_url: `${dashboardUrl}/dashboard?tab=setup&subtab=billing&billing=cancel`,
         metadata: { tenant_id, plan },
+        // Requires Stripe Tax enabled in dashboard + nexus registered.
+        // Set STRIPE_AUTO_TAX=true on Railway once both are configured.
+        ...(process.env.STRIPE_AUTO_TAX === 'true' && {
+          automatic_tax: { enabled: true },
+        }),
       });
 
       logEvent(req, 'checkout_session_created', { tenantId: tenant_id, plan });
@@ -214,6 +220,42 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
       }
       return reply.send(res.rows[0]);
     }, 'Failed to check billing status')
+  );
+
+  // POST /billing/portal — create a Stripe Customer Portal session
+  // Lets the owner manage payment methods, view invoices, and cancel.
+  app.post(
+    '/billing/portal',
+    withHandler(async (req: AppRequest, reply) => {
+      const stripe = getStripe();
+      if (!stripe) {
+        return reply.status(503).send({ success: false, error: 'Billing not configured' });
+      }
+
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const res = await pool.query('SELECT stripe_customer_id FROM tenants WHERE tenant_id = $1', [
+        tenantId,
+      ]);
+      if (res.rows.length === 0) {
+        return reply.status(404).send({ success: false, error: 'Tenant not found' });
+      }
+      if (!res.rows[0].stripe_customer_id) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'No billing account found — complete checkout first' });
+      }
+
+      const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
+      const session = await stripe.billingPortal.sessions.create({
+        customer: res.rows[0].stripe_customer_id,
+        return_url: `${dashboardUrl}/dashboard?tab=setup&subtab=billing`,
+      });
+
+      logEvent(req, 'billing_portal_session_created', { tenantId });
+      return reply.send({ url: session.url });
+    }, 'Failed to create billing portal session')
   );
 }
 

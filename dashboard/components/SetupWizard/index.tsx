@@ -36,8 +36,9 @@ function getStepLabels(_vocab: {
     4: 'When they work',
     5: 'Who does what',
     6: 'Look it over',
-    7: 'Teach Your AI',
-    8: "You're live",
+    7: 'Import from website',
+    8: 'Teach Your AI',
+    9: "You're live",
   };
 }
 
@@ -134,7 +135,9 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       if (services.length === 0 && seedTargetRef.current.length === 0) {
         seedTargetRef.current = tpl?.example_services ?? [];
       }
-      const missing = seedTargetRef.current.filter((name) => !services.some((s) => s.name === name));
+      const missing = seedTargetRef.current.filter(
+        (name) => !services.some((s) => s.name === name)
+      );
       for (const name of missing) {
         // is_auto_seeded persists the "I am a template default" tag in
         // the DB so a business_type change handled server-side (POST
@@ -216,7 +219,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
   };
 
   const goNext = async () => {
-    const next = Math.min(step + 1, 8) as WizardStep;
+    const next = Math.min(step + 1, 9) as WizardStep;
     if (!canAdvanceTo(next)) {
       showToast('Complete this step before continuing', 'warning');
       return;
@@ -227,7 +230,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
     // a tenant could activate the phone and still have every booking
     // attempt return EMPLOYEE_NOT_SCHEDULED. Errors are non-fatal —
     // we log and continue so a flaky network doesn't strand the user.
-    if (next === 8 && tenantId) {
+    if (next === 9 && tenantId) {
       // Group the in-memory shift form-state by employee so each
       // employee's pattern is fanned independently.
       for (const emp of activeEmployees) {
@@ -271,12 +274,8 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       // still return the user to the picker. A subsequent reseed will
       // simply skip the name if it still exists.
       await Promise.all([
-        ...serviceIds.map((id) =>
-          Api.services.delete(id, tenantId).catch(() => undefined)
-        ),
-        ...resourceIds.map((id) =>
-          Api.resources.delete(id, tenantId).catch(() => undefined)
-        ),
+        ...serviceIds.map((id) => Api.services.delete(id, tenantId).catch(() => undefined)),
+        ...resourceIds.map((id) => Api.resources.delete(id, tenantId).catch(() => undefined)),
       ]);
       await refresh();
     }
@@ -322,7 +321,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
         {/* Progress bar */}
         <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
-            {([1, 2, 3, 4, 5, 6, 7, 8] as WizardStep[]).map((s) => (
+            {([1, 2, 3, 4, 5, 6, 7, 8, 9] as WizardStep[]).map((s) => (
               <button
                 key={s}
                 onClick={() => goToStep(s)}
@@ -423,7 +422,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
         {/* Footer */}
         <footer className="px-6 py-4 bg-gray-50 dark:bg-[#222] border-t border-gray-100 dark:border-gray-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="text-xs text-gray-400">Step {step} of 8</div>
+            <div className="text-xs text-gray-400">Step {step} of 9</div>
             {/* Step 1 owns the "go back to the picker" affordance — any
                 later step uses the regular Back button to walk the
                 intra-wizard step strip first. Hidden when the parent
@@ -447,9 +446,9 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
                 Back
               </Button>
             )}
-            {step < 8 ? (
+            {step < 9 ? (
               <Button variant="primary" size="sm" onClick={goNext}>
-                {step === 7 ? 'Go Live' : 'Next'}
+                {step === 8 ? 'Go Live' : 'Next'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
