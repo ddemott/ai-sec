@@ -17,6 +17,7 @@
     "db:migrate": "bash scripts/setup-db.sh",
     "db:seed": "bash scripts/seed-db.sh",
     "db:rebuild": "bash scripts/rebuild-db.sh",
+    "db:baseline": "bash scripts/generate-baseline.sh",
     "start": "bash scripts/start-all.sh",
     "restart": "bash scripts/restart-all.sh",
     "build": "tsc -p .",
