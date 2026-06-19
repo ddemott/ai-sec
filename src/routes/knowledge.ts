@@ -160,6 +160,12 @@ Return only the JSON.`;
       },
       30000
     );
+    // Surface OpenAI failures (401 bad key, 429 rate limit, 5xx) as an error
+    // instead of silently parsing the error body to {} and returning an empty
+    // "successful" extraction — which would look like "scanned, found nothing".
+    if (!resp.ok) {
+      return { success: false, error: `OpenAI extract failed: HTTP ${resp.status}` };
+    }
     const data: any = await resp.json();
     const content = data.choices?.[0]?.message?.content || '{}';
     const parsed = JSON.parse(content);

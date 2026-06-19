@@ -96,11 +96,11 @@ testing calls immediately.
 the wizard offers an optional **"Import from website"** step. Paste your
 business URL and the AI scans your public pages (hours, services, pricing,
 policies, FAQ) and pre-fills the policy answers it can find — so the next
-step starts mostly filled in instead of blank. Everything it pulls is
-clearly marked **"from your website"** and is yours to edit or discard;
-nothing goes live to callers until you keep it. You can skip this and
-answer everything by hand. (See "Knowledge base setup" below for how the
-scan and review fit together.)
+step starts mostly filled in instead of blank. The pre-filled answers are
+saved as you go and shown on the very next step, where you review and edit
+(or clear) each one before you finish setup and go live. You can skip the
+scan entirely and answer everything by hand. (See "Knowledge base setup"
+below for how the scan and review fit together.)
 
 ### Common wizard mistakes (and how to avoid them)
 
@@ -165,12 +165,13 @@ files) under **Phone Assistant → Documents**. The AI extracts the text,
 indexes it, and references it when callers ask.
 
 **Fastest start — scan your website.** If you ran the wizard's optional
-"Import from website" step, many of these answers are already filled in,
-each tagged **"from your website."** A scan does two things:
+"Import from website" step, many of these answers are already filled in. A
+scan does two things:
 
 1. **Pre-fills the policy questions** it found direct answers for — these
    show up already answered in **Phone Assistant → Policy Q&A** (a green
-   "Answered" marker distinguishes them from still-blank questions).
+   "Answered" marker distinguishes already-answered questions from
+   still-blank ones). Review and edit them like any other answer.
 2. **Stages extra topics it discovered** (things outside the standard
    questions) for your review under the **Suggestions** tab. Each one has
    an **Add** (send to the live knowledge base) or **Discard** button —
