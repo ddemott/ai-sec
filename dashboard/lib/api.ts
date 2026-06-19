@@ -2,6 +2,7 @@ import { normalizePhone } from './phone';
 import type {
   Appointment,
   Customer,
+  ReminderDeliveryStats,
   Resource,
   Employee,
   Service,
@@ -639,7 +640,10 @@ export const Api = {
   // --- REMINDERS (delivery monitoring) ---
   reminders: {
     deliveryStats: (tenantId: string | null) =>
-      apiFetch(`/reminders/delivery-stats`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<ReminderDeliveryStats>(
+        `/reminders/delivery-stats`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- MASTER SKILLS ---

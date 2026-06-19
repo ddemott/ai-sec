@@ -237,7 +237,7 @@ export function registerReminderRoutes(
   );
 
   /**
-   * GET /reminders/delivery-stats - Owner-facing delivery monitoring stats (sent/failed by channel + recent).
+   * GET /reminders/delivery-stats - Owner-facing delivery monitoring stats (sent/failed/scheduled/cancelled counts by status + recency buckets).
    * Uses table aggregates (tenant-isolated) rather than global in-memory metrics so owners see *their* numbers.
    * Powers the reminder delivery monitoring view.
    */

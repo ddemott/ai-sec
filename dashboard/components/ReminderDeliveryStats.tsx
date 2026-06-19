@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Api } from '../lib/api';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { Card } from './ui/Card';
-import { Mail, MessageSquare, AlertTriangle, Clock } from 'lucide-react';
+import { Mail, AlertTriangle, Clock } from 'lucide-react';
 
 interface DeliveryStats {
   sent_total: number;

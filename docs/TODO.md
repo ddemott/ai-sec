@@ -235,7 +235,7 @@ captures or sends them**, so every logged call is duration-only.
 
 ### Reminder delivery monitoring (Phase 5 — never built)
 
-- [x] **Reminder delivery dashboard** — MERGED to main 2026-06-19 (`feat/reminder-delivery-stats`, cherry-picked from the never-merged `feat/transfers-invisible-calls`). `GET /reminders/delivery-stats` (tenant-isolated `reminder_schedules` aggregates: sent total/7d/30d, failed total/7d, scheduled, cancelled) + `ReminderDeliveryStats` cards wired into `AnalyticsView`. + route unit test (happy + empty/zeros, asserts tenant-scoped query). NOTE: the prior "[x] DONE" claims here and at the top of this file were premature — the code lived only on an unmerged branch and was absent from main until this cherry-pick (a baseline-drift-class bookkeeping gap). Now actually in main.
+- [x] **Reminder delivery dashboard** — landing via PR #50 (`feat/reminder-delivery-stats`, cherry-picked from the never-merged `feat/transfers-invisible-calls`); mark fully done once #50 merges. `GET /reminders/delivery-stats` (tenant-isolated `reminder_schedules` aggregates: sent total/7d/30d, failed total/7d, scheduled, cancelled) + `ReminderDeliveryStats` cards wired into `AnalyticsView`. + route unit test (happy + empty/zeros, asserts tenant-scoped query). NOTE: the prior "[x] DONE" claims here and at the top of this file were premature — the code lived only on an unmerged branch and was absent from main until this cherry-pick (a baseline-drift-class bookkeeping gap). Now actually in main.
 
 ### CRM sync status (`CRMIntegrationCard.tsx`)
 
