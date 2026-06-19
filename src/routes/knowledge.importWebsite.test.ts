@@ -159,4 +159,36 @@ describe('POST /knowledge/import-website', () => {
     expect(res.statusCode).toBe(400);
     expect(openAiPrompts.length).toBe(0);
   });
+
+  it('SAD: an OpenAI non-2xx (e.g. 429) surfaces as an error, not empty success', async () => {
+    // WHO: a scan that hits an OpenAI rate-limit / bad key / 5xx
+    // WHAT: handler returns 500 error instead of a "successful" empty extraction
+    // WHY: guard the silent-empty bug — a 429 must not look like "found nothing"
+    handle.queryResponses.push({ rows: [], rowCount: 0 }); // custom SELECT
+    // Re-stub fetch: site scrape OK, but OpenAI returns 429
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        const u = url.toString();
+        if (u.includes('api.openai.com')) {
+          return { ok: false, status: 429, json: async () => ({}) } as unknown as Response;
+        }
+        return {
+          ok: true,
+          text: async () =>
+            `<html><body>${'We are open Monday to Friday. '.repeat(20)}</body></html>`,
+        } as unknown as Response;
+      })
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/knowledge/import-website',
+      headers: AUTH,
+      payload: { url: 'https://example-shop.com' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().success).toBe(false);
+  });
 });

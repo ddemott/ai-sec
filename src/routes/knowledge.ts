@@ -21,6 +21,23 @@ import { resolveQuestions } from '../../shared/questionBank';
 
 // ── Website scrape helpers for onboarding (item 10) ─────────────────────
 
+// Bound every outbound call in the scan path so a slow/hung site page or a slow
+// OpenAI response can't hold a request (and a pool slot) open indefinitely —
+// same AbortController discipline the rest of the codebase uses on OpenAI calls.
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchAndExtractSiteText(
   startUrl: string
 ): Promise<{ success: true; text: string } | { success: false; error: string }> {
@@ -37,10 +54,14 @@ async function fetchAndExtractSiteText(
       if (visited.has(u)) continue;
       visited.add(u);
       try {
-        const resp = await fetch(u, {
-          headers: { 'User-Agent': 'SecretaryHQ-Bot/1.0' },
-          redirect: 'follow',
-        });
+        const resp = await fetchWithTimeout(
+          u,
+          {
+            headers: { 'User-Agent': 'SecretaryHQ-Bot/1.0' },
+            redirect: 'follow',
+          },
+          8000
+        );
         if (!resp.ok) continue;
         const html = await resp.text();
         const text = html
@@ -124,17 +145,27 @@ ${qList}
 Return only the JSON.`;
 
   try {
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 3000,
-        response_format: { type: 'json_object' },
-      }),
-    });
+    const resp = await fetchWithTimeout(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 3000,
+          response_format: { type: 'json_object' },
+        }),
+      },
+      30000
+    );
+    // Surface OpenAI failures (401 bad key, 429 rate limit, 5xx) as an error
+    // instead of silently parsing the error body to {} and returning an empty
+    // "successful" extraction — which would look like "scanned, found nothing".
+    if (!resp.ok) {
+      return { success: false, error: `OpenAI extract failed: HTTP ${resp.status}` };
+    }
     const data: any = await resp.json();
     const content = data.choices?.[0]?.message?.content || '{}';
     const parsed = JSON.parse(content);
