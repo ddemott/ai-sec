@@ -295,6 +295,16 @@ async function apiMutate<T>(
  * Entity-Specific API Library
  */
 export const Api = {
+  // --- ACCOUNTING ADD-ON (federated to MyAccountant) ---
+  accounting: {
+    enabled: () =>
+      apiFetch<{ accounting_enabled: boolean; accounting_org_id: string | null }>(
+        `/accounting/enabled`
+      ),
+    provision: () => apiMutate<{ accounting_org_id: string }>(`/accounting/provision`, 'POST'),
+    ssoUrl: () => apiFetch<{ url: string }>(`/accounting/sso-url`),
+  },
+
   // --- CUSTOMERS ---
   customers: {
     list: (tenantId: string | null) =>
@@ -630,10 +640,7 @@ export const Api = {
       apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
 
     getAiCost: (tenantId: string | null) =>
-      apiFetch<AiCostSummary>(
-        `/analytics/ai-cost`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
+      apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- MASTER SKILLS ---

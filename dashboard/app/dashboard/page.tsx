@@ -25,6 +25,7 @@ const SuperAdminDashboard = dynamic(() => import('@/components/SuperAdminDashboa
   ssr: false,
 });
 const VoiceCallsView = dynamic(() => import('@/components/VoiceCallsView'), { ssr: false });
+const AccountingView = dynamic(() => import('@/components/AccountingView'), { ssr: false });
 
 export type Tab =
   | 'dashboard'
@@ -35,7 +36,8 @@ export type Tab =
   | 'ai-insights'
   | 'settings'
   | 'all-businesses'
-  | 'profile';
+  | 'profile'
+  | 'accounting';
 
 // IA merge (2026-06-03): the old 'my-business' / 'my-team' / 'business-settings'
 // top-level tabs are gone — they're now sub-tabs of 'setup'. Old bookmarks,
@@ -71,6 +73,7 @@ export default function DashboardPage() {
     'settings',
     'all-businesses',
     'profile',
+    'accounting',
   ];
 
   // Resolve ?tab= → a valid Tab, transparently upgrading legacy tab ids to the
@@ -293,6 +296,7 @@ export default function DashboardPage() {
         {activeTab === 'ai-insights' && <AIInsightsView />}
         {activeTab === 'settings' && <SettingsView />}
         {activeTab === 'profile' && <ProfileView />}
+        {activeTab === 'accounting' && <AccountingView />}
       </ErrorBoundary>
       <ShortcutsHelpModal
         isOpen={shortcutsHelpOpen}
