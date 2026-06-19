@@ -17,6 +17,7 @@ import {
   prepareQADocument,
   ALLOWED_EXTENSIONS,
 } from '../services/knowledgeIngestion';
+import { resolveQuestions } from '../../shared/questionBank';
 
 // ── Website scrape helpers for onboarding (item 10) ─────────────────────
 
@@ -82,7 +83,7 @@ async function fetchAndExtractSiteText(
 
 async function extractAnswersWithLLM(
   siteText: string,
-  questions: Array<{ id: string; question: string }>,
+  questions: Array<{ id: string | null; question: string }>,
   baseUrl: string,
   apiKey: string
 ): Promise<
@@ -101,7 +102,9 @@ async function extractAnswersWithLLM(
 > {
   if (!apiKey) return { success: false, error: 'OPENAI_API_KEY not configured' };
 
-  const qList = questions.map((q, i) => `${i + 1}. [${q.id}] ${q.question}`).join('\n');
+  const qList = questions
+    .map((q, i) => `${i + 1}. ${q.id ? `[${q.id}] ` : ''}${q.question}`)
+    .join('\n');
 
   const prompt = `You are a precise business policy extractor. 
 Given the cleaned text from a small business website below, answer ONLY the listed questions with direct or closely paraphrased info from the text. 
@@ -410,14 +413,18 @@ export function registerKnowledgeRoutes(
       }
       const { url } = parsed.data;
 
-      // Use static for now (until question bank merged)
-      const { POLICY_QUESTIONS } = await import('../../dashboard/lib/policyQuestions.js').catch(
-        () => ({ POLICY_QUESTIONS: [] as any[] })
+      // Resolve the questions to extract: the shared static policy bank plus this
+      // tenant's owner-authored custom questions (tenant_docs source='custom-question'),
+      // so the scan also targets what this owner specifically cares about.
+      const customRows = await withTenantClient(tenantId, async (client) =>
+        client.query(
+          `SELECT title FROM tenant_docs
+           WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL`,
+          [tenantId]
+        )
       );
-      const questions = (POLICY_QUESTIONS || []).map((q: any) => ({
-        id: q.id,
-        question: q.question,
-      }));
+      const customs = customRows.rows.map((r: any) => r.title as string);
+      const questions = resolveQuestions({ customs });
 
       const siteText = await fetchAndExtractSiteText(url);
       if (!siteText.success) {
