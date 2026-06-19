@@ -17,6 +17,7 @@ import {
   prepareQADocument,
   ALLOWED_EXTENSIONS,
 } from '../services/knowledgeIngestion';
+import { resolveQuestions } from '../../shared/questionBank';
 
 // ── Website scrape helpers for onboarding (item 10) ─────────────────────
 
@@ -82,14 +83,14 @@ async function fetchAndExtractSiteText(
 
 async function extractAnswersWithLLM(
   siteText: string,
-  questions: Array<{ id: string; question: string }>,
+  questions: Array<{ id: string | null; question: string }>,
   baseUrl: string,
   apiKey: string
 ): Promise<
   | {
       success: true;
       answers: Array<{
-        questionId: string;
+        questionId: string | null;
         question: string;
         answer: string | null;
         sourceUrl: string;
@@ -101,7 +102,9 @@ async function extractAnswersWithLLM(
 > {
   if (!apiKey) return { success: false, error: 'OPENAI_API_KEY not configured' };
 
-  const qList = questions.map((q, i) => `${i + 1}. [${q.id}] ${q.question}`).join('\n');
+  const qList = questions
+    .map((q, i) => `${i + 1}. ${q.id ? `[${q.id}] ` : ''}${q.question}`)
+    .join('\n');
 
   const prompt = `You are a precise business policy extractor. 
 Given the cleaned text from a small business website below, answer ONLY the listed questions with direct or closely paraphrased info from the text. 
@@ -410,28 +413,69 @@ export function registerKnowledgeRoutes(
       }
       const { url } = parsed.data;
 
-      // Use static for now (until question bank merged)
-      const { POLICY_QUESTIONS } = await import('../../dashboard/lib/policyQuestions.js').catch(
-        () => ({ POLICY_QUESTIONS: [] as any[] })
+      // Resolve the questions to extract: the shared static policy bank plus this
+      // tenant's owner-authored custom questions (tenant_docs source='custom-question'),
+      // so the scan also targets what this owner specifically cares about.
+      // Bounded: cap how many custom questions feed the extract prompt so a tenant
+      // with a huge custom-question list can't blow up prompt size / OpenAI cost.
+      const customRows = await withTenantClient(tenantId, async (client) =>
+        client.query(
+          `SELECT title FROM tenant_docs
+           WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL
+           ORDER BY created_at DESC
+           LIMIT 50`,
+          [tenantId]
+        )
       );
-      const questions = (POLICY_QUESTIONS || []).map((q: any) => ({
-        id: q.id,
-        question: q.question,
-      }));
+      const customs = customRows.rows.map((r: any) => r.title as string);
+      const questions = resolveQuestions({ customs });
 
-      const siteText = await fetchAndExtractSiteText(url);
-      if (!siteText.success) {
-        return reply.status(400).send({ success: false, error: siteText.error });
-      }
-
-      const extract = await extractAnswersWithLLM(
-        siteText.text,
-        questions,
-        url,
-        process.env.OPENAI_API_KEY || ''
-      );
-      if (!extract.success) {
-        return reply.status(500).send({ success: false, error: extract.error });
+      // KNOWLEDGE_IMPORT_E2E_STUB: strict opt-in (literal "1") that swaps the real
+      // site fetch + OpenAI extraction for deterministic canned output, so E2E can
+      // exercise the REAL resolver → staging-INSERT path against a real DB without
+      // a live OpenAI key or external network (CI runs with OPENAI_API_KEY=sk-dummy).
+      // Same env-gated test-hook discipline as SYNC_TEST_RECORDER. Off by default.
+      let extract: { answers: any[]; discovered: any[] };
+      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB === '1') {
+        // Confirm every resolved custom question (id null) + the first two bank
+        // questions, plus one discovered topic — lets a test assert customs flow
+        // through the resolver into staging.
+        const picks = [
+          ...questions.filter((q) => q.id === null),
+          ...questions.filter((q) => q.id !== null).slice(0, 2),
+        ];
+        extract = {
+          answers: picks.map((q) => ({
+            questionId: q.id,
+            question: q.question,
+            answer: `Stubbed answer for: ${q.question}`,
+            sourceUrl: url,
+            confidence: 0.9,
+          })),
+          discovered: [
+            {
+              question: 'Stubbed discovered topic?',
+              answer: 'Stubbed discovered answer.',
+              sourceUrl: url,
+              confidence: 0.5,
+            },
+          ],
+        };
+      } else {
+        const siteText = await fetchAndExtractSiteText(url);
+        if (!siteText.success) {
+          return reply.status(400).send({ success: false, error: siteText.error });
+        }
+        const llm = await extractAnswersWithLLM(
+          siteText.text,
+          questions,
+          url,
+          process.env.OPENAI_API_KEY || ''
+        );
+        if (!llm.success) {
+          return reply.status(500).send({ success: false, error: llm.error });
+        }
+        extract = { answers: llm.answers, discovered: llm.discovered };
       }
 
       // Persist extracted (matched) + discovered items to knowledge_suggestion for review.
