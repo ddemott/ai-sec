@@ -36,8 +36,19 @@ if (!isLocal && !FORCE) {
   );
   process.exit(1);
 }
-// Self-signed cert on local HTTPS.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+// Disable TLS verification ONLY for the local self-signed cert — never weaken
+// TLS for a remote --force target.
+if (isLocal) process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+// /agent-tools/* require x-agent-secret; without it every booking 401s and the
+// run is meaningless. Warn loudly rather than report a wall of failures.
+if (!SECRET) {
+  console.error(
+    'WARNING: SIM_AGENT_SECRET is empty — every /agent-tools/book call will 401. ' +
+      "Set it to the backend's AGENT_SECRET, e.g. " +
+      'SIM_AGENT_SECRET=$(grep ^AGENT_SECRET= .env | cut -d= -f2-) node scripts/sim-load.mjs'
+  );
+}
 
 async function api(path, body, { auth = true } = {}) {
   const headers = { 'content-type': 'application/json' };
