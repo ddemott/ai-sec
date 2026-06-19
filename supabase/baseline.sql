@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ZWgeFnCT9Tw7T5f0TP7YrzbBybcOVEOab3pdvke2CzPpB7L56CdFQLcwzCE8pJJ
+\restrict nGGa5hMg1lk6Z6i1kEXMndKy9S2Fh1BcgAsYC8fSnOWroWxnAENRjF06WNZGCtp
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -17,20 +17,6 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
-
---
--- Name: public; Type: SCHEMA; Schema: -; Owner: -
---
-
--- *not* creating schema, since initdb creates it
-
-
---
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON SCHEMA public IS '';
-
 
 --
 -- Name: btree_gist; Type: EXTENSION; Schema: -; Owner: -
@@ -2156,6 +2142,48 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: ai_cost_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_cost_events (
+    ai_cost_event_id integer NOT NULL,
+    tenant_id uuid NOT NULL,
+    call_id text,
+    source text NOT NULL,
+    provider text NOT NULL,
+    model text NOT NULL,
+    input_tokens integer DEFAULT 0 NOT NULL,
+    output_tokens integer DEFAULT 0 NOT NULL,
+    characters_count integer DEFAULT 0 NOT NULL,
+    audio_duration_ms integer DEFAULT 0 NOT NULL,
+    estimated_cost_usd numeric(12,8) DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.ai_cost_events FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: ai_cost_events_ai_cost_event_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ai_cost_events_ai_cost_event_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ai_cost_events_ai_cost_event_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ai_cost_events_ai_cost_event_id_seq OWNED BY public.ai_cost_events.ai_cost_event_id;
+
+
+--
 -- Name: appointment_sync_map; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2459,6 +2487,26 @@ ALTER SEQUENCE public.consent_records_id_seq OWNED BY public.consent_records.con
 
 
 --
+-- Name: customer_messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.customer_messages (
+    message_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    customer_id uuid,
+    caller_phone text,
+    caller_name text NOT NULL,
+    callback_phone text,
+    message text NOT NULL,
+    call_id text,
+    status text DEFAULT 'new'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.customer_messages FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: customers; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2621,6 +2669,31 @@ CREATE TABLE public.entity_sync_map (
 );
 
 ALTER TABLE ONLY public.entity_sync_map FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: knowledge_suggestion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.knowledge_suggestion (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    question_id text,
+    question text NOT NULL,
+    answer text,
+    source_url text,
+    confidence real,
+    status text DEFAULT 'suggested'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: TABLE knowledge_suggestion; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.knowledge_suggestion IS 'Staged website-extracted policy answers. Only status=confirmed rows are ingested to tenant_docs for live RAG.';
 
 
 --
@@ -3077,16 +3150,16 @@ CREATE TABLE public.tenants (
     email_enabled boolean DEFAULT true NOT NULL,
     is_demo boolean DEFAULT false NOT NULL,
     demo_expires_at timestamp with time zone,
-    save_preferences_enabled boolean DEFAULT false NOT NULL,
+    save_preferences_enabled boolean DEFAULT true NOT NULL,
     preferences_instructions text,
     tts_voice text,
     tts_speed real,
     tts_soft boolean,
+    forward_phone text,
     tts_cheerful boolean,
     tts_formal boolean,
     tts_warm boolean,
-    tts_concise boolean,
-    forward_phone text
+    tts_concise boolean
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3124,7 +3197,7 @@ COMMENT ON COLUMN public.tenants.email_enabled IS 'Per-tenant email reminder cha
 -- Name: COLUMN tenants.save_preferences_enabled; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.tenants.save_preferences_enabled IS 'Opt-in gate for AI customer-preference capture. Default FALSE — owner turns it on in the Phone Assistant config.';
+COMMENT ON COLUMN public.tenants.save_preferences_enabled IS 'Preference capture enabled by default. Owners can opt out via the AI Persona dashboard.';
 
 
 --
@@ -3259,6 +3332,13 @@ COMMENT ON TABLE public.voice_sessions IS 'Per-call voice session state. RLS for
 
 
 --
+-- Name: ai_cost_events ai_cost_event_id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_cost_events ALTER COLUMN ai_cost_event_id SET DEFAULT nextval('public.ai_cost_events_ai_cost_event_id_seq'::regclass);
+
+
+--
 -- Name: communications_history communications_history_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3291,6 +3371,14 @@ ALTER TABLE ONLY public.opt_out_records ALTER COLUMN opt_out_record_id SET DEFAU
 --
 
 ALTER TABLE ONLY public.reminder_schedules ALTER COLUMN reminder_schedule_id SET DEFAULT nextval('public.reminder_schedules_id_seq'::regclass);
+
+
+--
+-- Name: ai_cost_events ai_cost_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_cost_events
+    ADD CONSTRAINT ai_cost_events_pkey PRIMARY KEY (ai_cost_event_id);
 
 
 --
@@ -3382,6 +3470,14 @@ ALTER TABLE ONLY public.consent_records
 
 
 --
+-- Name: customer_messages customer_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_messages
+    ADD CONSTRAINT customer_messages_pkey PRIMARY KEY (message_id);
+
+
+--
 -- Name: customers customers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3435,6 +3531,14 @@ ALTER TABLE ONLY public.entity_sync_map
 
 ALTER TABLE ONLY public.entity_sync_map
     ADD CONSTRAINT entity_sync_map_tenant_id_provider_entity_type_local_id_key UNIQUE (tenant_id, provider, entity_type, local_id);
+
+
+--
+-- Name: knowledge_suggestion knowledge_suggestion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_suggestion
+    ADD CONSTRAINT knowledge_suggestion_pkey PRIMARY KEY (id);
 
 
 --
@@ -3654,6 +3758,13 @@ ALTER TABLE ONLY public.voice_sessions
 
 
 --
+-- Name: ai_cost_events_tenant_month; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ai_cost_events_tenant_month ON public.ai_cost_events USING btree (tenant_id, created_at);
+
+
+--
 -- Name: idx_appointments_active; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3756,6 +3867,13 @@ CREATE INDEX idx_consent_records_customer_phone ON public.consent_records USING 
 --
 
 CREATE INDEX idx_consent_records_tenant_id ON public.consent_records USING btree (tenant_id);
+
+
+--
+-- Name: idx_customer_messages_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_customer_messages_tenant ON public.customer_messages USING btree (tenant_id, created_at DESC);
 
 
 --
@@ -4046,6 +4164,20 @@ CREATE INDEX idx_voice_sessions_tenant_id ON public.voice_sessions USING btree (
 
 
 --
+-- Name: knowledge_suggestion_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_suggestion_status_idx ON public.knowledge_suggestion USING btree (tenant_id, status);
+
+
+--
+-- Name: knowledge_suggestion_tenant_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX knowledge_suggestion_tenant_idx ON public.knowledge_suggestion USING btree (tenant_id);
+
+
+--
 -- Name: tenant_docs_embedding_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4179,6 +4311,14 @@ CREATE TRIGGER voice_sessions_auto_version AFTER INSERT OR DELETE OR UPDATE ON p
 
 
 --
+-- Name: ai_cost_events ai_cost_events_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_cost_events
+    ADD CONSTRAINT ai_cost_events_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
 -- Name: appointment_sync_map appointment_sync_map_appointment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4307,6 +4447,22 @@ ALTER TABLE ONLY public.consent_records
 
 
 --
+-- Name: customer_messages customer_messages_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_messages
+    ADD CONSTRAINT customer_messages_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(customer_id);
+
+
+--
+-- Name: customer_messages customer_messages_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_messages
+    ADD CONSTRAINT customer_messages_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
 -- Name: customers customers_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4328,6 +4484,14 @@ ALTER TABLE ONLY public.employees
 
 ALTER TABLE ONLY public.entity_sync_map
     ADD CONSTRAINT entity_sync_map_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
+-- Name: knowledge_suggestion knowledge_suggestion_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_suggestion
+    ADD CONSTRAINT knowledge_suggestion_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
 
 
 --
@@ -4679,6 +4843,19 @@ CREATE POLICY admin_bypass_users ON public.users USING ((NULLIF(current_setting(
 
 
 --
+-- Name: ai_cost_events; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_cost_events ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: ai_cost_events ai_cost_events_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY ai_cost_events_tenant_isolation ON public.ai_cost_events USING ((tenant_id = (current_setting('app.current_tenant_id'::text))::uuid));
+
+
+--
 -- Name: appointment_sync_map; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4762,6 +4939,19 @@ CREATE POLICY consent_records_tenant_isolation ON public.consent_records USING (
 
 
 --
+-- Name: customer_messages; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.customer_messages ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: customer_messages customer_messages_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY customer_messages_tenant_isolation ON public.customer_messages USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+
+
+--
 -- Name: customers; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4797,6 +4987,26 @@ ALTER TABLE public.entity_sync_map ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY feedback_tenant_isolation ON public.user_feedback USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+
+
+--
+-- Name: knowledge_suggestion; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.knowledge_suggestion ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: knowledge_suggestion knowledge_suggestion_admin_bypass; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY knowledge_suggestion_admin_bypass ON public.knowledge_suggestion USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+
+
+--
+-- Name: knowledge_suggestion knowledge_suggestion_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY knowledge_suggestion_tenant_isolation ON public.knowledge_suggestion USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
 
 
 --
@@ -5078,5 +5288,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ZWgeFnCT9Tw7T5f0TP7YrzbBybcOVEOab3pdvke2CzPpB7L56CdFQLcwzCE8pJJ
+\unrestrict nGGa5hMg1lk6Z6i1kEXMndKy9S2Fh1BcgAsYC8fSnOWroWxnAENRjF06WNZGCtp
 
