@@ -1730,6 +1730,7 @@ export function registerAgentToolRoutes(
              WHERE a.appointment_id = $1
                AND a.tenant_id = $2
                AND a.customer_id = c.customer_id
+               AND c.tenant_id = $2
                AND c.phone = $3
                AND a.status = 'scheduled'
                AND a.start_time > NOW()
