@@ -137,7 +137,7 @@ export async function activatePhone(
     ]);
 
     let purchasedId: string | null = null;
-    let purchasedNumber: string | null = null;
+    let _purchasedNumber: string | null = null;
 
     try {
       const available = await telnyx.client.searchAvailable(areaCode);
@@ -150,7 +150,7 @@ export async function activatePhone(
       }
 
       const ordered = await telnyx.client.orderNumber(available.phone_number);
-      purchasedNumber = ordered.phone_number;
+      _purchasedNumber = ordered.phone_number;
 
       // Resolve the canonical phone_numbers resource id. The order-line id from
       // number_orders is not guaranteed to equal it; using the wrong id makes
@@ -277,7 +277,10 @@ export async function deactivatePhone(
       tenant_id: tenantId,
       warnings,
       ...(releaseError !== undefined
-        ? { release_error: releaseError, release_phone_number_id: telnyx_phone_number_id ?? undefined }
+        ? {
+            release_error: releaseError,
+            release_phone_number_id: telnyx_phone_number_id ?? undefined,
+          }
         : {}),
     };
   } finally {

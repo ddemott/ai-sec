@@ -104,9 +104,9 @@ async function bookWithScheduling(params: {
 }) {
   const res = await root.query(
     `SELECT * FROM book_with_scheduling_atomic(
-       $1::UUID, $2::TEXT, NULL, 'Test', 'call-buf', NULL,
+       $1::UUID, $2::TEXT, NULL::TEXT, 'Test'::TEXT, 'call-buf'::TEXT, NULL::TEXT,
        NULL::TIMESTAMPTZ, NULL::TIMESTAMPTZ, $3::TIMESTAMPTZ, $4::TIMESTAMPTZ,
-       '{}'::TEXT[], '{}'::TEXT[], NULL::UUID, NULL, NULL, 30, $5::INTEGER
+       '{}'::TEXT[], '{}'::TEXT[], NULL::UUID, NULL::TEXT, NULL::TEXT, 30::INTEGER, $5::INTEGER
      )`,
     [
       params.tenant_id,
@@ -129,8 +129,8 @@ async function bookAppointmentAtomic(params: {
 }) {
   const res = await root.query(
     `SELECT * FROM book_appointment_atomic(
-       $1::UUID, $2::UUID, NULL, $3::TIMESTAMPTZ, $4::TIMESTAMPTZ, 'Test', 'call-buf',
-       NULL, NULL, NULL::UUID, $5::TEXT, 'Cust', $6::INTEGER
+       $1::UUID, $2::UUID, NULL::UUID, $3::TIMESTAMPTZ, $4::TIMESTAMPTZ, 'Test'::TEXT, 'call-buf'::TEXT,
+       NULL::TEXT, NULL::TEXT, NULL::UUID, $5::TEXT, 'Cust'::TEXT, $6::INTEGER
      )`,
     [
       params.tenant_id,
