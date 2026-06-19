@@ -33,6 +33,10 @@ export function Step7WebsiteScan({ tenantId }: Props) {
                 question: item.question || q.question,
                 answer: item.answer,
                 category: q.category,
+                // Tag provenance so the KB shows a "from your website" marker
+                // (distinct from manually-typed answers). Still pre-fills the
+                // questionnaire — KnowledgeBaseView accepts this source.
+                source: 'website-scan',
               });
               filled++;
             }

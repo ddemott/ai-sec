@@ -43,12 +43,15 @@ function PolicyQuestionField({
   placeholder,
   savedAnswer,
   savedId,
+  fromWebsite = false,
   onSave,
 }: {
   question: string;
   placeholder: string;
   savedAnswer: string;
   savedId: string | null;
+  /** True when this saved answer was pre-filled by the website scan (source='website-scan'). */
+  fromWebsite?: boolean;
   onSave: (answer: string, existingId: string | null) => Promise<string | null>;
 }) {
   const [value, setValue] = useState(savedAnswer);
@@ -141,11 +144,16 @@ function PolicyQuestionField({
           )}
           {/* Persistent marker for an answer loaded from the DB (answered in a
               prior session) — without this, a previously-answered question looks
-              identical to a blank one, since savedAt only reflects this session. */}
+              identical to a blank one, since savedAt only reflects this session.
+              A website-scan-sourced answer gets a distinct "from your website"
+              marker so the owner knows its provenance (vs typed by hand). */}
           {status === 'idle' && !savedAt && savedId && value.trim().length > 0 && (
-            <span className="flex items-center gap-1 text-xs opacity-50" style={{ color: 'var(--success)' }}>
-              <CheckCircle2 className="w-3 h-3" />
-              Answered
+            <span
+              className="flex items-center gap-1 text-xs opacity-50"
+              style={{ color: fromWebsite ? 'var(--accent-soft)' : 'var(--success)' }}
+            >
+              {fromWebsite ? <Globe className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+              {fromWebsite ? 'From your website' : 'Answered'}
             </span>
           )}
         </div>
@@ -165,7 +173,7 @@ function PolicyCategory({
 }: {
   category: string;
   questions: typeof POLICY_QUESTIONS;
-  savedAnswers: Map<string, { id: string; answer: string }>;
+  savedAnswers: Map<string, { id: string; answer: string; source?: string }>;
   onSave: (
     question: string,
     answer: string,
@@ -211,6 +219,7 @@ function PolicyCategory({
                 placeholder={q.placeholder}
                 savedAnswer={saved?.answer || ''}
                 savedId={saved?.id || null}
+                fromWebsite={saved?.source === 'website-scan'}
                 onSave={(answer, existingId) => onSave(q.question, answer, existingId, q.category)}
               />
             );
@@ -453,7 +462,9 @@ export default function KnowledgeBaseView() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showUnansweredOnly, setShowUnansweredOnly] = useState(false);
-  const [savedAnswers, setSavedAnswers] = useState<Map<string, { id: string; answer: string }>>(
+  const [savedAnswers, setSavedAnswers] = useState<
+    Map<string, { id: string; answer: string; source?: string }>
+  >(
     new Map()
   );
 
@@ -467,13 +478,15 @@ export default function KnowledgeBaseView() {
       const data = await Api.knowledge.list(tenantId);
       setDocs(data);
 
-      // Pre-fill questionnaire from saved entries
-      const answers = new Map<string, { id: string; answer: string }>();
+      // Pre-fill questionnaire from saved entries. Accept both the manual
+      // source ('policy-questionnaire') and website-scan-sourced answers so a
+      // scanned answer pre-fills AND carries its provenance for the badge.
+      const answers = new Map<string, { id: string; answer: string; source?: string }>();
       for (const doc of data) {
-        if (doc.source === 'policy-questionnaire' && doc.title) {
+        if ((doc.source === 'policy-questionnaire' || doc.source === 'website-scan') && doc.title) {
           const answerMatch = doc.content.match(/^Q: .+\nA: ([\s\S]+)$/);
           const answer = answerMatch ? answerMatch[1] : doc.content;
-          answers.set(doc.title, { id: doc.tenant_doc_id, answer });
+          answers.set(doc.title, { id: doc.tenant_doc_id, answer, source: doc.source });
         }
       }
       setSavedAnswers(answers);
@@ -506,13 +519,24 @@ export default function KnowledgeBaseView() {
     if (!tenantId) return null;
     try {
       if (existingId) {
+        // update resets source to the 'policy-questionnaire' default server-side;
+        // once an owner edits a scanned answer it's owner-authored, so drop the
+        // website badge to match.
         await Api.knowledge.update(existingId, tenantId, { question, answer, category });
-        setSavedAnswers((prev) => new Map(prev).set(question, { id: existingId, answer }));
+        setSavedAnswers((prev) =>
+          new Map(prev).set(question, { id: existingId, answer, source: 'policy-questionnaire' })
+        );
         return existingId;
       } else {
         const res = await Api.knowledge.add(tenantId, { question, answer, category });
         if (res.success) {
-          setSavedAnswers((prev) => new Map(prev).set(question, { id: res.tenant_doc_id, answer }));
+          setSavedAnswers((prev) =>
+            new Map(prev).set(question, {
+              id: res.tenant_doc_id,
+              answer,
+              source: 'policy-questionnaire',
+            })
+          );
           return res.tenant_doc_id;
         }
       }
@@ -942,6 +966,7 @@ export default function KnowledgeBaseView() {
                     (d) =>
                       d.source &&
                       d.source !== 'policy-questionnaire' &&
+                      d.source !== 'website-scan' &&
                       d.source !== CUSTOM_QUESTION_SOURCE
                   );
                   const byFile = uploadedDocs.reduce<
@@ -1027,7 +1052,9 @@ export default function KnowledgeBaseView() {
                                 <FileText className="w-3 h-3" />
                                 {doc.source === 'policy-questionnaire'
                                   ? 'Policy Q&A'
-                                  : doc.source || 'Manual'}
+                                  : doc.source === 'website-scan'
+                                    ? 'From website'
+                                    : doc.source || 'Manual'}
                               </div>
                               {doc.section && (
                                 <Badge variant="secondary" className="text-[9px] py-0 px-1.5">
