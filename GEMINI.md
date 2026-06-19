@@ -43,7 +43,7 @@ Telnyx (Carrier & SIP Trunk) ──> LiveKit Cloud (SIP Ingress)
 ### Technology Matrix
 
 - **Voice & AI Worker** (`/agent`): Deployed as `ai-sec-agent` on Railway. Powered by LiveKit Agents (Node SDK) using Deepgram Nova-3 for Speech-to-Text (STT), OpenAI GPT-4o-mini for LLM, and xAI Grok TTS (`ara` default voice) for Text-to-Speech (TTS). Fastify `/agent-tools/*` provides the tool runtime.
-- **Backend API** (`/src`): Fastify v4 server handling JWT auth, business logic, RLS isolation context, integrations, and scheduler rules. Deployed as `ai-sec-backend` on Railway.
+- **Backend API** (`/src`): Fastify v5 server handling JWT auth, business logic, RLS isolation context, integrations, and scheduler rules. Deployed as `ai-sec-backend` on Railway.
 - **Frontend Dashboard** (`/dashboard`): Next.js 14 (App Router) + React 18, Styled with Tailwind CSS 3.4, icons via Lucide. Deployed as `dashboard-production-cee3` on Railway.
 - **Database**: PostgreSQL + pgvector (handling vector embeddings) with Row Level Security (RLS) enabled on all 20 data tables.
 

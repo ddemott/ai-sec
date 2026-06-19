@@ -93,14 +93,10 @@ export function createQueryExpander(apiKey: string) {
         }),
         signal: controller.signal,
       });
-    } catch (err: unknown) {
+    } catch {
       // Network error / timeout: fall back to the raw query rather than fail
       // the call. The raw query still retrieves most topics; only the hardest
       // vocabulary-gap case (address) degrades.
-      clearTimeout(timeout);
-      if (err instanceof Error && err.name === 'AbortError') {
-        return trimmed;
-      }
       return trimmed;
     } finally {
       clearTimeout(timeout);
