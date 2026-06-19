@@ -159,8 +159,9 @@ export function checkMigrationTablesInBaseline(
   const createRe =
     /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi;
   const dropRe = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi;
+  // Capture BOTH sides of a rename: the old name is gone, the new name must exist.
   const renameRe =
-    /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+RENAME\s+TO/gi;
+    /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+RENAME\s+TO\s+(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi;
 
   // Strip SQL comments first — a comment like "... CREATE TABLE IF NOT EXISTS,
   // no backfill" otherwise mis-parses the keyword "if" as a table name.
@@ -171,7 +172,10 @@ export function checkMigrationTablesInBaseline(
     const sql = stripComments(raw);
     for (const m of sql.matchAll(createRe)) created.add(m[1].toLowerCase());
     for (const m of sql.matchAll(dropRe)) gone.add(m[1].toLowerCase());
-    for (const m of sql.matchAll(renameRe)) gone.add(m[1].toLowerCase());
+    for (const m of sql.matchAll(renameRe)) {
+      gone.add(m[1].toLowerCase()); // old name renamed away
+      created.add(m[2].toLowerCase()); // new name must exist in baseline
+    }
   }
   // schema_migrations is created by setup-db.sh, not a migration — and is always
   // in the dump — so it never needs this guard either way.

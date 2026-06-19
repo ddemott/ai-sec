@@ -24,9 +24,19 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ADMIN_URL="${DATABASE_URL:-postgres://postgres:postgres@localhost:5433/postgres}"
 OUT="$ROOT_DIR/supabase/baseline.sql"
 TMP_DB="baseline_gen_tmp"
-# Swap the database name in the connection string for the temp DB.
-BASE_URL="${ADMIN_URL%/*}"
-TMP_URL="$BASE_URL/$TMP_DB"
+# Swap the database name in the connection string for the temp DB, preserving any
+# ?query params (e.g. ?sslmode=require on managed Postgres) so the temp URL stays
+# connectable.
+QUERY=""
+ADMIN_NOQ="$ADMIN_URL"
+case "$ADMIN_URL" in
+  *\?*)
+    QUERY="?${ADMIN_URL#*\?}"
+    ADMIN_NOQ="${ADMIN_URL%%\?*}"
+    ;;
+esac
+BASE_URL="${ADMIN_NOQ%/*}"
+TMP_URL="$BASE_URL/$TMP_DB$QUERY"
 
 if ! command -v pg_dump >/dev/null 2>&1; then
   echo "Error: pg_dump is not installed. Install the PostgreSQL client first." >&2

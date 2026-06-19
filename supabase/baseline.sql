@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict nGGa5hMg1lk6Z6i1kEXMndKy9S2Fh1BcgAsYC8fSnOWroWxnAENRjF06WNZGCtp
+\restrict fffPn10i3mySg3bkgJ7VTgCZO1cgTB0KEZw72DnwyrjSWDQ9Btfz8dU4EwktHUR
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2688,6 +2688,8 @@ CREATE TABLE public.knowledge_suggestion (
     updated_at timestamp with time zone DEFAULT now()
 );
 
+ALTER TABLE ONLY public.knowledge_suggestion FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: TABLE knowledge_suggestion; Type: COMMENT; Schema: public; Owner: -
@@ -4852,7 +4854,7 @@ ALTER TABLE public.ai_cost_events ENABLE ROW LEVEL SECURITY;
 -- Name: ai_cost_events ai_cost_events_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY ai_cost_events_tenant_isolation ON public.ai_cost_events USING ((tenant_id = (current_setting('app.current_tenant_id'::text))::uuid));
+CREATE POLICY ai_cost_events_tenant_isolation ON public.ai_cost_events USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
 
 
 --
@@ -5288,5 +5290,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict nGGa5hMg1lk6Z6i1kEXMndKy9S2Fh1BcgAsYC8fSnOWroWxnAENRjF06WNZGCtp
+\unrestrict fffPn10i3mySg3bkgJ7VTgCZO1cgTB0KEZw72DnwyrjSWDQ9Btfz8dU4EwktHUR
 
