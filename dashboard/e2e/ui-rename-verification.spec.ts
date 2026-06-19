@@ -17,36 +17,57 @@
 import { test, expect } from './helpers/test';
 import type { Page } from '@playwright/test';
 import { Pool } from 'pg';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import { registerFreshTenant, cleanTenantData, BACKEND_URL } from './helpers/fixtures';
 
-const DYNATIRE_TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 
-// Most tests in this spec assume DynaTire is "fully configured" — the
-// inline comment at line ~136 explicitly notes the expectation. Since
-// 2026-05-18 seed-strip-stage-b moved business config out of seed.sql,
-// bootstrap it here so the My Team / Working Days / template-picker
+// Most tests in this spec assume a "fully configured" tenant — the
+// inline comment at line ~136 explicitly notes the expectation. We register
+// a fresh tenant and seed a basic employee so My Team / Working Days / etc.
 // surfaces have something to render against.
 let pool: Pool;
+let freshTenantId: string;
+
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
-  await seedDynaTireBusinessConfig(pool);
+
+  const { request: pr } = await import('@playwright/test');
+  const ctx = await pr.newContext({ ignoreHTTPSErrors: true });
+  const ft = await registerFreshTenant(ctx);
+  freshTenantId = ft.tenantId;
+  const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${ft.token}` };
+  // Seed one employee, service, and resource so the Home "Create a new booking"
+  // button is enabled (DashboardHome disables it when any of the three is empty).
+  await ctx.post(`${BACKEND_URL}/employees/create`, {
+    headers: hdr,
+    data: { tenant_id: freshTenantId, first_name: 'Test', last_name: 'Employee' },
+  });
+  await ctx.post(`${BACKEND_URL}/services/create`, {
+    headers: hdr,
+    data: { tenant_id: freshTenantId, name: 'Test Service', duration_minutes: 60 },
+  });
+  await ctx.post(`${BACKEND_URL}/resources/create`, {
+    headers: hdr,
+    data: { tenant_id: freshTenantId, name: 'Test Resource' },
+  });
+  await ctx.dispose();
 });
+
 test.afterAll(async () => {
-  await clearDynaTireBusinessConfig(pool);
+  await cleanTenantData(pool, freshTenantId);
   await pool.end();
 });
 
-async function landOnDynatireDashboard(page: Page) {
+async function landOnTestTenantDashboard(page: Page) {
   // Super-admin auth state can be left scoped to whichever tenant the
   // previous spec file ended on, so a bare goto('/dashboard') may land
   // on the wrong tenant. Force the All-Businesses grid via the URL,
-  // pick DynaTire by its tenant-card testid (sets activeTenantId), then
-  // click Home so the main view leaves the tile grid and renders the
+  // pick the test tenant by its tenant-card testid (sets activeTenantId),
+  // then click Home so the main view leaves the tile grid and renders the
   // tenant-scoped dashboard.
   await page.goto('/dashboard?tab=all-businesses');
-  const tenantBtn = page.getByTestId(`tenant-card-${DYNATIRE_TENANT_ID}`);
-  await tenantBtn.waitFor({ state: 'visible', timeout: 5000 });
+  const tenantBtn = page.getByTestId(`tenant-card-${freshTenantId}`);
+  await tenantBtn.waitFor({ state: 'visible', timeout: 10000 });
   await tenantBtn.click();
   await page.waitForTimeout(400);
   await page
@@ -55,23 +76,19 @@ async function landOnDynatireDashboard(page: Page) {
     .click();
   await page.waitForTimeout(800);
 
-  // DynaTire can sometimes have the wizard welcome dialog auto-open or left open
-  // depending on run order / previous tests. Dismiss it so the rename verification
-  // tests can reliably click the main tabs (My Team, etc.).
-  const welcomeDialog = page.getByRole('dialog', { name: /welcome/i });
-  if (await welcomeDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await page
-      .getByRole('button', { name: /set up later|Close wizard|I'll set up later/i })
-      .first()
-      .click()
-      .catch(() => {});
+  // Dismiss any wizard dialog (the new tenant may auto-open the welcome modal).
+  const dismiss = page
+    .locator('button:has-text("Maybe later"), button:has-text("Dismiss"), button:has-text("Skip"), button:has-text("set up later"), button:has-text("Close wizard"), button:has-text("I\'ll set up later")')
+    .first();
+  if (await dismiss.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await dismiss.click().catch(() => {});
     await page.waitForTimeout(500);
   }
 }
 
 test.describe('UI rename — A1 + B2', () => {
   test('owner sees the merged Setup tab + Phone Assistant', async ({ page }) => {
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
 
     // IA merge (2026-06-03): My Business + My Team + Business Settings collapsed
     // into one "Setup" tab. Setup + Phone Assistant present as advanced tabs.
@@ -84,7 +101,7 @@ test.describe('UI rename — A1 + B2', () => {
   });
 
   test('B2: Setup sub-tab reads "Working Days", not "Shifts"', async ({ page }) => {
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
 
     await page
       .getByRole('tab', { name: /^Setup$/ })
@@ -99,7 +116,7 @@ test.describe('UI rename — A1 + B2', () => {
   });
 
   test('B3: Knowledge Base lives under Phone Assistant, not Setup', async ({ page }) => {
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
 
     // Under Phone Assistant: Knowledge Base sub-tab is present.
     await page
@@ -119,7 +136,7 @@ test.describe('UI rename — A1 + B2', () => {
   });
 
   test('C3: "New Booking" button on Home opens the Quick Book panel', async ({ page }) => {
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
     // Home is the default landing after tenant select — no explicit nav.
     const newBookingBtn = page.getByRole('button', { name: /Create a new booking/i });
     await expect(newBookingBtn).toBeVisible();
@@ -138,7 +155,7 @@ test.describe('UI rename — A1 + B2', () => {
 
 test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
   test('Setup Assistant from Setup goes directly to mode chooser (no welcome)', async ({ page }) => {
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
 
     await page
       .getByRole('tab', { name: /^Setup$/ })
@@ -149,7 +166,7 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
     // The Setup Assistant button lives in the FolderTabBar right slot.
     // When launched from My Business it intentionally skips the welcome
     // screen and goes straight to the mode chooser (see MyBusinessView).
-    await page.getByRole('button', { name: /Setup Assistant/i }).click();
+    await page.getByRole('button', { name: 'Setup Assistant', exact: true }).click();
     await page.waitForTimeout(500);
 
     // Mode chooser visible immediately (no welcome gate from this launch point).
@@ -168,7 +185,7 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
   test('Setup Assistant from Setup can be closed cleanly', async ({ page }) => {
     // When launched from the Setup tab the chooser appears directly.
     // Closing it must exit cleanly with no leftover modals.
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
 
     await page
       .getByRole('tab', { name: /^Setup$/ })
@@ -176,7 +193,7 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
       .click();
     await page.waitForTimeout(500);
 
-    await page.getByRole('button', { name: /Setup Assistant/i }).click();
+    await page.getByRole('button', { name: 'Setup Assistant', exact: true }).click();
     await page.waitForTimeout(500);
 
     await expect(page.getByText('How is your business set up?')).toBeVisible();
@@ -192,7 +209,7 @@ test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
 
 test.describe("Business Type move — Settings hosts it, AI Persona doesn't", () => {
   test('Business Settings has the new "Business type" card', async ({ page }) => {
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
 
     // Open the profile dropdown, then Business Settings.
     // IA merge: Business Settings is now the 'business-settings' sub-tab of
@@ -207,7 +224,7 @@ test.describe("Business Type move — Settings hosts it, AI Persona doesn't", ()
   });
 
   test('AI Persona page no longer shows the template grid', async ({ page }) => {
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
 
     await page
       .getByRole('tab', { name: /^Phone Assistant$/ })
@@ -229,7 +246,7 @@ test.describe("Business Type move — Settings hosts it, AI Persona doesn't", ()
   test('Apply-to-my-business is guarded by a confirmation modal (cancel exits cleanly)', async ({
     page,
   }) => {
-    await landOnDynatireDashboard(page);
+    await landOnTestTenantDashboard(page);
 
     // IA merge: Business Settings is now the 'business-settings' sub-tab of
     // Setup. Route there directly (deterministic; exercises the merged routing).
@@ -240,8 +257,8 @@ test.describe("Business Type move — Settings hosts it, AI Persona doesn't", ()
     await page.getByRole('button', { name: /Change business type/i }).click();
     await page.waitForTimeout(500);
 
-    // Picker modal: pick a template guaranteed-different from DynaTire's
-    // current one ("Mobile Tire Shop"). Salon is beauty/personal-care,
+    // Picker modal: pick a template guaranteed-different from the fresh tenant's
+    // current one ("automotive"). Salon is beauty/personal-care,
     // unambiguously not the active template, so the preview's Apply
     // button is enabled (not "Already applied").
     const candidateCard = page.getByRole('dialog').getByRole('button', { name: /Salon/i }).first();
@@ -262,7 +279,7 @@ test.describe("Business Type move — Settings hosts it, AI Persona doesn't", ()
 
     // Cancel — no write, no visible change to the page after the modals
     // close. We do NOT click "Change business type" inside the guard,
-    // because that would rewrite the DynaTire tenant config.
+    // because that would rewrite the test tenant config.
     await page.getByRole('button', { name: /^Cancel$/ }).click();
     await page.waitForTimeout(400);
   });

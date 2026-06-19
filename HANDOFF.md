@@ -1,46 +1,61 @@
-# Session Handoff — 2026-06-12
+# HANDOFF — 2026-06-18
 
-Pick-up notes for the next session / agent. Source of truth for the task queue
-is `docs/TODO.md`; strategy is `docs/STRATEGY.md` + `docs/COMPETITOR_WEAKPOINTS.md`.
+## Deploy Rules (always)
 
-## Git state RIGHT NOW
+- All 3 Railway services deploy from `main` only — branch push deploys nothing
+- Shipping = merge to main via PR with 4 CI jobs green
+- Merge command: `gh pr merge <N> --squash --delete-branch --admin`
 
-- **`main`** (`c4585c7`) — deployed to prod. Has: live call-transfer + transcript capture, the simulation harness, baseline.sql fix + drift guard, gap #1 (call outcome/link/summary), gap #2 (real call analytics + tests).
-- **Branch `feat/remove-competitor-crms`** (ahead of main, **NOT pushed/merged**) — removes Jobber/ServiceTitan/HubSpot CRM integrations (keeps Square); + this `HANDOFF.md`; + a 2026-06-12 docs-sync pass (CLAUDE.md counts/modules, `SECRETARYHQ_FEATURES.md` analytics ✅, `docs/TODO.md` gap #2 done). Build + 1770 backend + 747 dashboard tests green; CLAUDE.md drift detector clean. **Next action: open its PR → main.**
-- Prod deploys from **`main` via MERGE** (not branch push). Merge = instant deploy of all 3 Railway services. No migration pending for the CRM branch.
+---
 
-## Local dev stack (for `simulate` / E2E)
+## Open PR: #36 `feat/ai-cost-meter`
 
-- Backend on `https://localhost:4001` (self-signed). Docker Postgres in container `ai-sec-db` on `localhost:5433`. After backend code changes: `kill $(lsof -ti :4001); npm run build && nohup node dist/src/index.js > /tmp/sim-backend.log 2>&1 &`.
-- On-demand verify: `./scripts/simulate.sh status --env prod|local [--deep]` · `tools` (agent-tools journey) · `call` (browser voice test, no phone).
-- The running backend may be stale after the CRM deletion — rebuild+restart before using it.
+**Status at handoff**: Backend ✅ Dashboard ✅ Agent ✅ E2E ⏳ IN_PROGRESS
 
-## What shipped this session (all on `main`, deployed)
+**What ships:**
 
-1. **Live call-transfer** (`transfer_call`, SIP REFER to owner cell) + **transcript capture** (PR #7).
-2. **Prod DB** migrations applied + `schema_migrations` reconciled.
-3. **`scripts/simulate.sh`** — system simulation/health harness (replaced dead `qa-live-test.py`).
-4. **baseline.sql fix** — was stale (missing `is_demo`/`tts_*`/`forward_phone`), broke every rebuilt DB + E2E; regenerated via `pg_dump` + self-maintaining drift guard (`verify-schema-alignment`).
-5. **Gap #1** — agent sends call `outcome` + `appointment_id` (call→appointment link) + bounded/failsafe post-call summary to `voice-session-end`.
-6. **Gap #2** — real call analytics: `GET /analytics/stats` + `/analytics/calls`; dashboard Volume/Conversion/Abandonment + "Why Callers Reached Out" WHY panel. Backend + component + E2E tests (all ran green).
-7. **Strategy docs** — `docs/STRATEGY.md`, `docs/COMPETITOR_WEAKPOINTS.md`, `SECRETARYHQ_FEATURES.md`.
-8. **CRM deletion** (on branch, not merged) — see git state above.
+- `ai_cost_events` table (migration `20260618000001_ai_cost_events.sql` — **already applied to prod**)
+- Agent subscribes to `SessionUsageUpdated` → POSTs LLM/STT/TTS usage to `POST /agent-tools/record-ai-cost` at call end
+- `GET /analytics/ai-cost` — month-to-date aggregation by provider/model
+- Dashboard Analytics tab: "AI Usage (this month)" table card
 
-## NEXT — task queue (fresh branch off main, one PR each)
+**Action**: merge when all 4 CI green + no unresolved review threads
 
-1. **Open the PR for `feat/remove-competitor-crms`** ← immediate.
-2. **(cosmetic) Clean stale comments** in the shared CRM layer (~9 files: `crmRouteScaffold`, `tokenManagement`, `syncMapHelpers`, `oauthCallbackFactory`, `oauthStateJwt`, `syncPaginate`, `crmDisconnect`, `crmSyncStatus`, `jsonContentTypeParser`) — docstrings still name the deleted Jobber/HubSpot/ServiceTitan. Non-breaking.
-3. **Richer WHY outcome classification** — agent classifies _why_ a non-booking happened (price / no-availability / wrong-service / after-hours), not just booked/transferred/message. Unlocks the high-value reporting cut ("14 callers wanted Saturday slots you don't offer"). The gap #2 WHY panel + owner copilot consume it.
-4. **Stripe — verify ALL paths** — built (`src/routes/billing.ts`), never tested. Use Stripe **test mode** (test keys + Stripe CLI webhook replay): checkout → webhook signature → subscription activates → payment*failed → cancellation → plan gating. Add a Stripe path-check to `simulate`. **Blocked on Dale: test account/keys** (drop `sk_test*…`in`/tmp/stripe`).
-5. **Twilio SMS delivery receipts** + **communications-history** stub (lower priority).
+---
 
-## Blocked on Dale (can't be done by an agent)
+## Next Code Items
 
-- **Stripe test account + keys** (for #4 above).
-- **Railway env check** — needs a fresh team token (`/tmp/rwtok`). Verify `BACKEND_URL` on `ai-sec-agent` (silent-failure risk for the shipped voice features), `TWILIO_*` (reminder SMS runs a MOCK in prod without it), `EMAIL_*` (email runs a mock), + the known-unset `METRICS_TOKEN`/`SENTRY_DSN`/`BETTER_STACK_TOKEN`/Stripe keys.
-- **Live PSTN call** — needs a 2nd phone (different carrier) → `+1 630-822-9086`; validates the unverified inbound path + transcript landing. Plus enable **call transfer/REFER on the Telnyx SIP Connection** + set the **forward number** on dashboard AI Persona.
-- **Rotate** the Railway team token created 2026-06-12 (`400a1ee0…`) — it was pasted in a session.
+**P1 (pick next):**
 
-## Strategy in one breath (full: `docs/STRATEGY.md`)
+1. Dashboard "Send self-service links" button — `dashboard/components/AppointmentDetailPanel.tsx`
+2. E2E: "book → SMS → link cancels/reschedules" + negative cases (expired token, wrong tenant)
+3. AI cost phase 2 — instrument `callSummary.ts` + `knowledgeIngestion.ts` + `knowledge.ts` for remaining token costs
 
-Receptionist-first; **cross-platform / no-platform**; **non-trades verticals** (salons/auto/fitness/food) where no incumbent bundles a receptionist. **Freeze→removed** the 3 competitor CRMs (their vendors ship native receptionists); **Square stays** (payments partner). Build the **operational system-of-record, not a full CRM**; expand into add-ons later, per demand (build the safe ones, partner the regulated — payments→Square, payroll→Gusto). **Stripe = our SaaS billing only** (no service-payment processing). **Pricing (deferred):** value-aligned **volume** — meter on bookings/calls, never seats or minutes. **Heuristic:** a vendor's money model predicts if it competes — SaaS-seat-bundlers compete, transaction/volume/infra vendors partner. Captured ideas: owner AI copilot, website-scan onboarding, restaurant vertical add-on, WHY-reporting depth.
+**P2:**
+
+- Deliberate-fail PR to verify CI gate blocks merge end-to-end
+- Load test booking path (`pool max=10`)
+
+---
+
+## User Actions Pending (not code)
+
+- Stripe bank account (weekend)
+- Stripe test round-trip: `stripe listen --forward-to localhost:4001/billing/webhook`
+- Dial `+1 630-866-1960` from different carrier while watching `listRooms()` — PSTN verify
+- Enable Telnyx REFER on SIP Connection `livekit-outbound`
+- Enable "Wait for CI" on 3 Railway services
+- Set `forward_phone` on Beth's tenant (Phone Assistant → AI Persona)
+- Set `BETTER_STACK_TOKEN` + `SENTRY_DSN` on Railway (non-blocking)
+
+---
+
+## Key Facts
+
+- Prod: `https://ai-sec-production.up.railway.app/`
+- Phone: `+1 630-866-1960` (Telnyx, tenant Thinking Hammer LLC `d5e3c6a1-…`)
+- Logins: `admin@secretaryhq.com` / `daledemott@gmail.com` / `bella@bellashair.com` — password `/ password`
+- Local DB: port 5433
+- Prod DB URL: encrypted at `~/.claude/projects/-home-dale-projects-secretary-hq/memory/db_url.enc`
+  - Decrypt: `openssl enc -d -aes-256-cbc -pbkdf2 -base64 -pass pass:PASSWORD -in <file>`
+- Full gap inventory: `GAPS.md` / `TODO_GAPS.md`

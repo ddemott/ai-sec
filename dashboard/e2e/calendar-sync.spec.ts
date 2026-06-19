@@ -43,21 +43,16 @@ import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import {
+  registerFreshTenant,
+  seedBookingScenario,
+  cleanTenantData,
+  isoDateDaysFromNow,
+  BACKEND_URL,
+} from './helpers/fixtures';
 
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-// Log in as the DynaTire tenant admin so the JWT carries
-// tenant_id=DYNATIRE_ID. Several routes (DELETE /appointments/:id, PUT
-// /customers/:id) read tenant_id from JWT context only — they don't
-// have a super-admin override path. Logging in as the platform admin
-// (admin@secretaryhq.com) would yield a JWT with the super-admin tenant
-// and the WHERE id = $1 AND tenant_id = $2 lookup would 404 against
-// rows in the DynaTire tenant.
-const TENANT_ADMIN_EMAIL = 'admin@dynatire.com';
-const TENANT_ADMIN_PASSWORD = 'password';
-const FUTURE_DATE = '2026-06-22';
-const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
+const FUTURE_DATE = isoDateDaysFromNow(7);
 
 function readAgentSecret(): string {
   if (process.env.AGENT_SECRET) return process.env.AGENT_SECRET;
@@ -74,6 +69,8 @@ function readAgentSecret(): string {
 const AGENT_SECRET = readAgentSecret();
 
 let pool: Pool;
+let freshTenant: { tenantId: string; token: string; email: string };
+let seededScenario: { employeeIds: string[]; resourceIds: string[]; customerId: string };
 
 function uniqueTag(): string {
   return `e2e-sync-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -122,43 +119,31 @@ async function recorderAvailable(req: APIRequestContext): Promise<boolean> {
   }
 }
 
-async function loginAsTenantAdmin(req: APIRequestContext): Promise<string> {
-  const res = await req.post(`${BACKEND_URL}/login`, {
-    data: { email: TENANT_ADMIN_EMAIL, password: TENANT_ADMIN_PASSWORD },
-    headers: { 'Content-Type': 'application/json' },
-  });
-  const body = await res.json();
-  if (!body?.token) throw new Error(`Login failed: ${JSON.stringify(body)}`);
-  return body.token as string;
-}
-
-async function findEmployeeIdByName(name: string): Promise<string> {
-  const r = await pool.query(
-    'SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1',
-    [DYNATIRE_ID, name]
-  );
-  if (!r.rows[0]) throw new Error(`Employee "${name}" not found in DynaTire seed`);
-  return r.rows[0].employee_id;
-}
-
-async function findResourceIdByName(name: string): Promise<string> {
-  const r = await pool.query(
-    'SELECT resource_id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1',
-    [DYNATIRE_ID, name]
-  );
-  if (!r.rows[0]) throw new Error(`Resource "${name}" not found in DynaTire seed`);
-  return r.rows[0].resource_id;
-}
-
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
-  // 2026-05-18 seed-strip-stage-b: DynaTire's business config moved
-  // out of supabase/seed.sql. Bootstrap it so the find* helpers and
-  // every booking-side-effect test in this spec has rows to act on.
-  await seedDynaTireBusinessConfig(pool);
+  // Register a fresh tenant and seed booking scenario so every test in
+  // this spec has employees, resources, and shifts to act on — no
+  // dependency on any seed data.
+  const { request: playwrightRequest } = await import('@playwright/test');
+  const ctx = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+  freshTenant = await registerFreshTenant(ctx);
+  seededScenario = await seedBookingScenario(ctx, pool, freshTenant.token, freshTenant.tenantId, {
+    employees: ['Test Tech'],
+    resources: ['Test Bay'],
+    shiftDates: [
+      FUTURE_DATE,
+      ...Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(FUTURE_DATE);
+        d.setDate(d.getDate() + i + 1);
+        return d.toISOString().slice(0, 10);
+      }),
+    ],
+  });
+  await ctx.dispose();
 });
+
 test.afterAll(async () => {
-  await clearDynaTireBusinessConfig(pool);
+  await cleanTenantData(pool, freshTenant.tenantId);
   await pool.end();
 });
 
@@ -201,17 +186,13 @@ test('appointment-create dispatches all sync providers (calendar + Square)', asy
   let scheduleSeeded = false;
   let customerId: string | null = null;
 
-  // Hoisted out of `try` (pilot #3, 2026-05-18) so the `finally` cleanup
-  // can pass mikeId into the composite-key DELETE.
-  let mikeId: string | null = null;
+  const techId = seededScenario.employeeIds[0];
+  const bayId = seededScenario.resourceIds[0];
 
   try {
-    mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
-
     const cIns = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
-      [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
+      [freshTenant.tenantId, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].customer_id;
 
@@ -219,20 +200,19 @@ test('appointment-create dispatches all sync providers (calendar + Square)', asy
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
-      [DYNATIRE_ID, mikeId, FUTURE_DATE]
+      [freshTenant.tenantId, techId, FUTURE_DATE]
     );
     scheduleSeeded = true;
 
-    const token = await loginAsTenantAdmin(request);
-    await clearSyncEvents(request); // login won't dispatch sync but be defensive
+    await clearSyncEvents(request); // be defensive before the actual call
 
     const res = await request.post(`${BACKEND_URL}/appointments/create`, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${freshTenant.token}` },
       data: {
-        tenant_id: DYNATIRE_ID,
-        resource_id: truckId,
+        tenant_id: freshTenant.tenantId,
+        resource_id: bayId,
         customer_id: customerId,
-        employee_id: mikeId,
+        employee_id: techId,
         start_time: `${FUTURE_DATE}T14:00:00.000Z`,
         end_time: `${FUTURE_DATE}T14:30:00.000Z`,
         description: tag,
@@ -256,15 +236,15 @@ test('appointment-create dispatches all sync providers (calendar + Square)', asy
     expect(matching).toHaveLength(2);
     expect(matching.map((e) => e.provider).sort()).toEqual(['calendar', 'square']);
     for (const e of matching) {
-      expect(e.tenantId).toBe(DYNATIRE_ID);
+      expect(e.tenantId).toBe(freshTenant.tenantId);
     }
   } finally {
     for (const id of apptIdsToCleanup)
       await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    if (scheduleSeeded && mikeId)
+    if (scheduleSeeded)
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, mikeId, FUTURE_DATE]
+        [freshTenant.tenantId, techId, FUTURE_DATE]
       );
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
@@ -281,16 +261,13 @@ test('appointment-update dispatches all providers with action=update', async ({ 
   let scheduleSeeded = false;
   let customerId: string | null = null;
 
-  // Hoisted out of `try` (pilot #3, 2026-05-18) so the `finally` cleanup
-  // can pass mikeId into the composite-key DELETE.
-  let mikeId: string | null = null;
+  const techId = seededScenario.employeeIds[0];
+  const bayId = seededScenario.resourceIds[0];
 
   try {
-    mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
-      [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
+      [freshTenant.tenantId, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].customer_id;
 
@@ -298,7 +275,7 @@ test('appointment-update dispatches all providers with action=update', async ({ 
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
-      [DYNATIRE_ID, mikeId, FUTURE_DATE]
+      [freshTenant.tenantId, techId, FUTURE_DATE]
     );
     scheduleSeeded = true;
 
@@ -308,10 +285,10 @@ test('appointment-update dispatches all providers with action=update', async ({ 
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id`,
       [
-        DYNATIRE_ID,
-        truckId,
+        freshTenant.tenantId,
+        bayId,
         customerId,
-        mikeId,
+        techId,
         `${FUTURE_DATE}T15:00:00.000Z`,
         `${FUTURE_DATE}T15:30:00.000Z`,
         tag,
@@ -319,13 +296,12 @@ test('appointment-update dispatches all providers with action=update', async ({ 
     );
     apptId = aIns.rows[0].appointment_id;
 
-    const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
 
     const res = await request.post(`${BACKEND_URL}/appointments/${apptId}/update`, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${freshTenant.token}` },
       data: {
-        tenant_id: DYNATIRE_ID,
+        tenant_id: freshTenant.tenantId,
         start_time: `${FUTURE_DATE}T16:00:00.000Z`,
         end_time: `${FUTURE_DATE}T16:30:00.000Z`,
       },
@@ -344,10 +320,10 @@ test('appointment-update dispatches all providers with action=update', async ({ 
     expect(matching.map((e) => e.provider).sort()).toEqual(['calendar', 'square']);
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
-    if (scheduleSeeded && mikeId)
+    if (scheduleSeeded)
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, mikeId, FUTURE_DATE]
+        [freshTenant.tenantId, techId, FUTURE_DATE]
       );
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
@@ -365,16 +341,13 @@ test('appointment-delete dispatches all providers with action=delete', async ({ 
   let customerId: string | null = null;
   const tag = uniqueTag();
 
-  // Hoisted out of `try` (pilot #3, 2026-05-18) so the `finally` cleanup
-  // can pass mikeId into the composite-key DELETE.
-  let mikeId: string | null = null;
+  const techId = seededScenario.employeeIds[0];
+  const bayId = seededScenario.resourceIds[0];
 
   try {
-    mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
-      [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
+      [freshTenant.tenantId, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].customer_id;
 
@@ -382,7 +355,7 @@ test('appointment-delete dispatches all providers with action=delete', async ({ 
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
-      [DYNATIRE_ID, mikeId, FUTURE_DATE]
+      [freshTenant.tenantId, techId, FUTURE_DATE]
     );
     scheduleSeeded = true;
 
@@ -390,10 +363,10 @@ test('appointment-delete dispatches all providers with action=delete', async ({ 
       `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled') RETURNING appointment_id`,
       [
-        DYNATIRE_ID,
-        truckId,
+        freshTenant.tenantId,
+        bayId,
         customerId,
-        mikeId,
+        techId,
         `${FUTURE_DATE}T13:00:00.000Z`,
         `${FUTURE_DATE}T13:30:00.000Z`,
         tag,
@@ -401,13 +374,12 @@ test('appointment-delete dispatches all providers with action=delete', async ({ 
     );
     apptId = aIns.rows[0].appointment_id;
 
-    const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
 
     // No body on DELETE — passing Content-Type: application/json with an
     // empty payload trips Fastify's JSON parser ("Invalid JSON" → 500).
     const res = await request.delete(`${BACKEND_URL}/appointments/${apptId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${freshTenant.token}` },
     });
     const body = await res.json();
     expect(res.status(), 'delete must succeed').toBe(200);
@@ -423,10 +395,10 @@ test('appointment-delete dispatches all providers with action=delete', async ({ 
     apptId = null; // already deleted
   } finally {
     if (apptId) await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [apptId]);
-    if (scheduleSeeded && mikeId)
+    if (scheduleSeeded)
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, mikeId, FUTURE_DATE]
+        [freshTenant.tenantId, techId, FUTURE_DATE]
       );
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }
@@ -449,13 +421,12 @@ test('customer-create dispatches to Square (no calendar — by contract)', async
   let customerId: string | null = null;
 
   try {
-    const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
 
     const res = await request.post(`${BACKEND_URL}/customers/create`, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${freshTenant.token}` },
       data: {
-        tenant_id: DYNATIRE_ID,
+        tenant_id: freshTenant.tenantId,
         name: `${tag}-customer`,
         phone: uniquePhone(),
         email: `${tag}@example.test`,
@@ -496,11 +467,10 @@ test('customer-update + customer-delete each dispatch to Square', async ({ reque
   try {
     const cIns = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
-      [DYNATIRE_ID, `${tag}-cust`, phone]
+      [freshTenant.tenantId, `${tag}-cust`, phone]
     );
     customerId = cIns.rows[0].customer_id;
 
-    const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
 
     // Update phase. The /customers/:id PUT handler overwrites every
@@ -508,7 +478,7 @@ test('customer-update + customer-delete each dispatch to Square', async ({ reque
     // original phone or the constraint trips and the dispatch never
     // happens.
     const up = await request.put(`${BACKEND_URL}/customers/${customerId}`, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${freshTenant.token}` },
       data: { name: `${tag}-renamed`, phone },
     });
     expect(up.status(), 'update must succeed').toBe(200);
@@ -523,7 +493,7 @@ test('customer-update + customer-delete each dispatch to Square', async ({ reque
     // Delete phase — clear and re-assert.
     await clearSyncEvents(request);
     const del = await request.delete(`${BACKEND_URL}/customers/${customerId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${freshTenant.token}` },
     });
     expect(del.status(), 'delete must succeed').toBe(200);
 
@@ -557,38 +527,34 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
   let scheduleSeeded = false;
   let customerId: string | null = null;
 
-  // Hoisted out of `try` (pilot #3, 2026-05-18) so the `finally` cleanup
-  // can pass mikeId into the composite-key DELETE.
-  let mikeId: string | null = null;
+  const techId = seededScenario.employeeIds[0];
+  const bayId = seededScenario.resourceIds[0];
 
   try {
-    mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truckId = await findResourceIdByName('Truck 1');
     const cIns = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
-      [DYNATIRE_ID, `${tag}-cust`, uniquePhone()]
+      [freshTenant.tenantId, `${tag}-cust`, uniquePhone()]
     );
     customerId = cIns.rows[0].customer_id;
     await pool.query(
       `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
        VALUES ($1, $2, $3, '09:00', '17:00', false)
        ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
-      [DYNATIRE_ID, mikeId, FUTURE_DATE]
+      [freshTenant.tenantId, techId, FUTURE_DATE]
     );
     scheduleSeeded = true;
 
-    const token = await loginAsTenantAdmin(request);
     await clearSyncEvents(request);
 
     const t0 = Date.now();
     const res = await request.post(`${BACKEND_URL}/appointments/create`, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${freshTenant.token}` },
       data: {
-        tenant_id: DYNATIRE_ID,
-        resource_id: truckId,
+        tenant_id: freshTenant.tenantId,
+        resource_id: bayId,
         customer_id: customerId,
-        employee_id: mikeId,
-        // 17:00 UTC = 12:00 CDT — squarely inside Mike's 09:00-17:00 local
+        employee_id: techId,
+        // 17:00 UTC = 12:00 CDT — squarely inside the tech's 09:00-17:00 local
         // shift on the FUTURE_DATE, doesn't collide with the 14:00 UTC
         // (09:00 CDT) used by appointment-create earlier in this file.
         start_time: `${FUTURE_DATE}T17:00:00.000Z`,
@@ -615,10 +581,10 @@ test('fire-and-forget: HTTP response does not wait for sync provider work', asyn
   } finally {
     for (const id of apptIdsToCleanup)
       await pool.query('DELETE FROM appointments WHERE appointment_id = $1', [id]);
-    if (scheduleSeeded && mikeId)
+    if (scheduleSeeded)
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, mikeId, FUTURE_DATE]
+        [freshTenant.tenantId, techId, FUTURE_DATE]
       );
     if (customerId) await pool.query('DELETE FROM customers WHERE customer_id = $1', [customerId]);
   }

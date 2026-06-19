@@ -33,6 +33,9 @@ export interface GrokTTSOptions {
   /** Wrap synthesized text in xAI's `<soft>` prosody tag for a softer,
    *  soothing delivery. */
   soft: boolean;
+  /** Wrap synthesized text in xAI's `<cheerful>` prosody tag for an upbeat,
+   *  positive delivery. */
+  cheerful: boolean;
   /** Injectable for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch;
 }
@@ -42,6 +45,7 @@ const DEFAULT_OPTIONS: Omit<GrokTTSOptions, 'apiKey'> = {
   language: 'en',
   speed: 1.0,
   soft: false,
+  cheerful: false,
 };
 
 export class GrokTTS extends tts.TTS {
@@ -66,7 +70,9 @@ export class GrokTTS extends tts.TTS {
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
-  updateOptions(opts: Partial<Pick<GrokTTSOptions, 'voice' | 'language' | 'speed' | 'soft'>>): void {
+  updateOptions(
+    opts: Partial<Pick<GrokTTSOptions, 'voice' | 'language' | 'speed' | 'soft' | 'cheerful'>>
+  ): void {
     this.opts = { ...this.opts, ...opts };
   }
 
@@ -75,9 +81,11 @@ export class GrokTTS extends tts.TTS {
     connOptions?: APIConnectOptions,
     abortSignal?: AbortSignal
   ): GrokChunkedStream {
-    // <soft> is a wrapping prosody tag — softer, soothing delivery. Applied to
-    // the whole utterance; xAI strips the tag from the spoken output.
-    const spokenText = this.opts.soft ? `<soft>${text}</soft>` : text;
+    // Prosody tags wrap the utterance; xAI strips them from the spoken output.
+    // cheerful is applied first (outer), then soft (inner), so both can stack.
+    let spokenText = text;
+    if (this.opts.cheerful) spokenText = `<cheerful>${spokenText}</cheerful>`;
+    if (this.opts.soft) spokenText = `<soft>${spokenText}</soft>`;
     const responsePromise = this.fetchImpl(GROK_TTS_URL, {
       method: 'POST',
       headers: {

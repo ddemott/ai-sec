@@ -103,3 +103,64 @@ VALUES (
 
 -- 6-9. (intentionally empty) Services / employees / shifts / service-mapping
 -- rows are set up per-test in fixtures. See block-comment above (sections 2-5).
+
+-- 10. Business Templates — vocabulary + display metadata.
+-- WHY THIS IS HERE: baseline.sql has only the schema (no data). The rebuild
+-- script's --baseline mode marks historical migrations applied without running
+-- them, so the template INSERT/UPDATE migrations never execute after a rebuild.
+-- Seeding here is idempotent (ON CONFLICT DO UPDATE) and ensures every
+-- rebuild ends with the correct vocabulary labels, category groups, and
+-- default-resource names that /vocabulary, /templates, and the
+-- apply_business_template_defaults trigger all depend on.
+-- system_prompt_template and first_message seed as '' (empty) — real values
+-- come from the original insert migrations which run before seed in CI.
+-- ON CONFLICT UPDATE intentionally omits them so migration data is preserved.
+INSERT INTO business_templates (
+  business_type, display_name, category, sort_order,
+  resource_label, resource_plural, employee_label, employee_plural, booking_label,
+  voice_id, default_resource_name, default_resource_description,
+  example_services, example_resources,
+  system_prompt_template, first_message
+) VALUES
+  ('auto-shop',         'Auto Repair Shop',               'Auto & Vehicle',          1, 'Bay',            'Bays',            'Mechanic',       'Mechanics',       'Appointment',  'pNInz6ovDWjNkhCspfAY', 'Service Bay 1',     'Standard repair and maintenance bay',  '{}', '{}', '', ''),
+  ('body-shop',         'Body & Paint Shop',              'Auto & Vehicle',          1, 'Booth',          'Booths',          'Body Tech',      'Body Techs',      'Appointment',  'pNInz6ovDWjNkhCspfAY', 'Paint Booth 1',     'Main paint and body bay',              '{}', '{}', '', ''),
+  ('car-detailing',     'Car Detailing',                  'Auto & Vehicle',          1, 'Detail Bay',     'Detail Bays',     'Detailer',       'Detailers',       'Appointment',  'pNInz6ovDWjNkhCspfAY', 'Detail Bay 1',      'Main detailing bay',                   '{}', '{}', '', ''),
+  ('car-wash',          'Car Wash',                       'Auto & Vehicle',          1, 'Wash Bay',       'Wash Bays',       'Washer',         'Washers',         'Appointment',  'pNInz6ovDWjNkhCspfAY', 'Wash Bay 1',        'Automated or hand wash bay',           '{}', '{}', '', ''),
+  ('mobile-tire',       'Mobile Tire Shop',               'Auto & Vehicle',          1, 'Truck',          'Trucks',          'Technician',     'Technicians',     'Appointment',  'ba124806-6962-4354-94a0-7607775952f4', 'Service Truck 1', 'Main mobile unit for tire repairs',  '{}', '{}', '', ''),
+  ('oil-change',        'Quick Lube / Oil Change',        'Auto & Vehicle',          1, 'Lane',           'Lanes',           'Lube Tech',      'Lube Techs',      'Appointment',  'pNInz6ovDWjNkhCspfAY', 'Lane 1',            'Quick service lane',                   '{}', '{}', '', ''),
+  ('barbershop',        'Barbershop',                     'Beauty & Personal Care',  2, 'Chair',          'Chairs',          'Barber',         'Barbers',         'Appointment',  'pNInz6ovDWjNkhCspfAY', 'Chair 1',           'Main barber chair',                    '{}', '{}', '', ''),
+  ('lash-studio',       'Lash & Brow Studio',             'Beauty & Personal Care',  2, 'Station',        'Stations',        'Lash Artist',    'Lash Artists',    'Appointment',  '21m00Tcm4llvDq8ikWAM', 'Station 1',         'Lash application station',             '{}', '{}', '', ''),
+  ('med-spa',           'Med Spa / Aesthetics',           'Beauty & Personal Care',  2, 'Treatment Room', 'Treatment Rooms', 'Aesthetician',   'Aestheticians',   'Appointment',  '21m00Tcm4llvDq8ikWAM', 'Treatment Room 1',  'Main treatment room',                  '{}', '{}', '', ''),
+  ('nail-salon',        'Nail Salon',                     'Beauty & Personal Care',  2, 'Station',        'Stations',        'Nail Tech',      'Nail Techs',      'Appointment',  '21m00Tcm4llvDq8ikWAM', 'Station 1',         'Nail technician station',              '{}', '{}', '', ''),
+  ('salon',             'Hair Salon',                     'Beauty & Personal Care',  2, 'Chair',          'Chairs',          'Stylist',        'Stylists',        'Appointment',  '21m00Tcm4llvDq8ikWAM', 'Styling Station 1', 'Main chair for hair services',         '{}', '{}', '', ''),
+  ('spa',               'Spa & Wellness',                 'Beauty & Personal Care',  2, 'Treatment Room', 'Treatment Rooms', 'Therapist',      'Therapists',      'Session',      '21m00Tcm4llvDq8ikWAM', 'Treatment Room 1',  'Main treatment room',                  '{}', '{}', '', ''),
+  ('personal-trainer',  'Personal Training',              'Fitness & Wellness',      4, 'Studio',         'Studios',         'Trainer',        'Trainers',        'Session',      'pNInz6ovDWjNkhCspfAY', 'Studio 1',          'Training studio',                      '{}', '{}', '', ''),
+  ('yoga-studio',       'Yoga Studio',                    'Fitness & Wellness',      4, 'Studio',         'Studios',         'Instructor',     'Instructors',     'Class',        '21m00Tcm4llvDq8ikWAM', 'Studio 1',          'Main yoga studio',                     '{}', '{}', '', ''),
+  ('bakery',            'Bakery',                         'Food & Beverage',         6, 'Counter',        'Counters',        'Baker',          'Bakers',          'Order',        '21m00Tcm4llvDq8ikWAM', 'Counter 1',         'Main service counter',                 '{}', '{}', '', ''),
+  ('catering',          'Catering Service',               'Food & Beverage',         6, 'Kitchen',        'Kitchens',        'Chef',           'Chefs',           'Event',        '21m00Tcm4llvDq8ikWAM', 'Kitchen 1',         'Main prep kitchen',                    '{}', '{}', '', ''),
+  ('cleaning',          'Cleaning Service',               'Home Services',           3, 'Team',           'Teams',           'Cleaner',        'Cleaners',        'Booking',      '21m00Tcm4llvDq8ikWAM', 'Team A',            'Cleaning crew',                        '{}', '{}', '', ''),
+  ('electrician',       'Electrical Service',             'Home Services',           3, 'Van',            'Vans',            'Electrician',    'Electricians',    'Service Call', 'pNInz6ovDWjNkhCspfAY', 'Van 1',             'Main service van',                     '{}', '{}', '', ''),
+  ('garage-door',       'Garage Door Service',            'Home Services',           3, 'Van',            'Vans',            'Installer',      'Installers',      'Service Call', 'pNInz6ovDWjNkhCspfAY', 'Van 1',             'Main service van',                     '{}', '{}', '', ''),
+  ('hvac',              'HVAC Service',                   'Home Services',           3, 'Van',            'Vans',            'Technician',     'Technicians',     'Service Call', 'pNInz6ovDWjNkhCspfAY', 'Van 1',             'Main service van',                     '{}', '{}', '', ''),
+  ('landscaping',       'Landscaping Service',            'Home Services',           3, 'Crew',           'Crews',           'Crew Lead',      'Crew Leads',      'Job',          'pNInz6ovDWjNkhCspfAY', 'Crew A',            'Landscaping crew',                     '{}', '{}', '', ''),
+  ('locksmith',         'Locksmith',                      'Home Services',           3, 'Van',            'Vans',            'Locksmith',      'Locksmiths',      'Service Call', 'pNInz6ovDWjNkhCspfAY', 'Van 1',             'Mobile locksmith van',                 '{}', '{}', '', ''),
+  ('pest-control',      'Pest Control',                   'Home Services',           3, 'Van',            'Vans',            'Technician',     'Technicians',     'Service Call', 'pNInz6ovDWjNkhCspfAY', 'Van 1',             'Main service van',                     '{}', '{}', '', ''),
+  ('plumber',           'Plumbing Service',               'Home Services',           3, 'Van',            'Vans',            'Plumber',        'Plumbers',        'Service Call', 'pNInz6ovDWjNkhCspfAY', 'Van 1',             'Main service van',                     '{}', '{}', '', ''),
+  ('answering-service', 'Answering & Scheduling Service', 'Professional Services',   0, 'Line',           'Lines',           'Staff',          'Staff',           'Meeting',      'clara',                'Main Office',       'Primary scheduling line',              '{}', '{}', '', ''),
+  ('insurance',         'Insurance Agency',               'Professional Services',   5, 'Office',         'Offices',         'Agent',          'Agents',          'Consultation', 'ErXwSzhRj4IW3zYCt9a2', 'Office 1',         'Consultation office',                  '{}', '{}', '', ''),
+  ('photography',       'Photography Studio',             'Professional Services',   5, 'Studio',         'Studios',         'Photographer',   'Photographers',   'Session',      '21m00Tcm4llvDq8ikWAM', 'Studio 1',         'Main photography studio',              '{}', '{}', '', ''),
+  ('real-estate',       'Real Estate Showings',           'Professional Services',   5, 'Office',         'Offices',         'Agent',          'Agents',          'Showing',      '21m00Tcm4llvDq8ikWAM', 'Office 1',         'Main showing office',                  '{}', '{}', '', ''),
+  ('tax-prep',          'Tax Preparation',                'Professional Services',   5, 'Office',         'Offices',         'Preparer',       'Preparers',       'Appointment',  'ErXwSzhRj4IW3zYCt9a2', 'Office 1',         'Tax preparation office',               '{}', '{}', '', ''),
+  ('tutoring',          'Tutoring Service',               'Professional Services',   5, 'Room',           'Rooms',           'Tutor',          'Tutors',          'Session',      '21m00Tcm4llvDq8ikWAM', 'Room 1',            'Tutoring room',                       '{}', '{}', '', '')
+ON CONFLICT (business_type) DO UPDATE SET
+  display_name             = EXCLUDED.display_name,
+  category                 = EXCLUDED.category,
+  sort_order               = EXCLUDED.sort_order,
+  resource_label           = EXCLUDED.resource_label,
+  resource_plural          = EXCLUDED.resource_plural,
+  employee_label           = EXCLUDED.employee_label,
+  employee_plural          = EXCLUDED.employee_plural,
+  booking_label            = EXCLUDED.booking_label,
+  voice_id                 = COALESCE(business_templates.voice_id, EXCLUDED.voice_id),
+  default_resource_name    = EXCLUDED.default_resource_name,
+  default_resource_description = EXCLUDED.default_resource_description;

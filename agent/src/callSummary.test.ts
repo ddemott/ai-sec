@@ -35,7 +35,9 @@ describe('summarizeCall (failsafe post-call summary)', () => {
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: '  Caller booked an oil change.  ' } }] }),
+        json: async () => ({
+          choices: [{ message: { content: '  Caller booked an oil change.  ' } }],
+        }),
       }))
     );
     expect(await summarizeCall('Caller: I need an oil change.', KEY)).toBe(
@@ -44,7 +46,10 @@ describe('summarizeCall (failsafe post-call summary)', () => {
   });
 
   it('returns null on a non-200 response (e.g. 429)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => ({}) })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, json: async () => ({}) }))
+    );
     expect(await summarizeCall('Caller: hi', KEY)).toBeNull();
   });
 
@@ -61,7 +66,10 @@ describe('summarizeCall (failsafe post-call summary)', () => {
   it('returns null when the model returns empty content', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '' } }] }) }))
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: '' } }] }),
+      }))
     );
     expect(await summarizeCall('Caller: hi', KEY)).toBeNull();
   });

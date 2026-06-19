@@ -8,6 +8,8 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ShortcutsHelpModal } from '@/components/ui/ShortcutsHelpModal';
 import { useKeyboardShortcuts, type Shortcut } from '@/lib/useKeyboardShortcuts';
 import { useSessionContext } from '@/lib/SessionContext';
+import { setSubscriptionRequiredCallback } from '@/lib/api';
+import { showToast } from '@/components/ui/Toast';
 
 // Lazy load tab content — only loads the JS for the active tab
 const DashboardHome = dynamic(() => import('@/components/DashboardHome'), { ssr: false });
@@ -124,6 +126,25 @@ export default function DashboardPage() {
   useEffect(() => {
     const resolved = resolveUrlTab();
     if (resolved && resolved !== activeTab) setActiveTab(resolved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Wire up 402 → upgrade toast. Runs once on mount; the callback navigates
+  // to the Billing sub-tab and shows a persistent error toast with a shortcut
+  // button so the user has a clear path to upgrade without any breadcrumb loss.
+  useEffect(() => {
+    setSubscriptionRequiredCallback(() => {
+      showToast('Upgrade required to access this feature.', 'error', {
+        label: 'Go to Billing',
+        onClick: () => {
+          handleSetActiveTab('setup');
+          const url = new URL(window.location.href);
+          url.searchParams.set('subtab', 'billing');
+          window.history.replaceState({}, '', url.toString());
+        },
+      });
+    });
+    return () => setSubscriptionRequiredCallback(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

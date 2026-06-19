@@ -282,7 +282,7 @@ export default function BusinessSettingsView() {
             ) : (
               <div className="grid grid-cols-7 gap-2">
                 {shifts.map((shift, i) => {
-                  const date = new Date(shift.shift_date + 'T12:00:00');
+                  const date = new Date(String(shift.shift_date).slice(0, 10) + 'T12:00:00');
                   const dayName = DAY_NAMES[date.getDay()];
                   const dayNum = date.getDate();
                   const isOff = shift.is_off;
@@ -446,6 +446,7 @@ export default function BusinessSettingsView() {
             disconnect: Api.square.disconnect,
             triggerSync: Api.square.triggerSync,
             connectedParam: 'squareConnected',
+            getSyncStatus: Api.square.getSyncStatus,
           }}
         />
 

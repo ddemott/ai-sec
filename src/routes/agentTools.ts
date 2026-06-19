@@ -35,7 +35,11 @@ import {
   type AppointmentConflict,
 } from '../services/conflictLookup';
 import { sendSms, generateVerificationCode } from '../services/telnyxSms';
-import { getSyncRecorder, clearSyncRecorder } from '../services/syncOrchestrator';
+import {
+  getSyncRecorder,
+  clearSyncRecorder,
+  syncAppointmentToAll,
+} from '../services/syncOrchestrator';
 import { toolCallsTotal, bookingAttemptsTotal } from '../services/metrics';
 import {
   selectAssignments,
@@ -141,6 +145,12 @@ const SaveCustomerPreferenceSchema = z.object({
   value: z.string().min(1).max(500),
 });
 
+const IdentifyCallerSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  name: z.string().min(1).max(200).optional(),
+});
+
 const GetAvailableSlotsSchema = z.object({
   tenant_id: z.string().uuid(),
   service_type: z.string().min(1),
@@ -156,6 +166,19 @@ const VerifyPhoneCodeSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
   code: z.string().regex(/^\d+$/, 'Code must be numeric'),
+});
+
+// take-message — record a caller message + SMS-notify the owner.
+// "Take a message" was previously pure LLM theater — the agent would say it
+// but nothing was stored. Now it lands in customer_messages and the owner's
+// forward_phone gets a text so no message is silently lost.
+const TakeMessageSchema = z.object({
+  tenant_id: z.string().uuid(),
+  caller_name: z.string().min(1).max(200),
+  callback_phone: z.string().optional(),
+  caller_phone: z.string().optional(),
+  message: z.string().min(1).max(2000),
+  call_id: z.string().optional(),
 });
 
 // voice-session-start / -end — the LiveKit agent logs a call so the dashboard
@@ -182,6 +205,17 @@ const VoiceSessionEndSchema = z.object({
   // The appointment booked during the call, if any. UUID-validated so a malformed
   // id can't reach (and 500) the RPC's ::uuid cast — it just stays null.
   appointment_id: z.string().uuid().nullable().optional(),
+});
+
+const MyAppointmentsSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+});
+
+const CancelAppointmentSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  appointment_id: z.string().uuid(),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -275,7 +309,7 @@ function toolRoute<T>(
 
 export function registerAgentToolRoutes(
   app: AppFastifyInstance,
-  _pool: Pool,
+  pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
   getEmbedding: (text: string) => Promise<number[]>,
   normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
@@ -342,9 +376,13 @@ export function registerAgentToolRoutes(
           tts_voice: string | null;
           tts_speed: number | null;
           tts_soft: boolean | null;
+          tts_cheerful: boolean | null;
+          tts_formal: boolean | null;
+          tts_warm: boolean | null;
+          tts_concise: boolean | null;
           forward_phone: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, forward_phone FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         return res.rows[0] ?? null;
@@ -375,6 +413,10 @@ export function registerAgentToolRoutes(
         tts_voice: row.tts_voice ?? null,
         tts_speed: row.tts_speed ?? null,
         tts_soft: row.tts_soft ?? null,
+        tts_cheerful: row.tts_cheerful ?? null,
+        tts_formal: row.tts_formal ?? null,
+        tts_warm: row.tts_warm ?? null,
+        tts_concise: row.tts_concise ?? null,
         // 2026-06-11: live-transfer destination (owner cell). NULL means no
         // forwarding configured — the agent's transfer_call tool stays inert
         // and falls back to taking a message.
@@ -415,21 +457,60 @@ export function registerAgentToolRoutes(
     '/agent-tools/voice-session-end',
     VoiceSessionEndSchema,
     async (args, reply) => {
-      const ended = await withTenantClient(args.tenant_id, async (client) => {
-        const res = await client.query<{ ended: boolean }>(
-          'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) AS ended',
-          [
+      const { ended, forwardPhone, inboundPhone } = await withTenantClient(
+        args.tenant_id,
+        async (client) => {
+          const res = await client.query<{ ended: boolean }>(
+            'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) AS ended',
+            [
+              args.tenant_id,
+              args.call_id,
+              args.duration_seconds ?? null,
+              args.outcome ?? null,
+              args.transcript ?? null,
+              args.summary ?? null,
+              args.appointment_id ?? null,
+            ]
+          );
+          if (!['price', 'no_availability'].includes(args.outcome ?? '')) {
+            return { ended: res.rows[0]?.ended ?? false, forwardPhone: null, inboundPhone: null };
+          }
+          const tenant = await client.query<{
+            forward_phone: string | null;
+            inbound_phone: string | null;
+          }>('SELECT forward_phone, inbound_phone FROM tenants WHERE tenant_id = $1', [
             args.tenant_id,
-            args.call_id,
-            args.duration_seconds ?? null,
-            args.outcome ?? null,
-            args.transcript ?? null,
-            args.summary ?? null,
-            args.appointment_id ?? null,
-          ]
-        );
-        return res.rows[0]?.ended ?? false;
-      });
+          ]);
+          return {
+            ended: res.rows[0]?.ended ?? false,
+            forwardPhone: tenant.rows[0]?.forward_phone ?? null,
+            inboundPhone: tenant.rows[0]?.inbound_phone ?? null,
+          };
+        }
+      );
+
+      if (ended && forwardPhone && inboundPhone) {
+        const normalizedForward = normalizePhone(forwardPhone);
+        const normalizedInbound = normalizePhone(inboundPhone);
+        if (
+          normalizedForward &&
+          normalizedInbound &&
+          isValidPhone(normalizedForward) &&
+          isValidPhone(normalizedInbound)
+        ) {
+          const outcomeMsg =
+            args.outcome === 'price'
+              ? 'had concerns about pricing'
+              : 'could not find an available time';
+          const body = `SecretaryHQ: A recent caller ${outcomeMsg}. They may be worth a follow-up. — via SecretaryHQ`;
+          sendSms({ from: normalizedInbound, to: normalizedForward, body }).catch(
+            (err: unknown) => {
+              app.log.error({ err }, 'Failed to send outcome-follow-up SMS to owner');
+            }
+          );
+        }
+      }
+
       return ok(reply, { ended });
     },
     'Failed to end voice session'
@@ -495,6 +576,37 @@ export function registerAgentToolRoutes(
       return ok(reply, { saved: true, key });
     },
     'Failed to save customer preference'
+  );
+
+  // identify_caller — upsert caller as a customer by phone. Creates the row
+  // if unknown; updates name when the stored name is blank or "Valued Customer".
+  // Called by the agent as soon as the caller gives their name, even without booking,
+  // so every call leaves a contact record behind.
+  toolRoute(
+    app,
+    '/agent-tools/identify-caller',
+    IdentifyCallerSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!isValidPhone(normalized)) {
+        return fail(reply, 'Invalid phone number — cannot create contact.');
+      }
+      await withTenantClient(args.tenant_id, async (client) => {
+        await client.query(
+          `INSERT INTO customers (tenant_id, phone, name)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (tenant_id, phone) DO UPDATE
+             SET name = CASE
+               WHEN customers.name IS NULL OR customers.name = '' OR customers.name = 'Valued Customer'
+               THEN EXCLUDED.name
+               ELSE customers.name
+             END`,
+          [args.tenant_id, normalized, args.name ?? null]
+        );
+      });
+      return ok(reply, { saved: true });
+    },
+    'Failed to identify caller'
   );
 
   // get_service_catalog — list public services for the tenant.
@@ -1375,6 +1487,267 @@ export function registerAgentToolRoutes(
       );
     },
     'Failed to verify phone code'
+  );
+
+  // take-message — persist caller message + optionally SMS-alert the owner.
+  // Up to now "I'll take a message" was pure LLM theater; this makes it real.
+  toolRoute(
+    app,
+    '/agent-tools/take-message',
+    TakeMessageSchema,
+    async (args, reply) => {
+      const callbackPhone = args.callback_phone ? normalizePhone(args.callback_phone) : null;
+      const callerPhone = args.caller_phone ? normalizePhone(args.caller_phone) : null;
+
+      const row = await withTenantClient(args.tenant_id, async (client) => {
+        // Resolve customer_id if we have a phone. Non-fatal if lookup fails.
+        let customerId: string | null = null;
+        const lookupPhone = callerPhone ?? callbackPhone;
+        if (lookupPhone && isValidPhone(lookupPhone)) {
+          const cust = await client.query<{ customer_id: string }>(
+            `SELECT customer_id FROM customers
+             WHERE tenant_id = $1 AND phone = $2
+               AND (is_deleted IS NULL OR is_deleted = false)
+             LIMIT 1`,
+            [args.tenant_id, lookupPhone]
+          );
+          customerId = cust.rows[0]?.customer_id ?? null;
+        }
+
+        const res = await client.query<{ message_id: string }>(
+          `INSERT INTO customer_messages
+             (tenant_id, customer_id, caller_phone, caller_name, callback_phone, message, call_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING message_id`,
+          [
+            args.tenant_id,
+            customerId,
+            callerPhone,
+            args.caller_name,
+            callbackPhone,
+            args.message,
+            args.call_id ?? null,
+          ]
+        );
+
+        // Fetch forward_phone + inbound_phone for owner notification.
+        const tenant = await client.query<{
+          forward_phone: string | null;
+          inbound_phone: string | null;
+        }>(`SELECT forward_phone, inbound_phone FROM tenants WHERE tenant_id = $1`, [
+          args.tenant_id,
+        ]);
+
+        return {
+          message_id: res.rows[0]?.message_id ?? null,
+          forwardPhone: tenant.rows[0]?.forward_phone ?? null,
+          inboundPhone: tenant.rows[0]?.inbound_phone ?? null,
+        };
+      });
+
+      // SMS the owner at forward_phone. Fire-and-forget; failure doesn't un-save the message.
+      let notified = false;
+      const normalizedForward = row.forwardPhone ? normalizePhone(row.forwardPhone) : null;
+      const normalizedInbound = row.inboundPhone ? normalizePhone(row.inboundPhone) : null;
+      if (
+        normalizedForward &&
+        normalizedInbound &&
+        isValidPhone(normalizedForward) &&
+        isValidPhone(normalizedInbound)
+      ) {
+        const callbackDisplay = callbackPhone ?? callerPhone ?? 'no number left';
+        const body =
+          `New message from ${args.caller_name} (${callbackDisplay}): ` +
+          `${args.message.slice(0, 300)}${args.message.length > 300 ? '…' : ''}` +
+          ' — via SecretaryHQ';
+        const sms = await sendSms({ from: normalizedInbound, to: normalizedForward, body });
+        notified = sms.ok;
+        if (!sms.ok) {
+          app.log.warn(
+            { tenantId: args.tenant_id, forwardPhone: normalizedForward, error: sms.error },
+            'take_message: owner SMS notification failed — message saved but owner not alerted'
+          );
+        }
+      } else if (row.forwardPhone || row.inboundPhone) {
+        app.log.warn(
+          {
+            tenantId: args.tenant_id,
+            forwardPhone: row.forwardPhone,
+            inboundPhone: row.inboundPhone,
+          },
+          'take_message: owner SMS skipped — forward_phone or inbound_phone is invalid/unnormalizable'
+        );
+      }
+
+      return ok(reply, {
+        saved: true,
+        message_id: row.message_id,
+        notified,
+        message: notified
+          ? 'Message saved and the owner has been notified by text.'
+          : 'Message saved. The owner will be able to see it in their dashboard.',
+      });
+    },
+    'Failed to save message'
+  );
+
+  // my-appointments — return upcoming scheduled appointments for the calling phone.
+  // Phone is server-injected (never from LLM) to prevent cross-caller enumeration.
+  toolRoute(
+    app,
+    '/agent-tools/my-appointments',
+    MyAppointmentsSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!normalized) return fail(reply, 'Invalid phone number');
+
+      const rows = await withTenantClient(args.tenant_id, async (client) => {
+        return client.query<{
+          appointment_id: string;
+          start_time: string;
+          end_time: string;
+          description: string | null;
+          status: string;
+        }>(
+          `SELECT a.appointment_id, a.start_time, a.end_time, a.description, a.status
+           FROM appointments a
+           JOIN customers c ON a.customer_id = c.customer_id
+           WHERE c.tenant_id = $1 AND c.phone = $2
+             AND a.status = 'scheduled' AND a.start_time > NOW()
+             AND (c.is_deleted IS NULL OR c.is_deleted = false)
+           ORDER BY a.start_time
+           LIMIT 5`,
+          [args.tenant_id, normalized]
+        );
+      });
+
+      return ok(reply, { appointments: rows.rows });
+    },
+    'Failed to fetch appointments'
+  );
+
+  // cancel-appointment — soft-cancel a scheduled appointment owned by the caller.
+  // Ownership verified by phone match so the LLM can never cancel another caller's
+  // appointment even if it hallucinates a UUID.
+  toolRoute(
+    app,
+    '/agent-tools/cancel-appointment',
+    CancelAppointmentSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!normalized) return fail(reply, 'Invalid phone number');
+
+      const result = await withTenantClient(args.tenant_id, async (client) => {
+        return client.query<{ appointment_id: string }>(
+          `UPDATE appointments a SET status = 'canceled'
+           FROM customers c
+           WHERE a.appointment_id = $1
+             AND a.tenant_id = $2
+             AND a.customer_id = c.customer_id
+             AND c.phone = $3
+             AND a.status = 'scheduled'
+             AND a.start_time > NOW()
+           RETURNING a.appointment_id`,
+          [args.appointment_id, args.tenant_id, normalized]
+        );
+      });
+
+      if (result.rows.length === 0) {
+        return fail(
+          reply,
+          "I couldn't find that appointment under your number, or it may already be past or canceled."
+        );
+      }
+
+      // Fire-and-forget calendar sync so the slot opens up immediately.
+      syncAppointmentToAll(pool, args.tenant_id, args.appointment_id, 'delete', app.log);
+
+      return ok(reply, { cancelled: true, appointment_id: args.appointment_id });
+    },
+    'Failed to cancel appointment'
+  );
+
+  // ── AI cost recording ─────────────────────────────────────────────
+  // Called by the agent worker at the end of every voice call with the
+  // session's model usage (LLM tokens, STT audio, TTS characters).
+  // Also callable from backend KB routes for ingestion/query costs.
+  // Computes estimated_cost_usd using known published rates; xAI TTS
+  // pricing is not public so that row gets 0 (chars stored for later).
+
+  const COST_PER_INPUT_TOKEN: Record<string, number> = {
+    'gpt-4o-mini': 0.15e-6,
+    'text-embedding-3-small': 0.02e-6,
+  };
+  const COST_PER_OUTPUT_TOKEN: Record<string, number> = {
+    'gpt-4o-mini': 0.6e-6,
+  };
+  const DEEPGRAM_COST_PER_MS = 0.0043 / 60000; // $0.0043/min
+
+  const ModelUsageItemSchema = z.object({
+    type: z.enum(['llm_usage', 'tts_usage', 'stt_usage', 'interruption_usage']),
+    provider: z.string(),
+    model: z.string(),
+    inputTokens: z.number().int().default(0),
+    outputTokens: z.number().int().default(0),
+    charactersCount: z.number().int().default(0),
+    audioDurationMs: z.number().default(0),
+  });
+
+  const RecordAiCostSchema = z.object({
+    tenant_id: z.string().uuid(),
+    call_id: z.string().optional(),
+    source: z.enum(['voice_call', 'kb_ingestion', 'kb_query', 'call_summary']),
+    model_usage: z.array(ModelUsageItemSchema),
+  });
+
+  toolRoute(
+    app,
+    '/agent-tools/record-ai-cost',
+    RecordAiCostSchema,
+    async (args, reply) => {
+      const rows = args.model_usage.filter((u) => u.type !== 'interruption_usage');
+      if (rows.length === 0) return ok(reply, { recorded: 0 });
+
+      const values: unknown[] = [];
+      const placeholders: string[] = [];
+      let idx = 1;
+
+      for (const u of rows) {
+        const inputCost = (COST_PER_INPUT_TOKEN[u.model] ?? 0) * u.inputTokens;
+        const outputCost = (COST_PER_OUTPUT_TOKEN[u.model] ?? 0) * u.outputTokens;
+        const audioCost = u.type === 'stt_usage' ? DEEPGRAM_COST_PER_MS * u.audioDurationMs : 0;
+        const estimatedCost = inputCost + outputCost + audioCost;
+
+        placeholders.push(
+          `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`
+        );
+        values.push(
+          args.tenant_id,
+          args.call_id ?? null,
+          args.source,
+          u.provider,
+          u.model,
+          u.inputTokens,
+          u.outputTokens,
+          u.charactersCount,
+          Math.round(u.audioDurationMs),
+          estimatedCost.toFixed(8)
+        );
+      }
+
+      await withTenantClient(args.tenant_id, (client) =>
+        client.query(
+          `INSERT INTO ai_cost_events
+             (tenant_id, call_id, source, provider, model,
+              input_tokens, output_tokens, characters_count, audio_duration_ms, estimated_cost_usd)
+           VALUES ${placeholders.join(', ')}`,
+          values
+        )
+      );
+
+      return ok(reply, { recorded: rows.length });
+    },
+    'Failed to record AI cost'
   );
 
   // ── Test-only sync recorder readout ───────────────────────────────

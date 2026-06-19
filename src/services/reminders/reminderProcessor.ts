@@ -185,6 +185,7 @@ export class ReminderProcessor {
             dateTime: appointment.date_time || appointment.start_time,
             duration: appointment.duration || 60,
             notes: appointment.notes,
+            appointmentId: reminder.appointment_id.toString(),
           };
 
           if (reminder.reminder_type === 'confirmation') {

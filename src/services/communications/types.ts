@@ -27,6 +27,8 @@ export interface AppointmentData {
   dateTime: string;
   duration: number;
   notes?: string;
+  /** UUID of the appointment — used to generate self-service cancel links. */
+  appointmentId?: string;
 }
 
 export interface ReminderData extends AppointmentData {

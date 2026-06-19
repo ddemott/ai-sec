@@ -28,10 +28,9 @@ export interface TenantDisplayConfig {
    */
   firstMessage: string | null;
   /**
-   * Whether the owner turned on customer-preference capture. When true the
-   * system prompt gains a "Customer preferences" section and the agent is
-   * told to call save_customer_preference. Default false — preference capture
-   * is opt-in (writes durable CRM data + steers upsells).
+   * Whether customer-preference capture is enabled. Default true — the agent
+   * saves durable facts about returning callers by default. Owners can opt out
+   * via the dashboard AI Persona page (sets column to false).
    */
   savePreferencesEnabled: boolean;
   /**
@@ -49,6 +48,10 @@ export interface TenantDisplayConfig {
   ttsVoice: string | null;
   ttsSpeed: number | null;
   ttsSoft: boolean | null;
+  ttsCheerful: boolean | null;
+  ttsFormal: boolean | null;
+  ttsWarm: boolean | null;
+  ttsConcise: boolean | null;
   /**
    * E.164 PSTN number the agent cold-transfers a live call to (owner cell),
    * via SIP REFER through the inbound trunk. NULL means no forwarding is
@@ -63,11 +66,15 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   timezone: 'America/Chicago',
   systemPrompt: null,
   firstMessage: null,
-  savePreferencesEnabled: false,
+  savePreferencesEnabled: true,
   preferencesInstructions: null,
   ttsVoice: null,
   ttsSpeed: null,
   ttsSoft: null,
+  ttsCheerful: null,
+  ttsFormal: null,
+  ttsWarm: null,
+  ttsConcise: null,
   forwardPhone: null,
 };
 
@@ -87,6 +94,10 @@ export async function fetchTenantConfig(
     tts_voice?: string | null;
     tts_speed?: number | null;
     tts_soft?: boolean | null;
+    tts_cheerful?: boolean | null;
+    tts_formal?: boolean | null;
+    tts_warm?: boolean | null;
+    tts_concise?: boolean | null;
     forward_phone?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
@@ -95,11 +106,15 @@ export async function fetchTenantConfig(
       timezone: res.result.timezone,
       systemPrompt: res.result.system_prompt ?? null,
       firstMessage: res.result.first_message ?? null,
-      savePreferencesEnabled: res.result.save_preferences_enabled ?? false,
+      savePreferencesEnabled: res.result.save_preferences_enabled ?? true,
       preferencesInstructions: res.result.preferences_instructions ?? null,
       ttsVoice: res.result.tts_voice ?? null,
       ttsSpeed: res.result.tts_speed ?? null,
       ttsSoft: res.result.tts_soft ?? null,
+      ttsCheerful: res.result.tts_cheerful ?? null,
+      ttsFormal: res.result.tts_formal ?? null,
+      ttsWarm: res.result.tts_warm ?? null,
+      ttsConcise: res.result.tts_concise ?? null,
       forwardPhone: res.result.forward_phone ?? null,
     };
   }

@@ -1,5 +1,2 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # Run the stronger pre-push checks before allowing a push
 bash scripts/example-pre-push-hook.sh

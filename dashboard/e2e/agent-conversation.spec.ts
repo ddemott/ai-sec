@@ -25,17 +25,26 @@
  * Each test fully self-contained per the test-isolation memory: creates
  * its own employee_schedule + appointment fixtures in `try`, cleans up
  * in `finally`. Independent of other test files; runs in any order.
+ *
+ * Tenant isolation: beforeAll registers a fresh tenant via registerFreshTenant()
+ * and seeds 2 employees + 2 resources + 1 customer + shifts for 14 days
+ * via seedBookingScenario(). afterAll calls cleanTenantData() which cascades
+ * the DELETE to all dependent rows.
  */
 import { test, expect } from './helpers/test';
 import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { seedDynaTireBusinessConfig, clearDynaTireBusinessConfig } from './helpers/fixtures';
+import {
+  registerFreshTenant,
+  seedBookingScenario,
+  cleanTenantData,
+  BACKEND_URL,
+} from './helpers/fixtures';
+import type { RegisteredTenant, SeededBookingScenario } from './helpers/fixtures';
 
-const DYNATIRE_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 
 function readAgentSecret(): string {
   if (process.env.AGENT_SECRET) return process.env.AGENT_SECRET;
@@ -52,6 +61,8 @@ function readAgentSecret(): string {
 const AGENT_SECRET = readAgentSecret();
 
 let pool: Pool;
+let freshTenant: RegisteredTenant;
+let seededScenario: SeededBookingScenario;
 
 function uniqueTag(): string {
   return `e2e-conv-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -76,32 +87,53 @@ async function callAgentTool(
   return { status: res.status(), body: responseBody };
 }
 
-async function findEmployeeIdByName(name: string): Promise<string> {
-  const r = await pool.query(
-    `SELECT employee_id FROM employees WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
-    [DYNATIRE_ID, name]
-  );
-  if (r.rowCount === 0) throw new Error(`Employee "${name}" not found in DynaTire seed`);
-  return r.rows[0].employee_id;
-}
-async function findResourceIdByName(name: string): Promise<string> {
-  const r = await pool.query(
-    `SELECT resource_id FROM resources WHERE tenant_id = $1 AND name = $2 LIMIT 1`,
-    [DYNATIRE_ID, name]
-  );
-  if (r.rowCount === 0) throw new Error(`Resource "${name}" not found in DynaTire seed`);
-  return r.rows[0].resource_id;
-}
-
 test.beforeAll(async () => {
   pool = new Pool({ connectionString: PG_URL });
-  // 2026-05-18 seed-strip-stage-b: DynaTire's business config moved
-  // out of supabase/seed.sql. findEmployeeIdByName / findResourceIdByName
-  // helpers below depend on the seeded rows; bootstrap them here.
-  await seedDynaTireBusinessConfig(pool);
+
+  // Register a fresh tenant so this spec owns its full data lifecycle and
+  // is never coupled to seed state that may change between runs.
+  const { request: playwrightRequest } = await import('@playwright/test');
+  const ctx = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+
+  freshTenant = await registerFreshTenant(ctx);
+
+  // Seed 2 employees, 2 resources, 1 customer, shifts for next 14 days.
+  // Employees have no skills (default) — booking tests pass [] skills so
+  // the RPC uses MODE B (resource-only) which is the correct path for
+  // availability-contract tests. Skill-matching is covered separately.
+  const shiftDates = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + i + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  seededScenario = await seedBookingScenario(ctx, pool, freshTenant.token, freshTenant.tenantId, {
+    employees: ['Alex Smith', 'Sam Jones'],
+    resources: ['Bay 1', 'Bay 2'],
+    customer: 'Test Customer',
+    shiftDates,
+  });
+
+  // Create a service so service-catalog tests have at least one row.
+  const svcRes = await ctx.post(`${BACKEND_URL}/services/create`, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${freshTenant.token}`,
+    },
+    data: {
+      tenant_id: freshTenant.tenantId,
+      name: 'Tire Rotation',
+      duration_minutes: 30,
+    },
+  });
+  expect(svcRes.status(), 'Tire Rotation service create must succeed').toBe(200);
+
+  await ctx.dispose();
 });
+
 test.afterAll(async () => {
-  await clearDynaTireBusinessConfig(pool);
+  // Single-statement cascade removes all seeded rows (employees, resources,
+  // customers, shifts, appointments, services, the tenant itself).
+  await cleanTenantData(pool, freshTenant.tenantId);
   await pool.end();
 });
 
@@ -127,12 +159,12 @@ test('conversation: returning caller is greeted by name (customer-context lookup
   try {
     const ins = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
-      [DYNATIRE_ID, `${tag}-Alice Lee`, phone]
+      [freshTenant.tenantId, `${tag}-Alice Lee`, phone]
     );
     customerId = ins.rows[0].customer_id;
 
     const res = await callAgentTool(request, '/agent-tools/customer-context', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone,
     });
 
@@ -163,7 +195,7 @@ test('conversation: unknown caller returns "new caller" prompt', async ({ reques
   //        customer, which is creepy and operationally wrong
   const phone = `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`;
   const res = await callAgentTool(request, '/agent-tools/customer-context', {
-    tenant_id: DYNATIRE_ID,
+    tenant_id: freshTenant.tenantId,
     phone,
   });
 
@@ -181,10 +213,13 @@ test('conversation: tire-rotation request books successfully via book_with_sched
   request,
 }) => {
   // WHO: caller asks for a tire rotation tomorrow afternoon; agent
-  //        bridges that to a specific window + skill, books in one call
-  // WHAT: /agent-tools/book-with-scheduling auto-picks the lowest-skill
-  //        qualified employee available in the window, books them,
-  //        returns the booked details (resource, employee, time)
+  //        bridges that to a specific window, books in one call
+  // WHAT: /agent-tools/book-with-scheduling auto-picks a qualified
+  //        employee available in the window, books them, returns the
+  //        booked details (resource, employee, time).
+  //        Skills are passed as [] so the RPC uses MODE B (resource-only
+  //        matching) — this test pins availability-contract and booking
+  //        side effects, not skill-filtering (covered separately).
   // WHEN: the most common voice booking path — caller doesn't pick a
   //        specific employee, just says "tire rotation, Friday at 2"
   // WHERE: src/routes/agentTools.ts book-with-scheduling +
@@ -202,30 +237,31 @@ test('conversation: tire-rotation request books successfully via book_with_sched
 
   try {
     // Set up shifts on a far-future date so the booking has somewhere
-    // to land without colliding with seed appointments.
-    const FUTURE = '2026-07-13'; // Monday, well past current 2-week shift seed
-    const carlosId = await findEmployeeIdByName('Carlos Vega');
-    const danaId = await findEmployeeIdByName('Dana Okafor');
-    for (const empId of [carlosId, danaId]) {
+    // to land without colliding with existing appointments.
+    const FUTURE = '2026-07-13'; // Monday, well past the 14-day seeded window
+    const [alexId, samId] = seededScenario.employeeIds;
+    for (const empId of [alexId, samId]) {
       await pool.query(
         `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
          VALUES ($1, $2, $3, '09:00', '17:00', false)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
            SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false`,
-        [DYNATIRE_ID, empId, FUTURE]
+        [freshTenant.tenantId, empId, FUTURE]
       );
       shiftsToCleanup.push({ employeeId: empId, shiftDate: FUTURE });
     }
 
     const res = await callAgentTool(request, '/agent-tools/book-with-scheduling', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone,
       name: `${tag}-AgentBookCustomer`,
       description: `${tag}-rotation`,
       window: { from: `${FUTURE}T15:00:00.000Z`, to: `${FUTURE}T16:00:00.000Z` },
       requirements: {
         serviceType: 'rotation',
-        requiredEmployeeSkills: ['tire-rotation'],
+        // Empty skills → RPC MODE B (resource-only); availability is the
+        // only constraint being tested here.
+        requiredEmployeeSkills: [],
         requiredResourceCapabilities: [],
       },
     });
@@ -234,7 +270,8 @@ test('conversation: tire-rotation request books successfully via book_with_sched
     expect(res.body.success).toBe(true);
     const result = res.body.result as Record<string, unknown>;
     expect(result.appointment_id, 'appointment_id present in result').toBeTruthy();
-    expect(result.employee_name).toBeTruthy();
+    // MODE B (empty skills) — RPC picks a resource but leaves employee unassigned
+    expect(result.employee_name).toBeNull();
     expect(result.resource_name).toBeTruthy();
     apptIdsToCleanup.push(result.appointment_id as string);
 
@@ -249,7 +286,7 @@ test('conversation: tire-rotation request books successfully via book_with_sched
     // Customer-create-as-separate-transaction: the customer row exists.
     const cust = await pool.query(
       `SELECT customer_id, name FROM customers WHERE tenant_id = $1 AND phone = $2`,
-      [DYNATIRE_ID, phone]
+      [freshTenant.tenantId, phone]
     );
     expect(cust.rowCount).toBe(1);
     expect(cust.rows[0].name).toBe(`${tag}-AgentBookCustomer`);
@@ -259,7 +296,7 @@ test('conversation: tire-rotation request books successfully via book_with_sched
     for (const s of shiftsToCleanup)
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, s.employeeId, s.shiftDate]
+        [freshTenant.tenantId, s.employeeId, s.shiftDate]
       );
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
@@ -271,13 +308,13 @@ test('conversation: tire-rotation request books successfully via book_with_sched
 test('conversation: full-busy slot returns next_available alternatives the agent can propose', async ({
   request,
 }) => {
-  // WHO: caller wants a tire rotation at 2pm; every qualified tech is
-  //        already booked at that time on the only resource
+  // WHO: caller wants a rotation at 2pm; every employee is already booked
+  //        at that time on the only resource available
   // WHAT: book-with-scheduling fails NO_AVAILABILITY but the response
   //        includes a non-empty next_available array of (start, end,
   //        employee_name, resource_name) so the agent prompt's
   //        next-available section can read them aloud
-  // WHEN: peak-hour bookings on small-staff tenants (DynaTire's reality)
+  // WHEN: peak-hour bookings on small-staff tenants
   // WHERE: book-with-scheduling fallback path → findNextAvailableSlots
   //        helper (slice 1 of 2026-05-08) → response carries through
   //        to the agent (slices 2-3 + prompt update later same day)
@@ -294,51 +331,46 @@ test('conversation: full-busy slot returns next_available alternatives the agent
 
   try {
     const FUTURE = '2026-07-14'; // Tuesday
-    const carlosId = await findEmployeeIdByName('Carlos Vega');
-    const danaId = await findEmployeeIdByName('Dana Okafor');
-    const mikeId = await findEmployeeIdByName('Mike Rivera');
-    const truck1 = await findResourceIdByName('Truck 1');
-    const truck2 = await findResourceIdByName('Truck 2');
-    const serviceTruck1 = await findResourceIdByName('Service Truck 1');
+    const [alexId, samId] = seededScenario.employeeIds;
+    const [bay1Id, bay2Id] = seededScenario.resourceIds;
 
-    // Shifts for everyone.
-    for (const empId of [carlosId, danaId, mikeId]) {
+    // Shifts for both employees on FUTURE.
+    for (const empId of [alexId, samId]) {
       await pool.query(
         `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
          VALUES ($1, $2, $3, '09:00', '17:00', false)
          ON CONFLICT (tenant_id, employee_id, shift_date) DO UPDATE
            SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, is_off = false`,
-        [DYNATIRE_ID, empId, FUTURE]
+        [freshTenant.tenantId, empId, FUTURE]
       );
       shiftsToCleanup.push({ employeeId: empId, shiftDate: FUTURE });
     }
 
-    // Pre-book every tire-rotation-qualified tech (Carlos, Dana, Mike all
-    // qualify) so each is busy at 14:00-14:30 UTC. Each on a DIFFERENT
-    // resource so the GiST resource-overlap doesn't reject any of the
-    // pre-INSERTs. Result: every employee unavailable + every truck
-    // unavailable at the requested time → NO_AVAILABILITY for the next
-    // booking attempt at that slot, alternatives kick in for 14:30+.
+    // Pre-book both employees (each on a different resource) at 14:00-14:30
+    // UTC so the GiST resource-overlap doesn't reject the pre-INSERTs.
+    // Result: every employee unavailable + every resource occupied at the
+    // requested time → NO_AVAILABILITY or TIMESLOT_OCCUPIED for the next
+    // booking attempt at that slot; alternatives kick in for 14:30+.
     const ph = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
       [
-        DYNATIRE_ID,
+        freshTenant.tenantId,
         `${tag}-blocker-customer`,
         `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`,
       ]
     );
     const blockerCust = ph.rows[0].customer_id;
+
     for (const [empId, resId] of [
-      [carlosId, truck1],
-      [danaId, truck2],
-      [mikeId, serviceTruck1],
-    ]) {
+      [alexId, bay1Id],
+      [samId, bay2Id],
+    ] as [string, string][]) {
       const a = await pool.query(
         `INSERT INTO appointments (tenant_id, resource_id, customer_id, employee_id, start_time, end_time, description, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
          RETURNING appointment_id`,
         [
-          DYNATIRE_ID,
+          freshTenant.tenantId,
           resId,
           blockerCust,
           empId,
@@ -352,14 +384,16 @@ test('conversation: full-busy slot returns next_available alternatives the agent
 
     // Now try to book — should fail, with alternatives.
     const res = await callAgentTool(request, '/agent-tools/book-with-scheduling', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone,
       name: `${tag}-second-customer`,
       description: `${tag}-tries-busy-slot`,
       window: { from: `${FUTURE}T14:00:00.000Z`, to: `${FUTURE}T14:30:00.000Z` },
       requirements: {
         serviceType: 'rotation',
-        requiredEmployeeSkills: ['tire-rotation'],
+        // Empty skills → RPC MODE B (resource-only); both employees are
+        // busy at this slot regardless of skills.
+        requiredEmployeeSkills: [],
         requiredResourceCapabilities: [],
       },
     });
@@ -367,22 +401,20 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(false);
     // Either NO_AVAILABILITY or TIMESLOT_OCCUPIED is correct here — both
-    // describe the same situation (every qualified employee + every
-    // resource is busy at the requested slot) and both go through the
-    // same route response shape that populates `next_available`. The
-    // RPC's check order returns TIMESLOT_OCCUPIED first when the
-    // resource/employee overlap predicate trips before the skill-match
-    // fallback (`book_with_scheduling_atomic` lines 200-216). The agent
-    // prompt handles both codes identically — it reads next_available
-    // and reads it aloud either way. The test's real concern is the
-    // alternatives payload, asserted below.
+    // describe the same situation (every employee + every resource is busy
+    // at the requested slot) and both go through the same route response
+    // shape that populates `next_available`. The RPC's check order returns
+    // TIMESLOT_OCCUPIED first when the resource/employee overlap predicate
+    // trips before the availability fallback. The agent prompt handles both
+    // codes identically — it reads next_available and reads it aloud either
+    // way. The test's real concern is the alternatives payload, asserted below.
     expect(['NO_AVAILABILITY', 'TIMESLOT_OCCUPIED']).toContain(res.body.error_code);
     // The critical assertion: alternatives propagated through the route.
     const alternatives = res.body.next_available as Array<Record<string, unknown>> | undefined;
     expect(alternatives, 'next_available must be present even on failure').toBeDefined();
     expect(
       alternatives!.length,
-      'at least one alternative since techs are free at 14:30+'
+      'at least one alternative since employees are free at 14:30+'
     ).toBeGreaterThan(0);
     // Each alternative has the fields the agent prompt reads from.
     for (const alt of alternatives!.slice(0, 3)) {
@@ -402,7 +434,7 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     // But customer-create-as-separate-transaction — second customer persists.
     const cust = await pool.query(
       `SELECT count(*)::int AS n FROM customers WHERE tenant_id = $1 AND phone = $2`,
-      [DYNATIRE_ID, phone]
+      [freshTenant.tenantId, phone]
     );
     expect(cust.rows[0].n, 'customer persists despite booking failure').toBe(1);
 
@@ -414,7 +446,7 @@ test('conversation: full-busy slot returns next_available alternatives the agent
     for (const s of shiftsToCleanup)
       await pool.query(
         'DELETE FROM employee_schedule WHERE tenant_id = $1 AND employee_id = $2 AND shift_date = $3',
-        [DYNATIRE_ID, s.employeeId, s.shiftDate]
+        [freshTenant.tenantId, s.employeeId, s.shiftDate]
       );
     await pool.query('DELETE FROM customers WHERE phone = $1', [phone]);
   }
@@ -436,8 +468,9 @@ test("conversation: service-catalog returns the tenant's services for the LLM to
   // WHY: pin the contract — if the route ever drops `duration_minutes`
   //        or `price`, the agent can't correctly quote callers and
   //        scheduling tools break (they need duration to compute end).
+  //        The 'Tire Rotation' service was created in beforeAll.
   const res = await callAgentTool(request, '/agent-tools/service-catalog', {
-    tenant_id: DYNATIRE_ID,
+    tenant_id: freshTenant.tenantId,
   });
 
   expect(res.status).toBe(200);
@@ -447,11 +480,13 @@ test("conversation: service-catalog returns the tenant's services for the LLM to
   // to the LLM as JSON.
   const wrapped = res.body.result as { services: Array<Record<string, unknown>> };
   expect(Array.isArray(wrapped.services)).toBe(true);
-  expect(wrapped.services.length).toBeGreaterThan(0);
-  // DynaTire's seed has 5 services. Pin a known one + the contract shape.
-  const flat = wrapped.services.find((s) => String(s.name).toLowerCase().includes('flat'));
-  expect(flat, 'Flat Repair service present in DynaTire seed').toBeTruthy();
-  expect(typeof flat!.duration_minutes).toBe('number');
+  expect(wrapped.services.length, 'at least the Tire Rotation service seeded in beforeAll').toBeGreaterThan(0);
+  // Pin the service we seeded and the contract shape.
+  const rotation = wrapped.services.find((s) =>
+    String(s.name).toLowerCase().includes('tire rotation')
+  );
+  expect(rotation, "'Tire Rotation' service present in catalog").toBeTruthy();
+  expect(typeof rotation!.duration_minutes).toBe('number');
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -460,7 +495,7 @@ test("conversation: service-catalog returns the tenant's services for the LLM to
 test('conversation: a saved preference is recalled by customer-context on the next call', async ({
   request,
 }) => {
-  // WHO: a returning caller the salon's AI is told to remember things about.
+  // WHO: a returning caller the AI is told to remember things about.
   // WHAT: save_customer_preference writes a durable fact to
   //        customers.metadata.preferences; on a later call the agent's
   //        get_customer_context tool (→ /agent-tools/customer-context) hands
@@ -480,13 +515,13 @@ test('conversation: a saved preference is recalled by customer-context on the ne
   try {
     const ins = await pool.query(
       `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, $2, $3) RETURNING customer_id`,
-      [DYNATIRE_ID, `${tag}-Sarah`, phone]
+      [freshTenant.tenantId, `${tag}-Sarah`, phone]
     );
     customerId = ins.rows[0].customer_id;
 
     // Call 1: the agent saves two durable facts.
     const save1 = await callAgentTool(request, '/agent-tools/save-customer-preference', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone,
       key: 'Preferred Stylist', // human label → slugified to preferred_stylist
       value: 'Maria',
@@ -497,7 +532,7 @@ test('conversation: a saved preference is recalled by customer-context on the ne
     expect((save1.body.result as { key: string }).key).toBe('preferred_stylist');
 
     await callAgentTool(request, '/agent-tools/save-customer-preference', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone,
       key: 'last_service',
       value: 'balayage',
@@ -512,7 +547,7 @@ test('conversation: a saved preference is recalled by customer-context on the ne
 
     // Call 2 (next week): customer-context hands the agent the preferences.
     const ctx = await callAgentTool(request, '/agent-tools/customer-context', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone,
     });
     expect(ctx.status).toBe(200);
@@ -523,7 +558,7 @@ test('conversation: a saved preference is recalled by customer-context on the ne
 
     // Unknown caller: save is a graceful no-op (saved:false), never an error.
     const miss = await callAgentTool(request, '/agent-tools/save-customer-preference', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone: `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`,
       key: 'preferred_stylist',
       value: 'Maria',
@@ -570,13 +605,13 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
       `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at)
        VALUES ($1, $2, $3, now() + interval '10 minutes')
        RETURNING phone_verification_id`,
-      [DYNATIRE_ID, phone, codeHash]
+      [freshTenant.tenantId, phone, codeHash]
     );
     pvId = ins.rows[0].phone_verification_id;
 
     // Wrong code — agent reads the failure message verbatim.
     const wrong = await callAgentTool(request, '/agent-tools/verify-phone-code', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone,
       code: '000000',
     });
@@ -585,7 +620,7 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
 
     // Correct code — agent proceeds with booking.
     const right = await callAgentTool(request, '/agent-tools/verify-phone-code', {
-      tenant_id: DYNATIRE_ID,
+      tenant_id: freshTenant.tenantId,
       phone,
       code: knownCode,
     });
@@ -602,7 +637,7 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
     if (pvId)
       await pool.query('DELETE FROM phone_verifications WHERE phone_verification_id = $1', [pvId]);
     await pool.query(`DELETE FROM phone_verifications WHERE tenant_id = $1 AND phone = $2`, [
-      DYNATIRE_ID,
+      freshTenant.tenantId,
       phone,
     ]);
   }

@@ -300,6 +300,11 @@ describe('agentTools /tenant-config', () => {
       tts_voice: null,
       tts_speed: null,
       tts_soft: null,
+      // 2026-06-14 voice style booleans default null → agent uses env defaults.
+      tts_cheerful: null,
+      tts_formal: null,
+      tts_warm: null,
+      tts_concise: null,
       // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
       forward_phone: null,
     });
@@ -352,6 +357,10 @@ describe('agentTools /tenant-config', () => {
       tts_voice: null,
       tts_speed: null,
       tts_soft: null,
+      tts_cheerful: null,
+      tts_formal: null,
+      tts_warm: null,
+      tts_concise: null,
       // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
       forward_phone: null,
     });
@@ -486,6 +495,77 @@ describe('agentTools /customer-context', () => {
       phone: 'abc123',
     });
     expect(res.json().result).toBe('New caller - no history found.');
+    expect(queries).toHaveLength(0);
+  });
+});
+
+describe('agentTools /identify-caller', () => {
+  it('HAPPY: new phone creates a customer row', async () => {
+    // WHO: First-time caller who gives their name during a non-booking call
+    // WHAT: Route inserts a new customer row via ON CONFLICT upsert
+    // WHERE: src/routes/agentTools.ts /agent-tools/identify-caller
+    // WHEN: Agent calls identify_caller tool as soon as caller says their name
+    // WHY: Previously, callers who didn't book were never saved to the address book
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [] }], // INSERT (ON CONFLICT) returns nothing
+    });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      name: 'Dale DeMott',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true });
+    expect(queries).toHaveLength(1);
+    expect(queries[0].text).toContain('INSERT INTO customers');
+    expect(queries[0].text).toContain('ON CONFLICT');
+    expect(queries[0].params).toEqual([TENANT_ID, '+15551234567', 'Dale DeMott']);
+  });
+
+  it('HAPPY: existing customer with placeholder name gets name updated', async () => {
+    // WHO: Returning caller who finally gives their name
+    // WHAT: ON CONFLICT DO UPDATE SET name only when stored name is blank/placeholder
+    // WHY: The CASE expression in the upsert leaves real names untouched
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [] }], // upsert: UPDATE path, no row returned
+    });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      name: 'Bob Smith',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true });
+    // Same upsert query handles both create and name-update paths
+    expect(queries[0].text).toMatch(/ON CONFLICT.*DO UPDATE/s);
+    expect(queries[0].text).toMatch(/Valued Customer/); // CASE guard in SQL
+  });
+
+  it('HAPPY: phone normalized before upsert', async () => {
+    // WHO: Agent passes raw 10-digit phone; must reach DB as E.164
+    // WHAT: normalizePhone runs before the INSERT so "+1" prefix is added
+    // WHY: Consistent format required to match existing rows (same contract as booking)
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [] }] });
+    await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '5559876543',
+      name: 'Jane Doe',
+    });
+    expect(queries[0].params?.[1]).toBe('+15559876543');
+  });
+
+  it('SAD: invalid phone returns error without touching DB', async () => {
+    // WHO: Garbled caller-ID — too short to normalize
+    // WHAT: Route rejects before any DB query
+    // WHY: Avoids inserting a customer row with an unusable phone number
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: 'abc',
+      name: 'Bad Phone',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
     expect(queries).toHaveLength(0);
   });
 });
@@ -1157,8 +1237,11 @@ describe('agentTools /book-with-scheduling', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         // The customerLookup helper runs first (separate transaction) — an
-        // existing customer match short-circuits the INSERT branch.
-        { rows: [{ customer_id: 'cust-1' }] },
+        // existing customer match short-circuits the INSERT branch. Because
+        // 'Bob' is a real name, the helper also fires a name UPDATE in case
+        // the stored name was blank/placeholder.
+        { rows: [{ customer_id: 'cust-1' }] }, // SELECT
+        { rows: [] }, // UPDATE name
         {
           rows: [
             {
@@ -1194,9 +1277,9 @@ describe('agentTools /book-with-scheduling', () => {
     });
     // WHY: Normalized phone must reach the RPC so the customer upsert path
     //       inside it matches previously-stored records. Helper SELECT is
-    //       queries[0]; RPC is queries[1] (post-2026-05-08 customer-create
-    //       refactor). Param shape for the RPC: $1=tenant_id, $2=phone.
-    expect(queries[1].params?.[1]).toBe('+15551234567');
+    //       queries[0]; name UPDATE is queries[1]; RPC is queries[2].
+    //       Param shape for the RPC: $1=tenant_id, $2=phone.
+    expect(queries[2].params?.[1]).toBe('+15551234567');
   });
 
   it('SAD: RPC error_code is surfaced so the agent can be specific', async () => {

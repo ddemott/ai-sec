@@ -43,7 +43,7 @@ export function useWizardCrud(
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
 
   // Step 4 — Shifts (ephemeral form state — persisted to
-  // employee_schedule on transition to step 7 via Api.shifts.expandWeekly)
+  // employee_schedule on transition to the questions step (now step 8) via Api.shifts.expandWeekly)
   const [shifts, setShifts] = useState<WizardShift[]>([]);
   const [selectedShiftEmployee, setSelectedShiftEmployee] = useState<string | null>(null);
 
@@ -325,7 +325,7 @@ export function useWizardCrud(
   }
 
   // --- Shift handlers (mutate local state only — pattern is sent to
-  //     expand-weekly when the user crosses into step 7). ---
+  //     expand-weekly when the user crosses into the questions step (now step 8)). ---
 
   function toggleShift(employeeId: string, dayOfWeek: number, startTime: string, endTime: string) {
     setShifts((prev) => {

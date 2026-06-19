@@ -267,4 +267,57 @@ export function registerAnalyticsRoutes(
       return reply.send(res.rows);
     }, 'Failed to fetch feedback')
   );
+
+  // GET /analytics/ai-cost — month-to-date AI usage aggregated by provider + model.
+  app.get(
+    '/analytics/ai-cost',
+    withHandler(async (req, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query<{
+          source: string;
+          provider: string;
+          model: string;
+          input_tokens: string;
+          output_tokens: string;
+          characters_count: string;
+          audio_duration_ms: string;
+          estimated_cost_usd: string;
+        }>(
+          `SELECT
+             source,
+             provider,
+             model,
+             SUM(input_tokens)::bigint        AS input_tokens,
+             SUM(output_tokens)::bigint       AS output_tokens,
+             SUM(characters_count)::bigint    AS characters_count,
+             SUM(audio_duration_ms)::bigint   AS audio_duration_ms,
+             SUM(estimated_cost_usd)          AS estimated_cost_usd
+           FROM ai_cost_events
+           WHERE tenant_id = $1
+             AND created_at >= date_trunc('month', now())
+           GROUP BY source, provider, model
+           ORDER BY SUM(estimated_cost_usd) DESC`,
+          [tenantId]
+        );
+      });
+
+      const breakdown = res.rows.map((r) => ({
+        source: r.source,
+        provider: r.provider,
+        model: r.model,
+        input_tokens: Number(r.input_tokens),
+        output_tokens: Number(r.output_tokens),
+        characters_count: Number(r.characters_count),
+        audio_duration_ms: Number(r.audio_duration_ms),
+        estimated_cost_usd: Number(r.estimated_cost_usd),
+      }));
+
+      const total_estimated_cost_usd = breakdown.reduce((sum, r) => sum + r.estimated_cost_usd, 0);
+
+      return reply.send({ breakdown, total_estimated_cost_usd });
+    }, 'Failed to load AI cost data')
+  );
 }

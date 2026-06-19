@@ -11,6 +11,7 @@ import ShiftManagementView from './ShiftManagementView';
 import SkillAssignmentsView from './SkillAssignmentsView';
 import TeamAccessView from './TeamAccessView';
 import BusinessSettingsView from './BusinessSettingsView';
+import BillingView from './BillingView';
 import SetupWizard from './SetupWizard';
 import SoloWizard from './SetupWizard/SoloWizard';
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser';
@@ -41,7 +42,8 @@ type SubTab =
   | 'shifts'
   | 'skills'
   | 'logins'
-  | 'business-settings';
+  | 'business-settings'
+  | 'billing';
 
 const VALID_SUB_TABS: SubTab[] = [
   'services',
@@ -51,6 +53,7 @@ const VALID_SUB_TABS: SubTab[] = [
   'skills',
   'logins',
   'business-settings',
+  'billing',
 ];
 
 function resolveInitialTab(searchParams: URLSearchParams): SubTab {
@@ -131,6 +134,7 @@ export default function SetupView() {
     { id: 'skills', label: 'Who Can Do What' },
     { id: 'logins', label: 'Team Access' },
     { id: 'business-settings', label: 'Business Settings' },
+    { id: 'billing', label: 'Billing' },
   ];
 
   // Setup Assistant wizard overlay — ported verbatim from the old
@@ -208,6 +212,7 @@ export default function SetupView() {
         {activeSubTab === 'skills' && <SkillAssignmentsView />}
         {activeSubTab === 'logins' && <TeamAccessView />}
         {activeSubTab === 'business-settings' && <BusinessSettingsView />}
+        {activeSubTab === 'billing' && <BillingView />}
       </div>
 
       {/* Wizard overlays — exactly one renders at a time, enforced by

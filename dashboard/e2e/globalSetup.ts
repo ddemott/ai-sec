@@ -5,8 +5,8 @@
  *   DROP SCHEMA public CASCADE
  *   → apply all migrations in order (tables, FKs, PKs, RLS, GRANTs,
  *     functions, triggers, indexes, types, extensions)
- *   → apply supabase/seed.sql (bare-bones tenants + owners + DynaTire
- *     business config)
+ *   → apply supabase/seed.sql (bare-bones tenants + owners + Bella's Hair Studio
+ *     business owner user)
  *
  * Every E2E run therefore starts from identical, validated state —
  * cross-spec data pollution is structurally impossible, AND the

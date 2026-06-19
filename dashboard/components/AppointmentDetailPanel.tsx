@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { formatPhone } from '../lib/phone';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -21,11 +21,14 @@ import {
   Edit,
   StickyNote,
   Trash2,
+  Send,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCustomerAddress } from '../lib/utils';
 import { useAppointmentDetail } from '../lib/AppointmentDetailContext';
 import type { Appointment } from '../lib/types';
+import { Api } from '../lib/api';
+import { showToast } from './ui/Toast';
 
 interface AppointmentDetailPanelProps {
   customers: {
@@ -105,6 +108,25 @@ export function AppointmentDetailPanel({
   // matching is by name (the same convention the auto-end-time effect
   // below uses).
   const tenantId = useActiveTenantId();
+  const [isSendingLinks, setIsSendingLinks] = useState(false);
+
+  const handleSendLinks = async () => {
+    if (!selectedAppointment) return;
+    setIsSendingLinks(true);
+    try {
+      const res = await Api.appointments.sendSelfServiceLinks(selectedAppointment.appointment_id);
+      if (res.success) {
+        showToast(res.message ?? 'Cancel/reschedule links sent.', 'success');
+      } else {
+        showToast(res.error ?? 'Failed to send links.', 'error');
+      }
+    } catch {
+      showToast('Failed to send links — check your connection.', 'error');
+    } finally {
+      setIsSendingLinks(false);
+    }
+  };
+
   const { maps } = useServiceMappings(tenantId);
   const currentServiceId = useMemo(() => {
     if (!form.description) return null;
@@ -205,6 +227,18 @@ export function AppointmentDetailPanel({
                       <Edit className="w-4 h-4 mr-2" /> Edit Details
                     </Button>
                   )}
+                  {selectedAppointment?.status === 'scheduled' &&
+                    selectedAppointment?.customers?.phone && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void handleSendLinks()}
+                        isLoading={isSendingLinks}
+                        title="Send cancel/reschedule links to customer via SMS"
+                      >
+                        <Send className="w-4 h-4 mr-1" /> Send Links
+                      </Button>
+                    )}
                 </>
               ) : (
                 <Button variant="ghost" onClick={onCancelEdit}>
