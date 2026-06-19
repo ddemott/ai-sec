@@ -148,33 +148,33 @@ export function StaffProfileCard({
       {/* Header: avatar + name + role + close */}
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3">
         <div className="flex items-center gap-3 min-w-0">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-          style={{
-            background: 'var(--accent-muted, rgba(59,130,246,0.15))',
-            color: 'var(--accent, #3b82f6)',
-          }}
-          data-testid="staff-avatar"
-        >
-          {initials}
-        </div>
-        <div className="min-w-0">
           <div
-            className="text-sm font-bold truncate"
-            style={{ color: 'var(--text-primary, #fff)' }}
-            title={employee.name}
-            data-testid="staff-card-name"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+            style={{
+              background: 'var(--accent-muted, rgba(59,130,246,0.15))',
+              color: 'var(--accent, #3b82f6)',
+            }}
+            data-testid="staff-avatar"
           >
-            {employee.name}
+            {initials}
           </div>
-          <div
-            className="text-xs truncate"
-            style={{ color: 'var(--text-muted, #888)' }}
-            data-testid="staff-card-role"
-          >
-            {employee.type === 'user' ? 'Admin' : vocab.employee_label}
+          <div className="min-w-0">
+            <div
+              className="text-sm font-bold truncate"
+              style={{ color: 'var(--text-primary, #fff)' }}
+              title={employee.name}
+              data-testid="staff-card-name"
+            >
+              {employee.name}
+            </div>
+            <div
+              className="text-xs truncate"
+              style={{ color: 'var(--text-muted, #888)' }}
+              data-testid="staff-card-role"
+            >
+              {employee.type === 'user' ? 'Admin' : vocab.employee_label}
+            </div>
           </div>
-        </div>
         </div>
         <button
           onClick={onClose}

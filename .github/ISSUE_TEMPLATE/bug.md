@@ -1,7 +1,7 @@
 ---
 name: Bug report
 about: Report a defect or unexpected behavior
-title: "[bug] "
+title: '[bug] '
 labels: bug
 assignees: ''
 ---
@@ -27,9 +27,9 @@ assignees: ''
 
 ## Environment
 
-- Browser / OS: 
-- Backend commit / version: 
-- Dashboard commit / version: 
+- Browser / OS:
+- Backend commit / version:
+- Dashboard commit / version:
 - Database: (local docker, Railway, etc.)
 
 ## Relevant logs / screenshots

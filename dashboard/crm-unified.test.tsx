@@ -1,11 +1,11 @@
-import React from 'react'
-import { expect, test, vi, beforeEach, describe } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import CRMView from './components/CRMView'
-import { MOCK_CUSTOMERS, MOCK_SUMMARIES } from './lib/mockData'
+import React from 'react';
+import { expect, test, vi, beforeEach, describe } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import CRMView from './components/CRMView';
+import { MOCK_CUSTOMERS, MOCK_SUMMARIES } from './lib/mockData';
 
 // Mock fetch
-global.fetch = vi.fn()
+global.fetch = vi.fn();
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
@@ -13,9 +13,9 @@ vi.mock('@/lib/supabase', () => ({
     select: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    then: vi.fn((resolve) => resolve({ data: [], error: null }))
-  }
-}))
+    then: vi.fn((resolve) => resolve({ data: [], error: null })),
+  },
+}));
 
 // SessionContext mock — must live at the top level so the
 // hoisting Vitest does is honest. The earlier nested placement
@@ -38,9 +38,9 @@ vi.mock('@/lib/SessionContext', () => ({
   }),
   useActiveTenantId: () => 'f234e471-0e60-4163-86c9-93cfd9338e3a',
   SessionProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
+}));
 
-const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a'
+const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 
 // Mock appointments data
 const MOCK_CUSTOMER_APPOINTMENTS = [
@@ -74,108 +74,108 @@ const MOCK_CUSTOMER_APPOINTMENTS = [
     resource_name: 'Service Truck 2',
     employee_name: 'Jane Mechanic',
   },
-]
+];
 
 /**
  * Helper to set up fetch mock that responds differently based on URL
  */
 function setupFetchMock(overrides: Record<string, unknown> = {}) {
-  ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+  (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
     if (url.includes('/customers/') && url.includes('/appointments')) {
       return Promise.resolve({
         ok: true,
         status: 200,
         json: async () => overrides.appointments ?? MOCK_CUSTOMER_APPOINTMENTS,
-      })
+      });
     }
     if (url.includes('/call-summaries')) {
       return Promise.resolve({
         ok: true,
         status: 200,
         json: async () => overrides.summaries ?? MOCK_SUMMARIES,
-      })
+      });
     }
     if (url.includes('/customers')) {
       return Promise.resolve({
         ok: true,
         status: 200,
         json: async () => overrides.customers ?? MOCK_CUSTOMERS,
-      })
+      });
     }
     // Default
     return Promise.resolve({
       ok: true,
       status: 200,
       json: async () => [],
-    })
-  })
+    });
+  });
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  window.localStorage.setItem('tenantId', TENANT_ID)
-})
+  vi.clearAllMocks();
+  window.localStorage.setItem('tenantId', TENANT_ID);
+});
 
 describe('CRM Unified View - Search', () => {
   test('should filter customer list by search query', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     // Wait for customers to load — use getAllByText since Bob appears in list and detail header
     await waitFor(() => {
-      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0)
-    })
-    expect(screen.getByText('Alice Johnson')).toBeDefined()
+      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText('Alice Johnson')).toBeDefined();
 
     // Type in search bar
-    const searchInput = screen.getByPlaceholderText('Search customers...')
-    fireEvent.change(searchInput, { target: { value: 'Bob' } })
+    const searchInput = screen.getByPlaceholderText('Search customers...');
+    fireEvent.change(searchInput, { target: { value: 'Bob' } });
 
     // The list pane should only show Bob. Alice should be gone from the list.
     // Bob still appears in the detail header, so we check Alice is gone entirely.
-    expect(screen.queryByText('Alice Johnson')).toBeNull()
-    expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Alice Johnson')).toBeNull();
+    expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
     // WHO: tenant user | WHAT: search customers by name | WHEN: customer list loaded | WHERE: CRMView search | WHY: quickly find specific customer without scrolling
-  })
+  });
 
   test('should filter by phone number', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0)
-    })
+      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
+    });
 
-    const searchInput = screen.getByPlaceholderText('Search customers...')
-    fireEvent.change(searchInput, { target: { value: '5550001111' } })
+    const searchInput = screen.getByPlaceholderText('Search customers...');
+    fireEvent.change(searchInput, { target: { value: '5550001111' } });
 
     // Alice's phone matches, Bob's doesn't — but Bob still appears in detail header
-    expect(screen.getByText('Alice Johnson')).toBeDefined()
+    expect(screen.getByText('Alice Johnson')).toBeDefined();
     // WHO: tenant user | WHAT: search customers by phone | WHEN: customer list loaded | WHERE: CRMView search | WHY: find customer by phone when name is unknown
-  })
+  });
 
   test('should show all customers when search is cleared', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0)
-    })
+      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
+    });
 
-    const searchInput = screen.getByPlaceholderText('Search customers...')
-    fireEvent.change(searchInput, { target: { value: 'zzzznotfound' } })
+    const searchInput = screen.getByPlaceholderText('Search customers...');
+    fireEvent.change(searchInput, { target: { value: 'zzzznotfound' } });
 
     // Both should be gone from the list (but Bob may persist in detail header from prior selection)
     await waitFor(() => {
-      expect(screen.queryByText('Alice Johnson')).toBeNull()
-    })
+      expect(screen.queryByText('Alice Johnson')).toBeNull();
+    });
 
-    fireEvent.change(searchInput, { target: { value: '' } })
-    expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0)
-    expect(screen.getByText('Alice Johnson')).toBeDefined()
+    fireEvent.change(searchInput, { target: { value: '' } });
+    expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
+    expect(screen.getByText('Alice Johnson')).toBeDefined();
     // WHO: tenant user | WHAT: clear search filter | WHEN: after filtering customers | WHERE: CRMView search | WHY: restore full customer list after narrowing results
-  })
-})
+  });
+});
 
 describe('CRM Unified View - Keyboard navigation (UX audit Flows 4.1.5)', () => {
   // The keyboard-nav layer (committed in a8fea43) gives front-desk
@@ -195,19 +195,21 @@ describe('CRM Unified View - Keyboard navigation (UX audit Flows 4.1.5)', () => 
     //      announce the search input but the visual focus would
     //      sit on a list row with no audible signal. Pins the
     //      combobox+listbox a11y contract.
-    setupFetchMock()
-    render(<CRMView />)
-    await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
+    setupFetchMock();
+    render(<CRMView />);
+    await waitFor(() => {
+      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
+    });
 
-    const searchInput = screen.getByPlaceholderText('Search customers...')
-    expect(searchInput.getAttribute('aria-activedescendant')).toBeFalsy()
+    const searchInput = screen.getByPlaceholderText('Search customers...');
+    expect(searchInput.getAttribute('aria-activedescendant')).toBeFalsy();
 
-    fireEvent.keyDown(searchInput, { key: 'ArrowDown' })
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
 
-    const activeId = searchInput.getAttribute('aria-activedescendant')
-    expect(activeId).toBeTruthy()
-    expect(activeId).toMatch(/^crm-customer-row-/)
-  })
+    const activeId = searchInput.getAttribute('aria-activedescendant');
+    expect(activeId).toBeTruthy();
+    expect(activeId).toMatch(/^crm-customer-row-/);
+  });
 
   test('HAPPY: Enter on search with results auto-selects the first match', async () => {
     // WHO: operator who typed a partial name and hit Enter — they
@@ -221,27 +223,29 @@ describe('CRM Unified View - Keyboard navigation (UX audit Flows 4.1.5)', () => 
     // WHY: matches Gmail/Slack quick-finder semantics — without the
     //      auto-select, the operator pays an extra ArrowDown for an
     //      unambiguous match.
-    setupFetchMock()
-    render(<CRMView />)
-    await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
+    setupFetchMock();
+    render(<CRMView />);
+    await waitFor(() => {
+      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
+    });
 
-    const searchInput = screen.getByPlaceholderText('Search customers...')
-    fireEvent.change(searchInput, { target: { value: 'Alice' } })
+    const searchInput = screen.getByPlaceholderText('Search customers...');
+    fireEvent.change(searchInput, { target: { value: 'Alice' } });
 
     // The detail pane initially shows Bob (auto-selected on mount).
     // Pin pre-state: an Alice h1 is NOT yet in the document; only
     // her list row is. After Enter, an h1 with her name should
     // appear in the detail pane.
     await waitFor(() => {
-      expect(screen.queryByRole('heading', { level: 1, name: /^Alice Johnson$/ })).toBeNull()
-    })
+      expect(screen.queryByRole('heading', { level: 1, name: /^Alice Johnson$/ })).toBeNull();
+    });
 
-    fireEvent.keyDown(searchInput, { key: 'Enter' })
+    fireEvent.keyDown(searchInput, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(screen.queryByRole('heading', { level: 1, name: /^Alice Johnson$/ })).toBeTruthy()
-    })
-  })
+      expect(screen.queryByRole('heading', { level: 1, name: /^Alice Johnson$/ })).toBeTruthy();
+    });
+  });
 
   test('HAPPY: Escape from the customer list returns focus to the search input', async () => {
     // WHO: operator who pressed `/` to search, ArrowDown'd into the
@@ -254,22 +258,24 @@ describe('CRM Unified View - Keyboard navigation (UX audit Flows 4.1.5)', () => 
     // WHY: without an explicit Escape return-path, the operator has
     //      to mouse-click back to search — defeating the point of
     //      the `/`-then-Arrow workflow.
-    setupFetchMock()
-    render(<CRMView />)
-    await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
+    setupFetchMock();
+    render(<CRMView />);
+    await waitFor(() => {
+      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
+    });
 
-    const searchInput = screen.getByPlaceholderText('Search customers...')
-    fireEvent.keyDown(searchInput, { key: 'ArrowDown' })
+    const searchInput = screen.getByPlaceholderText('Search customers...');
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
 
-    const list = document.getElementById('crm-customer-list')
-    expect(list).toBeTruthy()
-    fireEvent.keyDown(list!, { key: 'Escape' })
+    const list = document.getElementById('crm-customer-list');
+    expect(list).toBeTruthy();
+    fireEvent.keyDown(list!, { key: 'Escape' });
 
     // Focus should be back on the search input. jsdom doesn't always
     // fire focus listeners synchronously, but document.activeElement
     // reflects the focus call this code path makes.
-    expect(document.activeElement).toBe(searchInput)
-  })
+    expect(document.activeElement).toBe(searchInput);
+  });
 
   test('SAD: ArrowDown with no filtered results is a no-op', async () => {
     // WHO: operator who typed a query that matches no customers and
@@ -282,169 +288,176 @@ describe('CRM Unified View - Keyboard navigation (UX audit Flows 4.1.5)', () => 
     // WHY: a UI that arms a phantom row on ArrowDown would either
     //      crash on Enter or trap focus on an invisible target —
     //      both are worse than doing nothing.
-    setupFetchMock()
-    render(<CRMView />)
-    await waitFor(() => { expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0) })
+    setupFetchMock();
+    render(<CRMView />);
+    await waitFor(() => {
+      expect(screen.getAllByText('Bob Smith').length).toBeGreaterThan(0);
+    });
 
-    const searchInput = screen.getByPlaceholderText('Search customers...')
-    fireEvent.change(searchInput, { target: { value: 'zzzzz-no-match' } })
+    const searchInput = screen.getByPlaceholderText('Search customers...');
+    fireEvent.change(searchInput, { target: { value: 'zzzzz-no-match' } });
     // The list (id="crm-customer-list") should empty out, even if
     // the detail-pane h1 still shows Bob (auto-selected on mount).
     await waitFor(() => {
-      const list = document.getElementById('crm-customer-list')
-      expect(list?.querySelectorAll('[role="option"]').length || 0).toBe(0)
-    })
+      const list = document.getElementById('crm-customer-list');
+      expect(list?.querySelectorAll('[role="option"]').length || 0).toBe(0);
+    });
 
-    fireEvent.keyDown(searchInput, { key: 'ArrowDown' })
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
 
-    expect(searchInput.getAttribute('aria-activedescendant')).toBeFalsy()
-  })
-})
+    expect(searchInput.getAttribute('aria-activedescendant')).toBeFalsy();
+  });
+});
 
 describe('CRM Unified View - Upcoming Appointments', () => {
   test('should display upcoming appointments section when customer is selected', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     // First customer is auto-selected, wait for appointments to load
     await waitFor(() => {
-      expect(screen.getByText('Upcoming Appointments')).toBeDefined()
-    })
+      expect(screen.getByText('Upcoming Appointments')).toBeDefined();
+    });
 
     // Should show the scheduled future appointment
     await waitFor(() => {
-      expect(screen.getByText('Oil Change')).toBeDefined()
-    })
+      expect(screen.getByText('Oil Change')).toBeDefined();
+    });
     // WHO: tenant user | WHAT: view upcoming appointments | WHEN: customer selected | WHERE: CRMView detail panel | WHY: see what is scheduled next for this customer
-  })
+  });
 
   test('should show resource and employee name on appointment cards', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Oil Change')).toBeDefined()
-    })
+      expect(screen.getByText('Oil Change')).toBeDefined();
+    });
 
     // Service Truck 1 appears on multiple cards, so use getAllByText
-    expect(screen.getAllByText(/Service Truck 1/).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Mike Tech/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Service Truck 1/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Mike Tech/).length).toBeGreaterThan(0);
     // WHO: tenant user | WHAT: view resource and employee on appointment | WHEN: appointments loaded | WHERE: CRMView appointment cards | WHY: know which staff and resource are assigned to each job
-  })
+  });
 
   test('should show cancel button on upcoming appointments', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Oil Change')).toBeDefined()
-    })
+      expect(screen.getByText('Oil Change')).toBeDefined();
+    });
 
     // Should have a cancel button
-    const cancelButtons = screen.getAllByLabelText(/cancel appointment/i)
-    expect(cancelButtons.length).toBeGreaterThan(0)
+    const cancelButtons = screen.getAllByLabelText(/cancel appointment/i);
+    expect(cancelButtons.length).toBeGreaterThan(0);
     // WHO: tenant user | WHAT: see cancel action on upcoming appointment | WHEN: future appointment displayed | WHERE: CRMView appointment cards | WHY: allow quick cancellation without navigating away
-  })
-})
+  });
+});
 
 describe('CRM Unified View - Appointment History', () => {
   test('should display past appointments section', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Appointment History')).toBeDefined()
-    })
+      expect(screen.getByText('Appointment History')).toBeDefined();
+    });
     // WHO: tenant user | WHAT: view appointment history section | WHEN: customer selected | WHERE: CRMView detail panel | WHY: review past service interactions for context
-  })
+  });
 
   test('should show completed and canceled appointments in history', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Tire Rotation')).toBeDefined()
-      expect(screen.getByText('Brake Inspection')).toBeDefined()
-    })
+      expect(screen.getByText('Tire Rotation')).toBeDefined();
+      expect(screen.getByText('Brake Inspection')).toBeDefined();
+    });
     // WHO: tenant user | WHAT: view completed and canceled appointments | WHEN: customer has past appointments | WHERE: CRMView history section | WHY: see full service history including cancellations
-  })
+  });
 
   test('should show status badges on past appointments', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Completed')).toBeDefined()
-      expect(screen.getByText('Canceled')).toBeDefined()
-    })
+      expect(screen.getByText('Completed')).toBeDefined();
+      expect(screen.getByText('Canceled')).toBeDefined();
+    });
     // WHO: tenant user | WHAT: view status badges on past appointments | WHEN: history loaded | WHERE: CRMView history section | WHY: distinguish completed jobs from canceled ones at a glance
-  })
-})
+  });
+});
 
 describe('CRM Unified View - AI Call History', () => {
   test('should display call summaries section', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText('AI Call History')).toBeDefined()
-    })
+      expect(screen.getByText('AI Call History')).toBeDefined();
+    });
 
     await waitFor(() => {
-      expect(screen.getByText(/Bob called to ask about pricing/)).toBeDefined()
-    })
+      expect(screen.getByText(/Bob called to ask about pricing/)).toBeDefined();
+    });
     // WHO: tenant user | WHAT: view AI call summaries | WHEN: customer selected with call history | WHERE: CRMView call history section | WHY: review what the AI discussed with the customer
-  })
-})
+  });
+});
 
 describe('CRM Unified View - Cancel Appointment Flow', () => {
   test('should cancel an appointment and refresh the list', async () => {
-    setupFetchMock()
-    render(<CRMView />)
+    setupFetchMock();
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText('Oil Change')).toBeDefined()
-    })
+      expect(screen.getByText('Oil Change')).toBeDefined();
+    });
 
     // Click cancel on the upcoming appointment — opens confirmation modal
-    const cancelButton = screen.getAllByLabelText(/cancel appointment/i)[0]
-    fireEvent.click(cancelButton)
+    const cancelButton = screen.getAllByLabelText(/cancel appointment/i)[0];
+    fireEvent.click(cancelButton);
 
     // Confirm in the modal — click the button (not the title)
     await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeDefined()
-    })
-    const confirmBtn = screen.getAllByText('Cancel Appointment').find(el => el.tagName === 'BUTTON')!
-    fireEvent.click(confirmBtn)
+      expect(screen.getByRole('dialog')).toBeDefined();
+    });
+    const confirmBtn = screen
+      .getAllByText('Cancel Appointment')
+      .find((el) => el.tagName === 'BUTTON')!;
+    fireEvent.click(confirmBtn);
 
     // Should have called the cancel endpoint
     await waitFor(() => {
-      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
-      const cancelCall = calls.find((c: unknown[]) => typeof c[0] === 'string' && c[0].includes('/appointments/') && c[0].includes('/cancel'))
-      expect(cancelCall).toBeDefined()
-    })
+      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      const cancelCall = calls.find(
+        (c: unknown[]) =>
+          typeof c[0] === 'string' && c[0].includes('/appointments/') && c[0].includes('/cancel')
+      );
+      expect(cancelCall).toBeDefined();
+    });
     // WHO: tenant user | WHAT: cancel an upcoming appointment | WHEN: appointment is in the future | WHERE: CRMView appointment card | WHY: allow front-desk staff to cancel on behalf of customer
-  })
-})
+  });
+});
 
 describe('CRM Unified View - Empty States', () => {
   test('should show message when no upcoming appointments', async () => {
-    setupFetchMock({ appointments: [] })
-    render(<CRMView />)
+    setupFetchMock({ appointments: [] });
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText(/no upcoming appointments/i)).toBeDefined()
-    })
+      expect(screen.getByText(/no upcoming appointments/i)).toBeDefined();
+    });
     // WHO: tenant user | WHAT: see empty upcoming appointments state | WHEN: customer has no future bookings | WHERE: CRMView detail panel | WHY: confirm no upcoming work rather than showing blank space
-  })
+  });
 
   test('should show message when no appointment history', async () => {
-    setupFetchMock({ appointments: [] })
-    render(<CRMView />)
+    setupFetchMock({ appointments: [] });
+    render(<CRMView />);
 
     await waitFor(() => {
-      expect(screen.getByText(/no past appointments/i)).toBeDefined()
-    })
+      expect(screen.getByText(/no past appointments/i)).toBeDefined();
+    });
     // WHO: tenant user | WHAT: see empty appointment history state | WHEN: customer is new with no past visits | WHERE: CRMView history section | WHY: clearly indicate no prior service history exists
-  })
-})
+  });
+});

@@ -402,7 +402,10 @@ export default function VoiceCallsView() {
       </div>
 
       {/* Right Panel: Call Details */}
-      <div className="flex-1 overflow-y-auto flex flex-col" style={{ backgroundColor: 'var(--bg-base)' }}>
+      <div
+        className="flex-1 overflow-y-auto flex flex-col"
+        style={{ backgroundColor: 'var(--bg-base)' }}
+      >
         {selectedCall ? (
           <div className="p-6">
             {/* Call Header */}

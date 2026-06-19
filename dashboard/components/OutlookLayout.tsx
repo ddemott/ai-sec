@@ -130,12 +130,7 @@ export function OutlookLayout({
   // they always land on the simplest working surface.
   useEffect(() => {
     if (!isFrontDeskOnly) return;
-    const restrictedTabs = new Set<Tab>([
-      'setup',
-      'ai-insights',
-      'settings',
-      'all-businesses',
-    ]);
+    const restrictedTabs = new Set<Tab>(['setup', 'ai-insights', 'settings', 'all-businesses']);
     if (restrictedTabs.has(activeTab)) setActiveTab('dashboard');
   }, [isFrontDeskOnly, activeTab, setActiveTab]);
 
@@ -342,9 +337,7 @@ export function OutlookLayout({
                 title={`Account: ${userName || 'Profile'}`}
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 className={`inline-flex items-center justify-center min-w-[40px] min-h-[40px] p-2 rounded-md transition-all ${
-                  profileMenuOpen || activeTab === 'profile'
-                    ? ''
-                    : 'hover:brightness-110'
+                  profileMenuOpen || activeTab === 'profile' ? '' : 'hover:brightness-110'
                 }`}
                 style={
                   profileMenuOpen || activeTab === 'profile'
@@ -654,7 +647,10 @@ export function OutlookLayout({
                   className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all hover:brightness-110"
                   style={
                     theme === t.id
-                      ? { boxShadow: '0 0 0 2px var(--accent)', backgroundColor: 'var(--accent-muted)' }
+                      ? {
+                          boxShadow: '0 0 0 2px var(--accent)',
+                          backgroundColor: 'var(--accent-muted)',
+                        }
                       : undefined
                   }
                 >

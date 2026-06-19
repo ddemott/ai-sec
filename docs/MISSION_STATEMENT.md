@@ -5,6 +5,7 @@
 We are building **SecretaryHQ** — an AI secretary as a service that gives small and medium businesses a reliable, always-available front desk without the cost and complexity of hiring full-time staff.
 
 The system should:
+
 - Answer calls and messages as naturally as a human.
 - Capture all the information a good receptionist would.
 - Book and manage appointments correctly in the right calendars.
@@ -21,6 +22,7 @@ Our initial focus is on **service businesses** that live and die by their schedu
 - Trades and professional services (fitness, food & beverage, and more).
 
 These businesses typically:
+
 - Miss calls when busy, losing revenue.
 - Rely on a single receptionist or owner who is stretched thin.
 - Struggle with no-shows and last-minute changes.
@@ -30,6 +32,7 @@ These businesses typically:
 ### 3.1 SecretaryHQ
 
 A conversational agent that:
+
 - Answers phone calls and SMS on behalf of the business.
 - Speaks with a **very human-sounding voice** and low latency.
 - Handles common receptionist tasks:
@@ -41,6 +44,7 @@ A conversational agent that:
 ### 3.2 Built-in CRM
 
 An internal customer relationship layer that:
+
 - Stores customers with contact details, preferences, and history.
 - Keeps notes at both the **customer** and **appointment** level.
 - Records communication preferences (SMS, email, call).
@@ -51,12 +55,14 @@ This CRM is the **default** for all tenants. Bidirectional sync with external CR
 ### 3.3 Internal Calendar + External Sync
 
 A robust internal calendar model that:
+
 - Represents resources (stylists, bays, trucks, technicians, etc.).
 - Defines working hours and availability rules.
 - Stores all appointments and their statuses.
 - **Excellent test coverage:** All calendar and booking logic is fully verified; all tests pass.
 
 And a sync layer that:
+
 - Mirrors appointments into external calendars (Outlook/Google) so owners and staff can see their schedule where they already work.
 - Maintains mappings between internal appointments and external events.
 
@@ -81,6 +87,7 @@ A templating system that makes the platform adaptable across industries:
   - Location and job type are critical to scheduling.
 
 Templates capture:
+
 - Resource types, calendars, and basic scheduling rules.
 - What information must be collected from the caller.
 - How to map bookings into external calendars.
@@ -88,11 +95,13 @@ Templates capture:
 ## 4. Why This Matters
 
 For business owners:
+
 - Fewer missed calls and lost opportunities.
 - Lower staffing costs or the ability to re-focus staff on higher-value work.
 - More consistent customer experience, 24/7 if desired.
 
 For customers calling in:
+
 - Faster response and less time on hold.
 - Clear, consistent information and confirmations.
 - The feeling of talking to a competent, polite assistant.

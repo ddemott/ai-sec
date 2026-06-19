@@ -64,7 +64,9 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
       <header className="px-4 py-3 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <User className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
-          <h3 id="focus-panel-title" className="font-bold text-gray-900 dark:text-gray-100">{employee.name}</h3>
+          <h3 id="focus-panel-title" className="font-bold text-gray-900 dark:text-gray-100">
+            {employee.name}
+          </h3>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close focus panel">
           <X className="w-4 h-4" />
@@ -147,9 +149,7 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
                     <div className="text-xs font-bold text-gray-900 dark:text-gray-100">
                       {formatTimeFromISO(appt.start_time)}
                     </div>
-                    <div className="text-xs text-gray-400">
-                      {formatTimeFromISO(appt.end_time)}
-                    </div>
+                    <div className="text-xs text-gray-400">{formatTimeFromISO(appt.end_time)}</div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">

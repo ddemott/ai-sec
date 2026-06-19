@@ -204,5 +204,4 @@ describe('nameUtils', () => {
       expect(buildDisplayName('John', '')).toBe('John');
     });
   });
-
 });

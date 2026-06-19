@@ -1,4 +1,5 @@
 # SecretaryHQ — Design & UX Handoff Document
+
 **Date:** March 24, 2026  
 **From:** Dale (Product Owner) + Claude (Web)  
 **To:** Claude Code  
@@ -10,7 +11,7 @@
 
 ## About This Document
 
-Dale and I spent an extended session working through the demo, the real app, and a series of UX decisions. Every decision here was discussed, debated, and landed on deliberately. The reasoning is included because context matters — knowing *why* a decision was made prevents you from accidentally undoing it.
+Dale and I spent an extended session working through the demo, the real app, and a series of UX decisions. Every decision here was discussed, debated, and landed on deliberately. The reasoning is included because context matters — knowing _why_ a decision was made prevents you from accidentally undoing it.
 
 The working artifact from this session is `secretaryhq-demo.html` — an interactive in-browser demo with no backend, no database, all mock data in memory. It is **not** the real app. It is a design reference and prospect-facing demo. The real app (Next.js dashboard) should be reskinned to match the decisions documented here.
 
@@ -47,6 +48,7 @@ The working artifact from this session is `secretaryhq-demo.html` — an interac
 **Reasoning:** External review flagged the two-mode toggle as cognitively expensive for non-technical users — staff had to learn a meta-concept ("which mode am I in?") before they could find the action they wanted. Flattening to a single bar makes the most-used destinations one click away and lets role-based gating (rather than mode-switching) hide the configuration surface from front-desk staff.
 
 **Sidebar visual spec (from demo):**
+
 - Background: `--bg-surface`
 - Active item: left border `2px solid var(--accent)` + background `var(--accent-muted)`
 - Section labels: `10px, font-weight 600, letter-spacing 0.12em, uppercase, color var(--text-muted)`
@@ -65,6 +67,7 @@ This is the most significant change. The scheduler was completely rethought duri
 ### 4a. Orientation — Rows = Staff, Columns = Hours
 
 **Decision:** Flip the scheduler 90 degrees from the original implementation.
+
 - **Rows** = staff members (one row per person, scrolls vertically)
 - **Columns** = hours of the day (left to right, scrolls horizontally)
 
@@ -75,6 +78,7 @@ This is the most significant change. The scheduler was completely rethought duri
 **Decision:** Staff names must remain visible at all times as the user scrolls horizontally through the hours.
 
 **Implementation:** Split into two separate scroll containers:
+
 - **Left panel (160px wide):** Staff names only. Fixed, no horizontal scroll. Scrolls vertically in sync with the appointment rows.
 - **Right panel:** Hour header + appointment rows. Scrolls both horizontally and vertically.
 - **Sync:** When the right panel scrolls vertically, the left panel scrolls to match. When the right panel scrolls horizontally, the hour header scrolls to match.
@@ -98,8 +102,9 @@ This is NOT achievable with CSS `position: sticky` alone because the scroll happ
 **Why no labels:** "OPEN" and "CLOSE" text was tried and removed. It's redundant — if you can see the darker zone you already know. Labels added noise without adding information.
 
 **Business hours defined:**
+
 - DynaTire: 7am–6pm
-- Bella's Hair: 9am–7pm  
+- Bella's Hair: 9am–7pm
 - QuickFix Auto: 7am–5pm
 
 ### 4e. Zoom Control
@@ -117,6 +122,7 @@ This is NOT achievable with CSS `position: sticky` alone because the scroll happ
 **Reasoning:** Manager is mid-scheduling and needs to quickly answer "can this person do this service?" or "when do they leave today?" Without leaving the scheduler. The card is purely informational — no editing. Editing belongs in My Team.
 
 **Card contents (exact layout agreed upon):**
+
 ```
   [Avatar]  Name
             Role
@@ -147,6 +153,7 @@ This is NOT achievable with CSS `position: sticky` alone because the scroll happ
 **Skills mode (to be built):** Stacked bars within each staff member's shift hours. Each skill is a separate bar, same color across all staff for that skill. Bar spans the employee's working hours. Label at the left edge of the bar.
 
 **Example:**
+
 ```
 Mike    [Oil Change      8am ————————————— 4pm]
         [Tire Rotation   8am ————————————— 4pm]
@@ -169,6 +176,7 @@ Carlos  [Oil Change      8am ———————— 3pm     ]
 **Pattern:** Same drag-and-drop pattern as the existing tenant reorder in the admin panel. Drag handle on the left edge of the name cell (grip icon). Row lifts slightly during drag, others shift to show drop target.
 
 **Save behavior:**
+
 - **Save button** appears in scheduler header when unsaved changes exist — "Save Order" and "Discard"
 - **If Save clicked:** Persists. Same order next visit.
 - **If Discard clicked:** Reverts immediately, no prompt.
@@ -187,11 +195,12 @@ Carlos  [Oil Change      8am ———————— 3pm     ]
 
 The original Coverage Map showed gap analysis — "Carlos not certified," "Dana unavailable after 1pm," "50% staffed." This was us telling the manager how to run their business. We don't know what 50% means for their operation. We don't know if they need seasonal tire swaps in July (they don't). We don't know if 2 cashiers at 9pm is fine or a disaster. Only the manager knows.
 
-The gap analysis was also vague and actionless. A bar showing "50% coverage" doesn't tell you *which* hours, *which* days, or *what* to do about it. It creates noise without signal.
+The gap analysis was also vague and actionless. A bar showing "50% coverage" doesn't tell you _which_ hours, _which_ days, or _what_ to do about it. It creates noise without signal.
 
 **The replacement:** The Skills toggle in the scheduler (Section 4g) IS the coverage tool. It shows who is on the floor, when, and what they can do. The manager looks at it and decides if they're set. No percentages, no warnings, no system opinions. Just a neutral staffing picture.
 
 **Philosophy that drove this decision:**
+
 > We surface the data. They manage the business. We are a scheduling tool, not a management consultant.
 
 This came up repeatedly throughout the session. Our job is to show information clearly. Their job is to interpret it. Any time the UI starts telling the user what's wrong or what to do, we've overstepped.
@@ -213,6 +222,7 @@ This came up repeatedly throughout the session. Our job is to show information c
 **Decision:** Completely rebuild the analytics screen. The old version was a vanity dashboard — numbers without context, no actionable insight. A business owner would look at it and say "this is useless to me."
 
 **Philosophy:**
+
 > We give them numbers so they can look at their own business and figure it out. We aren't answering questions — we're surfacing patterns that make them ask WHY.
 
 **The six metrics we actually build (Phase 1):**
@@ -230,6 +240,7 @@ This came up repeatedly throughout the session. Our job is to show information c
 6. **No-Show Pattern** — which days have the most no-shows? Color coded (green/yellow/red). Patterns here often have meaning — Saturday morning bookings at this shop consistently no-show. Owner can act on that.
 
 **What we explicitly decided NOT to include:**
+
 - "AI Performance Score" — meaningless without context
 - Average call length — interesting but not actionable
 - Staff request tracking — data lives in unstructured notes, can't be reliably parsed. Phase 2 when AI captures it as structured data.
@@ -254,6 +265,7 @@ This came up repeatedly throughout the session. Our job is to show information c
 **Decision:** There will be two separate demo versions:
 
 **Version 1 — Public Demo** (lives on the landing page at `/demo`)
+
 - Simple, impressive, shows "wow" moments
 - Live call transcript, swimlane scheduler, customer profiles
 - Enough to make a prospect pick up the phone or hit Start Trial
@@ -261,6 +273,7 @@ This came up repeatedly throughout the session. Our job is to show information c
 - This is `secretaryhq-demo.html`
 
 **Version 2 — Customer App** (the real dashboard)
+
 - Complete — all views, all functionality
 - Skill Relationship Map, My Team, My Business, Phone Assistant, Settings, SuperAdmin
 - Fully themed with all decisions in this document applied
@@ -318,4 +331,4 @@ Bays for tire shops. Chairs for salons. Technicians vs Stylists vs Mechanics. Th
 
 ---
 
-*This document represents a single focused design session. Every decision was made deliberately with reasoning. When in doubt, ask Dale — don't assume.*
+_This document represents a single focused design session. Every decision was made deliberately with reasoning. When in doubt, ask Dale — don't assume._

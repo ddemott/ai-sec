@@ -1,844 +1,1625 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SecretaryHQ Dashboard — UX/UI Audit · 2026-05-18</title>
-<style>
-  :root{
-    --bg:#0b0e14; --panel:#11161f; --panel2:#161c28; --line:#1f2937;
-    --text:#e8eef7; --muted:#94a3b8; --mute2:#64748b;
-    --p0:#dc2626; --p1:#ea580c; --p2:#ca8a04; --p3:#6b7280;
-    --s:#22c55e; --m:#eab308; --l:#a855f7;
-    --accent:#60a5fa;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    font-size:15px; line-height:1.55;}
-  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px;}
-  h1,h2,h3,h4{font-weight:700;line-height:1.25;margin:0 0 12px}
-  h1{font-size:28px;letter-spacing:-0.01em}
-  h2{font-size:22px;margin-top:48px;padding-top:24px;border-top:1px solid var(--line)}
-  h3{font-size:17px;margin-top:24px}
-  h4{font-size:14px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-top:24px}
-  p{margin:0 0 12px;color:#cdd5e0}
-  code,kbd{background:#1a2030;color:#a5b4fc;padding:1.5px 6px;border-radius:4px;
-    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.85em;}
-  .meta{color:var(--muted);font-size:13px;margin-top:-4px}
-  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;
-    font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#fff;vertical-align:middle}
-  .b-p0{background:var(--p0)}  .b-p1{background:var(--p1)}
-  .b-p2{background:var(--p2)}  .b-p3{background:var(--p3)}
-  .b-s{background:var(--s);color:#031b0a}
-  .b-m{background:var(--m);color:#2a1e02}
-  .b-l{background:var(--l)}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    padding:20px 22px;margin:18px 0}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:640px){.grid2{grid-template-columns:1fr}}
-  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
-  th,td{border-bottom:1px solid var(--line);padding:9px 8px;text-align:left;vertical-align:top}
-  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.04em}
-  tr:last-child td{border-bottom:none}
-  ul{margin:6px 0 12px 18px;padding:0}
-  li{margin:4px 0;color:#cdd5e0}
-  .small{font-size:12.5px;color:var(--muted)}
-  .pill{display:inline-block;background:#0f1623;border:1px solid var(--line);
-    color:var(--muted);padding:1px 8px;border-radius:6px;font-size:11.5px;margin-right:4px}
-  .ref{font-family:ui-monospace,monospace;font-size:12px;color:#a5b4fc}
-  svg{display:block;max-width:100%;height:auto}
-  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin:8px 0 0}
-  .sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:6px}
-  .hi{font-weight:700;color:var(--text)}
-  .stat{display:inline-block;background:#0f1623;border:1px solid var(--line);
-    padding:8px 12px;border-radius:8px;margin:6px 8px 6px 0;font-size:13px;color:var(--muted)}
-  .stat b{color:var(--text);font-size:18px;margin-right:5px}
-  hr{border:none;border-top:1px solid var(--line);margin:32px 0}
-  .finding{border-left:3px solid var(--mute2);padding:8px 0 8px 14px;margin:14px 0}
-  .finding.p0{border-color:var(--p0)} .finding.p1{border-color:var(--p1)}
-  .finding.p2{border-color:var(--p2)} .finding.p3{border-color:var(--p3)}
-  .finding h3{margin:0 0 6px;font-size:15.5px}
-  .finding .refs{margin-top:4px}
-  .wireframe-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-  @media(max-width:640px){.wireframe-pair{grid-template-columns:1fr}}
-  .wireframe-pair figcaption{font-size:11px;color:var(--muted);text-align:center;margin-top:4px;text-transform:uppercase;letter-spacing:0.04em}
-</style>
-</head>
-<body>
-<div class="wrap">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SecretaryHQ Dashboard — UX/UI Audit · 2026-05-18</title>
+    <style>
+      :root {
+        --bg: #0b0e14;
+        --panel: #11161f;
+        --panel2: #161c28;
+        --line: #1f2937;
+        --text: #e8eef7;
+        --muted: #94a3b8;
+        --mute2: #64748b;
+        --p0: #dc2626;
+        --p1: #ea580c;
+        --p2: #ca8a04;
+        --p3: #6b7280;
+        --s: #22c55e;
+        --m: #eab308;
+        --l: #a855f7;
+        --accent: #60a5fa;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+      }
+      h1,
+      h2,
+      h3,
+      h4 {
+        font-weight: 700;
+        line-height: 1.25;
+        margin: 0 0 12px;
+      }
+      h1 {
+        font-size: 28px;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        font-size: 22px;
+        margin-top: 48px;
+        padding-top: 24px;
+        border-top: 1px solid var(--line);
+      }
+      h3 {
+        font-size: 17px;
+        margin-top: 24px;
+      }
+      h4 {
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin-top: 24px;
+      }
+      p {
+        margin: 0 0 12px;
+        color: #cdd5e0;
+      }
+      code,
+      kbd {
+        background: #1a2030;
+        color: #a5b4fc;
+        padding: 1.5px 6px;
+        border-radius: 4px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85em;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: -4px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #fff;
+        vertical-align: middle;
+      }
+      .b-p0 {
+        background: var(--p0);
+      }
+      .b-p1 {
+        background: var(--p1);
+      }
+      .b-p2 {
+        background: var(--p2);
+      }
+      .b-p3 {
+        background: var(--p3);
+      }
+      .b-s {
+        background: var(--s);
+        color: #031b0a;
+      }
+      .b-m {
+        background: var(--m);
+        color: #2a1e02;
+      }
+      .b-l {
+        background: var(--l);
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px 22px;
+        margin: 18px 0;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      @media (max-width: 640px) {
+        .grid2 {
+          grid-template-columns: 1fr;
+        }
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13.5px;
+        margin-top: 8px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 9px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+      ul {
+        margin: 6px 0 12px 18px;
+        padding: 0;
+      }
+      li {
+        margin: 4px 0;
+        color: #cdd5e0;
+      }
+      .small {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-block;
+        background: #0f1623;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        padding: 1px 8px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        margin-right: 4px;
+      }
+      .ref {
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        color: #a5b4fc;
+      }
+      svg {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        font-size: 12.5px;
+        color: var(--muted);
+        margin: 8px 0 0;
+      }
+      .sw {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        vertical-align: -2px;
+        margin-right: 6px;
+      }
+      .hi {
+        font-weight: 700;
+        color: var(--text);
+      }
+      .stat {
+        display: inline-block;
+        background: #0f1623;
+        border: 1px solid var(--line);
+        padding: 8px 12px;
+        border-radius: 8px;
+        margin: 6px 8px 6px 0;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .stat b {
+        color: var(--text);
+        font-size: 18px;
+        margin-right: 5px;
+      }
+      hr {
+        border: none;
+        border-top: 1px solid var(--line);
+        margin: 32px 0;
+      }
+      .finding {
+        border-left: 3px solid var(--mute2);
+        padding: 8px 0 8px 14px;
+        margin: 14px 0;
+      }
+      .finding.p0 {
+        border-color: var(--p0);
+      }
+      .finding.p1 {
+        border-color: var(--p1);
+      }
+      .finding.p2 {
+        border-color: var(--p2);
+      }
+      .finding.p3 {
+        border-color: var(--p3);
+      }
+      .finding h3 {
+        margin: 0 0 6px;
+        font-size: 15.5px;
+      }
+      .finding .refs {
+        margin-top: 4px;
+      }
+      .wireframe-pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      @media (max-width: 640px) {
+        .wireframe-pair {
+          grid-template-columns: 1fr;
+        }
+      }
+      .wireframe-pair figcaption {
+        font-size: 11px;
+        color: var(--muted);
+        text-align: center;
+        margin-top: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>SecretaryHQ Dashboard — UX/UI Audit</h1>
+        <p class="meta">
+          2026-05-18 · scope: <code>dashboard/</code> · backend referenced where it surfaces in UI ·
+          27 findings, top-10 recommended
+        </p>
+      </header>
 
-<header>
-  <h1>SecretaryHQ Dashboard — UX/UI Audit</h1>
-  <p class="meta">2026-05-18 · scope: <code>dashboard/</code> · backend referenced where it surfaces in UI · 27 findings, top-10 recommended</p>
-</header>
+      <!-- =================== EXECUTIVE SUMMARY =================== -->
+      <h2>1. Executive summary</h2>
+      <p>
+        The dashboard is structurally solid: a single primary tab bar, clear role-gating, an
+        Outlook-style shell, theme tokens, and a thoughtful Home + Quick Book entry point. The
+        friction is concentrated in three places.
+        <strong>(a) Destructive flows are inconsistent</strong> — nine sites use
+        <code>window.confirm()</code> / <code>alert()</code> instead of the project's own
+        <code>ConfirmModal</code> primitive, which looks broken in dark themes and bypasses the
+        design system. <strong>(b) Touch reachability is incomplete</strong> — the appointment
+        delete affordance is a hover-only trash icon, and the mobile bottom nav cram-renders 5+ tabs
+        at 9 px. <strong>(c) Status feedback drifts</strong> — the "active call" red pulse on the
+        Calls tab refetches only on tab change, so the badge that feels live is actually stale.
+        Fixing the destructive-flow gap alone removes the largest source of perceived-instability
+        and is mostly mechanical.
+      </p>
 
-<!-- =================== EXECUTIVE SUMMARY =================== -->
-<h2>1. Executive summary</h2>
-<p>
-  The dashboard is structurally solid: a single primary tab bar, clear role-gating, an Outlook-style
-  shell, theme tokens, and a thoughtful Home + Quick Book entry point. The friction is concentrated in
-  three places. <strong>(a) Destructive flows are inconsistent</strong> — nine sites use
-  <code>window.confirm()</code> / <code>alert()</code> instead of the project's own
-  <code>ConfirmModal</code> primitive, which looks broken in dark themes and bypasses the design system.
-  <strong>(b) Touch reachability is incomplete</strong> — the appointment delete affordance is a
-  hover-only trash icon, and the mobile bottom nav cram-renders 5+ tabs at 9 px. <strong>(c) Status
-  feedback drifts</strong> — the "active call" red pulse on the Calls tab refetches only on tab change,
-  so the badge that feels live is actually stale. Fixing the destructive-flow gap alone removes the
-  largest source of perceived-instability and is mostly mechanical.
-</p>
+      <!-- severity distribution chart -->
+      <svg viewBox="0 0 720 160" role="img" aria-label="Severity distribution chart">
+        <style>
+          .bar-lbl {
+            font:
+              600 12px -apple-system,
+              sans-serif;
+            fill: #cdd5e0;
+          }
+          .bar-n {
+            font:
+              700 22px -apple-system,
+              sans-serif;
+            fill: #fff;
+          }
+          .axis {
+            font:
+              11px -apple-system,
+              sans-serif;
+            fill: #64748b;
+          }
+        </style>
+        <rect x="0" y="0" width="720" height="160" fill="#11161f" rx="10" />
+        <text x="20" y="22" class="bar-lbl">Findings by severity (n=27)</text>
+        <!-- P0: 3 -->
+        <rect x="30" y="55" width="60" height="80" fill="#dc2626" rx="3" />
+        <text x="60" y="100" class="bar-n" text-anchor="middle">3</text>
+        <text x="60" y="148" class="axis" text-anchor="middle">P0 · Critical</text>
+        <!-- P1: 9 -->
+        <rect x="120" y="35" width="60" height="100" fill="#ea580c" rx="3" />
+        <text x="150" y="90" class="bar-n" text-anchor="middle">9</text>
+        <text x="150" y="148" class="axis" text-anchor="middle">P1 · High</text>
+        <!-- P2: 10 -->
+        <rect x="210" y="25" width="60" height="110" fill="#ca8a04" rx="3" />
+        <text x="240" y="85" class="bar-n" text-anchor="middle">10</text>
+        <text x="240" y="148" class="axis" text-anchor="middle">P2 · Medium</text>
+        <!-- P3: 5 -->
+        <rect x="300" y="70" width="60" height="65" fill="#6b7280" rx="3" />
+        <text x="330" y="110" class="bar-n" text-anchor="middle">5</text>
+        <text x="330" y="148" class="axis" text-anchor="middle">P3 · Low</text>
+        <!-- effort bars -->
+        <text x="430" y="22" class="bar-lbl">Effort distribution</text>
+        <rect x="430" y="55" width="60" height="80" fill="#22c55e" rx="3" />
+        <text x="460" y="100" class="bar-n" text-anchor="middle" style="fill: #031b0a">14</text>
+        <text x="460" y="148" class="axis" text-anchor="middle">S · &lt;1 day</text>
+        <rect x="520" y="45" width="60" height="90" fill="#eab308" rx="3" />
+        <text x="550" y="95" class="bar-n" text-anchor="middle" style="fill: #2a1e02">10</text>
+        <text x="550" y="148" class="axis" text-anchor="middle">M · 1-3 days</text>
+        <rect x="610" y="95" width="60" height="40" fill="#a855f7" rx="3" />
+        <text x="640" y="125" class="bar-n" text-anchor="middle">3</text>
+        <text x="640" y="148" class="axis" text-anchor="middle">L · &gt;3 days</text>
+      </svg>
 
-<!-- severity distribution chart -->
-<svg viewBox="0 0 720 160" role="img" aria-label="Severity distribution chart">
-  <style>
-    .bar-lbl{font:600 12px -apple-system,sans-serif;fill:#cdd5e0}
-    .bar-n{font:700 22px -apple-system,sans-serif;fill:#fff}
-    .axis{font:11px -apple-system,sans-serif;fill:#64748b}
-  </style>
-  <rect x="0" y="0" width="720" height="160" fill="#11161f" rx="10"/>
-  <text x="20" y="22" class="bar-lbl">Findings by severity (n=27)</text>
-  <!-- P0: 3 -->
-  <rect x="30" y="55" width="60" height="80" fill="#dc2626" rx="3"/>
-  <text x="60" y="100" class="bar-n" text-anchor="middle">3</text>
-  <text x="60" y="148" class="axis" text-anchor="middle">P0 · Critical</text>
-  <!-- P1: 9 -->
-  <rect x="120" y="35" width="60" height="100" fill="#ea580c" rx="3"/>
-  <text x="150" y="90" class="bar-n" text-anchor="middle">9</text>
-  <text x="150" y="148" class="axis" text-anchor="middle">P1 · High</text>
-  <!-- P2: 10 -->
-  <rect x="210" y="25" width="60" height="110" fill="#ca8a04" rx="3"/>
-  <text x="240" y="85" class="bar-n" text-anchor="middle">10</text>
-  <text x="240" y="148" class="axis" text-anchor="middle">P2 · Medium</text>
-  <!-- P3: 5 -->
-  <rect x="300" y="70" width="60" height="65" fill="#6b7280" rx="3"/>
-  <text x="330" y="110" class="bar-n" text-anchor="middle">5</text>
-  <text x="330" y="148" class="axis" text-anchor="middle">P3 · Low</text>
-  <!-- effort bars -->
-  <text x="430" y="22" class="bar-lbl">Effort distribution</text>
-  <rect x="430" y="55" width="60" height="80" fill="#22c55e" rx="3"/>
-  <text x="460" y="100" class="bar-n" text-anchor="middle" style="fill:#031b0a">14</text>
-  <text x="460" y="148" class="axis" text-anchor="middle">S · &lt;1 day</text>
-  <rect x="520" y="45" width="60" height="90" fill="#eab308" rx="3"/>
-  <text x="550" y="95" class="bar-n" text-anchor="middle" style="fill:#2a1e02">10</text>
-  <text x="550" y="148" class="axis" text-anchor="middle">M · 1-3 days</text>
-  <rect x="610" y="95" width="60" height="40" fill="#a855f7" rx="3"/>
-  <text x="640" y="125" class="bar-n" text-anchor="middle">3</text>
-  <text x="640" y="148" class="axis" text-anchor="middle">L · &gt;3 days</text>
-</svg>
+      <div class="panel">
+        <span class="stat"><b>27</b> findings</span>
+        <span class="stat"><b>3</b> P0 critical</span>
+        <span class="stat"><b>14</b> small-effort fixes</span>
+        <span class="stat"><b>8</b> themes audited</span>
+        <span class="stat"><b>53</b> files w/ hardcoded gray classes</span>
+      </div>
 
-<div class="panel">
-  <span class="stat"><b>27</b> findings</span>
-  <span class="stat"><b>3</b> P0 critical</span>
-  <span class="stat"><b>14</b> small-effort fixes</span>
-  <span class="stat"><b>8</b> themes audited</span>
-  <span class="stat"><b>53</b> files w/ hardcoded gray classes</span>
-</div>
+      <!-- =================== SITEMAP =================== -->
+      <h2>2. Visual sitemap</h2>
+      <p>
+        Single Next.js route <code>/dashboard</code>. State is held in URL params
+        (<code>?tab=</code>, <code>?subtab=</code>, <code>?view=</code>). Bracketed boxes show
+        URL-deep-linkable surfaces. Boxes with a yellow inner ring auto-open the Setup Wizard for
+        new tenants.
+      </p>
 
-<!-- =================== SITEMAP =================== -->
-<h2>2. Visual sitemap</h2>
-<p>
-  Single Next.js route <code>/dashboard</code>. State is held in URL params (<code>?tab=</code>,
-  <code>?subtab=</code>, <code>?view=</code>). Bracketed boxes show URL-deep-linkable surfaces. Boxes
-  with a yellow inner ring auto-open the Setup Wizard for new tenants.
-</p>
+      <svg viewBox="0 0 960 720" role="img" aria-label="Dashboard sitemap">
+        <style>
+          .nd {
+            fill: #11161f;
+            stroke: #374151;
+            stroke-width: 1;
+          }
+          .nd-acc {
+            fill: #0c2244;
+            stroke: #3b82f6;
+            stroke-width: 1.5;
+          }
+          .nd-warn {
+            fill: #11161f;
+            stroke: #eab308;
+            stroke-width: 2;
+          }
+          .nd-adv {
+            fill: #1a1410;
+            stroke: #4b3a25;
+          }
+          .nd-pri {
+            fill: #0c1a2e;
+            stroke: #2563eb;
+            stroke-width: 1.5;
+          }
+          .tx {
+            font:
+              600 12.5px -apple-system,
+              sans-serif;
+            fill: #e8eef7;
+            text-anchor: middle;
+          }
+          .tx-s {
+            font:
+              11px -apple-system,
+              sans-serif;
+            fill: #94a3b8;
+            text-anchor: middle;
+          }
+          .ln {
+            stroke: #475569;
+            stroke-width: 1;
+            fill: none;
+          }
+          .ln-acc {
+            stroke: #3b82f6;
+            stroke-width: 1.5;
+            fill: none;
+          }
+        </style>
+        <!-- root -->
+        <rect class="nd-acc" x="380" y="15" width="200" height="38" rx="6" />
+        <text class="tx" x="480" y="30">/dashboard</text>
+        <text class="tx-s" x="480" y="44">single Next.js route</text>
 
-<svg viewBox="0 0 960 720" role="img" aria-label="Dashboard sitemap">
-  <style>
-    .nd{fill:#11161f;stroke:#374151;stroke-width:1}
-    .nd-acc{fill:#0c2244;stroke:#3b82f6;stroke-width:1.5}
-    .nd-warn{fill:#11161f;stroke:#eab308;stroke-width:2}
-    .nd-adv{fill:#1a1410;stroke:#4b3a25}
-    .nd-pri{fill:#0c1a2e;stroke:#2563eb;stroke-width:1.5}
-    .tx{font:600 12.5px -apple-system,sans-serif;fill:#e8eef7;text-anchor:middle}
-    .tx-s{font:11px -apple-system,sans-serif;fill:#94a3b8;text-anchor:middle}
-    .ln{stroke:#475569;stroke-width:1;fill:none}
-    .ln-acc{stroke:#3b82f6;stroke-width:1.5;fill:none}
-  </style>
-  <!-- root -->
-  <rect class="nd-acc" x="380" y="15" width="200" height="38" rx="6"/>
-  <text class="tx" x="480" y="30">/dashboard</text>
-  <text class="tx-s" x="480" y="44">single Next.js route</text>
+        <!-- primary nav -->
+        <line class="ln-acc" x1="480" y1="53" x2="480" y2="85" />
+        <rect class="nd-acc" x="200" y="85" width="560" height="28" rx="4" />
+        <text class="tx" x="480" y="103">Primary nav (FolderTabBar size=lg)</text>
 
-  <!-- primary nav -->
-  <line class="ln-acc" x1="480" y1="53" x2="480" y2="85"/>
-  <rect class="nd-acc" x="200" y="85" width="560" height="28" rx="4"/>
-  <text class="tx" x="480" y="103">Primary nav (FolderTabBar size=lg)</text>
+        <!-- 4 primary tabs -->
+        <g>
+          <line class="ln-acc" x1="480" y1="113" x2="100" y2="150" />
+          <rect class="nd-pri" x="40" y="150" width="130" height="42" rx="5" />
+          <text class="tx" x="105" y="168">Home</text>
+          <text class="tx-s" x="105" y="183">DashboardHome</text>
 
-  <!-- 4 primary tabs -->
-  <g>
-    <line class="ln-acc" x1="480" y1="113" x2="100" y2="150"/>
-    <rect class="nd-pri" x="40" y="150" width="130" height="42" rx="5"/>
-    <text class="tx" x="105" y="168">Home</text>
-    <text class="tx-s" x="105" y="183">DashboardHome</text>
+          <line class="ln-acc" x1="480" y1="113" x2="265" y2="150" />
+          <rect class="nd-pri" x="195" y="150" width="140" height="42" rx="5" />
+          <text class="tx" x="265" y="168">Schedule</text>
+          <text class="tx-s" x="265" y="183">SchedulerView</text>
 
-    <line class="ln-acc" x1="480" y1="113" x2="265" y2="150"/>
-    <rect class="nd-pri" x="195" y="150" width="140" height="42" rx="5"/>
-    <text class="tx" x="265" y="168">Schedule</text>
-    <text class="tx-s" x="265" y="183">SchedulerView</text>
+          <line class="ln-acc" x1="480" y1="113" x2="425" y2="150" />
+          <rect class="nd-pri" x="355" y="150" width="140" height="42" rx="5" />
+          <text class="tx" x="425" y="168">Customers</text>
+          <text class="tx-s" x="425" y="183">CRMView</text>
 
-    <line class="ln-acc" x1="480" y1="113" x2="425" y2="150"/>
-    <rect class="nd-pri" x="355" y="150" width="140" height="42" rx="5"/>
-    <text class="tx" x="425" y="168">Customers</text>
-    <text class="tx-s" x="425" y="183">CRMView</text>
+          <line class="ln-acc" x1="480" y1="113" x2="585" y2="150" />
+          <rect class="nd-pri" x="515" y="150" width="140" height="42" rx="5" />
+          <text class="tx" x="585" y="168">Calls</text>
+          <text class="tx-s" x="585" y="183">VoiceCallsView (badge)</text>
+        </g>
 
-    <line class="ln-acc" x1="480" y1="113" x2="585" y2="150"/>
-    <rect class="nd-pri" x="515" y="150" width="140" height="42" rx="5"/>
-    <text class="tx" x="585" y="168">Calls</text>
-    <text class="tx-s" x="585" y="183">VoiceCallsView (badge)</text>
-  </g>
+        <!-- advanced 3 (owner-only) -->
+        <line class="ln" x1="480" y1="113" x2="800" y2="155" />
+        <rect class="nd-adv" x="710" y="125" width="220" height="100" rx="6" />
+        <text class="tx" x="820" y="143">Advanced (owner/admin only)</text>
+        <text class="tx-s" x="820" y="160">My Business · My Team · Phone Assistant</text>
+        <text class="tx-s" x="820" y="178">snapped back to Home for front_desk</text>
+        <text class="tx-s" x="820" y="200">Account: Profile · Business Settings</text>
+        <text class="tx-s" x="820" y="216">All Businesses (super-admin)</text>
 
-  <!-- advanced 3 (owner-only) -->
-  <line class="ln" x1="480" y1="113" x2="800" y2="155"/>
-  <rect class="nd-adv" x="710" y="125" width="220" height="100" rx="6"/>
-  <text class="tx" x="820" y="143">Advanced (owner/admin only)</text>
-  <text class="tx-s" x="820" y="160">My Business · My Team · Phone Assistant</text>
-  <text class="tx-s" x="820" y="178">snapped back to Home for front_desk</text>
-  <text class="tx-s" x="820" y="200">Account: Profile · Business Settings</text>
-  <text class="tx-s" x="820" y="216">All Businesses (super-admin)</text>
+        <!-- schedule sub-tabs -->
+        <line class="ln" x1="265" y1="192" x2="265" y2="225" />
+        <rect class="nd" x="190" y="225" width="150" height="28" rx="4" />
+        <text class="tx" x="265" y="243">Sub-tabs (size=sm)</text>
+        <rect class="nd" x="60" y="263" width="98" height="32" rx="4" />
+        <text class="tx" x="109" y="282">Calendar</text>
+        <rect class="nd-warn" x="166" y="263" width="98" height="32" rx="4" />
+        <text class="tx" x="215" y="282">Staff*</text>
+        <rect class="nd" x="272" y="263" width="98" height="32" rx="4" />
+        <text class="tx" x="321" y="282">Resources</text>
+        <rect class="nd" x="378" y="263" width="78" height="32" rx="4" />
+        <text class="tx" x="417" y="282">List</text>
+        <line class="ln" x1="190" y1="253" x2="109" y2="263" />
+        <line class="ln" x1="240" y1="253" x2="215" y2="263" />
+        <line class="ln" x1="290" y1="253" x2="321" y2="263" />
+        <line class="ln" x1="340" y1="253" x2="417" y2="263" />
+        <text class="tx-s" x="265" y="313">* default · drag shifts / Quick Book on cell click</text>
 
-  <!-- schedule sub-tabs -->
-  <line class="ln" x1="265" y1="192" x2="265" y2="225"/>
-  <rect class="nd" x="190" y="225" width="150" height="28" rx="4"/>
-  <text class="tx" x="265" y="243">Sub-tabs (size=sm)</text>
-  <rect class="nd" x="60" y="263" width="98" height="32" rx="4"/><text class="tx" x="109" y="282">Calendar</text>
-  <rect class="nd-warn" x="166" y="263" width="98" height="32" rx="4"/><text class="tx" x="215" y="282">Staff*</text>
-  <rect class="nd" x="272" y="263" width="98" height="32" rx="4"/><text class="tx" x="321" y="282">Resources</text>
-  <rect class="nd" x="378" y="263" width="78" height="32" rx="4"/><text class="tx" x="417" y="282">List</text>
-  <line class="ln" x1="190" y1="253" x2="109" y2="263"/>
-  <line class="ln" x1="240" y1="253" x2="215" y2="263"/>
-  <line class="ln" x1="290" y1="253" x2="321" y2="263"/>
-  <line class="ln" x1="340" y1="253" x2="417" y2="263"/>
-  <text class="tx-s" x="265" y="313">* default · drag shifts / Quick Book on cell click</text>
+        <!-- home subsections -->
+        <line class="ln" x1="105" y1="192" x2="105" y2="225" />
+        <rect class="nd" x="35" y="225" width="145" height="28" rx="4" />
+        <text class="tx" x="107" y="243">Sections</text>
+        <text class="tx-s" x="107" y="270">Greeting + New Booking</text>
+        <text class="tx-s" x="107" y="287">Today / Week cards</text>
+        <text class="tx-s" x="107" y="304">SetupWizard (auto)</text>
+        <text class="tx-s" x="107" y="321">FirstRunTour overlay</text>
 
-  <!-- home subsections -->
-  <line class="ln" x1="105" y1="192" x2="105" y2="225"/>
-  <rect class="nd" x="35" y="225" width="145" height="28" rx="4"/>
-  <text class="tx" x="107" y="243">Sections</text>
-  <text class="tx-s" x="107" y="270">Greeting + New Booking</text>
-  <text class="tx-s" x="107" y="287">Today / Week cards</text>
-  <text class="tx-s" x="107" y="304">SetupWizard (auto)</text>
-  <text class="tx-s" x="107" y="321">FirstRunTour overlay</text>
+        <!-- customers + voice splits -->
+        <line class="ln" x1="425" y1="192" x2="425" y2="225" />
+        <rect class="nd" x="355" y="225" width="140" height="28" rx="4" />
+        <text class="tx" x="425" y="243">List + Detail pane</text>
+        <text class="tx-s" x="425" y="269">CustomerDetailPanel</text>
+        <text class="tx-s" x="425" y="284">delete · edit · history</text>
 
-  <!-- customers + voice splits -->
-  <line class="ln" x1="425" y1="192" x2="425" y2="225"/>
-  <rect class="nd" x="355" y="225" width="140" height="28" rx="4"/>
-  <text class="tx" x="425" y="243">List + Detail pane</text>
-  <text class="tx-s" x="425" y="269">CustomerDetailPanel</text>
-  <text class="tx-s" x="425" y="284">delete · edit · history</text>
+        <line class="ln" x1="585" y1="192" x2="585" y2="225" />
+        <rect class="nd" x="515" y="225" width="140" height="28" rx="4" />
+        <text class="tx" x="585" y="243">Calls</text>
+        <text class="tx-s" x="585" y="269">Active + history</text>
+        <text class="tx-s" x="585" y="284">outcome filter</text>
 
-  <line class="ln" x1="585" y1="192" x2="585" y2="225"/>
-  <rect class="nd" x="515" y="225" width="140" height="28" rx="4"/>
-  <text class="tx" x="585" y="243">Calls</text>
-  <text class="tx-s" x="585" y="269">Active + history</text>
-  <text class="tx-s" x="585" y="284">outcome filter</text>
+        <!-- Advanced split -->
+        <line class="ln" x1="820" y1="225" x2="820" y2="350" />
+        <rect class="nd-adv" x="710" y="350" width="220" height="160" rx="6" />
+        <text class="tx" x="820" y="370">My Team sub-tabs</text>
+        <text class="tx-s" x="820" y="390">Employees · Working Days</text>
+        <text class="tx-s" x="820" y="406">Service Assignments (Grid|Map)</text>
+        <text class="tx-s" x="820" y="422">Logins</text>
+        <text class="tx" x="820" y="450">Phone Assistant</text>
+        <text class="tx-s" x="820" y="468">Persona · Knowledge Base</text>
+        <text class="tx-s" x="820" y="484">Analytics (badge: unanswered)</text>
+        <text class="tx" x="820" y="504">My Business: Services · Resources</text>
 
-  <!-- Advanced split -->
-  <line class="ln" x1="820" y1="225" x2="820" y2="350"/>
-  <rect class="nd-adv" x="710" y="350" width="220" height="160" rx="6"/>
-  <text class="tx" x="820" y="370">My Team sub-tabs</text>
-  <text class="tx-s" x="820" y="390">Employees · Working Days</text>
-  <text class="tx-s" x="820" y="406">Service Assignments (Grid|Map)</text>
-  <text class="tx-s" x="820" y="422">Logins</text>
-  <text class="tx" x="820" y="450">Phone Assistant</text>
-  <text class="tx-s" x="820" y="468">Persona · Knowledge Base</text>
-  <text class="tx-s" x="820" y="484">Analytics (badge: unanswered)</text>
-  <text class="tx" x="820" y="504">My Business: Services · Resources</text>
+        <!-- Scheduler interior callout -->
+        <rect class="nd" x="60" y="360" width="500" height="160" rx="8" />
+        <text class="tx" x="310" y="380">Scheduler interior (Staff view default)</text>
+        <text class="tx-s" x="310" y="402">rows = employees · cols = hours (40–180 px zoom)</text>
+        <text class="tx-s" x="310" y="420">drag empty cells → create shift</text>
+        <text class="tx-s" x="310" y="436">drag bar edges → resize</text>
+        <text class="tx-s" x="310" y="452">click empty cell → QuickBook prefill</text>
+        <text class="tx-s" x="310" y="468">
+          click appointment → AppointmentPopover (Edit · Cancel)
+        </text>
+        <text class="tx-s" x="310" y="484">drag block → move time (15-min snap)</text>
+        <text class="tx-s" x="310" y="500">hover → trash icon (hidden on touch) ⚠</text>
 
-  <!-- Scheduler interior callout -->
-  <rect class="nd" x="60" y="360" width="500" height="160" rx="8"/>
-  <text class="tx" x="310" y="380">Scheduler interior (Staff view default)</text>
-  <text class="tx-s" x="310" y="402">rows = employees · cols = hours (40–180 px zoom)</text>
-  <text class="tx-s" x="310" y="420">drag empty cells → create shift</text>
-  <text class="tx-s" x="310" y="436">drag bar edges → resize</text>
-  <text class="tx-s" x="310" y="452">click empty cell → QuickBook prefill</text>
-  <text class="tx-s" x="310" y="468">click appointment → AppointmentPopover (Edit · Cancel)</text>
-  <text class="tx-s" x="310" y="484">drag block → move time (15-min snap)</text>
-  <text class="tx-s" x="310" y="500">hover → trash icon (hidden on touch) ⚠</text>
+        <!-- QuickBook flow -->
+        <rect class="nd" x="60" y="545" width="500" height="100" rx="8" />
+        <text class="tx" x="310" y="565">Quick Book Panel — reachable from</text>
+        <text class="tx-s" x="310" y="585">
+          Home (New Booking) · Scheduler toolbar · empty cell click
+        </text>
+        <text class="tx-s" x="310" y="603">
+          customer · service · employee (auto-filtered) · resource · time
+        </text>
+        <text class="tx-s" x="310" y="621">409 → ConflictModal w/ next-available alternates</text>
 
-  <!-- QuickBook flow -->
-  <rect class="nd" x="60" y="545" width="500" height="100" rx="8"/>
-  <text class="tx" x="310" y="565">Quick Book Panel — reachable from</text>
-  <text class="tx-s" x="310" y="585">Home (New Booking) · Scheduler toolbar · empty cell click</text>
-  <text class="tx-s" x="310" y="603">customer · service · employee (auto-filtered) · resource · time</text>
-  <text class="tx-s" x="310" y="621">409 → ConflictModal w/ next-available alternates</text>
+        <!-- mobile nav -->
+        <rect class="nd-warn" x="600" y="545" width="330" height="100" rx="8" />
+        <text class="tx" x="765" y="565">Mobile bottom nav (md:hidden)</text>
+        <text class="tx-s" x="765" y="585">14 px row · 9 px label · horizontal scroll</text>
+        <text class="tx-s" x="765" y="603">tab badges (KB unanswered · live calls)</text>
+        <text class="tx-s" x="765" y="621">⚠ overflow + WCAG body-text contrast</text>
 
-  <!-- mobile nav -->
-  <rect class="nd-warn" x="600" y="545" width="330" height="100" rx="8"/>
-  <text class="tx" x="765" y="565">Mobile bottom nav (md:hidden)</text>
-  <text class="tx-s" x="765" y="585">14 px row · 9 px label · horizontal scroll</text>
-  <text class="tx-s" x="765" y="603">tab badges (KB unanswered · live calls)</text>
-  <text class="tx-s" x="765" y="621">⚠ overflow + WCAG body-text contrast</text>
+        <!-- Modals -->
+        <rect class="nd" x="60" y="670" width="870" height="32" rx="6" />
+        <text class="tx" x="495" y="690">
+          Modals · ConfirmModal · Modal · SetupWizard · WizardWelcome · BusinessTypePicker ·
+          RecordHistoryModal · ConflictModal · QuickBookPanel · AppointmentPopover
+        </text>
+      </svg>
 
-  <!-- Modals -->
-  <rect class="nd" x="60" y="670" width="870" height="32" rx="6"/>
-  <text class="tx" x="495" y="690">Modals · ConfirmModal · Modal · SetupWizard · WizardWelcome · BusinessTypePicker · RecordHistoryModal · ConflictModal · QuickBookPanel · AppointmentPopover</text>
-</svg>
+      <div class="legend">
+        <span
+          ><span class="sw" style="background: #0c1a2e; border: 1.5px solid #2563eb"></span>Primary
+          tabs (always-visible)</span
+        >
+        <span
+          ><span class="sw" style="background: #1a1410; border: 1px solid #4b3a25"></span>Advanced
+          (owner/admin)</span
+        >
+        <span
+          ><span class="sw" style="background: #11161f; border: 2px solid #eab308"></span>Default
+          landing / known issue</span
+        >
+      </div>
 
-<div class="legend">
-  <span><span class="sw" style="background:#0c1a2e;border:1.5px solid #2563eb"></span>Primary tabs (always-visible)</span>
-  <span><span class="sw" style="background:#1a1410;border:1px solid #4b3a25"></span>Advanced (owner/admin)</span>
-  <span><span class="sw" style="background:#11161f;border:2px solid #eab308"></span>Default landing / known issue</span>
-</div>
+      <!-- =================== TOP 10 =================== -->
+      <h2>3. Top 10 prioritized improvements</h2>
 
-<!-- =================== TOP 10 =================== -->
-<h2>3. Top 10 prioritized improvements</h2>
+      <!-- ============ #1 ============ -->
+      <div class="finding p0">
+        <h3>
+          #1 · Destructive flows still use <code>window.confirm()</code> / <code>alert()</code>
+          <span class="badge b-p0">P0</span> <span class="badge b-m">M</span>
+        </h3>
+        <p class="refs">
+          <span class="ref">SchedulerView.tsx:114, 142</span> ·
+          <span class="ref">AppointmentView.tsx:382</span> ·
+          <span class="ref">EmployeeManagementView.tsx:109, 116</span> ·
+          <span class="ref">ServiceAssignmentView.tsx:127</span> ·
+          <span class="ref">SkillManagementView.tsx:48, 54</span> ·
+          <span class="ref">ResourceManagerView.tsx:114</span> ·
+          <span class="ref">scheduler/StaffSwimLaneView.tsx:337</span> ·
+          <span class="ref">scheduler/NewSchedulerView.tsx:412</span> ·
+          <span class="ref">SkillMatrixView.tsx:107</span>
+        </p>
+        <p>
+          The CLAUDE.md code-conventions section explicitly mandates
+          <code>ConfirmModal + useConfirm()</code> for destructive actions, and
+          <code>CRMView.tsx</code>, <code>KnowledgeBaseView.tsx</code>, and
+          <code>BusinessSettingsView.tsx</code> already follow that pattern. Nine other destructive
+          callsites still call the browser-native dialog, which (a) renders as a system-styled
+          rectangle that looks broken against the 8 themed dark palettes, (b) cannot be styled, (c)
+          blocks the JS event loop so toast feedback can't run alongside it, and (d) is
+          unkeyboard-trappable in odd ways on mobile Safari. Threading
+          <code>useConfirm()</code> through these sites is mechanical work — the pattern is already
+          proven.
+        </p>
+        <div class="wireframe-pair">
+          <figure>
+            <svg viewBox="0 0 380 220" aria-label="Native confirm dialog">
+              <rect width="380" height="220" fill="#0b0e14" rx="8" />
+              <rect x="20" y="20" width="340" height="180" fill="#11161f" stroke="#2563eb" rx="6" />
+              <text x="40" y="50" font="600 13px sans-serif" fill="#e8eef7">
+                Scheduler / Calendar
+              </text>
+              <rect x="120" y="80" width="180" height="80" fill="#f5f5f5" stroke="#aaa" rx="4" />
+              <text x="135" y="105" font="11px sans-serif" fill="#000">localhost says</text>
+              <text x="135" y="125" font="11px sans-serif" fill="#000">
+                Cancel this appointment?
+              </text>
+              <rect x="225" y="138" width="58" height="18" fill="#1c75f5" rx="2" />
+              <text x="254" y="151" font="10px sans-serif" fill="#fff" text-anchor="middle">
+                OK
+              </text>
+              <rect x="160" y="138" width="58" height="18" fill="#fff" stroke="#aaa" rx="2" />
+              <text x="189" y="151" font="10px sans-serif" fill="#000" text-anchor="middle">
+                Cancel
+              </text>
+            </svg>
+            <figcaption>current · native dialog</figcaption>
+          </figure>
+          <figure>
+            <svg viewBox="0 0 380 220" aria-label="Themed ConfirmModal">
+              <rect width="380" height="220" fill="#0b0e14" rx="8" />
+              <rect x="20" y="20" width="340" height="180" fill="#0a101c" rx="6" />
+              <rect
+                x="60"
+                y="50"
+                width="260"
+                height="125"
+                fill="#11182a"
+                stroke="#2a3a5a"
+                rx="10"
+              />
+              <text x="78" y="74" font="700 13.5px sans-serif" fill="#fde8c0">
+                Cancel appointment?
+              </text>
+              <text x="78" y="96" font="11.5px sans-serif" fill="#94a3b8">
+                The slot frees up. Record kept
+              </text>
+              <text x="78" y="110" font="11.5px sans-serif" fill="#94a3b8">
+                for history — you can restore it.
+              </text>
+              <rect x="78" y="135" width="80" height="26" fill="#1f2937" stroke="#374151" rx="5" />
+              <text x="118" y="152" font="11px 600 sans-serif" fill="#cbd5e1" text-anchor="middle">
+                Keep
+              </text>
+              <rect x="170" y="135" width="120" height="26" fill="#dc2626" rx="5" />
+              <text x="230" y="152" font="11px 700 sans-serif" fill="#fff" text-anchor="middle">
+                Cancel appointment
+              </text>
+            </svg>
+            <figcaption>proposed · ConfirmModal</figcaption>
+          </figure>
+        </div>
+      </div>
 
-<!-- ============ #1 ============ -->
-<div class="finding p0">
-<h3>#1 · Destructive flows still use <code>window.confirm()</code> / <code>alert()</code>
-  <span class="badge b-p0">P0</span> <span class="badge b-m">M</span></h3>
-<p class="refs"><span class="ref">SchedulerView.tsx:114, 142</span> · <span class="ref">AppointmentView.tsx:382</span> ·
-  <span class="ref">EmployeeManagementView.tsx:109, 116</span> · <span class="ref">ServiceAssignmentView.tsx:127</span> ·
-  <span class="ref">SkillManagementView.tsx:48, 54</span> · <span class="ref">ResourceManagerView.tsx:114</span> ·
-  <span class="ref">scheduler/StaffSwimLaneView.tsx:337</span> · <span class="ref">scheduler/NewSchedulerView.tsx:412</span> ·
-  <span class="ref">SkillMatrixView.tsx:107</span>
-</p>
-<p>
-  The CLAUDE.md code-conventions section explicitly mandates <code>ConfirmModal + useConfirm()</code> for
-  destructive actions, and <code>CRMView.tsx</code>, <code>KnowledgeBaseView.tsx</code>, and
-  <code>BusinessSettingsView.tsx</code> already follow that pattern. Nine other destructive callsites
-  still call the browser-native dialog, which (a) renders as a system-styled rectangle that looks broken
-  against the 8 themed dark palettes, (b) cannot be styled, (c) blocks the JS event loop so toast
-  feedback can't run alongside it, and (d) is unkeyboard-trappable in odd ways on mobile Safari.
-  Threading <code>useConfirm()</code> through these sites is mechanical work — the pattern is already
-  proven.
-</p>
-<div class="wireframe-pair">
-<figure>
-<svg viewBox="0 0 380 220" aria-label="Native confirm dialog">
-  <rect width="380" height="220" fill="#0b0e14" rx="8"/>
-  <rect x="20" y="20" width="340" height="180" fill="#11161f" stroke="#2563eb" rx="6"/>
-  <text x="40" y="50" font="600 13px sans-serif" fill="#e8eef7">Scheduler / Calendar</text>
-  <rect x="120" y="80" width="180" height="80" fill="#f5f5f5" stroke="#aaa" rx="4"/>
-  <text x="135" y="105" font="11px sans-serif" fill="#000">localhost says</text>
-  <text x="135" y="125" font="11px sans-serif" fill="#000">Cancel this appointment?</text>
-  <rect x="225" y="138" width="58" height="18" fill="#1c75f5" rx="2"/>
-  <text x="254" y="151" font="10px sans-serif" fill="#fff" text-anchor="middle">OK</text>
-  <rect x="160" y="138" width="58" height="18" fill="#fff" stroke="#aaa" rx="2"/>
-  <text x="189" y="151" font="10px sans-serif" fill="#000" text-anchor="middle">Cancel</text>
-</svg>
-<figcaption>current · native dialog</figcaption>
-</figure>
-<figure>
-<svg viewBox="0 0 380 220" aria-label="Themed ConfirmModal">
-  <rect width="380" height="220" fill="#0b0e14" rx="8"/>
-  <rect x="20" y="20" width="340" height="180" fill="#0a101c" rx="6"/>
-  <rect x="60" y="50" width="260" height="125" fill="#11182a" stroke="#2a3a5a" rx="10"/>
-  <text x="78" y="74" font="700 13.5px sans-serif" fill="#fde8c0">Cancel appointment?</text>
-  <text x="78" y="96" font="11.5px sans-serif" fill="#94a3b8">The slot frees up. Record kept</text>
-  <text x="78" y="110" font="11.5px sans-serif" fill="#94a3b8">for history — you can restore it.</text>
-  <rect x="78" y="135" width="80" height="26" fill="#1f2937" stroke="#374151" rx="5"/>
-  <text x="118" y="152" font="11px 600 sans-serif" fill="#cbd5e1" text-anchor="middle">Keep</text>
-  <rect x="170" y="135" width="120" height="26" fill="#dc2626" rx="5"/>
-  <text x="230" y="152" font="11px 700 sans-serif" fill="#fff" text-anchor="middle">Cancel appointment</text>
-</svg>
-<figcaption>proposed · ConfirmModal</figcaption>
-</figure>
-</div>
-</div>
+      <!-- ============ #2 ============ -->
+      <div class="finding p0">
+        <h3>
+          #2 · Hover-only appointment delete is invisible on touch
+          <span class="badge b-p0">P0</span> <span class="badge b-s">S</span>
+        </h3>
+        <p class="refs">
+          <span class="ref">scheduler/AppointmentBlock.tsx:213</span> ·
+          <span class="ref">scheduler/NewSchedulerView.tsx:1364</span>
+        </p>
+        <p>
+          Trash icon on every appointment block uses <code>opacity-0 group-hover:opacity-100</code>.
+          On any iPad or phone — and any keyboard user — there's no hover, so the affordance never
+          appears. The popover fallback works, but it requires <em>two taps</em> (tap to open
+          popover, tap Cancel) where a desktop user needs just one (hover, click trash). Replace the
+          hover-reveal with a small always-visible "⋯" overflow menu inside the block (or, for
+          fields wider than 90 px, an always-visible trash at low opacity that brightens on
+          focus/hover).
+        </p>
+        <div class="wireframe-pair">
+          <figure>
+            <svg viewBox="0 0 380 110" aria-label="Hover-only trash">
+              <rect width="380" height="110" fill="#0b0e14" />
+              <rect x="40" y="30" width="300" height="50" fill="#3b82f6" rx="4" />
+              <text x="55" y="50" font="700 11px sans-serif" fill="#fff">
+                9:00a · Tire rotation
+              </text>
+              <text x="55" y="66" font="10px sans-serif" fill="#dce6ff">Maria · Bay 2</text>
+              <!-- no trash visible -->
+              <text x="200" y="100" font="11px sans-serif" fill="#ea580c" text-anchor="middle">
+                ⚠ trash icon hidden until hover
+              </text>
+            </svg>
+            <figcaption>current · touch-inaccessible</figcaption>
+          </figure>
+          <figure>
+            <svg viewBox="0 0 380 110" aria-label="Always-visible affordance">
+              <rect width="380" height="110" fill="#0b0e14" />
+              <rect x="40" y="30" width="300" height="50" fill="#3b82f6" rx="4" />
+              <text x="55" y="50" font="700 11px sans-serif" fill="#fff">
+                9:00a · Tire rotation
+              </text>
+              <text x="55" y="66" font="10px sans-serif" fill="#dce6ff">Maria · Bay 2</text>
+              <circle cx="315" cy="55" r="13" fill="rgba(0,0,0,0.35)" />
+              <text x="315" y="60" font="700 12px sans-serif" fill="#fff" text-anchor="middle">
+                ⋯
+              </text>
+              <text x="200" y="100" font="11px sans-serif" fill="#22c55e" text-anchor="middle">
+                menu surfaces Cancel · Reschedule · Open
+              </text>
+            </svg>
+            <figcaption>proposed · overflow menu</figcaption>
+          </figure>
+        </div>
+      </div>
 
-<!-- ============ #2 ============ -->
-<div class="finding p0">
-<h3>#2 · Hover-only appointment delete is invisible on touch
-  <span class="badge b-p0">P0</span> <span class="badge b-s">S</span></h3>
-<p class="refs"><span class="ref">scheduler/AppointmentBlock.tsx:213</span> · <span class="ref">scheduler/NewSchedulerView.tsx:1364</span></p>
-<p>
-  Trash icon on every appointment block uses <code>opacity-0 group-hover:opacity-100</code>. On any
-  iPad or phone — and any keyboard user — there's no hover, so the affordance never appears. The popover
-  fallback works, but it requires <em>two taps</em> (tap to open popover, tap Cancel) where a desktop user
-  needs just one (hover, click trash). Replace the hover-reveal with a small always-visible "⋯" overflow
-  menu inside the block (or, for fields wider than 90 px, an always-visible trash at low opacity that
-  brightens on focus/hover).
-</p>
-<div class="wireframe-pair">
-<figure>
-<svg viewBox="0 0 380 110" aria-label="Hover-only trash">
-  <rect width="380" height="110" fill="#0b0e14"/>
-  <rect x="40" y="30" width="300" height="50" fill="#3b82f6" rx="4"/>
-  <text x="55" y="50" font="700 11px sans-serif" fill="#fff">9:00a · Tire rotation</text>
-  <text x="55" y="66" font="10px sans-serif" fill="#dce6ff">Maria · Bay 2</text>
-  <!-- no trash visible -->
-  <text x="200" y="100" font="11px sans-serif" fill="#ea580c" text-anchor="middle">⚠ trash icon hidden until hover</text>
-</svg>
-<figcaption>current · touch-inaccessible</figcaption>
-</figure>
-<figure>
-<svg viewBox="0 0 380 110" aria-label="Always-visible affordance">
-  <rect width="380" height="110" fill="#0b0e14"/>
-  <rect x="40" y="30" width="300" height="50" fill="#3b82f6" rx="4"/>
-  <text x="55" y="50" font="700 11px sans-serif" fill="#fff">9:00a · Tire rotation</text>
-  <text x="55" y="66" font="10px sans-serif" fill="#dce6ff">Maria · Bay 2</text>
-  <circle cx="315" cy="55" r="13" fill="rgba(0,0,0,0.35)"/>
-  <text x="315" y="60" font="700 12px sans-serif" fill="#fff" text-anchor="middle">⋯</text>
-  <text x="200" y="100" font="11px sans-serif" fill="#22c55e" text-anchor="middle">menu surfaces Cancel · Reschedule · Open</text>
-</svg>
-<figcaption>proposed · overflow menu</figcaption>
-</figure>
-</div>
-</div>
+      <!-- ============ #3 ============ -->
+      <div class="finding p0">
+        <h3>
+          #3 · "Live" badges aren't live — they refetch only on tab change
+          <span class="badge b-p0">P0</span> <span class="badge b-m">M</span>
+        </h3>
+        <p class="refs"><span class="ref">OutlookLayout.tsx:116–133</span></p>
+        <p>
+          The animate-pulsing red badge on the Calls tab promises real-time, but the underlying
+          fetch runs in a
+          <code>useEffect</code> whose only dependency is <code>activeTab</code>. A receptionist on
+          Home will never see the badge fire until they navigate. Same shape for the KB
+          unanswered-question badge. Two fixes — both small: (a) poll
+          <code>Api.voice.getActiveCalls()</code> every 5 seconds while the user is authenticated,
+          or (b) subscribe via SSE (backend already streams call events). The pulse animation is
+          fine; the data behind it just needs to actually move.
+        </p>
+        <div class="wireframe-pair">
+          <figure>
+            <svg viewBox="0 0 380 80" aria-label="Stale badge">
+              <rect width="380" height="80" fill="#0b0e14" />
+              <rect x="40" y="20" width="300" height="42" fill="#11161f" stroke="#1f2937" rx="6" />
+              <text x="60" y="46" font="600 13px sans-serif" fill="#cbd5e1">
+                Home · Schedule · Customers · Calls
+              </text>
+              <circle cx="324" cy="32" r="9" fill="#dc2626" />
+              <text x="324" y="36" font="700 10px sans-serif" fill="#fff" text-anchor="middle">
+                3
+              </text>
+              <text x="40" y="74" font="11px sans-serif" fill="#ea580c">
+                ⚠ refetch fires only on tab switch — count may be minutes stale
+              </text>
+            </svg>
+            <figcaption>current · misleadingly static</figcaption>
+          </figure>
+          <figure>
+            <svg viewBox="0 0 380 80" aria-label="Polled badge">
+              <rect width="380" height="80" fill="#0b0e14" />
+              <rect x="40" y="20" width="300" height="42" fill="#11161f" stroke="#1f2937" rx="6" />
+              <text x="60" y="46" font="600 13px sans-serif" fill="#cbd5e1">
+                Home · Schedule · Customers · Calls
+              </text>
+              <circle cx="324" cy="32" r="9" fill="#dc2626" />
+              <circle
+                cx="324"
+                cy="32"
+                r="9"
+                fill="none"
+                stroke="#fca5a5"
+                stroke-width="1.5"
+                opacity="0.6"
+              />
+              <text x="324" y="36" font="700 10px sans-serif" fill="#fff" text-anchor="middle">
+                3
+              </text>
+              <text x="40" y="74" font="11px sans-serif" fill="#22c55e">
+                poll every 5s · SSE preferred · accessible "3 active calls" live region
+              </text>
+            </svg>
+            <figcaption>proposed · actually live</figcaption>
+          </figure>
+        </div>
+      </div>
 
-<!-- ============ #3 ============ -->
-<div class="finding p0">
-<h3>#3 · "Live" badges aren't live — they refetch only on tab change
-  <span class="badge b-p0">P0</span> <span class="badge b-m">M</span></h3>
-<p class="refs"><span class="ref">OutlookLayout.tsx:116–133</span></p>
-<p>
-  The animate-pulsing red badge on the Calls tab promises real-time, but the underlying fetch runs in a
-  <code>useEffect</code> whose only dependency is <code>activeTab</code>. A receptionist on Home will
-  never see the badge fire until they navigate. Same shape for the KB unanswered-question badge. Two
-  fixes — both small: (a) poll <code>Api.voice.getActiveCalls()</code> every 5 seconds while the user is
-  authenticated, or (b) subscribe via SSE (backend already streams call events). The pulse animation is
-  fine; the data behind it just needs to actually move.
-</p>
-<div class="wireframe-pair">
-<figure>
-<svg viewBox="0 0 380 80" aria-label="Stale badge">
-  <rect width="380" height="80" fill="#0b0e14"/>
-  <rect x="40" y="20" width="300" height="42" fill="#11161f" stroke="#1f2937" rx="6"/>
-  <text x="60" y="46" font="600 13px sans-serif" fill="#cbd5e1">Home  ·  Schedule  ·  Customers  ·  Calls</text>
-  <circle cx="324" cy="32" r="9" fill="#dc2626"/>
-  <text x="324" y="36" font="700 10px sans-serif" fill="#fff" text-anchor="middle">3</text>
-  <text x="40" y="74" font="11px sans-serif" fill="#ea580c">⚠ refetch fires only on tab switch — count may be minutes stale</text>
-</svg>
-<figcaption>current · misleadingly static</figcaption>
-</figure>
-<figure>
-<svg viewBox="0 0 380 80" aria-label="Polled badge">
-  <rect width="380" height="80" fill="#0b0e14"/>
-  <rect x="40" y="20" width="300" height="42" fill="#11161f" stroke="#1f2937" rx="6"/>
-  <text x="60" y="46" font="600 13px sans-serif" fill="#cbd5e1">Home  ·  Schedule  ·  Customers  ·  Calls</text>
-  <circle cx="324" cy="32" r="9" fill="#dc2626"/>
-  <circle cx="324" cy="32" r="9" fill="none" stroke="#fca5a5" stroke-width="1.5" opacity="0.6"/>
-  <text x="324" y="36" font="700 10px sans-serif" fill="#fff" text-anchor="middle">3</text>
-  <text x="40" y="74" font="11px sans-serif" fill="#22c55e">poll every 5s · SSE preferred · accessible "3 active calls" live region</text>
-</svg>
-<figcaption>proposed · actually live</figcaption>
-</figure>
-</div>
-</div>
+      <!-- ============ #4 ============ -->
+      <div class="finding p1">
+        <h3>
+          #4 · Mobile bottom nav crams 5–8 items at 9 px, fails WCAG body-text
+          <span class="badge b-p1">P1</span> <span class="badge b-s">S</span>
+        </h3>
+        <p class="refs">
+          <span class="ref">OutlookLayout.tsx:272–317</span> (<code>text-[9px]</code>,
+          <code>h-14</code>, <code>overflow-x-auto</code>)
+        </p>
+        <p>
+          At 375 px viewport with the admin Globe + 4 primary + 3 advanced tabs the row scrolls
+          horizontally, and the label below the icon renders at 9 px — below the WCAG 2.1 1.4.4
+          reflow guidance for body text. Drop labels at &lt;360 px and rely on the (already
+          meaningful) icon + active accent color; show labels at ≥360 px with a 12 px minimum. Move
+          the admin Globe into the profile sheet so we never need horizontal scroll on a phone.
+        </p>
+        <div class="wireframe-pair">
+          <figure>
+            <svg viewBox="0 0 375 90" aria-label="Mobile nav now">
+              <rect width="375" height="90" fill="#0b0e14" />
+              <rect x="0" y="20" width="375" height="56" fill="#13171f" stroke="#1f2937" />
+              <g font="700 9px sans-serif" fill="#94a3b8" text-anchor="middle">
+                <rect x="2" y="22" width="46" height="52" fill="#1a1f2b" />
+                <text x="25" y="68">Bus.</text>
+                <text x="78" y="68">Home</text>
+                <text x="128" y="68">Sched.</text>
+                <text x="180" y="68">Cust.</text>
+                <text x="228" y="68">Calls</text>
+                <text x="282" y="68">My Biz</text>
+                <text x="338" y="68">My Team</text>
+                <text x="395" y="68">Phone…</text>
+              </g>
+              <text x="187" y="14" font="11px sans-serif" fill="#ea580c" text-anchor="middle">
+                ⚠ horizontal scroll · sub-12px labels
+              </text>
+            </svg>
+            <figcaption>current · 375px</figcaption>
+          </figure>
+          <figure>
+            <svg viewBox="0 0 375 90" aria-label="Mobile nav proposed">
+              <rect width="375" height="90" fill="#0b0e14" />
+              <rect x="0" y="20" width="375" height="56" fill="#13171f" stroke="#1f2937" />
+              <g font="700 12px sans-serif" fill="#94a3b8" text-anchor="middle">
+                <rect x="0" y="22" width="93" height="52" fill="#1a1f2b" />
+                <text x="47" y="68">Home</text>
+                <text x="140" y="68">Schedule</text>
+                <text x="233" y="68">Customers</text>
+                <text x="328" y="68">Calls</text>
+              </g>
+              <text x="187" y="14" font="11px sans-serif" fill="#22c55e" text-anchor="middle">
+                4 primary tabs · 12px labels · "More" lives in profile sheet
+              </text>
+            </svg>
+            <figcaption>proposed · 4 + profile sheet</figcaption>
+          </figure>
+        </div>
+      </div>
 
-<!-- ============ #4 ============ -->
-<div class="finding p1">
-<h3>#4 · Mobile bottom nav crams 5–8 items at 9 px, fails WCAG body-text
-  <span class="badge b-p1">P1</span> <span class="badge b-s">S</span></h3>
-<p class="refs"><span class="ref">OutlookLayout.tsx:272–317</span> (<code>text-[9px]</code>, <code>h-14</code>, <code>overflow-x-auto</code>)</p>
-<p>
-  At 375 px viewport with the admin Globe + 4 primary + 3 advanced tabs the row scrolls horizontally,
-  and the label below the icon renders at 9 px — below the WCAG 2.1 1.4.4 reflow guidance for body
-  text. Drop labels at &lt;360 px and rely on the (already meaningful) icon + active accent color; show
-  labels at ≥360 px with a 12 px minimum. Move the admin Globe into the profile sheet so we never
-  need horizontal scroll on a phone.
-</p>
-<div class="wireframe-pair">
-<figure>
-<svg viewBox="0 0 375 90" aria-label="Mobile nav now">
-  <rect width="375" height="90" fill="#0b0e14"/>
-  <rect x="0" y="20" width="375" height="56" fill="#13171f" stroke="#1f2937"/>
-  <g font="700 9px sans-serif" fill="#94a3b8" text-anchor="middle">
-    <rect x="2" y="22" width="46" height="52" fill="#1a1f2b"/><text x="25" y="68">Bus.</text>
-    <text x="78" y="68">Home</text>
-    <text x="128" y="68">Sched.</text>
-    <text x="180" y="68">Cust.</text>
-    <text x="228" y="68">Calls</text>
-    <text x="282" y="68">My Biz</text>
-    <text x="338" y="68">My Team</text>
-    <text x="395" y="68">Phone…</text>
-  </g>
-  <text x="187" y="14" font="11px sans-serif" fill="#ea580c" text-anchor="middle">⚠ horizontal scroll · sub-12px labels</text>
-</svg>
-<figcaption>current · 375px</figcaption>
-</figure>
-<figure>
-<svg viewBox="0 0 375 90" aria-label="Mobile nav proposed">
-  <rect width="375" height="90" fill="#0b0e14"/>
-  <rect x="0" y="20" width="375" height="56" fill="#13171f" stroke="#1f2937"/>
-  <g font="700 12px sans-serif" fill="#94a3b8" text-anchor="middle">
-    <rect x="0" y="22" width="93" height="52" fill="#1a1f2b"/>
-    <text x="47" y="68">Home</text>
-    <text x="140" y="68">Schedule</text>
-    <text x="233" y="68">Customers</text>
-    <text x="328" y="68">Calls</text>
-  </g>
-  <text x="187" y="14" font="11px sans-serif" fill="#22c55e" text-anchor="middle">4 primary tabs · 12px labels · "More" lives in profile sheet</text>
-</svg>
-<figcaption>proposed · 4 + profile sheet</figcaption>
-</figure>
-</div>
-</div>
+      <!-- ============ #5 ============ -->
+      <div class="finding p1">
+        <h3>
+          #5 · No undo on cancel-appointment <span class="badge b-p1">P1</span>
+          <span class="badge b-s">S</span>
+        </h3>
+        <p class="refs">
+          <span class="ref">SchedulerView.tsx:117</span> ·
+          <span class="ref">scheduler/NewSchedulerView.tsx</span>
+        </p>
+        <p>
+          The backend already exposes <code>/appointments/:id/reactivate</code> (added 2026-05-10).
+          The toast on cancel shows "Appointment canceled" but no undo affordance — and the route is
+          wired but invisible from the schedule. Add an <strong>Undo</strong> button in the success
+          toast (5-second window already exists in the Toast primitive) that calls
+          <code>Api.appointments.reactivate()</code>. This is the single highest-trust UX win for a
+          destructive flow: a misclick is forgivable in ≤5 seconds.
+        </p>
+        <div class="wireframe-pair">
+          <figure>
+            <svg viewBox="0 0 380 80" aria-label="Toast without undo">
+              <rect width="380" height="80" fill="#0b0e14" />
+              <rect x="180" y="22" width="190" height="38" fill="#0c2244" stroke="#1d4ed8" rx="6" />
+              <text x="195" y="46" font="600 12px sans-serif" fill="#cbd5e1">
+                ✓ Appointment canceled
+              </text>
+            </svg>
+            <figcaption>current</figcaption>
+          </figure>
+          <figure>
+            <svg viewBox="0 0 380 80" aria-label="Toast with undo">
+              <rect width="380" height="80" fill="#0b0e14" />
+              <rect x="120" y="22" width="250" height="38" fill="#0c2244" stroke="#1d4ed8" rx="6" />
+              <text x="135" y="46" font="600 12px sans-serif" fill="#cbd5e1">
+                ✓ Appointment canceled
+              </text>
+              <rect x="305" y="30" width="55" height="22" fill="#1f2937" stroke="#475569" rx="3" />
+              <text x="332" y="45" font="700 11px sans-serif" fill="#60a5fa" text-anchor="middle">
+                Undo
+              </text>
+            </svg>
+            <figcaption>proposed · 5-second undo</figcaption>
+          </figure>
+        </div>
+      </div>
 
-<!-- ============ #5 ============ -->
-<div class="finding p1">
-<h3>#5 · No undo on cancel-appointment
-  <span class="badge b-p1">P1</span> <span class="badge b-s">S</span></h3>
-<p class="refs"><span class="ref">SchedulerView.tsx:117</span> · <span class="ref">scheduler/NewSchedulerView.tsx</span></p>
-<p>
-  The backend already exposes <code>/appointments/:id/reactivate</code> (added 2026-05-10). The toast on
-  cancel shows "Appointment canceled" but no undo affordance — and the route is wired but invisible from
-  the schedule. Add an <strong>Undo</strong> button in the success toast (5-second window already exists
-  in the Toast primitive) that calls <code>Api.appointments.reactivate()</code>. This is the single
-  highest-trust UX win for a destructive flow: a misclick is forgivable in ≤5 seconds.
-</p>
-<div class="wireframe-pair">
-<figure>
-<svg viewBox="0 0 380 80" aria-label="Toast without undo">
-  <rect width="380" height="80" fill="#0b0e14"/>
-  <rect x="180" y="22" width="190" height="38" fill="#0c2244" stroke="#1d4ed8" rx="6"/>
-  <text x="195" y="46" font="600 12px sans-serif" fill="#cbd5e1">✓ Appointment canceled</text>
-</svg>
-<figcaption>current</figcaption>
-</figure>
-<figure>
-<svg viewBox="0 0 380 80" aria-label="Toast with undo">
-  <rect width="380" height="80" fill="#0b0e14"/>
-  <rect x="120" y="22" width="250" height="38" fill="#0c2244" stroke="#1d4ed8" rx="6"/>
-  <text x="135" y="46" font="600 12px sans-serif" fill="#cbd5e1">✓ Appointment canceled</text>
-  <rect x="305" y="30" width="55" height="22" fill="#1f2937" stroke="#475569" rx="3"/>
-  <text x="332" y="45" font="700 11px sans-serif" fill="#60a5fa" text-anchor="middle">Undo</text>
-</svg>
-<figcaption>proposed · 5-second undo</figcaption>
-</figure>
-</div>
-</div>
+      <!-- ============ #6 ============ -->
+      <div class="finding p1">
+        <h3>
+          #6 · Drag-to-move on appointment blocks has no discoverable affordance
+          <span class="badge b-p1">P1</span> <span class="badge b-s">S</span>
+        </h3>
+        <p class="refs"><span class="ref">scheduler/AppointmentBlock.tsx:186</span></p>
+        <p>
+          Outlook-style drag-to-move is wired and works, but the only cue is
+          <code>cursor: move</code> on hover. A new front-desk user will never discover it. Add a
+          4-dot drag handle on the left edge of every block, plus a small inline tip the first time
+          the user hovers (<em>"Drag to move · click for details"</em>).
+        </p>
+      </div>
 
-<!-- ============ #6 ============ -->
-<div class="finding p1">
-<h3>#6 · Drag-to-move on appointment blocks has no discoverable affordance
-  <span class="badge b-p1">P1</span> <span class="badge b-s">S</span></h3>
-<p class="refs"><span class="ref">scheduler/AppointmentBlock.tsx:186</span></p>
-<p>
-  Outlook-style drag-to-move is wired and works, but the only cue is <code>cursor: move</code> on
-  hover. A new front-desk user will never discover it. Add a 4-dot drag handle on the left edge of every
-  block, plus a small inline tip the first time the user hovers (<em>"Drag to move · click for details"</em>).
-</p>
-</div>
+      <!-- ============ #7 ============ -->
+      <div class="finding p1">
+        <h3>
+          #7 · Setup wizard / Welcome / Business-type / FirstRunTour overlap risk
+          <span class="badge b-p1">P1</span> <span class="badge b-m">M</span>
+        </h3>
+        <p class="refs">
+          <span class="ref">DashboardHome.tsx:185–309</span> ·
+          <span class="ref">MyBusinessView.tsx:107–134</span> ·
+          <span class="ref">FirstRunTour.tsx</span>
+        </p>
+        <p>
+          Four overlay layers are gated by independent state flags (<code>welcomePassed</code>,
+          <code>wizardMode</code>, <code>businessTypeReady</code>, <code>wizardDismissed</code>)
+          plus a localStorage tour flag. The code is correct in isolation, but the matrix has at
+          least one ordering where a returning tenant with cleared localStorage opens the tour
+          overlay <em>and</em> the welcome modal simultaneously. Fold all four gates into a single
+          <code>useOnboardingState()</code> reducer that returns exactly one of
+          <code>idle | welcome | chooser | picker | wizard | tour</code>, and assert in tests that
+          only one renders at a time.
+        </p>
+      </div>
 
-<!-- ============ #7 ============ -->
-<div class="finding p1">
-<h3>#7 · Setup wizard / Welcome / Business-type / FirstRunTour overlap risk
-  <span class="badge b-p1">P1</span> <span class="badge b-m">M</span></h3>
-<p class="refs"><span class="ref">DashboardHome.tsx:185–309</span> · <span class="ref">MyBusinessView.tsx:107–134</span> · <span class="ref">FirstRunTour.tsx</span></p>
-<p>
-  Four overlay layers are gated by independent state flags (<code>welcomePassed</code>,
-  <code>wizardMode</code>, <code>businessTypeReady</code>, <code>wizardDismissed</code>) plus a
-  localStorage tour flag. The code is correct in isolation, but the matrix has at least one ordering
-  where a returning tenant with cleared localStorage opens the tour overlay <em>and</em> the welcome
-  modal simultaneously. Fold all four gates into a single
-  <code>useOnboardingState()</code> reducer that returns exactly one of <code>idle |
-  welcome | chooser | picker | wizard | tour</code>, and assert in tests that only one renders at a time.
-</p>
-</div>
+      <!-- ============ #8 ============ -->
+      <div class="finding p1">
+        <h3>
+          #8 · "Start your free trial" link has no signup destination
+          <span class="badge b-p1">P1</span> <span class="badge b-m">M</span>
+        </h3>
+        <p class="refs"><span class="ref">LoginView.tsx:144–148</span></p>
+        <p>
+          Login footer links to <code>/?trial=true</code>. That route is the marketing landing page;
+          the <code>trial=true</code> param is consumed by <code>DashboardHome</code> on mount but
+          only as a cleanup effect (<code>params.delete('trial')</code>). There is no signup flow —
+          a prospect clicking the link lands back on marketing copy with no obvious next step.
+          Either build a one-page self-serve signup, or rephrase the link as "Contact sales" with a
+          mailto: + Calendly until a signup flow exists. Don't ship the affordance until the
+          destination works.
+        </p>
+      </div>
 
-<!-- ============ #8 ============ -->
-<div class="finding p1">
-<h3>#8 · "Start your free trial" link has no signup destination
-  <span class="badge b-p1">P1</span> <span class="badge b-m">M</span></h3>
-<p class="refs"><span class="ref">LoginView.tsx:144–148</span></p>
-<p>
-  Login footer links to <code>/?trial=true</code>. That route is the marketing landing page; the
-  <code>trial=true</code> param is consumed by <code>DashboardHome</code> on mount but only as a cleanup
-  effect (<code>params.delete('trial')</code>). There is no signup flow — a prospect clicking
-  the link lands back on marketing copy with no obvious next step. Either build a one-page
-  self-serve signup, or rephrase the link as "Contact sales" with a mailto: + Calendly until a
-  signup flow exists. Don't ship the affordance until the destination works.
-</p>
-</div>
+      <!-- ============ #9 ============ -->
+      <div class="finding p1">
+        <h3>
+          #9 · Color contrast: <code>--text-muted</code> falls below WCAG AA in 4 of 8 themes
+          <span class="badge b-p1">P1</span> <span class="badge b-s">S</span>
+        </h3>
+        <p class="refs"><span class="ref">app/globals.css:48,87,126,164</span></p>
+        <p>
+          Navy <code>--text-muted: #3A4E6E</code> on <code>--bg-base: #090E1A</code> measures ~3.8:1
+          — below WCAG 2.1 AA 4.5:1 for normal-weight body text. <code>--text-muted</code> is used
+          for date subtitles, card descriptions, sub-tab counts (DashboardHome, every
+          Card.description). Same shape in Rose, Forest, Midnight. Bump each
+          <code>--text-muted</code> by ~12 % luminance and run a contrast pass through WebAIM's
+          calculator. A 30-minute fix unlocking AA across the secondary type ramp.
+        </p>
+        <div class="wireframe-pair">
+          <figure>
+            <svg viewBox="0 0 380 120" aria-label="Low contrast text">
+              <rect width="380" height="120" fill="#090E1A" />
+              <text x="22" y="48" font="700 18px sans-serif" fill="#e8f0ff">
+                Good morning, Dale
+              </text>
+              <text x="22" y="72" font="13px sans-serif" fill="#3A4E6E">
+                Friday, May 18, 2026 · 3.8:1 ⚠
+              </text>
+              <text x="22" y="100" font="12px sans-serif" fill="#3A4E6E">
+                Nothing booked for today yet.
+              </text>
+            </svg>
+            <figcaption>current navy</figcaption>
+          </figure>
+          <figure>
+            <svg viewBox="0 0 380 120" aria-label="Bumped contrast">
+              <rect width="380" height="120" fill="#090E1A" />
+              <text x="22" y="48" font="700 18px sans-serif" fill="#e8f0ff">
+                Good morning, Dale
+              </text>
+              <text x="22" y="72" font="13px sans-serif" fill="#6A82A8">
+                Friday, May 18, 2026 · 5.1:1 ✓
+              </text>
+              <text x="22" y="100" font="12px sans-serif" fill="#6A82A8">
+                Nothing booked for today yet.
+              </text>
+            </svg>
+            <figcaption>proposed · ~+12% lum</figcaption>
+          </figure>
+        </div>
+      </div>
 
-<!-- ============ #9 ============ -->
-<div class="finding p1">
-<h3>#9 · Color contrast: <code>--text-muted</code> falls below WCAG AA in 4 of 8 themes
-  <span class="badge b-p1">P1</span> <span class="badge b-s">S</span></h3>
-<p class="refs"><span class="ref">app/globals.css:48,87,126,164</span></p>
-<p>
-  Navy <code>--text-muted: #3A4E6E</code> on <code>--bg-base: #090E1A</code> measures ~3.8:1 — below
-  WCAG 2.1 AA 4.5:1 for normal-weight body text. <code>--text-muted</code> is used for date subtitles,
-  card descriptions, sub-tab counts (DashboardHome, every Card.description). Same shape in Rose, Forest,
-  Midnight. Bump each <code>--text-muted</code> by ~12 % luminance and run a contrast pass through
-  WebAIM's calculator. A 30-minute fix unlocking AA across the secondary type ramp.
-</p>
-<div class="wireframe-pair">
-<figure>
-<svg viewBox="0 0 380 120" aria-label="Low contrast text">
-  <rect width="380" height="120" fill="#090E1A"/>
-  <text x="22" y="48" font="700 18px sans-serif" fill="#e8f0ff">Good morning, Dale</text>
-  <text x="22" y="72" font="13px sans-serif" fill="#3A4E6E">Friday, May 18, 2026 · 3.8:1 ⚠</text>
-  <text x="22" y="100" font="12px sans-serif" fill="#3A4E6E">Nothing booked for today yet.</text>
-</svg>
-<figcaption>current navy</figcaption>
-</figure>
-<figure>
-<svg viewBox="0 0 380 120" aria-label="Bumped contrast">
-  <rect width="380" height="120" fill="#090E1A"/>
-  <text x="22" y="48" font="700 18px sans-serif" fill="#e8f0ff">Good morning, Dale</text>
-  <text x="22" y="72" font="13px sans-serif" fill="#6A82A8">Friday, May 18, 2026 · 5.1:1 ✓</text>
-  <text x="22" y="100" font="12px sans-serif" fill="#6A82A8">Nothing booked for today yet.</text>
-</svg>
-<figcaption>proposed · ~+12% lum</figcaption>
-</figure>
-</div>
-</div>
+      <!-- ============ #10 ============ -->
+      <div class="finding p1">
+        <h3>
+          #10 · No keyboard shortcuts at all for a daily-use power surface
+          <span class="badge b-p1">P1</span> <span class="badge b-l">L</span>
+        </h3>
+        <p class="refs">global (none registered)</p>
+        <p>
+          Front-desk operators are the dashboard's most frequent users by 10×. A receptionist on the
+          phone with a customer wants <kbd>N</kbd> to open New Booking, <kbd>G S</kbd> to jump to
+          Schedule, <kbd>/</kbd> to focus search, <kbd>Esc</kbd> to close panels. None exist today.
+          Start small: <kbd>N</kbd> for New Booking, <kbd>/</kbd> for customer search,
+          <kbd>G H</kbd>/<kbd>G S</kbd>/<kbd>G C</kbd>/<kbd>G K</kbd> for the four primary tabs,
+          <kbd>?</kbd> to show a help cheat-sheet. Document in a one-page modal. This is L because
+          the cheat-sheet, the focus-stealing edge cases (modals open, input focused), and the help
+          modal copy take real time — but the value is enormous.
+        </p>
+      </div>
 
-<!-- ============ #10 ============ -->
-<div class="finding p1">
-<h3>#10 · No keyboard shortcuts at all for a daily-use power surface
-  <span class="badge b-p1">P1</span> <span class="badge b-l">L</span></h3>
-<p class="refs">global (none registered)</p>
-<p>
-  Front-desk operators are the dashboard's most frequent users by 10×. A receptionist on the phone with
-  a customer wants <kbd>N</kbd> to open New Booking, <kbd>G S</kbd> to jump to Schedule, <kbd>/</kbd> to
-  focus search, <kbd>Esc</kbd> to close panels. None exist today. Start small: <kbd>N</kbd> for New
-  Booking, <kbd>/</kbd> for customer search, <kbd>G H</kbd>/<kbd>G S</kbd>/<kbd>G C</kbd>/<kbd>G K</kbd>
-  for the four primary tabs, <kbd>?</kbd> to show a help cheat-sheet. Document in a one-page modal.
-  This is L because the cheat-sheet, the focus-stealing edge cases (modals open, input focused), and
-  the help modal copy take real time — but the value is enormous.
-</p>
-</div>
+      <!-- =================== FULL FINDINGS =================== -->
+      <h2>4. Full findings by category</h2>
 
-<!-- =================== FULL FINDINGS =================== -->
-<h2>4. Full findings by category</h2>
+      <h3>4.1 Flows</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Sev</th>
+            <th>Finding</th>
+            <th>File ref</th>
+            <th>Recommendation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-p0">P0</span></td>
+            <td>
+              Destructive flows use <code>confirm()</code>/<code>alert()</code> instead of
+              ConfirmModal
+            </td>
+            <td><span class="ref">9 files</span></td>
+            <td>Thread <code>useConfirm()</code>, drop natives</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>"Start your free trial" link with no signup destination</td>
+            <td><span class="ref">LoginView.tsx:144</span></td>
+            <td>Build signup or rephrase to "Contact sales"</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>Wizard / Welcome / BusinessType / Tour overlap risk</td>
+            <td><span class="ref">DashboardHome.tsx:185</span></td>
+            <td>Single <code>useOnboardingState()</code> reducer</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>No undo affordance on cancel-appointment despite reactivate API existing</td>
+            <td><span class="ref">SchedulerView.tsx:117</span></td>
+            <td>Add Undo button in success toast (5s)</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>Customer search uses raw input, ignores existing CustomerCombobox primitive</td>
+            <td><span class="ref">CRMView.tsx</span></td>
+            <td>Reuse Combobox · keyboard nav + recents</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>
+              Empty "Nothing booked today" card shows only navigation chips, no New Booking CTA
+            </td>
+            <td><span class="ref">DashboardHome.tsx:335</span></td>
+            <td>Promote New Booking as primary inside the empty state</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>Forgot-password page sends user back to login but no toast confirms email sent</td>
+            <td><span class="ref">app/forgot-password/page.tsx</span></td>
+            <td>Toast on success · explicit "Check your inbox"</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p3">P3</span></td>
+            <td>
+              Browser back from <code>?tab=schedule&amp;subtab=staff</code> loses sub-tab on iOS
+              Safari
+            </td>
+            <td><span class="ref">app/dashboard/page.tsx:59</span></td>
+            <td>Wire popstate to sub-tab state too</td>
+          </tr>
+        </tbody>
+      </table>
 
-<h3>4.1 Flows</h3>
-<table>
-  <thead><tr><th>Sev</th><th>Finding</th><th>File ref</th><th>Recommendation</th></tr></thead>
-  <tbody>
-  <tr><td><span class="badge b-p0">P0</span></td><td>Destructive flows use <code>confirm()</code>/<code>alert()</code> instead of ConfirmModal</td><td><span class="ref">9 files</span></td><td>Thread <code>useConfirm()</code>, drop natives</td></tr>
-  <tr><td><span class="badge b-p1">P1</span></td><td>"Start your free trial" link with no signup destination</td><td><span class="ref">LoginView.tsx:144</span></td><td>Build signup or rephrase to "Contact sales"</td></tr>
-  <tr><td><span class="badge b-p1">P1</span></td><td>Wizard / Welcome / BusinessType / Tour overlap risk</td><td><span class="ref">DashboardHome.tsx:185</span></td><td>Single <code>useOnboardingState()</code> reducer</td></tr>
-  <tr><td><span class="badge b-p1">P1</span></td><td>No undo affordance on cancel-appointment despite reactivate API existing</td><td><span class="ref">SchedulerView.tsx:117</span></td><td>Add Undo button in success toast (5s)</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Customer search uses raw input, ignores existing CustomerCombobox primitive</td><td><span class="ref">CRMView.tsx</span></td><td>Reuse Combobox · keyboard nav + recents</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Empty "Nothing booked today" card shows only navigation chips, no New Booking CTA</td><td><span class="ref">DashboardHome.tsx:335</span></td><td>Promote New Booking as primary inside the empty state</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Forgot-password page sends user back to login but no toast confirms email sent</td><td><span class="ref">app/forgot-password/page.tsx</span></td><td>Toast on success · explicit "Check your inbox"</td></tr>
-  <tr><td><span class="badge b-p3">P3</span></td><td>Browser back from <code>?tab=schedule&amp;subtab=staff</code> loses sub-tab on iOS Safari</td><td><span class="ref">app/dashboard/page.tsx:59</span></td><td>Wire popstate to sub-tab state too</td></tr>
-  </tbody>
-</table>
+      <h3>4.2 Heuristics (Nielsen + WCAG)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Sev</th>
+            <th>Finding</th>
+            <th>File ref</th>
+            <th>Recommendation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-p0">P0</span></td>
+            <td>
+              Hover-only delete: violates "match between system and the real world" + WCAG 2.5.7
+              dragging movements
+            </td>
+            <td><span class="ref">AppointmentBlock.tsx:213</span></td>
+            <td>Always-visible overflow menu</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>"Live" badges aren't live — visibility-of-system-status violation</td>
+            <td><span class="ref">OutlookLayout.tsx:127</span></td>
+            <td>5s poll or SSE; aria-live region</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>--text-muted &lt; 4.5:1 in navy/rose/forest/midnight themes</td>
+            <td><span class="ref">globals.css</span></td>
+            <td>+12% lum across 4 themes</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>No keyboard shortcuts for power users (help/recognition rather than recall)</td>
+            <td>global</td>
+            <td>N · / · G H/S/C/K · ? · Esc</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>Drag-to-move has no discoverable affordance</td>
+            <td><span class="ref">AppointmentBlock.tsx:186</span></td>
+            <td>Drag handle + first-hover tip</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>
+              53 files still use Tailwind <code>bg-gray-*</code>/<code>text-gray-*</code> classes —
+              breaks themes
+            </td>
+            <td><span class="ref">grep</span></td>
+            <td>Sweep to CSS-var-only</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>
+              Profile + tenant dropdowns use absolute getBoundingClientRect() — float away on scroll
+            </td>
+            <td><span class="ref">OutlookLayout.tsx:331,394</span></td>
+            <td>Use Popover w/ floating-ui-style anchor tracking</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>Scheduler zoom buttons have icons only; no current-level indicator</td>
+            <td><span class="ref">SchedulerView.tsx</span></td>
+            <td>Show "60 px/hr · 4 of 5" or step indicator</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>SchedulerView default sub-tab "staff" not reflected in URL on first load</td>
+            <td><span class="ref">SchedulerView.tsx:45</span></td>
+            <td>Replace state initialiser to write URL on mount</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>
+              Multiple toast messages stack vertically; oldest disappears silently — error from
+              yesterday's action may be missed
+            </td>
+            <td><span class="ref">Toast.tsx</span></td>
+            <td>Persist error toasts until dismissed</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p3">P3</span></td>
+            <td>"Sign in" button copy is fine but "Signing in…" verbose; consider just spinner</td>
+            <td><span class="ref">LoginView.tsx:125</span></td>
+            <td>Optional micro-polish</td>
+          </tr>
+        </tbody>
+      </table>
 
-<h3>4.2 Heuristics (Nielsen + WCAG)</h3>
-<table>
-  <thead><tr><th>Sev</th><th>Finding</th><th>File ref</th><th>Recommendation</th></tr></thead>
-  <tbody>
-  <tr><td><span class="badge b-p0">P0</span></td><td>Hover-only delete: violates "match between system and the real world" + WCAG 2.5.7 dragging movements</td><td><span class="ref">AppointmentBlock.tsx:213</span></td><td>Always-visible overflow menu</td></tr>
-  <tr><td><span class="badge b-p1">P1</span></td><td>"Live" badges aren't live — visibility-of-system-status violation</td><td><span class="ref">OutlookLayout.tsx:127</span></td><td>5s poll or SSE; aria-live region</td></tr>
-  <tr><td><span class="badge b-p1">P1</span></td><td>--text-muted &lt; 4.5:1 in navy/rose/forest/midnight themes</td><td><span class="ref">globals.css</span></td><td>+12% lum across 4 themes</td></tr>
-  <tr><td><span class="badge b-p1">P1</span></td><td>No keyboard shortcuts for power users (help/recognition rather than recall)</td><td>global</td><td>N · / · G H/S/C/K · ? · Esc</td></tr>
-  <tr><td><span class="badge b-p1">P1</span></td><td>Drag-to-move has no discoverable affordance</td><td><span class="ref">AppointmentBlock.tsx:186</span></td><td>Drag handle + first-hover tip</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>53 files still use Tailwind <code>bg-gray-*</code>/<code>text-gray-*</code> classes — breaks themes</td><td><span class="ref">grep</span></td><td>Sweep to CSS-var-only</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Profile + tenant dropdowns use absolute getBoundingClientRect() — float away on scroll</td><td><span class="ref">OutlookLayout.tsx:331,394</span></td><td>Use Popover w/ floating-ui-style anchor tracking</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Scheduler zoom buttons have icons only; no current-level indicator</td><td><span class="ref">SchedulerView.tsx</span></td><td>Show "60 px/hr · 4 of 5" or step indicator</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>SchedulerView default sub-tab "staff" not reflected in URL on first load</td><td><span class="ref">SchedulerView.tsx:45</span></td><td>Replace state initialiser to write URL on mount</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Multiple toast messages stack vertically; oldest disappears silently — error from yesterday's action may be missed</td><td><span class="ref">Toast.tsx</span></td><td>Persist error toasts until dismissed</td></tr>
-  <tr><td><span class="badge b-p3">P3</span></td><td>"Sign in" button copy is fine but "Signing in…" verbose; consider just spinner</td><td><span class="ref">LoginView.tsx:125</span></td><td>Optional micro-polish</td></tr>
-  </tbody>
-</table>
+      <h3>4.3 Device support</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Sev</th>
+            <th>Finding</th>
+            <th>File ref</th>
+            <th>Recommendation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>
+              Mobile bottom nav: 5–8 tabs at <code>text-[9px]</code>, horizontal scroll at 375px
+            </td>
+            <td><span class="ref">OutlookLayout.tsx:274</span></td>
+            <td>Drop labels below 360px · 4 primary + "More"</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>
+              Scheduler swim-lane requires 480 px minimum horizontal; pinch-zoom blocked by drag
+              handlers
+            </td>
+            <td><span class="ref">StaffSwimLaneView.tsx</span></td>
+            <td>Horizontal pan via 2-finger only · keep 1-finger for drag-to-create</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>
+              QuickBookPanel modal — at 375px tall (iPhone SE landscape) bottom action row sits
+              below fold
+            </td>
+            <td><span class="ref">scheduler/QuickBookPanel.tsx</span></td>
+            <td>Sticky-bottom CTA bar inside modal</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>iOS Safari: input under keyboard not auto-scrolled into view in long forms</td>
+            <td><span class="ref">BusinessSettingsView.tsx</span></td>
+            <td><code>scrollIntoView({block:'center'})</code> on focus</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>Touch targets &lt; 44 px: trash icon (16 px), zoom in/out, badge ✕</td>
+            <td>multiple</td>
+            <td>Wrap in 44 px tap area (padding)</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p3">P3</span></td>
+            <td>Theme select is a 32 px-tall native dropdown in the top utility bar</td>
+            <td><span class="ref">OutlookLayout.tsx:194</span></td>
+            <td>Move to profile sheet · larger swatches</td>
+          </tr>
+        </tbody>
+      </table>
 
-<h3>4.3 Device support</h3>
-<table>
-  <thead><tr><th>Sev</th><th>Finding</th><th>File ref</th><th>Recommendation</th></tr></thead>
-  <tbody>
-  <tr><td><span class="badge b-p1">P1</span></td><td>Mobile bottom nav: 5–8 tabs at <code>text-[9px]</code>, horizontal scroll at 375px</td><td><span class="ref">OutlookLayout.tsx:274</span></td><td>Drop labels below 360px · 4 primary + "More"</td></tr>
-  <tr><td><span class="badge b-p1">P1</span></td><td>Scheduler swim-lane requires 480 px minimum horizontal; pinch-zoom blocked by drag handlers</td><td><span class="ref">StaffSwimLaneView.tsx</span></td><td>Horizontal pan via 2-finger only · keep 1-finger for drag-to-create</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>QuickBookPanel modal — at 375px tall (iPhone SE landscape) bottom action row sits below fold</td><td><span class="ref">scheduler/QuickBookPanel.tsx</span></td><td>Sticky-bottom CTA bar inside modal</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>iOS Safari: input under keyboard not auto-scrolled into view in long forms</td><td><span class="ref">BusinessSettingsView.tsx</span></td><td><code>scrollIntoView({block:'center'})</code> on focus</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Touch targets &lt; 44 px: trash icon (16 px), zoom in/out, badge ✕</td><td>multiple</td><td>Wrap in 44 px tap area (padding) </td></tr>
-  <tr><td><span class="badge b-p3">P3</span></td><td>Theme select is a 32 px-tall native dropdown in the top utility bar</td><td><span class="ref">OutlookLayout.tsx:194</span></td><td>Move to profile sheet · larger swatches</td></tr>
-  </tbody>
-</table>
+      <h3>4.4 Web design</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Sev</th>
+            <th>Finding</th>
+            <th>File ref</th>
+            <th>Recommendation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>Inconsistent loading affordances (pulse text · spinner · skeleton)</td>
+            <td>multiple</td>
+            <td>Single <code>&lt;LoadingState/&gt;</code> primitive</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>Density jump between Home (16/24 px gutter) and Schedule (0 px gutter for grid)</td>
+            <td>n/a</td>
+            <td>Establish 4/8/16/24 px spacing scale and enforce</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p3">P3</span></td>
+            <td>
+              Bebas Neue for headings is heavy + tracked-out; reads as marketing not utility on data
+              screens
+            </td>
+            <td><span class="ref">globals.css:31</span></td>
+            <td>Consider DM Sans 700 for in-app H1/H2 · keep Bebas for marketing</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p3">P3</span></td>
+            <td>Card border radius mixes <code>rounded-lg</code> and <code>rounded-xl</code></td>
+            <td>multiple</td>
+            <td>Pick one (8 or 12 px) and stop</td>
+          </tr>
+        </tbody>
+      </table>
 
-<h3>4.4 Web design</h3>
-<table>
-  <thead><tr><th>Sev</th><th>Finding</th><th>File ref</th><th>Recommendation</th></tr></thead>
-  <tbody>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Inconsistent loading affordances (pulse text · spinner · skeleton)</td><td>multiple</td><td>Single <code>&lt;LoadingState/&gt;</code> primitive</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Density jump between Home (16/24 px gutter) and Schedule (0 px gutter for grid)</td><td>n/a</td><td>Establish 4/8/16/24 px spacing scale and enforce</td></tr>
-  <tr><td><span class="badge b-p3">P3</span></td><td>Bebas Neue for headings is heavy + tracked-out; reads as marketing not utility on data screens</td><td><span class="ref">globals.css:31</span></td><td>Consider DM Sans 700 for in-app H1/H2 · keep Bebas for marketing</td></tr>
-  <tr><td><span class="badge b-p3">P3</span></td><td>Card border radius mixes <code>rounded-lg</code> and <code>rounded-xl</code></td><td>multiple</td><td>Pick one (8 or 12 px) and stop</td></tr>
-  </tbody>
-</table>
+      <h3>4.5 Natural use</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Sev</th>
+            <th>Finding</th>
+            <th>File ref</th>
+            <th>Recommendation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-p1">P1</span></td>
+            <td>
+              "Phone Assistant" tab houses Persona + KB + Analytics — owner has to know that's where
+              to configure AI
+            </td>
+            <td><span class="ref">AIInsightsView.tsx</span></td>
+            <td>Keep, but surface "AI Persona" link from Home setup checklist</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>"All Businesses" admin globe icon-only · no text label even on hover</td>
+            <td><span class="ref">OutlookLayout.tsx:184</span></td>
+            <td>Add <code>title</code> + text label on hover</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p2">P2</span></td>
+            <td>
+              Setup-progress pill always shows a percentage but never says <em>what's left</em>
+            </td>
+            <td><span class="ref">SetupProgressPill.tsx</span></td>
+            <td>Tooltip listing the remaining steps</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-p3">P3</span></td>
+            <td>
+              "Admin Mode" header banner is striking but offers no quick-return-to-super-admin link
+            </td>
+            <td><span class="ref">OutlookLayout.tsx:147</span></td>
+            <td>"Exit admin mode" button in the header chip</td>
+          </tr>
+        </tbody>
+      </table>
 
-<h3>4.5 Natural use</h3>
-<table>
-  <thead><tr><th>Sev</th><th>Finding</th><th>File ref</th><th>Recommendation</th></tr></thead>
-  <tbody>
-  <tr><td><span class="badge b-p1">P1</span></td><td>"Phone Assistant" tab houses Persona + KB + Analytics — owner has to know that's where to configure AI</td><td><span class="ref">AIInsightsView.tsx</span></td><td>Keep, but surface "AI Persona" link from Home setup checklist</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>"All Businesses" admin globe icon-only · no text label even on hover</td><td><span class="ref">OutlookLayout.tsx:184</span></td><td>Add <code>title</code> + text label on hover</td></tr>
-  <tr><td><span class="badge b-p2">P2</span></td><td>Setup-progress pill always shows a percentage but never says <em>what's left</em></td><td><span class="ref">SetupProgressPill.tsx</span></td><td>Tooltip listing the remaining steps</td></tr>
-  <tr><td><span class="badge b-p3">P3</span></td><td>"Admin Mode" header banner is striking but offers no quick-return-to-super-admin link</td><td><span class="ref">OutlookLayout.tsx:147</span></td><td>"Exit admin mode" button in the header chip</td></tr>
-  </tbody>
-</table>
+      <h3>4.6 Severity × Category heatmap</h3>
+      <svg viewBox="0 0 720 240" aria-label="Severity × category heatmap">
+        <style>
+          .hl {
+            font: 700 14px sans-serif;
+            fill: #fff;
+            text-anchor: middle;
+          }
+          .lb {
+            font: 600 12px sans-serif;
+            fill: #cbd5e1;
+          }
+          .ax {
+            font: 11px sans-serif;
+            fill: #64748b;
+            text-anchor: middle;
+          }
+        </style>
+        <rect width="720" height="240" fill="#11161f" rx="10" />
+        <!-- columns: P0 P1 P2 P3 -->
+        <!-- rows: Flows, Heuristics, Devices, Design, Natural -->
+        <!-- helper: cell at x,y with count and severity color -->
+        <!-- counts derived from the four 4.x tables -->
+        <text x="200" y="30" class="lb">P0</text>
+        <text x="320" y="30" class="lb">P1</text>
+        <text x="440" y="30" class="lb">P2</text>
+        <text x="560" y="30" class="lb">P3</text>
+        <!-- row labels -->
+        <text x="125" y="65" class="lb" text-anchor="end">Flows</text>
+        <text x="125" y="105" class="lb" text-anchor="end">Heuristics</text>
+        <text x="125" y="145" class="lb" text-anchor="end">Devices</text>
+        <text x="125" y="185" class="lb" text-anchor="end">Design</text>
+        <text x="125" y="225" class="lb" text-anchor="end">Natural use</text>
+        <!-- cells -->
+        <!-- Flows: P0=1 P1=3 P2=3 P3=1 -->
+        <g>
+          <rect x="160" y="45" width="80" height="32" fill="#dc2626" rx="4" />
+          <text class="hl" x="200" y="66">1</text>
+          <rect x="280" y="45" width="80" height="32" fill="#ea580c" rx="4" />
+          <text class="hl" x="320" y="66">3</text>
+          <rect x="400" y="45" width="80" height="32" fill="#ca8a04" rx="4" />
+          <text class="hl" x="440" y="66" style="fill: #2a1e02">3</text>
+          <rect x="520" y="45" width="80" height="32" fill="#6b7280" rx="4" />
+          <text class="hl" x="560" y="66">1</text>
+        </g>
+        <!-- Heuristics: P0=1 P1=4 P2=5 P3=1 -->
+        <g>
+          <rect x="160" y="85" width="80" height="32" fill="#dc2626" rx="4" />
+          <text class="hl" x="200" y="106">1</text>
+          <rect x="280" y="85" width="80" height="32" fill="#ea580c" rx="4" />
+          <text class="hl" x="320" y="106">4</text>
+          <rect x="400" y="85" width="80" height="32" fill="#ca8a04" rx="4" />
+          <text class="hl" x="440" y="106" style="fill: #2a1e02">5</text>
+          <rect x="520" y="85" width="80" height="32" fill="#6b7280" rx="4" />
+          <text class="hl" x="560" y="106">1</text>
+        </g>
+        <!-- Devices: P0=0 P1=2 P2=3 P3=1 -->
+        <g>
+          <rect x="160" y="125" width="80" height="32" fill="#22202a" rx="4" />
+          <text class="hl" x="200" y="146" style="fill: #475569">·</text>
+          <rect x="280" y="125" width="80" height="32" fill="#ea580c" rx="4" />
+          <text class="hl" x="320" y="146">2</text>
+          <rect x="400" y="125" width="80" height="32" fill="#ca8a04" rx="4" />
+          <text class="hl" x="440" y="146" style="fill: #2a1e02">3</text>
+          <rect x="520" y="125" width="80" height="32" fill="#6b7280" rx="4" />
+          <text class="hl" x="560" y="146">1</text>
+        </g>
+        <!-- Design: P0=0 P1=0 P2=2 P3=2 -->
+        <g>
+          <rect x="160" y="165" width="80" height="32" fill="#22202a" rx="4" />
+          <text class="hl" x="200" y="186" style="fill: #475569">·</text>
+          <rect x="280" y="165" width="80" height="32" fill="#22202a" rx="4" />
+          <text class="hl" x="320" y="186" style="fill: #475569">·</text>
+          <rect x="400" y="165" width="80" height="32" fill="#ca8a04" rx="4" />
+          <text class="hl" x="440" y="186" style="fill: #2a1e02">2</text>
+          <rect x="520" y="165" width="80" height="32" fill="#6b7280" rx="4" />
+          <text class="hl" x="560" y="186">2</text>
+        </g>
+        <!-- Natural: P0=0 P1=1 P2=2 P3=1 -->
+        <g>
+          <rect x="160" y="205" width="80" height="32" fill="#22202a" rx="4" />
+          <text class="hl" x="200" y="226" style="fill: #475569">·</text>
+          <rect x="280" y="205" width="80" height="32" fill="#ea580c" rx="4" />
+          <text class="hl" x="320" y="226">1</text>
+          <rect x="400" y="205" width="80" height="32" fill="#ca8a04" rx="4" />
+          <text class="hl" x="440" y="226" style="fill: #2a1e02">2</text>
+          <rect x="520" y="205" width="80" height="32" fill="#6b7280" rx="4" />
+          <text class="hl" x="560" y="226">1</text>
+        </g>
+      </svg>
 
-<h3>4.6 Severity × Category heatmap</h3>
-<svg viewBox="0 0 720 240" aria-label="Severity × category heatmap">
-  <style>.hl{font:700 14px sans-serif;fill:#fff;text-anchor:middle}
-    .lb{font:600 12px sans-serif;fill:#cbd5e1}
-    .ax{font:11px sans-serif;fill:#64748b;text-anchor:middle}</style>
-  <rect width="720" height="240" fill="#11161f" rx="10"/>
-  <!-- columns: P0 P1 P2 P3 -->
-  <!-- rows: Flows, Heuristics, Devices, Design, Natural -->
-  <!-- helper: cell at x,y with count and severity color -->
-  <!-- counts derived from the four 4.x tables -->
-  <text x="200" y="30" class="lb">P0</text>
-  <text x="320" y="30" class="lb">P1</text>
-  <text x="440" y="30" class="lb">P2</text>
-  <text x="560" y="30" class="lb">P3</text>
-  <!-- row labels -->
-  <text x="125" y="65" class="lb" text-anchor="end">Flows</text>
-  <text x="125" y="105" class="lb" text-anchor="end">Heuristics</text>
-  <text x="125" y="145" class="lb" text-anchor="end">Devices</text>
-  <text x="125" y="185" class="lb" text-anchor="end">Design</text>
-  <text x="125" y="225" class="lb" text-anchor="end">Natural use</text>
-  <!-- cells -->
-  <!-- Flows: P0=1 P1=3 P2=3 P3=1 -->
-  <g>
-    <rect x="160" y="45" width="80" height="32" fill="#dc2626" rx="4"/><text class="hl" x="200" y="66">1</text>
-    <rect x="280" y="45" width="80" height="32" fill="#ea580c" rx="4"/><text class="hl" x="320" y="66">3</text>
-    <rect x="400" y="45" width="80" height="32" fill="#ca8a04" rx="4"/><text class="hl" x="440" y="66" style="fill:#2a1e02">3</text>
-    <rect x="520" y="45" width="80" height="32" fill="#6b7280" rx="4"/><text class="hl" x="560" y="66">1</text>
-  </g>
-  <!-- Heuristics: P0=1 P1=4 P2=5 P3=1 -->
-  <g>
-    <rect x="160" y="85" width="80" height="32" fill="#dc2626" rx="4"/><text class="hl" x="200" y="106">1</text>
-    <rect x="280" y="85" width="80" height="32" fill="#ea580c" rx="4"/><text class="hl" x="320" y="106">4</text>
-    <rect x="400" y="85" width="80" height="32" fill="#ca8a04" rx="4"/><text class="hl" x="440" y="106" style="fill:#2a1e02">5</text>
-    <rect x="520" y="85" width="80" height="32" fill="#6b7280" rx="4"/><text class="hl" x="560" y="106">1</text>
-  </g>
-  <!-- Devices: P0=0 P1=2 P2=3 P3=1 -->
-  <g>
-    <rect x="160" y="125" width="80" height="32" fill="#22202a" rx="4"/><text class="hl" x="200" y="146" style="fill:#475569">·</text>
-    <rect x="280" y="125" width="80" height="32" fill="#ea580c" rx="4"/><text class="hl" x="320" y="146">2</text>
-    <rect x="400" y="125" width="80" height="32" fill="#ca8a04" rx="4"/><text class="hl" x="440" y="146" style="fill:#2a1e02">3</text>
-    <rect x="520" y="125" width="80" height="32" fill="#6b7280" rx="4"/><text class="hl" x="560" y="146">1</text>
-  </g>
-  <!-- Design: P0=0 P1=0 P2=2 P3=2 -->
-  <g>
-    <rect x="160" y="165" width="80" height="32" fill="#22202a" rx="4"/><text class="hl" x="200" y="186" style="fill:#475569">·</text>
-    <rect x="280" y="165" width="80" height="32" fill="#22202a" rx="4"/><text class="hl" x="320" y="186" style="fill:#475569">·</text>
-    <rect x="400" y="165" width="80" height="32" fill="#ca8a04" rx="4"/><text class="hl" x="440" y="186" style="fill:#2a1e02">2</text>
-    <rect x="520" y="165" width="80" height="32" fill="#6b7280" rx="4"/><text class="hl" x="560" y="186">2</text>
-  </g>
-  <!-- Natural: P0=0 P1=1 P2=2 P3=1 -->
-  <g>
-    <rect x="160" y="205" width="80" height="32" fill="#22202a" rx="4"/><text class="hl" x="200" y="226" style="fill:#475569">·</text>
-    <rect x="280" y="205" width="80" height="32" fill="#ea580c" rx="4"/><text class="hl" x="320" y="226">1</text>
-    <rect x="400" y="205" width="80" height="32" fill="#ca8a04" rx="4"/><text class="hl" x="440" y="226" style="fill:#2a1e02">2</text>
-    <rect x="520" y="205" width="80" height="32" fill="#6b7280" rx="4"/><text class="hl" x="560" y="226">1</text>
-  </g>
-</svg>
+      <!-- =================== TOUCH TARGETS =================== -->
+      <h2>5. Touch-target audit (375 px viewport)</h2>
+      <p>Boxes color-coded by whether they meet the 44 × 44 px iOS / 48 × 48 dp Android minimum.</p>
+      <svg viewBox="0 0 720 220" aria-label="Touch target audit">
+        <rect width="720" height="220" fill="#11161f" rx="10" />
+        <text x="20" y="28" font="700 13px sans-serif" fill="#e8eef7">
+          Sampled controls at 375 px
+        </text>
+        <!-- legend -->
+        <rect x="500" y="14" width="14" height="14" fill="#22c55e" rx="2" />
+        <text x="520" y="25" font="11px sans-serif" fill="#cbd5e1">≥44px</text>
+        <rect x="565" y="14" width="14" height="14" fill="#dc2626" rx="2" />
+        <text x="585" y="25" font="11px sans-serif" fill="#cbd5e1">&lt;44px</text>
 
-<!-- =================== TOUCH TARGETS =================== -->
-<h2>5. Touch-target audit (375 px viewport)</h2>
-<p>Boxes color-coded by whether they meet the 44 × 44 px iOS / 48 × 48 dp Android minimum.</p>
-<svg viewBox="0 0 720 220" aria-label="Touch target audit">
-  <rect width="720" height="220" fill="#11161f" rx="10"/>
-  <text x="20" y="28" font="700 13px sans-serif" fill="#e8eef7">Sampled controls at 375 px</text>
-  <!-- legend -->
-  <rect x="500" y="14" width="14" height="14" fill="#22c55e" rx="2"/><text x="520" y="25" font="11px sans-serif" fill="#cbd5e1">≥44px</text>
-  <rect x="565" y="14" width="14" height="14" fill="#dc2626" rx="2"/><text x="585" y="25" font="11px sans-serif" fill="#cbd5e1">&lt;44px</text>
+        <!-- New Booking button (~84x36) -->
+        <rect x="30" y="60" width="84" height="36" fill="#dc2626" rx="6" />
+        <text x="72" y="82" font="700 11px sans-serif" fill="#fff" text-anchor="middle">
+          New Booking
+        </text>
+        <text x="72" y="116" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">
+          36 px tall · ✗
+        </text>
 
-  <!-- New Booking button (~84x36) -->
-  <rect x="30" y="60" width="84" height="36" fill="#dc2626" rx="6"/>
-  <text x="72" y="82" font="700 11px sans-serif" fill="#fff" text-anchor="middle">New Booking</text>
-  <text x="72" y="116" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">36 px tall · ✗</text>
+        <!-- Bottom nav tab (~74x56) -->
+        <rect x="140" y="50" width="74" height="56" fill="#22c55e" rx="6" />
+        <text x="177" y="84" font="700 11px sans-serif" fill="#031b0a" text-anchor="middle">
+          Home
+        </text>
+        <text x="177" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">
+          56 px tall · ✓
+        </text>
 
-  <!-- Bottom nav tab (~74x56) -->
-  <rect x="140" y="50" width="74" height="56" fill="#22c55e" rx="6"/>
-  <text x="177" y="84" font="700 11px sans-serif" fill="#031b0a" text-anchor="middle">Home</text>
-  <text x="177" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">56 px tall · ✓</text>
+        <!-- Primary tab in folder bar (~120x40) -->
+        <rect x="240" y="58" width="120" height="40" fill="#dc2626" rx="6" />
+        <text x="300" y="84" font="700 11px sans-serif" fill="#fff" text-anchor="middle">
+          Schedule (tab)
+        </text>
+        <text x="300" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">
+          40 px tall · ✗ (close call)
+        </text>
 
-  <!-- Primary tab in folder bar (~120x40) -->
-  <rect x="240" y="58" width="120" height="40" fill="#dc2626" rx="6"/>
-  <text x="300" y="84" font="700 11px sans-serif" fill="#fff" text-anchor="middle">Schedule (tab)</text>
-  <text x="300" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">40 px tall · ✗ (close call)</text>
+        <!-- Theme select native (~70x30) -->
+        <rect x="380" y="64" width="70" height="30" fill="#dc2626" rx="4" />
+        <text x="415" y="84" font="700 11px sans-serif" fill="#fff" text-anchor="middle">
+          Theme ▾
+        </text>
+        <text x="415" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">
+          30 px · ✗
+        </text>
 
-  <!-- Theme select native (~70x30) -->
-  <rect x="380" y="64" width="70" height="30" fill="#dc2626" rx="4"/>
-  <text x="415" y="84" font="700 11px sans-serif" fill="#fff" text-anchor="middle">Theme ▾</text>
-  <text x="415" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">30 px · ✗</text>
+        <!-- Appointment trash icon (16x16, hover only) -->
+        <rect x="475" y="68" width="20" height="20" fill="#dc2626" rx="3" />
+        <text x="485" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">
+          trash · 20 px · ✗
+        </text>
 
-  <!-- Appointment trash icon (16x16, hover only) -->
-  <rect x="475" y="68" width="20" height="20" fill="#dc2626" rx="3"/>
-  <text x="485" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">trash · 20 px · ✗</text>
+        <!-- Toggle (44x24, w-11) -->
+        <rect x="525" y="68" width="44" height="20" fill="#dc2626" rx="10" />
+        <circle cx="558" cy="78" r="8" fill="#fff" />
+        <text x="547" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">
+          toggle · 20 px · ✗
+        </text>
 
-  <!-- Toggle (44x24, w-11) -->
-  <rect x="525" y="68" width="44" height="20" fill="#dc2626" rx="10"/>
-  <circle cx="558" cy="78" r="8" fill="#fff"/>
-  <text x="547" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">toggle · 20 px · ✗</text>
+        <!-- Customer-row tap (~h ~60) -->
+        <rect x="600" y="50" width="100" height="60" fill="#22c55e" rx="6" />
+        <text x="650" y="84" font="700 11px sans-serif" fill="#031b0a" text-anchor="middle">
+          customer row
+        </text>
+        <text x="650" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">
+          60 px · ✓
+        </text>
 
-  <!-- Customer-row tap (~h ~60) -->
-  <rect x="600" y="50" width="100" height="60" fill="#22c55e" rx="6"/>
-  <text x="650" y="84" font="700 11px sans-serif" fill="#031b0a" text-anchor="middle">customer row</text>
-  <text x="650" y="124" font="11px sans-serif" fill="#cbd5e1" text-anchor="middle">60 px · ✓</text>
+        <!-- summary -->
+        <text x="20" y="180" font="600 13px sans-serif" fill="#fbbf24">
+          7 sampled · 2 pass · 5 fail.
+        </text>
+        <text x="20" y="200" font="12px sans-serif" fill="#cbd5e1">
+          Fix is mostly padding: wrap icon-only buttons in
+          <tspan font-family="ui-monospace,monospace" fill="#a5b4fc">p-2.5</tspan>
+          (40 px), pull New Booking to
+          <tspan font-family="ui-monospace,monospace" fill="#a5b4fc">size="lg"</tspan>
+          (48 px), and bump
+          <tspan font-family="ui-monospace,monospace" fill="#a5b4fc">Button size="sm"</tspan>
+          minimum height to 40 px.
+        </text>
+      </svg>
 
-  <!-- summary -->
-  <text x="20" y="180" font="600 13px sans-serif" fill="#fbbf24">7 sampled · 2 pass · 5 fail.</text>
-  <text x="20" y="200" font="12px sans-serif" fill="#cbd5e1">Fix is mostly padding: wrap icon-only buttons in <tspan font-family="ui-monospace,monospace" fill="#a5b4fc">p-2.5</tspan> (40 px), pull New Booking to <tspan font-family="ui-monospace,monospace" fill="#a5b4fc">size="lg"</tspan> (48 px), and bump <tspan font-family="ui-monospace,monospace" fill="#a5b4fc">Button size="sm"</tspan> minimum height to 40 px.</text>
-</svg>
+      <!-- =================== ROADMAP =================== -->
+      <h2>6. 30-day quick-wins roadmap</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Week</th>
+            <th>Initiative</th>
+            <th>Items closed</th>
+            <th>Effort</th>
+            <th>Dependencies</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Wk 1<br /><span class="small">Quick safety</span></td>
+            <td>
+              Replace 9 native <code>confirm()</code> / <code>alert()</code> with
+              <code>useConfirm()</code> · Undo-toast on cancel
+            </td>
+            <td>#1 · #5 · part of 4.2 alert sweep</td>
+            <td><span class="badge b-m">M</span></td>
+            <td>
+              <span class="pill">ConfirmModal exists</span><span class="pill">Toast exists</span>
+            </td>
+          </tr>
+          <tr>
+            <td>Wk 2<br /><span class="small">Touch</span></td>
+            <td>
+              Always-visible appointment overflow menu · drag handle on blocks · 44 px touch targets
+              sweep
+            </td>
+            <td>#2 · #6 · device 4.3 row 5</td>
+            <td><span class="badge b-s">S</span></td>
+            <td><span class="pill">AppointmentBlock refactor</span></td>
+          </tr>
+          <tr>
+            <td>Wk 3<br /><span class="small">Live feedback</span></td>
+            <td>
+              5s poll for active calls + KB unanswered · contrast bump on
+              <code>--text-muted</code> · mobile nav: drop labels &lt;360 px, move admin Globe to
+              profile sheet
+            </td>
+            <td>#3 · #4 · #9</td>
+            <td><span class="badge b-m">M</span></td>
+            <td><span class="pill">none</span></td>
+          </tr>
+          <tr>
+            <td>Wk 4<br /><span class="small">Polish + power</span></td>
+            <td>
+              Keyboard shortcuts (N · / · G H/S/C/K · ?) + cheat-sheet modal · single
+              <code>useOnboardingState()</code> reducer · rephrase trial link until signup exists ·
+              promote New Booking inside empty-day card
+            </td>
+            <td>#7 · #8 · #10 · flows 4.1 row 6</td>
+            <td><span class="badge b-l">L</span></td>
+            <td><span class="pill">Tests for overlay matrix</span></td>
+          </tr>
+          <tr>
+            <td>Backlog<br /><span class="small">P2 cleanup</span></td>
+            <td>
+              Hardcoded-gray sweep across 53 files · loading-state primitive · scheduler zoom step
+              indicator · profile/tenant dropdowns floating-ui · Combobox in CRMView search
+            </td>
+            <td>4.2 row 6 · 4.4 row 1 · 4.2 row 8 · 4.2 row 7 · 4.1 row 5</td>
+            <td><span class="badge b-m">M</span></td>
+            <td>Run with next release</td>
+          </tr>
+        </tbody>
+      </table>
 
-<!-- =================== ROADMAP =================== -->
-<h2>6. 30-day quick-wins roadmap</h2>
-<table>
-  <thead><tr><th>Week</th><th>Initiative</th><th>Items closed</th><th>Effort</th><th>Dependencies</th></tr></thead>
-  <tbody>
-  <tr>
-    <td>Wk 1<br><span class="small">Quick safety</span></td>
-    <td>
-      Replace 9 native <code>confirm()</code> / <code>alert()</code> with <code>useConfirm()</code> · Undo-toast on cancel
-    </td>
-    <td>#1 · #5 · part of 4.2 alert sweep</td>
-    <td><span class="badge b-m">M</span></td>
-    <td><span class="pill">ConfirmModal exists</span><span class="pill">Toast exists</span></td>
-  </tr>
-  <tr>
-    <td>Wk 2<br><span class="small">Touch</span></td>
-    <td>
-      Always-visible appointment overflow menu · drag handle on blocks · 44 px touch targets sweep
-    </td>
-    <td>#2 · #6 · device 4.3 row 5</td>
-    <td><span class="badge b-s">S</span></td>
-    <td><span class="pill">AppointmentBlock refactor</span></td>
-  </tr>
-  <tr>
-    <td>Wk 3<br><span class="small">Live feedback</span></td>
-    <td>
-      5s poll for active calls + KB unanswered · contrast bump on <code>--text-muted</code> ·
-      mobile nav: drop labels &lt;360 px, move admin Globe to profile sheet
-    </td>
-    <td>#3 · #4 · #9</td>
-    <td><span class="badge b-m">M</span></td>
-    <td><span class="pill">none</span></td>
-  </tr>
-  <tr>
-    <td>Wk 4<br><span class="small">Polish + power</span></td>
-    <td>
-      Keyboard shortcuts (N · / · G H/S/C/K · ?) + cheat-sheet modal ·
-      single <code>useOnboardingState()</code> reducer · rephrase trial link until signup exists ·
-      promote New Booking inside empty-day card
-    </td>
-    <td>#7 · #8 · #10 · flows 4.1 row 6</td>
-    <td><span class="badge b-l">L</span></td>
-    <td><span class="pill">Tests for overlay matrix</span></td>
-  </tr>
-  <tr>
-    <td>Backlog<br><span class="small">P2 cleanup</span></td>
-    <td>
-      Hardcoded-gray sweep across 53 files · loading-state primitive · scheduler zoom step indicator ·
-      profile/tenant dropdowns floating-ui · Combobox in CRMView search
-    </td>
-    <td>4.2 row 6 · 4.4 row 1 · 4.2 row 8 · 4.2 row 7 · 4.1 row 5</td>
-    <td><span class="badge b-m">M</span></td>
-    <td>Run with next release</td>
-  </tr>
-  </tbody>
-</table>
+      <h2>7. Appendix — file references</h2>
+      <div class="panel small">
+        <p>
+          <strong>Primary nav &amp; shell:</strong>
+          <span class="ref">dashboard/app/dashboard/page.tsx</span> ·
+          <span class="ref">dashboard/components/OutlookLayout.tsx</span> ·
+          <span class="ref">dashboard/components/ui/FolderTabs.tsx</span>
+        </p>
+        <p>
+          <strong>Home + Quick Book:</strong>
+          <span class="ref">dashboard/components/DashboardHome.tsx</span> ·
+          <span class="ref">dashboard/components/scheduler/QuickBookPanel.tsx</span>
+        </p>
+        <p>
+          <strong>Scheduler:</strong>
+          <span class="ref">dashboard/components/SchedulerView.tsx</span> ·
+          <span class="ref">dashboard/components/scheduler/StaffSwimLaneView.tsx</span> ·
+          <span class="ref">dashboard/components/scheduler/ResourceColumnsView.tsx</span> ·
+          <span class="ref">dashboard/components/scheduler/AppointmentBlock.tsx</span> ·
+          <span class="ref">dashboard/components/scheduler/NewSchedulerView.tsx</span>
+        </p>
+        <p>
+          <strong>Destructive flows w/ native dialog:</strong>
+          <span class="ref">SchedulerView.tsx:114, 142</span>,
+          <span class="ref">AppointmentView.tsx:382</span>,
+          <span class="ref">EmployeeManagementView.tsx:109</span>,
+          <span class="ref">ServiceAssignmentView.tsx:127</span>,
+          <span class="ref">SkillManagementView.tsx:48</span>,
+          <span class="ref">ResourceManagerView.tsx:114</span>,
+          <span class="ref">StaffSwimLaneView.tsx:337</span>,
+          <span class="ref">NewSchedulerView.tsx:412</span>,
+          <span class="ref">SkillMatrixView.tsx:107</span>,
+          <span class="ref">KnowledgeBaseView.tsx:260</span>
+        </p>
+        <p>
+          <strong>Themes &amp; contrast:</strong>
+          <span class="ref">dashboard/app/globals.css</span> (8 themes ·
+          navy/rose/forest/midnight/nord/sunset/high-contrast/solarized)
+        </p>
+        <p>
+          <strong>UI primitives:</strong>
+          <span class="ref"
+            >dashboard/components/ui/{Button,Input,Select,Modal,ConfirmModal,Card,Badge,Toast,FolderTabs,PhoneInput,TimeInput,CoverageBar,EmptyState,CustomerCombobox}.tsx</span
+          >
+        </p>
+      </div>
 
-<h2>7. Appendix — file references</h2>
-<div class="panel small">
-<p><strong>Primary nav &amp; shell:</strong> <span class="ref">dashboard/app/dashboard/page.tsx</span> · <span class="ref">dashboard/components/OutlookLayout.tsx</span> · <span class="ref">dashboard/components/ui/FolderTabs.tsx</span></p>
-<p><strong>Home + Quick Book:</strong> <span class="ref">dashboard/components/DashboardHome.tsx</span> · <span class="ref">dashboard/components/scheduler/QuickBookPanel.tsx</span></p>
-<p><strong>Scheduler:</strong> <span class="ref">dashboard/components/SchedulerView.tsx</span> · <span class="ref">dashboard/components/scheduler/StaffSwimLaneView.tsx</span> · <span class="ref">dashboard/components/scheduler/ResourceColumnsView.tsx</span> · <span class="ref">dashboard/components/scheduler/AppointmentBlock.tsx</span> · <span class="ref">dashboard/components/scheduler/NewSchedulerView.tsx</span></p>
-<p><strong>Destructive flows w/ native dialog:</strong> <span class="ref">SchedulerView.tsx:114, 142</span>, <span class="ref">AppointmentView.tsx:382</span>, <span class="ref">EmployeeManagementView.tsx:109</span>, <span class="ref">ServiceAssignmentView.tsx:127</span>, <span class="ref">SkillManagementView.tsx:48</span>, <span class="ref">ResourceManagerView.tsx:114</span>, <span class="ref">StaffSwimLaneView.tsx:337</span>, <span class="ref">NewSchedulerView.tsx:412</span>, <span class="ref">SkillMatrixView.tsx:107</span>, <span class="ref">KnowledgeBaseView.tsx:260</span></p>
-<p><strong>Themes &amp; contrast:</strong> <span class="ref">dashboard/app/globals.css</span> (8 themes · navy/rose/forest/midnight/nord/sunset/high-contrast/solarized)</p>
-<p><strong>UI primitives:</strong> <span class="ref">dashboard/components/ui/{Button,Input,Select,Modal,ConfirmModal,Card,Badge,Toast,FolderTabs,PhoneInput,TimeInput,CoverageBar,EmptyState,CustomerCombobox}.tsx</span></p>
-</div>
-
-<p class="meta" style="margin-top:32px">End of audit. Report generated 2026-05-18.</p>
-</div>
-</body>
+      <p class="meta" style="margin-top: 32px">End of audit. Report generated 2026-05-18.</p>
+    </div>
+  </body>
 </html>

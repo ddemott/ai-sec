@@ -134,7 +134,9 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       if (services.length === 0 && seedTargetRef.current.length === 0) {
         seedTargetRef.current = tpl?.example_services ?? [];
       }
-      const missing = seedTargetRef.current.filter((name) => !services.some((s) => s.name === name));
+      const missing = seedTargetRef.current.filter(
+        (name) => !services.some((s) => s.name === name)
+      );
       for (const name of missing) {
         // is_auto_seeded persists the "I am a template default" tag in
         // the DB so a business_type change handled server-side (POST
@@ -271,12 +273,8 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       // still return the user to the picker. A subsequent reseed will
       // simply skip the name if it still exists.
       await Promise.all([
-        ...serviceIds.map((id) =>
-          Api.services.delete(id, tenantId).catch(() => undefined)
-        ),
-        ...resourceIds.map((id) =>
-          Api.resources.delete(id, tenantId).catch(() => undefined)
-        ),
+        ...serviceIds.map((id) => Api.services.delete(id, tenantId).catch(() => undefined)),
+        ...resourceIds.map((id) => Api.resources.delete(id, tenantId).catch(() => undefined)),
       ]);
       await refresh();
     }

@@ -111,9 +111,7 @@ describe('RegisterPage — self-serve signup', () => {
     fillForm();
     fireEvent.click(screen.getByRole('button', { name: /start free trial/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('already exists')
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('already exists'));
     expect(localStorage.getItem('authToken')).toBeNull();
     expect(window.location.href).toBe('');
   });

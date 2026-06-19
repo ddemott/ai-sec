@@ -167,6 +167,7 @@ See the skill at `.claude/skills/commit-code/SKILL.md` for the exact expectation
 **Work on one active PR at a time.**
 
 Before you create a new feature branch or open a new PR, the previous feature branch **must** have been:
+
 - Pushed to its remote
 - Merged into `main`
 - Deleted (both locally and on the remote)
@@ -174,6 +175,7 @@ Before you create a new feature branch or open a new PR, the previous feature br
 This rule prevents painful rebase conflicts and context loss when multiple long-lived branches exist in parallel.
 
 The rule is enforced in:
+
 - Output of `npm run prepare-commit`
 - The `BRANCH_CHECKLIST.md` (required checkbox when starting a new branch)
 

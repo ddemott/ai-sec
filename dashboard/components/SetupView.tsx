@@ -227,10 +227,18 @@ export default function SetupView() {
         />
       )}
       {stage === 'wizard' && mode === 'solo' && (
-        <SoloWizard isOpen={true} onClose={handleCloseWizard} onBackToPicker={transitions.backToPicker} />
+        <SoloWizard
+          isOpen={true}
+          onClose={handleCloseWizard}
+          onBackToPicker={transitions.backToPicker}
+        />
       )}
       {stage === 'wizard' && mode === 'team' && (
-        <SetupWizard isOpen={true} onClose={handleCloseWizard} onBackToPicker={transitions.backToPicker} />
+        <SetupWizard
+          isOpen={true}
+          onClose={handleCloseWizard}
+          onBackToPicker={transitions.backToPicker}
+        />
       )}
     </div>
   );

@@ -132,7 +132,10 @@ function PolicyQuestionField({
             </span>
           )}
           {status === 'idle' && savedAt && (
-            <span className="flex items-center gap-1 text-xs opacity-50" style={{ color: 'var(--text-muted)' }}>
+            <span
+              className="flex items-center gap-1 text-xs opacity-50"
+              style={{ color: 'var(--text-muted)' }}
+            >
               <CheckCircle2 className="w-3 h-3" />
               Saved {savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
@@ -728,13 +731,17 @@ export default function KnowledgeBaseView() {
                       borderColor: 'var(--accent)',
                     }}
                   >
-                    <MessageSquare className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--accent-soft)' }} />
+                    <MessageSquare
+                      className="w-5 h-5 mt-0.5 shrink-0"
+                      style={{ color: 'var(--accent-soft)' }}
+                    />
                     <div>
                       <p className="text-sm font-semibold" style={{ color: 'var(--accent-soft)' }}>
                         Start here — answer a few questions about your business
                       </p>
                       <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                        Your AI uses these answers to respond to callers. Each answer auto-saves as you type. Start with Business Hours below.
+                        Your AI uses these answers to respond to callers. Each answer auto-saves as
+                        you type. Start with Business Hours below.
                       </p>
                     </div>
                   </div>
@@ -743,7 +750,10 @@ export default function KnowledgeBaseView() {
                 {totalQuestions > 0 && (
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      <span
+                        className="text-xs font-medium"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
                         {totalAnswered} of {totalQuestions} answered
                         {totalAnswered === totalQuestions && ' — fully trained!'}
                       </span>
@@ -751,7 +761,10 @@ export default function KnowledgeBaseView() {
                         {Math.round((totalAnswered / totalQuestions) * 100)}%
                       </span>
                     </div>
-                    <div className="w-full rounded-full h-1.5" style={{ backgroundColor: 'var(--bg-raised)' }}>
+                    <div
+                      className="w-full rounded-full h-1.5"
+                      style={{ backgroundColor: 'var(--bg-raised)' }}
+                    >
                       <div
                         className="h-1.5 rounded-full transition-all duration-500"
                         style={{
@@ -775,7 +788,10 @@ export default function KnowledgeBaseView() {
                       borderColor: 'var(--accent)',
                     }}
                   >
-                    <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--accent-soft)' }} />
+                    <CheckCircle2
+                      className="w-5 h-5 mt-0.5 shrink-0"
+                      style={{ color: 'var(--accent-soft)' }}
+                    />
                     <div>
                       <p className="text-sm font-semibold" style={{ color: 'var(--accent-soft)' }}>
                         Your AI is fully trained on your business
@@ -830,17 +846,18 @@ export default function KnowledgeBaseView() {
                 </div>
                 {POLICY_CATEGORIES.filter((cat) => {
                   if (!showUnansweredOnly) return true;
-                  return POLICY_QUESTIONS.filter(
-                    (q) => q.category === cat && !savedAnswers.has(q.question)
-                  ).length > 0;
+                  return (
+                    POLICY_QUESTIONS.filter(
+                      (q) => q.category === cat && !savedAnswers.has(q.question)
+                    ).length > 0
+                  );
                 }).map((cat, idx) => (
                   <PolicyCategory
                     key={cat}
                     category={cat}
                     questions={POLICY_QUESTIONS.filter(
                       (q) =>
-                        q.category === cat &&
-                        (!showUnansweredOnly || !savedAnswers.has(q.question))
+                        q.category === cat && (!showUnansweredOnly || !savedAnswers.has(q.question))
                     )}
                     savedAnswers={savedAnswers}
                     onSave={handleSaveAnswer}
@@ -895,9 +912,9 @@ export default function KnowledgeBaseView() {
                   )}
                 </div>
                 <p className="text-xs mt-4" style={{ color: 'var(--text-muted)' }}>
-                  Upload your price sheet, service menu, warranty policy, or any document about
-                  your business. When a caller asks a question, the AI searches your documents
-                  for the answer and reads it back to them.
+                  Upload your price sheet, service menu, warranty policy, or any document about your
+                  business. When a caller asks a question, the AI searches your documents for the
+                  answer and reads it back to them.
                 </p>
                 {(() => {
                   const uploadedDocs = docs.filter(
@@ -919,24 +936,40 @@ export default function KnowledgeBaseView() {
                   if (files.length === 0) return null;
                   return (
                     <div className="mt-6 space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                      <p
+                        className="text-xs font-semibold uppercase tracking-wider mb-2"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
                         Uploaded files
                       </p>
                       {files.map(([filename, { chunks, oldest }]) => (
                         <div
                           key={filename}
                           className="flex items-center justify-between p-3 rounded-lg border"
-                          style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
+                          style={{
+                            backgroundColor: 'var(--bg-raised)',
+                            borderColor: 'var(--border-soft)',
+                          }}
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--warning)' }} />
+                            <FileText
+                              className="w-4 h-4 shrink-0"
+                              style={{ color: 'var(--warning)' }}
+                            />
                             <div className="min-w-0">
-                              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                              <p
+                                className="text-sm font-medium truncate"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
                                 {filename}
                               </p>
                               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                                 {chunks.length} chunk{chunks.length === 1 ? '' : 's'} ·{' '}
-                                {new Date(oldest).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {new Date(oldest).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
                               </p>
                             </div>
                           </div>

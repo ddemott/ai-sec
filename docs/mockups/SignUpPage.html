@@ -1,634 +1,2484 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SecretaryHQ — Get Started</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:#080808;color:#e8e8e8;font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;min-height:100vh;}
-:root{
-  --blue:#2563eb;--blue-lt:#3b82f6;--blue-dim:rgba(37,99,235,0.12);
-  --green:#22c55e;--green-dim:rgba(34,197,94,0.1);
-  --bg:#080808;--bg2:#0f0f0f;--bg3:#141414;--bg4:#1a1a1a;
-  --border:rgba(255,255,255,0.07);--border-md:rgba(255,255,255,0.11);
-  --text:#e8e8e8;--text-muted:#666;--text-dim:#3a3a3a;
-  --ff-display:'Bebas Neue',sans-serif;--ff-body:'DM Sans',sans-serif;--ff-mono:'JetBrains Mono',monospace;
-}
-body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
-  background-image:linear-gradient(rgba(255,255,255,0.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.022) 1px,transparent 1px);
-  background-size:80px 80px;mask-image:radial-gradient(ellipse 100% 50% at 50% 0%,black 0%,transparent 100%);}
-nav{position:fixed;top:0;left:0;right:0;z-index:100;height:60px;display:flex;align-items:center;padding:0 40px;
-  background:rgba(8,8,8,0.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);}
-.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--ff-display);font-size:20px;letter-spacing:1px;color:var(--text);}
-.nav-logo-icon{width:30px;height:30px;background:var(--blue);border-radius:7px;display:flex;align-items:center;justify-content:center;}
-.nav-logo-icon svg{width:15px;height:15px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;}
-.nav-right{margin-left:auto;font-size:13px;color:var(--text-muted);}
-.nav-right a{color:var(--blue-lt);text-decoration:none;font-weight:500;}
-.page{min-height:100vh;display:grid;grid-template-columns:1fr 380px;position:relative;z-index:1;}
-.left{padding:100px 64px 80px;display:flex;flex-direction:column;border-right:1px solid var(--border);min-height:100vh;}
-.progress-track{display:flex;align-items:center;gap:0;margin-bottom:52px;}
-.prog-step{display:flex;align-items:center;gap:0;position:relative;}
-.prog-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-family:var(--ff-mono);font-size:10px;font-weight:500;border:1px solid var(--border-md);
-  background:var(--bg3);color:var(--text-muted);transition:all 0.3s;flex-shrink:0;}
-.prog-dot.done{background:var(--blue-dim);border-color:rgba(59,130,246,0.35);color:var(--blue-lt);}
-.prog-dot.active{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 16px rgba(37,99,235,0.5);}
-.prog-line{height:1px;width:24px;background:var(--border);transition:background 0.3s;flex-shrink:0;}
-.prog-line.done{background:rgba(59,130,246,0.35);}
-.prog-label{position:absolute;top:34px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--text-muted);white-space:nowrap;letter-spacing:0.3px;font-weight:500;}
-.step-head{margin-bottom:28px;}
-.step-eyebrow{font-size:11px;font-weight:600;color:var(--blue-lt);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;}
-.breadcrumb{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);margin-bottom:8px;flex-wrap:wrap;}
-.bc-item{color:var(--blue-lt);font-weight:600;}
-.bc-item.muted{color:var(--text-muted);font-weight:400;}
-.bc-sep{color:var(--text-dim);}
-.back-btn{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-muted);cursor:pointer;
-  background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;
-  transition:all 0.2s;user-select:none;margin-bottom:14px;}
-.back-btn:hover{color:var(--text);border-color:var(--border-md);}
-.back-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-.step-h{font-family:var(--ff-display);font-size:clamp(36px,4vw,52px);line-height:0.95;letter-spacing:0.5px;color:#fff;margin-bottom:12px;}
-.step-sub{font-size:14px;font-weight:300;color:#777;line-height:1.65;max-width:480px;}
-.cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
-.cat-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:18px 12px;
-  cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;
-  text-align:center;gap:9px;user-select:none;}
-.cat-card:hover{border-color:var(--border-md);background:var(--bg4);transform:translateY(-1px);}
-.cat-card.selected{border-color:rgba(59,130,246,0.5);background:var(--blue-dim);}
-.cat-icon{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--bg4);border:1px solid var(--border);font-size:18px;}
-.cat-card.selected .cat-icon{background:rgba(37,99,235,0.15);border-color:rgba(59,130,246,0.25);}
-.cat-name{font-size:12px;font-weight:500;color:var(--text);line-height:1.3;}
-.type-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
-.type-pill{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:13px 16px;
-  cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:500;color:#aaa;
-  display:flex;align-items:center;justify-content:space-between;gap:10px;user-select:none;}
-.type-pill:hover{border-color:var(--border-md);color:var(--text);background:var(--bg4);}
-.type-pill.selected{border-color:rgba(59,130,246,0.5);background:var(--blue-dim);color:var(--blue-lt);}
-.type-pill-left{display:flex;align-items:center;gap:10px;}
-.type-check{width:18px;height:18px;border-radius:50%;border:1px solid var(--border-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s;}
-.type-pill.selected .type-check{background:var(--blue);border-color:var(--blue);}
-.type-check svg{width:10px;height:10px;stroke:#fff;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity 0.15s;}
-.type-pill.selected .type-check svg{opacity:1;}
-.has-sub{font-size:9px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-dim);
-  background:var(--bg4);border:1px solid var(--border);border-radius:4px;padding:2px 6px;white-space:nowrap;flex-shrink:0;}
-.spec-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
-.spec-chip{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px 14px;
-  cursor:pointer;transition:all 0.2s;font-size:13px;font-weight:500;color:#aaa;
-  display:flex;align-items:center;gap:8px;user-select:none;}
-.spec-chip:hover{border-color:var(--border-md);color:var(--text);background:var(--bg4);}
-.spec-chip.selected{border-color:rgba(59,130,246,0.5);background:var(--blue-dim);color:var(--blue-lt);}
-.spec-skip{font-size:12px;color:var(--text-muted);margin-top:14px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:color 0.2s;}
-.spec-skip:hover{color:var(--text);}
-.size-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
-.size-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px 12px;
-  cursor:pointer;transition:all 0.2s;text-align:center;user-select:none;display:flex;flex-direction:column;gap:8px;align-items:center;}
-.size-card:hover{border-color:var(--border-md);background:var(--bg4);transform:translateY(-1px);}
-.size-card.selected{border-color:rgba(59,130,246,0.5);background:var(--blue-dim);}
-.size-num{font-family:var(--ff-display);font-size:32px;letter-spacing:0.3px;color:#fff;line-height:1;}
-.size-card.selected .size-num{color:var(--blue-lt);}
-.size-label{font-size:12px;color:var(--text-muted);}
-.size-plan{font-size:10px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;padding:3px 8px;
-  border-radius:4px;background:var(--blue-dim);color:var(--blue-lt);border:1px solid rgba(59,130,246,0.2);opacity:0;transition:opacity 0.2s;}
-.size-card.selected .size-plan{opacity:1;}
-.services-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
-.svc-item{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 16px;
-  cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:12px;user-select:none;}
-.svc-item:hover{border-color:var(--border-md);background:var(--bg4);}
-.svc-item.checked{border-color:rgba(59,130,246,0.35);background:var(--blue-dim);}
-.svc-checkbox{width:20px;height:20px;border-radius:5px;border:1px solid var(--border-md);background:var(--bg4);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;}
-.svc-item.checked .svc-checkbox{background:var(--blue);border-color:var(--blue);}
-.svc-checkbox svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity 0.15s;}
-.svc-item.checked .svc-checkbox svg{opacity:1;}
-.svc-name{font-size:13px;font-weight:500;color:var(--text);}
-.svc-meta{font-size:11px;color:var(--text-muted);margin-top:1px;}
-.svc-hint{font-size:12px;color:var(--text-muted);margin-bottom:14px;display:flex;align-items:center;gap:6px;}
-.svc-hint svg{width:13px;height:13px;stroke:var(--blue-lt);fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0;}
-.form-grid{display:flex;flex-direction:column;gap:14px;max-width:480px;}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.form-group{display:flex;flex-direction:column;gap:6px;}
-.form-label{font-size:12px;font-weight:600;color:#888;letter-spacing:0.5px;text-transform:uppercase;}
-.form-input{background:var(--bg3);border:1px solid var(--border-md);border-radius:9px;padding:11px 14px;
-  font-family:var(--ff-body);font-size:14px;color:var(--text);outline:none;transition:all 0.2s;width:100%;}
-.form-input::placeholder{color:var(--text-dim);}
-.form-input:focus{border-color:rgba(59,130,246,0.5);box-shadow:0 0 0 3px rgba(37,99,235,0.12);background:var(--bg4);}
-.form-input.mono{font-family:var(--ff-mono);font-size:13px;}
-.form-hint{font-size:11px;color:var(--text-muted);margin-top:2px;}
-.form-divider{height:1px;background:var(--border);margin:4px 0;}
-.plan-preview{background:var(--bg3);border:1px solid rgba(59,130,246,0.25);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;}
-.plan-preview-name{font-family:var(--ff-display);font-size:18px;letter-spacing:0.3px;color:#fff;}
-.plan-preview-sub{font-size:12px;color:var(--text-muted);margin-top:1px;}
-.plan-preview-price{font-family:var(--ff-display);font-size:28px;letter-spacing:-0.5px;color:var(--blue-lt);}
-.plan-preview-price span{font-family:var(--ff-body);font-size:12px;color:var(--text-muted);}
-.btn-submit{width:100%;padding:14px;background:var(--blue);border:none;border-radius:10px;color:#fff;
-  font-family:var(--ff-body);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s;
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  box-shadow:0 0 32px rgba(37,99,235,0.3);margin-top:4px;}
-.btn-submit:hover{background:var(--blue-lt);transform:translateY(-1px);box-shadow:0 0 48px rgba(59,130,246,0.4);}
-.btn-submit svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
-.btn-continue{max-width:240px;margin-top:20px;}
-.terms-note{font-size:11px;color:var(--text-muted);text-align:center;margin-top:10px;line-height:1.6;}
-.terms-note a{color:#666;text-decoration:underline;}
-.step-section{opacity:0;transform:translateY(16px);transition:opacity 0.4s ease,transform 0.4s ease;pointer-events:none;height:0;overflow:hidden;}
-.step-section.visible{opacity:1;transform:translateY(0);pointer-events:all;height:auto;overflow:visible;margin-top:44px;}
-.right{background:var(--bg2);border-left:1px solid var(--border);padding:100px 36px 40px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:auto;}
-.right-title{font-family:var(--ff-display);font-size:16px;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:28px;text-transform:uppercase;}
-.summary-items{display:flex;flex-direction:column;gap:4px;margin-bottom:32px;}
-.summary-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:8px;transition:background 0.2s;}
-.summary-row.active{background:var(--bg3);border:1px solid var(--border);}
-.summary-row.inactive{opacity:0.35;}
-.sum-label{font-size:12px;color:var(--text-muted);font-weight:500;text-transform:uppercase;letter-spacing:0.5px;}
-.sum-val{font-size:13px;color:var(--text);font-weight:500;text-align:right;}
-.sum-val.blue{color:var(--blue-lt);}
-.sum-val.muted{color:var(--text-muted);}
-.sum-tags{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:180px;}
-.sum-tag{font-size:10px;padding:2px 7px;border-radius:4px;background:var(--blue-dim);border:1px solid rgba(59,130,246,0.15);color:var(--blue-lt);font-weight:500;}
-.right-divider{height:1px;background:var(--border);margin:16px 0;}
-.get-list{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;}
-.get-item{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#888;line-height:1.5;}
-.get-dot{width:16px;height:16px;border-radius:50%;flex-shrink:0;margin-top:1px;background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);display:flex;align-items:center;justify-content:center;}
-.get-dot svg{width:8px;height:8px;stroke:var(--green);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
-.trial-badge{background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px 16px;margin-top:auto;display:flex;align-items:center;gap:12px;}
-.trial-badge-icon{width:36px;height:36px;border-radius:50%;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.trial-badge-icon svg{width:16px;height:16px;stroke:var(--green);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-.trial-badge-title{font-size:13px;font-weight:600;color:var(--green);}
-.trial-badge-sub{font-size:11px;color:#666;margin-top:1px;line-height:1.4;}
-::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:#1e1e1e;border-radius:3px;}
-@media(max-width:1100px){.cat-grid{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:900px){.page{grid-template-columns:1fr;}.right{display:none;}.left{padding:90px 24px 60px;}.size-grid{grid-template-columns:repeat(2,1fr);}.spec-grid{grid-template-columns:repeat(2,1fr);}}
-</style>
-</head>
-<body>
-<nav>
-  <a href="LandingPage.html" class="nav-logo">
-    <div class="nav-logo-icon"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg></div>
-    AI SECRETARY
-  </a>
-  <div class="nav-right">Already have an account? <a href="#">Sign in</a></div>
-</nav>
-<div class="page">
-  <div class="left">
-    <div class="progress-track" id="progressTrack">
-      <div class="prog-step"><div class="prog-dot active" id="pd1">1<span class="prog-label">Category</span></div></div>
-      <div class="prog-line" id="pl1"></div>
-      <div class="prog-step"><div class="prog-dot" id="pd2">2<span class="prog-label">Type</span></div></div>
-      <div class="prog-line" id="pl2"></div>
-      <div class="prog-step"><div class="prog-dot" id="pd3">3<span class="prog-label">Specialty</span></div></div>
-      <div class="prog-line" id="pl3"></div>
-      <div class="prog-step"><div class="prog-dot" id="pd4">4<span class="prog-label">Size</span></div></div>
-      <div class="prog-line" id="pl4"></div>
-      <div class="prog-step"><div class="prog-dot" id="pd5">5<span class="prog-label">Services</span></div></div>
-      <div class="prog-line" id="pl5"></div>
-      <div class="prog-step"><div class="prog-dot" id="pd6">6<span class="prog-label">Account</span></div></div>
-    </div>
-
-    <!-- S1 CATEGORY -->
-    <div id="step1">
-      <div class="step-head">
-        <div class="step-eyebrow">Step 1 of 6</div>
-        <h1 class="step-h">WHAT KIND OF<br>BUSINESS<br>DO YOU RUN?</h1>
-        <p class="step-sub">Pick your industry and we'll load the right template — vocabulary, services, and defaults built for your trade.</p>
-      </div>
-      <div class="cat-grid" id="catGrid"></div>
-    </div>
-
-    <!-- S2 TYPE -->
-    <div class="step-section" id="step2">
-      <div class="step-head">
-        <div class="breadcrumb" id="bc2"></div>
-        <div class="back-btn" onclick="goBack(1)"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</div>
-        <h2 class="step-h" id="step2-h">WHAT TYPE<br>OF BUSINESS?</h2>
-        <p class="step-sub">Pick the closest match — you can fine-tune everything in your dashboard after setup.</p>
-      </div>
-      <div class="type-grid" id="typeGrid"></div>
-    </div>
-
-    <!-- S3 SPECIALTY -->
-    <div class="step-section" id="step3">
-      <div class="step-head">
-        <div class="breadcrumb" id="bc3"></div>
-        <div class="back-btn" onclick="goBack(2)"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</div>
-        <h2 class="step-h" id="step3-h">WHAT'S YOUR<br>SPECIALTY?</h2>
-        <p class="step-sub" id="step3-sub">Optional — helps us load the most relevant services for your business.</p>
-      </div>
-      <div class="spec-grid" id="specGrid"></div>
-      <div class="spec-skip" onclick="skipSpec()">
-        Skip — I'll configure services manually
-        <svg style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-      </div>
-    </div>
-
-    <!-- S4 SIZE -->
-    <div class="step-section" id="step4">
-      <div class="step-head">
-        <div class="breadcrumb" id="bc4"></div>
-        <div class="back-btn" onclick="goBack(3)"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</div>
-        <h2 class="step-h">HOW BIG<br>IS YOUR TEAM?</h2>
-        <p class="step-sub">This selects your starting plan — upgrade anytime with no friction.</p>
-      </div>
-      <div class="size-grid">
-        <div class="size-card" data-size="1" data-plan="Solo" data-price="129" onclick="selectSize(this)"><div class="size-num">1</div><div class="size-label">Just me</div><div class="size-plan">Solo · $129/mo</div></div>
-        <div class="size-card" data-size="2-5" data-plan="Growth" data-price="279" onclick="selectSize(this)"><div class="size-num">2–5</div><div class="size-label">Small team</div><div class="size-plan">Growth · $279/mo</div></div>
-        <div class="size-card" data-size="6-15" data-plan="Professional" data-price="449" onclick="selectSize(this)"><div class="size-num">6–15</div><div class="size-label">Medium team</div><div class="size-plan">Pro · $449/mo</div></div>
-        <div class="size-card" data-size="16+" data-plan="Professional" data-price="449" onclick="selectSize(this)"><div class="size-num">16+</div><div class="size-label">Large team</div><div class="size-plan">Pro · $449/mo</div></div>
-      </div>
-    </div>
-
-    <!-- S5 SERVICES -->
-    <div class="step-section" id="step5">
-      <div class="step-head">
-        <div class="breadcrumb" id="bc5"></div>
-        <div class="back-btn" onclick="goBack(4)"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</div>
-        <h2 class="step-h">WHAT DO<br>YOU OFFER?</h2>
-        <p class="step-sub">Pre-checked from your template. Uncheck anything you don't offer — pricing and duration are set inside your dashboard.</p>
-      </div>
-      <div class="svc-hint"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>You can add, edit, and price services inside your dashboard at any time.</div>
-      <div class="services-grid" id="servicesGrid"></div>
-      <button class="btn-submit btn-continue" onclick="goToStep(6)">Continue<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
-    </div>
-
-    <!-- S6 ACCOUNT -->
-    <div class="step-section" id="step6">
-      <div class="step-head">
-        <div class="back-btn" onclick="goBack(5)"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Back</div>
-        <h2 class="step-h">ALMOST<br>THERE.</h2>
-        <p class="step-sub">Create your account. Your AI secretary will be live in minutes.</p>
-      </div>
-      <div class="form-grid">
-        <div class="plan-preview">
-          <div><div class="plan-preview-name" id="planName">Growth Plan</div><div class="plan-preview-sub">14-day free trial · No card required today</div></div>
-          <div class="plan-preview-price" id="planPrice">$279<span>/mo</span></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SecretaryHQ — Get Started</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: #080808;
+        color: #e8e8e8;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+      :root {
+        --blue: #2563eb;
+        --blue-lt: #3b82f6;
+        --blue-dim: rgba(37, 99, 235, 0.12);
+        --green: #22c55e;
+        --green-dim: rgba(34, 197, 94, 0.1);
+        --bg: #080808;
+        --bg2: #0f0f0f;
+        --bg3: #141414;
+        --bg4: #1a1a1a;
+        --border: rgba(255, 255, 255, 0.07);
+        --border-md: rgba(255, 255, 255, 0.11);
+        --text: #e8e8e8;
+        --text-muted: #666;
+        --text-dim: #3a3a3a;
+        --ff-display: 'Bebas Neue', sans-serif;
+        --ff-body: 'DM Sans', sans-serif;
+        --ff-mono: 'JetBrains Mono', monospace;
+      }
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+        background-size: 80px 80px;
+        mask-image: radial-gradient(ellipse 100% 50% at 50% 0%, black 0%, transparent 100%);
+      }
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        padding: 0 40px;
+        background: rgba(8, 8, 8, 0.9);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+      }
+      .nav-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-family: var(--ff-display);
+        font-size: 20px;
+        letter-spacing: 1px;
+        color: var(--text);
+      }
+      .nav-logo-icon {
+        width: 30px;
+        height: 30px;
+        background: var(--blue);
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .nav-logo-icon svg {
+        width: 15px;
+        height: 15px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+      .nav-right {
+        margin-left: auto;
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .nav-right a {
+        color: var(--blue-lt);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .page {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        position: relative;
+        z-index: 1;
+      }
+      .left {
+        padding: 100px 64px 80px;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--border);
+        min-height: 100vh;
+      }
+      .progress-track {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        margin-bottom: 52px;
+      }
+      .prog-step {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        position: relative;
+      }
+      .prog-dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--ff-mono);
+        font-size: 10px;
+        font-weight: 500;
+        border: 1px solid var(--border-md);
+        background: var(--bg3);
+        color: var(--text-muted);
+        transition: all 0.3s;
+        flex-shrink: 0;
+      }
+      .prog-dot.done {
+        background: var(--blue-dim);
+        border-color: rgba(59, 130, 246, 0.35);
+        color: var(--blue-lt);
+      }
+      .prog-dot.active {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
+        box-shadow: 0 0 16px rgba(37, 99, 235, 0.5);
+      }
+      .prog-line {
+        height: 1px;
+        width: 24px;
+        background: var(--border);
+        transition: background 0.3s;
+        flex-shrink: 0;
+      }
+      .prog-line.done {
+        background: rgba(59, 130, 246, 0.35);
+      }
+      .prog-label {
+        position: absolute;
+        top: 34px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 9px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        letter-spacing: 0.3px;
+        font-weight: 500;
+      }
+      .step-head {
+        margin-bottom: 28px;
+      }
+      .step-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--blue-lt);
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+      }
+      .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+      .bc-item {
+        color: var(--blue-lt);
+        font-weight: 600;
+      }
+      .bc-item.muted {
+        color: var(--text-muted);
+        font-weight: 400;
+      }
+      .bc-sep {
+        color: var(--text-dim);
+      }
+      .back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--text-muted);
+        cursor: pointer;
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 10px;
+        transition: all 0.2s;
+        user-select: none;
+        margin-bottom: 14px;
+      }
+      .back-btn:hover {
+        color: var(--text);
+        border-color: var(--border-md);
+      }
+      .back-btn svg {
+        width: 12px;
+        height: 12px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .step-h {
+        font-family: var(--ff-display);
+        font-size: clamp(36px, 4vw, 52px);
+        line-height: 0.95;
+        letter-spacing: 0.5px;
+        color: #fff;
+        margin-bottom: 12px;
+      }
+      .step-sub {
+        font-size: 14px;
+        font-weight: 300;
+        color: #777;
+        line-height: 1.65;
+        max-width: 480px;
+      }
+      .cat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+      }
+      .cat-card {
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 9px;
+        user-select: none;
+      }
+      .cat-card:hover {
+        border-color: var(--border-md);
+        background: var(--bg4);
+        transform: translateY(-1px);
+      }
+      .cat-card.selected {
+        border-color: rgba(59, 130, 246, 0.5);
+        background: var(--blue-dim);
+      }
+      .cat-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg4);
+        border: 1px solid var(--border);
+        font-size: 18px;
+      }
+      .cat-card.selected .cat-icon {
+        background: rgba(37, 99, 235, 0.15);
+        border-color: rgba(59, 130, 246, 0.25);
+      }
+      .cat-name {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text);
+        line-height: 1.3;
+      }
+      .type-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .type-pill {
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 13px 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 13px;
+        font-weight: 500;
+        color: #aaa;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        user-select: none;
+      }
+      .type-pill:hover {
+        border-color: var(--border-md);
+        color: var(--text);
+        background: var(--bg4);
+      }
+      .type-pill.selected {
+        border-color: rgba(59, 130, 246, 0.5);
+        background: var(--blue-dim);
+        color: var(--blue-lt);
+      }
+      .type-pill-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .type-check {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 1px solid var(--border-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: all 0.2s;
+      }
+      .type-pill.selected .type-check {
+        background: var(--blue);
+        border-color: var(--blue);
+      }
+      .type-check svg {
+        width: 10px;
+        height: 10px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      .type-pill.selected .type-check svg {
+        opacity: 1;
+      }
+      .has-sub {
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        background: var(--bg4);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 2px 6px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .spec-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .spec-chip {
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 12px 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 13px;
+        font-weight: 500;
+        color: #aaa;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        user-select: none;
+      }
+      .spec-chip:hover {
+        border-color: var(--border-md);
+        color: var(--text);
+        background: var(--bg4);
+      }
+      .spec-chip.selected {
+        border-color: rgba(59, 130, 246, 0.5);
+        background: var(--blue-dim);
+        color: var(--blue-lt);
+      }
+      .spec-skip {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 14px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        transition: color 0.2s;
+      }
+      .spec-skip:hover {
+        color: var(--text);
+      }
+      .size-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+      }
+      .size-card {
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: center;
+        user-select: none;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+      }
+      .size-card:hover {
+        border-color: var(--border-md);
+        background: var(--bg4);
+        transform: translateY(-1px);
+      }
+      .size-card.selected {
+        border-color: rgba(59, 130, 246, 0.5);
+        background: var(--blue-dim);
+      }
+      .size-num {
+        font-family: var(--ff-display);
+        font-size: 32px;
+        letter-spacing: 0.3px;
+        color: #fff;
+        line-height: 1;
+      }
+      .size-card.selected .size-num {
+        color: var(--blue-lt);
+      }
+      .size-label {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .size-plan {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 4px;
+        background: var(--blue-dim);
+        color: var(--blue-lt);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .size-card.selected .size-plan {
+        opacity: 1;
+      }
+      .services-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .svc-item {
+        background: var(--bg3);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        user-select: none;
+      }
+      .svc-item:hover {
+        border-color: var(--border-md);
+        background: var(--bg4);
+      }
+      .svc-item.checked {
+        border-color: rgba(59, 130, 246, 0.35);
+        background: var(--blue-dim);
+      }
+      .svc-checkbox {
+        width: 20px;
+        height: 20px;
+        border-radius: 5px;
+        border: 1px solid var(--border-md);
+        background: var(--bg4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: all 0.15s;
+      }
+      .svc-item.checked .svc-checkbox {
+        background: var(--blue);
+        border-color: var(--blue);
+      }
+      .svc-checkbox svg {
+        width: 11px;
+        height: 11px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      .svc-item.checked .svc-checkbox svg {
+        opacity: 1;
+      }
+      .svc-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+      }
+      .svc-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 1px;
+      }
+      .svc-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .svc-hint svg {
+        width: 13px;
+        height: 13px;
+        stroke: var(--blue-lt);
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        flex-shrink: 0;
+      }
+      .form-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        max-width: 480px;
+      }
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .form-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #888;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+      .form-input {
+        background: var(--bg3);
+        border: 1px solid var(--border-md);
+        border-radius: 9px;
+        padding: 11px 14px;
+        font-family: var(--ff-body);
+        font-size: 14px;
+        color: var(--text);
+        outline: none;
+        transition: all 0.2s;
+        width: 100%;
+      }
+      .form-input::placeholder {
+        color: var(--text-dim);
+      }
+      .form-input:focus {
+        border-color: rgba(59, 130, 246, 0.5);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        background: var(--bg4);
+      }
+      .form-input.mono {
+        font-family: var(--ff-mono);
+        font-size: 13px;
+      }
+      .form-hint {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+      .form-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 4px 0;
+      }
+      .plan-preview {
+        background: var(--bg3);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        border-radius: 10px;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .plan-preview-name {
+        font-family: var(--ff-display);
+        font-size: 18px;
+        letter-spacing: 0.3px;
+        color: #fff;
+      }
+      .plan-preview-sub {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 1px;
+      }
+      .plan-preview-price {
+        font-family: var(--ff-display);
+        font-size: 28px;
+        letter-spacing: -0.5px;
+        color: var(--blue-lt);
+      }
+      .plan-preview-price span {
+        font-family: var(--ff-body);
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .btn-submit {
+        width: 100%;
+        padding: 14px;
+        background: var(--blue);
+        border: none;
+        border-radius: 10px;
+        color: #fff;
+        font-family: var(--ff-body);
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-shadow: 0 0 32px rgba(37, 99, 235, 0.3);
+        margin-top: 4px;
+      }
+      .btn-submit:hover {
+        background: var(--blue-lt);
+        transform: translateY(-1px);
+        box-shadow: 0 0 48px rgba(59, 130, 246, 0.4);
+      }
+      .btn-submit svg {
+        width: 16px;
+        height: 16px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .btn-continue {
+        max-width: 240px;
+        margin-top: 20px;
+      }
+      .terms-note {
+        font-size: 11px;
+        color: var(--text-muted);
+        text-align: center;
+        margin-top: 10px;
+        line-height: 1.6;
+      }
+      .terms-note a {
+        color: #666;
+        text-decoration: underline;
+      }
+      .step-section {
+        opacity: 0;
+        transform: translateY(16px);
+        transition:
+          opacity 0.4s ease,
+          transform 0.4s ease;
+        pointer-events: none;
+        height: 0;
+        overflow: hidden;
+      }
+      .step-section.visible {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: all;
+        height: auto;
+        overflow: visible;
+        margin-top: 44px;
+      }
+      .right {
+        background: var(--bg2);
+        border-left: 1px solid var(--border);
+        padding: 100px 36px 40px;
+        display: flex;
+        flex-direction: column;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+      }
+      .right-title {
+        font-family: var(--ff-display);
+        font-size: 16px;
+        letter-spacing: 0.8px;
+        color: var(--text-muted);
+        margin-bottom: 28px;
+        text-transform: uppercase;
+      }
+      .summary-items {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 32px;
+      }
+      .summary-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        transition: background 0.2s;
+      }
+      .summary-row.active {
+        background: var(--bg3);
+        border: 1px solid var(--border);
+      }
+      .summary-row.inactive {
+        opacity: 0.35;
+      }
+      .sum-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .sum-val {
+        font-size: 13px;
+        color: var(--text);
+        font-weight: 500;
+        text-align: right;
+      }
+      .sum-val.blue {
+        color: var(--blue-lt);
+      }
+      .sum-val.muted {
+        color: var(--text-muted);
+      }
+      .sum-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: flex-end;
+        max-width: 180px;
+      }
+      .sum-tag {
+        font-size: 10px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        background: var(--blue-dim);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        color: var(--blue-lt);
+        font-weight: 500;
+      }
+      .right-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 16px 0;
+      }
+      .get-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 32px;
+      }
+      .get-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        color: #888;
+        line-height: 1.5;
+      }
+      .get-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 1px;
+        background: var(--green-dim);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .get-dot svg {
+        width: 8px;
+        height: 8px;
+        stroke: var(--green);
+        fill: none;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .trial-badge {
+        background: var(--green-dim);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-top: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .trial-badge-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(34, 197, 94, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .trial-badge-icon svg {
+        width: 16px;
+        height: 16px;
+        stroke: var(--green);
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .trial-badge-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--green);
+      }
+      .trial-badge-sub {
+        font-size: 11px;
+        color: #666;
+        margin-top: 1px;
+        line-height: 1.4;
+      }
+      ::-webkit-scrollbar {
+        width: 5px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1e1e1e;
+        border-radius: 3px;
+      }
+      @media (max-width: 1100px) {
+        .cat-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 900px) {
+        .page {
+          grid-template-columns: 1fr;
+        }
+        .right {
+          display: none;
+        }
+        .left {
+          padding: 90px 24px 60px;
+        }
+        .size-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .spec-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="LandingPage.html" class="nav-logo">
+        <div class="nav-logo-icon">
+          <svg viewBox="0 0 24 24">
+            <path
+              d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"
+            />
+          </svg>
         </div>
-        <div class="form-divider"></div>
-        <div class="form-row">
-          <div class="form-group"><label class="form-label">First name</label><input class="form-input" type="text" placeholder="Dale"></div>
-          <div class="form-group"><label class="form-label">Last name</label><input class="form-input" type="text" placeholder="Morrison"></div>
+        AI SECRETARY
+      </a>
+      <div class="nav-right">Already have an account? <a href="#">Sign in</a></div>
+    </nav>
+    <div class="page">
+      <div class="left">
+        <div class="progress-track" id="progressTrack">
+          <div class="prog-step">
+            <div class="prog-dot active" id="pd1">1<span class="prog-label">Category</span></div>
+          </div>
+          <div class="prog-line" id="pl1"></div>
+          <div class="prog-step">
+            <div class="prog-dot" id="pd2">2<span class="prog-label">Type</span></div>
+          </div>
+          <div class="prog-line" id="pl2"></div>
+          <div class="prog-step">
+            <div class="prog-dot" id="pd3">3<span class="prog-label">Specialty</span></div>
+          </div>
+          <div class="prog-line" id="pl3"></div>
+          <div class="prog-step">
+            <div class="prog-dot" id="pd4">4<span class="prog-label">Size</span></div>
+          </div>
+          <div class="prog-line" id="pl4"></div>
+          <div class="prog-step">
+            <div class="prog-dot" id="pd5">5<span class="prog-label">Services</span></div>
+          </div>
+          <div class="prog-line" id="pl5"></div>
+          <div class="prog-step">
+            <div class="prog-dot" id="pd6">6<span class="prog-label">Account</span></div>
+          </div>
         </div>
-        <div class="form-group"><label class="form-label">Business name</label><input class="form-input" type="text" placeholder="DynaTire Mobile Services"></div>
-        <div class="form-group"><label class="form-label">Email address</label><input class="form-input" type="email" placeholder="dale@dynatire.com"><div class="form-hint">This becomes your login — use a real one.</div></div>
-        <div class="form-group"><label class="form-label">Password</label><input class="form-input" type="password" placeholder="Min. 8 characters"></div>
-        <div class="form-group"><label class="form-label">Business phone <span style="font-weight:300;text-transform:none;letter-spacing:0;">(optional)</span></label><input class="form-input mono" type="tel" placeholder="(630) 555-0100"><div class="form-hint">For owner SMS alerts. Not your AI secretary number.</div></div>
-        <div class="form-divider"></div>
-        <button class="btn-submit" type="button" onclick="launchWizard()">Create my account — start free trial<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
-        <p class="terms-note">By creating an account you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.<br>14-day free trial. No credit card required. Cancel anytime.</p>
+
+        <!-- S1 CATEGORY -->
+        <div id="step1">
+          <div class="step-head">
+            <div class="step-eyebrow">Step 1 of 6</div>
+            <h1 class="step-h">WHAT KIND OF<br />BUSINESS<br />DO YOU RUN?</h1>
+            <p class="step-sub">
+              Pick your industry and we'll load the right template — vocabulary, services, and
+              defaults built for your trade.
+            </p>
+          </div>
+          <div class="cat-grid" id="catGrid"></div>
+        </div>
+
+        <!-- S2 TYPE -->
+        <div class="step-section" id="step2">
+          <div class="step-head">
+            <div class="breadcrumb" id="bc2"></div>
+            <div class="back-btn" onclick="goBack(1)">
+              <svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7" /></svg>Back
+            </div>
+            <h2 class="step-h" id="step2-h">WHAT TYPE<br />OF BUSINESS?</h2>
+            <p class="step-sub">
+              Pick the closest match — you can fine-tune everything in your dashboard after setup.
+            </p>
+          </div>
+          <div class="type-grid" id="typeGrid"></div>
+        </div>
+
+        <!-- S3 SPECIALTY -->
+        <div class="step-section" id="step3">
+          <div class="step-head">
+            <div class="breadcrumb" id="bc3"></div>
+            <div class="back-btn" onclick="goBack(2)">
+              <svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7" /></svg>Back
+            </div>
+            <h2 class="step-h" id="step3-h">WHAT'S YOUR<br />SPECIALTY?</h2>
+            <p class="step-sub" id="step3-sub">
+              Optional — helps us load the most relevant services for your business.
+            </p>
+          </div>
+          <div class="spec-grid" id="specGrid"></div>
+          <div class="spec-skip" onclick="skipSpec()">
+            Skip — I'll configure services manually
+            <svg
+              style="
+                width: 12px;
+                height: 12px;
+                stroke: currentColor;
+                fill: none;
+                stroke-width: 2;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+              "
+              viewBox="0 0 24 24"
+            >
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+
+        <!-- S4 SIZE -->
+        <div class="step-section" id="step4">
+          <div class="step-head">
+            <div class="breadcrumb" id="bc4"></div>
+            <div class="back-btn" onclick="goBack(3)">
+              <svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7" /></svg>Back
+            </div>
+            <h2 class="step-h">HOW BIG<br />IS YOUR TEAM?</h2>
+            <p class="step-sub">
+              This selects your starting plan — upgrade anytime with no friction.
+            </p>
+          </div>
+          <div class="size-grid">
+            <div
+              class="size-card"
+              data-size="1"
+              data-plan="Solo"
+              data-price="129"
+              onclick="selectSize(this)"
+            >
+              <div class="size-num">1</div>
+              <div class="size-label">Just me</div>
+              <div class="size-plan">Solo · $129/mo</div>
+            </div>
+            <div
+              class="size-card"
+              data-size="2-5"
+              data-plan="Growth"
+              data-price="279"
+              onclick="selectSize(this)"
+            >
+              <div class="size-num">2–5</div>
+              <div class="size-label">Small team</div>
+              <div class="size-plan">Growth · $279/mo</div>
+            </div>
+            <div
+              class="size-card"
+              data-size="6-15"
+              data-plan="Professional"
+              data-price="449"
+              onclick="selectSize(this)"
+            >
+              <div class="size-num">6–15</div>
+              <div class="size-label">Medium team</div>
+              <div class="size-plan">Pro · $449/mo</div>
+            </div>
+            <div
+              class="size-card"
+              data-size="16+"
+              data-plan="Professional"
+              data-price="449"
+              onclick="selectSize(this)"
+            >
+              <div class="size-num">16+</div>
+              <div class="size-label">Large team</div>
+              <div class="size-plan">Pro · $449/mo</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- S5 SERVICES -->
+        <div class="step-section" id="step5">
+          <div class="step-head">
+            <div class="breadcrumb" id="bc5"></div>
+            <div class="back-btn" onclick="goBack(4)">
+              <svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7" /></svg>Back
+            </div>
+            <h2 class="step-h">WHAT DO<br />YOU OFFER?</h2>
+            <p class="step-sub">
+              Pre-checked from your template. Uncheck anything you don't offer — pricing and
+              duration are set inside your dashboard.
+            </p>
+          </div>
+          <div class="svc-hint">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" /></svg
+            >You can add, edit, and price services inside your dashboard at any time.
+          </div>
+          <div class="services-grid" id="servicesGrid"></div>
+          <button class="btn-submit btn-continue" onclick="goToStep(6)">
+            Continue<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+          </button>
+        </div>
+
+        <!-- S6 ACCOUNT -->
+        <div class="step-section" id="step6">
+          <div class="step-head">
+            <div class="back-btn" onclick="goBack(5)">
+              <svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7" /></svg>Back
+            </div>
+            <h2 class="step-h">ALMOST<br />THERE.</h2>
+            <p class="step-sub">Create your account. Your AI secretary will be live in minutes.</p>
+          </div>
+          <div class="form-grid">
+            <div class="plan-preview">
+              <div>
+                <div class="plan-preview-name" id="planName">Growth Plan</div>
+                <div class="plan-preview-sub">14-day free trial · No card required today</div>
+              </div>
+              <div class="plan-preview-price" id="planPrice">$279<span>/mo</span></div>
+            </div>
+            <div class="form-divider"></div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">First name</label
+                ><input class="form-input" type="text" placeholder="Dale" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Last name</label
+                ><input class="form-input" type="text" placeholder="Morrison" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Business name</label
+              ><input class="form-input" type="text" placeholder="DynaTire Mobile Services" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email address</label
+              ><input class="form-input" type="email" placeholder="dale@dynatire.com" />
+              <div class="form-hint">This becomes your login — use a real one.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label
+              ><input class="form-input" type="password" placeholder="Min. 8 characters" />
+            </div>
+            <div class="form-group">
+              <label class="form-label"
+                >Business phone
+                <span style="font-weight: 300; text-transform: none; letter-spacing: 0"
+                  >(optional)</span
+                ></label
+              ><input class="form-input mono" type="tel" placeholder="(630) 555-0100" />
+              <div class="form-hint">For owner SMS alerts. Not your AI secretary number.</div>
+            </div>
+            <div class="form-divider"></div>
+            <button class="btn-submit" type="button" onclick="launchWizard()">
+              Create my account — start free trial<svg viewBox="0 0 24 24">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+            <p class="terms-note">
+              By creating an account you agree to our <a href="#">Terms of Service</a> and
+              <a href="#">Privacy Policy</a>.<br />14-day free trial. No credit card required.
+              Cancel anytime.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="right">
+        <div class="right-title">Your setup so far</div>
+        <div class="summary-items">
+          <div class="summary-row active" id="sum-cat">
+            <div class="sum-label">Category</div>
+            <div class="sum-val muted" id="sum-cat-val">—</div>
+          </div>
+          <div class="summary-row inactive" id="sum-type">
+            <div class="sum-label">Business type</div>
+            <div class="sum-val muted" id="sum-type-val">—</div>
+          </div>
+          <div class="summary-row inactive" id="sum-spec">
+            <div class="sum-label">Specialty</div>
+            <div class="sum-val muted" id="sum-spec-val">—</div>
+          </div>
+          <div class="summary-row inactive" id="sum-size">
+            <div class="sum-label">Team size</div>
+            <div class="sum-val muted" id="sum-size-val">—</div>
+          </div>
+          <div class="summary-row inactive" id="sum-plan">
+            <div class="sum-label">Plan</div>
+            <div class="sum-val blue" id="sum-plan-val">—</div>
+          </div>
+          <div class="summary-row inactive" id="sum-svcs">
+            <div class="sum-label">Services</div>
+            <div class="sum-tags" id="sum-svcs-val"><span class="sum-val muted">—</span></div>
+          </div>
+        </div>
+        <div class="right-divider"></div>
+        <div class="right-title" style="margin-bottom: 16px">What you get on day one</div>
+        <div class="get-list">
+          <div class="get-item">
+            <div class="get-dot">
+              <svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3" /></svg>
+            </div>
+            A real local phone number, ready to call
+          </div>
+          <div class="get-item">
+            <div class="get-dot">
+              <svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3" /></svg>
+            </div>
+            AI secretary trained on your business type
+          </div>
+          <div class="get-item">
+            <div class="get-dot">
+              <svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3" /></svg>
+            </div>
+            Smart booking — staff, skills, and resources matched automatically
+          </div>
+          <div class="get-item">
+            <div class="get-dot">
+              <svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3" /></svg>
+            </div>
+            SMS confirmations sent automatically
+          </div>
+          <div class="get-item">
+            <div class="get-dot">
+              <svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3" /></svg>
+            </div>
+            Customer CRM built from every call
+          </div>
+          <div class="get-item">
+            <div class="get-dot">
+              <svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3" /></svg>
+            </div>
+            Coverage alerts so you never miss a booking
+          </div>
+        </div>
+        <div class="right-divider"></div>
+        <div class="trial-badge">
+          <div class="trial-badge-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+          </div>
+          <div>
+            <div class="trial-badge-title">14-day free trial</div>
+            <div class="trial-badge-sub">
+              No credit card required. No setup fee. No per-call charges. Cancel anytime.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- RIGHT -->
-  <div class="right">
-    <div class="right-title">Your setup so far</div>
-    <div class="summary-items">
-      <div class="summary-row active" id="sum-cat"><div class="sum-label">Category</div><div class="sum-val muted" id="sum-cat-val">—</div></div>
-      <div class="summary-row inactive" id="sum-type"><div class="sum-label">Business type</div><div class="sum-val muted" id="sum-type-val">—</div></div>
-      <div class="summary-row inactive" id="sum-spec"><div class="sum-label">Specialty</div><div class="sum-val muted" id="sum-spec-val">—</div></div>
-      <div class="summary-row inactive" id="sum-size"><div class="sum-label">Team size</div><div class="sum-val muted" id="sum-size-val">—</div></div>
-      <div class="summary-row inactive" id="sum-plan"><div class="sum-label">Plan</div><div class="sum-val blue" id="sum-plan-val">—</div></div>
-      <div class="summary-row inactive" id="sum-svcs"><div class="sum-label">Services</div><div class="sum-tags" id="sum-svcs-val"><span class="sum-val muted">—</span></div></div>
-    </div>
-    <div class="right-divider"></div>
-    <div class="right-title" style="margin-bottom:16px;">What you get on day one</div>
-    <div class="get-list">
-      <div class="get-item"><div class="get-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>A real local phone number, ready to call</div>
-      <div class="get-item"><div class="get-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>AI secretary trained on your business type</div>
-      <div class="get-item"><div class="get-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Smart booking — staff, skills, and resources matched automatically</div>
-      <div class="get-item"><div class="get-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>SMS confirmations sent automatically</div>
-      <div class="get-item"><div class="get-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Customer CRM built from every call</div>
-      <div class="get-item"><div class="get-dot"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>Coverage alerts so you never miss a booking</div>
-    </div>
-    <div class="right-divider"></div>
-    <div class="trial-badge">
-      <div class="trial-badge-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-      <div><div class="trial-badge-title">14-day free trial</div><div class="trial-badge-sub">No credit card required. No setup fee. No per-call charges. Cancel anytime.</div></div>
-    </div>
-  </div>
-</div>
+    <script>
+      const CATS = [
+        { id: 'auto', icon: '🔧', name: 'Auto & Vehicles' },
+        { id: 'beauty', icon: '✂️', name: 'Beauty & Wellness' },
+        { id: 'fitness', icon: '💪', name: 'Fitness' },
+        { id: 'trades', icon: '🏠', name: 'Trades' },
+        { id: 'prof', icon: '💼', name: 'Professional Services' },
+        { id: 'food', icon: '🍽️', name: 'Food & Beverage' },
+        { id: 'fin', icon: '📊', name: 'Financial Services' },
+        { id: 'it', icon: '💻', name: 'IT Services' },
+      ];
+      const TYPES = {
+        auto: [
+          'Mobile Tire Service',
+          'Tire Shop',
+          'Oil & Lube',
+          'Auto Repair',
+          'Full-Service Shop',
+          'Body Shop',
+          'Transmission Shop',
+          'Detailing Studio',
+          'Windshield & Glass',
+          'Exhaust & Muffler',
+          'Wheel & Rim Shop',
+          'Brake Specialist',
+          'Performance & Tuning',
+          'Auto Upholstery',
+          'Towing & Recovery',
+          'Car Wash & Valeting',
+        ],
+        beauty: [
+          'Hair Salon',
+          'Barbershop',
+          'Nail Salon',
+          'Spa',
+          'Massage Therapy',
+          'Esthetics Studio',
+          'Waxing Studio',
+          'Eyebrow & Lash',
+          'Tanning Studio',
+          'Tattoo & Piercing',
+          'Makeup Artist',
+          'Hair Extensions Studio',
+          'Natural Hair Studio',
+          "Men's Grooming Lounge",
+        ],
+        fitness: [
+          'Gym',
+          'Personal Training Studio',
+          'Yoga Studio',
+          'Martial Arts',
+          'CrossFit Box',
+          'Pilates Studio',
+          'Dance Studio',
+          'Sports Coaching',
+          'Cycling Studio',
+          'Rock Climbing Gym',
+          'Swimming & Aquatics',
+          'Boot Camp',
+          'Golf Training',
+          'Tennis Club',
+          'Cheer & Gymnastics',
+          'Archery Range',
+        ],
+        trades: [
+          'Plumbing',
+          'HVAC',
+          'Electrician',
+          'Landscaping',
+          'Cleaning Service',
+          'Handyman',
+          'Pest Control',
+          'Painting & Decorating',
+          'Roofing',
+          'Flooring & Tiling',
+          'Fencing',
+          'Pool & Spa Service',
+          'Garage Door',
+          'Locksmith',
+          'Tree Service',
+          'Pressure Washing',
+          'Irrigation',
+          'Insulation',
+        ],
+        prof: [
+          'Real Estate Agency',
+          'Photography Studio',
+          'Tutoring Center',
+          'Event Space',
+          'Law Firm',
+          'Notary',
+          'Business Consulting',
+          'Marketing Agency',
+          'Architecture & Design',
+          'Interior Design',
+          'HR Consulting',
+          'PR Agency',
+          'Life Coaching',
+          'Career Coaching',
+          'Wedding Planning',
+          'Translation Services',
+        ],
+        food: [
+          'Restaurant',
+          'Bar & Lounge',
+          'Catering Company',
+          'Bakery',
+          'Food Truck',
+          'Private Chef',
+          'Coffee Shop',
+          'Meal Prep Service',
+          'Wine Bar',
+          'Brewery & Taproom',
+          'Cooking Classes',
+          'Pop-up Dining',
+        ],
+        fin: [
+          'Accounting & Tax',
+          'Bookkeeping',
+          'Financial Planning',
+          'Insurance Agency',
+          'Mortgage Broker',
+          'Wealth Management',
+          'Credit Counseling',
+          'Tax Resolution',
+          'Payroll Services',
+          'Business Finance',
+          'Investment Advisory',
+          'Retirement Planning',
+        ],
+        it: [
+          'Managed IT Support',
+          'Computer Repair',
+          'Network Setup',
+          'Cybersecurity Consulting',
+          'Web Development',
+          'Software Consulting',
+          'Data Recovery',
+          'IT Training',
+          'Cloud Services',
+          'VoIP & Phone Systems',
+          'CCTV & Security Systems',
+          'POS Setup & Support',
+          'App Development',
+          'SEO & Digital Marketing',
+          'Database Administration',
+          'IT Procurement',
+        ],
+      };
+      const SPECS = {
+        // Auto & Vehicles
+        'Mobile Tire Service': [
+          'Passenger Vehicles',
+          'Commercial Trucks',
+          'Fleet Services',
+          'Emergency Roadside',
+          'Motorsport / Track',
+          'Agricultural & Equipment',
+        ],
+        'Tire Shop': [
+          'Passenger Tires',
+          'Performance Tires',
+          'Off-Road / 4x4',
+          'Commercial Tires',
+          'Motorcycle Tires',
+          'Agricultural Tires',
+        ],
+        'Oil & Lube': [
+          'Conventional Oil',
+          'Synthetic Oil',
+          'Diesel Vehicles',
+          'Fleet Accounts',
+          'Hybrid & EV',
+          'Motorcycle & Powersport',
+        ],
+        'Auto Repair': [
+          'General Repair',
+          'Brakes & Suspension',
+          'Engine & Transmission',
+          'Electrical Systems',
+          'Exhaust & Emissions',
+          '4x4 & Off-Road',
+        ],
+        'Full-Service Shop': [
+          'Import Vehicles',
+          'Domestic Vehicles',
+          'Luxury & Exotic',
+          'Fleet Accounts',
+          'Classic & Vintage',
+          'Hybrid & EV',
+        ],
+        'Body Shop': [
+          'Collision Repair',
+          'Paint & Refinish',
+          'PDR / Dent Removal',
+          'Frame & Structural',
+          'Hail Damage',
+          'Insurance Claims',
+        ],
+        'Transmission Shop': [
+          'Automatic Transmission',
+          'Manual & CVT',
+          'Rebuild & Overhaul',
+          'Performance Upgrades',
+          'Diagnostics Only',
+        ],
+        'Detailing Studio': [
+          'Interior Detail',
+          'Exterior Detail',
+          'Ceramic Coating',
+          'Paint Correction',
+          'Window Tinting',
+          'Fleet Detailing',
+        ],
+        'Windshield & Glass': [
+          'Windshield Replacement',
+          'Chip & Crack Repair',
+          'Side & Rear Glass',
+          'Sunroof Repair',
+          'Fleet Glass',
+        ],
+        'Wheel & Rim Shop': [
+          'Alloy Repair',
+          'Custom Painting',
+          'Chrome & Plating',
+          'Straightening',
+          'New Wheel Sales',
+        ],
+        'Brake Specialist': [
+          'Brake Pad & Rotor',
+          'Brake Lines & Fluid',
+          'Caliper Service',
+          'ABS Diagnostics',
+          'Performance Brakes',
+        ],
+        'Performance & Tuning': [
+          'ECU Tuning',
+          'Suspension Upgrades',
+          'Exhaust Systems',
+          'Turbo & Supercharger',
+          'Dyno Testing',
+        ],
+        'Car Wash & Valeting': [
+          'Hand Wash',
+          'Machine Wash',
+          'Full Valet',
+          'Fleet Accounts',
+          'Mobile Valet',
+        ],
 
-<script>
-const CATS=[
-  {id:'auto',icon:'🔧',name:'Auto & Vehicles'},
-  {id:'beauty',icon:'✂️',name:'Beauty & Wellness'},
-  {id:'fitness',icon:'💪',name:'Fitness'},
-  {id:'trades',icon:'🏠',name:'Trades'},
-  {id:'prof',icon:'💼',name:'Professional Services'},
-  {id:'food',icon:'🍽️',name:'Food & Beverage'},
-  {id:'fin',icon:'📊',name:'Financial Services'},
-  {id:'it',icon:'💻',name:'IT Services'},
-];
-const TYPES={
-  auto:[
-    'Mobile Tire Service','Tire Shop','Oil & Lube','Auto Repair',
-    'Full-Service Shop','Body Shop','Transmission Shop','Detailing Studio',
-    'Windshield & Glass','Exhaust & Muffler','Wheel & Rim Shop','Brake Specialist',
-    'Performance & Tuning','Auto Upholstery','Towing & Recovery','Car Wash & Valeting',
-  ],
-  beauty:[
-    'Hair Salon','Barbershop','Nail Salon','Spa',
-    'Massage Therapy','Esthetics Studio','Waxing Studio','Eyebrow & Lash',
-    'Tanning Studio','Tattoo & Piercing','Makeup Artist','Hair Extensions Studio',
-    'Natural Hair Studio','Men\'s Grooming Lounge',
-  ],
-  fitness:[
-    'Gym','Personal Training Studio','Yoga Studio','Martial Arts',
-    'CrossFit Box','Pilates Studio','Dance Studio','Sports Coaching',
-    'Cycling Studio','Rock Climbing Gym','Swimming & Aquatics','Boot Camp',
-    'Golf Training','Tennis Club','Cheer & Gymnastics','Archery Range',
-  ],
-  trades:[
-    'Plumbing','HVAC','Electrician','Landscaping',
-    'Cleaning Service','Handyman','Pest Control','Painting & Decorating',
-    'Roofing','Flooring & Tiling','Fencing','Pool & Spa Service',
-    'Garage Door','Locksmith','Tree Service','Pressure Washing',
-    'Irrigation','Insulation',
-  ],
-  prof:[
-    'Real Estate Agency','Photography Studio','Tutoring Center','Event Space',
-    'Law Firm','Notary','Business Consulting','Marketing Agency',
-    'Architecture & Design','Interior Design','HR Consulting','PR Agency',
-    'Life Coaching','Career Coaching','Wedding Planning','Translation Services',
-  ],
-  food:[
-    'Restaurant','Bar & Lounge','Catering Company','Bakery',
-    'Food Truck','Private Chef','Coffee Shop','Meal Prep Service',
-    'Wine Bar','Brewery & Taproom','Cooking Classes','Pop-up Dining',
-  ],
-  fin:[
-    'Accounting & Tax','Bookkeeping','Financial Planning','Insurance Agency',
-    'Mortgage Broker','Wealth Management','Credit Counseling','Tax Resolution',
-    'Payroll Services','Business Finance','Investment Advisory','Retirement Planning',
-  ],
-  it:[
-    'Managed IT Support','Computer Repair','Network Setup','Cybersecurity Consulting',
-    'Web Development','Software Consulting','Data Recovery','IT Training',
-    'Cloud Services','VoIP & Phone Systems','CCTV & Security Systems','POS Setup & Support',
-    'App Development','SEO & Digital Marketing','Database Administration','IT Procurement',
-  ],
-};
-const SPECS={
-  // Auto & Vehicles
-  'Mobile Tire Service':['Passenger Vehicles','Commercial Trucks','Fleet Services','Emergency Roadside','Motorsport / Track','Agricultural & Equipment'],
-  'Tire Shop':['Passenger Tires','Performance Tires','Off-Road / 4x4','Commercial Tires','Motorcycle Tires','Agricultural Tires'],
-  'Oil & Lube':['Conventional Oil','Synthetic Oil','Diesel Vehicles','Fleet Accounts','Hybrid & EV','Motorcycle & Powersport'],
-  'Auto Repair':['General Repair','Brakes & Suspension','Engine & Transmission','Electrical Systems','Exhaust & Emissions','4x4 & Off-Road'],
-  'Full-Service Shop':['Import Vehicles','Domestic Vehicles','Luxury & Exotic','Fleet Accounts','Classic & Vintage','Hybrid & EV'],
-  'Body Shop':['Collision Repair','Paint & Refinish','PDR / Dent Removal','Frame & Structural','Hail Damage','Insurance Claims'],
-  'Transmission Shop':['Automatic Transmission','Manual & CVT','Rebuild & Overhaul','Performance Upgrades','Diagnostics Only'],
-  'Detailing Studio':['Interior Detail','Exterior Detail','Ceramic Coating','Paint Correction','Window Tinting','Fleet Detailing'],
-  'Windshield & Glass':['Windshield Replacement','Chip & Crack Repair','Side & Rear Glass','Sunroof Repair','Fleet Glass'],
-  'Wheel & Rim Shop':['Alloy Repair','Custom Painting','Chrome & Plating','Straightening','New Wheel Sales'],
-  'Brake Specialist':['Brake Pad & Rotor','Brake Lines & Fluid','Caliper Service','ABS Diagnostics','Performance Brakes'],
-  'Performance & Tuning':['ECU Tuning','Suspension Upgrades','Exhaust Systems','Turbo & Supercharger','Dyno Testing'],
-  'Car Wash & Valeting':['Hand Wash','Machine Wash','Full Valet','Fleet Accounts','Mobile Valet'],
+        // Beauty & Wellness
+        'Hair Salon': [
+          'Full Service',
+          'Cuts Only',
+          'Color Specialist',
+          'Extensions',
+          'Braiding & Natural Hair',
+          'Keratin & Smoothing',
+        ],
+        Barbershop: [
+          'Classic Cuts',
+          'Fades & Tapers',
+          'Beard Grooming',
+          'Hot Towel Shave',
+          'Kids Cuts',
+          'Color & Gray Blending',
+        ],
+        'Nail Salon': [
+          'Manicure & Pedicure',
+          'Acrylic & Gel',
+          'Nail Art',
+          'Dip Powder',
+          'Spa Nails',
+          "Men's Grooming",
+        ],
+        Spa: [
+          'Day Spa',
+          'Medi-Spa & Wellness',
+          'Couples Spa',
+          'Facial & Skincare',
+          'Body Wraps & Scrubs',
+          'Hydrotherapy',
+        ],
+        'Massage Therapy': [
+          'Swedish',
+          'Deep Tissue',
+          'Sports Massage',
+          'Prenatal',
+          'Hot Stone',
+          'Reflexology',
+          'Lymphatic Drainage',
+        ],
+        'Esthetics Studio': [
+          'Facials',
+          'Chemical Peels',
+          'Microdermabrasion',
+          'LED Therapy',
+          'Acne Treatment',
+          'Anti-Aging',
+        ],
+        'Waxing Studio': [
+          'Full Body Waxing',
+          'Brazilian',
+          'Facial Waxing',
+          "Men's Waxing",
+          'Sugaring',
+        ],
+        'Eyebrow & Lash': [
+          'Lash Extensions',
+          'Lash Lift & Tint',
+          'Brow Lamination',
+          'Microblading',
+          'Threading & Tinting',
+        ],
+        'Tanning Studio': [
+          'Spray Tan',
+          'UV Tanning Beds',
+          'Custom Airbrush',
+          'Mobile Tanning',
+          'Membership Plans',
+        ],
+        'Tattoo & Piercing': [
+          'Custom Tattoo',
+          'Cover-Up Work',
+          'Piercing',
+          'Laser Removal',
+          'Fine Line / Minimalist',
+          'Traditional',
+        ],
+        'Makeup Artist': [
+          'Bridal',
+          'Editorial',
+          'Special FX',
+          'Lessons & Training',
+          'Prom & Events',
+        ],
+        "Men's Grooming Lounge": [
+          'Classic Shave',
+          'Haircut & Style',
+          'Beard Sculpting',
+          'Facial & Skincare',
+          'Packages',
+        ],
 
-  // Beauty & Wellness
-  'Hair Salon':['Full Service','Cuts Only','Color Specialist','Extensions','Braiding & Natural Hair','Keratin & Smoothing'],
-  'Barbershop':['Classic Cuts','Fades & Tapers','Beard Grooming','Hot Towel Shave','Kids Cuts','Color & Gray Blending'],
-  'Nail Salon':['Manicure & Pedicure','Acrylic & Gel','Nail Art','Dip Powder','Spa Nails','Men\'s Grooming'],
-  'Spa':['Day Spa','Medi-Spa & Wellness','Couples Spa','Facial & Skincare','Body Wraps & Scrubs','Hydrotherapy'],
-  'Massage Therapy':['Swedish','Deep Tissue','Sports Massage','Prenatal','Hot Stone','Reflexology','Lymphatic Drainage'],
-  'Esthetics Studio':['Facials','Chemical Peels','Microdermabrasion','LED Therapy','Acne Treatment','Anti-Aging'],
-  'Waxing Studio':['Full Body Waxing','Brazilian','Facial Waxing','Men\'s Waxing','Sugaring'],
-  'Eyebrow & Lash':['Lash Extensions','Lash Lift & Tint','Brow Lamination','Microblading','Threading & Tinting'],
-  'Tanning Studio':['Spray Tan','UV Tanning Beds','Custom Airbrush','Mobile Tanning','Membership Plans'],
-  'Tattoo & Piercing':['Custom Tattoo','Cover-Up Work','Piercing','Laser Removal','Fine Line / Minimalist','Traditional'],
-  'Makeup Artist':['Bridal','Editorial','Special FX','Lessons & Training','Prom & Events'],
-  'Men\'s Grooming Lounge':['Classic Shave','Haircut & Style','Beard Sculpting','Facial & Skincare','Packages'],
+        // Fitness
+        Gym: [
+          'General Fitness',
+          'Powerlifting',
+          'Olympic Weightlifting',
+          'Boxing & MMA',
+          'Women-Only',
+          '24-Hour Access',
+        ],
+        'Personal Training Studio': [
+          'Weight Loss',
+          'Strength & Conditioning',
+          'Athletic Performance',
+          'Rehab & Mobility',
+          'Senior Fitness',
+          'Nutrition Coaching',
+        ],
+        'Yoga Studio': [
+          'Hatha',
+          'Vinyasa',
+          'Hot Yoga',
+          'Restorative & Yin',
+          'Prenatal Yoga',
+          'Kids Yoga',
+          'Aerial Yoga',
+        ],
+        'Martial Arts': [
+          'Karate',
+          'Brazilian Jiu-Jitsu',
+          'Kickboxing',
+          'Mixed Martial Arts',
+          'Wrestling',
+          'Muay Thai',
+          'Krav Maga',
+        ],
+        'CrossFit Box': [
+          'General CrossFit',
+          'Olympic Lifting Focus',
+          'Endurance',
+          'Competition Prep',
+          'Kids & Teens',
+        ],
+        'Pilates Studio': [
+          'Mat Pilates',
+          'Reformer Pilates',
+          'Clinical Pilates',
+          'Prenatal',
+          'Group Classes',
+        ],
+        'Dance Studio': [
+          'Ballet',
+          'Hip-Hop',
+          'Ballroom & Latin',
+          'Contemporary',
+          'Kids Classes',
+          'Adult Beginners',
+          'Competition Prep',
+        ],
+        'Sports Coaching': [
+          'Football',
+          'Basketball',
+          'Baseball & Softball',
+          'Soccer',
+          'Tennis',
+          'Swimming',
+          'Golf',
+          'Multi-Sport',
+        ],
+        'Cycling Studio': [
+          'Indoor Cycling / Spin',
+          'Road Cycling Club',
+          'Mountain Biking',
+          'Virtual Cycling',
+          'Recovery Rides',
+        ],
+        'Rock Climbing Gym': [
+          'Bouldering',
+          'Top Rope & Lead',
+          'Youth Programs',
+          'Beginner Lessons',
+          'Competition Training',
+        ],
+        'Boot Camp': [
+          'Outdoor Boot Camp',
+          'Military-Style',
+          'HIIT',
+          'Corporate Wellness',
+          'Women-Only',
+        ],
+        'Golf Training': [
+          'Swing Analysis',
+          'Short Game',
+          'Putting',
+          'Course Management',
+          'Junior Golf',
+          'Club Fitting',
+        ],
 
-  // Fitness
-  'Gym':['General Fitness','Powerlifting','Olympic Weightlifting','Boxing & MMA','Women-Only','24-Hour Access'],
-  'Personal Training Studio':['Weight Loss','Strength & Conditioning','Athletic Performance','Rehab & Mobility','Senior Fitness','Nutrition Coaching'],
-  'Yoga Studio':['Hatha','Vinyasa','Hot Yoga','Restorative & Yin','Prenatal Yoga','Kids Yoga','Aerial Yoga'],
-  'Martial Arts':['Karate','Brazilian Jiu-Jitsu','Kickboxing','Mixed Martial Arts','Wrestling','Muay Thai','Krav Maga'],
-  'CrossFit Box':['General CrossFit','Olympic Lifting Focus','Endurance','Competition Prep','Kids & Teens'],
-  'Pilates Studio':['Mat Pilates','Reformer Pilates','Clinical Pilates','Prenatal','Group Classes'],
-  'Dance Studio':['Ballet','Hip-Hop','Ballroom & Latin','Contemporary','Kids Classes','Adult Beginners','Competition Prep'],
-  'Sports Coaching':['Football','Basketball','Baseball & Softball','Soccer','Tennis','Swimming','Golf','Multi-Sport'],
-  'Cycling Studio':['Indoor Cycling / Spin','Road Cycling Club','Mountain Biking','Virtual Cycling','Recovery Rides'],
-  'Rock Climbing Gym':['Bouldering','Top Rope & Lead','Youth Programs','Beginner Lessons','Competition Training'],
-  'Boot Camp':['Outdoor Boot Camp','Military-Style','HIIT','Corporate Wellness','Women-Only'],
-  'Golf Training':['Swing Analysis','Short Game','Putting','Course Management','Junior Golf','Club Fitting'],
+        // Trades
+        Plumbing: [
+          'Residential',
+          'Commercial',
+          'Emergency & 24-Hour',
+          'New Construction',
+          'Drain Cleaning',
+          'Water Heaters',
+          'Remodeling',
+        ],
+        HVAC: [
+          'Residential',
+          'Commercial',
+          'Installation',
+          'Repair & Maintenance',
+          'Duct Cleaning',
+          'Refrigeration',
+          'Smart Home Integration',
+        ],
+        Electrician: [
+          'Residential',
+          'Commercial',
+          'Industrial',
+          'Solar & EV Charging',
+          'Panel Upgrades',
+          'Smart Home',
+          'Generator Install',
+        ],
+        Landscaping: [
+          'Lawn Maintenance',
+          'Landscape Design',
+          'Hardscaping',
+          'Irrigation',
+          'Tree Service',
+          'Snow Removal',
+          'Garden Design',
+        ],
+        'Cleaning Service': [
+          'Residential',
+          'Commercial',
+          'Deep Clean',
+          'Move In / Move Out',
+          'Post-Construction',
+          'Airbnb Turnover',
+          'Window Cleaning',
+        ],
+        Handyman: [
+          'General Repairs',
+          'Furniture Assembly',
+          'Drywall & Painting',
+          'Door & Window',
+          'Carpentry',
+          'TV & Mounting',
+        ],
+        'Pest Control': [
+          'Residential',
+          'Commercial',
+          'Termite Treatment',
+          'Rodent Control',
+          'Bed Bugs',
+          'Wildlife Removal',
+          'Preventative Plans',
+        ],
+        'Painting & Decorating': [
+          'Interior Painting',
+          'Exterior Painting',
+          'Wallpaper',
+          'Commercial',
+          'Cabinet Refinishing',
+          'Faux Finishes',
+          'Deck Staining',
+        ],
+        Roofing: [
+          'Residential Repair',
+          'Full Replacement',
+          'Commercial',
+          'Metal Roofing',
+          'Gutters & Fascia',
+          'Emergency Tarping',
+          'Inspection',
+        ],
+        'Flooring & Tiling': [
+          'Hardwood',
+          'Laminate & LVP',
+          'Tile',
+          'Carpet',
+          'Epoxy',
+          'Refinishing',
+          'Commercial',
+        ],
+        'Pool & Spa Service': [
+          'Weekly Maintenance',
+          'Opening & Closing',
+          'Repairs',
+          'Equipment Install',
+          'Water Testing',
+          'New Construction',
+        ],
+        Locksmith: [
+          'Residential',
+          'Commercial',
+          'Auto Lockout',
+          'Safe Service',
+          'Key Cutting',
+          'Access Control',
+          'Emergency',
+        ],
+        'Tree Service': [
+          'Trimming & Pruning',
+          'Tree Removal',
+          'Stump Grinding',
+          'Emergency Storm Work',
+          'Land Clearing',
+          'Consulting',
+        ],
+        'Pressure Washing': [
+          'Residential',
+          'Commercial',
+          'Driveway & Concrete',
+          'Roof Soft Wash',
+          'Deck & Fence',
+          'Fleet Washing',
+        ],
 
-  // Trades
-  'Plumbing':['Residential','Commercial','Emergency & 24-Hour','New Construction','Drain Cleaning','Water Heaters','Remodeling'],
-  'HVAC':['Residential','Commercial','Installation','Repair & Maintenance','Duct Cleaning','Refrigeration','Smart Home Integration'],
-  'Electrician':['Residential','Commercial','Industrial','Solar & EV Charging','Panel Upgrades','Smart Home','Generator Install'],
-  'Landscaping':['Lawn Maintenance','Landscape Design','Hardscaping','Irrigation','Tree Service','Snow Removal','Garden Design'],
-  'Cleaning Service':['Residential','Commercial','Deep Clean','Move In / Move Out','Post-Construction','Airbnb Turnover','Window Cleaning'],
-  'Handyman':['General Repairs','Furniture Assembly','Drywall & Painting','Door & Window','Carpentry','TV & Mounting'],
-  'Pest Control':['Residential','Commercial','Termite Treatment','Rodent Control','Bed Bugs','Wildlife Removal','Preventative Plans'],
-  'Painting & Decorating':['Interior Painting','Exterior Painting','Wallpaper','Commercial','Cabinet Refinishing','Faux Finishes','Deck Staining'],
-  'Roofing':['Residential Repair','Full Replacement','Commercial','Metal Roofing','Gutters & Fascia','Emergency Tarping','Inspection'],
-  'Flooring & Tiling':['Hardwood','Laminate & LVP','Tile','Carpet','Epoxy','Refinishing','Commercial'],
-  'Pool & Spa Service':['Weekly Maintenance','Opening & Closing','Repairs','Equipment Install','Water Testing','New Construction'],
-  'Locksmith':['Residential','Commercial','Auto Lockout','Safe Service','Key Cutting','Access Control','Emergency'],
-  'Tree Service':['Trimming & Pruning','Tree Removal','Stump Grinding','Emergency Storm Work','Land Clearing','Consulting'],
-  'Pressure Washing':['Residential','Commercial','Driveway & Concrete','Roof Soft Wash','Deck & Fence','Fleet Washing'],
+        // Professional Services
+        'Real Estate Agency': [
+          'Residential Sales',
+          'Commercial Sales',
+          'Property Management',
+          'Rentals & Leasing',
+          'Investment Properties',
+          'New Construction',
+        ],
+        'Photography Studio': [
+          'Wedding',
+          'Portrait',
+          'Commercial & Product',
+          'Real Estate',
+          'Event',
+          'Newborn & Family',
+          'Headshots',
+        ],
+        'Tutoring Center': [
+          'K-12 Academic',
+          'SAT / ACT Prep',
+          'College Prep',
+          'STEM',
+          'Reading & Writing',
+          'Languages',
+          'Special Needs',
+        ],
+        'Event Space': [
+          'Corporate Events',
+          'Weddings',
+          'Private Parties',
+          'Conferences',
+          'Pop-ups & Markets',
+          'Film & Photo Shoots',
+        ],
+        'Law Firm': [
+          'Family Law',
+          'Criminal Defense',
+          'Real Estate Law',
+          'Business & Corporate',
+          'Estate Planning',
+          'Immigration',
+          'Personal Injury',
+        ],
+        Notary: [
+          'General Notary',
+          'Mobile Notary',
+          'Loan Signing Agent',
+          'Apostille Services',
+          'Remote Online Notary',
+        ],
+        'Business Consulting': [
+          'Strategy & Growth',
+          'Operations',
+          'HR & Staffing',
+          'Sales & Marketing',
+          'Finance & Accounting',
+          'Franchise Consulting',
+        ],
+        'Marketing Agency': [
+          'Digital Marketing',
+          'SEO & Content',
+          'Social Media',
+          'PPC & Paid Ads',
+          'Branding',
+          'Email Marketing',
+          'Video Production',
+        ],
+        'Architecture & Design': [
+          'Residential Architecture',
+          'Commercial Architecture',
+          'Interior Design',
+          'Landscape Architecture',
+          'Renovation & Remodel',
+        ],
+        'Interior Design': [
+          'Residential',
+          'Commercial',
+          'E-Design / Virtual',
+          'Staging',
+          'Color Consulting',
+          'Space Planning',
+        ],
+        'HR Consulting': [
+          'Recruiting & Staffing',
+          'HR Compliance',
+          'Payroll Advisory',
+          'Benefits Design',
+          'Employee Relations',
+          'Training & Development',
+        ],
+        'Life Coaching': [
+          'Executive Coaching',
+          'Career Transition',
+          'Relationship',
+          'Health & Wellness',
+          'Mindset & Mindfulness',
+          'Accountability',
+        ],
+        'Wedding Planning': [
+          'Full-Service Planning',
+          'Month-Of Coordination',
+          'Design & Styling',
+          'Destination Weddings',
+          'Elopements',
+        ],
+        'Career Coaching': [
+          'Resume & LinkedIn',
+          'Interview Prep',
+          'Job Search Strategy',
+          'Career Change',
+          'Salary Negotiation',
+          'Leadership Development',
+        ],
 
-  // Professional Services
-  'Real Estate Agency':['Residential Sales','Commercial Sales','Property Management','Rentals & Leasing','Investment Properties','New Construction'],
-  'Photography Studio':['Wedding','Portrait','Commercial & Product','Real Estate','Event','Newborn & Family','Headshots'],
-  'Tutoring Center':['K-12 Academic','SAT / ACT Prep','College Prep','STEM','Reading & Writing','Languages','Special Needs'],
-  'Event Space':['Corporate Events','Weddings','Private Parties','Conferences','Pop-ups & Markets','Film & Photo Shoots'],
-  'Law Firm':['Family Law','Criminal Defense','Real Estate Law','Business & Corporate','Estate Planning','Immigration','Personal Injury'],
-  'Notary':['General Notary','Mobile Notary','Loan Signing Agent','Apostille Services','Remote Online Notary'],
-  'Business Consulting':['Strategy & Growth','Operations','HR & Staffing','Sales & Marketing','Finance & Accounting','Franchise Consulting'],
-  'Marketing Agency':['Digital Marketing','SEO & Content','Social Media','PPC & Paid Ads','Branding','Email Marketing','Video Production'],
-  'Architecture & Design':['Residential Architecture','Commercial Architecture','Interior Design','Landscape Architecture','Renovation & Remodel'],
-  'Interior Design':['Residential','Commercial','E-Design / Virtual','Staging','Color Consulting','Space Planning'],
-  'HR Consulting':['Recruiting & Staffing','HR Compliance','Payroll Advisory','Benefits Design','Employee Relations','Training & Development'],
-  'Life Coaching':['Executive Coaching','Career Transition','Relationship','Health & Wellness','Mindset & Mindfulness','Accountability'],
-  'Wedding Planning':['Full-Service Planning','Month-Of Coordination','Design & Styling','Destination Weddings','Elopements'],
-  'Career Coaching':['Resume & LinkedIn','Interview Prep','Job Search Strategy','Career Change','Salary Negotiation','Leadership Development'],
+        // Food & Beverage
+        Restaurant: [
+          'Fine Dining',
+          'Casual Dining',
+          'Fast Casual',
+          'Breakfast & Brunch',
+          'Family Style',
+          'Ethnic Cuisine',
+          'Farm-to-Table',
+        ],
+        'Bar & Lounge': [
+          'Sports Bar',
+          'Cocktail Bar',
+          'Wine Bar',
+          'Speakeasy',
+          'Rooftop Bar',
+          'Live Music Venue',
+        ],
+        'Catering Company': [
+          'Corporate Catering',
+          'Wedding Catering',
+          'Private Events',
+          'Drop-Off Catering',
+          'Food Stations',
+          'Dietary Specialist',
+        ],
+        Bakery: [
+          'Custom Cakes',
+          'Pastries & Bread',
+          'Wedding Cakes',
+          'Wholesale',
+          'Vegan & Gluten-Free',
+          'Subscription Box',
+        ],
+        'Food Truck': [
+          'Street Food',
+          'Events & Catering',
+          'Festival Circuit',
+          'Corporate Lunch',
+          'Private Hire',
+          'Multi-Truck Fleet',
+        ],
+        'Coffee Shop': [
+          'Specialty Coffee',
+          'Espresso Bar',
+          'Café & Light Bites',
+          'Drive-Through',
+          'Roastery',
+          'Mobile Coffee',
+        ],
+        'Brewery & Taproom': [
+          'Craft Beer',
+          'Taproom Events',
+          'Brewery Tours',
+          'Private Events',
+          'Wholesale Distribution',
+        ],
+        'Cooking Classes': [
+          'Home Cooking',
+          'Professional Skills',
+          'Baking & Pastry',
+          'Kids Classes',
+          'Team Building',
+          'Dietary Specialist',
+        ],
 
-  // Food & Beverage
-  'Restaurant':['Fine Dining','Casual Dining','Fast Casual','Breakfast & Brunch','Family Style','Ethnic Cuisine','Farm-to-Table'],
-  'Bar & Lounge':['Sports Bar','Cocktail Bar','Wine Bar','Speakeasy','Rooftop Bar','Live Music Venue'],
-  'Catering Company':['Corporate Catering','Wedding Catering','Private Events','Drop-Off Catering','Food Stations','Dietary Specialist'],
-  'Bakery':['Custom Cakes','Pastries & Bread','Wedding Cakes','Wholesale','Vegan & Gluten-Free','Subscription Box'],
-  'Food Truck':['Street Food','Events & Catering','Festival Circuit','Corporate Lunch','Private Hire','Multi-Truck Fleet'],
-  'Coffee Shop':['Specialty Coffee','Espresso Bar','Café & Light Bites','Drive-Through','Roastery','Mobile Coffee'],
-  'Brewery & Taproom':['Craft Beer','Taproom Events','Brewery Tours','Private Events','Wholesale Distribution'],
-  'Cooking Classes':['Home Cooking','Professional Skills','Baking & Pastry','Kids Classes','Team Building','Dietary Specialist'],
+        // Financial Services
+        'Accounting & Tax': [
+          'Individual Tax',
+          'Business Tax',
+          'CPA Services',
+          'Tax Planning',
+          'Audit Support',
+          'Nonprofit Accounting',
+        ],
+        Bookkeeping: [
+          'Small Business',
+          'Startup Accounting',
+          'Catch-Up Bookkeeping',
+          'Virtual CFO',
+          'Xero & QuickBooks',
+          'E-commerce',
+        ],
+        'Financial Planning': [
+          'Retirement Planning',
+          'Investment Advice',
+          'Estate Planning',
+          'College Funding',
+          'Divorce Financial Planning',
+          'Young Professionals',
+        ],
+        'Insurance Agency': [
+          'Auto Insurance',
+          'Home & Property',
+          'Life Insurance',
+          'Business & Commercial',
+          'Health Insurance',
+          'Umbrella & Specialty',
+        ],
+        'Mortgage Broker': [
+          'Residential Purchase',
+          'Refinancing',
+          'First-Time Buyers',
+          'Investment Properties',
+          'Commercial Mortgage',
+          'Reverse Mortgage',
+        ],
+        'Wealth Management': [
+          'High-Net-Worth',
+          'Portfolio Management',
+          'Trust & Estate',
+          'Tax-Efficient Investing',
+          'Family Office',
+          'Impact Investing',
+        ],
+        'Credit Counseling': [
+          'Debt Management',
+          'Credit Repair',
+          'Bankruptcy Alternatives',
+          'Student Loan Counseling',
+          'Housing Counseling',
+        ],
+        'Payroll Services': [
+          'Small Business Payroll',
+          'Multi-State Payroll',
+          'HR Integration',
+          'Contractor Payments',
+          'Year-End Reporting',
+        ],
+        'Tax Resolution': [
+          'IRS Audit Representation',
+          'Offer in Compromise',
+          'Installment Agreements',
+          'Lien & Levy Release',
+          'Back Taxes',
+        ],
+        'Business Finance': [
+          'Business Loans',
+          'Equipment Financing',
+          'SBA Loans',
+          'Invoice Factoring',
+          'Merchant Cash Advance',
+          'Startup Funding',
+        ],
 
-  // Financial Services
-  'Accounting & Tax':['Individual Tax','Business Tax','CPA Services','Tax Planning','Audit Support','Nonprofit Accounting'],
-  'Bookkeeping':['Small Business','Startup Accounting','Catch-Up Bookkeeping','Virtual CFO','Xero & QuickBooks','E-commerce'],
-  'Financial Planning':['Retirement Planning','Investment Advice','Estate Planning','College Funding','Divorce Financial Planning','Young Professionals'],
-  'Insurance Agency':['Auto Insurance','Home & Property','Life Insurance','Business & Commercial','Health Insurance','Umbrella & Specialty'],
-  'Mortgage Broker':['Residential Purchase','Refinancing','First-Time Buyers','Investment Properties','Commercial Mortgage','Reverse Mortgage'],
-  'Wealth Management':['High-Net-Worth','Portfolio Management','Trust & Estate','Tax-Efficient Investing','Family Office','Impact Investing'],
-  'Credit Counseling':['Debt Management','Credit Repair','Bankruptcy Alternatives','Student Loan Counseling','Housing Counseling'],
-  'Payroll Services':['Small Business Payroll','Multi-State Payroll','HR Integration','Contractor Payments','Year-End Reporting'],
-  'Tax Resolution':['IRS Audit Representation','Offer in Compromise','Installment Agreements','Lien & Levy Release','Back Taxes'],
-  'Business Finance':['Business Loans','Equipment Financing','SBA Loans','Invoice Factoring','Merchant Cash Advance','Startup Funding'],
+        // IT Services
+        'Managed IT Support': [
+          'Small Business',
+          'Enterprise',
+          'Remote Support',
+          'On-Site Support',
+          'Break-Fix',
+          'Co-Managed IT',
+        ],
+        'Computer Repair': [
+          'PC Repair',
+          'Mac Repair',
+          'Phone & Tablet',
+          'Gaming Systems',
+          'Laptop Screen & Battery',
+          'Data Migration',
+        ],
+        'Network Setup': [
+          'Home Network',
+          'Business LAN / WAN',
+          'Wi-Fi & Access Points',
+          'Structured Cabling',
+          'VPN Setup',
+          'Firewall Config',
+        ],
+        'Cybersecurity Consulting': [
+          'Risk Assessment',
+          'Penetration Testing',
+          'Compliance (SOC2 / ISO)',
+          'Security Training',
+          'Incident Response',
+          'Dark Web Monitoring',
+        ],
+        'Web Development': [
+          'E-commerce Sites',
+          'Business Websites',
+          'Web Apps',
+          'WordPress',
+          'Shopify',
+          'Landing Pages',
+          'Web Hosting',
+        ],
+        'Software Consulting': [
+          'ERP & CRM Implementation',
+          'Custom Software',
+          'API Integration',
+          'Process Automation',
+          'Cloud Migration',
+          'Tech Stack Advisory',
+        ],
+        'Data Recovery': [
+          'Hard Drive Recovery',
+          'RAID Recovery',
+          'Phone & Tablet',
+          'SSD Recovery',
+          'Remote Recovery',
+          'Emergency Service',
+        ],
+        'IT Training': [
+          'End-User Training',
+          'Microsoft 365',
+          'Cybersecurity Awareness',
+          'Software Onboarding',
+          'IT Certification Prep',
+          'Corporate Training',
+        ],
+        'Cloud Services': [
+          'Microsoft Azure',
+          'Google Workspace',
+          'AWS',
+          'Cloud Migration',
+          'Backup & Disaster Recovery',
+          'SaaS Management',
+        ],
+        'VoIP & Phone Systems': [
+          'Business VoIP',
+          'Phone System Install',
+          'Call Center Setup',
+          'Unified Communications',
+          'On-Hold & Auto-Attendant',
+        ],
+        'CCTV & Security Systems': [
+          'Camera Installation',
+          'Access Control',
+          'Alarm Systems',
+          'Remote Monitoring',
+          'Commercial',
+          'Residential',
+        ],
+        'App Development': [
+          'iOS Apps',
+          'Android Apps',
+          'Cross-Platform',
+          'MVP & Prototyping',
+          'App Maintenance',
+          'UI/UX Design',
+        ],
+        'SEO & Digital Marketing': [
+          'Local SEO',
+          'Technical SEO',
+          'PPC Management',
+          'Social Media Ads',
+          'Content Strategy',
+          'Analytics & Reporting',
+        ],
+      };
+      const SERVICES = {
+        auto: [
+          'Tire Rotation|45 min',
+          'Flat Repair|30 min',
+          'Seasonal Tire Swap|60 min',
+          'Oil Change|30 min',
+          'Brake Inspection|45 min',
+          'Wheel Alignment|60 min',
+          'Tire Balancing|30 min',
+          'Battery Replacement|20 min',
+        ],
+        beauty: [
+          'Haircut|45 min',
+          'Color Treatment|90 min',
+          'Blowout|30 min',
+          'Highlights|120 min',
+          'Trim|20 min',
+          'Deep Conditioning|45 min',
+          'Style & Finish|30 min',
+          'Perm|90 min',
+        ],
+        fitness: [
+          'Personal Training|60 min',
+          'Group Class|45 min',
+          'Fitness Assessment|30 min',
+          'Nutrition Consult|45 min',
+          'Recovery Session|30 min',
+          'Programme Design|60 min',
+        ],
+        trades: [
+          'Initial Assessment|60 min',
+          'Repair Service|120 min',
+          'Installation|180 min',
+          'Maintenance Check|45 min',
+          'Emergency Call|60 min',
+          'Quote Visit|30 min',
+        ],
+        prof: [
+          'Initial Consultation|60 min',
+          'Follow-up Meeting|30 min',
+          'Full Session|90 min',
+          'Project Kickoff|60 min',
+          'Strategy Review|45 min',
+        ],
+        food: [
+          'Table Reservation|120 min',
+          'Private Dining|180 min',
+          'Catering Consult|60 min',
+          'Event Booking|240 min',
+          'Tasting Session|90 min',
+        ],
+        fin: [
+          'Initial Consultation|60 min',
+          'Tax Preparation|90 min',
+          'Financial Review|45 min',
+          'Planning Session|60 min',
+          'Annual Review|90 min',
+          'Document Drop-off|15 min',
+        ],
+        it: [
+          'Remote Support|30 min',
+          'On-Site Visit|60 min',
+          'System Assessment|90 min',
+          'Device Repair|60 min',
+          'Network Audit|120 min',
+          'Training Session|60 min',
+          'Data Recovery|120 min',
+          'Security Review|90 min',
+        ],
+      };
+      const STEP_LABELS = ['Category', 'Type', 'Specialty', 'Size', 'Services', 'Account'];
+      let state = {
+        cat: null,
+        catName: null,
+        type: null,
+        spec: null,
+        size: null,
+        plan: null,
+        price: null,
+        services: [],
+        solo: false,
+      };
 
-  // IT Services
-  'Managed IT Support':['Small Business','Enterprise','Remote Support','On-Site Support','Break-Fix','Co-Managed IT'],
-  'Computer Repair':['PC Repair','Mac Repair','Phone & Tablet','Gaming Systems','Laptop Screen & Battery','Data Migration'],
-  'Network Setup':['Home Network','Business LAN / WAN','Wi-Fi & Access Points','Structured Cabling','VPN Setup','Firewall Config'],
-  'Cybersecurity Consulting':['Risk Assessment','Penetration Testing','Compliance (SOC2 / ISO)','Security Training','Incident Response','Dark Web Monitoring'],
-  'Web Development':['E-commerce Sites','Business Websites','Web Apps','WordPress','Shopify','Landing Pages','Web Hosting'],
-  'Software Consulting':['ERP & CRM Implementation','Custom Software','API Integration','Process Automation','Cloud Migration','Tech Stack Advisory'],
-  'Data Recovery':['Hard Drive Recovery','RAID Recovery','Phone & Tablet','SSD Recovery','Remote Recovery','Emergency Service'],
-  'IT Training':['End-User Training','Microsoft 365','Cybersecurity Awareness','Software Onboarding','IT Certification Prep','Corporate Training'],
-  'Cloud Services':['Microsoft Azure','Google Workspace','AWS','Cloud Migration','Backup & Disaster Recovery','SaaS Management'],
-  'VoIP & Phone Systems':['Business VoIP','Phone System Install','Call Center Setup','Unified Communications','On-Hold & Auto-Attendant'],
-  'CCTV & Security Systems':['Camera Installation','Access Control','Alarm Systems','Remote Monitoring','Commercial','Residential'],
-  'App Development':['iOS Apps','Android Apps','Cross-Platform','MVP & Prototyping','App Maintenance','UI/UX Design'],
-  'SEO & Digital Marketing':['Local SEO','Technical SEO','PPC Management','Social Media Ads','Content Strategy','Analytics & Reporting'],
-};
-const SERVICES={
-  auto:['Tire Rotation|45 min','Flat Repair|30 min','Seasonal Tire Swap|60 min','Oil Change|30 min','Brake Inspection|45 min','Wheel Alignment|60 min','Tire Balancing|30 min','Battery Replacement|20 min'],
-  beauty:['Haircut|45 min','Color Treatment|90 min','Blowout|30 min','Highlights|120 min','Trim|20 min','Deep Conditioning|45 min','Style & Finish|30 min','Perm|90 min'],
-  fitness:['Personal Training|60 min','Group Class|45 min','Fitness Assessment|30 min','Nutrition Consult|45 min','Recovery Session|30 min','Programme Design|60 min'],
-  trades:['Initial Assessment|60 min','Repair Service|120 min','Installation|180 min','Maintenance Check|45 min','Emergency Call|60 min','Quote Visit|30 min'],
-  prof:['Initial Consultation|60 min','Follow-up Meeting|30 min','Full Session|90 min','Project Kickoff|60 min','Strategy Review|45 min'],
-  food:['Table Reservation|120 min','Private Dining|180 min','Catering Consult|60 min','Event Booking|240 min','Tasting Session|90 min'],
-  fin:['Initial Consultation|60 min','Tax Preparation|90 min','Financial Review|45 min','Planning Session|60 min','Annual Review|90 min','Document Drop-off|15 min'],
-  it:['Remote Support|30 min','On-Site Visit|60 min','System Assessment|90 min','Device Repair|60 min','Network Audit|120 min','Training Session|60 min','Data Recovery|120 min','Security Review|90 min'],
-};
-const STEP_LABELS=['Category','Type','Specialty','Size','Services','Account'];
-let state={cat:null,catName:null,type:null,spec:null,size:null,plan:null,price:null,services:[],solo:false};
+      document.getElementById('catGrid').innerHTML = CATS.map(
+        (c) =>
+          `<div class="cat-card" data-cat="${c.id}" onclick="selectCat(this,'${c.id}','${c.name}')"><div class="cat-icon">${c.icon}</div><div class="cat-name">${c.name}</div></div>`
+      ).join('');
+      updateProgress(1);
+      updateSummary();
 
-document.getElementById('catGrid').innerHTML=CATS.map(c=>
-  `<div class="cat-card" data-cat="${c.id}" onclick="selectCat(this,'${c.id}','${c.name}')"><div class="cat-icon">${c.icon}</div><div class="cat-name">${c.name}</div></div>`
-).join('');
-updateProgress(1); updateSummary();
-
-function updateProgress(step){
-  for(let i=1;i<=6;i++){
-    const d=document.getElementById('pd'+i);
-    d.classList.remove('active','done');
-    const lbl=`<span class="prog-label">${STEP_LABELS[i-1]}</span>`;
-    if(i<step){d.classList.add('done');d.innerHTML='✓'+lbl;}
-    else if(i===step){d.classList.add('active');d.innerHTML=i+lbl;}
-    else{d.innerHTML=i+lbl;}
-    if(i<6)document.getElementById('pl'+i).classList.toggle('done',i<step);
-  }
-}
-function setBc(id,items){
-  document.getElementById(id).innerHTML=items.map((it,i)=>
-    i<items.length-1?`<span class="bc-item">${it}</span><span class="bc-sep">›</span>`:`<span class="bc-item muted">${it}</span>`
-  ).join('');
-}
-function show(id){
-  const el=document.getElementById(id);
-  requestAnimationFrame(()=>{el.classList.add('visible');setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'nearest'}),80);});
-}
-function hide(id){
-  const el=document.getElementById(id);
-  el.classList.remove('visible');el.style.height='0';el.style.overflow='hidden';el.style.opacity='0';
-}
-function goBack(to){
-  for(let s=to+1;s<=6;s++)hide('step'+s);
-  updateProgress(to);
-  document.getElementById('step'+to).scrollIntoView({behavior:'smooth',block:'nearest'});
-}
-function goToStep(n){
-  updateProgress(n);
-  for(let s=2;s<=n;s++)show('step'+s);
-}
-function selectCat(el,id,name){
-  document.querySelectorAll('.cat-card').forEach(c=>c.classList.remove('selected'));
-  el.classList.add('selected');
-  state.cat=id;state.catName=name;state.type=null;state.spec=null;
-  const types=TYPES[id]||[];
-  document.getElementById('typeGrid').innerHTML=types.map(t=>{
-    const has=SPECS[t]&&SPECS[t].length>0;
-    return `<div class="type-pill" onclick="selectType(this,'${t.replace(/'/g,"\\'")}')">
+      function updateProgress(step) {
+        for (let i = 1; i <= 6; i++) {
+          const d = document.getElementById('pd' + i);
+          d.classList.remove('active', 'done');
+          const lbl = `<span class="prog-label">${STEP_LABELS[i - 1]}</span>`;
+          if (i < step) {
+            d.classList.add('done');
+            d.innerHTML = '✓' + lbl;
+          } else if (i === step) {
+            d.classList.add('active');
+            d.innerHTML = i + lbl;
+          } else {
+            d.innerHTML = i + lbl;
+          }
+          if (i < 6) document.getElementById('pl' + i).classList.toggle('done', i < step);
+        }
+      }
+      function setBc(id, items) {
+        document.getElementById(id).innerHTML = items
+          .map((it, i) =>
+            i < items.length - 1
+              ? `<span class="bc-item">${it}</span><span class="bc-sep">›</span>`
+              : `<span class="bc-item muted">${it}</span>`
+          )
+          .join('');
+      }
+      function show(id) {
+        const el = document.getElementById(id);
+        requestAnimationFrame(() => {
+          el.classList.add('visible');
+          setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
+        });
+      }
+      function hide(id) {
+        const el = document.getElementById(id);
+        el.classList.remove('visible');
+        el.style.height = '0';
+        el.style.overflow = 'hidden';
+        el.style.opacity = '0';
+      }
+      function goBack(to) {
+        for (let s = to + 1; s <= 6; s++) hide('step' + s);
+        updateProgress(to);
+        document
+          .getElementById('step' + to)
+          .scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      function goToStep(n) {
+        updateProgress(n);
+        for (let s = 2; s <= n; s++) show('step' + s);
+      }
+      function selectCat(el, id, name) {
+        document.querySelectorAll('.cat-card').forEach((c) => c.classList.remove('selected'));
+        el.classList.add('selected');
+        state.cat = id;
+        state.catName = name;
+        state.type = null;
+        state.spec = null;
+        const types = TYPES[id] || [];
+        document.getElementById('typeGrid').innerHTML = types
+          .map((t) => {
+            const has = SPECS[t] && SPECS[t].length > 0;
+            return `<div class="type-pill" onclick="selectType(this,'${t.replace(/'/g, "\\'")}')">
       <div class="type-pill-left"><div class="type-check"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>${t}</div>
-      ${has?'<div class="has-sub">Specialties ›</div>':''}
+      ${has ? '<div class="has-sub">Specialties ›</div>' : ''}
     </div>`;
-  }).join('');
-  setBc('bc2',[name,'Business type']);
-  updateSummary();goToStep(2);
-}
-function selectType(el,type){
-  document.querySelectorAll('.type-pill').forEach(p=>p.classList.remove('selected'));
-  el.classList.add('selected');
-  state.type=type;state.spec=null;
-  setBc('bc3',[state.catName,type,'Specialty']);
-  const specs=SPECS[type];
-  if(specs&&specs.length){
-    document.getElementById('step3-sub').textContent=`Optional — helps us load the most relevant services for ${type}.`;
-    document.getElementById('specGrid').innerHTML=specs.map(s=>
-      `<div class="spec-chip" onclick="selectSpec(this,'${s.replace(/'/g,"\\'")}')">◈ ${s}</div>`
-    ).join('');
-    updateSummary();goToStep(3);
-  } else {
-    state.spec=null;populateServices();setBc('bc4',[state.catName,type,'Team size']);updateSummary();goToStep(4);
-  }
-}
-function selectSpec(el,spec){
-  document.querySelectorAll('.spec-chip').forEach(c=>c.classList.remove('selected'));
-  el.classList.add('selected');
-  state.spec=spec;populateServices();setBc('bc4',[state.catName,state.type,spec,'Team size']);updateSummary();goToStep(4);
-}
-function skipSpec(){state.spec=null;populateServices();setBc('bc4',[state.catName,state.type,'Team size']);updateSummary();goToStep(4);}
-function selectSize(el){
-  document.querySelectorAll('.size-card').forEach(c=>c.classList.remove('selected'));
-  el.classList.add('selected');
-  state.size=el.dataset.size;state.plan=el.dataset.plan;state.price=el.dataset.price;
-  state.solo = el.dataset.size === '1';
-  document.getElementById('planName').textContent=state.plan+' Plan';
-  document.getElementById('planPrice').innerHTML='$'+state.price+'<span>/mo</span>';
-  setBc('bc5',[state.catName,state.type||'','Services']);
-  updateSummary();goToStep(5);
-}
-function toggleSvc(el,svc){
-  el.classList.toggle('checked');
-  state.services=el.classList.contains('checked')?[...state.services,svc]:state.services.filter(s=>s!==svc);
-  updateSummary();
-}
-function populateServices(){
-  const svcs=SERVICES[state.cat]||[];
-  state.services=svcs.slice(0,4);
-  document.getElementById('servicesGrid').innerHTML=svcs.map((s,i)=>{
-    const[name,dur]=s.split('|');const chk=i<4;
-    return `<div class="svc-item${chk?' checked':''}" onclick="toggleSvc(this,'${s.replace(/'/g,"\\'")}')">
+          })
+          .join('');
+        setBc('bc2', [name, 'Business type']);
+        updateSummary();
+        goToStep(2);
+      }
+      function selectType(el, type) {
+        document.querySelectorAll('.type-pill').forEach((p) => p.classList.remove('selected'));
+        el.classList.add('selected');
+        state.type = type;
+        state.spec = null;
+        setBc('bc3', [state.catName, type, 'Specialty']);
+        const specs = SPECS[type];
+        if (specs && specs.length) {
+          document.getElementById('step3-sub').textContent =
+            `Optional — helps us load the most relevant services for ${type}.`;
+          document.getElementById('specGrid').innerHTML = specs
+            .map(
+              (s) =>
+                `<div class="spec-chip" onclick="selectSpec(this,'${s.replace(/'/g, "\\'")}')">◈ ${s}</div>`
+            )
+            .join('');
+          updateSummary();
+          goToStep(3);
+        } else {
+          state.spec = null;
+          populateServices();
+          setBc('bc4', [state.catName, type, 'Team size']);
+          updateSummary();
+          goToStep(4);
+        }
+      }
+      function selectSpec(el, spec) {
+        document.querySelectorAll('.spec-chip').forEach((c) => c.classList.remove('selected'));
+        el.classList.add('selected');
+        state.spec = spec;
+        populateServices();
+        setBc('bc4', [state.catName, state.type, spec, 'Team size']);
+        updateSummary();
+        goToStep(4);
+      }
+      function skipSpec() {
+        state.spec = null;
+        populateServices();
+        setBc('bc4', [state.catName, state.type, 'Team size']);
+        updateSummary();
+        goToStep(4);
+      }
+      function selectSize(el) {
+        document.querySelectorAll('.size-card').forEach((c) => c.classList.remove('selected'));
+        el.classList.add('selected');
+        state.size = el.dataset.size;
+        state.plan = el.dataset.plan;
+        state.price = el.dataset.price;
+        state.solo = el.dataset.size === '1';
+        document.getElementById('planName').textContent = state.plan + ' Plan';
+        document.getElementById('planPrice').innerHTML = '$' + state.price + '<span>/mo</span>';
+        setBc('bc5', [state.catName, state.type || '', 'Services']);
+        updateSummary();
+        goToStep(5);
+      }
+      function toggleSvc(el, svc) {
+        el.classList.toggle('checked');
+        state.services = el.classList.contains('checked')
+          ? [...state.services, svc]
+          : state.services.filter((s) => s !== svc);
+        updateSummary();
+      }
+      function populateServices() {
+        const svcs = SERVICES[state.cat] || [];
+        state.services = svcs.slice(0, 4);
+        document.getElementById('servicesGrid').innerHTML = svcs
+          .map((s, i) => {
+            const [name, dur] = s.split('|');
+            const chk = i < 4;
+            return `<div class="svc-item${chk ? ' checked' : ''}" onclick="toggleSvc(this,'${s.replace(/'/g, "\\'")}')">
       <div class="svc-checkbox"><svg viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg></div>
       <div><div class="svc-name">${name}</div><div class="svc-meta">${dur}</div></div>
     </div>`;
-  }).join('');
-}
-function updateSummary(){
-  const set=(row,val,cls,active)=>{
-    const r=document.getElementById('sum-'+row);const v=document.getElementById('sum-'+row+'-val');
-    r.classList.toggle('inactive',!active);r.classList.toggle('active',!!active);
-    if(v){v.textContent=val||'—';v.className='sum-val'+(cls?' '+cls:'');}
-  };
-  set('cat',state.catName,state.catName?'':'muted',true);
-  set('type',state.type,state.type?'':'muted',!!state.type);
-  set('spec',state.spec||'—',state.spec?'':'muted',!!state.type);
-  set('size',state.size?state.size+' staff':null,state.size?'':'muted',!!state.size);
-  // Update right panel trial badge for solo
-  if(state.solo){
-    document.querySelector('.trial-badge-title').textContent='Solo plan · 2-step setup';
-    document.querySelector('.trial-badge-sub').textContent='Just services and your hours. Live in under 3 minutes.';
-  } else {
-    document.querySelector('.trial-badge-title').textContent='14-day free trial';
-    document.querySelector('.trial-badge-sub').textContent='No credit card required. No setup fee. No per-call charges. Cancel anytime.';
-  }
-  set('plan',state.plan?state.plan+' · $'+state.price+'/mo':null,'blue',!!state.plan);
-  const sc=document.getElementById('sum-svcs');const sv=document.getElementById('sum-svcs-val');
-  sc.classList.toggle('inactive',!state.services.length);sc.classList.toggle('active',!!state.services.length);
-  sv.innerHTML=state.services.length
-    ?state.services.slice(0,4).map(s=>`<div class="sum-tag">${s.split('|')[0]}</div>`).join('')+(state.services.length>4?`<div class="sum-tag">+${state.services.length-4}</div>`:'')
-    :'<span class="sum-val muted">—</span>';
-}
+          })
+          .join('');
+      }
+      function updateSummary() {
+        const set = (row, val, cls, active) => {
+          const r = document.getElementById('sum-' + row);
+          const v = document.getElementById('sum-' + row + '-val');
+          r.classList.toggle('inactive', !active);
+          r.classList.toggle('active', !!active);
+          if (v) {
+            v.textContent = val || '—';
+            v.className = 'sum-val' + (cls ? ' ' + cls : '');
+          }
+        };
+        set('cat', state.catName, state.catName ? '' : 'muted', true);
+        set('type', state.type, state.type ? '' : 'muted', !!state.type);
+        set('spec', state.spec || '—', state.spec ? '' : 'muted', !!state.type);
+        set(
+          'size',
+          state.size ? state.size + ' staff' : null,
+          state.size ? '' : 'muted',
+          !!state.size
+        );
+        // Update right panel trial badge for solo
+        if (state.solo) {
+          document.querySelector('.trial-badge-title').textContent = 'Solo plan · 2-step setup';
+          document.querySelector('.trial-badge-sub').textContent =
+            'Just services and your hours. Live in under 3 minutes.';
+        } else {
+          document.querySelector('.trial-badge-title').textContent = '14-day free trial';
+          document.querySelector('.trial-badge-sub').textContent =
+            'No credit card required. No setup fee. No per-call charges. Cancel anytime.';
+        }
+        set(
+          'plan',
+          state.plan ? state.plan + ' · $' + state.price + '/mo' : null,
+          'blue',
+          !!state.plan
+        );
+        const sc = document.getElementById('sum-svcs');
+        const sv = document.getElementById('sum-svcs-val');
+        sc.classList.toggle('inactive', !state.services.length);
+        sc.classList.toggle('active', !!state.services.length);
+        sv.innerHTML = state.services.length
+          ? state.services
+              .slice(0, 4)
+              .map((s) => `<div class="sum-tag">${s.split('|')[0]}</div>`)
+              .join('') +
+            (state.services.length > 4
+              ? `<div class="sum-tag">+${state.services.length - 4}</div>`
+              : '')
+          : '<span class="sum-val muted">—</span>';
+      }
 
-function launchWizard(){
-  if(state.solo){
-    window.location.href='SoloWizard.html';
-  } else {
-    window.location.href='SetupWizard.html';
-  }
-}
-</script>
-</body>
+      function launchWizard() {
+        if (state.solo) {
+          window.location.href = 'SoloWizard.html';
+        } else {
+          window.location.href = 'SetupWizard.html';
+        }
+      }
+    </script>
+  </body>
 </html>

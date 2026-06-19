@@ -27,7 +27,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = (await response.json()) as { success?: boolean; tenant_id: string; user_name: string; token?: string; role?: string; error?: string };
+      const data = (await response.json()) as {
+        success?: boolean;
+        tenant_id: string;
+        user_name: string;
+        token?: string;
+        role?: string;
+        error?: string;
+      };
 
       if (response.ok && data.success) {
         localStorage.setItem('tenantId', data.tenant_id);

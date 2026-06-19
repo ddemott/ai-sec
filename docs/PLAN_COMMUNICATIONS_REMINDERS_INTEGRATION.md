@@ -13,17 +13,20 @@ The `communications/` and `reminders/` services were migrated from ai-secretary 
 ## Architecture Gap Analysis
 
 ### ai-sec Pattern (current codebase)
+
 ```
 Routes → withTenantClient(pool) → Direct SQL with RLS
 ```
 
 ### Migrated Services Pattern (from ai-secretary)
+
 ```
 Service → DatabaseService interface → Abstract DB operations
 Service → TenantConfigService → Tenant configuration
 ```
 
 ### Bridge Required
+
 Create adapter layer that implements the expected interfaces using ai-sec's database pool.
 
 ---
@@ -55,12 +58,14 @@ Create adapter layer that implements the expected interfaces using ai-sec's data
 ### Phase 2: Communications Service Integration
 
 - [ ] **TODO-2.1**: Install and configure nodemailer
+
   ```bash
   npm install nodemailer
   npm install -D @types/nodemailer
   ```
 
 - [ ] **TODO-2.2**: Add email environment variables
+
   ```
   EMAIL_USER=noreply@secretaryhq.com
   EMAIL_PASS=<app-password>
@@ -168,6 +173,7 @@ Week 4: Phase 4-5 (Testing & Hardening)
 ## File Changes Summary
 
 ### New Files
+
 ```
 src/database/index.ts                    # DatabaseService adapter
 src/database/reminderQueries.ts          # Reminder SQL queries
@@ -178,6 +184,7 @@ supabase/migrations/YYYYMMDD_reminder_schedules.sql
 ```
 
 ### Modified Files
+
 ```
 src/services/tenants/index.ts            # DB-backed implementation
 src/services/communications/emailService.ts  # Production SMTP config
@@ -189,6 +196,7 @@ package.json                             # Add nodemailer dependency
 ```
 
 ### Test Files
+
 ```
 src/services/communications/communications.test.ts  # Expand with implementation tests
 src/services/reminders/reminders.test.ts           # Expand with implementation tests
@@ -201,6 +209,7 @@ src/routes/reminders.test.ts                       # API route tests
 ## Dependencies
 
 ### npm packages needed
+
 ```json
 {
   "nodemailer": "^6.9.x",
@@ -209,6 +218,7 @@ src/routes/reminders.test.ts                       # API route tests
 ```
 
 ### Environment variables needed
+
 ```bash
 # Email (Gmail example)
 EMAIL_USER=noreply@secretaryhq.com
@@ -225,13 +235,13 @@ TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
 
 ## Risk Assessment
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Email delivery failures | High | Use reliable provider (SendGrid/SES), add retries |
-| SMS costs | Medium | Implement consent checking, usage caps |
-| Timezone bugs in reminders | High | Comprehensive timezone tests, use tenant timezone |
-| Database migration issues | Medium | Test migration on staging first |
-| Consent compliance (GDPR/TCPA) | High | Strict consent checking, audit trail |
+| Risk                           | Impact | Mitigation                                        |
+| ------------------------------ | ------ | ------------------------------------------------- |
+| Email delivery failures        | High   | Use reliable provider (SendGrid/SES), add retries |
+| SMS costs                      | Medium | Implement consent checking, usage caps            |
+| Timezone bugs in reminders     | High   | Comprehensive timezone tests, use tenant timezone |
+| Database migration issues      | Medium | Test migration on staging first                   |
+| Consent compliance (GDPR/TCPA) | High   | Strict consent checking, audit trail              |
 
 ---
 

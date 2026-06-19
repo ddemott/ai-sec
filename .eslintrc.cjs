@@ -26,10 +26,7 @@ module.exports = {
     sourceType: 'module',
   },
   plugins: ['@typescript-eslint'],
-  extends: [
-    'eslint:recommended',
-    'plugin:@typescript-eslint/recommended-type-checked',
-  ],
+  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended-type-checked'],
   ignorePatterns: [
     'dist/',
     'node_modules/',
@@ -63,28 +60,37 @@ module.exports = {
     // CI. Promote to 'error' per family once the count hits zero — same
     // play as the no-explicit-any cleanup.
     '@typescript-eslint/no-floating-promises': 'error',
-    '@typescript-eslint/no-misused-promises': ['error', {
-      // Allow void-returning async handlers in places that expect
-      // void callbacks (e.g., Fastify route handlers — handled via
-      // `withHandler`, so the floating-promise check is enough).
-      checksVoidReturn: false,
-    }],
+    '@typescript-eslint/no-misused-promises': [
+      'error',
+      {
+        // Allow void-returning async handlers in places that expect
+        // void callbacks (e.g., Fastify route handlers — handled via
+        // `withHandler`, so the floating-promise check is enough).
+        checksVoidReturn: false,
+      },
+    ],
     '@typescript-eslint/await-thenable': 'error',
     '@typescript-eslint/require-await': 'error',
     '@typescript-eslint/restrict-template-expressions': 'error',
     '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     '@typescript-eslint/no-base-to-string': 'error',
-    '@typescript-eslint/no-unused-vars': ['error', {
-      argsIgnorePattern: '^_',
-      varsIgnorePattern: '^_',
-      // Allow unused destructured siblings — common when extracting a
-      // single field: `const { foo, ...rest } = obj`.
-      ignoreRestSiblings: true,
-    }],
-    '@typescript-eslint/consistent-type-imports': ['error', {
-      prefer: 'type-imports',
-      fixStyle: 'inline-type-imports',
-    }],
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        // Allow unused destructured siblings — common when extracting a
+        // single field: `const { foo, ...rest } = obj`.
+        ignoreRestSiblings: true,
+      },
+    ],
+    '@typescript-eslint/consistent-type-imports': [
+      'error',
+      {
+        prefer: 'type-imports',
+        fixStyle: 'inline-type-imports',
+      },
+    ],
     // `require()` in .cjs config files is normal; turn off the rule
     // entirely rather than try to scope it per-file.
     '@typescript-eslint/no-var-requires': 'off',
@@ -117,4 +123,4 @@ module.exports = {
       },
     },
   ],
-}
+};

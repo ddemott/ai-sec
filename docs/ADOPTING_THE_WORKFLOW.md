@@ -5,6 +5,7 @@
 If someone sent you here (especially from a sibling/parallel project like `../ai-sec`), follow the instructions in this file exactly. You should not need any additional files or explanations from the person who pointed you at it.
 
 The goal is to give your project the same battle-tested system for:
+
 - Consistent feature branching
 - Automated quality gates before committing
 - Documentation hygiene
@@ -38,6 +39,7 @@ You can also use the always-up-to-date folders:
 After unzipping or copying a folder, you will have a `portable-workflow-kit/` directory ready to use.
 
 **Also copy this document** if you want it locally:
+
 ```bash
 cp ../ai-sec/docs/ADOPTING_THE_WORKFLOW.md .
 ```

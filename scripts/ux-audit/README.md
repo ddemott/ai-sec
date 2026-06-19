@@ -38,7 +38,7 @@ Edit `.claude/commands/ux-audit.md`. Changes take effect the next time you run `
 ## Caveats
 
 - **Static analysis only.** Visual issues that need real rendering (cramped spacing, alignment off by a pixel, real responsive behavior on iPhone) are inferred from code, not observed.
-- **No analytics.** The audit can't tell you what's slow or confusing in practice, only what *looks* problematic in the code.
+- **No analytics.** The audit can't tell you what's slow or confusing in practice, only what _looks_ problematic in the code.
 - **Reports are committed.** Each timestamped run is a durable artifact. If you regenerate often and want to prune, delete old folders by date.
 
 ## Why not a Managed Agent?

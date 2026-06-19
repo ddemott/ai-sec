@@ -32,7 +32,7 @@ export default function DemoPage() {
           headers: { 'Content-Type': 'application/json' },
         });
 
-        const data: DemoStartResponse = await res.json() as DemoStartResponse;
+        const data: DemoStartResponse = (await res.json()) as DemoStartResponse;
 
         if (cancelled) return;
 

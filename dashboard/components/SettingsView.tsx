@@ -86,8 +86,8 @@ export default function SettingsView() {
         <ShieldCheck className="w-10 h-10 mb-4" style={{ color: 'var(--text-muted)' }} />
         <h1 className="text-2xl font-display mb-2">Settings moved</h1>
         <p style={{ color: 'var(--text-secondary)', maxWidth: '28rem' }}>
-          Business configuration — services, team, hours, calendar &amp; CRM connections — now
-          lives under the <strong>Setup</strong> tab in the main navigation.
+          Business configuration — services, team, hours, calendar &amp; CRM connections — now lives
+          under the <strong>Setup</strong> tab in the main navigation.
         </p>
       </div>
     );

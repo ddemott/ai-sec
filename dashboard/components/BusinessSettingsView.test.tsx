@@ -338,7 +338,9 @@ describe('BusinessSettingsView', () => {
       mockServices = [];
       render(<BusinessSettingsView />);
       await waitFor(() => {
-        expect(screen.getByText(/No services yet — tap to add what you offer/i)).toBeInTheDocument();
+        expect(
+          screen.getByText(/No services yet — tap to add what you offer/i)
+        ).toBeInTheDocument();
       });
     });
   });
@@ -412,7 +414,6 @@ describe('BusinessSettingsView', () => {
         expect(screen.queryByText('My Availability')).not.toBeInTheDocument();
       });
     });
-
 
     test('shows shifts loading state', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 });

@@ -44,9 +44,7 @@ interface AppointmentDetailPanelProps {
   services: { service_id: string; name: string; duration_minutes: number }[];
   vocab: { booking_label: string; resource_label: string; employee_label: string };
   getServiceBaseTimes: (appointment: Appointment) => { start: Date; end: Date };
-  findCustomerById: (
-    id: string
-  ) =>
+  findCustomerById: (id: string) =>
     | {
         customer_id: string;
         name: string;

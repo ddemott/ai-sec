@@ -19,10 +19,7 @@ module.exports = {
     sourceType: 'module',
   },
   plugins: ['@typescript-eslint'],
-  extends: [
-    'eslint:recommended',
-    'plugin:@typescript-eslint/recommended-type-checked',
-  ],
+  extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended-type-checked'],
   ignorePatterns: [
     'dist/',
     'node_modules/',
@@ -47,15 +44,21 @@ module.exports = {
     '@typescript-eslint/restrict-template-expressions': 'error',
     '@typescript-eslint/no-unnecessary-type-assertion': 'error',
     '@typescript-eslint/no-base-to-string': 'error',
-    '@typescript-eslint/no-unused-vars': ['error', {
-      argsIgnorePattern: '^_',
-      varsIgnorePattern: '^_',
-      ignoreRestSiblings: true,
-    }],
-    '@typescript-eslint/consistent-type-imports': ['error', {
-      prefer: 'type-imports',
-      fixStyle: 'inline-type-imports',
-    }],
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        ignoreRestSiblings: true,
+      },
+    ],
+    '@typescript-eslint/consistent-type-imports': [
+      'error',
+      {
+        prefer: 'type-imports',
+        fixStyle: 'inline-type-imports',
+      },
+    ],
     '@typescript-eslint/no-var-requires': 'off',
     '@typescript-eslint/unbound-method': 'warn',
   },
@@ -74,4 +77,4 @@ module.exports = {
       },
     },
   ],
-}
+};

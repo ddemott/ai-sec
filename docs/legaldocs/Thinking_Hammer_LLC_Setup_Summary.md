@@ -2,16 +2,16 @@
 
 > **Not legal or tax advice.** This is a planning summary capturing decisions and open items for the formation and launch of Thinking Hammer LLC (entity for AI Secretary). Items flagged for **counsel** or **CPA** should be confirmed with a licensed professional before you rely on them.
 
-*Prepared: June 2026 · Jurisdiction: Illinois*
+_Prepared: June 2026 · Jurisdiction: Illinois_
 
 ---
 
 ## 1. Entity decision
 
 - **Entity:** Thinking Hammer LLC — a **standard** (not series) LLC, formed in Illinois.
-- **Why standard, not series:** In Illinois the series structure costs *more* up front ($550 vs $450 for three entities) and the same to maintain ($75 + $50/series annually), so it offers no cost advantage here. It also creates friction against the goal of selling products individually — acquirers and investors prefer clean standalone entities, inter-series liability is less court-tested, and out-of-state recognition is inconsistent. Each future product gets its own separate standard LLC.
+- **Why standard, not series:** In Illinois the series structure costs _more_ up front ($550 vs $450 for three entities) and the same to maintain ($75 + $50/series annually), so it offers no cost advantage here. It also creates friction against the goal of selling products individually — acquirers and investors prefer clean standalone entities, inter-series liability is less court-tested, and out-of-state recognition is inconsistent. Each future product gets its own separate standard LLC.
 - **Management:** member-managed (solo owner).
-- **Registered agent:** self, at 331 Ridley St, North Aurora, IL 60542. *(Note: this address becomes public record — a commercial registered agent ~$100–150/yr is the privacy alternative if that matters.)*
+- **Registered agent:** self, at 331 Ridley St, North Aurora, IL 60542. _(Note: this address becomes public record — a commercial registered agent ~$100–150/yr is the privacy alternative if that matters.)_
 
 ---
 
@@ -19,9 +19,9 @@
 
 1. **File Articles of Organization (Form LLC-5.5)** through the Illinois SOS online portal (ilsos.gov → Business Services → LLC). Select **"standard."** Fee **$150**. Keep purpose as the default "all lawful business" and add no custom provisions — a specific purpose or custom provisions forces a slower mail filing. Duration: leave perpetual.
    - Processing ~5–10 business days online; +$100 for 1–2 day expedited.
-2. **BOI / FinCEN: nothing to file.** Under the March 2025 interim rule (still in effect), domestic US entities are exempt from beneficial-ownership reporting. *(Interim rule — re-check before filing in case it flips.)*
+2. **BOI / FinCEN: nothing to file.** Under the March 2025 interim rule (still in effect), domestic US entities are exempt from beneficial-ownership reporting. _(Interim rule — re-check before filing in case it flips.)_
 3. **Get an EIN** from the IRS — free, instant, at irs.gov. Don't pay a third-party site.
-4. **Sign the Operating Agreement** (companion .docx) *after* the Articles are approved, since it ratifies the filing. Internal document — never filed with the state or anyone else; produced only when a bank/lawyer/investor/court asks.
+4. **Sign the Operating Agreement** (companion .docx) _after_ the Articles are approved, since it ratifies the filing. Internal document — never filed with the state or anyone else; produced only when a bank/lawyer/investor/court asks.
 5. **Open a dedicated business bank account.** Non-negotiable: commingling personal and business funds is the fastest way to pierce the liability shield. Keep funds fully separate from day one.
 6. **Bookkeeping from day one** (QuickBooks/Xero) so the CPA inherits clean books.
 
@@ -57,7 +57,7 @@ This is where a product that speaks to the public for other businesses is most e
 - **Terms of Service + Privacy Policy that limit liability** — disclaim responsibility for AI errors, cap damages, disclose data handling, pass through vendor (Telnyx/LiveKit/LLM) outages. The other half of the E&O shield.
 - **Call-recording consent** — Illinois is an **all-party consent** state, and callers are nationwide, so the strictest applicable state governs. Recording/transcription and routing audio through third-party vendors can implicate eavesdropping/wiretap law. See companion consent doc.
 - **Illinois BIPA** — voiceprints can be biometric identifiers requiring **written** consent + retention policy, with per-violation statutory damages and aggressive litigation. Keep any model-training to **de-identified text transcripts only** to stay clear of it. **[Counsel]**
-- **TCPA / outbound calling** — attaches only if the agent calls *out* (confirmations, callbacks). Inbound-only is much lower risk.
+- **TCPA / outbound calling** — attaches only if the agent calls _out_ (confirmations, callbacks). Inbound-only is much lower risk.
 - **Data Processing Agreements (DPAs)** — business customers (esp. higher tiers) may require a signed DPA; you're a processor of their callers' data.
 - **Local:** check for any North Aurora / Kane County home-business license; register with IDOR when you start collecting IL sales tax.
 
@@ -68,7 +68,7 @@ This is where a product that speaks to the public for other businesses is most e
 Full language is in the companion doc **"AI Secretary — Consent & Privacy Language."** Key decisions captured there:
 
 - **Recommended launch posture:** record **off**, training **off.** A spoken AI disclosure + the required core consent checkbox is a complete, defensible setup for a working receptionist, with the fewest legal rocks.
-- Spoken line discloses the AI and (if recording) says **"quality and service,"** never "AI training." Recording must start only *after* the line plays.
+- Spoken line discloses the AI and (if recording) says **"quality and service,"** never "AI training." Recording must start only _after_ the line plays.
 - Consents are **unbundled** (core required / recording optional / training optional, opt-in, default off) — granular opt-in holds up better than blanket consent.
 - The business customer carries the **caller-notification obligation**; Thinking Hammer supplies the **disclosure mechanism**. Correct processor split.
 
@@ -86,7 +86,7 @@ Full language is in the companion doc **"AI Secretary — Consent & Privacy Lang
 
 ## 8. Advisors & what each covers
 
-- **CPA** (tax layer): S-corp timing & reasonable salary, quarterly estimates, §174 treatment, sales-tax judgment, clean books. *Note: a consulting-focused CPA can handle all of this; the only SaaS-specific gap is sales-tax nexus, which is increasingly handled by software (Stripe Tax/Anrok) anyway.*
+- **CPA** (tax layer): S-corp timing & reasonable salary, quarterly estimates, §174 treatment, sales-tax judgment, clean books. _Note: a consulting-focused CPA can handle all of this; the only SaaS-specific gap is sales-tax nexus, which is increasingly handled by software (Stripe Tax/Anrok) anyway._
 - **Tech/startup attorney** (liability layer): ToS + Privacy Policy, E&O/insurance posture, recording-consent wording, BIPA, DPA, final consent language.
 
 ---
@@ -99,4 +99,4 @@ Full language is in the companion doc **"AI Secretary — Consent & Privacy Lang
 
 ---
 
-*This summary reflects general information as of June 2026 and decisions made during planning. It is a starting map, not a substitute for the CPA and attorney passes noted throughout.*
+_This summary reflects general information as of June 2026 and decisions made during planning. It is a starting map, not a substitute for the CPA and attorney passes noted throughout._

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -23,15 +23,9 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       // Source code only — exclude tests, vendored, and runtime-only files
       include: ['src/**', 'shared/**'],
-      exclude: [
-        '**/*.test.ts',
-        '**/test-utils*.ts',
-        'src/types/**',
-        'dist/**',
-        'node_modules/**',
-      ],
+      exclude: ['**/*.test.ts', '**/test-utils*.ts', 'src/types/**', 'dist/**', 'node_modules/**'],
       // Output to coverage_data/ (already in .gitignore)
       reportsDirectory: './coverage_data',
     },
   },
-})
+});

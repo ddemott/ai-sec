@@ -1,9 +1,11 @@
 # SecretaryHQ Dashboard — UI/UX Design Brief
+
 **Last updated:** 2026-05-27 (pointers & cross-references refreshed during documentation unification; core content from March 2026 design session)
 
 > **Role of this file (vs. `DESIGN_HANDOFF.md`):** this is the **living** design brief — update it as design philosophy evolves, new components ship, or interaction patterns get established. For the **frozen** record of the original 2026-03-24 design session decisions, see [`DESIGN_HANDOFF.md`](DESIGN_HANDOFF.md).
 
 ## Purpose
+
 This document captures the current state of the dashboard UI, its problems, and all design decisions. The goal is to make the dashboard intuitive for service business owners (tire shops, salons, auto shops, spas, trades, fitness) who are not technical users.
 
 > **Related:** an earlier component-level UX audit (231 lines, 2026-04-20) is archived at [`sessions/2026-04-20-ux-review.md`](sessions/2026-04-20-ux-review.md). Most items have since been addressed in the commit `f9ffa8e` UX/a11y batch — see `docs/BUGS.md`.
@@ -61,6 +63,7 @@ Bebas Neue only appears in: page titles, stat numbers, the logo, section heading
 **Custom themes (future):** Users will eventually be able to create a custom theme — pick a base, adjust accent color to match their brand, name it, save it. Don't build now, but don't architect against it. The CSS variable structure already supports it.
 
 Each theme defines:
+
 ```css
 --bg-base, --bg-surface, --bg-raised, --bg-card
 --accent, --accent-soft, --accent-muted
@@ -79,6 +82,7 @@ Each theme defines:
 **Decision:** Do NOT restructure navigation. Keep the existing Front Desk / Back Office two-tab layout with all current sub-views intact. Apply the new dark sidebar visual style on top.
 
 **Sidebar visual spec:**
+
 - Background: `var(--bg-surface)`
 - Section labels: `10px, font-weight 600, letter-spacing 0.12em, uppercase, color var(--text-muted)`
 - Nav items default: `13px, color var(--text-secondary)`
@@ -95,6 +99,7 @@ The sidebar bottom shows today's appointment count and staff count as a summary.
 ## Current Dashboard Architecture
 
 ### Tech Stack
+
 - **Framework**: Next.js 14 (App Router) + React 18
 - **Styling**: Tailwind CSS 3.4
 - **Icons**: Lucide React
@@ -136,6 +141,7 @@ Desktop: Two primary tabs at top level
 Staff names must remain visible at all times as the user scrolls horizontally.
 
 **Implementation:** Two separate scroll containers:
+
 - **Left panel (160px):** Staff names only. Fixed, no horizontal scroll. Syncs vertically with appointment rows.
 - **Right panel:** Hour header + appointment rows. Scrolls both horizontally and vertically.
 - JS scroll sync: right panel horizontal → header syncs. Right panel vertical → left panel syncs.
@@ -161,6 +167,7 @@ Closed hours (outside business hours) get `background: rgba(0,0,0,0.28)` on both
 Clicking a staff member's name opens a compact read-only card. **Read-only. No editing.**
 
 **Exact layout:**
+
 ```
 [Avatar]  Name
           Role
@@ -193,6 +200,7 @@ Add a toggle at the top of the scheduler: **Hours | Skills**
 **Label:** Sits at the left edge of the bar. Readable when wide enough, gracefully disappears (color only) at small zoom.
 
 **Example:**
+
 ```
 Mike    [Oil Change      8am ————————————— 4pm]
         [Tire Rotation   8am ————————————— 4pm]
@@ -208,6 +216,7 @@ Carlos  [Oil Change      8am ———————— 3pm     ]
 Staff rows are draggable. Drag handle on the left edge of the name cell (grip icon, same as tenant reorder in admin panel).
 
 **Save behavior:**
+
 - Save button appears in header when unsaved changes exist ("Save Order" + "Discard")
 - Save clicked → persists, same order next visit
 - Discard clicked → reverts immediately, no prompt
@@ -248,6 +257,7 @@ Reskin to match dark theme. Do not restructure.
 **Old version was wrong.** It showed: appointment count, estimated revenue, avg booking value, bar charts of services and staff. A business owner would look at it and say "this is useless to me." Numbers without context, no action implied.
 
 **Philosophy:**
+
 > We give them numbers so they can look at their own business and figure it out. We surface patterns that make them ask WHY. We are not answering their questions — we are holding a mirror.
 
 **Note on total calls:** This is NOT a vanity metric. Total calls over time reflects whether marketing is working. You run a Facebook ad in March, calls spike — that's the connection. Show as a trend over time, not just today's number.
@@ -284,6 +294,7 @@ Which days have the most no-shows? Color coded. Patterns here often have meaning
 ### Staff Request Tracking (Future Note)
 
 Staff requests ("I want Suzy") currently live in free-text notes. Can't be reliably parsed. To track properly we need:
+
 - Structured field on booking: "Requested staff member"
 - AI to recognize preference during call and capture it explicitly
 
@@ -293,26 +304,27 @@ This is valuable especially for salons (80% of calls asking for one stylist = bu
 
 ## Current Views (12 components)
 
-| Tab ID | Component | What it does |
-|--------|-----------|-------------|
-| `all-businesses` | SuperAdminDashboard | Multi-tenant management (super-admin only) |
-| `appointments` | AppointmentView | Scheduler — REDESIGN per spec above |
-| `crm` | CRMView | Customer list + detail pane (contact info, appointments, call history, notes, search) |
-| `staff` | EmployeeManagementView | Employee list with add/edit/delete |
-| `staff-shifts` | ShiftManagementView | Employee shift scheduling |
-| `service-catalog` | ServiceAssignmentView | Service definitions with duration, price, employee/resource assignments |
-| `manage-resources` | ResourceManagerView | Physical resource management (bays, trucks, chairs) |
-| `skill-matrix` | SkillMatrixView | Grid matching employee skills to resource capabilities |
-| `knowledge-base` | KnowledgeBaseView | RAG document upload and management |
-| `ai-tuning` | AIConfigView | System prompt, voice ID, first message, persona settings |
-| `analytics` | AnalyticsView | REBUILD per spec above |
-| `settings` | SettingsView | Calendar sync, tenant configuration |
+| Tab ID             | Component              | What it does                                                                          |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------------------- |
+| `all-businesses`   | SuperAdminDashboard    | Multi-tenant management (super-admin only)                                            |
+| `appointments`     | AppointmentView        | Scheduler — REDESIGN per spec above                                                   |
+| `crm`              | CRMView                | Customer list + detail pane (contact info, appointments, call history, notes, search) |
+| `staff`            | EmployeeManagementView | Employee list with add/edit/delete                                                    |
+| `staff-shifts`     | ShiftManagementView    | Employee shift scheduling                                                             |
+| `service-catalog`  | ServiceAssignmentView  | Service definitions with duration, price, employee/resource assignments               |
+| `manage-resources` | ResourceManagerView    | Physical resource management (bays, trucks, chairs)                                   |
+| `skill-matrix`     | SkillMatrixView        | Grid matching employee skills to resource capabilities                                |
+| `knowledge-base`   | KnowledgeBaseView      | RAG document upload and management                                                    |
+| `ai-tuning`        | AIConfigView           | System prompt, voice ID, first message, persona settings                              |
+| `analytics`        | AnalyticsView          | REBUILD per spec above                                                                |
+| `settings`         | SettingsView           | Calendar sync, tenant configuration                                                   |
 
 ---
 
 ## Vocabulary System
 
 UI labels adapt per business type via 3-tier fallback:
+
 1. Tenant override (owner changed "Bay" to "Stall")
 2. Template default (auto-shop template says "Bay")
 3. Hardcoded fallback ("Resource")
@@ -325,34 +337,34 @@ UI labels adapt per business type via 3-tier fallback:
 
 ## Implementation Scope
 
-| # | Item | Type | Status | Notes |
-|---|------|------|--------|-------|
-| 1 | Restructure sidebar from 12 → 5 grouped sections | UI/UX | **Done** | |
-| 2 | Update tab routing logic | Coding | **Done** | |
-| 3 | MyTeamView composite (Employees + Shifts + Skills) | Both | **Done** | |
-| 4 | MyBusinessView composite (Services + Resources + Knowledge) | Both | **Done** | |
-| 5 | AIInsightsView composite (AI Persona + Analytics) | Both | **Done** | |
-| 6 | Mobile bottom nav (5 items) | UI/UX | **Done** | |
-| 7 | Public sign-up page | Both | Missing | |
-| 8 | Public registration API | Coding | **Done** | |
-| 9 | Business type picker (card grid) | UI/UX | Missing | |
-| 10 | Onboarding wizard (6-step) | Both | Missing | |
-| 11 | `useVocabulary` hook + React Context | Coding | **Done** | 3-tier fallback |
-| 12 | Replace hardcoded labels with vocabulary | Both | **Done** | 21 components wired |
-| — | Google Calendar OAuth + sync | Both | **Done** | Real OAuth, auto-sync on mutations |
-| 13 | Settings: "Customize Labels" section | Both | Missing | |
-| 14 | Dashboard home / quick actions landing | UI/UX | Missing | |
-| 15 | Contextual navigation (CRM → Calendar links) | Both | Missing | |
-| 16 | Empty states with helpful guidance | UI/UX | Missing | |
-| **17** | **Apply dark sidebar visual style to real app** | **UI/UX** | **Done** | All components use CSS vars, all themes dark |
-| **18** | **Rebuild theme system with font variables** | **Coding** | **Done** | `--font-display`/`--font-body` in all 8 themes |
-| **19** | **Flip scheduler: rows=staff, columns=hours** | **Both** | **Done** | NewSchedulerView: 24hr, split-panel scroll sync |
-| **20** | **Staff quick profile card** | **UI/UX** | **Done** | Read-only, anchored, outside-click dismiss, skills list |
-| **21** | **Skills toggle in scheduler** | **Both** | **Done** | Hours (shift bar + appts) / Skills (stacked skill bars) |
-| **22** | **Drag to reorder staff rows** | **Both** | **Done** | Grip handles, save/discard, persists to localStorage |
-| **23** | **Rebuild analytics — 6 real metrics** | **Both** | **Done** | 3 active (booking data), 3 Phase 2 (Vapi) |
-| **24** | **Remove Coverage Map from navigation** | **Both** | **Done** | ServiceCoverageView.tsx deleted, zero references |
-| **25** | **Theme switcher → dropdown** | **UI/UX** | **Done** | `<select>` dropdown in OutlookLayout topbar |
+| #      | Item                                                        | Type       | Status   | Notes                                                   |
+| ------ | ----------------------------------------------------------- | ---------- | -------- | ------------------------------------------------------- |
+| 1      | Restructure sidebar from 12 → 5 grouped sections            | UI/UX      | **Done** |                                                         |
+| 2      | Update tab routing logic                                    | Coding     | **Done** |                                                         |
+| 3      | MyTeamView composite (Employees + Shifts + Skills)          | Both       | **Done** |                                                         |
+| 4      | MyBusinessView composite (Services + Resources + Knowledge) | Both       | **Done** |                                                         |
+| 5      | AIInsightsView composite (AI Persona + Analytics)           | Both       | **Done** |                                                         |
+| 6      | Mobile bottom nav (5 items)                                 | UI/UX      | **Done** |                                                         |
+| 7      | Public sign-up page                                         | Both       | Missing  |                                                         |
+| 8      | Public registration API                                     | Coding     | **Done** |                                                         |
+| 9      | Business type picker (card grid)                            | UI/UX      | Missing  |                                                         |
+| 10     | Onboarding wizard (6-step)                                  | Both       | Missing  |                                                         |
+| 11     | `useVocabulary` hook + React Context                        | Coding     | **Done** | 3-tier fallback                                         |
+| 12     | Replace hardcoded labels with vocabulary                    | Both       | **Done** | 21 components wired                                     |
+| —      | Google Calendar OAuth + sync                                | Both       | **Done** | Real OAuth, auto-sync on mutations                      |
+| 13     | Settings: "Customize Labels" section                        | Both       | Missing  |                                                         |
+| 14     | Dashboard home / quick actions landing                      | UI/UX      | Missing  |                                                         |
+| 15     | Contextual navigation (CRM → Calendar links)                | Both       | Missing  |                                                         |
+| 16     | Empty states with helpful guidance                          | UI/UX      | Missing  |                                                         |
+| **17** | **Apply dark sidebar visual style to real app**             | **UI/UX**  | **Done** | All components use CSS vars, all themes dark            |
+| **18** | **Rebuild theme system with font variables**                | **Coding** | **Done** | `--font-display`/`--font-body` in all 8 themes          |
+| **19** | **Flip scheduler: rows=staff, columns=hours**               | **Both**   | **Done** | NewSchedulerView: 24hr, split-panel scroll sync         |
+| **20** | **Staff quick profile card**                                | **UI/UX**  | **Done** | Read-only, anchored, outside-click dismiss, skills list |
+| **21** | **Skills toggle in scheduler**                              | **Both**   | **Done** | Hours (shift bar + appts) / Skills (stacked skill bars) |
+| **22** | **Drag to reorder staff rows**                              | **Both**   | **Done** | Grip handles, save/discard, persists to localStorage    |
+| **23** | **Rebuild analytics — 6 real metrics**                      | **Both**   | **Done** | 3 active (booking data), 3 Phase 2 (Vapi)               |
+| **24** | **Remove Coverage Map from navigation**                     | **Both**   | **Done** | ServiceCoverageView.tsx deleted, zero references        |
+| **25** | **Theme switcher → dropdown**                               | **UI/UX**  | **Done** | `<select>` dropdown in OutlookLayout topbar             |
 
 **Bold rows** = new work items from March 24, 2026 design session.
 
@@ -372,11 +384,13 @@ UI labels adapt per business type via 3-tier fallback:
 ## April 2026 UI/UX Audit
 
 A comprehensive code review audit was conducted on April 9-10, 2026. 35 issues were identified and all resolved:
+
 - 7 Critical (validation, error feedback, crash prevention)
 - 13 High (accessibility, confirmations, mobile, theming)
 - 15 Medium (polish, consistency, navigation)
 
 Key new components added:
+
 - `ConfirmModal` + `useConfirm()` hook — replaces all browser `confirm()` calls
 - Toast improvements — dismissable, duration by type, stacking limit
 - `TimeInput` — label association via useId(), error prop, theme-aware colorScheme

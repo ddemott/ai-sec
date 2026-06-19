@@ -529,11 +529,7 @@ export function CustomerDetailPanel({
                       })}
                     </div>
                   ) : (
-                    <EmptyState
-                      icon={History}
-                      title="No past appointments"
-                      variant="compact"
-                    />
+                    <EmptyState icon={History} title="No past appointments" variant="compact" />
                   )}
                 </div>
 
@@ -587,11 +583,7 @@ export function CustomerDetailPanel({
                         </div>
                       ))
                     ) : (
-                      <EmptyState
-                        icon={Phone}
-                        title="No call history"
-                        variant="compact"
-                      />
+                      <EmptyState icon={Phone} title="No call history" variant="compact" />
                     )}
                   </div>
                 </div>

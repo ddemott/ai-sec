@@ -67,7 +67,11 @@ export function AppointmentListSidebar({
           </div>
         )}
         {loading && appointments.length === 0 && (
-          <div className="flex flex-col gap-2 p-4" aria-label="Loading appointments" aria-busy="true">
+          <div
+            className="flex flex-col gap-2 p-4"
+            aria-label="Loading appointments"
+            aria-busy="true"
+          >
             {[0, 1, 2].map((i) => (
               <div
                 key={i}

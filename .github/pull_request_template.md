@@ -9,7 +9,7 @@
 - [ ] Refactor / cleanup (no behavior change)
 - [ ] Documentation only
 - [ ] Test addition / improvement
-- [ ] Other: __________
+- [ ] Other: \***\*\_\_\*\***
 
 ## Related Work
 
@@ -23,14 +23,17 @@
 ## Testing
 
 **Unit / Integration tests**
+
 - [ ] All relevant unit tests pass (`npm test` or targeted vitest)
 - [ ] New or modified tests include 5W comments (WHO/WHAT/WHEN/WHERE/WHY)
 
 **E2E / Live QA (when applicable)**
+
 - [ ] Relevant Playwright tests run and pass (use `--grep` for targeted execution)
 - [ ] Live QA (`scripts/qa-live-test.py`) executed if voice/agent flows are involved
 
 **Manual / Local verification**
+
 - [ ] Ran locally with `npm start` + relevant flows
 - [ ] Build succeeds (`npm run build` + dashboard build)
 - [ ] Quality gates pass (`npm run checks`)

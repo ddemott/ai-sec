@@ -17,9 +17,9 @@
 }
 
 /* Match datetime-local / date / time picker icons to input text color */
-input[type="datetime-local"]::-webkit-calendar-picker-indicator,
-input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="time"]::-webkit-calendar-picker-indicator {
+input[type='datetime-local']::-webkit-calendar-picker-indicator,
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
 }
 
@@ -37,23 +37,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
    AA 4.5:1 on --bg-base. UX audit #9 — old value measured ~3.8:1
    against #090E1A. Same shape across rose / forest / midnight below. */
 :root,
-[data-theme="navy"] {
-  --bg-base: #090E1A;
-  --bg-surface: #0D1525;
-  --bg-raised: #111C30;
-  --bg-card: #0F1A2E;
-  --accent: #2563EB;
-  --accent-soft: #60A5FA;
+[data-theme='navy'] {
+  --bg-base: #090e1a;
+  --bg-surface: #0d1525;
+  --bg-raised: #111c30;
+  --bg-card: #0f1a2e;
+  --accent: #2563eb;
+  --accent-soft: #60a5fa;
   --accent-muted: rgba(37, 99, 235, 0.12);
   --accent-glow: rgba(37, 99, 235, 0.25);
-  --text-primary: #E8F0FF;
-  --text-secondary: #7A90B8;
-  --text-muted: #6B7F9E;
+  --text-primary: #e8f0ff;
+  --text-secondary: #7a90b8;
+  --text-muted: #6b7f9e;
   --border: rgba(37, 99, 235, 0.18);
   --border-soft: rgba(255, 255, 255, 0.06);
-  --green: #34D399;
-  --red: #F87171;
-  --yellow: #FCD34D;
+  --green: #34d399;
+  --red: #f87171;
+  --yellow: #fcd34d;
   --font-display: var(--font-bebas-neue), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   /* Legacy mappings for existing components */
@@ -62,7 +62,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --surface-elevated: var(--bg-raised);
   --surface-selected: var(--bg-raised);
   --primary: var(--accent);
-  --primary-hover: #1D4ED8;
+  --primary-hover: #1d4ed8;
   --primary-text: #ffffff;
   --hover: var(--accent-muted);
   --input-bg: var(--bg-raised);
@@ -76,23 +76,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* --- Rose (salon/spa) --- */
-[data-theme="rose"] {
-  --bg-base: #160F14;
-  --bg-surface: #1E1219;
+[data-theme='rose'] {
+  --bg-base: #160f14;
+  --bg-surface: #1e1219;
   --bg-raised: #271820;
-  --bg-card: #1C1018;
-  --accent: #BE185D;
-  --accent-soft: #F9A8D4;
+  --bg-card: #1c1018;
+  --accent: #be185d;
+  --accent-soft: #f9a8d4;
   --accent-muted: rgba(190, 24, 93, 0.12);
   --accent-glow: rgba(190, 24, 93, 0.22);
-  --text-primary: #FDE8F0;
-  --text-secondary: #B87A96;
-  --text-muted: #9E6F84;
+  --text-primary: #fde8f0;
+  --text-secondary: #b87a96;
+  --text-muted: #9e6f84;
   --border: rgba(190, 24, 93, 0.2);
   --border-soft: rgba(255, 255, 255, 0.06);
-  --green: #34D399;
-  --red: #F87171;
-  --yellow: #FCD34D;
+  --green: #34d399;
+  --red: #f87171;
+  --yellow: #fcd34d;
   --font-display: var(--font-bebas-neue), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
@@ -100,7 +100,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --surface-elevated: var(--bg-raised);
   --surface-selected: var(--bg-raised);
   --primary: var(--accent);
-  --primary-hover: #9D174D;
+  --primary-hover: #9d174d;
   --primary-text: #ffffff;
   --hover: var(--accent-muted);
   --input-bg: var(--bg-raised);
@@ -114,23 +114,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* --- Forest --- */
-[data-theme="forest"] {
-  --bg-base: #0A110E;
-  --bg-surface: #0E1812;
+[data-theme='forest'] {
+  --bg-base: #0a110e;
+  --bg-surface: #0e1812;
   --bg-raised: #132018;
-  --bg-card: #111C15;
-  --accent: #16A34A;
-  --accent-soft: #86EFAC;
+  --bg-card: #111c15;
+  --accent: #16a34a;
+  --accent-soft: #86efac;
   --accent-muted: rgba(22, 163, 74, 0.12);
   --accent-glow: rgba(22, 163, 74, 0.22);
-  --text-primary: #E8F5EC;
-  --text-secondary: #7AAE8A;
-  --text-muted: #6E9F7F;
+  --text-primary: #e8f5ec;
+  --text-secondary: #7aae8a;
+  --text-muted: #6e9f7f;
   --border: rgba(22, 163, 74, 0.18);
   --border-soft: rgba(255, 255, 255, 0.06);
-  --green: #34D399;
-  --red: #F87171;
-  --yellow: #FCD34D;
+  --green: #34d399;
+  --red: #f87171;
+  --yellow: #fcd34d;
   --font-display: var(--font-bebas-neue), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
@@ -138,7 +138,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --surface-elevated: var(--bg-raised);
   --surface-selected: var(--bg-raised);
   --primary: var(--accent);
-  --primary-hover: #15803D;
+  --primary-hover: #15803d;
   --primary-text: #ffffff;
   --hover: var(--accent-muted);
   --input-bg: var(--bg-raised);
@@ -152,23 +152,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* --- Midnight --- */
-[data-theme="midnight"] {
-  --bg-base: #0B0E14;
-  --bg-surface: #13171F;
-  --bg-raised: #1A1F2B;
-  --bg-card: #161C28;
-  --accent: #5865F2;
-  --accent-soft: #A5AEFF;
+[data-theme='midnight'] {
+  --bg-base: #0b0e14;
+  --bg-surface: #13171f;
+  --bg-raised: #1a1f2b;
+  --bg-card: #161c28;
+  --accent: #5865f2;
+  --accent-soft: #a5aeff;
   --accent-muted: rgba(88, 101, 242, 0.12);
   --accent-glow: rgba(88, 101, 242, 0.22);
-  --text-primary: #E1E4EA;
-  --text-secondary: #8B92A5;
-  --text-muted: #7B8398;
+  --text-primary: #e1e4ea;
+  --text-secondary: #8b92a5;
+  --text-muted: #7b8398;
   --border: rgba(88, 101, 242, 0.18);
   --border-soft: rgba(255, 255, 255, 0.06);
-  --green: #23A55A;
-  --red: #F23F43;
-  --yellow: #F0B232;
+  --green: #23a55a;
+  --red: #f23f43;
+  --yellow: #f0b232;
   --font-display: var(--font-bebas-neue), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
@@ -176,7 +176,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --surface-elevated: var(--bg-raised);
   --surface-selected: var(--bg-raised);
   --primary: var(--accent);
-  --primary-hover: #6E7BF7;
+  --primary-hover: #6e7bf7;
   --primary-text: #ffffff;
   --hover: var(--accent-muted);
   --input-bg: var(--bg-raised);
@@ -190,23 +190,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* --- Nord --- */
-[data-theme="nord"] {
-  --bg-base: #2E3440;
-  --bg-surface: #3B4252;
-  --bg-raised: #434C5E;
-  --bg-card: #3E4758;
-  --accent: #88C0D0;
-  --accent-soft: #B8DEE8;
+[data-theme='nord'] {
+  --bg-base: #2e3440;
+  --bg-surface: #3b4252;
+  --bg-raised: #434c5e;
+  --bg-card: #3e4758;
+  --accent: #88c0d0;
+  --accent-soft: #b8dee8;
   --accent-muted: rgba(136, 192, 208, 0.12);
   --accent-glow: rgba(136, 192, 208, 0.22);
-  --text-primary: #ECEFF4;
-  --text-secondary: #D8DEE9;
-  --text-muted: #7B849A;
+  --text-primary: #eceff4;
+  --text-secondary: #d8dee9;
+  --text-muted: #7b849a;
   --border: rgba(136, 192, 208, 0.18);
   --border-soft: rgba(255, 255, 255, 0.06);
-  --green: #A3BE8C;
-  --red: #BF616A;
-  --yellow: #EBCB8B;
+  --green: #a3be8c;
+  --red: #bf616a;
+  --yellow: #ebcb8b;
   --font-display: var(--font-bebas-neue), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
@@ -214,8 +214,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --surface-elevated: var(--bg-raised);
   --surface-selected: var(--bg-raised);
   --primary: var(--accent);
-  --primary-hover: #8FBCBB;
-  --primary-text: #2E3440;
+  --primary-hover: #8fbcbb;
+  --primary-text: #2e3440;
   --hover: var(--accent-muted);
   --input-bg: var(--bg-base);
   --sidebar-bg: var(--bg-surface);
@@ -228,23 +228,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* --- Sunset --- */
-[data-theme="sunset"] {
-  --bg-base: #1A1412;
-  --bg-surface: #231C18;
-  --bg-raised: #2E2420;
-  --bg-card: #281E1A;
-  --accent: #E8914F;
-  --accent-soft: #F0BA8A;
+[data-theme='sunset'] {
+  --bg-base: #1a1412;
+  --bg-surface: #231c18;
+  --bg-raised: #2e2420;
+  --bg-card: #281e1a;
+  --accent: #e8914f;
+  --accent-soft: #f0ba8a;
   --accent-muted: rgba(232, 145, 79, 0.12);
   --accent-glow: rgba(232, 145, 79, 0.22);
-  --text-primary: #F0E6DC;
-  --text-secondary: #A89585;
-  --text-muted: #6B584A;
+  --text-primary: #f0e6dc;
+  --text-secondary: #a89585;
+  --text-muted: #6b584a;
   --border: rgba(232, 145, 79, 0.18);
   --border-soft: rgba(255, 255, 255, 0.06);
-  --green: #6ABF69;
-  --red: #E05252;
-  --yellow: #E8C44F;
+  --green: #6abf69;
+  --red: #e05252;
+  --yellow: #e8c44f;
   --font-display: var(--font-bebas-neue), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
@@ -252,8 +252,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --surface-elevated: var(--bg-raised);
   --surface-selected: var(--bg-raised);
   --primary: var(--accent);
-  --primary-hover: #F0A265;
-  --primary-text: #1A1412;
+  --primary-hover: #f0a265;
+  --primary-text: #1a1412;
   --hover: var(--accent-muted);
   --input-bg: var(--bg-raised);
   --sidebar-bg: var(--bg-surface);
@@ -266,23 +266,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* --- High Contrast --- */
-[data-theme="high-contrast"] {
+[data-theme='high-contrast'] {
   --bg-base: #000000;
-  --bg-surface: #0A0A0A;
-  --bg-raised: #1A1A1A;
+  --bg-surface: #0a0a0a;
+  --bg-raised: #1a1a1a;
   --bg-card: #121212;
-  --accent: #FFD60A;
-  --accent-soft: #FFE34D;
+  --accent: #ffd60a;
+  --accent-soft: #ffe34d;
   --accent-muted: rgba(255, 214, 10, 0.12);
   --accent-glow: rgba(255, 214, 10, 0.22);
-  --text-primary: #FFFFFF;
-  --text-secondary: #CCCCCC;
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
   --text-muted: #888888;
   --border: rgba(255, 214, 10, 0.18);
   --border-soft: rgba(255, 255, 255, 0.1);
-  --green: #00E676;
-  --red: #FF1744;
-  --yellow: #FFD60A;
+  --green: #00e676;
+  --red: #ff1744;
+  --yellow: #ffd60a;
   --font-display: var(--font-bebas-neue), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
@@ -290,7 +290,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --surface-elevated: var(--bg-raised);
   --surface-selected: var(--bg-raised);
   --primary: var(--accent);
-  --primary-hover: #FFE34D;
+  --primary-hover: #ffe34d;
   --primary-text: #000000;
   --hover: var(--accent-muted);
   --input-bg: var(--bg-raised);
@@ -304,23 +304,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* --- Solarized --- */
-[data-theme="solarized"] {
-  --bg-base: #002B36;
+[data-theme='solarized'] {
+  --bg-base: #002b36;
   --bg-surface: #073642;
-  --bg-raised: #0A4050;
+  --bg-raised: #0a4050;
   --bg-card: #084050;
-  --accent: #268BD2;
-  --accent-soft: #6CB4E0;
+  --accent: #268bd2;
+  --accent-soft: #6cb4e0;
   --accent-muted: rgba(38, 139, 210, 0.12);
   --accent-glow: rgba(38, 139, 210, 0.22);
-  --text-primary: #EEE8D5;
-  --text-secondary: #93A1A1;
-  --text-muted: #586E75;
+  --text-primary: #eee8d5;
+  --text-secondary: #93a1a1;
+  --text-muted: #586e75;
   --border: rgba(38, 139, 210, 0.18);
   --border-soft: rgba(255, 255, 255, 0.06);
   --green: #859900;
-  --red: #DC322F;
-  --yellow: #B58900;
+  --red: #dc322f;
+  --yellow: #b58900;
   --font-display: var(--font-bebas-neue), sans-serif;
   --font-body: var(--font-dm-sans), sans-serif;
   --page-bg: var(--bg-base);
@@ -328,7 +328,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   --surface-elevated: var(--bg-raised);
   --surface-selected: var(--bg-raised);
   --primary: var(--accent);
-  --primary-hover: #2AA198;
+  --primary-hover: #2aa198;
   --primary-text: #ffffff;
   --hover: var(--accent-muted);
   --input-bg: var(--bg-raised);

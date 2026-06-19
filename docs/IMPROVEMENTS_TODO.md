@@ -41,6 +41,7 @@ Templates exist but the UX doesn't realize their value — users still type ever
 Step 4 of the global `commit-code` skill hardcodes test commands for a different project: "For the Pixel Agents project specifically: `npm run test:daemon` / `npm run test:webview` … `npm run e2e`". This repo has none of those scripts (its tests are `npm test` → vitest, `cd dashboard && npm test`, Playwright e2e). Baking one project's commands into a global skill misleads every other repo. Replace the Pixel-Agents block with project-agnostic guidance (detect the runner from package.json, run the fast suite, gate E2E on whether changes touch the relevant surface) — or move the project-specific note into that project's local memory/CLAUDE.md. Done = no project name appears in the global skill's Step 4.
 
 **Resolution (2026-06-03):** Approved by Dale + fixed. Genericized the leak in BOTH global skills (the same audit found `start-feature` had it too):
+
 - `commit-code` SKILL.md Step 4: dropped the "For the Pixel Agents project specifically" block; kept the already-generic "detect runner / gate E2E on touched surface" guidance.
 - `start-feature` SKILL.md: 5 sites genericized — intro line, "Pixel Agents Feature Lifecycle" heading, baseline gates (`npm run check-types`/`daemon`/`webview` → generic typecheck/lint/build/test), dev-loop test commands, closing "proper way for Pixel Agents" line.
 - Verified: `grep -niE "pixel agents|test:daemon|test:webview|check-types"` across both skills → 0 hits.

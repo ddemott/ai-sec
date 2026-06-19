@@ -14,7 +14,7 @@ Built for tire shops, salons, auto repair, fitness studios, trades, and food & b
 | **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                          |
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                       |
 | **Voice AI**  | Migrated to LiveKit Agents (Telnyx → LiveKit Cloud → Deepgram/OpenAI). Awaiting first live call to confirm carrier propagation — see `docs/TICKET_SUPPORT.md` |
-| **Phone**     | `+1 630-866-1960` purchased + routed via Telnyx (2026-06-02); LiveKit trunk wiring pending — see `docs/BETH_GO_LIVE_TODO.md`. Old `+1-630-937-9478` is dead. |
+| **Phone**     | `+1 630-866-1960` purchased + routed via Telnyx (2026-06-02); LiveKit trunk wiring pending — see `docs/BETH_GO_LIVE_TODO.md`. Old `+1-630-937-9478` is dead.  |
 | **Tests**     | 2,632 passing (1,910 backend + 631 dashboard + 91 agent) + 0 skips, zero TypeScript errors                                                                    |
 | **E2e**       | 71 Playwright tests + 29 live QA tool calls (88 assertions)                                                                                                   |
 

@@ -20,19 +20,22 @@ const httpsOptions = {
   cert: fs.readFileSync(path.join(certDir, 'localhost-cert.pem')),
 };
 
-app.prepare().then(() => {
-  console.log('[dashboard] app.prepare() complete. Starting HTTPS server...');
-  createServer(httpsOptions, (req, res) => {
-    console.log('[dashboard] HTTPS server received request:', req.url);
-    const parsedUrl = parse(req.url, true);
-    handle(req, res, parsedUrl);
-  }).listen(4000, (err) => {
-    if (err) {
-      console.error('[dashboard] HTTPS server error:', err);
-      throw err;
-    }
-    console.log('> Dashboard ready on https://localhost:4000');
+app
+  .prepare()
+  .then(() => {
+    console.log('[dashboard] app.prepare() complete. Starting HTTPS server...');
+    createServer(httpsOptions, (req, res) => {
+      console.log('[dashboard] HTTPS server received request:', req.url);
+      const parsedUrl = parse(req.url, true);
+      handle(req, res, parsedUrl);
+    }).listen(4000, (err) => {
+      if (err) {
+        console.error('[dashboard] HTTPS server error:', err);
+        throw err;
+      }
+      console.log('> Dashboard ready on https://localhost:4000');
+    });
+  })
+  .catch((err) => {
+    console.error('[dashboard] app.prepare() failed:', err);
   });
-}).catch((err) => {
-  console.error('[dashboard] app.prepare() failed:', err);
-});

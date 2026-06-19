@@ -4,7 +4,7 @@
 
 **Method:** read-only walk through every entry point, sub-tab, and form. Click counts assume the user is already logged in and on Home (the default landing).
 
-**Rule from `docs/TODO.md`:** anything > 3 *decisions* on a daily task is a candidate for simplification. "Decision" = a moment where the user must choose: tab, sub-tab, view variant, dropdown selection, search query, or destructive confirmation. Typing into a single search box is one decision.
+**Rule from `docs/TODO.md`:** anything > 3 _decisions_ on a daily task is a candidate for simplification. "Decision" = a moment where the user must choose: tab, sub-tab, view variant, dropdown selection, search query, or destructive confirmation. Typing into a single search box is one decision.
 
 ---
 
@@ -30,7 +30,7 @@ Three paths exist; only one is reasonable, and it isn't the default.
 
 #### Path A — Calendar (default) → AppointmentView "+" sidebar button
 
-1. *(landing on Home)* Decision 1: click `Schedule` tab → Calendar view loads in month grid (`AppointmentView.tsx:111`).
+1. _(landing on Home)_ Decision 1: click `Schedule` tab → Calendar view loads in month grid (`AppointmentView.tsx:111`).
 2. Visual parse: month grid dominates; sidebar below is the only place `Plus` appears (`AppointmentListSidebar.tsx:42`).
 3. Decision 2: click `+` icon button (no label, `aria-label` only — fails H6 Recognition over Recall for non-technical users who don't read aria attributes; **P1 affordance issue**).
 4. Form opens in `AppointmentDetailPanel` with these fields:
@@ -119,6 +119,7 @@ Staff view has the best read layout (24h grid, who's working, who has appointmen
 `OutlookLayout.tsx:81-92` hides the Advanced tab group (Services & Resources, Staff & Shifts, AI & Knowledge) when `role === 'front_desk' && !isAdmin`. The off-day affordance lives only in `ShiftManagementView` (`MyTeamView.tsx:49`), which is inside `Staff & Shifts`. Search across `dashboard/components/scheduler/` confirms no off-day affordance there (only one reference, in `useSchedulerData.ts:117`, and it's read-only display logic).
 
 **This is a P0 functional gap.** "Carlos is sick today, take him off the board" is a daily front-desk task, and the role currently designed for daily front-desk use cannot do it. Either:
+
 - Today's stale-bookings stay on Carlos and the AI tries to book him for new calls (operational mistake), or
 - The front-desk staffer has to call/text the owner to log in and toggle the off flag (workflow break).
 
@@ -161,15 +162,15 @@ Empty state copy is good: "No customers match \"Smith\"" vs "No customers yet" (
 
 ## Decision-count summary
 
-| Task | Front-desk decisions today | Threshold | Status |
-|---|---|---|---|
-| Book a call-in (Calendar default) | 8+ | 3 | **P0 — over by 5+** |
-| Book a call-in (Quick Book path) | 7 | 3 | **P0 — over by 4** |
-| Look up tomorrow (Home glance) | 0 | 3 | ✓ |
-| Look up tomorrow (Schedule tab) | 3 | 3 | borderline |
-| Mark someone unavailable (front_desk) | ∞ | 3 | **P0 — task is blocked** |
-| Mark someone unavailable (owner) | 5 | 3 | P1 — over by 2 + wrong location |
-| Find a customer | 2 | 3 | ✓ |
+| Task                                  | Front-desk decisions today | Threshold | Status                          |
+| ------------------------------------- | -------------------------- | --------- | ------------------------------- |
+| Book a call-in (Calendar default)     | 8+                         | 3         | **P0 — over by 5+**             |
+| Book a call-in (Quick Book path)      | 7                          | 3         | **P0 — over by 4**              |
+| Look up tomorrow (Home glance)        | 0                          | 3         | ✓                               |
+| Look up tomorrow (Schedule tab)       | 3                          | 3         | borderline                      |
+| Mark someone unavailable (front_desk) | ∞                          | 3         | **P0 — task is blocked**        |
+| Mark someone unavailable (owner)      | 5                          | 3         | P1 — over by 2 + wrong location |
+| Find a customer                       | 2                          | 3         | ✓                               |
 
 3 of 4 daily tasks fail the threshold for the audience the dashboard was just role-gated for.
 
@@ -179,15 +180,15 @@ Empty state copy is good: "No customers match \"Smith\"" vs "No customers yet" (
 
 These cut across multiple tasks and are worth pulling out:
 
-| Heuristic | Score (0-4) | Finding |
-|---|---|---|
-| **H6 Recognition over Recall** | 3 | Icon-only `+` for new appointment, icon-only `Plus` for Quick Book trigger; no labels. Operator must learn the dashboard's icon vocabulary. |
-| **H2 Match real world** | 3 | "Calendar" / "Staff" / "Resources" / "List" sub-tabs are *implementation* names, not *task* names. Users want "Today's schedule" / "Who's working" / "Find a slot". |
-| **H4 Consistency** | 3 | Two different scheduler implementations (`AppointmentView`, `NewSchedulerView`) on the same Schedule tab, with different create flows, different date nav widgets, different empty states. |
-| **H7 Flexibility & efficiency** | 3 | The fastest path (Quick Book) is buried two clicks deep behind sub-tab switching. The default path is the slowest path. |
-| **H5 Error prevention** | 2 | `AppointmentDetailPanel` lets users free-text the description and manually pick start/end time, missing the duration auto-calc that exists in `QuickBookPanel`. Easy to book a 2-hour slot for a 30-minute service. |
-| **H1 Visibility of system status** | 1 | Generally good — load errors surface, mock-data banner shows, save state visible. |
-| **H10 Help & documentation** | 2 | No first-run tour, no contextual hints. New front-desk hires would need over-the-shoulder training to discover Quick Book. |
+| Heuristic                          | Score (0-4) | Finding                                                                                                                                                                                                             |
+| ---------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **H6 Recognition over Recall**     | 3           | Icon-only `+` for new appointment, icon-only `Plus` for Quick Book trigger; no labels. Operator must learn the dashboard's icon vocabulary.                                                                         |
+| **H2 Match real world**            | 3           | "Calendar" / "Staff" / "Resources" / "List" sub-tabs are _implementation_ names, not _task_ names. Users want "Today's schedule" / "Who's working" / "Find a slot".                                                 |
+| **H4 Consistency**                 | 3           | Two different scheduler implementations (`AppointmentView`, `NewSchedulerView`) on the same Schedule tab, with different create flows, different date nav widgets, different empty states.                          |
+| **H7 Flexibility & efficiency**    | 3           | The fastest path (Quick Book) is buried two clicks deep behind sub-tab switching. The default path is the slowest path.                                                                                             |
+| **H5 Error prevention**            | 2           | `AppointmentDetailPanel` lets users free-text the description and manually pick start/end time, missing the duration auto-calc that exists in `QuickBookPanel`. Easy to book a 2-hour slot for a 30-minute service. |
+| **H1 Visibility of system status** | 1           | Generally good — load errors surface, mock-data banner shows, save state visible.                                                                                                                                   |
+| **H10 Help & documentation**       | 2           | No first-run tour, no contextual hints. New front-desk hires would need over-the-shoulder training to discover Quick Book.                                                                                          |
 
 ---
 
@@ -206,12 +207,12 @@ Items 1–3 are the launch-blocker subset — without them the front-desk role w
 
 **All six punch-list items shipped 2026-05-07.** Decision-count audit re-run after the changes:
 
-| Task | Before | After | Threshold |
-|---|---|---|---|
-| Book a call-in (default landing) | 8+ | 1 (cell click → Quick Book prefilled) | 3 ✓ |
-| Look up tomorrow (Schedule tab) | 3 | 1 (Tomorrow chip) | 3 ✓ |
-| Mark someone unavailable (front_desk) | ∞ | 3 (staff name → Mark off → confirm) | 3 ✓ |
-| Find a customer | 2 | 2 (unchanged — already passing) | 3 ✓ |
+| Task                                  | Before | After                                 | Threshold |
+| ------------------------------------- | ------ | ------------------------------------- | --------- |
+| Book a call-in (default landing)      | 8+     | 1 (cell click → Quick Book prefilled) | 3 ✓       |
+| Look up tomorrow (Schedule tab)       | 3      | 1 (Tomorrow chip)                     | 3 ✓       |
+| Mark someone unavailable (front_desk) | ∞      | 3 (staff name → Mark off → confirm)   | 3 ✓       |
+| Find a customer                       | 2      | 2 (unchanged — already passing)       | 3 ✓       |
 
 All four daily-use tasks now meet the ≤3-decision threshold for the audience the dashboard was role-gated for.
 

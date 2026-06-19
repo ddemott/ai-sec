@@ -8,7 +8,7 @@
 
 There are two parties who consent to two different things:
 
-- **Your business customer** (the salon, clinic, shop) consents **in writing, in the SetupWizard.** They agree to your Terms, and they take on the obligation to inform their own callers — because legally *they* are the ones whose callers are being notified. AI Secretary supplies the disclosure mechanism.
+- **Your business customer** (the salon, clinic, shop) consents **in writing, in the SetupWizard.** They agree to your Terms, and they take on the obligation to inform their own callers — because legally _they_ are the ones whose callers are being notified. AI Secretary supplies the disclosure mechanism.
 - **The end caller** consents **by spoken notice + continuing the call.** That's the implied-consent model.
 
 Your job is to make both layers say the same thing. The doc below does that.
@@ -26,6 +26,7 @@ Your job is to make both layers say the same thing. The doc below does that.
 > "Thanks for calling [Business Name]. I'm an AI assistant, and this call may be recorded for quality and service. To continue, just stay on the line — how can I help you today?"
 
 Rules that make this hold up:
+
 - Recording must **not start until after this line finishes.** Gate it in the pipeline.
 - Purpose is **"quality and service,"** never "AI training."
 - "Stay on the line" is the consent trigger. If you build a non-recorded fallback (voicemail or your out-of-scope routing), you can offer a real opt-out, which strengthens consent — but only promise it if it exists.
@@ -44,7 +45,7 @@ Rules that make this hold up:
 
 ### C. Product improvement / training — OPTIONAL, OPT-IN (default OFF; consider omitting at launch)
 
-> ☐ *(Optional)* Allow **de-identified call transcripts** to help improve AI Secretary. **Off by default.** We do not use your call data to train or improve our models unless you turn this on, and we use **text transcripts only — never voiceprints or voice recordings** for this purpose. Additional consent requirements may apply for businesses or callers in Illinois and certain other states; see the Privacy Notice.
+> ☐ _(Optional)_ Allow **de-identified call transcripts** to help improve AI Secretary. **Off by default.** We do not use your call data to train or improve our models unless you turn this on, and we use **text transcripts only — never voiceprints or voice recordings** for this purpose. Additional consent requirements may apply for businesses or callers in Illinois and certain other states; see the Privacy Notice.
 
 > **My steer:** ship without C entirely. It's the one thing that turns a simple disclosure into a biometric-consent question, and you don't need it to launch a working receptionist. Add it later as a deliberate feature with the lawyer's wording. Keeping training to **de-identified text transcripts only** (never voice/biometric) is what keeps it out of BIPA's lane if you do add it.
 
@@ -55,6 +56,7 @@ Rules that make this hold up:
 Goes in your published Privacy Policy and is what the spoken line / your customer's notice points callers to.
 
 > ### AI call handling
+>
 > When you call a business that uses AI Secretary, your call is answered by an **AI assistant** that books appointments and answers questions on that business's behalf.
 >
 > **What we process:** the contents of the call (converted to text), and the contact and appointment details you provide.
@@ -80,4 +82,4 @@ Goes in your published Privacy Policy and is what the spoken line / your custome
 
 ---
 
-*Fill the brackets, pick your options in section 4, and this set stays internally consistent. The attorney edits the final phrasing — particularly anything in the signup consent and the BIPA-adjacent language — but you walk in with a coherent draft instead of a blank page.*
+_Fill the brackets, pick your options in section 4, and this set stays internally consistent. The attorney edits the final phrasing — particularly anything in the signup consent and the BIPA-adjacent language — but you walk in with a coherent draft instead of a blank page._

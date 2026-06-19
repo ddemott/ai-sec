@@ -743,11 +743,7 @@ function WeekView({
 
             {/* First few appointments */}
             {day.appts.slice(0, 4).map((a, i) => (
-              <div
-                key={i}
-                className="text-xs truncate"
-                style={{ color: 'var(--text-secondary)' }}
-              >
+              <div key={i} className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
                 {a.time} {a.desc}
               </div>
             ))}
@@ -761,11 +757,7 @@ function WeekView({
             {workingStaff.length > 0 && employees.length > 1 && (
               <div className="mt-1.5 pt-1.5 border-t" style={{ borderColor: 'var(--border-soft)' }}>
                 {workingStaff.slice(0, 3).map((s, i) => (
-                  <div
-                    key={i}
-                    className="text-xs truncate"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
+                  <div key={i} className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                     {s.name} {formatShiftTime(s.start)}–{formatShiftTime(s.end)}
                   </div>
                 ))}
@@ -782,4 +774,3 @@ function WeekView({
     </div>
   );
 }
-

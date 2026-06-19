@@ -44,7 +44,10 @@ export function Step1Services({
       title: 'Remove service?',
       message: `Remove "${svc.name}"? This won't affect existing appointments.`,
       confirmLabel: 'Remove',
-      onConfirm: () => { closeConfirm(); onDelete(svc.service_id); },
+      onConfirm: () => {
+        closeConfirm();
+        onDelete(svc.service_id);
+      },
     });
   }
 
@@ -88,7 +91,10 @@ export function Step1Services({
               <div className="flex items-center gap-1 ml-2 shrink-0">
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onEdit(svc); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(svc);
+                  }}
                   aria-label={`Edit ${svc.name}`}
                   className="p-1.5 text-gray-400 transition-colors rounded-sm hover:[color:var(--accent-soft)] focus-visible:[color:var(--accent-soft)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--accent-soft]"
                 >
@@ -96,7 +102,10 @@ export function Step1Services({
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); handleDelete(svc); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(svc);
+                  }}
                   aria-label={`Remove ${svc.name}`}
                   className="p-1.5 text-gray-400 transition-colors rounded-sm hover:[color:var(--danger)] focus-visible:[color:var(--danger)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[--danger]"
                 >
@@ -149,7 +158,9 @@ export function Step1Services({
             // field to "0" the instant it was emptied — you couldn't clear "3"
             // to type "30". 0 is treated as "unset" (saveService rejects it
             // anyway via the `< 1` guard), so rendering it as empty is correct.
-            value={editingService.duration_minutes === 0 ? '' : String(editingService.duration_minutes)}
+            value={
+              editingService.duration_minutes === 0 ? '' : String(editingService.duration_minutes)
+            }
             onChange={(e) => {
               const n = parseInt(e.target.value, 10);
               // Never propagate NaN — saveService()'s `< 1` guard treats NaN as

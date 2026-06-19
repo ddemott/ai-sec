@@ -118,6 +118,7 @@ You will normally perform these steps using tools (adapt order intelligently):
 ## Success Criteria
 
 A successful session ends with the target project having:
+
 - A working `npm run create-branch feat/xxx`
 - A working `npm run prepare-commit`
 - `npm run checks` (or equivalent) wired

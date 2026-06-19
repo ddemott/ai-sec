@@ -5,6 +5,7 @@
 > **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. The OpenAI TTS → xAI Grok swap is also code-complete (commit `f6cc1d4`, 2026-05-01) — see `docs/FRAMEWORK_MIGRATIONS.md` for the index.
 
 ## Contents
+
 - [1. Overview](#1-overview)
 - [2. Directory Structure](#2-directory-structure)
 - [3. Deployment Topology](#3-deployment-topology)
@@ -37,6 +38,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 **Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars + CRM.
 
 **Layering:**
+
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via xAI Grok with OpenAI TTS as the `runFallback()` dead-air guard)
 - **Tools**: 10 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (26 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
@@ -82,6 +84,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 ```
 
 **Shipped in LiveKit migration (commit `661d21d`):**
+
 - `agent/` — separate Node.js package for the LiveKit agent worker (deployed as Railway service `ai-sec-agent`)
 - `src/routes/agentTools.ts` — 10 voice-AI tools (8 originals + 2 OTP helpers); replaced the deleted `supabase/functions/vapi-tools/`
 
@@ -138,15 +141,15 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
     └──────────────┘
 ```
 
-| Service | Platform | Region / URL | Deploy mechanism |
-|---|---|---|---|
-| Backend (Fastify) | Railway | `ai-sec-production.up.railway.app` | Nixpacks auto-deploy from `main` |
-| Agent worker | Railway (service `ai-sec-agent`) | WebSocket long-runner, worker ID `AW_vPmGExrgTeGn`, registers with LiveKit under agent name `ai-secretary-agent` | Node.js package under `agent/` |
-| Database | Supabase (managed Postgres + pgvector) | `sgibijfchvfuizudrmir` (us-west-2) | Migrations applied via `npm run db:migrate` |
-| Dashboard | Railway | `dashboard-production-cee3.up.railway.app` | Next.js build via `dashboard/server.js` |
-| Telephony | Telnyx | `+1 (630) 937-9478` | SIP Connection `livekit-outbound` (ID `2945038451784812111`); provisioned per tenant via `POST /provisioning/activate` |
-| Voice orchestrator | LiveKit Cloud | `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` (SIP); WebSocket for agent | Dispatch rule `SDR_if97ky4Zf7e6` routes to agent name `ai-secretary-agent` |
-| Stripe | Hosted | Webhook: `/billing/webhook` on Railway | Products + price IDs in Stripe dashboard |
+| Service            | Platform                               | Region / URL                                                                                                     | Deploy mechanism                                                                                                       |
+| ------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Backend (Fastify)  | Railway                                | `ai-sec-production.up.railway.app`                                                                               | Nixpacks auto-deploy from `main`                                                                                       |
+| Agent worker       | Railway (service `ai-sec-agent`)       | WebSocket long-runner, worker ID `AW_vPmGExrgTeGn`, registers with LiveKit under agent name `ai-secretary-agent` | Node.js package under `agent/`                                                                                         |
+| Database           | Supabase (managed Postgres + pgvector) | `sgibijfchvfuizudrmir` (us-west-2)                                                                               | Migrations applied via `npm run db:migrate`                                                                            |
+| Dashboard          | Railway                                | `dashboard-production-cee3.up.railway.app`                                                                       | Next.js build via `dashboard/server.js`                                                                                |
+| Telephony          | Telnyx                                 | `+1 (630) 937-9478`                                                                                              | SIP Connection `livekit-outbound` (ID `2945038451784812111`); provisioned per tenant via `POST /provisioning/activate` |
+| Voice orchestrator | LiveKit Cloud                          | `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` (SIP); WebSocket for agent                                        | Dispatch rule `SDR_if97ky4Zf7e6` routes to agent name `ai-secretary-agent`                                             |
+| Stripe             | Hosted                                 | Webhook: `/billing/webhook` on Railway                                                                           | Products + price IDs in Stripe dashboard                                                                               |
 
 **Graceful shutdown:** Backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
@@ -240,18 +243,18 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 
 ### 4.4 Stored procedures (key RPCs)
 
-| RPC | Purpose |
-|---|---|
-| `book_appointment_atomic(...)` | Legacy atomic booking — 7-layer constraint check + past-time rejection, business hours validation, fuzzy service matching. Used by dashboard QuickBook. |
-| `book_with_scheduling_atomic(...)` | Production voice-AI booking path — uses `employee_schedule` for shift validation (date-based), night-shift support (cross-midnight), specific error codes (`TIMESLOT_OCCUPIED`, `NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_SCHEDULED`, `NO_AVAILABILITY`, `INVALID_PARAMS`). |
-| `check_availability_with_tz(...)` | Timezone-aware availability check — queries `employee_schedule` for active employees + scans `appointments` for conflicts. |
-| `get_effective_shifts(tenant_id, date)` | Returns entries from `employee_schedule` (date-based only). |
-| `get_effective_shifts_bulk(tenant_id, start, end)` | Bulk variant — returns all employees' shifts in a date range. Used by scheduler for efficient loading. |
-| `search_tenant_docs(tenant_id, query_embedding)` | Cosine similarity over `tenant_docs.embedding` (pgvector `<=>` operator). |
-| `check_coverage_gaps(tenant_id)` | Returns list of services with missing coverage (no qualified employee or resource). |
-| `link_orphaned_transcripts()` | Post-call cleanup — joins transcripts to summaries where `call_id` matches. Called from `dispatcher.handleCallEnded()`. |
-| `set_tenant_context(uuid)` | Sets `app.current_tenant_id` session variable for RLS policy evaluation. Called by `withTenantClient()`. |
-| `fn_audit_trigger()` | `SECURITY DEFINER` trigger — writes before/after snapshots to `audit_log` on INSERT/UPDATE/DELETE of appointments, customers, resources. |
+| RPC                                                | Purpose                                                                                                                                                                                                                                                                |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `book_appointment_atomic(...)`                     | Legacy atomic booking — 7-layer constraint check + past-time rejection, business hours validation, fuzzy service matching. Used by dashboard QuickBook.                                                                                                                |
+| `book_with_scheduling_atomic(...)`                 | Production voice-AI booking path — uses `employee_schedule` for shift validation (date-based), night-shift support (cross-midnight), specific error codes (`TIMESLOT_OCCUPIED`, `NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_SCHEDULED`, `NO_AVAILABILITY`, `INVALID_PARAMS`). |
+| `check_availability_with_tz(...)`                  | Timezone-aware availability check — queries `employee_schedule` for active employees + scans `appointments` for conflicts.                                                                                                                                             |
+| `get_effective_shifts(tenant_id, date)`            | Returns entries from `employee_schedule` (date-based only).                                                                                                                                                                                                            |
+| `get_effective_shifts_bulk(tenant_id, start, end)` | Bulk variant — returns all employees' shifts in a date range. Used by scheduler for efficient loading.                                                                                                                                                                 |
+| `search_tenant_docs(tenant_id, query_embedding)`   | Cosine similarity over `tenant_docs.embedding` (pgvector `<=>` operator).                                                                                                                                                                                              |
+| `check_coverage_gaps(tenant_id)`                   | Returns list of services with missing coverage (no qualified employee or resource).                                                                                                                                                                                    |
+| `link_orphaned_transcripts()`                      | Post-call cleanup — joins transcripts to summaries where `call_id` matches. Called from `dispatcher.handleCallEnded()`.                                                                                                                                                |
+| `set_tenant_context(uuid)`                         | Sets `app.current_tenant_id` session variable for RLS policy evaluation. Called by `withTenantClient()`.                                                                                                                                                               |
+| `fn_audit_trigger()`                               | `SECURITY DEFINER` trigger — writes before/after snapshots to `audit_log` on INSERT/UPDATE/DELETE of appointments, customers, resources.                                                                                                                               |
 
 ---
 
@@ -326,18 +329,18 @@ Every route returns HTTP 200 with one of:
 
 ### 7.3 The 10 tools
 
-| Route | Input (Zod) | Return shape | Backing logic |
-|---|---|---|---|
-| `POST /agent-tools/service-catalog` | `{ tenant_id }` | `{ services: [{ id, name, duration_minutes, price, description }] }` | `SELECT * FROM services WHERE is_deleted = false` |
-| `POST /agent-tools/customer-context` | `{ tenant_id, phone }` | `{ customer, last_appointment, recent_calls }` (or `{ customer: null }` for new caller) | Caller phone lookup; routing to existing customer record + history |
-| `POST /agent-tools/check-availability` | `{ tenant_id, resource_id, start_time, end_time }` | `{ available: boolean, conflicts?: [...] }` | `check_availability_with_tz()` RPC (timezone-aware) |
-| `POST /agent-tools/policy-answer` | `{ tenant_id, question }` | `{ answer: string \| null, source_doc_ids: string[] }` | `search_tenant_docs()` RPC over pgvector + OpenAI embedding of the question |
-| `POST /agent-tools/book-appointment` | `{ tenant_id, resource_id, start_time, end_time, phone, name?, description?, employee_id?, location?, call_id? }` | `{ appointment_id, status }` or `{ ask_for_phone: true, message }` | Legacy atomic booking — `book_appointment_atomic()` RPC. Gates on `isValidPhone(phone)` before the RPC. |
-| `POST /agent-tools/scheduling-options` | `{ tenant_id, requirements: { serviceType, requiredResourceCapabilities?, requiredEmployeeSkills? }, window: { from, to } }` | `{ options: [{ start_time, end_time, resource_id, employee_id }, ...] }` | Pure algorithm in `shared/scheduling.ts:selectAssignments()` — no DB write |
-| `POST /agent-tools/book-with-scheduling` | `{ tenant_id, requirements, window, phone, name?, description?, location?, call_id? }` | `{ appointment_id, status }` or `{ ask_for_phone: true, message }` or specific error code (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY) | **Production booking path** — `book_with_scheduling_atomic()` RPC with 7-layer validation. Gates on `isValidPhone(phone)`. |
-| `POST /agent-tools/available-slots` | `{ tenant_id, service_type, date }` (date `YYYY-MM-DD`) | `{ slots: [{ start_time, end_time }, ...] }` | Consolidated slot aggregator, single query — replaces multi-round-trip discovery |
-| `POST /agent-tools/send-verification-code` | `{ tenant_id, phone }` | `{ message: "I just sent a verification code to <phone>..." }` | OTP send via `telnyxSms.sendSms`. 6-digit code, 10-min TTL, bcrypt-hashed. Rate-limited 3/phone/hour, 100/tenant/day. |
-| `POST /agent-tools/verify-phone-code` | `{ tenant_id, phone, code }` (code numeric) | `{ verified: boolean, message }` | Verifies hashed code from `phone_verifications` table. 5 attempts max per code. |
+| Route                                      | Input (Zod)                                                                                                                  | Return shape                                                                                                                                                                | Backing logic                                                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `POST /agent-tools/service-catalog`        | `{ tenant_id }`                                                                                                              | `{ services: [{ id, name, duration_minutes, price, description }] }`                                                                                                        | `SELECT * FROM services WHERE is_deleted = false`                                                                          |
+| `POST /agent-tools/customer-context`       | `{ tenant_id, phone }`                                                                                                       | `{ customer, last_appointment, recent_calls }` (or `{ customer: null }` for new caller)                                                                                     | Caller phone lookup; routing to existing customer record + history                                                         |
+| `POST /agent-tools/check-availability`     | `{ tenant_id, resource_id, start_time, end_time }`                                                                           | `{ available: boolean, conflicts?: [...] }`                                                                                                                                 | `check_availability_with_tz()` RPC (timezone-aware)                                                                        |
+| `POST /agent-tools/policy-answer`          | `{ tenant_id, question }`                                                                                                    | `{ answer: string \| null, source_doc_ids: string[] }`                                                                                                                      | `search_tenant_docs()` RPC over pgvector + OpenAI embedding of the question                                                |
+| `POST /agent-tools/book-appointment`       | `{ tenant_id, resource_id, start_time, end_time, phone, name?, description?, employee_id?, location?, call_id? }`            | `{ appointment_id, status }` or `{ ask_for_phone: true, message }`                                                                                                          | Legacy atomic booking — `book_appointment_atomic()` RPC. Gates on `isValidPhone(phone)` before the RPC.                    |
+| `POST /agent-tools/scheduling-options`     | `{ tenant_id, requirements: { serviceType, requiredResourceCapabilities?, requiredEmployeeSkills? }, window: { from, to } }` | `{ options: [{ start_time, end_time, resource_id, employee_id }, ...] }`                                                                                                    | Pure algorithm in `shared/scheduling.ts:selectAssignments()` — no DB write                                                 |
+| `POST /agent-tools/book-with-scheduling`   | `{ tenant_id, requirements, window, phone, name?, description?, location?, call_id? }`                                       | `{ appointment_id, status }` or `{ ask_for_phone: true, message }` or specific error code (TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY) | **Production booking path** — `book_with_scheduling_atomic()` RPC with 7-layer validation. Gates on `isValidPhone(phone)`. |
+| `POST /agent-tools/available-slots`        | `{ tenant_id, service_type, date }` (date `YYYY-MM-DD`)                                                                      | `{ slots: [{ start_time, end_time }, ...] }`                                                                                                                                | Consolidated slot aggregator, single query — replaces multi-round-trip discovery                                           |
+| `POST /agent-tools/send-verification-code` | `{ tenant_id, phone }`                                                                                                       | `{ message: "I just sent a verification code to <phone>..." }`                                                                                                              | OTP send via `telnyxSms.sendSms`. 6-digit code, 10-min TTL, bcrypt-hashed. Rate-limited 3/phone/hour, 100/tenant/day.      |
+| `POST /agent-tools/verify-phone-code`      | `{ tenant_id, phone, code }` (code numeric)                                                                                  | `{ verified: boolean, message }`                                                                                                                                            | Verifies hashed code from `phone_verifications` table. 5 attempts max per code.                                            |
 
 ### 7.4 OTP flow integration
 
@@ -598,12 +601,13 @@ Unanswered questions (no chunk above similarity threshold) are logged to `unansw
 
 Two providers, same orchestration layer.
 
-| Provider | Service | Route | API |
-|---|---|---|---|
-| Google | `src/services/googleCalendar.ts` | `src/routes/calendar.ts` | `googleapis` SDK |
-| Outlook | `src/services/outlookCalendar.ts` | `src/routes/calendar.ts` | Microsoft Graph API (raw fetch) |
+| Provider | Service                           | Route                    | API                             |
+| -------- | --------------------------------- | ------------------------ | ------------------------------- |
+| Google   | `src/services/googleCalendar.ts`  | `src/routes/calendar.ts` | `googleapis` SDK                |
+| Outlook  | `src/services/outlookCalendar.ts` | `src/routes/calendar.ts` | Microsoft Graph API (raw fetch) |
 
 ### 13.1 OAuth + token management
+
 Via `oauthCallbackFactory.ts` + `tokenManagement.ts` (§10.3). State param is a signed JWT (CSRF protection). Tokens never exposed to the frontend. Best-effort token revocation on disconnect.
 
 ### 13.2 Sync orchestrator
@@ -631,11 +635,11 @@ Fires from the 4 appointment mutation points (create, update, delete, cancel). C
 
 ## 14. CRM Sync (Bidirectional)
 
-| Provider | Client | Sync | Route | API |
-|---|---|---|---|---|
-| Jobber | `jobberClient.ts` | `jobberSync.ts` | `jobber.ts` | GraphQL |
-| HubSpot | `hubspotClient.ts` | `hubspotSync.ts` | `hubspot.ts` | REST v3 |
-| Square | `squareClient.ts` | `squareSync.ts` | `square.ts` | REST v2 |
+| Provider     | Client                  | Sync                  | Route             | API     |
+| ------------ | ----------------------- | --------------------- | ----------------- | ------- |
+| Jobber       | `jobberClient.ts`       | `jobberSync.ts`       | `jobber.ts`       | GraphQL |
+| HubSpot      | `hubspotClient.ts`      | `hubspotSync.ts`      | `hubspot.ts`      | REST v3 |
+| Square       | `squareClient.ts`       | `squareSync.ts`       | `square.ts`       | REST v2 |
 | ServiceTitan | `servicetitanClient.ts` | `servicetitanSync.ts` | `servicetitan.ts` | REST v2 |
 
 ### 14.1 Merge strategy
@@ -646,15 +650,15 @@ Timestamp-based merge. For each conflicting field, the row with the most recent 
 
 From 7 mutation points:
 
-| Event | Calendar | Jobber | HubSpot | Square | ServiceTitan |
-|---|---|---|---|---|---|
-| Appointment create | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Appointment update | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Appointment delete | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Appointment cancel | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Customer create | — | ✓ | ✓ | ✓ | ✓ |
-| Customer update | — | ✓ | ✓ | ✓ | ✓ |
-| Customer delete | — | ✓ | ✓ | ✓ | ✓ |
+| Event              | Calendar | Jobber | HubSpot | Square | ServiceTitan |
+| ------------------ | -------- | ------ | ------- | ------ | ------------ |
+| Appointment create | ✓        | ✓      | ✓       | ✓      | ✓            |
+| Appointment update | ✓        | ✓      | ✓       | ✓      | ✓            |
+| Appointment delete | ✓        | ✓      | ✓       | ✓      | ✓            |
+| Appointment cancel | ✓        | ✓      | ✓       | ✓      | ✓            |
+| Customer create    | —        | ✓      | ✓       | ✓      | ✓            |
+| Customer update    | —        | ✓      | ✓       | ✓      | ✓            |
+| Customer delete    | —        | ✓      | ✓       | ✓      | ✓            |
 
 `src/services/syncOrchestrator.ts` fans out. Each provider fails independently — one bad provider doesn't block the others.
 
@@ -673,12 +677,12 @@ From 7 mutation points:
 
 ### 15.1 Plans
 
-| Plan | Price | Capabilities |
-|---|---|---|
-| Solo | $129/mo | 1 employee, core features |
-| Growth | $279/mo | Multi-employee, CRM integrations |
-| Professional | $449/mo | (defined, not yet gated) |
-| Enterprise | Custom | Not implemented |
+| Plan         | Price   | Capabilities                     |
+| ------------ | ------- | -------------------------------- |
+| Solo         | $129/mo | 1 employee, core features        |
+| Growth       | $279/mo | Multi-employee, CRM integrations |
+| Professional | $449/mo | (defined, not yet gated)         |
+| Enterprise   | Custom  | Not implemented                  |
 
 ### 15.2 Checkout flow
 
@@ -699,10 +703,10 @@ Client → redirects to checkout_url
 
 Stripe-signed via `STRIPE_WEBHOOK_SECRET`. Handles three events:
 
-| Event | Action |
-|---|---|
-| `checkout.session.completed` | `UPDATE tenants SET stripe_subscription_id, subscription_status = 'active', subscription_plan = $plan` |
-| `invoice.payment_failed` | `UPDATE tenants SET subscription_status = 'past_due'` |
+| Event                           | Action                                                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `checkout.session.completed`    | `UPDATE tenants SET stripe_subscription_id, subscription_status = 'active', subscription_plan = $plan`         |
+| `invoice.payment_failed`        | `UPDATE tenants SET subscription_status = 'past_due'`                                                          |
 | `customer.subscription.deleted` | `UPDATE tenants SET subscription_status = 'canceled', stripe_subscription_id = NULL, subscription_plan = NULL` |
 
 ### 15.4 Subscription gate middleware
@@ -741,12 +745,12 @@ Single top-level tab bar. Front-desk-only users (`role === 'front_desk' && !isAd
 
 Four React contexts in `dashboard/lib/`:
 
-| Context | Purpose |
-|---|---|
-| `SessionContext` | JWT, current user, active tenant (via `useActiveTenantId()`), tenant list, `tenantsVersion` counter for cross-component sync |
-| `ThemeContext` | 8 themes (light, dark, midnight, nord, sunset, forest, high-contrast, solarized) — swaps CSS custom properties in `app/globals.css` |
-| `VocabularyContext` | 3-tier label fallback (`COALESCE(tenant_override, template_default, hardcoded)`) per business type. 29 types across 6 categories |
-| `AppointmentDetailContext` | Holds selected appointment for cross-view access (list → detail panel) |
+| Context                    | Purpose                                                                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionContext`           | JWT, current user, active tenant (via `useActiveTenantId()`), tenant list, `tenantsVersion` counter for cross-component sync        |
+| `ThemeContext`             | 8 themes (light, dark, midnight, nord, sunset, forest, high-contrast, solarized) — swaps CSS custom properties in `app/globals.css` |
+| `VocabularyContext`        | 3-tier label fallback (`COALESCE(tenant_override, template_default, hardcoded)`) per business type. 29 types across 6 categories    |
+| `AppointmentDetailContext` | Holds selected appointment for cross-view access (list → detail panel)                                                              |
 
 ### 16.4 Component hierarchy
 
@@ -777,15 +781,15 @@ Vitest + React Testing Library (jsdom). 22 test files, 465 tests. Contexts are p
 
 `n8n/` was removed. All async work runs inline in Fastify route handlers as fire-and-forget calls.
 
-| Concern | Trigger point | Runs in |
-|---|---|---|
-| Post-call summary | LiveKit room close event → `POST /voice/session/end` | `src/routes/voice.ts` |
-| Call summary embedding | After summary insert | `src/routes/voice.ts` (OpenAI embedding call) |
-| Calendar sync | Appointment mutation routes | `src/services/calendarSync.ts` |
-| CRM push | Appointment + customer mutation routes | `src/services/syncOrchestrator.ts` |
-| CRM pull | `POST /{provider}/webhook` receivers | `src/routes/{provider}.ts` |
-| SMS / reminders | Planned cron-based | `src/routes/reminders.ts` (stub; scheduler not yet wired) |
-| Orphaned transcript linking | After call end | `link_orphaned_transcripts()` RPC from dispatcher |
+| Concern                     | Trigger point                                        | Runs in                                                   |
+| --------------------------- | ---------------------------------------------------- | --------------------------------------------------------- |
+| Post-call summary           | LiveKit room close event → `POST /voice/session/end` | `src/routes/voice.ts`                                     |
+| Call summary embedding      | After summary insert                                 | `src/routes/voice.ts` (OpenAI embedding call)             |
+| Calendar sync               | Appointment mutation routes                          | `src/services/calendarSync.ts`                            |
+| CRM push                    | Appointment + customer mutation routes               | `src/services/syncOrchestrator.ts`                        |
+| CRM pull                    | `POST /{provider}/webhook` receivers                 | `src/routes/{provider}.ts`                                |
+| SMS / reminders             | Planned cron-based                                   | `src/routes/reminders.ts` (stub; scheduler not yet wired) |
+| Orphaned transcript linking | After call end                                       | `link_orphaned_transcripts()` RPC from dispatcher         |
 
 All async work is **best-effort**. If a sync fails, the user-facing operation still succeeds. Failures are logged + surfaced in the dashboard (e.g., "Reconnect required").
 
@@ -839,9 +843,14 @@ Pino under Fastify. Every request + response logs a structured JSON line. Domain
 
 ```ts
 logEvent(req, 'appointment_booked', {
-  tenantId, customerId, appointmentId,
-  serviceId, employeeId, startTime, source: 'voice'
-})
+  tenantId,
+  customerId,
+  appointmentId,
+  serviceId,
+  employeeId,
+  startTime,
+  source: 'voice',
+});
 ```
 
 Railway captures stdout/stderr. No aggregation pipeline yet (Datadog/Logtail/etc.) — planned but not started.
@@ -874,17 +883,17 @@ Planned once there's real call volume.
 
 ### 20.1 Error taxonomy
 
-| Source | Type | Response |
-|---|---|---|
-| User input | Zod validation failure | 400 `{ error, details: [...zod issues] }` |
-| Auth | Invalid / expired JWT | 401 `{ error: 'TOKEN_EXPIRED' }` → client refresh |
-| Auth | Tenant deleted | 401 `{ error: 'TENANT_NOT_FOUND' }` → client force-logout |
-| Billing | No active subscription | 402 `{ error: 'SUBSCRIPTION_REQUIRED', upgrade_url }` |
-| Authorization | Wrong tenant | 403 `{ error: 'FORBIDDEN' }` |
-| Not found | Zero-row UPDATE/DELETE | 404 `{ error: 'NOT_FOUND' }` (via `assertRowAffected()`) |
-| Conflict | Booking clash | 409 `{ error: 'TIMESLOT_OCCUPIED' }` (RPC-specific codes) |
-| Upstream | OpenAI/Deepgram timeout | 502 `{ error: 'UPSTREAM_TIMEOUT' }` |
-| Server | Uncaught | 500 `{ error: 'INTERNAL_SERVER_ERROR' }` (details hidden in prod) |
+| Source        | Type                    | Response                                                          |
+| ------------- | ----------------------- | ----------------------------------------------------------------- |
+| User input    | Zod validation failure  | 400 `{ error, details: [...zod issues] }`                         |
+| Auth          | Invalid / expired JWT   | 401 `{ error: 'TOKEN_EXPIRED' }` → client refresh                 |
+| Auth          | Tenant deleted          | 401 `{ error: 'TENANT_NOT_FOUND' }` → client force-logout         |
+| Billing       | No active subscription  | 402 `{ error: 'SUBSCRIPTION_REQUIRED', upgrade_url }`             |
+| Authorization | Wrong tenant            | 403 `{ error: 'FORBIDDEN' }`                                      |
+| Not found     | Zero-row UPDATE/DELETE  | 404 `{ error: 'NOT_FOUND' }` (via `assertRowAffected()`)          |
+| Conflict      | Booking clash           | 409 `{ error: 'TIMESLOT_OCCUPIED' }` (RPC-specific codes)         |
+| Upstream      | OpenAI/Deepgram timeout | 502 `{ error: 'UPSTREAM_TIMEOUT' }`                               |
+| Server        | Uncaught                | 500 `{ error: 'INTERNAL_SERVER_ERROR' }` (details hidden in prod) |
 
 ### 20.2 Retry strategy
 

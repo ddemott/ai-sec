@@ -23,7 +23,9 @@ import { buildRouteTestApp, type RouteTestAppHandle } from '../test-utils-mock';
 const TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
 // Mock TelnyxNumbersClient — only the methods the route calls
-function buildMockTelnyx(overrides: Partial<TelnyxProvisioningConfig['client']> = {}): TelnyxProvisioningConfig {
+function buildMockTelnyx(
+  overrides: Partial<TelnyxProvisioningConfig['client']> = {}
+): TelnyxProvisioningConfig {
   return {
     sipConnectionId: 'sip-conn-123',
     client: {

@@ -114,16 +114,12 @@ function SoloScheduleView({
   const [saved, setSaved] = useState(false);
 
   function toggle(dow: number) {
-    setRows((prev) =>
-      prev.map((r) => (r.day_of_week === dow ? { ...r, active: !r.active } : r))
-    );
+    setRows((prev) => prev.map((r) => (r.day_of_week === dow ? { ...r, active: !r.active } : r)));
     setSaved(false);
   }
 
   function updateTime(dow: number, field: 'start_time' | 'end_time', val: string) {
-    setRows((prev) =>
-      prev.map((r) => (r.day_of_week === dow ? { ...r, [field]: val } : r))
-    );
+    setRows((prev) => prev.map((r) => (r.day_of_week === dow ? { ...r, [field]: val } : r)));
     setSaved(false);
   }
 
@@ -198,7 +194,9 @@ function SoloScheduleView({
                     onChange={(v) => updateTime(id, 'start_time', v)}
                     aria-label={`${label} start time`}
                   />
-                  <span className="text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>to</span>
+                  <span className="text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>
+                    to
+                  </span>
                   <TimeInput
                     value={row.end_time}
                     onChange={(v) => updateTime(id, 'end_time', v)}
@@ -206,7 +204,9 @@ function SoloScheduleView({
                   />
                 </>
               ) : (
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Off</span>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  Off
+                </span>
               )}
 
               {/* Quick toggle button */}
@@ -835,10 +835,7 @@ export default function ShiftManagementView() {
                             style={{ zIndex: 2 }}
                             onClick={() => openEditor(day.dateStr)}
                           >
-                            <span
-                              className="text-xs italic"
-                              style={{ color: 'var(--text-muted)' }}
-                            >
+                            <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
                               Click to schedule
                             </span>
                           </div>

@@ -138,7 +138,12 @@ describe('prepareQADocument', () => {
     const getEmbedding = vi.fn(async () => [0.1, 0.2, 0.3]);
     const normalize = vi.fn(async (text: string) => `normalized:${text}`);
 
-    const result = await prepareQADocument('What are your hours?', 'Mon-Fri 8-6', getEmbedding, normalize);
+    const result = await prepareQADocument(
+      'What are your hours?',
+      'Mon-Fri 8-6',
+      getEmbedding,
+      normalize
+    );
 
     expect(result.combined).toBe('Q: What are your hours?\nA: Mon-Fri 8-6');
     expect(normalize).toHaveBeenCalledWith(result.combined, { context: 'knowledge base Q&A' });
@@ -154,7 +159,11 @@ describe('prepareQADocument', () => {
     // WHY: the function must degrade gracefully — normalization is an
     //      enhancement, not a hard requirement
     const getEmbedding = vi.fn(async () => [0.5]);
-    const result = await prepareQADocument('Do you offer mobile service?', 'Yes, we do.', getEmbedding);
+    const result = await prepareQADocument(
+      'Do you offer mobile service?',
+      'Yes, we do.',
+      getEmbedding
+    );
 
     expect(result.normalizedText).toBe(result.combined);
     expect(getEmbedding).toHaveBeenCalledWith(result.combined);
@@ -169,9 +178,16 @@ describe('prepareQADocument', () => {
     // WHY: a normalization outage must not block KB edits — degraded
     //      quality (unnormalized embedding) is better than a 500
     const getEmbedding = vi.fn(async () => [0.7]);
-    const normalize = vi.fn(async () => { throw new Error('normalization service unavailable'); });
+    const normalize = vi.fn(async () => {
+      throw new Error('normalization service unavailable');
+    });
 
-    const result = await prepareQADocument('Test question', 'Test answer long enough.', getEmbedding, normalize);
+    const result = await prepareQADocument(
+      'Test question',
+      'Test answer long enough.',
+      getEmbedding,
+      normalize
+    );
 
     expect(result.normalizedText).toBe(result.combined);
     expect(getEmbedding).toHaveBeenCalledWith(result.combined);

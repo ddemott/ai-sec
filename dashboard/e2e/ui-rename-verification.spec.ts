@@ -92,7 +92,9 @@ test.describe('UI rename — A1 + B2', () => {
       .click();
 
     // Wait properly for the sub-tabs to render (short fixed waits are flaky after tenant switch / rebuild)
-    await expect(page.getByRole('tab', { name: /Working Days/ }).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('tab', { name: /Working Days/ }).first()).toBeVisible({
+      timeout: 10000,
+    });
 
     // Old sub-tab label should not appear anywhere under Setup.
     await expect(page.getByRole('tab', { name: /^Shifts$/ })).toHaveCount(0);
@@ -137,7 +139,9 @@ test.describe('UI rename — A1 + B2', () => {
 });
 
 test.describe('Wizard launcher (D2 chip labels verified by unit tests)', () => {
-  test('Setup Assistant from Setup goes directly to mode chooser (no welcome)', async ({ page }) => {
+  test('Setup Assistant from Setup goes directly to mode chooser (no welcome)', async ({
+    page,
+  }) => {
     await landOnDynatireDashboard(page);
 
     await page

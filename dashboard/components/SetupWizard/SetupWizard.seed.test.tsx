@@ -52,9 +52,9 @@ vi.mock('@/lib/api', () => ({
   Api: {
     tenants: { getConfig: vi.fn().mockResolvedValue({ business_type: 'salon' }) },
     templates: {
-      listFull: vi.fn().mockResolvedValue([
-        { business_type: 'salon', example_services: ['Haircut', 'Color'] },
-      ]),
+      listFull: vi
+        .fn()
+        .mockResolvedValue([{ business_type: 'salon', example_services: ['Haircut', 'Color'] }]),
     },
     services: { create: (...args: unknown[]) => createService(...args) },
     resources: { create: vi.fn().mockResolvedValue({}) },

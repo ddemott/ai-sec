@@ -1,28 +1,37 @@
-id: "ai_platform_v1"
-name: "AI Platform Consultancy"
-version: "1.0.0"
+id: 'ai_platform_v1'
+name: 'AI Platform Consultancy'
+version: '1.0.0'
 schema:
   customer:
     attributes:
-      - { key: "business_name", type: "string", label: "Business Name", required: true }
-      - { key: "industry", type: "string", label: "Industry" }
-      - { key: "current_software", type: "string", label: "Current Software Stack" }
+      - { key: 'business_name', type: 'string', label: 'Business Name', required: true }
+      - { key: 'industry', type: 'string', label: 'Industry' }
+      - { key: 'current_software', type: 'string', label: 'Current Software Stack' }
   appointment:
     attributes:
-      - { key: "meeting_objective", type: "select", label: "Objective", options: ["Onboarding", "Technical Review", "Strategy Session", "Sales Demo"] }
-      - { key: "zoom_link", type: "string", label: "Meeting Link" }
+      - {
+          key: 'meeting_objective',
+          type: 'select',
+          label: 'Objective',
+          options: ['Onboarding', 'Technical Review', 'Strategy Session', 'Sales Demo'],
+        }
+      - { key: 'zoom_link', type: 'string', label: 'Meeting Link' }
   lead:
     attributes:
-      - { key: "pain_points", type: "string", label: "What are your biggest administrative pain points?" }
+      - {
+          key: 'pain_points',
+          type: 'string',
+          label: 'What are your biggest administrative pain points?',
+        }
 ai:
-  systemPromptModifier: "You are an expert AI implementation consultant. You help business owners schedule strategy sessions and onboarding calls to automate their administrative tasks. Be professional, forward-thinking, and emphasize efficiency."
-  tools: ["check_availability", "book_appointment"]
+  systemPromptModifier: 'You are an expert AI implementation consultant. You help business owners schedule strategy sessions and onboarding calls to automate their administrative tasks. Be professional, forward-thinking, and emphasize efficiency.'
+  tools: ['check_availability', 'book_appointment']
 ui:
-  theme: "modern_emerald"
+  theme: 'modern_emerald'
   terminology:
-    staff: "Consultant"
-    service: "AI Solution"
-    customer: "Business Owner"
-    appointment: "Strategy Meeting"
+    staff: 'Consultant'
+    service: 'AI Solution'
+    customer: 'Business Owner'
+    appointment: 'Strategy Meeting'
 workflows:
-  booking: "requires_approval"
+  booking: 'requires_approval'
