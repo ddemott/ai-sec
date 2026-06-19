@@ -92,6 +92,16 @@ employees in step 1. You can switch later without re-doing any steps.
 After step 7 you have a fully working booking system. You can start
 testing calls immediately.
 
+**Optional: Import from website.** Just before the policy-questions step,
+the wizard offers an optional **"Import from website"** step. Paste your
+business URL and the AI scans your public pages (hours, services, pricing,
+policies, FAQ) and pre-fills the policy answers it can find — so the next
+step starts mostly filled in instead of blank. The pre-filled answers are
+saved as you go and shown on the very next step, where you review and edit
+(or clear) each one before you finish setup and go live. You can skip the
+scan entirely and answer everything by hand. (See "Knowledge base setup"
+below for how the scan and review fit together.)
+
 ### Common wizard mistakes (and how to avoid them)
 
 - **Skipping shifts (step 6)**: every booking the AI tries to make
@@ -153,6 +163,22 @@ suggested questions. Fill in the ones your customers actually ask:
 You can also upload existing policy documents (PDFs, Word docs, text
 files) under **Phone Assistant → Documents**. The AI extracts the text,
 indexes it, and references it when callers ask.
+
+**Fastest start — scan your website.** If you ran the wizard's optional
+"Import from website" step, many of these answers are already filled in. A
+scan does two things:
+
+1. **Pre-fills the policy questions** it found direct answers for — these
+   show up already answered in **Phone Assistant → Policy Q&A** (a green
+   "Answered" marker distinguishes already-answered questions from
+   still-blank ones). Review and edit them like any other answer.
+2. **Stages extra topics it discovered** (things outside the standard
+   questions) for your review under the **Suggestions** tab. Each one has
+   an **Add** (send to the live knowledge base) or **Discard** button —
+   nothing reaches callers until you approve it.
+
+The scan is bounded (a handful of pages, with request timeouts) so it
+stays fast and low-cost; re-run it any time your website changes.
 
 ---
 

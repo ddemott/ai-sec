@@ -139,6 +139,15 @@ function PolicyQuestionField({
               Saved {savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
+          {/* Persistent marker for an answer loaded from the DB (answered in a
+              prior session) — without this, a previously-answered question looks
+              identical to a blank one, since savedAt only reflects this session. */}
+          {status === 'idle' && !savedAt && savedId && value.trim().length > 0 && (
+            <span className="flex items-center gap-1 text-xs opacity-50" style={{ color: 'var(--success)' }}>
+              <CheckCircle2 className="w-3 h-3" />
+              Answered
+            </span>
+          )}
         </div>
       </div>
     </div>
