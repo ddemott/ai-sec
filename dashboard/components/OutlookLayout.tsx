@@ -24,6 +24,7 @@ import { FeedbackButton } from './ui/FeedbackButton';
 import { SetupProgressPill } from './SetupProgressPill';
 import { DemoBanner } from './DemoBanner';
 import { useAnchorRect } from '../lib/useAnchorRect';
+import { AppShell } from './AppShell';
 
 type Tab =
   | 'dashboard'
@@ -247,6 +248,9 @@ export function OutlookLayout({
         >
           {liveAnnouncement}
         </div>
+
+        {/* CROSS-APP NAV */}
+        <AppShell currentAppId="secretary-hq" userName={userName ?? undefined} onSignOut={onLogout} />
 
         {/* ADMIN HEADER (super-admin only) */}
         {isAdmin && managedTenantName && (
