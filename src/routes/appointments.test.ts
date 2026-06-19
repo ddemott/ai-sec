@@ -1557,17 +1557,24 @@ describe('POST /appointments/:id/update', () => {
 // ────────────────────────────────────────────────────────────────────
 
 describe('POST /appointments/:id/send-self-service-links', () => {
-  const OLD_ENV = process.env.DASHBOARD_URL;
+  const OLD_DASHBOARD_URL = process.env.DASHBOARD_URL;
+  const OLD_BACKEND_PUBLIC_URL = process.env.BACKEND_PUBLIC_URL;
 
   beforeEach(() => {
     process.env.DASHBOARD_URL = 'https://example.secretaryhq.com';
+    delete process.env.BACKEND_PUBLIC_URL;
   });
 
   afterEach(() => {
-    if (OLD_ENV === undefined) {
+    if (OLD_DASHBOARD_URL === undefined) {
       delete process.env.DASHBOARD_URL;
     } else {
-      process.env.DASHBOARD_URL = OLD_ENV;
+      process.env.DASHBOARD_URL = OLD_DASHBOARD_URL;
+    }
+    if (OLD_BACKEND_PUBLIC_URL === undefined) {
+      delete process.env.BACKEND_PUBLIC_URL;
+    } else {
+      process.env.BACKEND_PUBLIC_URL = OLD_BACKEND_PUBLIC_URL;
     }
   });
 
@@ -1651,9 +1658,9 @@ describe('POST /appointments/:id/send-self-service-links', () => {
     expect(sendSms).not.toHaveBeenCalled();
   });
 
-  it('SAD: returns 503 when DASHBOARD_URL is not set', async () => {
-    // WHO: owner on a deployment without self-service links configured
-    // WHAT: 503 before any DB query — links can't be built without the dashboard URL
+  it('SAD: returns 503 when no public base URL is configured', async () => {
+    // WHO: owner on a deployment where neither DASHBOARD_URL nor BACKEND_PUBLIC_URL is set
+    // WHAT: 503 before any DB query — links can't be built without at least one base URL
     delete process.env.DASHBOARD_URL;
     delete process.env.BACKEND_PUBLIC_URL;
 

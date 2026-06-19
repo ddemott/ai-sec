@@ -655,7 +655,7 @@ export function registerAppointmentRoutes(
       if (!baseUrl) {
         return reply.status(503).send({
           success: false,
-          error: 'Self-service links not configured (DASHBOARD_URL not set).',
+          error: 'Self-service links not configured (set DASHBOARD_URL or BACKEND_PUBLIC_URL).',
         });
       }
 
@@ -717,9 +717,10 @@ export function registerAppointmentRoutes(
         !isValidPhone(normalizedFrom) ||
         !isValidPhone(normalizedTo)
       ) {
-        return reply
-          .status(400)
-          .send({ success: false, error: 'Invalid phone number — check tenant inbound_phone.' });
+        return reply.status(400).send({
+          success: false,
+          error: 'Invalid phone number — check customer phone and tenant inbound_phone.',
+        });
       }
 
       const smsResult = await sendSms({ from: normalizedFrom, to: normalizedTo, body: smsBody });
