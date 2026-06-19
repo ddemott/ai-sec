@@ -86,6 +86,8 @@ describe('/agent-tools/my-appointments', () => {
       end_time: '2026-07-01T15:00:00Z',
       description: 'Oil Change',
       status: 'scheduled',
+      service_name: 'Full Oil Change',
+      employee_name: 'Mike',
     };
     const { app, queries } = buildApp({ queryResponses: [{ rows: [mockAppt] }] });
 
@@ -98,7 +100,11 @@ describe('/agent-tools/my-appointments', () => {
     const body = res.json<{ success: boolean; result: { appointments: unknown[] } }>();
     expect(body.success).toBe(true);
     expect(body.result.appointments).toHaveLength(1);
-    expect(body.result.appointments[0]).toMatchObject({ appointment_id: APPT_ID_A });
+    expect(body.result.appointments[0]).toMatchObject({
+      appointment_id: APPT_ID_A,
+      service_name: 'Full Oil Change',
+      employee_name: 'Mike',
+    });
     // Verify phone was normalized before DB query
     expect(queries[0].params[1]).toBe(CALLER_A_PHONE);
   });

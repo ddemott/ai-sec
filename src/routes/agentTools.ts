@@ -1639,10 +1639,16 @@ export function registerAgentToolRoutes(
           end_time: string;
           description: string | null;
           status: string;
+          service_name: string | null;
+          employee_name: string | null;
         }>(
-          `SELECT a.appointment_id, a.start_time, a.end_time, a.description, a.status
+          `SELECT a.appointment_id, a.start_time, a.end_time, a.description, a.status,
+                  s.name AS service_name,
+                  e.name AS employee_name
            FROM appointments a
            JOIN customers c ON a.customer_id = c.customer_id
+           LEFT JOIN services s ON a.service_id = s.service_id AND s.tenant_id = a.tenant_id
+           LEFT JOIN employees e ON a.employee_id = e.employee_id AND e.tenant_id = a.tenant_id
            WHERE c.tenant_id = $1 AND c.phone = $2
              AND a.status = 'scheduled' AND a.start_time > NOW()
              AND (c.is_deleted IS NULL OR c.is_deleted = false)
