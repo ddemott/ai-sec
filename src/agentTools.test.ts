@@ -824,8 +824,9 @@ describe('agentTools /book-appointment', () => {
       end_time: '2026-05-01T15:00:00',
     });
     expect(res.json().result.appointment_id).toBe('appt-2');
-    // WHY: Exactly 2 queries — SELECT + RPC, no INSERT
-    expect(queries).toHaveLength(2);
+    // WHY: At least 2 queries — SELECT + RPC, no INSERT. Additional queries
+    //       may fire (fire-and-forget reminder scheduling) and are not counted.
+    expect(queries.length).toBeGreaterThanOrEqual(2);
     expect(queries[1].params?.[2]).toBe('existing-cust');
   });
 
@@ -2136,7 +2137,9 @@ describe('agentTools customer persistence on booking failure', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    expect(queries).toHaveLength(2);
+    // At least 2 core queries (SELECT customer + RPC); reminder scheduling
+    // fires additional queries fire-and-forget after the response.
+    expect(queries.length).toBeGreaterThanOrEqual(2);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toContain('book_with_scheduling_atomic');
   });

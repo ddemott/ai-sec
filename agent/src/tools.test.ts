@@ -537,3 +537,158 @@ describe('reschedule_appointment', () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe('get_my_appointments', () => {
+  it('HAPPY: injects tenant_id + phone from context, returns appointments', async () => {
+    // WHO: Returning caller who wants to see or cancel/reschedule their appointments
+    // WHAT: Tool sends tenant_id + callerPhone (never LLM-supplied) to backend
+    // WHEN: Caller says "can I see my appointments" or "I want to reschedule"
+    // WHERE: agent/src/tools.ts get_my_appointments → /agent-tools/my-appointments
+    // WHY: Phone must come from caller-ID so a caller can only see their own appointments
+    const mockAppts = [
+      {
+        appointment_id: 'aaaaaaaa-0000-4000-8000-000000000001',
+        start_time: '2099-07-01T14:00:00Z',
+        service_name: 'Oil Change',
+        employee_name: 'Mike',
+      },
+    ];
+    const { client, calls } = makeClient([{ ok: true, result: { appointments: mockAppts } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    const result = await exec(tools.get_my_appointments, {});
+
+    expect(calls[0].path).toBe('/agent-tools/my-appointments');
+    expect(calls[0].body).toEqual({ tenant_id: TENANT_ID, phone: CALLER_PHONE });
+    expect(JSON.parse(result).appointments).toHaveLength(1);
+    expect(JSON.parse(result).appointments[0].service_name).toBe('Oil Change');
+  });
+
+  it('SAD: anonymous caller → short-circuits, no backend call', async () => {
+    // WHO: Caller with blocked caller-ID
+    // WHAT: Tool returns error without hitting backend — no phone to lookup with
+    // WHY: Backend would return empty results for null phone; better to tell the
+    //       caller we can't identify them before wasting the round-trip
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    const result = await exec(tools.get_my_appointments, {});
+
+    expect(JSON.parse(result).error).toMatch(/caller-ID/i);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('cancel_appointment', () => {
+  const APPT_ID = 'cccccccc-0000-4000-8000-000000000003';
+
+  it('HAPPY: injects phone from context and forwards appointment_id to backend', async () => {
+    // WHO: Caller who confirmed they want to cancel their appointment
+    // WHAT: Tool posts to cancel-appointment with server-injected phone (not LLM's)
+    // WHEN: LLM supplies appointment_id from a prior get_my_appointments call
+    // WHERE: agent/src/tools.ts cancel_appointment → /agent-tools/cancel-appointment
+    // WHY: Phone ownership gate on the backend requires the correct caller phone;
+    //       LLM must never supply it — prevents canceling another caller's appointment
+    const { client, calls } = makeClient([{ ok: true, result: { cancelled: true, appointment_id: APPT_ID } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.cancel_appointment, { appointment_id: APPT_ID });
+
+    expect(calls[0].path).toBe('/agent-tools/cancel-appointment');
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: CALLER_PHONE,
+      appointment_id: APPT_ID,
+    });
+  });
+
+  it('SAD: no caller-ID → short-circuits, no backend call', async () => {
+    // WHO: Caller with blocked caller-ID trying to cancel
+    // WHAT: Tool returns error without hitting backend
+    // WHY: Backend phone ownership gate would reject an empty/null phone anyway;
+    //       short-circuit avoids the wasted roundtrip mid-call
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    const result = await exec(tools.cancel_appointment, { appointment_id: APPT_ID });
+
+    expect(JSON.parse(result).error).toMatch(/caller-ID/i);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('take_message', () => {
+  it('HAPPY: forwards name, message, and optional callback_phone to backend', async () => {
+    // WHO: Caller the agent could not immediately help (owner unavailable, after-hours, etc.)
+    // WHAT: Tool collects name + message + optional callback number and persists to DB
+    // WHEN: transfer_call returns no_number, or owner is unavailable
+    // WHERE: agent/src/tools.ts take_message → /agent-tools/take-message
+    // WHY: Ensures the caller's need is recorded even when voice booking can't resolve it
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.take_message, {
+      caller_name: 'Alice Smith',
+      message: 'Need a quote for four tires',
+      callback_phone: '+15559990000',
+    });
+
+    expect(calls[0].path).toBe('/agent-tools/take-message');
+    expect(calls[0].body).toMatchObject({
+      tenant_id: TENANT_ID,
+      caller_name: 'Alice Smith',
+      message: 'Need a quote for four tires',
+      callback_phone: '+15559990000',
+    });
+  });
+
+  it('HAPPY: callback_phone is optional — tool works without it', async () => {
+    // WHO: Caller who didn't provide a callback number (or same as caller-ID)
+    // WHAT: Tool omits callback_phone from body when not supplied
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.take_message, {
+      caller_name: 'Bob',
+      message: 'Looking for weekend availability',
+    });
+
+    expect(calls[0].path).toBe('/agent-tools/take-message');
+    // callback_phone is undefined (dropped on JSON serialization) when not supplied
+    expect((calls[0].body as Record<string, unknown>).callback_phone).toBeUndefined();
+  });
+});
+
+describe('identify_caller', () => {
+  it('HAPPY: injects tenant_id + phone from context, forwards LLM-supplied name', async () => {
+    // WHO: Caller who gives their name mid-call before or instead of booking
+    // WHAT: Tool posts tenant_id + callerPhone (from context) + name (from LLM) to identify-caller
+    // WHEN: Agent hears the caller say their name and calls identify_caller immediately
+    // WHERE: agent/src/tools.ts identify_caller → /agent-tools/identify-caller
+    // WHY: Phone and tenant must come from context; name is the only LLM-supplied arg
+    const { client, calls } = makeClient([{ ok: true, result: { identified: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.identify_caller, { name: 'Dale DeMott' });
+
+    expect(calls[0].path).toBe('/agent-tools/identify-caller');
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: CALLER_PHONE,
+      name: 'Dale DeMott',
+    });
+  });
+
+  it('SAD: anonymous caller → returns plain string, no backend call', async () => {
+    // WHO: Caller with blocked caller-ID who gives their name
+    // WHAT: Tool returns a plain string (not JSON) and skips the backend
+    // WHY: Backend requires a real phone to upsert; null phone would fail validation
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    const result = await exec(tools.identify_caller, { name: 'Jane Doe' });
+
+    expect(result).toContain('No caller-ID');
+    expect(calls).toHaveLength(0);
+  });
+});
