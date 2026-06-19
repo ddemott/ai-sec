@@ -138,6 +138,27 @@ async function main() {
     fail('book-with-scheduling', `status ${book.status} ${JSON.stringify(book.json)}`);
   }
 
+  // ── S6b. Caller lists upcoming appointments (my-appointments) ──
+  if (bookedApptId) {
+    const myAppts = await api('/agent-tools/my-appointments', { tenant_id: TENANT, phone });
+    const apptList = myAppts.json?.result?.appointments ?? [];
+    const found = apptList.some((a) => a.appointment_id === bookedApptId);
+    if (myAppts.json?.success && apptList.length >= 1 && found) {
+      const a = apptList[0];
+      const hasEnrich = a.service_name || a.employee_name;
+      pass(
+        'my-appointments',
+        `${apptList.length} appt(s)${hasEnrich ? `, service="${a.service_name}" staff="${a.employee_name}"` : ' (no service/staff enrichment)'}`
+      );
+    } else if (myAppts.json?.success) {
+      fail('my-appointments', `booking not in results — ${JSON.stringify(apptList)}`);
+    } else {
+      fail('my-appointments', `status ${myAppts.status} ${JSON.stringify(myAppts.json)}`);
+    }
+  } else {
+    gap('my-appointments', 'skipped — no appointment_id from booking step');
+  }
+
   // ── S7. Shop remembers a preference ──
   const pref = await api('/agent-tools/save-customer-preference', {
     tenant_id: TENANT,
@@ -145,8 +166,15 @@ async function main() {
     key: 'last_service',
     value: 'Oil Change',
   });
-  if (pref.json?.success) pass('save-customer-preference', "saved 'last_service'");
-  else fail('save-customer-preference', `status ${pref.status} ${JSON.stringify(pref.json)}`);
+  if (pref.json?.success && pref.json?.result?.saved) {
+    pass('save-customer-preference', "saved 'last_service'");
+  } else if (pref.json?.success && pref.json?.result?.saved === false) {
+    // Endpoint returns success:true even when saved:false (customer not found).
+    // Treat as a FAIL so we can catch the mismatch between booking + preference lookup.
+    fail('save-customer-preference', `customer not found for preference — booking created it but preference lookup missed: ${JSON.stringify(pref.json?.result)}`);
+  } else {
+    fail('save-customer-preference', `status ${pref.status} ${JSON.stringify(pref.json)}`);
+  }
 
   // ── S8. Call ends — full payload: duration, transcript, outcome, the booked
   //        appointment_id, and a summary (the agent now sends all of these). ──
@@ -200,13 +228,79 @@ async function main() {
 
   // ── S9. Returning caller is recognized + preference recalled ──
   const ctx2 = await api('/agent-tools/customer-context', { tenant_id: TENANT, phone });
-  const blob = JSON.stringify(ctx2.json ?? {});
-  if (ctx2.json?.success !== false && /last_service|Oil Change|Sim Test Caller/i.test(blob)) {
-    pass('customer-context (returning)', 'history + preference recalled');
+  const result2 = ctx2.json?.result ?? {};
+  const hasName = /Sim Test Caller/i.test(result2.name ?? '');
+  const hasPref =
+    result2.preferences &&
+    (result2.preferences.last_service === 'Oil Change' ||
+      JSON.stringify(result2.preferences).includes('Oil Change'));
+  if (ctx2.json?.success && hasName && hasPref) {
+    pass('customer-context (returning)', 'customer recognized + preference recalled');
+  } else if (ctx2.json?.success && hasName && !hasPref) {
+    gap(
+      'preference round-trip',
+      `customer found (name="${result2.name}") but preference missing from context — preferences=${JSON.stringify(result2.preferences)}`
+    );
   } else if (ctx2.status === 200) {
-    gap('preference round-trip', 'context returned but preference not visible in response');
+    gap('customer-context (returning)', `unexpected shape — ${JSON.stringify(ctx2.json)}`);
   } else {
     fail('customer-context (returning)', `status ${ctx2.status}`);
+  }
+
+  // ── S10. Reschedule that appointment to a slot 8 days out ──
+  //         winTo+1d@14:00Z is clearly in the future and not inside the
+  //         original booking window, so no GiST overlap.
+  const reschedStart = new Date(winTo.getTime() + 86400_000);
+  reschedStart.setUTCHours(14, 0, 0, 0);
+  const reschedEnd = new Date(reschedStart.getTime() + 3600_000);
+  if (bookedApptId) {
+    const resched = await api('/agent-tools/reschedule-appointment', {
+      tenant_id: TENANT,
+      phone,
+      appointment_id: bookedApptId,
+      new_start_time: reschedStart.toISOString(),
+      new_end_time: reschedEnd.toISOString(),
+    });
+    if (resched.json?.success && resched.json?.result?.rescheduled) {
+      pass('reschedule-appointment', `appointment ${bookedApptId.slice(0, 8)}… moved`);
+    } else {
+      fail('reschedule-appointment', `status ${resched.status} ${JSON.stringify(resched.json)}`);
+    }
+  } else {
+    gap('reschedule-appointment', 'skipped — no appointment_id from booking step');
+  }
+
+  // ── S11. Cancel that appointment ──
+  if (bookedApptId) {
+    const cancel = await api('/agent-tools/cancel-appointment', {
+      tenant_id: TENANT,
+      phone,
+      appointment_id: bookedApptId,
+    });
+    if (cancel.json?.success && cancel.json?.result?.cancelled) {
+      pass('cancel-appointment', `appointment ${bookedApptId.slice(0, 8)}… cancelled`);
+    } else {
+      fail('cancel-appointment', `status ${cancel.status} ${JSON.stringify(cancel.json)}`);
+    }
+  } else {
+    gap('cancel-appointment', 'skipped — no appointment_id from booking step');
+  }
+
+  // ── S12. my-appointments after cancel — should be empty for this caller ──
+  if (bookedApptId) {
+    const myAppts2 = await api('/agent-tools/my-appointments', { tenant_id: TENANT, phone });
+    const apptList2 = myAppts2.json?.result?.appointments ?? [];
+    const stillPresent = apptList2.some((a) => a.appointment_id === bookedApptId);
+    if (myAppts2.json?.success && !stillPresent) {
+      pass('my-appointments (post-cancel)', 'cancelled appointment no longer listed');
+    } else if (myAppts2.json?.success && stillPresent) {
+      fail('my-appointments (post-cancel)', 'cancelled appointment still appears in list');
+    } else {
+      fail(
+        'my-appointments (post-cancel)',
+        `status ${myAppts2.status} ${JSON.stringify(myAppts2.json)}`
+      );
+    }
   }
 
   // ── Analytics (the dashboard "is it working" surface) ──
