@@ -36,7 +36,7 @@
 
 Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, auto shops, trades, fitness, food & beverage). HIPAA verticals are permanently excluded.
 
-**Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars.
+**Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars + Square CRM.
 
 **Layering:**
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via xAI Grok with OpenAI TTS as the `runFallback()` dead-air guard)

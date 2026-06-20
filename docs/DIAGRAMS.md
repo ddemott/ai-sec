@@ -12,7 +12,7 @@ Companion to `ARCHITECTURE.md`. Every diagram is a Mermaid block — renders nat
 4. [Voice Call Flow — Historical (pre-661d21d, Vapi + Edge Function)](#4-voice-call-flow--historical-pre-661d21d-vapi--edge-function)
 5. [Booking — 7-Layer Atomic Check](#5-booking--7-layer-atomic-check)
 6. [OAuth Flow (Generic, Calendar Providers)](#6-oauth-flow-generic-calendar-providers)
-7. [Calendar Sync Fan-out](#7-calendar-sync-fan-out)
+7. [Calendar + Square CRM Sync Fan-out](#7-calendar--square-crm-sync-fan-out)
 8. [Auth Flow (JWT + Refresh + Force-logout)](#8-auth-flow-jwt--refresh--force-logout)
 9. [Billing State Machine](#9-billing-state-machine)
 10. [Dashboard Component Hierarchy](#10-dashboard-component-hierarchy)
@@ -38,7 +38,7 @@ flowchart TB
     Agent["Node + LiveKit Agents SDK<br/>worker AW_vPmGExrgTeGn"]
     DG["Deepgram Nova-3 STT"]
     OAI["OpenAI GPT-4o-mini LLM"]
-    TTS["OpenAI TTS<br/>(xAI Grok pending — see NEEDS-REFACTORING #9)"]
+    TTS["xAI Grok TTS<br/>(default; OpenAI TTS fallback)"]
     Agent --> DG
     Agent --> OAI
     Agent --> TTS
@@ -51,7 +51,7 @@ flowchart TB
 
   Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>140 migrations")]
   Stripe["Stripe"]
-  Integrations["Google / Outlook<br/>calendars"]
+  Integrations["Google / Outlook calendars<br/>+ Square CRM"]
   Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
 
   Fastify --> Postgres
@@ -229,7 +229,7 @@ sequenceDiagram
   participant Agent as Agent Worker<br/>(Node on Railway)
   participant DG as Deepgram STT
   participant OAI as OpenAI LLM
-  participant TTS as OpenAI TTS<br/>(Grok pending)
+  participant TTS as xAI Grok TTS<br/>(OpenAI fallback)
   participant API as Fastify<br/>/agent-tools/*
   participant DB as Postgres
 
