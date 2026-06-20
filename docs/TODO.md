@@ -15,9 +15,109 @@ Everything else complete or tracked below.
 
 ---
 
+## 🎯 Open Work — Master Backlog (canonical, consolidated 2026-06-19)
+
+**This is the single canonical list of every OPEN item.** The dated sections that
+follow (Active build queue, Production Wiring, Phase 13, Voice Validation, Back-to-Front,
+UX audit pass 2, …) are the **detail/history dossier** — full IDs, env specifics, status
+notes, and the `[x]` DONE log for each item below. `GAPS.md` remains the category
+inventory ("did we miss a whole angle?").
+
+_Status reconciled 2026-06-18 (from the former `TODO_GAPS.md` prod audit): `DASHBOARD_URL`,
+`METRICS_TOKEN`, `CORS_ORIGIN`, `EMAIL_USER`/`EMAIL_PASS`, `BACKEND_URL`,
+`STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO`/`GROWTH_PRICE_ID`, and `TELNYX_PHONE_NUMBER` are
+**confirmed set in prod** — they are NOT in the open list below even though older dossier
+sections still show them as "IN FLIGHT (user)"._
+
+### P0 — Launch blockers (clear before first paying customer)
+
+**Voice path — live inbound + transfer** (dossier: _Voice Validation_, _Phase 13_)
+
+- [ ] **PSTN inbound** — different-carrier call to `+1 630-822-9086` while watching LiveKit `listRooms()`; confirm path end-to-end (blocked on a 2nd phone). Also validates the `ai-sec-agent` deploy.
+- [ ] **Telnyx REFER** — enable call-transfer / REFER on the SIP Connection (`livekit-outbound`); else `transfer_call` fails at runtime.
+- [ ] **Forward number** — set on dashboard AI Persona → "Forward Calls to a Person" (Dale's cell `+1 608 217 5303`).
+- [ ] **Telnyx prod creds** — verify `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` set on Railway (local `.env` only today); else OTP + provisioning 503.
+- [ ] **Manual conversation testing** — full voice calls (booking + preference capture); confirm natural dialog flow (asks preferred time, widens, never imposes). Blocked on live inbound.
+
+**Prod config / observability** (dossier: _Production hardening_, _Phase 13_)
+
+- [ ] **`SENTRY_DSN`** on Railway backend + agent (dashboard already wired; needs DSN).
+- [ ] **`BETTER_STACK_TOKEN`** on Railway backend + agent (no log aggregation until set).
+- [ ] **Alert rules** — once `METRICS_TOKEN`/`BETTER_STACK_TOKEN` live, wire `rate(errors_total[5m])`, booking-failure, http-5xx, p95 latency, sustained `/ready waiting>0`. Route to a channel Dale watches.
+
+**Billing** (dossier: _Active build queue_, _Phase 13_)
+
+- [ ] **Stripe — verify ALL paths in test mode** (`stripe listen` round-trip): checkout → webhook verifies → subscription activates (gate flips) → `payment_failed` → `subscription.deleted` revokes → plan gating (Solo/Growth/Pro). Confirm `STRIPE_SECRET_KEY` + webhook registered at `/billing/webhook`. Add a `simulate stripe` path-check.
+- [ ] **Stripe Tax** — user actions: enable Stripe Tax dashboard, register IL + customer-state nexus, set `STRIPE_AUTO_TAX=true` on Railway (code done).
+
+**CI / deploy gate** (dossier: _Production hardening → Gap 2_)
+
+- [ ] **Enable "Wait for CI"** toggle on the 3 Railway services (branch protection already gates merges).
+- [ ] **Gate end-to-end verification** — open a deliberate-fail PR → confirm block → fix → confirm green unblocks.
+
+**Legal / ops — user actions, not code** (dossier: _Phase 13_)
+
+- [ ] **LLC bank account** for Thinking Hammer LLC (required before Stripe payouts).
+- [ ] **Legal docs** — Bonterms ToS + Privacy Policy + DPA, published + linked from dashboard.
+- [ ] **TCPA SMS opt-in** consent language at booking time (Twilio template) — before any confirmation texts.
+- [ ] **E&O insurance** before first paying customer (~$800–1,200/yr; Next/Hiscox).
+- [ ] **Cyber Liability insurance** before first paying customer (often bundled with E&O).
+- [ ] _FUTURE_: at ~$60K taxable income, elect S-Corp taxation (IRS Form 2553; consult a CPA).
+
+**Security housekeeping**
+
+- [ ] **Rotate Railway team token** created 2026-06-12 (`400a1ee0…`) — pasted into a Claude session; burn + reissue.
+- [ ] **Remove DynaTire rows from prod DB** (local already clean; gated on the Railway token).
+
+### P1 — Customer success & trust (dossier: _Back-to-Front_, _Non-blocking_)
+
+- [ ] **AI cost / usage meter** — instrument spend at ~5 call sites (`agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` policy-answer, `agent/src/grokTTS.ts`); pick data model (`cost_usd` on `voice_sessions` vs new `tenant_daily_usage`); "Usage this month" Analytics card.
+- [ ] **Self-service links — dashboard surface** — "Send self-service links" button in `AppointmentDetailPanel.tsx` (backend cancel/reschedule/email links shipped PR #34; this is the trigger only).
+- [ ] **Self-service E2E** — book → SMS link → reschedule + negatives (expired, wrong tenant, double-use).
+- [ ] **Verify reminder delivery stats in prod** after Telnyx creds set.
+- [ ] **Pricing tiers (Pro/Enterprise) positioning.**
+
+### P1 — Optional integrations (turn on per business need) (dossier: _Production Wiring → optional integrations_)
+
+- [ ] **Google Calendar live proof** — `GOOGLE_CLIENT_ID/SECRET/CALLBACK_URL` + GCP OAuth app; prove a real round-trip via `calendarSync.ts` + `SYNC_TEST_RECORDER`.
+- [ ] **Outlook Calendar** — `OUTLOOK_CLIENT_ID/SECRET/CALLBACK_URL` + Azure app.
+- [ ] **Square CRM** — `SQUARE_CLIENT_ID/SECRET/CALLBACK_URL` + `SQUARE_WEBHOOK_SIGNATURE_KEY` + provider OAuth app (code no-ops safely until set).
+
+### P2 — Quality, scale & defensibility (dossier: _Back-to-Front_, _Production hardening_, _Tooling harness_)
+
+- [ ] **Data portability & retention** — `GET /export/tenant-data` (ZIP of JSONL/CSV); GDPR/CCPA hard-purge (anonymize `voice_sessions` phone+transcript, delete notes/preferences, audit-write); automated retention/purge worker; owner-facing audit-log view from `audit_log`.
+- [ ] **Website scan polish** — wizard UI click-path E2E + `simulate tools` import coverage (API/unit layers done); rate-limit / per-tenant scan guardrails; periodic re-scan scheduler for stale KB.
+- [ ] **Analytics depth** — caller-facing source citations from KB; admin "explain this answer" RAG debugger; cohort / CLV / service-specific abandonment drill-down.
+- [ ] **Docs / runbooks** — owner admin guides ("how to read analytics", FAQ); telephony troubleshooting playbook (Telnyx/LiveKit/PSTN); prod incident runbook ("agent silent", "reminders not sending", "Stripe webhook 400").
+- [ ] **Agent reliability — idempotent-read retry** in `toolsClient` (READ tools only, never mutations; backed out 2026-05-21; revisit).
+- [ ] **`simulate tools` → CI** once the `[dev]` links are wired, so journeys are regression-guarded.
+- [ ] **Remove vestigial edge-function section** from `docs/DEPLOYMENT.md` ("Phase 3: Deploy Edge Functions" lingers; body already says removed).
+- [ ] _(Optional)_ Repoint Railway `healthcheckPath` → `/ready` (gates deploy promotion on DB reachability — Dale's call).
+
+### P3 — Moat & expansion (deferred until a customer asks) (dossier: _Production Wiring → future candidates_)
+
+- [ ] **Square CRM deeper reads** (pull open jobs into voice context); real external OAuth + Stripe + live CRM round-trips in CI (recorder-only today).
+- [ ] **Extended self-service** — public portal/login (manage all appointments); waitlist / callback-queue tool; no-show auto-marking + auto-rebook.
+- [ ] **Voice enhancements** — post-call "how did we do?" SMS/NPS link; multi-language; real-time owner listen-in / barge.
+- [ ] **Product expansion** — booking widget/embed; granular RBAC beyond owner/front_desk; white-label / reseller theming; public API; CSV/PDF export (calls/appointments/customers/analytics); SSO/SAML; international numbers (US-centric today); multi-DID per tenant.
+- [ ] **Future CRM/platform candidates** (build-deferred per the `docs/STRATEGY.md` vendor heuristic) — QuickBooks/Xero, Toast, Apple Calendar (safe partners); Teams (notify-only); Vagaro/Mindbody, Acuity/Calendly (competitor-ish → shallow or import-only).
+
+### UX backlog (separate workstream — `/ux-expert` audits) (dossier: _UX audit pass 2_)
+
+- [ ] **BLOCKER (Dale)** — review live scheduling coloring/grading so Cluster A neutral-language work can proceed (de-grade slices reverted 2026-05-20; do not re-apply unprompted).
+- [ ] **Cluster A — neutral-language / no-grading** (8 surfaces, blocked on the Dale review): `StepReview`, `SkillRelationshipMap`/`SkillMapNode`, `ResourceColumnsView`, `AppointmentListView`, `EmployeeDayFocusPanel`, `AnalyticsView`, `AppointmentDetailPanel`.
+- [ ] **Wizard Phase B** — full draft-commit model (hold wizard state local, commit on Step-7 Done; ~5K-line infra; coordinate with overlay work).
+- [ ] **P3 dense-view decomposition** — track-don't-piecemeal (`SettingsView`, `TenantEditPanel`, `CRMView`, `AppointmentView`, `DashboardHome`, `CustomerDetailPanel`, scheduler orchestration, …).
+
+### Tooling cleanup (dossier: _Tooling cleanup_)
+
+- [ ] `@typescript-eslint/unbound-method` — heavy in tests; may stay `warn` forever.
+
+---
+
 ## Active build queue (2026-06-12)
 
-- [x] **🐛 BUG (infra) — `supabase/baseline.sql` was STALE; local E2E used a schema missing 3 shipped tables.** Found + FIXED 2026-06-19 (`fix/baseline-sql-drift`). `rebuild-db.sh` prefers the single-file `baseline.sql` then `setup-db.sh --baseline` marks every later migration applied **without running it** — so tables created after the 2026-05-18 squash (`knowledge_suggestion`, `customer_messages`, `ai_cost_events`) were absent from any baseline-built DB (local Playwright `globalSetup`, `npm run db:rebuild`) while CI dodged it (builds from the chain + `PLAYWRIGHT_SKIP_DB_RESET=1`). **Fix:** (1) regenerated `baseline.sql` from the chain (33→36 tables); (2) added `scripts/generate-baseline.sh` + `npm run db:baseline` (spins a throwaway DB, applies the chain, `pg_dump --schema-only --no-owner --no-privileges`) as the canonical regen so it can't silently rot; (3) closed the guard hole — `verify-schema-alignment.ts` only scanned `ADD COLUMN`, so `CREATE TABLE` (inline columns) escaped it; added `checkMigrationTablesInBaseline` (every migration-created table, minus dropped/renamed, must appear in baseline) + 4 unit tests. Verified: full KB e2e 15/15 green via the **baseline** path; guard catches the old drift, passes the new baseline. Note: CI exercises the *chain* path, not baseline — this drift class is only observable locally, so the guard now runs in prepare-commit/CI as the catch.
+- [x] **🐛 BUG (infra) — `supabase/baseline.sql` was STALE; local E2E used a schema missing 3 shipped tables.** Found + FIXED 2026-06-19 (`fix/baseline-sql-drift`). `rebuild-db.sh` prefers the single-file `baseline.sql` then `setup-db.sh --baseline` marks every later migration applied **without running it** — so tables created after the 2026-05-18 squash (`knowledge_suggestion`, `customer_messages`, `ai_cost_events`) were absent from any baseline-built DB (local Playwright `globalSetup`, `npm run db:rebuild`) while CI dodged it (builds from the chain + `PLAYWRIGHT_SKIP_DB_RESET=1`). **Fix:** (1) regenerated `baseline.sql` from the chain (33→36 tables); (2) added `scripts/generate-baseline.sh` + `npm run db:baseline` (spins a throwaway DB, applies the chain, `pg_dump --schema-only --no-owner --no-privileges`) as the canonical regen so it can't silently rot; (3) closed the guard hole — `verify-schema-alignment.ts` only scanned `ADD COLUMN`, so `CREATE TABLE` (inline columns) escaped it; added `checkMigrationTablesInBaseline` (every migration-created table, minus dropped/renamed, must appear in baseline) + 4 unit tests. Verified: full KB e2e 15/15 green via the **baseline** path; guard catches the old drift, passes the new baseline. Note: CI exercises the _chain_ path, not baseline — this drift class is only observable locally, so the guard now runs in prepare-commit/CI as the catch.
 
 - [x] **Gap #2: Analytics — DONE 2026-06-12** (shipped to main, deployed). `GET /analytics/stats` + `GET /analytics/calls` built; dashboard panels now real — Call Volume / Booking Conversion / Caller Abandonment from `voice_sessions` ("booked" keyed on `appointment_id IS NOT NULL`), + a first "Why Callers Reached Out" outcome breakdown. Backend unit + dashboard component + `analytics.spec.ts` E2E all green; harness asserts both routes.
   - [x] **Follow-up: richer WHY classification — DONE 2026-06-12.** Agent's post-call classifier (`agent/src/callClassify.ts`, bounded/failsafe) categorizes non-booking calls into `no_availability` / `wrong_service` / `price` / `message` / `info` (null when unclear → stays `no_outcome` = abandoned, preserving that metric). Wired into the shutdown hook (only when no booking/transfer tool already set the outcome). Dashboard "Why Callers Reached Out" panel renders friendly labels. +8 agent + dashboard component tests; analytics E2E extended to seed a `no_availability` call and assert the label (run-verified).
@@ -231,7 +331,7 @@ captures or sends them**, so every logged call is duration-only.
 
 - [x] **Implement `GET /analytics/stats`** — DONE 2026-06-12. Route live at `src/routes/analytics.ts`; dashboard panels fully wired with real `voice_sessions` data.
 - [x] **Wire the 3 stubbed call-based panels** — DONE 2026-06-12. Call Volume / Booking Conversion / Caller Abandonment all pull from real `voice_sessions`; "Why Callers Reached Out" breakdown wired via `callClassify.ts`.
-- [decided: leave to ops dashboards] **(Optional) Owner-facing reliability tiles** — `booking_attempts_total`, `tool_calls_total` (`src/services/metrics.ts:284,291`) are Prometheus-only (`/metrics`, token-gated). **Decision 2026-06-19: NOT building a bespoke in-app view.** These counters are labeled `{outcome,source}` / `{tool,outcome}` — **no tenant label** — so an *owner-facing per-tenant* tile is impossible without new per-tenant tracking; any view would be platform-wide and would duplicate what `/metrics` + Grafana already serve. Per build principles (no speculative/duplicative surfaces; observability tokens aren't even set in prod yet) the right home is an ops dashboard. Owners already get the per-tenant booking-conversion view in `AnalyticsView` (from `voice_sessions`). Revisit only if a customer asks for an in-app reliability tile, at which point add a `tenant` label to the counters first. (Reopen if you want the super-admin platform view built anyway.)
+- [decided: leave to ops dashboards] **(Optional) Owner-facing reliability tiles** — `booking_attempts_total`, `tool_calls_total` (`src/services/metrics.ts:284,291`) are Prometheus-only (`/metrics`, token-gated). **Decision 2026-06-19: NOT building a bespoke in-app view.** These counters are labeled `{outcome,source}` / `{tool,outcome}` — **no tenant label** — so an _owner-facing per-tenant_ tile is impossible without new per-tenant tracking; any view would be platform-wide and would duplicate what `/metrics` + Grafana already serve. Per build principles (no speculative/duplicative surfaces; observability tokens aren't even set in prod yet) the right home is an ops dashboard. Owners already get the per-tenant booking-conversion view in `AnalyticsView` (from `voice_sessions`). Revisit only if a customer asks for an in-app reliability tile, at which point add a `tenant` label to the counters first. (Reopen if you want the super-admin platform view built anyway.)
 
 ### Reminder delivery monitoring (Phase 5 — never built)
 
@@ -247,7 +347,7 @@ Backend fetch+LLM extract core now wired (`/knowledge/import-website` + helpers 
 
 - [x] **Dedicated "Import from website" step in the SetupWizard (right before the questions/policy step).** Inserted as step 7 ("Import from website") after the review step (6), immediately before the "Teach Your AI" questions step (now 8). New component `Step7WebsiteScan.tsx` with URL input + scan button that runs the backend extract and saves matching starter answers via knowledge.add. The questions step now loads pre-existing answers (by matching question text in the tenant_docs) on mount and prefills + marks saved, so the scan directly helps answer the questions in the following step. Wizard updated (type to 9 steps, labels, arrays, "of 9", next button text, expand timing, comments). User-facing explanatory copy added to scan page per spec: "when questions are asked of your AI Assistant, the information from your company comes from here. Our system will scan your website... The following page is to answer any...". Also cleaned duplicate import box from questions step in main wizard (kept for Solo via prop). See the implementation in `Step7WebsiteScan.tsx`, updates to `Step7CallerQuestions.tsx` (load prefill + conditional import box), `index.tsx`, `WizardStepContent.tsx`, `types.ts`. Advanced per-question suggestion review UI with badges still pending (see other sub-items).
 - [x] **Wire question bank resolver into import + wizard.** DONE 2026-06-19 (`feat/question-bank-shared`). Moved the question bank to `shared/questionBank.ts` (single cross-runtime source) — killed the brittle backend→dashboard runtime import (`import('../../dashboard/lib/policyQuestions.js')`); `dashboard/lib/policyQuestions.ts` is now a thin re-export so all wizard / `KnowledgeBaseView` imports are unchanged. Added `resolveQuestions({ customs })` = static bank + tenant custom questions (`tenant_docs` source='custom-question'), deduped by normalized text. `import-website` now resolves via this (direct in-process resolve). **Deliberately NOT built** (build-principle / no dormant abstraction): `GET /knowledge/questions` endpoint (no HTTP consumer — backend resolves in-process, dashboard imports shared directly), `business_type` filtering (all 9 categories are universal across verticals), and a `question_bank` DB table. Unit + handler regression tests guard the silent-`[]` path.
-- [~] **E2E + simulate coverage for the step.** PARTIAL 2026-06-19 (`feat/question-bank-shared`). Added to `dashboard/e2e/knowledge-base.spec.ts`: tests 11-13 (suggestion review lifecycle — seed `knowledge_suggestion` → GET queue → PATCH confirmed ingests into live KB source=`website-scan` + status flips / PATCH rejected discards / cross-tenant approve → 404) and test 14 (`kb-import-website-stub`) which drives the REAL import-website handler — `resolveQuestions` (static bank + tenant custom questions) → real staging INSERT — with deterministic canned extraction via `KNOWLEDGE_IMPORT_E2E_STUB=1` (set on the e2e backend in `ci.yml`; CI's OPENAI key is `sk-dummy` so a real scan can't run there). Asserts the owner's custom question reaches the DB. Plus backend handler unit test (`src/routes/knowledge.importWebsite.test.ts`, mocked fetch). Run-verified 15/15 green against a migration-chain DB. **Real OpenAI scan path: live-smoke verified 2026-06-19** — real `POST /knowledge/import-website` against a local fixture site (`Joe's Auto Shop`) extracted 8 answers → 8 confirmed staged rows (real fetch + real GPT-4o-mini + real DB); not automated (cost/flake/network). **Still TODO (deferred):** wizard UI click-path E2E (paste URL → suggestions render → approve in the React UI). Deferred 2026-06-19 after a feasibility probe: the Suggestions surface sits under `AIInsightsView`'s `activeSubTab` (internal React state, NOT URL-routable — only `KnowledgeBaseView`'s inner `?tab=suggestions` is), and no existing e2e asserts KB UI *content* as the super-admin storageState user (active-tenant selection is the blocker). Forcing one risks a flaky test; the approve logic is already covered at the component-unit (`KnowledgeSuggestions.test.tsx`) + API-E2E (tests 11-14) layers. Also `simulate.sh tools` import coverage (OpenAI-dependent — on-demand, like `simulate rag`). Gate on the RAG accuracy eval.
+- [~] **E2E + simulate coverage for the step.** PARTIAL 2026-06-19 (`feat/question-bank-shared`). Added to `dashboard/e2e/knowledge-base.spec.ts`: tests 11-13 (suggestion review lifecycle — seed `knowledge_suggestion` → GET queue → PATCH confirmed ingests into live KB source=`website-scan` + status flips / PATCH rejected discards / cross-tenant approve → 404) and test 14 (`kb-import-website-stub`) which drives the REAL import-website handler — `resolveQuestions` (static bank + tenant custom questions) → real staging INSERT — with deterministic canned extraction via `KNOWLEDGE_IMPORT_E2E_STUB=1` (set on the e2e backend in `ci.yml`; CI's OPENAI key is `sk-dummy` so a real scan can't run there). Asserts the owner's custom question reaches the DB. Plus backend handler unit test (`src/routes/knowledge.importWebsite.test.ts`, mocked fetch). Run-verified 15/15 green against a migration-chain DB. **Real OpenAI scan path: live-smoke verified 2026-06-19** — real `POST /knowledge/import-website` against a local fixture site (`Joe's Auto Shop`) extracted 8 answers → 8 confirmed staged rows (real fetch + real GPT-4o-mini + real DB); not automated (cost/flake/network). **Still TODO (deferred):** wizard UI click-path E2E (paste URL → suggestions render → approve in the React UI). Deferred 2026-06-19 after a feasibility probe: the Suggestions surface sits under `AIInsightsView`'s `activeSubTab` (internal React state, NOT URL-routable — only `KnowledgeBaseView`'s inner `?tab=suggestions` is), and no existing e2e asserts KB UI _content_ as the super-admin storageState user (active-tenant selection is the blocker). Forcing one risks a flaky test; the approve logic is already covered at the component-unit (`KnowledgeSuggestions.test.tsx`) + API-E2E (tests 11-14) layers. Also `simulate.sh tools` import coverage (OpenAI-dependent — on-demand, like `simulate rag`). Gate on the RAG accuracy eval.
 - [x] **Docs / UX polish.** DONE 2026-06-19 (`feat/knowledge-import-polish`). (1) **Docs**: `docs/BETA_ONBOARDING.md` now documents the optional "Import from website" wizard step + the scan/review flow + "from your website" provenance (wizard section + Knowledge base section). (`beth-knowledge-base.md` is tenant content, not onboarding — left alone.) (2) **Empty-vs-unanswered**: `KnowledgeBaseView` PolicyQuestionRow now shows a persistent green "Answered" marker for answers loaded from the DB (previously only current-session saves showed a marker, so a prior-session answer looked identical to a blank one). Per-category `answeredCount` badge already existed. (3) **Cost guardrails**: added `fetchWithTimeout` (AbortController) to the scan path — 8s per site page + 30s on the OpenAI extract — matching the codebase's OpenAI-timeout discipline; combined with existing bounds (maxPages 6, 8KB/page, 12KB prompt, max_tokens 3000, customs LIMIT 50) the endpoint can't hang a request/pool slot. Per-tenant scan rate-limit deferred (no abuse evidence; YAGNI). Verified: tsc clean (backend+dashboard), KB e2e 15/15 green.
   - [x] **Per-row "from your website" provenance badge** — DONE 2026-06-19 (`feat/knowledge-import-low-items`). The wizard scan now saves matched answers with `source='website-scan'`; `KnowledgeBaseView` prefill accepts BOTH `policy-questionnaire` and `website-scan` (additive — scanned answers still pre-fill), carries `source` through the saved-answers map, and renders a distinct "From your website" marker (vs "Answered") on scan-sourced rows; scanned answers are excluded from the uploaded-files list + labeled "From website" in Review Everything. Editing a scanned answer drops the badge (server resets source on update — once edited it's owner-authored). The wizard's own questions-step prefill is title-based (not source-keyed) so onboarding is unaffected. **Regression guard:** new `KnowledgeBaseView.test.tsx` asserts both sources pre-fill + the two markers render. (Low-risk path chosen after confirming `tenant_docs` has no metadata column — `source` change was the only option short of a migration.)
 
@@ -378,52 +478,19 @@ Cross-references:
 
 ## Gap inventory — folded from `TODO_GAPS.md` (2026-06-19)
 
-`TODO_GAPS.md` was a derived checklist of `GAPS.md`; its closed items shipped and its
-go-live blockers (PSTN different-carrier dial, Telnyx REFER, "Wait for CI" toggle,
-`BETTER_STACK_TOKEN`/`SENTRY_DSN`, Stripe live round-trip) are already tracked above
-(Production Wiring Checklist + Voice Validation). The file was deleted 2026-06-19 after
-folding its still-open, not-otherwise-tracked items here. `GAPS.md` remains the
-category-completeness inventory ("did we miss a whole angle?").
-
-### P1 — customer success & trust
-
-- [ ] **AI cost / usage meter** — instrument AI spend at ~5 call sites (`agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` policy-answer path, `agent/src/grokTTS.ts`); pick data model (`cost_usd` on `voice_sessions` vs new `tenant_daily_usage` table); surface "Usage this month" card in Analytics (calls + estimated AI spend)
-- [ ] **Self-service links — dashboard surface** — "Send self-service links" button in `AppointmentDetailPanel.tsx` (shows which links were sent). _Backend cancel/reschedule/email links already shipped (PR #34); this is the dashboard trigger only._
-- [ ] **Self-service E2E** — "book → SMS with link → link reschedules" + negative paths (expired, wrong tenant, double-use)
-- [ ] **Calendar sync live proof** — set `GOOGLE_CLIENT_ID/SECRET/REDIRECT` on Railway for one tenant; prove a real Google round-trip via `calendarSync.ts` + `SYNC_TEST_RECORDER`
-- [ ] Verify reminder delivery stats in prod after Telnyx creds set
-
-### P2 — quality, scale & defensibility
-
-- [ ] **Load test booking path** to find pool-exhaustion cliff (pool `max=10`); document scaling knobs (pool size, agent worker count per tenant)
-- [ ] **Data portability & retention** — `GET /export/tenant-data` (ZIP of JSONL/CSV); GDPR/CCPA hard-purge (anonymize `voice_sessions` phone+transcript, delete notes/preferences, audit-write); automated retention/purge worker (configurable max age for `voice_sessions`, `communications_history`, soft-deleted rows); owner-facing audit-log view from `audit_log`
-- [ ] **Website scan polish** — E2E coverage for the scan flow; rate-limit / cost guardrails on repeated scans; periodic re-scan scheduler for stale KB entries
-- [ ] **Analytics depth** — source citations shown to caller when answering from KB; admin "explain this answer" KB-RAG debugger; cohort / CLV / service-specific abandonment drill-down
-- [ ] **Docs / runbooks** — owner admin guides ("how to read analytics", FAQ); telephony troubleshooting playbook (Telnyx/LiveKit/PSTN); prod incident runbook ("agent silent", "reminders not sending", "Stripe webhook 400")
-- [ ] Idempotent-read retry for transient agent-tools failures (backed out 2026-05-21; revisit)
-
-### P3 — moat & expansion (deferred until a customer asks)
-
-- [ ] Square CRM: deeper bidirectional reads (pull open jobs into voice context); real external OAuth + Stripe + live CRM round-trips in CI (currently recorder-only)
-- [ ] Customer self-service extended: public portal/login (manage all appointments); waitlist / callback-queue tool; no-show auto-marking + auto-rebook
-- [ ] Voice: post-call "how did we do?" SMS/NPS link; multi-language; real-time owner listen-in / barge
-- [ ] Product: public booking widget/embed; granular RBAC beyond owner/front_desk; white-label / reseller theming; public API; CSV/PDF export (calls/appointments/customers/analytics); SSO/SAML; international numbers (code is US-centric); multi-DID per tenant (one DID/tenant today)
-
-### Legal / ops (user actions — not code)
-
-- [ ] Bonterms ToS + Privacy Policy + DPA published and linked from dashboard
-- [ ] TCPA-compliant SMS opt-in language at booking time (consent design in `GAPS.md` §9)
-- [ ] E&O + Cyber Liability insurance
-- [ ] LLC bank account open (Stripe payouts)
+`TODO_GAPS.md` was a derived checklist of `GAPS.md`; it was deleted 2026-06-19 and all its
+still-open items were consolidated into the **Open Work — Master Backlog** at the top of
+this file (status reconciled to its 2026-06-18 prod audit). `GAPS.md` remains the
+category-completeness inventory. Below is the key-files map kept for reference.
 
 ### Key files per gap
 
-| Gap | Primary files |
-| --- | --- |
-| Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts` |
-| AI cost meter | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts`, `agent/src/grokTTS.ts` |
-| Calendar sync live | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env |
-| Data export / GDPR | new `src/routes/export.ts` + DB migration for purge |
+| Gap                     | Primary files                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts`                                            |
+| AI cost meter           | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts`, `agent/src/grokTTS.ts` |
+| Calendar sync live      | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env                                                             |
+| Data export / GDPR      | new `src/routes/export.ts` + DB migration for purge                                                                                   |
 
 ---
 
