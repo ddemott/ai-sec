@@ -66,7 +66,7 @@ sections still show them as "IN FLIGHT (user)"._
 
 **Security housekeeping**
 
-- [ ] **Rotate Railway team token** created 2026-06-12 (`400a1ee0…`) — pasted into a Claude session; burn + reissue.
+- [ ] **Rotate Railway team token** created 2026-06-12 — pasted into a Claude session; burn + reissue.
 - [ ] **Remove DynaTire rows from prod DB** (local already clean; gated on the Railway token).
 
 ### P1 — Customer success & trust (dossier: _Back-to-Front_, _Non-blocking_)
@@ -305,7 +305,7 @@ track main; see CLAUDE.md Project Status).**
 - [ ] **IN FLIGHT (user) — REMAINING** Enable call transfer / REFER on the Telnyx SIP Connection — else every transfer fails at runtime.
 - [ ] **IN FLIGHT (user) — REMAINING** Set the forward number on dashboard AI Persona → "Forward Calls to a Person" (Dale's cell `+1 608 217 5303`).
 - [ ] **IN FLIGHT (validation — BLOCKED on a 2nd phone)** Different-carrier call to `+1 630-822-9086` → ask for a person → confirm the cell rings + Calls tab shows the transcript. Dale has no spare phone right now; do later. Also validates the still-open PSTN inbound path + the agent (`ai-sec-agent`) deploy.
-- [ ] **Housekeeping** Rotate the Railway team token created 2026-06-12 (`400a1ee0…`) — it was pasted into a Claude session; burn + reissue.
+- [ ] **Housekeeping** Rotate the Railway team token created 2026-06-12 — it was pasted into a Claude session; burn + reissue.
 
 ---
 
