@@ -1,6 +1,6 @@
 # Framework Migrations
 
-Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `REFACTORING_TODO.md` (mechanical) or `docs/TODO.md` (general).
+Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `docs/TODO.md`.
 
 **Last updated:** 2026-05-27 (pointers refreshed during documentation unification pass; content otherwise stable)
 
@@ -40,7 +40,6 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 ## Related docs
 
-- `REFACTORING_TODO.md` — current mechanical / convention refactors
 - `docs/TODO.md` — full active task list
 - `docs/ARCHITECTURE.md` — system architecture
 - `CLAUDE.md` — project overview, includes migration callout

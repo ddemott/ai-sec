@@ -7,7 +7,7 @@
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
 - **CI**: green. Agent package gated in CI. Tests (2026-06-11): backend 2,017 · dashboard 744 · agent 122 · E2E 113 (CI green for the first time — getPool db-name bug + 9 other infra fixes in PR #4). Includes the uncommitted live call-transfer feature.
 - **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Replaced by **`+1 630-866-1960`** — DONE 2026-06-02: account funded + upgraded (trial cap lifted), number purchased (Telnyx id `2973794140900296302`), routed to SIP connection `livekit-outbound` (`2945038451784812111`), connection activated. **Remaining**: local `.env` LiveKit API key is dead (rotated at Railway) → need fresh creds → update LiveKit inbound trunk OLD→`+16308661960` → write tenant phone fields → live test. Full checklist: `docs/BETH_GO_LIVE_TODO.md`. Still zero inbound CDRs until trunk wired.
-- **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See root `TODO_GAPS.md` subtasks.
+- **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See the Production Wiring Checklist above.
 - **Browser validation**: Role gating + invite flow — DONE 2026-06-03, proven by green e2e (`auth-flows` route-gate 403, `workflows:630` front-desk nav-hide/snap-back, `workflows:676` owner invite).
 - **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (now archived/reduced). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
 
@@ -167,7 +167,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 **Gap 2 — CI / deploy gate (prioritized; agent job already DONE above):**
 
-- [ ] **P0 — Gate Railway deploy on CI green.** GitHub branch protection applied 2026-06-15 (exact 4 jobs from ci.yml + enforce admins + required PR + strict checks + conversation resolution). This blocks merges to `main` (and thus deploys) on red CI. **Still needed**: Enable "Wait for CI" toggle on the 3 Railway services (see root TODO_GAPS.md for full subtask list). Update: use `npm run ci:status` / `./scripts/simulate.sh ci` before merging. Highest priority.
+- [ ] **P0 — Gate Railway deploy on CI green.** GitHub branch protection applied 2026-06-15 (exact 4 jobs from ci.yml + enforce admins + required PR + strict checks + conversation resolution). This blocks merges to `main` (and thus deploys) on red CI. **Still needed**: Enable "Wait for CI" toggle on the 3 Railway services (see the Production Wiring Checklist above). Update: use `npm run ci:status` / `./scripts/simulate.sh ci` before merging. Highest priority.
 - [x] **P1 — Add E2E (Playwright) job to CI.** DONE 2026-05-28. `e2e` job added to `.github/workflows/ci.yml`: pgvector service, migrations + seed, backend build + start, dashboard build + start, `wait-on`, Playwright chromium install + test run, artifact upload on failure. **Needs first-run green in Actions before marking required.** The runtime security proof (anonymous-401, cross-tenant 403, `/ready`) runs only locally today. Concrete plan: new `e2e` job — `ankane/pgvector` service (mirror backend job) → `npm ci` (root + dashboard) → `npm run build` (backend) → start backend + dashboard → `npx playwright install --with-deps chromium` → `cd dashboard && npx playwright test`. **Needs first-run validation in Actions** (browser install + server startup are the usual flake sources) — don't mark required until one green run.
 - [ ] **P2 — Repoint Railway `healthcheckPath` → `/ready`.** `railway.json` currently `/health` (shallow); `/ready` would gate deploy _promotion_ on DB reachability. Behavior change (could block promotion during a DB blip) — Dale's call.
 
@@ -319,7 +319,7 @@ Source: Raw UX audit performed 2026-05-19 (previously captured in `ux-review-not
 
 ## Tooling cleanup (remaining ESLint promotions)
 
-Small mechanical hygiene pass completed: cleaned up remaining references to the now-historical NEEDS-REFACTORING.md in source comments (updated to point to RESOLVED.md / REFACTORING_TODO.md for accuracy).
+Small mechanical hygiene pass completed: cleaned up remaining references to the now-historical NEEDS-REFACTORING.md in source comments (updated to point to RESOLVED.md for accuracy).
 
 Most of the 2026-05-17 lint adoption already promoted to `error`. Still at `warn`:
 
@@ -373,6 +373,57 @@ Cross-references:
 - Original raw UX audit notes (archived; key findings triaged here)
 - `docs/TODO.md` → UX audit pass 2 → P1 Cluster C and P2 wizard copy items
 - CI section: "P1 — Add E2E job to CI"
+
+---
+
+## Gap inventory — folded from `TODO_GAPS.md` (2026-06-19)
+
+`TODO_GAPS.md` was a derived checklist of `GAPS.md`; its closed items shipped and its
+go-live blockers (PSTN different-carrier dial, Telnyx REFER, "Wait for CI" toggle,
+`BETTER_STACK_TOKEN`/`SENTRY_DSN`, Stripe live round-trip) are already tracked above
+(Production Wiring Checklist + Voice Validation). The file was deleted 2026-06-19 after
+folding its still-open, not-otherwise-tracked items here. `GAPS.md` remains the
+category-completeness inventory ("did we miss a whole angle?").
+
+### P1 — customer success & trust
+
+- [ ] **AI cost / usage meter** — instrument AI spend at ~5 call sites (`agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` policy-answer path, `agent/src/grokTTS.ts`); pick data model (`cost_usd` on `voice_sessions` vs new `tenant_daily_usage` table); surface "Usage this month" card in Analytics (calls + estimated AI spend)
+- [ ] **Self-service links — dashboard surface** — "Send self-service links" button in `AppointmentDetailPanel.tsx` (shows which links were sent). _Backend cancel/reschedule/email links already shipped (PR #34); this is the dashboard trigger only._
+- [ ] **Self-service E2E** — "book → SMS with link → link reschedules" + negative paths (expired, wrong tenant, double-use)
+- [ ] **Calendar sync live proof** — set `GOOGLE_CLIENT_ID/SECRET/REDIRECT` on Railway for one tenant; prove a real Google round-trip via `calendarSync.ts` + `SYNC_TEST_RECORDER`
+- [ ] Verify reminder delivery stats in prod after Telnyx creds set
+
+### P2 — quality, scale & defensibility
+
+- [ ] **Load test booking path** to find pool-exhaustion cliff (pool `max=10`); document scaling knobs (pool size, agent worker count per tenant)
+- [ ] **Data portability & retention** — `GET /export/tenant-data` (ZIP of JSONL/CSV); GDPR/CCPA hard-purge (anonymize `voice_sessions` phone+transcript, delete notes/preferences, audit-write); automated retention/purge worker (configurable max age for `voice_sessions`, `communications_history`, soft-deleted rows); owner-facing audit-log view from `audit_log`
+- [ ] **Website scan polish** — E2E coverage for the scan flow; rate-limit / cost guardrails on repeated scans; periodic re-scan scheduler for stale KB entries
+- [ ] **Analytics depth** — source citations shown to caller when answering from KB; admin "explain this answer" KB-RAG debugger; cohort / CLV / service-specific abandonment drill-down
+- [ ] **Docs / runbooks** — owner admin guides ("how to read analytics", FAQ); telephony troubleshooting playbook (Telnyx/LiveKit/PSTN); prod incident runbook ("agent silent", "reminders not sending", "Stripe webhook 400")
+- [ ] Idempotent-read retry for transient agent-tools failures (backed out 2026-05-21; revisit)
+
+### P3 — moat & expansion (deferred until a customer asks)
+
+- [ ] Square CRM: deeper bidirectional reads (pull open jobs into voice context); real external OAuth + Stripe + live CRM round-trips in CI (currently recorder-only)
+- [ ] Customer self-service extended: public portal/login (manage all appointments); waitlist / callback-queue tool; no-show auto-marking + auto-rebook
+- [ ] Voice: post-call "how did we do?" SMS/NPS link; multi-language; real-time owner listen-in / barge
+- [ ] Product: public booking widget/embed; granular RBAC beyond owner/front_desk; white-label / reseller theming; public API; CSV/PDF export (calls/appointments/customers/analytics); SSO/SAML; international numbers (code is US-centric); multi-DID per tenant (one DID/tenant today)
+
+### Legal / ops (user actions — not code)
+
+- [ ] Bonterms ToS + Privacy Policy + DPA published and linked from dashboard
+- [ ] TCPA-compliant SMS opt-in language at booking time (consent design in `GAPS.md` §9)
+- [ ] E&O + Cyber Liability insurance
+- [ ] LLC bank account open (Stripe payouts)
+
+### Key files per gap
+
+| Gap | Primary files |
+| --- | --- |
+| Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts` |
+| AI cost meter | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts`, `agent/src/grokTTS.ts` |
+| Calendar sync live | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env |
+| Data export / GDPR | new `src/routes/export.ts` + DB migration for purge |
 
 ---
 

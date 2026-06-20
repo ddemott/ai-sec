@@ -7,7 +7,7 @@ Status lifecycle: `proposed` → `approved` / `rejected` → `done`
 
 This file is append-only by the loop. Humans update Status fields.
 
-Cross-references: [docs/TODO.md](TODO.md) | [docs/IMPROVEMENT_IDEAS.md](IMPROVEMENT_IDEAS.md) | [REFACTORING_TODO.md](../REFACTORING_TODO.md)
+Cross-references: [docs/TODO.md](TODO.md) | [docs/IMPROVEMENT_IDEAS.md](IMPROVEMENT_IDEAS.md)
 
 ---
 

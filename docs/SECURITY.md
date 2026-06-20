@@ -9,7 +9,7 @@ This is a baseline of the production-surface security posture so future audits s
 SecretaryHQ is a multi-tenant voice-AI receptionist SaaS for service businesses. The realistic threats:
 
 - **Cross-tenant data leak** — tenant A reading or writing tenant B's customers, appointments, or voice transcripts. Highest-stakes class of breach for this platform.
-- **Webhook forgery** — attacker forging a Stripe / HubSpot / Square / Jobber / ServiceTitan / Telnyx webhook to manipulate subscription state, customer records, or call routing.
+- **Webhook forgery** — attacker forging a Stripe / Square / Telnyx webhook to manipulate subscription state, customer records, or call routing. (The HubSpot / Jobber / ServiceTitan CRM webhooks were removed 2026-06-12 with those integrations; Square sync was retained.)
 - **Account takeover** — password-reset token exfiltration, JWT theft, or replay of an old token after credential rotation.
 - **Agent worker impersonation** — caller forging `/agent-tools/*` requests to read a tenant's booking data, customer context, or trigger fraudulent bookings without being on a real call.
 
@@ -39,19 +39,14 @@ Out of scope (not a multi-tenant SaaS concern at this stage): DDoS, application-
 | Webhook | Header | Algorithm | Verifier | Test |
 |---|---|---|---|---|
 | Stripe `/billing/webhook` | `stripe-signature` | Stripe v1 (constructEvent) | `stripe.webhooks.constructEvent` | `webhook-signatures.test.ts` |
-| HubSpot `/hubspot/webhook` | `x-hubspot-signature-v3` + `x-hubspot-request-timestamp` | HMAC-SHA256 over `${method}${uri}${body}${timestamp}`, base64 | `hubspotClient.verifyWebhookSignature` | `webhook-signatures.test.ts` |
 | Square `/square/webhook` | `x-square-hmacsha256-signature` | HMAC-SHA256 over `${notificationUrl}${body}`, base64 | `squareClient.verifyWebhookSignature` | `webhook-signatures.test.ts` |
-| Jobber `/jobber/webhook/:tenantId` | `x-jobber-hmac-sha256` | HMAC-SHA256 over body, hex; per-tenant secret in `tenant_integration_settings` | `jobberClient.verifyWebhookSignature` | `webhook-signatures.test.ts` |
-| ServiceTitan `/servicetitan/webhook` | `x-servicetitan-webhook-secret` (or `Authorization: Bearer ...`) | shared-secret comparison | inline | (gap — not pinned by test) |
 | Telnyx (SIP, not HTTP) | n/a | n/a — SIP layer auth via SIP Connection ID | n/a | n/a |
 
-**Critical correctness detail:** all HMAC verifications use `req.rawBody` (preserved by the global content-type parser at `src/index.ts:142`), NOT `JSON.stringify(req.body)`. Re-serializing through V8 doesn't byte-match the original payload (whitespace, key order, number formatting differ), so signature math fails deterministically. This was a bug from 2026-04-22 to 2026-05-09 in HubSpot/Square/Jobber routes; fixed in commit `4c3205d`. ServiceTitan uses a shared-secret header (no HMAC) so it was unaffected.
+> The HubSpot / Jobber / ServiceTitan CRM webhooks (and their HMAC verifiers) were removed 2026-06-12 along with those integrations. Stripe and Square are the remaining HMAC-verified HTTP webhooks.
 
-HubSpot also enforces a 5-minute timestamp-freshness window for replay protection.
+**Critical correctness detail:** all HMAC verifications use `req.rawBody` (preserved by the global content-type parser at `src/index.ts:142`), NOT `JSON.stringify(req.body)`. Re-serializing through V8 doesn't byte-match the original payload (whitespace, key order, number formatting differ), so signature math fails deterministically. This was a bug from 2026-04-22 to 2026-05-09 in the HubSpot/Square/Jobber routes; fixed in commit `4c3205d`. (The HubSpot/Jobber routes were later removed entirely on 2026-06-12; the rule still applies to the surviving Stripe and Square webhooks.)
 
-**Gaps acknowledged:**
-
-- ServiceTitan webhook signature path is not pinned by a contract test — its check is a string comparison rather than HMAC. Low priority because (a) ServiceTitan uses a per-tenant shared secret, not global; (b) no real ServiceTitan integration is wired today.
+Square also verifies HMAC against `${notificationUrl}${body}` rather than the body alone, so the registered notification URL must match exactly.
 
 ## Password reset flow
 
@@ -97,6 +92,5 @@ HubSpot also enforces a 5-minute timestamp-freshness window for replay protectio
 
 These are tracked in `docs/TODO.md`:
 
-- ServiceTitan webhook contract test (low priority; no real integration today).
 - Admin "lock account" UI surface (currently SQL-only via `password_changed_at` update).
 - Per-worker agent identity (only matters when we run multiple agent workers concurrently).

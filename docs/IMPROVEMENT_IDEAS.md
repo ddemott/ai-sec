@@ -3,7 +3,7 @@
 > **Restructured 2026-05-29.** Items verified against current code; done items moved to Closed section. All remaining items reworded to be bite-size.
 >
 > **Where things live:**
-> - Mechanical/type/naming/convention work → `REFACTORING_TODO.md` (complete)
+> - Mechanical/type/naming/convention work → complete (history in `RESOLVED.md`)
 > - Blocking launch + UX audit pass 2 → `docs/TODO.md`
 > - "Would be nice someday" → this file
 
@@ -80,7 +80,7 @@ Items confirmed done against current code (2026-05-29):
 - **Super-Admin destructive/reorder tests** — `dashboard/superadmin.test.tsx` covers reorder, duplicate-name rejection, and delete confirmation gate.
 - **Date-range query parsing (analytics)** — `analytics.ts` already imports and uses `parseDateRange` from `routeHelpers`. *(Calendar routes have no date params.)*
 - **Extract Shared Route Guards** — `routeHelpers.ts` already provides `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`. Used across route modules.
-- **All REFACTORING_TODO.md items** — fully closed 2026-05-27 (see that file).
+- **All mechanical-refactor backlog items** (former `REFACTORING_TODO.md`) — fully closed 2026-05-27; history in `RESOLVED.md`.
 
 Items completed 2026-05-29 (this session):
 

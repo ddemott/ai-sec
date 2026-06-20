@@ -11,8 +11,8 @@ Companion to `ARCHITECTURE.md`. Every diagram is a Mermaid block — renders nat
 3. [Voice Call Flow — Current (LiveKit Agent)](#3-voice-call-flow--current-livekit-agent)
 4. [Voice Call Flow — Historical (pre-661d21d, Vapi + Edge Function)](#4-voice-call-flow--historical-pre-661d21d-vapi--edge-function)
 5. [Booking — 7-Layer Atomic Check](#5-booking--7-layer-atomic-check)
-6. [OAuth Flow (Generic, 6 Providers)](#6-oauth-flow-generic-6-providers)
-7. [Calendar + CRM Sync Fan-out](#7-calendar--crm-sync-fan-out)
+6. [OAuth Flow (Generic, Calendar Providers)](#6-oauth-flow-generic-calendar-providers)
+7. [Calendar + Square CRM Sync Fan-out](#7-calendar--square-crm-sync-fan-out)
 8. [Auth Flow (JWT + Refresh + Force-logout)](#8-auth-flow-jwt--refresh--force-logout)
 9. [Billing State Machine](#9-billing-state-machine)
 10. [Dashboard Component Hierarchy](#10-dashboard-component-hierarchy)
@@ -38,7 +38,7 @@ flowchart TB
     Agent["Node + LiveKit Agents SDK<br/>worker AW_vPmGExrgTeGn"]
     DG["Deepgram Nova-3 STT"]
     OAI["OpenAI GPT-4o-mini LLM"]
-    TTS["OpenAI TTS<br/>(xAI Grok pending — see NEEDS-REFACTORING #9)"]
+    TTS["xAI Grok TTS<br/>(default; OpenAI TTS fallback)"]
     Agent --> DG
     Agent --> OAI
     Agent --> TTS
@@ -46,12 +46,12 @@ flowchart TB
 
   LiveKit -->|WebSocket| Agent
 
-  Fastify["Fastify Backend<br/>26 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
+  Fastify["Fastify Backend<br/>27 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
-  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>83 migrations")]
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>140 migrations")]
   Stripe["Stripe"]
-  Integrations["Google / Outlook<br/>Jobber / HubSpot<br/>Square / ServiceTitan"]
+  Integrations["Google / Outlook calendars<br/>+ Square CRM"]
   Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
 
   Fastify --> Postgres
@@ -66,7 +66,7 @@ flowchart TB
 
 ## 2. Data Model (ER)
 
-20 RLS-scoped tenant tables + the core relationships. `business_templates`, `audit_log`, `record_versions`, `voice_sessions`, `consent_records`, `opt_out_records` are global/platform-scoped and omitted here for clarity.
+20 RLS-scoped tenant tables + the core relationships. `business_templates`, `audit_log`, `record_versions`, `voice_sessions`, `consent_records`, `opt_out_records` are global/platform-scoped and omitted here for clarity. `tenant_integration_settings` (Square OAuth tokens) and `entity_sync_map` (Square local↔external ID mapping) are actively written by the live Square CRM sync — the only external CRM surviving the 2026-06-12 removal of Jobber/HubSpot/ServiceTitan/GoHighLevel. Calendar sync uses `appointment_sync_map`.
 
 ```mermaid
 erDiagram
@@ -229,7 +229,7 @@ sequenceDiagram
   participant Agent as Agent Worker<br/>(Node on Railway)
   participant DG as Deepgram STT
   participant OAI as OpenAI LLM
-  participant TTS as OpenAI TTS<br/>(Grok pending)
+  participant TTS as xAI Grok TTS<br/>(OpenAI fallback)
   participant API as Fastify<br/>/agent-tools/*
   participant DB as Postgres
 
@@ -264,7 +264,7 @@ sequenceDiagram
   Agent->>API: POST /voice/session/end
   API->>API: generate summary + embedding
   API->>DB: INSERT call_summaries<br/>link_orphaned_transcripts()
-  API-)API: fire-and-forget CRM + calendar sync
+  API-)API: fire-and-forget calendar + Square sync
 ```
 
 ---
@@ -372,9 +372,9 @@ sequenceDiagram
 
 ---
 
-## 6. OAuth Flow (Generic, 6 Providers)
+## 6. OAuth Flow (Generic, Calendar Providers)
 
-One factory (`oauthCallbackFactory.ts`) + one token refresher (`tokenManagement.ts`) back all 6 integrations: Google Calendar, Outlook, Jobber, HubSpot, Square, ServiceTitan.
+One factory (`oauthCallbackFactory.ts`) + one token refresher (`tokenManagement.ts`) back both calendar integrations: Google Calendar and Outlook. (The competitor-CRM OAuth flows — Jobber, HubSpot, ServiceTitan, GoHighLevel — were removed 2026-06-12.) **Square** — the surviving external CRM sync — uses its own OAuth path in `src/services/crm/squareClient.ts` (`getAuthUrl` / `verifyState` / `exchangeCodeForTokens`) plus webhook HMAC-SHA256 verification (`SQUARE_WEBHOOK_SIGNATURE_KEY`) at `POST /square/webhook`, not the generic calendar factory; its tokens still land in `tenant_integration_settings`.
 
 ```mermaid
 sequenceDiagram
@@ -382,7 +382,7 @@ sequenceDiagram
   actor Owner as Owner (dashboard)
   participant API as Fastify<br/>/{provider}/auth/*
   participant Factory as oauthCallbackFactory
-  participant Provider as Provider<br/>(Google/Jobber/etc)
+  participant Provider as Provider<br/>(Google/Outlook)
   participant DB as tenant_integration_settings
   participant Token as tokenManagement.ts
 
@@ -421,9 +421,9 @@ sequenceDiagram
 
 ---
 
-## 7. Calendar + CRM Sync Fan-out
+## 7. Calendar + Square CRM Sync Fan-out
 
-7 mutation points fan out to 2 calendar providers (push-only) and 4 CRM providers (bidirectional). Every provider fails independently — one bad provider never blocks another.
+The 4 appointment mutation points fan out through `syncOrchestrator.ts` to 2 calendar providers (push-only) **and** Square (the surviving external CRM sync, bidirectional). Each provider fails independently — one bad provider never blocks another. (The competitor-CRM providers — Jobber/HubSpot/ServiceTitan/GoHighLevel — were removed 2026-06-12; **Square remains live**.)
 
 ```mermaid
 flowchart LR
@@ -432,56 +432,36 @@ flowchart LR
     A2[appointment update]
     A3[appointment delete]
     A4[appointment cancel]
-    C1[customer create]
-    C2[customer update]
-    C3[customer delete]
   end
 
-  CalSync["calendarSync.ts<br/>(fire-and-forget)"]
-  CrmSync["syncOrchestrator.ts<br/>(fire-and-forget)"]
+  Orch["syncOrchestrator.ts<br/>(fire-and-forget fan-out)"]
 
-  A1 & A2 & A3 & A4 --> CalSync
-  A1 & A2 & A3 & A4 --> CrmSync
-  C1 & C2 & C3 --> CrmSync
+  A1 & A2 & A3 & A4 --> Orch
+
+  CalSync["calendarSync.ts"]
+  SqSync["crm/squareSync.ts"]
+
+  Orch --> CalSync
+  Orch --> SqSync
 
   subgraph cal["Calendars (push-only)"]
     G[Google Calendar]
     O[Outlook / MS Graph]
   end
 
-  subgraph crm["CRMs (bidirectional)"]
-    J[Jobber — GraphQL]
-    H[HubSpot — REST v3]
-    S[Square — REST v2]
-    ST[ServiceTitan — REST v2]
-  end
-
   CalSync --> G
   CalSync --> O
-  CrmSync --> J
-  CrmSync --> H
-  CrmSync --> S
-  CrmSync --> ST
 
-  subgraph pull["Pull triggers"]
-    WH["POST /{provider}/webhook<br/>(signature-verified)"]
-    Recon["POST /{provider}/sync<br/>full reconcile"]
+  subgraph crm["Square CRM (bidirectional)"]
+    SQ[Square API + /square/webhook]
   end
 
-  J -.webhook.-> WH
-  H -.webhook.-> WH
-  S -.webhook.-> WH
-  ST -.webhook.-> WH
-  WH --> CrmSync
-  Recon --> CrmSync
+  SqSync --> SQ
 
-  ESM[("entity_sync_map<br/>local_id ↔ external_id")]
   ASM[("appointment_sync_map")]
-  CrmSync <--> ESM
+  ESM[("entity_sync_map")]
   CalSync <--> ASM
-
-  Merge["Merge rule:<br/>most recent updated_at wins<br/>COALESCE for non-conflicting fields"]
-  CrmSync -.-> Merge
+  SqSync <--> ESM
 ```
 
 ---
