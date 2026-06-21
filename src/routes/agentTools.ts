@@ -29,6 +29,7 @@ import { validateAppointmentTimeRange } from '../services/appointmentValidation'
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../services/customerLookup';
 import { findNextAvailableSlots } from '../services/availabilitySearch';
+import { recordAiCostEvent } from '../services/aiCost';
 import {
   findOverlappingAppointment,
   isOverlapError,
@@ -755,6 +756,20 @@ export function registerAgentToolRoutes(
         }
       }
       const embedding = await getEmbedding(queryText);
+
+      // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+      const embTokens = Math.ceil(queryText.length / 4);
+      const embCost = embTokens * 0.02e-6;
+      withTenantClient(args.tenant_id, (client) =>
+        recordAiCostEvent(client, {
+          tenantId: args.tenant_id,
+          source: 'kb_query',
+          provider: 'openai',
+          model: 'text-embedding-3-small',
+          inputTokens: embTokens,
+          estimatedCostUsd: embCost,
+        })
+      ).catch(() => undefined);
 
       const matches = await withTenantClient(args.tenant_id, (client) =>
         client.query<{ content: string; similarity: number }>(

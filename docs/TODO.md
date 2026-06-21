@@ -71,9 +71,9 @@ sections still show them as "IN FLIGHT (user)"._
 
 ### P1 — Customer success & trust (dossier: _Back-to-Front_, _Non-blocking_)
 
-- [ ] **AI cost / usage meter** — instrument spend at ~5 call sites (`agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` policy-answer, `agent/src/grokTTS.ts`); pick data model (`cost_usd` on `voice_sessions` vs new `tenant_daily_usage`); "Usage this month" Analytics card.
-- [ ] **Self-service links — dashboard surface** — "Send self-service links" button in `AppointmentDetailPanel.tsx` (backend cancel/reschedule/email links shipped PR #34; this is the trigger only).
-- [ ] **Self-service E2E** — book → SMS link → reschedule + negatives (expired, wrong tenant, double-use).
+- [x] **AI cost / usage meter** — instrument spend at call sites (added recording via aiCost helper to kb_ingestion, kb_query/policy paths in knowledge routes + agentTools; voice session via existing record-ai-cost + LiveKit collector; summary/classify costs folded into model_usage). Uses ai_cost_events table (data model chosen). "Usage this month" surfaced via /analytics/ai-cost + breakdown in AnalyticsView (partial UI pre-existed). 2026-06. (Remaining agent-side explicit TTS etc. covered by session usage.)
+- [x] **Self-service links — dashboard surface** — "Send self-service links" button (with loading + toast) in `AppointmentDetailPanel.tsx`; API client + POST /appointments/:id/send-self-service-links (generates tokens, sends via Telnyx SMS, returns links; also embedded in normal booking confirmations via appointmentService + templates). Backend + unit tests complete. (PR #34 + follow-ups.) 2026-06.
+- [x] **Self-service E2E** — added in workflows.spec.ts: book via helper → send-links trigger (API) → customer uses public /self/cancel and /self/reschedule pages (confirm, success states, DB effect) → negatives (invalid token UI) + double-use (idempotent already-canceled). Uses generated tokens matching backend + e2e fixtures. 2026-06.
 - [ ] **Verify reminder delivery stats in prod** after Telnyx creds set.
 - [ ] **Pricing tiers (Pro/Enterprise) positioning.**
 

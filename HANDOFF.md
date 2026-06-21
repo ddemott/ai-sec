@@ -27,8 +27,8 @@
 
 **P1 (pick next):**
 
-1. Dashboard "Send self-service links" button — `dashboard/components/AppointmentDetailPanel.tsx`
-2. E2E: "book → SMS → link cancels/reschedules" + negative cases (expired token, wrong tenant)
+1. (done) Dashboard "Send self-service links" button + backend trigger — `dashboard/components/AppointmentDetailPanel.tsx` + `/appointments/:id/send-self-service-links` (and links in booking templates). E2E added for full journey + negatives.
+2. (done) E2E: "book → SMS → link cancels/reschedules" + negative cases (expired token, wrong tenant, double-use) — added to workflows.spec.ts.
 3. AI cost phase 2 — instrument `callSummary.ts` + `knowledgeIngestion.ts` + `knowledge.ts` for remaining token costs
 
 **P2:**

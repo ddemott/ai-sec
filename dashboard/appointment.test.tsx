@@ -500,6 +500,61 @@ describe('AppointmentView sad paths', () => {
     expect(deleteFetchHappened).not.toHaveBeenCalled()
   })
 
+  test('handleSendLinks calls the send-self-service-links endpoint (Send Links button in detail panel)', async () => {
+    // WHO: owner viewing a scheduled appointment in the detail panel (real or mock data)
+    // WHAT: clicking "Send Links" calls Api.appointments.sendSelfServiceLinks (which POSTs /appointments/:id/send-self-service-links)
+    //       and shows success/error toast based on response (no crash)
+    // WHEN: a scheduled appointment with customer phone is selected
+    // WHERE: dashboard/components/AppointmentDetailPanel.tsx → handleSendLinks + the conditional Send Links <Button>
+    // WHY: this is the P1 self-service "dashboard surface" trigger. The E2E covers the full customer journey + backend;
+    //      this unit pins that the React handler + API client wiring is exercised and the button is rendered when conditions met.
+    //      (Complements the backend unit tests and the new playwright E2E.)
+    const sendLinksFetchHappened = vi.fn()
+    global.fetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : ''
+      if (url.includes('/appointments') && (!init?.method || init.method === 'GET') && !url.includes('/update') && !url.includes('/cancel') && !url.includes('/send-self-service-links')) {
+        return Promise.reject(new Error('simulated network error'))
+      }
+      if (url.includes('/send-self-service-links') && init?.method === 'POST') {
+        sendLinksFetchHappened()
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, message: 'Links sent to +15551112222.' }),
+        } as Response)
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        redirected: false,
+        type: 'basic',
+        url,
+        json: async () => ([]),
+        text: async () => '[]',
+        clone: function () { return this },
+        body: null,
+        bodyUsed: false,
+      } as Response)
+    })
+
+    render(<AppointmentView />)
+
+    await screen.findByText(/Showing sample data/i)
+
+    // Select a scheduled mock appointment that has customers.phone (Bob Smith is scheduled).
+    const listItems = await screen.findAllByText(/Bob Smith/i, { selector: 'p' })
+    fireEvent.click(listItems[0])
+
+    // The Send Links button is rendered in AppointmentDetailPanel when status=scheduled && has phone.
+    const sendButtons = await screen.findAllByRole('button', { name: /Send Links/i })
+    expect(sendButtons.length).toBeGreaterThan(0)
+    fireEvent.click(sendButtons[0])
+
+    await waitFor(() => expect(sendLinksFetchHappened).toHaveBeenCalled())
+  })
+
   test('mock-mode handleCreate is a no-op (no POST /appointments/create when sample data is showing)', async () => {
     // WHO: same logged-out / fetch-failure viewer who clicks the "+"
     //      button to create a new appointment while mock-mode is active

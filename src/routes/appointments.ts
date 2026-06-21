@@ -731,7 +731,12 @@ export function registerAppointmentRoutes(
       }
 
       logEvent(req, 'self_service_links_sent', { appointmentId: id });
-      return reply.send({ success: true, message: `Links sent to ${normalizedTo}.` });
+      return reply.send({
+        success: true,
+        message: `Links sent to ${normalizedTo}.`,
+        cancelLink,
+        rescheduleLink,
+      });
     }, 'Failed to send self-service links')
   );
 }

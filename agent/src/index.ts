@@ -204,14 +204,15 @@ export default defineAgent({
             // Post-call summary is best-effort: summarizeCall is bounded + never
             // throws (resolves null on timeout/error), so it can never drop the
             // duration/transcript/outcome write below.
-            const summary = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
+            const summaryResult = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
+            const summary = summaryResult.summary;
             // If no booking/transfer tool already set the outcome, classify WHY
             // the caller reached out (no_availability / wrong_service / price /
             // message / info). classifyCallOutcome is bounded + failsafe and
             // returns null when unclear — a null outcome stays 'no_outcome'
             // server-side, i.e. counted as abandoned. So we never guess.
-            const outcome =
-              trackedOutcome ?? (await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY));
+            const classifyResult = await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY);
+            const outcome = trackedOutcome ?? classifyResult.outcome;
             await client.call('/agent-tools/voice-session-end', {
               tenant_id: sessionCtx.tenantId,
               call_id: callId,
@@ -225,13 +226,42 @@ export default defineAgent({
             // Fire-and-forget: POST session AI usage to the cost ledger.
             // sessionModelUsage is empty when the session never started (e.g.
             // fallback path) — skip silently rather than inserting a zero row.
-            if (sessionModelUsage.length > 0) {
+            let finalModelUsage = sessionModelUsage;
+            if (summaryResult.usage) {
+              finalModelUsage = [
+                ...finalModelUsage,
+                {
+                  type: 'llm_usage',
+                  provider: 'openai',
+                  model: 'gpt-4o-mini',
+                  inputTokens: summaryResult.usage.inputTokens,
+                  outputTokens: summaryResult.usage.outputTokens,
+                  charactersCount: 0,
+                  audioDurationMs: 0,
+                },
+              ];
+            }
+            if (classifyResult.usage) {
+              finalModelUsage = [
+                ...finalModelUsage,
+                {
+                  type: 'llm_usage',
+                  provider: 'openai',
+                  model: 'gpt-4o-mini',
+                  inputTokens: classifyResult.usage.inputTokens,
+                  outputTokens: classifyResult.usage.outputTokens,
+                  charactersCount: 0,
+                  audioDurationMs: 0,
+                },
+              ];
+            }
+            if (finalModelUsage.length > 0) {
               void client
                 .call('/agent-tools/record-ai-cost', {
                   tenant_id: sessionCtx.tenantId,
                   call_id: callId,
                   source: 'voice_call',
-                  model_usage: sessionModelUsage,
+                  model_usage: finalModelUsage,
                 })
                 .catch((e: unknown) =>
                   callLog.warn(

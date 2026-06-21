@@ -405,8 +405,12 @@ export const Api = {
         };
       }>(`/appointments/${id}/reactivate`, 'POST', { tenant_id: tenantId }),
 
-    sendSelfServiceLinks: (id: string) =>
-      apiMutate<{ message?: string }>(`/appointments/${id}/send-self-service-links`, 'POST'),
+    sendSelfServiceLinks: (id: string, tenantId?: string | null) =>
+      apiMutate<{ message?: string; cancelLink?: string; rescheduleLink?: string }>(
+        `/appointments/${id}/send-self-service-links`,
+        'POST',
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- RESOURCES ---

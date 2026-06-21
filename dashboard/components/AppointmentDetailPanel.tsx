@@ -114,7 +114,7 @@ export function AppointmentDetailPanel({
     if (!selectedAppointment) return;
     setIsSendingLinks(true);
     try {
-      const res = await Api.appointments.sendSelfServiceLinks(selectedAppointment.appointment_id);
+      const res = await Api.appointments.sendSelfServiceLinks(selectedAppointment.appointment_id, tenantId);
       if (res.success) {
         showToast(res.message ?? 'Cancel/reschedule links sent.', 'success');
       } else {
