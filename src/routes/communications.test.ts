@@ -47,7 +47,6 @@ beforeEach(() => {
     email: 'owner@test.local',
     role: 'owner',
   };
-  validateRequest.mockReset();
   process.env = { ...ORIGINAL_ENV };
 });
 
