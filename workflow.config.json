@@ -9,7 +9,7 @@
   "projectTypeProfiles": {
     "node-fullstack": {
       "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
-      "unitTests": "npm test",
+      "unitTests": "npm test && cd dashboard && npm test",
       "build": "npm run build && cd dashboard && npm run build",
       "lint": "npm run lint",
       "formatCheck": "npm run format:check",
@@ -45,7 +45,7 @@
   "commands": {
     "_comment": "ACTIVE commands for the current projectType. These are what the automation scripts actually execute. Populate by copying the matching block from projectTypeProfiles and editing the values for your exact binaries/paths.",
     "checks": "npm run format:check && npm run lint && npx tsc --noEmit && cd dashboard && npx tsc --noEmit",
-    "unitTests": "npm test",
+    "unitTests": "npm test && cd dashboard && npm test",
     "build": "npm run build && cd dashboard && npm run build",
     "lint": "npm run lint",
     "formatCheck": "npm run format:check",
