@@ -147,7 +147,7 @@ Bug caught during D4 E2E: first pass pushed `tab=home` from the pill but the int
 
 ## 2026-05-14 — Per-tenant SMS rate limiter + 429 retry-policy carve-out
 
-Closes TODO Phase 5 Ops "Rate limiting for SMS sends." Pre-fix the project relied entirely on Twilio's account-wide throttle to bound SMS volume — a single tenant batching 200 reminders could exhaust the per-second budget for everyone else on the same Twilio account. New behavior caps each tenant individually so a noisy tenant only slows itself down.
+Closes TODO Phase 5 Ops "Rate limiting for SMS sends." Pre-fix the project relied entirely on the legacy SMS provider's account-wide throttle to bound SMS volume — a single tenant batching 200 reminders could exhaust the per-second budget for everyone else on the same account. (Legacy SMS provider support fully removed 2026-06; Telnyx is the only provider.) New behavior caps each tenant individually so a noisy tenant only slows itself down.
 
 **Implementation:**
 
@@ -165,7 +165,7 @@ Closes TODO Phase 5 Ops "Rate limiting for SMS sends." Pre-fix the project relie
   - `sendSystemSMS` deliberately does NOT rate-limit — opt-out confirmations are themselves bounded by inbound STOP/UNSUBSCRIBE volume, and dropping one would leave a customer wondering whether their opt-out took effect.
 
 - Retry policy carve-out in `src/services/reminders/retryPolicy.ts`:
-  - `isRetryable` now special-cases HTTP 429 as retryable before applying the generic "4xx → don't retry" rule. 429 is HTTP's canonical "wait and retry" signal — both the new in-process limiter and Twilio's external throttle emit it. Without this carve-out the reminder retry policy would mark rate-limited rows failed immediately, defeating the whole feature.
+  - `isRetryable` now special-cases HTTP 429 as retryable before applying the generic "4xx → don't retry" rule. 429 is HTTP's canonical "wait and retry" signal — both the new in-process limiter and the (then) legacy provider's external throttle emit it. (Legacy SMS provider support fully removed 2026-06; Telnyx is the only provider.) Without this carve-out the reminder retry policy would mark rate-limited rows failed immediately, defeating the whole feature.
 
 **Composition with retry logic (yesterday's commit):** rate-limited send → `RateLimitedError` (status 429) → reminder retry policy sees retryable → row's `retry_count` increments + `next_retry_at` set to now + 5/30/120 min → worker picks up after backoff → bucket has likely refilled → send succeeds. Zero new error plumbing required.
 
@@ -209,7 +209,7 @@ No code changes; pure docs. Linked from `docs/TODO.md` close note. Backend tests
 
 ## 2026-05-14 — Retry logic for failed reminder sends
 
-Closes TODO Phase 5 Ops "Retry logic for failed sends." Pre-fix, `src/workers/reminderScheduler.ts` caught any send failure and immediately flipped the row to `status='failed'` — meaning a single transient Twilio 5xx or DNS blip lost the reminder permanently. The cure surface is one migration + one new module + one worker rewrite.
+Closes TODO Phase 5 Ops "Retry logic for failed sends." Pre-fix, `src/workers/reminderScheduler.ts` caught any send failure and immediately flipped the row to `status='failed'` — meaning a single transient legacy provider 5xx or DNS blip lost the reminder permanently. (Legacy SMS provider support fully removed 2026-06; Telnyx is the only provider.) The cure surface is one migration + one new module + one worker rewrite.
 
 **Migration `20260514000000_reminder_retry_columns.sql`** adds two columns to `reminder_schedules`:
 

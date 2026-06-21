@@ -749,7 +749,7 @@ describe('PostgresDatabaseService', () => {
       it('updates status with error message', async () => {
         // WHO: ReminderProcessor recording delivery failure details
         // WHAT: Updating status and error message together
-        // WHEN: External service (Twilio/SendGrid) returned error
+        // WHEN: External service (the SMS provider/SendGrid) returned error
         // WHERE: updateReminderSchedule method
         // WHY: Error details needed for debugging and retry logic
 

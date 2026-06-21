@@ -218,7 +218,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   ├── index.ts            Entry point (26 route registrations)
 │   ├── middleware.ts        withHandler, tenant middleware, structured logging
 │   ├── routes/             26 route modules + shared routeHelpers.ts (incl. agentTools.ts for the LiveKit agent)
-│   ├── services/           Square CRM sync, calendar sync, communications, reminders, token management, telnyxNumbers + telnyxSms
+│   ├── services/           Square CRM sync, calendar sync, communications (Telnyx-only for SMS + delivery receipts), reminders, token management, telnyxNumbers + telnyxSms (Telnyx is now the sole provider)
 │   └── database/           DatabaseService interface + Postgres implementation
 ├── agent/                  LiveKit Agents worker (Node) — Deepgram STT + OpenAI LLM + xAI Grok TTS
 │   └── src/                Worker entry, session context, prompt, tool client
