@@ -19,6 +19,7 @@ import {
 } from '../services/knowledgeIngestion';
 import { resolveQuestions } from '../../shared/questionBank';
 import { recordAiCostEvent } from '../services/aiCost';
+import { scanRateLimiter } from '../services/scanRateLimit';
 
 // ── Website scrape helpers for onboarding (item 10) ─────────────────────
 
@@ -490,6 +491,18 @@ export function registerKnowledgeRoutes(
           .send({ success: false, error: 'Invalid URL', details: parsed.error.issues });
       }
       const { url } = parsed.data;
+
+      // Per-tenant guardrail on the expensive scan (external multi-page fetch +
+      // OpenAI extraction). Rejects with 429 once the tenant's bucket is dry so
+      // one tenant can't burn OpenAI budget or hammer external sites through us.
+      // Skipped in the E2E stub path (deterministic, zero external cost).
+      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1' && !scanRateLimiter.tryAcquire(tenantId)) {
+        logEvent(req, 'website_scan_rate_limited', { tenantId });
+        return reply.status(429).send({
+          success: false,
+          error: 'Website scan limit reached. Please wait a bit before scanning again.',
+        });
+      }
 
       // Resolve the questions to extract: the shared static policy bank plus this
       // tenant's owner-authored custom questions (tenant_docs source='custom-question'),
