@@ -12,7 +12,7 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { Api } from '../lib/api';
-import type { AnalyticsCalls, AiCostSummary } from '../lib/types';
+import type { AnalyticsCalls, AiCostSummary, AnalyticsCohorts } from '../lib/types';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { formatHour } from '../lib/utils';
 import { EmptyState } from './ui/EmptyState';
@@ -74,6 +74,7 @@ export default function AnalyticsView() {
   const [summary, setSummary] = useState<AppointmentSummary | null>(null);
   const [calls, setCalls] = useState<AnalyticsCalls | null>(null);
   const [aiCost, setAiCost] = useState<AiCostSummary | null>(null);
+  const [cohorts, setCohorts] = useState<AnalyticsCohorts | null>(null);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -86,14 +87,16 @@ export default function AnalyticsView() {
     try {
       // Load appointments (the hour/day/return patterns) and call analytics
       // (volume/conversion/abandonment/outcome) in parallel.
-      const [appointments, callStats, aiCostRes] = await Promise.all([
+      const [appointments, callStats, aiCostRes, cohortRes] = await Promise.all([
         Api.appointments.list(tenantId),
         Api.analytics.getCalls(tenantId).catch(() => null),
         Api.analytics.getAiCost(tenantId).catch(() => null),
+        Api.analytics.getCohorts(tenantId).catch(() => null),
       ]);
 
       if (callStats) setCalls(callStats);
       if (aiCostRes) setAiCost(aiCostRes);
+      if (cohortRes) setCohorts(cohortRes);
 
       if (Array.isArray(appointments)) {
         const byDay: Record<string, number> = {};
@@ -525,6 +528,99 @@ export default function AnalyticsView() {
             ) : (
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 No data yet
+              </p>
+            )}
+          </MetricCard>
+
+          {/* 8. Repeat callers — who reaches out more than once + how often they book */}
+          <MetricCard
+            icon={Repeat}
+            title="Repeat Callers"
+            subtitle="Callers who reached out more than once"
+          >
+            {cohorts && cohorts.summary.repeat_callers > 0 ? (
+              <div className="space-y-2">
+                <div className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {cohorts.summary.repeat_callers}
+                  <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>
+                    {' '}
+                    of {cohorts.summary.distinct_callers} callers
+                  </span>
+                </div>
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {cohorts.summary.total_calls > 0
+                    ? Math.round(
+                        (cohorts.summary.repeat_call_volume / cohorts.summary.total_calls) * 100
+                      )
+                    : 0}
+                  % of all calls come from repeat callers
+                </p>
+                <div className="space-y-1 pt-1">
+                  {cohorts.repeat_callers.slice(0, 5).map((c) => (
+                    <div key={c.phone} className="flex justify-between text-xs">
+                      <span style={{ color: 'var(--text-secondary)' }}>{c.phone}</span>
+                      <span style={{ color: 'var(--text-primary)' }} className="font-medium">
+                        {c.call_count} calls · {c.booked_count} booked
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No repeat callers yet
+              </p>
+            )}
+          </MetricCard>
+
+          {/* 9. Bookings by service — which services the booked calls actually booked */}
+          <MetricCard
+            icon={ListChecks}
+            title="Bookings by Service"
+            subtitle="What booked calls scheduled"
+          >
+            {cohorts && cohorts.by_service.length > 0 ? (
+              (() => {
+                const maxBooked = Math.max(...cohorts.by_service.map((s) => s.booked_count), 1);
+                return (
+                  <div className="space-y-2">
+                    {cohorts.by_service.slice(0, 6).map((s) => (
+                      <div key={s.service}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span
+                            style={{ color: 'var(--text-secondary)' }}
+                            className="truncate mr-2"
+                          >
+                            {s.service}
+                          </span>
+                          <span
+                            style={{ color: 'var(--text-primary)' }}
+                            className="font-medium shrink-0"
+                          >
+                            {s.booked_count}
+                          </span>
+                        </div>
+                        <div
+                          className="h-1 rounded-full"
+                          style={{ backgroundColor: 'var(--border-soft)' }}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.round((s.booked_count / maxBooked) * 100)}%`,
+                              backgroundColor: 'var(--accent-soft)',
+                              opacity: 0.7,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No bookings yet
               </p>
             )}
           </MetricCard>

@@ -108,10 +108,55 @@ describe('AuditLogView', () => {
     });
 
     // The most recent call carries the chosen table_name + a reset offset.
-    expect(mockApi.auditLog.list).toHaveBeenLastCalledWith('tenant-123', {
+    expect(mockApi.auditLog.list).toHaveBeenLastCalledWith(
+      'tenant-123',
+      expect.objectContaining({ limit: 50, offset: 0, table_name: 'customers' })
+    );
+  });
+
+  test('HAPPY: setting a date range re-queries with start_date/end_date', async () => {
+    // WHY: the date range must reach the backend (validated there), so an owner
+    //       can scope the change history to a window.
+    mockApi.auditLog.list.mockResolvedValue({
+      success: true,
+      entries: [ENTRY],
+      count: 1,
       limit: 50,
       offset: 0,
-      table_name: 'customers',
     });
+
+    render(<AuditLogView />);
+    await screen.findByText('appointments');
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-06-01' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-06-30' } });
+
+    expect(mockApi.auditLog.list).toHaveBeenLastCalledWith(
+      'tenant-123',
+      expect.objectContaining({ start_date: '2026-06-01', end_date: '2026-06-30' })
+    );
+  });
+
+  test('HAPPY: clicking a row opens a drill-down showing the old→new field diff', async () => {
+    // WHO: an owner asking "what exactly changed on this booking?"
+    // WHAT: clicking a row opens a modal listing each changed field with its
+    //        before + after value.
+    // WHY: the table alone shows that something changed, not what — the diff
+    //        is the actionable detail.
+    mockApi.auditLog.list.mockResolvedValue({
+      success: true,
+      entries: [{ ...ENTRY, old_data: { status: 'scheduled' }, new_data: { status: 'completed' } }],
+      count: 1,
+      limit: 50,
+      offset: 0,
+    });
+
+    render(<AuditLogView />);
+    fireEvent.click(await screen.findByText('appointments'));
+
+    expect(await screen.findByText(/UPDATE on appointments/i)).toBeInTheDocument();
+    expect(screen.getByText('status')).toBeInTheDocument();
+    expect(screen.getByText('scheduled')).toBeInTheDocument();
+    expect(screen.getByText('completed')).toBeInTheDocument();
   });
 });

@@ -250,6 +250,23 @@ export interface AnalyticsCalls {
   by_day: Array<{ day: string; total: number; booked: number }>;
 }
 
+export interface AnalyticsCohorts {
+  repeat_callers: Array<{
+    phone: string;
+    call_count: number;
+    booked_count: number;
+    first_call: string;
+    last_call: string;
+  }>;
+  by_service: Array<{ service: string; booked_count: number }>;
+  summary: {
+    distinct_callers: number;
+    repeat_callers: number;
+    repeat_call_volume: number;
+    total_calls: number;
+  };
+}
+
 export interface AiCostRow {
   source: string;
   provider: string;

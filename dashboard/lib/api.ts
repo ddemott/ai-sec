@@ -17,6 +17,7 @@ import type {
   CalendarSettings,
   AnalyticsStats,
   AnalyticsCalls,
+  AnalyticsCohorts,
   AiCostSummary,
   Vocabulary,
   CoverageItem,
@@ -639,6 +640,12 @@ export const Api = {
 
     getAiCost: (tenantId: string | null) =>
       apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getCohorts: (tenantId: string | null) =>
+      apiFetch<AnalyticsCohorts>(
+        `/analytics/cohorts`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- REMINDERS (delivery monitoring) ---
@@ -863,13 +870,21 @@ export const Api = {
   auditLog: {
     list: (
       tenantId: string | null,
-      params?: { limit?: number; offset?: number; table_name?: string }
+      params?: {
+        limit?: number;
+        offset?: number;
+        table_name?: string;
+        start_date?: string;
+        end_date?: string;
+      }
     ) => {
       const query: Record<string, string> = {};
       if (tenantId) query.tenant_id = tenantId;
       if (params?.limit != null) query.limit = String(params.limit);
       if (params?.offset != null) query.offset = String(params.offset);
       if (params?.table_name) query.table_name = params.table_name;
+      if (params?.start_date) query.start_date = params.start_date;
+      if (params?.end_date) query.end_date = params.end_date;
       return apiFetch<AuditLogResponse>(
         `/audit-log`,
         Object.keys(query).length > 0 ? query : undefined

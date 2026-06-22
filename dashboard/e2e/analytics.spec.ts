@@ -449,3 +449,57 @@ test('coverage-api: GET /coverage with date range returns an array', async ({ re
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// 7. GET /analytics/cohorts — repeat-caller cohorts + bookings-by-service
+// ────────────────────────────────────────────────────────────────────────────
+test('analytics-cohorts-api: two calls from one phone surface as a repeat caller', async ({
+  request,
+}) => {
+  // WHO: an owner opening the analytics-depth panels.
+  // WHAT: seed two calls from the SAME caller phone; GET /analytics/cohorts
+  //       returns that phone in repeat_callers (call_count 2) and a summary
+  //       counting it as a repeat caller.
+  // WHEN: every Analytics-depth load.
+  // WHERE: src/routes/analytics.ts GET /analytics/cohorts.
+  // WHY: repeat callers are grouped on phone DIGITS — a regression in the
+  //      normalization or the >1 HAVING filter would drop genuine repeat callers.
+  let tenant: RegisteredTenant | null = null;
+  try {
+    tenant = await registerFreshTenant(request);
+    const agentHdr = { 'x-agent-secret': AGENT_SECRET, 'content-type': 'application/json' };
+
+    // Same caller, two formats — must still count as ONE repeat caller.
+    for (const [callId, phone] of [
+      [`e2e-cohort-a-${Date.now()}`, '+16305559999'],
+      [`e2e-cohort-b-${Date.now()}`, '630-555-9999'],
+    ] as const) {
+      await request.post(`${BACKEND_URL}/agent-tools/voice-session-start`, {
+        headers: agentHdr,
+        data: { tenant_id: tenant.tenantId, call_id: callId, caller_phone: phone },
+      });
+    }
+
+    const hdr = { Authorization: `Bearer ${tenant.token}` };
+    const res = await request.get(`${BACKEND_URL}/analytics/cohorts?tenant_id=${tenant.tenantId}`, {
+      headers: hdr,
+    });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+
+    // Shape contract
+    expect(Array.isArray(body.repeat_callers)).toBe(true);
+    expect(Array.isArray(body.by_service)).toBe(true);
+    expect(typeof body.summary.repeat_callers).toBe('number');
+
+    // The two same-caller calls collapse to one repeat caller with count 2.
+    const repeat = body.repeat_callers.find(
+      (r: { phone: string }) => r.phone === '6305559999'
+    );
+    expect(repeat, 'the two same-phone calls must surface as one repeat caller').toBeTruthy();
+    expect(repeat.call_count).toBe(2);
+    expect(body.summary.repeat_callers).toBeGreaterThanOrEqual(1);
+  } finally {
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
+  }
+});
