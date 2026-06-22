@@ -499,6 +499,10 @@ describe('GET /analytics/cohorts', () => {
     queryResponses.push({
       rows: [{ distinct_callers: 10, repeat_callers: 1, repeat_call_volume: 3, total_calls: 12 }],
     });
+    // top_customers (CLV) — 4th query in the Promise.all
+    queryResponses.push({
+      rows: [{ customer_id: 'cust-1', name: 'Jane Doe', visits: 4, revenue: 320 }],
+    });
 
     const res = await app.inject({
       method: 'GET',
@@ -509,6 +513,7 @@ describe('GET /analytics/cohorts', () => {
     const body = res.json<{
       repeat_callers: Array<{ phone: string; call_count: number }>;
       by_service: Array<{ service: string; booked_count: number }>;
+      top_customers: Array<{ name: string; visits: number; revenue: number }>;
       summary: { distinct_callers: number; repeat_callers: number };
     }>();
     expect(body.repeat_callers[0]).toMatchObject({
@@ -517,6 +522,12 @@ describe('GET /analytics/cohorts', () => {
       booked_count: 2,
     });
     expect(body.by_service[0]).toEqual({ service: 'Oil Change', booked_count: 5 });
+    expect(body.top_customers[0]).toEqual({
+      customer_id: 'cust-1',
+      name: 'Jane Doe',
+      visits: 4,
+      revenue: 320,
+    });
     expect(body.summary).toMatchObject({ distinct_callers: 10, repeat_callers: 1 });
 
     // WHY: repeat callers must be grouped on phone DIGITS so format variants
@@ -527,6 +538,9 @@ describe('GET /analytics/cohorts', () => {
     // by_service joins booked calls → appointment → service.
     expect(queries[1].text).toContain('JOIN appointments');
     expect(queries[1].text).toContain('services');
+    // top_customers (CLV) sums service price per customer.
+    expect(queries[3].text).toContain('sum(s.price)');
+    expect(queries[3].text).toContain('JOIN customers');
   });
 
   it('HAPPY: empty tenant → empty arrays + zeroed summary', async () => {
@@ -534,6 +548,7 @@ describe('GET /analytics/cohorts', () => {
     queryResponses.push({ rows: [] }); // repeatCallers
     queryResponses.push({ rows: [] }); // byService
     queryResponses.push({ rows: [] }); // summary (no row)
+    queryResponses.push({ rows: [] }); // top_customers
 
     const res = await app.inject({
       method: 'GET',
@@ -548,6 +563,7 @@ describe('GET /analytics/cohorts', () => {
     }>();
     expect(body.repeat_callers).toHaveLength(0);
     expect(body.by_service).toHaveLength(0);
+    expect((body as { top_customers: unknown[] }).top_customers).toHaveLength(0);
     expect(body.summary.total_calls).toBe(0); // graceful default when no summary row
   });
 });

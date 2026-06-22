@@ -843,6 +843,38 @@ export function registerKnowledgeRoutes(
         };
       });
 
+      // Compose the EXACT context the agent would receive from
+      // /agent-tools/policy-answer (the used chunks joined, each prefixed with
+      // its source-doc title) so the owner sees the real answer the AI gets —
+      // not just the ranked chunks. Null when nothing clears the threshold.
+      const usedDocs = ranked.filter((r) => r.used_in_production);
+      let composedAnswer: string | null = null;
+      if (usedDocs.length > 0) {
+        const usedIds = usedDocs.map((d) => d.tenant_doc_id).filter(Boolean);
+        let titleById = new Map<string, string>();
+        try {
+          const titlesRes = await withTenantClient(tenantId, (client) =>
+            client.query<{ tenant_doc_id: string; title: string | null }>(
+              // ::uuid[] cast — without it Postgres compares uuid against text[]
+              // and errors (same fix as the policy-answer citation lookup).
+              'SELECT tenant_doc_id, title FROM tenant_docs WHERE tenant_id = $1 AND tenant_doc_id = ANY($2::uuid[])',
+              [tenantId, usedIds]
+            )
+          );
+          titleById = new Map(
+            titlesRes.rows.filter((r) => r.title).map((r) => [r.tenant_doc_id, r.title as string])
+          );
+        } catch {
+          // title lookup is non-critical — fall back to un-attributed content
+        }
+        composedAnswer = usedDocs
+          .map((d) => {
+            const title = titleById.get(d.tenant_doc_id);
+            return title ? `[From "${title}"]\n${d.content}` : d.content;
+          })
+          .join('\n\n---\n\n');
+      }
+
       logEvent(req, 'knowledge_answer_explained', {
         tenantId,
         candidates: ranked.length,
@@ -857,6 +889,8 @@ export function registerKnowledgeRoutes(
         candidates: ranked,
         // A quick read: did production have anything to answer with at all?
         would_answer: usedSoFar > 0,
+        // The exact context string the agent would relay for this question.
+        composed_answer: composedAnswer,
       });
     }, 'Failed to explain answer')
   );

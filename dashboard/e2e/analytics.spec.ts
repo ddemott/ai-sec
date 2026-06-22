@@ -490,6 +490,7 @@ test('analytics-cohorts-api: two calls from one phone surface as a repeat caller
     // Shape contract
     expect(Array.isArray(body.repeat_callers)).toBe(true);
     expect(Array.isArray(body.by_service)).toBe(true);
+    expect(Array.isArray(body.top_customers)).toBe(true); // CLV cut
     expect(typeof body.summary.repeat_callers).toBe('number');
 
     // The two same-caller calls collapse to one repeat caller with count 2.

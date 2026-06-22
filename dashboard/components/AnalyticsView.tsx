@@ -626,6 +626,35 @@ export default function AnalyticsView() {
               </p>
             )}
           </MetricCard>
+
+          {/* 10. Top customers (CLV) — lifetime booked revenue per customer */}
+          <MetricCard
+            icon={TrendingUp}
+            title="Top Customers"
+            subtitle="By lifetime booked revenue"
+          >
+            {cohorts && cohorts.top_customers.length > 0 ? (
+              <div className="space-y-1">
+                {cohorts.top_customers.slice(0, 6).map((c) => (
+                  <div key={c.customer_id} className="flex justify-between text-xs">
+                    <span style={{ color: 'var(--text-secondary)' }} className="truncate mr-2">
+                      {c.name}
+                    </span>
+                    <span style={{ color: 'var(--text-primary)' }} className="font-medium shrink-0">
+                      ${c.revenue.toFixed(0)} · {c.visits} visit{c.visits === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-xs pt-1" style={{ color: 'var(--text-muted)' }}>
+                  Revenue uses each service&apos;s price — set prices under My Business for accuracy.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No bookings yet
+              </p>
+            )}
+          </MetricCard>
         </div>
 
         {/* Reminder delivery monitoring */}

@@ -59,6 +59,14 @@ describe('POST /knowledge/explain', () => {
         { tenant_doc_id: 'd5', content: 'Cat photos', similarity: 0.12 },
       ],
     });
+    // titles lookup for the used-in-production docs (composed_answer)
+    handle.queryResponses.push({
+      rows: [
+        { tenant_doc_id: 'd1', title: 'Hours' },
+        { tenant_doc_id: 'd2', title: 'Delivery' },
+        { tenant_doc_id: 'd3', title: 'Parking' },
+      ],
+    });
 
     const res = await app.inject({
       method: 'POST',
@@ -96,11 +104,24 @@ describe('POST /knowledge/explain', () => {
     ).toEqual([true, true, true, false, false]);
     expect(body.would_answer).toBe(true);
 
+    // composed_answer = the EXACT context the agent would relay: the 3 used
+    // chunks, each prefixed with its source-doc title, joined; the un-used d4/d5
+    // are excluded.
+    expect(body.composed_answer).toContain('[From "Hours"]');
+    expect(body.composed_answer).toContain('Mon-Fri 9-5');
+    expect(body.composed_answer).toContain('[From "Parking"]');
+    expect(body.composed_answer).not.toContain('Founded in 2010'); // d4 not used
+    expect(body.composed_answer).not.toContain('Cat photos'); // d5 not used
+
     // The query passed the embedding cast to ::vector + the debug params.
     const q = handle.queries.find((qq) => qq.text.includes('search_tenant_docs_normalized'));
     expect(q).toBeDefined();
     expect(q!.text).toContain('::vector');
     expect(q!.params[0]).toBe(TENANT_ID);
+    // composed_answer's title lookup casts to ::uuid[].
+    const titleQ = handle.queries.find((qq) => qq.text.includes('FROM tenant_docs'));
+    expect(titleQ).toBeDefined();
+    expect(titleQ!.text).toContain('::uuid[]');
   });
 
   it('HAPPY: caps used_in_production at top-3 even when more clear the threshold', async () => {
@@ -151,6 +172,8 @@ describe('POST /knowledge/explain', () => {
     expect(
       body.candidates.every((c: { used_in_production: boolean }) => !c.used_in_production)
     ).toBe(true);
+    // Nothing used → no composed answer.
+    expect(body.composed_answer).toBeNull();
   });
 
   it('SAD: a front-desk user is rejected 403', async () => {
