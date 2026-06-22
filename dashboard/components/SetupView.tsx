@@ -12,6 +12,8 @@ import SkillAssignmentsView from './SkillAssignmentsView';
 import TeamAccessView from './TeamAccessView';
 import BusinessSettingsView from './BusinessSettingsView';
 import BillingView from './BillingView';
+import AuditLogView from './AuditLogView';
+import ExplainAnswerView from './ExplainAnswerView';
 import SetupWizard from './SetupWizard';
 import SoloWizard from './SetupWizard/SoloWizard';
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser';
@@ -43,7 +45,9 @@ type SubTab =
   | 'skills'
   | 'logins'
   | 'business-settings'
-  | 'billing';
+  | 'billing'
+  | 'audit-log'
+  | 'explain-answer';
 
 const VALID_SUB_TABS: SubTab[] = [
   'services',
@@ -54,6 +58,8 @@ const VALID_SUB_TABS: SubTab[] = [
   'logins',
   'business-settings',
   'billing',
+  'audit-log',
+  'explain-answer',
 ];
 
 function resolveInitialTab(searchParams: URLSearchParams): SubTab {
@@ -135,6 +141,8 @@ export default function SetupView() {
     { id: 'logins', label: 'Team Access' },
     { id: 'business-settings', label: 'Business Settings' },
     { id: 'billing', label: 'Billing' },
+    { id: 'audit-log', label: 'Audit Log' },
+    { id: 'explain-answer', label: 'Answer Debugger' },
   ];
 
   // Setup Assistant wizard overlay — ported verbatim from the old
@@ -213,6 +221,8 @@ export default function SetupView() {
         {activeSubTab === 'logins' && <TeamAccessView />}
         {activeSubTab === 'business-settings' && <BusinessSettingsView />}
         {activeSubTab === 'billing' && <BillingView />}
+        {activeSubTab === 'audit-log' && <AuditLogView />}
+        {activeSubTab === 'explain-answer' && <ExplainAnswerView />}
       </div>
 
       {/* Wizard overlays — exactly one renders at a time, enforced by
@@ -232,10 +242,18 @@ export default function SetupView() {
         />
       )}
       {stage === 'wizard' && mode === 'solo' && (
-        <SoloWizard isOpen={true} onClose={handleCloseWizard} onBackToPicker={transitions.backToPicker} />
+        <SoloWizard
+          isOpen={true}
+          onClose={handleCloseWizard}
+          onBackToPicker={transitions.backToPicker}
+        />
       )}
       {stage === 'wizard' && mode === 'team' && (
-        <SetupWizard isOpen={true} onClose={handleCloseWizard} onBackToPicker={transitions.backToPicker} />
+        <SetupWizard
+          isOpen={true}
+          onClose={handleCloseWizard}
+          onBackToPicker={transitions.backToPicker}
+        />
       )}
     </div>
   );

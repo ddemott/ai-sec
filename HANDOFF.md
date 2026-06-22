@@ -1,52 +1,52 @@
-# HANDOFF — 2026-06-18
+# HANDOFF — 2026-06-22
 
 ## Deploy Rules (always)
 
 - All 3 Railway services deploy from `main` only — branch push deploys nothing
 - Shipping = merge to main via PR with 4 CI jobs green
-- Merge command: `gh pr merge <N> --squash --delete-branch --admin`
+- Branch protection requires green CI **+ all review threads resolved**; solo merge = `gh pr merge <N> --merge --admin --delete-branch` (admin overrides the human-review requirement, never the CI/conversation gates without intent)
 
 ---
 
-## Open PR: #36 `feat/ai-cost-meter`
+## Shipped + merged to main this session (PRs #56 / #57 / #58)
 
-**Status at handoff**: Backend ✅ Dashboard ✅ Agent ✅ E2E ⏳ IN_PROGRESS
+- **#56** — `toolsClient` idempotent-read retry: 5 tests (read retries once on 5xx/throw; mutations never retry → double-book guard). Also the `docs/DEPLOYMENT.md` edge-function-phase removal.
+- **#57** — `GET /export/tenant-data` (owner-gated JSON export, password_hash-safe); per-tenant website-scan rate-limit (`scanRateLimit.ts`, 429 when dry); `docs/RUNBOOK.md` (incident + telephony playbook).
+- **#58** — `GET /audit-log` (owner-gated, paginated change history); `POST /knowledge/explain` (RAG answer-debugger; embeds the question identically to `policy-answer`); `docs/OWNER_GUIDE.md`.
 
-**What ships:**
+Note: each route-adding PR must bump the `route modules` count in `CLAUDE.md` (the `verify-claude-md` drift guard fails CI otherwise) — it is **merge-order-fragile**: rebase each branch onto the latest main so the count reflects the union (main is now 29).
 
-- `ai_cost_events` table (migration `20260618000001_ai_cost_events.sql` — **already applied to prod**)
-- Agent subscribes to `SessionUsageUpdated` → POSTs LLM/STT/TTS usage to `POST /agent-tools/record-ai-cost` at call end
-- `GET /analytics/ai-cost` — month-to-date aggregation by provider/model
-- Dashboard Analytics tab: "AI Usage (this month)" table card
+## Open PR (this session) — branch `feat/dashboard-audit-explain-citations-rescan`
 
-**Action**: merge when all 4 CI green + no unresolved review threads
+Dashboard surfaces + backend follow-ups that complete the #57/#58 APIs:
+
+- **AuditLogView** (Setup → "Audit Log" sub-tab) + **ExplainAnswerView** (Setup → "Answer Debugger" sub-tab) + a **"Download my data"** export button in `BusinessSettingsView`.
+- **Caller-facing source citations** — `policy-answer` joins `tenant_docs` for each chunk's title, prefixes context with `[From "<title>"]`; agent prompt updated to attribute naturally.
+- **Website-scan happy-path E2E** — `kb-website-import-happy` in `knowledge-base.spec.ts` via `KNOWLEDGE_IMPORT_E2E_STUB` (skips when the stub is off).
+
+Verified locally: backend 140 files/1931 tests, dashboard 62 files/778 tests, agent prompt tests, tsc + lint clean.
 
 ---
 
-## Next Code Items
+## Next Code Items (remaining, independent)
 
-**P1 (pick next):**
+- **GDPR/CCPA hard-purge** + retention/purge worker (destructive — needs Dale's legal-retention scope before building; the purge worker also needs a `last_scanned`/retention column + migration).
+- **Wizard browser click-path E2E** for the website-scan step (the suite tests the wizard via API today; a true browser-drive needs the live stack).
+- **Analytics depth**: cohort / CLV / service-specific abandonment drill-down.
+- `@typescript-eslint/unbound-method` — heavy in tests; deprioritized (may stay `warn`).
 
-1. (done) Dashboard "Send self-service links" button + backend trigger — `dashboard/components/AppointmentDetailPanel.tsx` + `/appointments/:id/send-self-service-links` (and links in booking templates). E2E added for full journey + negatives.
-2. (done) E2E: "book → SMS → link cancels/reschedules" + negative cases (expired token, wrong tenant, double-use) — added to workflows.spec.ts.
-3. AI cost phase 2 — instrument `callSummary.ts` + `knowledgeIngestion.ts` + `knowledge.ts` for remaining token costs
-
-**P2:**
-
-- Deliberate-fail PR to verify CI gate blocks merge end-to-end
-- Load test booking path (`pool max=10`)
+Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
 
 ---
 
 ## User Actions Pending (not code)
 
-- Stripe bank account (weekend)
-- Stripe test round-trip: `stripe listen --forward-to localhost:4001/billing/webhook`
-- Dial `+1 630-866-1960` from different carrier while watching `listRooms()` — PSTN verify
-- Enable Telnyx REFER on SIP Connection `livekit-outbound`
-- Enable "Wait for CI" on 3 Railway services
-- Set `forward_phone` on Beth's tenant (Phone Assistant → AI Persona)
-- Set `BETTER_STACK_TOKEN` + `SENTRY_DSN` on Railway (non-blocking)
+- LLC bank account; Stripe test round-trip (`stripe listen --forward-to localhost:4001/billing/webhook`) + Stripe Tax dashboard setup
+- Dial `+1 630-866-1960` from a different carrier while watching `listRooms()` — PSTN verify (blocked on a 2nd phone)
+- Enable Telnyx REFER on SIP Connection `livekit-outbound`; set forward number (Phone Assistant → AI Persona)
+- Enable "Wait for CI" on the 3 Railway services
+- Set `SENTRY_DSN` + `BETTER_STACK_TOKEN` + `EMAIL_USER`/`EMAIL_PASS` on Railway (silent-degrade until set; boot warnings fire)
+- Rotate the Railway team token created 2026-06-12 (pasted into a session)
 
 ---
 
@@ -58,4 +58,4 @@
 - Local DB: port 5433
 - Prod DB URL: encrypted at `~/.claude/projects/-home-dale-projects-secretary-hq/memory/db_url.enc`
   - Decrypt: `openssl enc -d -aes-256-cbc -pbkdf2 -base64 -pass pass:PASSWORD -in <file>`
-- Full gap inventory: `GAPS.md` (categories) + `docs/TODO.md` (actionable, folded from TODO_GAPS.md 2026-06-19)
+- Full gap inventory: `GAPS.md` (categories) + `docs/TODO.md` (actionable)

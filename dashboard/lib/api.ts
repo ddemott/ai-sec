@@ -36,6 +36,9 @@ import type {
   VersionComparison,
   TeamUser,
   CustomerMessage,
+  AuditLogResponse,
+  KnowledgeExplainResponse,
+  TenantDataExportResponse,
 } from './types';
 
 export const API_BASE_URL =
@@ -635,10 +638,7 @@ export const Api = {
       apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
 
     getAiCost: (tenantId: string | null) =>
-      apiFetch<AiCostSummary>(
-        `/analytics/ai-cost`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
+      apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantId ? { tenant_id: tenantId } : undefined),
   },
 
   // --- REMINDERS (delivery monitoring) ---
@@ -849,6 +849,41 @@ export const Api = {
         tenant_id: tenantId,
         status: 'rejected',
       }),
+
+    // "Explain this answer" RAG debugger — shows which KB chunks the AI
+    // retrieves for a question + their scores (owner-only on the backend).
+    explain: (tenantId: string | null, question: string) =>
+      apiMutate<KnowledgeExplainResponse>(`/knowledge/explain`, 'POST', {
+        tenant_id: tenantId,
+        question,
+      }),
+  },
+
+  // --- AUDIT LOG (owner-only change history) ---
+  auditLog: {
+    list: (
+      tenantId: string | null,
+      params?: { limit?: number; offset?: number; table_name?: string }
+    ) => {
+      const query: Record<string, string> = {};
+      if (tenantId) query.tenant_id = tenantId;
+      if (params?.limit != null) query.limit = String(params.limit);
+      if (params?.offset != null) query.offset = String(params.offset);
+      if (params?.table_name) query.table_name = params.table_name;
+      return apiFetch<AuditLogResponse>(
+        `/audit-log`,
+        Object.keys(query).length > 0 ? query : undefined
+      );
+    },
+  },
+
+  // --- DATA EXPORT (owner-only data portability) ---
+  exportData: {
+    tenantData: (tenantId: string | null) =>
+      apiFetch<TenantDataExportResponse>(
+        `/export/tenant-data`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- BILLING ---

@@ -83,14 +83,15 @@ test('kb-add-list: POST /knowledge/add persists entry visible in GET /knowledge'
     expect(addBody.success).toBe(true);
     expect(addBody.tenant_doc_id).toBeTruthy();
 
-    const listRes = await request.get(
-      `${BACKEND_URL}/knowledge?tenant_id=${tenant.tenantId}`,
-      { headers: hdr }
-    );
+    const listRes = await request.get(`${BACKEND_URL}/knowledge?tenant_id=${tenant.tenantId}`, {
+      headers: hdr,
+    });
     expect(listRes.status()).toBe(200);
     const entries = await listRes.json();
     expect(Array.isArray(entries)).toBe(true);
-    const found = entries.find((e: { tenant_doc_id: string }) => e.tenant_doc_id === addBody.tenant_doc_id);
+    const found = entries.find(
+      (e: { tenant_doc_id: string }) => e.tenant_doc_id === addBody.tenant_doc_id
+    );
     expect(found, 'newly added entry must appear in list').toBeTruthy();
     expect(found.title).toBe('What are your hours?');
     expect(found.source).toBeTruthy();
@@ -131,7 +132,8 @@ test('kb-update: PUT /knowledge/:id updates question and answer', async ({ reque
       data: {
         tenant_id: tenant.tenantId,
         question: 'Do you accept walk-ins?',
-        answer: 'Walk-ins are welcome Monday to Thursday only. Fridays are by appointment only now.',
+        answer:
+          'Walk-ins are welcome Monday to Thursday only. Fridays are by appointment only now.',
       },
     });
     expect(updRes.status()).toBe(200);
@@ -172,7 +174,8 @@ test('kb-delete: DELETE /knowledge/:id removes entry from the list', async ({ re
       data: {
         tenant_id: tenant.tenantId,
         question: 'Do you offer military discounts?',
-        answer: 'Yes, we offer a ten percent discount for all active and veteran military personnel.',
+        answer:
+          'Yes, we offer a ten percent discount for all active and veteran military personnel.',
       },
     });
     const { tenant_doc_id } = await addRes.json();
@@ -189,7 +192,9 @@ test('kb-delete: DELETE /knowledge/:id removes entry from the list', async ({ re
       headers: hdr,
     });
     const entries = await listRes.json();
-    const stillThere = entries.find((e: { tenant_doc_id: string }) => e.tenant_doc_id === tenant_doc_id);
+    const stillThere = entries.find(
+      (e: { tenant_doc_id: string }) => e.tenant_doc_id === tenant_doc_id
+    );
     expect(stillThere, 'deleted entry must not appear in list').toBeUndefined();
   } finally {
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
@@ -199,9 +204,7 @@ test('kb-delete: DELETE /knowledge/:id removes entry from the list', async ({ re
 // ────────────────────────────────────────────────────────────────────────────
 // 4. Add sad — validation
 // ────────────────────────────────────────────────────────────────────────────
-test('kb-add-sad-validation: answer shorter than 10 chars is rejected 400', async ({
-  request,
-}) => {
+test('kb-add-sad-validation: answer shorter than 10 chars is rejected 400', async ({ request }) => {
   // WHO: operator submitting an incomplete KB entry
   // WHAT: POST /knowledge/add with answer.length < 10 is rejected with 400
   //       and validation error details; no row inserted
@@ -219,7 +222,7 @@ test('kb-add-sad-validation: answer shorter than 10 chars is rejected 400', asyn
       data: {
         tenant_id: tenant.tenantId,
         question: 'What is your return policy?',
-        answer: 'No.',  // 3 chars — below the 10-char minimum
+        answer: 'No.', // 3 chars — below the 10-char minimum
       },
     });
     expect(res.status()).toBe(400);
@@ -281,12 +284,13 @@ test('kb-delete-sad-wrong-tenant: cannot delete another tenant entry (404)', asy
     expect(delRes.status()).toBe(404);
 
     // Original entry still exists under tenant A
-    const listRes = await request.get(
-      `${BACKEND_URL}/knowledge?tenant_id=${tenantA.tenantId}`,
-      { headers: hdrA }
-    );
+    const listRes = await request.get(`${BACKEND_URL}/knowledge?tenant_id=${tenantA.tenantId}`, {
+      headers: hdrA,
+    });
     const entries = await listRes.json();
-    const stillThere = entries.find((e: { tenant_doc_id: string }) => e.tenant_doc_id === tenant_doc_id);
+    const stillThere = entries.find(
+      (e: { tenant_doc_id: string }) => e.tenant_doc_id === tenant_doc_id
+    );
     expect(stillThere, 'tenant A entry must survive tenant B delete attempt').toBeTruthy();
   } finally {
     await Promise.all([
@@ -330,7 +334,9 @@ test('kb-unanswered-list: GET /knowledge/unanswered returns unresolved questions
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(Array.isArray(body.questions)).toBe(true);
-    const q = body.questions.find((q: { question: string }) => q.question === 'Do you offer financing?');
+    const q = body.questions.find(
+      (q: { question: string }) => q.question === 'Do you offer financing?'
+    );
     expect(q, 'inserted unanswered question must appear in list').toBeTruthy();
     expect(q.resolved).toBe(false);
     expect(q.unanswered_question_id).toBeTruthy();
@@ -363,7 +369,9 @@ test('kb-unanswered-resolve: PATCH /knowledge/unanswered/:id/resolve marks resol
        RETURNING unanswered_question_id`,
       [tenant.tenantId, 'Do you sell tires online?', 'What brands do you carry?']
     );
-    const [toResolveId, toKeepId] = ins.rows.map((r: { unanswered_question_id: string }) => r.unanswered_question_id);
+    const [toResolveId, toKeepId] = ins.rows.map(
+      (r: { unanswered_question_id: string }) => r.unanswered_question_id
+    );
 
     const patchRes = await request.patch(
       `${BACKEND_URL}/knowledge/unanswered/${toResolveId}/resolve`,
@@ -379,7 +387,9 @@ test('kb-unanswered-resolve: PATCH /knowledge/unanswered/:id/resolve marks resol
       { headers: { Authorization: `Bearer ${tenant.token}` } }
     );
     const body = await listRes.json();
-    const ids = body.questions.map((q: { unanswered_question_id: string }) => q.unanswered_question_id);
+    const ids = body.questions.map(
+      (q: { unanswered_question_id: string }) => q.unanswered_question_id
+    );
     expect(ids, 'resolved question must not appear in unresolved list').not.toContain(toResolveId);
     expect(ids, 'unresolved question must still appear').toContain(toKeepId);
   } finally {
@@ -428,7 +438,10 @@ test('kb-resolve-sad-wrong-tenant: cannot resolve another tenant unanswered ques
       `SELECT resolved FROM unanswered_questions WHERE unanswered_question_id = $1`,
       [questionId]
     );
-    expect(row.rows[0]?.resolved, 'question must remain unresolved after failed cross-tenant patch').toBe(false);
+    expect(
+      row.rows[0]?.resolved,
+      'question must remain unresolved after failed cross-tenant patch'
+    ).toBe(false);
   } finally {
     await Promise.all([
       tenantA ? cleanTenantData(pool, tenantA.tenantId) : Promise.resolve(),
@@ -505,26 +518,25 @@ test('kb-isolation: tenant B cannot read tenant A KB entries', async ({ request 
         data: {
           tenant_id: tenantA.tenantId,
           question: 'Do you have a VIP program?',
-          answer: 'Yes, our VIP program is available to clients spending over $500 per month with us.',
+          answer:
+            'Yes, our VIP program is available to clients spending over $500 per month with us.',
         },
       }),
     ]);
 
     // Tenant B's GET must return empty (their own KB has no entries)
-    const bList = await request.get(
-      `${BACKEND_URL}/knowledge?tenant_id=${tenantB.tenantId}`,
-      { headers: hdrB }
-    );
+    const bList = await request.get(`${BACKEND_URL}/knowledge?tenant_id=${tenantB.tenantId}`, {
+      headers: hdrB,
+    });
     expect(bList.status()).toBe(200);
     const bEntries = await bList.json();
     expect(Array.isArray(bEntries)).toBe(true);
     expect(bEntries.length, 'tenant B must see 0 KB entries (only tenant A has any)').toBe(0);
 
     // Tenant A's GET returns exactly their 2 entries
-    const aList = await request.get(
-      `${BACKEND_URL}/knowledge?tenant_id=${tenantA.tenantId}`,
-      { headers: hdrA }
-    );
+    const aList = await request.get(`${BACKEND_URL}/knowledge?tenant_id=${tenantA.tenantId}`, {
+      headers: hdrA,
+    });
     const aEntries = await aList.json();
     expect(aEntries.length).toBe(2);
   } finally {
@@ -560,7 +572,8 @@ test('kb-suggestion-approve: PATCH confirmed ingests a staged suggestion into th
     const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` };
 
     const question = 'Do you offer mobile service?';
-    const answer = 'Yes, we come to your home or office anywhere in the metro area for a small travel fee.';
+    const answer =
+      'Yes, we come to your home or office anywhere in the metro area for a small travel fee.';
     const ins = await pool.query(
       `INSERT INTO knowledge_suggestion
          (tenant_id, question_id, question, answer, source_url, confidence, status)
@@ -609,11 +622,68 @@ test('kb-suggestion-approve: PATCH confirmed ingests a staged suggestion into th
     expect(queueAfter.suggestions.some((s: { id: string }) => s.id === suggestionId)).toBe(false);
 
     // DB confirms the status flip
-    const statusRow = await pool.query(
-      `SELECT status FROM knowledge_suggestion WHERE id = $1`,
-      [suggestionId]
-    );
+    const statusRow = await pool.query(`SELECT status FROM knowledge_suggestion WHERE id = $1`, [
+      suggestionId,
+    ]);
     expect(statusRow.rows[0].status).toBe('confirmed');
+  } finally {
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 11b. Website-scan HAPPY path (deterministic via KNOWLEDGE_IMPORT_E2E_STUB)
+//
+// Closes the gap the test above documents: with the stub enabled (CI sets
+// KNOWLEDGE_IMPORT_E2E_STUB=1) the scan needs no real OpenAI call or external
+// fetch, so the full onboarding scan → staged-suggestions path IS CI-safe. This
+// exercises the wizard's "Import from website" step end-to-end at the API layer:
+// owner submits a URL → the resolver (bank + custom questions) runs → answers are
+// staged as knowledge_suggestion rows for review. Skipped when the stub is off so
+// it never makes a live network/OpenAI call on a local run.
+// ────────────────────────────────────────────────────────────────────────────
+test('kb-website-import-happy: scanning a URL stages reviewable suggestions (stub)', async ({
+  request,
+}) => {
+  // WHO: owner pasting their website URL on the wizard's "Import from website" step
+  // WHAT: POST /knowledge/import-website returns success with a confirmed count
+  //       and the extracted answers land in the suggestions review queue
+  // WHEN: onboarding scan, with the deterministic E2E stub active
+  // WHERE: POST /knowledge/import-website (stub branch) + the staging INSERTs
+  // WHY: the scan is the entry point of the whole KB-onboarding flow; a regression
+  //      here means owners scan their site and get nothing to review.
+  test.skip(
+    process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1',
+    'website-scan happy path requires KNOWLEDGE_IMPORT_E2E_STUB=1 (no live OpenAI/network)'
+  );
+
+  let tenant: RegisteredTenant | null = null;
+  try {
+    tenant = await registerFreshTenant(request);
+    const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${tenant.token}` };
+
+    const res = await request.post(`${BACKEND_URL}/knowledge/import-website`, {
+      headers: hdr,
+      data: { tenant_id: tenant.tenantId, url: 'https://example-shop.com' },
+    });
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    // The stub confirms at least the first bank questions and surfaces a
+    // discovered topic, so something is always staged for the owner to review.
+    expect(body.confirmed, 'scan should confirm at least one answer').toBeGreaterThan(0);
+
+    // Those answers are now in the review queue.
+    const queue = await (
+      await request.get(`${BACKEND_URL}/knowledge/suggestions?tenant_id=${tenant.tenantId}`, {
+        headers: hdr,
+      })
+    ).json();
+    expect(queue.success).toBe(true);
+    expect(
+      queue.suggestions.length,
+      'scan must stage suggestions for the owner to review'
+    ).toBeGreaterThan(0);
   } finally {
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
@@ -660,10 +730,9 @@ test('kb-suggestion-reject: PATCH rejected discards a suggestion without touchin
     expect(entries.some((e: { title: string }) => e.title === question)).toBe(false);
 
     // Status flipped to rejected
-    const statusRow = await pool.query(
-      `SELECT status FROM knowledge_suggestion WHERE id = $1`,
-      [suggestionId]
-    );
+    const statusRow = await pool.query(`SELECT status FROM knowledge_suggestion WHERE id = $1`, [
+      suggestionId,
+    ]);
     expect(statusRow.rows[0].status).toBe('rejected');
   } finally {
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
@@ -708,10 +777,9 @@ test('kb-suggestion-sad-wrong-tenant: cannot approve another tenant suggestion (
     expect(patchRes.status()).toBe(404);
 
     // A's suggestion remains untouched (still 'suggested', not ingested)
-    const statusRow = await pool.query(
-      `SELECT status FROM knowledge_suggestion WHERE id = $1`,
-      [suggestionId]
-    );
+    const statusRow = await pool.query(`SELECT status FROM knowledge_suggestion WHERE id = $1`, [
+      suggestionId,
+    ]);
     expect(statusRow.rows[0].status).toBe('suggested');
   } finally {
     await Promise.all([

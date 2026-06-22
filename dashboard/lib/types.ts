@@ -382,6 +382,56 @@ export interface RecordHistoryResponse {
   deleted_by: string | null;
 }
 
+// --- Audit log (GET /audit-log) ---
+export interface AuditLogEntry {
+  audit_log_id: string;
+  tenant_id: string;
+  table_name: string;
+  record_id: string;
+  action: string;
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
+  changed_by: string | null;
+  created_at: string;
+}
+
+export interface AuditLogResponse {
+  success: boolean;
+  entries: AuditLogEntry[];
+  count: number;
+  limit: number;
+  offset: number;
+}
+
+// --- RAG answer debugger (POST /knowledge/explain) ---
+export interface KnowledgeExplainCandidate {
+  rank: number;
+  tenant_doc_id: string;
+  similarity: number;
+  above_threshold: boolean;
+  used_in_production: boolean;
+  content: string;
+}
+
+export interface KnowledgeExplainResponse {
+  success: boolean;
+  question: string;
+  production_threshold: number;
+  production_match_count: number;
+  candidates: KnowledgeExplainCandidate[];
+  would_answer: boolean;
+}
+
+// --- Tenant data export (GET /export/tenant-data) ---
+export interface TenantDataExportResponse {
+  success: boolean;
+  tenant_id: string;
+  generated_at: string;
+  record_counts: Record<string, number>;
+  total_records: number;
+  tables: Record<string, unknown[]>;
+}
+
 export interface DeletedRecord {
   record_id: string;
   tenant_id: string;
