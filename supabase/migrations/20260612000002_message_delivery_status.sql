@@ -1,4 +1,4 @@
--- SMS delivery-receipt tracking (initially implemented for legacy provider provider).
+-- SMS delivery-receipt tracking (initially implemented for legacy provider).
 --
 -- Background: The (legacy) legacy adapter.sendSMS() previously called messages.create()
 -- with NO statusCallback, so the system never learned whether an SMS that
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS message_delivery_status (
 CREATE INDEX IF NOT EXISTS idx_message_delivery_status_tenant
   ON message_delivery_status(tenant_id, updated_at DESC);
 
-COMMENT ON TABLE message_delivery_status IS 'Latest SMS delivery status per message SID (from Telnyx or legacy provider webhooks). Non-RLS event table (webhook is tenant-exempt, writes via shared pool). Legacy legacy provider support removed 2026-06.';
+COMMENT ON TABLE message_delivery_status IS 'Latest SMS delivery status per message SID (from Telnyx or legacy provider webhooks). Non-RLS event table (webhook is tenant-exempt, writes via shared pool). Legacy provider support removed 2026-06.';
 COMMENT ON COLUMN message_delivery_status.message_sid IS 'Provider Message SID/ID. UNIQUE -- one row per message, upserted as status advances.';
 COMMENT ON COLUMN message_delivery_status.message_status IS 'Latest MessageStatus (queued|sending|sent|delivered|undelivered|failed|received).';
 

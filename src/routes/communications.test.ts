@@ -13,6 +13,7 @@
  *           services/communications/communicationHistory.test.ts.)
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createHmac } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 
 import { registerCommunicationRoutes } from './communications';
@@ -178,5 +179,102 @@ describe('GET /communications/history', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().success).toBe(false);
+  });
+});
+
+describe('POST /communications/telnyx/status (delivery-status webhook)', () => {
+  // A well-formed Telnyx v2 delivery-status payload (message delivered, no errors).
+  const validPayload = {
+    data: {
+      event_type: 'message.finalized',
+      payload: {
+        id: 'msg_abc123',
+        to: [{ status: 'delivered' }],
+        errors: [],
+      },
+    },
+  };
+
+  it('HAPPY: unverified (no secret) records the status and returns success', async () => {
+    // WHO: Telnyx POSTing a delivery receipt for a sent SMS
+    // WHAT: route parses id+status, upserts message_delivery_status via recordDeliveryStatus
+    // WHEN: TELNYX_WEBHOOK_SECRET is unset (dev/staging) → accept without signature
+    // WHERE: POST /communications/telnyx/status handler
+    // WHY: delivery receipts must persist so reminder/delivery stats are real
+    delete process.env.TELNYX_WEBHOOK_SECRET;
+    const res = await app.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      payload: validPayload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    // The upsert hit the delivery-status table with the parsed sid + status + tenant.
+    const upsert = handle.queries.find((q) => q.text.includes('message_delivery_status'));
+    expect(upsert, 'expected an upsert into message_delivery_status').toBeTruthy();
+    expect(upsert!.params).toContain('msg_abc123');
+    expect(upsert!.params).toContain('delivered');
+    expect(upsert!.params).toContain(TENANT_ID);
+  });
+
+  it('SAD: malformed payload (missing id/status) returns 400 and writes nothing', async () => {
+    // WHO: a bad/garbage POST to the public webhook
+    // WHAT: payload lacks data.payload.id and status → no DB write
+    // WHEN: Telnyx (or an attacker) sends an unexpected shape
+    // WHERE: the malformed-guard before any DB call
+    // WHY: never upsert a row with a null SID; fail loud with 400
+    delete process.env.TELNYX_WEBHOOK_SECRET;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/communications/telnyx/status',
+      payload: { data: { event_type: 'message.finalized', payload: {} } },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().success).toBe(false);
+    expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeUndefined();
+  });
+
+  it('SAD: wrong signature (secret set) returns 403 and writes nothing', async () => {
+    // WHO: a forged webhook call when signature verification is enabled
+    // WHAT: telnyx-signature v1 does not match HMAC(secret, t|body) → 403
+    // WHEN: TELNYX_WEBHOOK_SECRET is configured (prod)
+    // WHERE: the signature-verification branch
+    // WHY: a public DB-writing endpoint must reject unsigned/forged callers
+    process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
+    const res = await app.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      headers: { 'telnyx-signature': 't=123,v1=deadbeef' },
+      payload: validPayload,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+    expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeUndefined();
+  });
+
+  it('HAPPY: valid signature (secret set) passes verification and records', async () => {
+    // WHO: a genuine Telnyx call with a correct HMAC signature
+    // WHAT: v1 == HMAC-SHA256(secret, `${t}|${rawBody}`) → 200 + upsert
+    // WHEN: TELNYX_WEBHOOK_SECRET is configured and the signature is honest
+    // WHERE: the signature-verification branch (happy side)
+    // WHY: real signed receipts must be accepted, not just rejected
+    process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
+    const timestamp = '1700000000';
+    // rawBody must equal JSON.stringify(req.body) as the route recomputes it.
+    const rawBody = JSON.stringify(validPayload);
+    const sig = createHmac('sha256', 'whsec_test').update(`${timestamp}|${rawBody}`).digest('hex');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      headers: { 'telnyx-signature': `t=${timestamp},v1=${sig}` },
+      payload: validPayload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeTruthy();
   });
 });

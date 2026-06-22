@@ -14,11 +14,15 @@ export class ProviderRegistry {
     this.registerProvider(telnyx);
     this.registerProvider(mock);
 
-    // Determine default provider
+    // Determine default provider. Validate against the registered set: a stale
+    // TELEPHONY_PROVIDER (e.g. 'twilio' after Twilio removal) must NOT become the
+    // default, or getProvider()'s fallback `.get(defaultProviderName)!` returns
+    // undefined and crashes. Unknown values fall back to 'telnyx'.
     if (this.shouldUseSimulationMode()) {
       this.defaultProviderName = 'mock';
     } else {
-      this.defaultProviderName = process.env.TELEPHONY_PROVIDER || 'telnyx';
+      const requested = process.env.TELEPHONY_PROVIDER || 'telnyx';
+      this.defaultProviderName = this.providers.has(requested) ? requested : 'telnyx';
     }
   }
 

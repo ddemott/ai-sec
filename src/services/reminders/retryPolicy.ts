@@ -12,7 +12,7 @@
  *
  * Origin: docs/TODO.md — "Retry logic for failed sends." Pre-fix the
  * worker marked a reminder `status='failed'` on the first send error
- * and never retried, meaning a single transient the SMS provider 5xx or network
+ * and never retried, meaning a single transient SMS provider 5xx or network
  * blip lost the reminder permanently. Added 2026-05-14 alongside
  * migration 20260514000000 (retry_count + next_retry_at columns).
  */

@@ -14,7 +14,8 @@ export interface RecordAiCostParams {
   outputTokens?: number;
   charactersCount?: number;
   audioDurationMs?: number;
-  estimatedCostUsd: number;
+  /** Caller-provided cost. When omitted, estimateCost() derives it from tokens/usage. */
+  estimatedCostUsd?: number;
 }
 
 const PRICING: Record<string, { input: number; output: number }> = {
@@ -43,7 +44,8 @@ export async function recordAiCostEvent(
   client: PoolClient,
   params: RecordAiCostParams
 ): Promise<void> {
-  const cost = params.estimatedCostUsd || estimateCost(params);
+  // Nullish (not ||) so an explicit 0 cost is stored as 0 rather than re-estimated.
+  const cost = params.estimatedCostUsd ?? estimateCost(params);
   await client.query(
     `INSERT INTO ai_cost_events
        (tenant_id, call_id, source, provider, model,

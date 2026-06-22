@@ -290,14 +290,20 @@ export function registerKnowledgeRoutes(
           // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
           const embTokens = Math.ceil(normalizedText.length / 4);
           const embCost = embTokens * 0.02e-6;
-          await recordAiCostEvent(client, {
-            tenantId,
-            source: 'kb_ingestion',
-            provider: 'openai',
-            model: 'text-embedding-3-small',
-            inputTokens: embTokens,
-            estimatedCostUsd: embCost,
-          });
+          // Cost telemetry is best-effort: a ledger write failure (missing table
+          // in dev/test, transient DB error) must NOT abort document ingestion.
+          try {
+            await recordAiCostEvent(client, {
+              tenantId,
+              source: 'kb_ingestion',
+              provider: 'openai',
+              model: 'text-embedding-3-small',
+              inputTokens: embTokens,
+              estimatedCostUsd: embCost,
+            });
+          } catch {
+            /* swallow — ingestion continues */
+          }
           await client.query(
             'INSERT INTO tenant_docs (tenant_id, content, normalized_text, source, embedding) VALUES ($1, $2, $3, $4, $5::vector)',
             [tenantId, trimmedChunk, normalizedText, filename, JSON.stringify(embedding)]

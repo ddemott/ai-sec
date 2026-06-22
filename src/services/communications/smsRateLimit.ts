@@ -3,7 +3,7 @@
  *
  * WHY this exists. Pre-fix the project relied entirely on the SMS provider's
  * account-wide throttle to bound SMS volume. A single tenant batching
- * 200 reminders at once could exhaust the the SMS provider per-second budget for
+ * 200 reminders at once could exhaust the SMS provider per-second budget for
  * everyone else on the same account. This module fronts the SMS path
  * with a per-tenant bucket so a noisy tenant only slows itself down.
  *
