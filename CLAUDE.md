@@ -33,7 +33,7 @@ Items below capture hidden context — things you can't grep for. Everything els
 
 - `/src` — Fastify backend (slim `index.ts` + 27 route modules)
 - `/src/routes/routeHelpers.ts` — `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`
-- `/src/services/communications/` — CommunicationService + email/sms/appointment services + Handlebars templates + ProviderRegistry + Twilio/Mock adapters. Consent-gated.
+- `/src/services/communications/` — CommunicationService + email/sms/appointment services + Handlebars templates + ProviderRegistry (Telnyx + Mock). Consent-gated.
 - `/src/services/reminders/` — ReminderService schedules; reminderProcessor delivers via CommunicationService; reminderRepository handles DB.
 - `/src/database/index.ts` — Canonical pool (lazy singleton w/ deadlock-prevention timeouts: `statement_timeout=30000`, `lock_timeout=10000`, `idle_in_transaction_session_timeout=60000`, `max=10`, `connectionTimeoutMillis=5000`). The first three are Postgres server-side GUCs (`options` string); `connectionTimeoutMillis` is the client-side checkout cap — added 2026-05-21 so a request that can't get a pool slot under load fails fast (→ error → `errors_total`) instead of hanging forever. `createWithTenantClient(pool)` returns the per-request RLS-scoped helper injected into routes.
 - `/src/workers/reminderScheduler.ts` — 60s tick, batches up to 100. Runs in prod or when `ENABLE_REMINDER_SCHEDULER=true`.

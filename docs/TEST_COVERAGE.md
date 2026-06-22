@@ -111,7 +111,7 @@ the test still passes.
 | File | Statements | Notes |
 |---|---|---|
 | `src/services/tenants/index.ts` | 5.05% | `DatabaseTenantConfigService` — flagged as "delete by default" in CLAUDE.md |
-| `src/services/communications/TwilioAdapter.ts` | 6.25% | |
+| (removed) | src/services/communications/ legacy adapter files | Full removal of legacy SMS provider fallback (2026-06) |
 | `src/workers/reminderScheduler.ts` | 17.74% | |
 | `src/services/reminders/reminderProcessor.ts` | 0% | |
 | `src/services/reminders/reminderRepository.ts` | 0% | |

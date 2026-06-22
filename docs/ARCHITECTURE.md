@@ -55,7 +55,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── index.ts                  Entry — registers 27 route modules (~280 lines)
 │   ├── middleware.ts             withHandler, tenantMiddleware, registerJwtAuthHook, generateToken, AppError, logEvent
 │   ├── routes/                   27 route modules + routeHelpers.ts
-│   ├── services/                 flat files (calendar sync, OAuth, name/token/SMS utilities) + communications/, reminders/, tenants/, usage/ subdirs
+│   ├── services/                 flat files (calendar sync, OAuth, name/token/SMS utilities) + communications/ (Telnyx-only SMS + delivery webhooks), reminders/, tenants/, usage/ subdirs
 │   └── database/                 getPool() singleton + createWithTenantClient(pool) factory + DatabaseService adapter
 ├── dashboard/                    Next.js 14 App Router
 │   ├── app/                      page.tsx (landing), dashboard/page.tsx (app shell), layout.tsx, globals.css

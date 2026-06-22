@@ -18,6 +18,7 @@ import {
   ALLOWED_EXTENSIONS,
 } from '../services/knowledgeIngestion';
 import { resolveQuestions } from '../../shared/questionBank';
+import { recordAiCostEvent } from '../services/aiCost';
 
 // ── Website scrape helpers for onboarding (item 10) ─────────────────────
 
@@ -118,6 +119,7 @@ async function extractAnswersWithLLM(
         confidence: number;
       }>;
       discovered: Array<any>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
     }
   | { success: false; error: string }
 > {
@@ -182,7 +184,7 @@ Return only the JSON.`;
       sourceUrl: d.sourceUrl || '',
       confidence: d.confidence || 0.5,
     }));
-    return { success: true, answers, discovered };
+    return { success: true, answers, discovered, usage: data.usage };
   } catch (e: any) {
     return { success: false, error: 'LLM extract failed: ' + (e.message || e) };
   }
@@ -285,6 +287,23 @@ export function registerKnowledgeRoutes(
             ? await normalizeForEmbedding(trimmedChunk, { context: 'knowledge base document' })
             : trimmedChunk;
           const embedding = await getEmbedding(normalizedText);
+          // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+          const embTokens = Math.ceil(normalizedText.length / 4);
+          const embCost = embTokens * 0.02e-6;
+          // Cost telemetry is best-effort: a ledger write failure (missing table
+          // in dev/test, transient DB error) must NOT abort document ingestion.
+          try {
+            await recordAiCostEvent(client, {
+              tenantId,
+              source: 'kb_ingestion',
+              provider: 'openai',
+              model: 'text-embedding-3-small',
+              inputTokens: embTokens,
+              estimatedCostUsd: embCost,
+            });
+          } catch {
+            /* swallow — ingestion continues */
+          }
           await client.query(
             'INSERT INTO tenant_docs (tenant_id, content, normalized_text, source, embedding) VALUES ($1, $2, $3, $4, $5::vector)',
             [tenantId, trimmedChunk, normalizedText, filename, JSON.stringify(embedding)]
@@ -317,6 +336,20 @@ export function registerKnowledgeRoutes(
         getEmbedding,
         normalizeForEmbedding
       );
+
+      // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+      const embTokens = Math.ceil(normalizedText.length / 4);
+      const embCost = embTokens * 0.02e-6;
+      withTenantClient(tenantId, (client) =>
+        recordAiCostEvent(client, {
+          tenantId,
+          source: source === 'website-scan' ? 'kb_ingestion' : 'policy-questionnaire',
+          provider: 'openai',
+          model: 'text-embedding-3-small',
+          inputTokens: embTokens,
+          estimatedCostUsd: embCost,
+        })
+      ).catch(() => undefined);
 
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
@@ -359,6 +392,20 @@ export function registerKnowledgeRoutes(
         getEmbedding,
         normalizeForEmbedding
       );
+
+      // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+      const embTokens = Math.ceil(normalizedText.length / 4);
+      const embCost = embTokens * 0.02e-6;
+      withTenantClient(tenantId, (client) =>
+        recordAiCostEvent(client, {
+          tenantId,
+          source: source === 'website-scan' ? 'kb_ingestion' : 'policy-questionnaire',
+          provider: 'openai',
+          model: 'text-embedding-3-small',
+          inputTokens: embTokens,
+          estimatedCostUsd: embCost,
+        })
+      ).catch(() => undefined);
 
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
@@ -507,6 +554,22 @@ export function registerKnowledgeRoutes(
           return reply.status(500).send({ success: false, error: llm.error });
         }
         extract = { answers: llm.answers, discovered: llm.discovered };
+        if (llm.usage && tenantId) {
+          const input = llm.usage.prompt_tokens || 0;
+          const output = llm.usage.completion_tokens || 0;
+          const cost = input * 0.15e-6 + output * 0.6e-6;
+          withTenantClient(tenantId, (client) =>
+            recordAiCostEvent(client, {
+              tenantId,
+              source: 'kb_ingestion',
+              provider: 'openai',
+              model: 'gpt-4o-mini',
+              inputTokens: input,
+              outputTokens: output,
+              estimatedCostUsd: cost,
+            })
+          ).catch(() => undefined);
+        }
       }
 
       // Persist extracted (matched) + discovered items to knowledge_suggestion for review.
@@ -635,6 +698,20 @@ export function registerKnowledgeRoutes(
           getEmbedding,
           normalizeForEmbedding
         );
+
+        // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+        const embTokens = Math.ceil(normalizedText.length / 4);
+        const embCost = embTokens * 0.02e-6;
+        withTenantClient(tenantId, (client) =>
+          recordAiCostEvent(client, {
+            tenantId,
+            source: 'kb_ingestion',
+            provider: 'openai',
+            model: 'text-embedding-3-small',
+            inputTokens: embTokens,
+            estimatedCostUsd: embCost,
+          })
+        ).catch(() => undefined);
 
         await withTenantClient(tenantId, async (client) => {
           await client.query('BEGIN');

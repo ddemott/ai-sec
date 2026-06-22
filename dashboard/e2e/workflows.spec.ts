@@ -12,11 +12,14 @@
 import { test, expect } from './helpers/test';
 import { type Page } from '@playwright/test';
 import { Pool } from 'pg';
+import * as crypto from 'crypto';
 import {
   registerFreshTenant,
   seedBookingScenario,
   cleanTenantData,
   BACKEND_URL,
+  bookAppointmentAs,
+  isoDateDaysFromNow,
 } from './helpers/fixtures';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
@@ -729,5 +732,169 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
       await pool.query('DELETE FROM password_resets WHERE user_id = $1', [invitedId]);
       await pool.query('DELETE FROM users WHERE user_id = $1', [invitedId]);
     }
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Self-service links E2E (P1)
+// Owner "Send Links" trigger + customer public pages for cancel/reschedule
+// + negatives (invalid token, double-use) + DB side effects.
+// Uses API setup + public page UI (the /self/* pages are served by the same
+// Next.js app and require no login — the token is the credential).
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Minimal HS256 JWT signer for E2E tests (matches selfServiceToken.ts dev fallback secret + 24h). No extra deps. */
+function generateTestSelfServiceToken(
+  appointmentId: string,
+  tenantId: string,
+  action: 'cancel' | 'reschedule'
+): string {
+  const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    appointment_id: appointmentId,
+    tenant_id: tenantId,
+    action,
+    iat: now,
+    exp: now + 24 * 3600,
+  };
+  const h = Buffer.from(JSON.stringify(header)).toString('base64url');
+  const p = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', secret).update(`${h}.${p}`).digest('base64url');
+  return `${h}.${p}.${sig}`;
+}
+
+test('self-service E2E: book → send links (API trigger) → customer uses cancel/reschedule public pages → negatives + double-use', async ({ page }) => {
+  // WHO: owner + customer (via public token links from SMS or "Send Links" button)
+  // WHAT: full journey: owner triggers send (or booking embeds links), customer loads public cancel/reschedule UI, acts, sees feedback; negatives show friendly errors; double-use is safe.
+  // WHEN: after a scheduled booking with customer phone.
+  // WHERE: dashboard Send Links (or equivalent API), /self/cancel, /self/reschedule public pages, backend selfService + appointments routes.
+  // WHY: this is the customer-trust P1 surface (no login required for the customer side); the backend trigger + pages shipped earlier, this E2E guards the end-to-end + error states that only appear in browser + real token flows.
+  const tid = freshTenant.tenantId;
+  const tok = freshTenant.token;
+  const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` };
+
+  let apptId: string | null = null;
+
+  // Use a fresh request context for API setup calls (same as other workflows tests).
+  const { request: pwRequest } = await import('@playwright/test');
+  const apiCtx = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+
+  try {
+    // Ensure the tenant has an inbound_phone. The send-self-service-links handler
+    // uses it (or TELNYX_PHONE_NUMBER env) as the SMS "from" number; both from and to
+    // must normalize + pass isValidPhone, else it 400s with "Invalid phone number".
+    // Freshly registered e2e tenants don't have one set (provisioning normally does this).
+    await pool.query(
+      `UPDATE tenants SET inbound_phone = '+15551234567' WHERE tenant_id = $1`,
+      [tid]
+    );
+
+    // Seed supporting data (employee/resource/customer + shifts) so booking can succeed.
+    // Use one UTC date string for BOTH the seeded shift and the booked time, and
+    // build the booking as an explicit `...T10:00:00.000Z`. The booking RPC
+    // compares the appointment's UTC time-of-day against the shift's 09:00-17:00
+    // window, so any local-tz construction (setHours) drifts the instant outside
+    // the window on a non-UTC CI runner → EMPLOYEE_NOT_SCHEDULED (400). This
+    // matches the proven pattern in booking-enforcement.spec.ts.
+    const bookingDate = isoDateDaysFromNow(7);
+    const scenario = await seedBookingScenario(apiCtx, pool, tok, tid, {
+      employees: ['Self Service Tech'],
+      resources: ['Self Service Bay'],
+      customer: 'Self Service Customer',
+      shiftDates: [bookingDate],
+    });
+
+    const empId = scenario.employeeIds[0];
+    const resId = scenario.resourceIds[0];
+    const custId = scenario.customerId;
+
+    // 10:00-10:30 on the seeded shift date, in explicit UTC (covered by 09:00-17:00).
+    const startIso = `${bookingDate}T10:00:00.000Z`;
+    const endIso = `${bookingDate}T10:30:00.000Z`;
+
+    // Book a real scheduled appointment (the "book" part of the journey).
+    const bookRes = await bookAppointmentAs(apiCtx, tok, {
+      tenant_id: tid,
+      resource_id: resId,
+      customer_id: custId,
+      employee_id: empId,
+      start_time: startIso,
+      end_time: endIso,
+      description: 'Self-Service Test Booking',
+    });
+    expect(bookRes.status, 'booking for self-service E2E must succeed').toBe(200);
+    apptId = (bookRes.body as any).appointment_id || (bookRes.body as any).appointment?.appointment_id;
+    expect(apptId, 'expected appointment_id from book response').toBeTruthy();
+
+    // 1. Owner "Send Links" trigger (the dashboard surface API; button in AppointmentDetailPanel calls exactly this).
+    // Note: omit Content-Type (no JSON body for this endpoint). Including it with no body
+    // causes Fastify's JSON parser to 400 "Invalid JSON". The dashboard apiMutate does
+    // the same (deletes Content-Type when !body).
+    const sendRes = await apiCtx.post(`${BACKEND_URL}/appointments/${apptId}/send-self-service-links`, {
+      headers: { Authorization: `Bearer ${tok}` },
+    });
+    const sendBody = (await sendRes.json().catch(() => ({}))) as {
+      success?: boolean;
+      message?: string;
+      cancelLink?: string;
+      rescheduleLink?: string;
+    };
+    // In full E2E env with DASHBOARD_URL set this is 200; if not configured the route returns clear 503 (still exercises the path).
+    // 502 can happen if SMS provider (Telnyx) not configured in the test env (smsResult not ok) — the UI/token paths still work.
+    if (sendRes.status() === 200) {
+      expect(sendBody.success).toBe(true);
+      expect(sendBody.message).toMatch(/sent/i);
+      // Links are present when configured (useful for copy or for tests).
+      if (sendBody.cancelLink) expect(sendBody.cancelLink).toMatch(/self\/cancel/);
+    } else if ([502, 503].includes(sendRes.status())) {
+      // Env-specific (no DASHBOARD_URL or Telnyx creds for real SMS in this test stack start).
+      // We still proceed because the subsequent customer UI flows use manually-generated tokens (independent of the actual SMS send).
+    } else {
+      expect(sendRes.status(), 'unexpected status from send-self-service-links').toBe(200);
+    }
+
+    // 2. Generate real tokens (same secret + shape the backend uses) so we can drive the public pages.
+    const cancelToken = generateTestSelfServiceToken(apptId!, tid, 'cancel');
+    const rescheduleToken = generateTestSelfServiceToken(apptId!, tid, 'reschedule');
+
+    // 3. Reschedule request page first (does NOT change appt status, so the token remains valid for lookup).
+    // Load shows the confirm prompt + button; click performs the action (notifies owner) and shows success message.
+    await page.goto(`/self/reschedule?token=${encodeURIComponent(rescheduleToken)}`);
+    await expect(page.getByText(/Tap below to notify us/i)).toBeVisible();
+    await page.getByRole('button', { name: /Send reschedule request/i }).click();
+    await expect(page.getByText(/request has been sent/i)).toBeVisible();
+
+    // 4. Customer cancel via public page (the link that would be in the SMS).
+    await page.goto(`/self/cancel?token=${encodeURIComponent(cancelToken)}`);
+    await expect(page.getByText(/Are you sure you want to cancel your appointment/i)).toBeVisible({ timeout: 10000 });
+    await page.getByRole('button', { name: /Yes, cancel my appointment/i }).click();
+    await expect(page.getByText(/has been canceled/i)).toBeVisible();
+
+    // Verify DB side-effect (status flipped by the token-gated route).
+    const afterCancel = await pool.query('SELECT status FROM appointments WHERE appointment_id = $1', [apptId]);
+    expect(afterCancel.rows[0]?.status).toBe('canceled');
+
+    // 5. Double-use (idempotent): reload the link (shows confirm UI again), click the action button a second time;
+    //    the backend cancel handler returns the "already been canceled" success message (idempotent, no error).
+    await page.goto(`/self/cancel?token=${encodeURIComponent(cancelToken)}`);
+    await expect(page.getByText(/Are you sure you want to cancel your appointment/i)).toBeVisible();
+    await page.getByRole('button', { name: /Yes, cancel my appointment/i }).click();
+    await expect(page.getByText(/already been canceled/i)).toBeVisible();
+
+    // 6. Negatives: invalid/missing token shows clear error UI (no crash, no data leak).
+    // Bad token (present but invalid): load shows confirm prompt (state based on token presence), click performs the fetch which fails -> error state with the message.
+    await page.goto('/self/cancel?token=not.a.real.token');
+    await expect(page.getByText(/Are you sure you want to cancel your appointment/i)).toBeVisible();
+    await page.getByRole('button', { name: /Yes, cancel my appointment/i }).click();
+    await expect(page.getByText(/expired or is invalid|missing a token/i)).toBeVisible();
+
+    // No token at all: load immediately sets invalid state and shows the missing message (no button/click needed).
+    await page.goto('/self/cancel');
+    await expect(page.getByText(/missing a token/i)).toBeVisible();
+  } finally {
+    // The outer afterAll cleanTenantData on freshTenant will cascade-delete the appt + everything.
+    // Nothing extra needed here.
   }
 });

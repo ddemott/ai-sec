@@ -81,7 +81,7 @@ describe('SmsRateLimiter — token bucket per tenant', () => {
   it('CONTRACT: separate tenants have independent buckets', () => {
     // WHY: this is the load-bearing claim of the whole feature — a
     //      noisy tenant must NOT throttle a quiet one. Without per-
-    //      tenant isolation we'd be no better off than Twilio's
+    //      tenant isolation we'd be no better off than the SMS provider's
     //      account-wide rate limit.
     const rl = new SmsRateLimiter({ capacity: 2, refillRate: 1 });
     rl.acquire('tenant-noisy', 0);

@@ -238,7 +238,6 @@ const TENANT_EXEMPT_ROUTES = [
   '/square/webhook',
   // SMS delivery-status callbacks (verified via provider signature, not JWT;
   // tenant_id rides on the query string, not the body)
-  '/communications/twilio/status',
   '/communications/telnyx/status',
   '/tenants',
   '/templates',
@@ -534,7 +533,6 @@ const PUBLIC_ROUTES = [
   // CRM webhooks (authenticated via HMAC/signature, not JWT)
   '/square/webhook',
   // SMS delivery-status callbacks (verified via provider signature, not JWT)
-  '/communications/twilio/status',
   '/communications/telnyx/status',
   // Self-service appointment actions — token-gated, no session JWT
   '/self/cancel',

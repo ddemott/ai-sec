@@ -2401,7 +2401,7 @@ COMMENT ON COLUMN public.communications_history.status IS 'Delivery disposition 
 -- Name: COLUMN communications_history.provider_message_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.communications_history.provider_message_id IS 'Upstream provider message id (nodemailer messageId / Twilio SID) for cross-referencing';
+COMMENT ON COLUMN public.communications_history.provider_message_id IS 'Upstream provider message id (nodemailer messageId / provider SID) for cross-referencing';
 
 
 --
@@ -2717,21 +2717,21 @@ CREATE TABLE public.message_delivery_status (
 -- Name: TABLE message_delivery_status; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.message_delivery_status IS 'Latest Twilio SMS delivery status per message SID, recorded by POST /communications/twilio/status. Non-RLS event table (webhook is tenant-exempt, writes via shared pool).';
+COMMENT ON TABLE public.message_delivery_status IS 'Latest SMS delivery status per message SID (from Telnyx; legacy provider webhooks removed). Non-RLS event table (webhook tenant-exempt).';
 
 
 --
 -- Name: COLUMN message_delivery_status.message_sid; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.message_delivery_status.message_sid IS 'Twilio Message SID (SMxxx). UNIQUE -- one row per message, upserted as status advances.';
+COMMENT ON COLUMN public.message_delivery_status.message_sid IS 'Provider Message SID (legacy provider refs) (SMxxx). UNIQUE -- one row per message, upserted as status advances.';
 
 
 --
 -- Name: COLUMN message_delivery_status.message_status; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.message_delivery_status.message_status IS 'Latest Twilio MessageStatus (queued|sending|sent|delivered|undelivered|failed|received).';
+COMMENT ON COLUMN public.message_delivery_status.message_status IS 'Latest MessageStatus (queued|sending|sent|delivered|undelivered|failed|received).';
 
 
 --

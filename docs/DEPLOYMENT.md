@@ -169,11 +169,11 @@ The backend boots without these but specific features fail or warn loudly.
 | `CORS_ORIGIN` | (none) | Permitted CORS origin for cross-domain dashboard requests |
 | `STRIPE_ENTERPRISE_PRICE_ID` | (none) | Stripe price ID for Enterprise plan (not yet shipped) |
 | `ENABLE_REMINDER_SCHEDULER` | `false` outside prod | Forces the appointment-reminder background worker on in dev |
-| `TELEPHONY_PROVIDER` | `telnyx` | Switch SMS provider (`telnyx` or `twilio`) |
+| `TELEPHONY_PROVIDER` | `telnyx` | (Optional) Override default SMS provider (Telnyx is the only supported provider; legacy support removed) |
 | `TELEPHONY_SIMULATION_MODE` | `false` | If `true`, voice/SMS providers no-op (test/dev) |
 | `SMS_SIMULATION_MODE` | `false` | If `true`, SMS service no-ops (test/dev) |
 | `EMAIL_USER`, `EMAIL_PASS` | (none) | nodemailer SMTP creds for transactional email |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | (none) | Used only when `TELEPHONY_PROVIDER=twilio` |
+| `TELNYX_*` (API_KEY, SIP_CONNECTION_ID, PHONE_NUMBER, WEBHOOK_SECRET) | (required for prod) | Telnyx for numbers, SIP, SMS, OTP |
 | `BETTER_STACK_TOKEN` | (none) | Source token for Better Stack (Logtail) log aggregation. When set, backend + agent forward Pino logs in addition to writing to stdout. Unset = stdout only (local dev / no aggregation). See "Observability" below. |
 | `LOG_LEVEL` | `info` (prod) / `debug` (dev) | Pino log level (`trace` `debug` `info` `warn` `error` `fatal`). Env knob for dialing back verbosity if free-tier ingest is approached without redeploy. |
 | `SENTRY_DSN` | (none) | DSN for Sentry error monitoring. When set, backend + agent send unhandled exceptions and `logError` calls to Sentry for grouping + alert-on-spike. Unset = no Sentry calls (local dev / tests). See "Observability" below. |

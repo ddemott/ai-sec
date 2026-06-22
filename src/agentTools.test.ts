@@ -36,6 +36,13 @@ function buildApp(opts: {
 
   const mockClient = {
     query: vi.fn(async (text: string, params?: unknown[]) => {
+      // Cost-ledger writes are out-of-band telemetry (fire-and-forget in the
+      // routes); they must not consume a queued response or appear in the
+      // asserted query log, otherwise they'd shift every other test's
+      // expectations by one.
+      if (typeof text === 'string' && text.includes('ai_cost_events')) {
+        return { rows: [], rowCount: 1 };
+      }
       queries.push({ text, params: params || [] });
       return responses.shift() || { rows: [], rowCount: 0 };
     }),

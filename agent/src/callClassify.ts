@@ -22,9 +22,9 @@ export async function classifyCallOutcome(
   transcript: string,
   apiKey: string,
   opts: { timeoutMs?: number } = {}
-): Promise<string | null> {
-  if (!transcript || transcript.trim().length === 0) return null;
-  if (!apiKey) return null;
+): Promise<{ outcome: string | null; usage?: { inputTokens: number; outputTokens: number } }> {
+  if (!transcript || transcript.trim().length === 0) return { outcome: null };
+  if (!apiKey) return { outcome: null };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
@@ -55,19 +55,25 @@ export async function classifyCallOutcome(
       }),
       signal: controller.signal,
     });
-    if (!res.ok) return null;
-    const data: unknown = await res.json();
-    const raw = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]
-      ?.message?.content;
-    if (typeof raw !== 'string') return null;
+    if (!res.ok) return { outcome: null };
+    const data: any = await res.json();
+    const raw = data.choices?.[0]?.message?.content;
+    if (typeof raw !== 'string') return { outcome: null };
     // Sanitize: lowercase, strip non-letters/underscores, keep only an allowed category.
     const word = raw
       .trim()
       .toLowerCase()
       .replace(/[^a-z_]/g, '');
-    return ALLOWED.has(word) ? word : null;
+    const outcome = ALLOWED.has(word) ? word : null;
+    const usage = data.usage
+      ? {
+          inputTokens: data.usage.prompt_tokens || 0,
+          outputTokens: data.usage.completion_tokens || 0,
+        }
+      : undefined;
+    return { outcome, usage };
   } catch {
-    return null;
+    return { outcome: null };
   } finally {
     clearTimeout(timer);
   }

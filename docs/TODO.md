@@ -59,7 +59,7 @@ sections still show them as "IN FLIGHT (user)"._
 
 - [ ] **LLC bank account** for Thinking Hammer LLC (required before Stripe payouts).
 - [ ] **Legal docs** — Bonterms ToS + Privacy Policy + DPA, published + linked from dashboard.
-- [ ] **TCPA SMS opt-in** consent language at booking time (Twilio template) — before any confirmation texts.
+- [ ] **TCPA SMS opt-in** consent language at booking time — before any confirmation texts. (Public templates from carriers are fine to reference.)
 - [ ] **E&O insurance** before first paying customer (~$800–1,200/yr; Next/Hiscox).
 - [ ] **Cyber Liability insurance** before first paying customer (often bundled with E&O).
 - [ ] _FUTURE_: at ~$60K taxable income, elect S-Corp taxation (IRS Form 2553; consult a CPA).
@@ -71,9 +71,9 @@ sections still show them as "IN FLIGHT (user)"._
 
 ### P1 — Customer success & trust (dossier: _Back-to-Front_, _Non-blocking_)
 
-- [ ] **AI cost / usage meter** — instrument spend at ~5 call sites (`agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` policy-answer, `agent/src/grokTTS.ts`); pick data model (`cost_usd` on `voice_sessions` vs new `tenant_daily_usage`); "Usage this month" Analytics card.
-- [ ] **Self-service links — dashboard surface** — "Send self-service links" button in `AppointmentDetailPanel.tsx` (backend cancel/reschedule/email links shipped PR #34; this is the trigger only).
-- [ ] **Self-service E2E** — book → SMS link → reschedule + negatives (expired, wrong tenant, double-use).
+- [x] **AI cost / usage meter** — instrument spend at call sites (added recording via aiCost helper to kb_ingestion, kb_query/policy paths in knowledge routes + agentTools; voice session via existing record-ai-cost + LiveKit collector; summary/classify costs folded into model_usage). Uses ai_cost_events table (data model chosen). "Usage this month" surfaced via /analytics/ai-cost + breakdown in AnalyticsView (partial UI pre-existed). 2026-06. (Remaining agent-side explicit TTS etc. covered by session usage.)
+- [x] **Self-service links — dashboard surface** — "Send self-service links" button (with loading + toast) in `AppointmentDetailPanel.tsx`; API client + POST /appointments/:id/send-self-service-links (generates tokens, sends via Telnyx SMS, returns links; also embedded in normal booking confirmations via appointmentService + templates). Backend + unit tests complete. (PR #34 + follow-ups.) 2026-06.
+- [x] **Self-service E2E** — added in workflows.spec.ts: book via helper → send-links trigger (API) → customer uses public /self/cancel and /self/reschedule pages (confirm, success states, DB effect) → negatives (invalid token UI) + double-use (idempotent already-canceled). Uses generated tokens matching backend + e2e fixtures. 2026-06.
 - [ ] **Verify reminder delivery stats in prod** after Telnyx creds set.
 - [ ] **Pricing tiers (Pro/Enterprise) positioning.**
 
@@ -173,7 +173,7 @@ Captured 2026-06-19 (Dale brainstorming migration targets). **Decision rule = th
 - [x] **[dev]** **Voice-session capture (outcome + appointment link + summary)** — DONE 2026-06-12. `CallOutcomeTracker` (`agent/src/callOutcome.ts`) is mutated by the booking tools (`recordBooking(appointment_id)`, guarded on a real id in the response) and the transfer tool (`recordTransfer`); the shutdown hook reads it and sends `outcome` + `appointment_id` + a bounded/failsafe post-call `summary` (`agent/src/callSummary.ts` — never throws, can't drop the session-end write) to `voice-session-end`. Backend `VoiceSessionEndSchema` now accepts `summary` + UUID-validated `appointment_id` and forwards them to the RPC (was hardcoded null). +14 agent + 2 backend tests; `simulate tools` now proves the link **persisted** via a `voice_sessions` DB read-back (appointment_id matches the booking, outcome=booked, summary stored).
 - [x] **[dev]** **Transfers invisible in Calls tab** — DONE (see Back-to-Front section line 215 + Gap #1). `recordTransfer()` sets `outcome='transferred'`; `end_voice_session` RPC sets `status='transferred'` when outcome matches. UI badge wired.
 - [x] **[dev]** **`GET /analytics/stats` missing** — DONE 2026-06-12 (Gap #2). Route at `src/routes/analytics.ts:24`; dashboard panels fully wired. See active build queue above.
-- [x] **[dev] Twilio delivery monitoring** — DONE 2026-06-12 (`feat/twilio-delivery-receipts`): `TwilioAdapter.sendSMS` attaches a `statusCallback` (`BACKEND_PUBLIC_URL`-gated) -> `POST /communications/twilio/status` webhook, which verifies `X-Twilio-Signature`, upserts into `message_delivery_status` by SID, increments `message_delivery_receipts_total{status}`. Needs `BACKEND_PUBLIC_URL` on Railway to activate.
+- [x] **[dev] SMS delivery monitoring** — DONE 2026-06-12: Delivery status webhooks + `message_delivery_status` table + metrics for Telnyx (legacy provider path removed 2026-06). `POST /communications/telnyx/status` wired.
 - [x] **[dev] `GET /communications/history` implemented** — DONE 2026-06-12 (`feat/communications-history`): real `communications_history` table, written on the Email/SMS send-success path, tenant-scoped paginated query. No live UI consumer yet (backend-only).
 - [x] **[dev]** **Stripe tax code wired** — `automatic_tax: { enabled: true }` added to checkout session in `billing.ts`, gated on `STRIPE_AUTO_TAX=true` env var. Set that on Railway after: (1) enable Stripe Tax in Stripe dashboard, (2) register nexus for IL + customer states. See Phase 13 user-action item.
 
@@ -212,7 +212,7 @@ CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry
 
 - [ ] **IN FLIGHT (user)** Open LLC bank account for Thinking Hammer LLC (required before Stripe payouts can be configured)
 - [ ] **FUTURE (user)** At ~$60K taxable income, elect S Corp taxation on the LLC (file IRS Form 2553). Thinking Hammer LLC stays as-is legally — the S Corp election just changes how it's taxed, letting you split income between salary and distributions to reduce self-employment tax. Talk to a CPA before filing.
-- [ ] **IN FLIGHT (user)** Legal docs — use Bonterms (bonterms.com) for SaaS Terms of Service, Privacy Policy, and Data Processing Agreement (free, open source, lawyer-drafted). Add to site before first paying customer. Separately: add TCPA-compliant SMS opt-in consent language at booking time (Twilio publishes a copy-ready template) — required before sending any confirmation texts.
+- [ ] **IN FLIGHT (user)** Legal docs — use Bonterms (bonterms.com) for SaaS Terms of Service, Privacy Policy, and Data Processing Agreement (free, open source, lawyer-drafted). Add to site before first paying customer. Separately: add TCPA-compliant SMS opt-in consent language at booking time — required before sending any confirmation texts.
 - [ ] **FUTURE (user)** Get E&O (Errors & Omissions) insurance before first paying customer. Quote via Next Insurance or Hiscox (~$800–1,200/yr for solo SaaS). Covers:
   - Customer claims Secretary HQ missed a booking or double-booked and they lost business
   - Customer claims the AI gave wrong information (pricing, hours, services) during a call
