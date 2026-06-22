@@ -96,7 +96,9 @@ export default function AnalyticsView() {
 
       if (callStats) setCalls(callStats);
       if (aiCostRes) setAiCost(aiCostRes);
-      if (cohortRes) setCohorts(cohortRes);
+      // Set unconditionally (null on fetch error) so switching tenants never
+      // leaves the previous tenant's cohort data on screen.
+      setCohorts(cohortRes);
 
       if (Array.isArray(appointments)) {
         const byDay: Record<string, number> = {};

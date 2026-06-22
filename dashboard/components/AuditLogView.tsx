@@ -177,8 +177,17 @@ export default function AuditLogView() {
                 {entries.map((e) => (
                   <tr
                     key={e.audit_log_id}
-                    className="border-b last:border-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    className="border-b last:border-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-800"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`View what changed: ${e.action} on ${e.table_name}`}
                     onClick={() => setSelected(e)}
+                    onKeyDown={(ev) => {
+                      if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault();
+                        setSelected(e);
+                      }
+                    }}
                     title="View what changed"
                   >
                     <td className="py-2 pr-4 whitespace-nowrap">

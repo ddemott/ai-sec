@@ -124,11 +124,14 @@ async function main() {
     const err = (co.json?.error ?? '').toString().toLowerCase();
     if (co.status === 200 && co.json?.url) {
       pass(`checkout: ${plan}`, 'price wired → session URL ✓');
+    } else if (err.includes('price')) {
+      // A missing price ID ALSO returns 503 ("Price ID not configured for …"),
+      // so check it BEFORE the generic key-missing 503 branch — otherwise one
+      // unpriced plan would be misreported as "key missing" and skip the rest.
+      gap(`checkout: ${plan}`, `key present but STRIPE_${plan.toUpperCase()}_PRICE_ID missing`);
     } else if (co.status === 503 || err.includes('not configured') || err.includes('stripe_secret')) {
       keyMissing = true;
       gap(`checkout: ${plan}`, 'STRIPE_SECRET_KEY not set on this env — billing inactive');
-    } else if (err.includes('price')) {
-      gap(`checkout: ${plan}`, `key present but STRIPE_${plan.toUpperCase()}_PRICE_ID missing`);
     } else if (co.status === 400) {
       // key present, plan accepted by schema but rejected downstream — surface it
       fail(`checkout: ${plan}`, `400 ${co.json?.error ?? ''}`);
