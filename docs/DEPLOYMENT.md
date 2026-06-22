@@ -89,21 +89,7 @@ WHERE schemaname = 'public' AND rowsecurity = true;
 
 ---
 
-## Phase 3: Deploy Edge Functions
-
-### 3.1 Link the Supabase CLI
-```bash
-npx supabase login
-npx supabase link --project-ref <PROJECT_ID>
-```
-
-### 3.2 (Removed — no edge functions)
-
-The earlier `vapi-tools` Supabase edge function was deleted in commit `661d21d` (2026-04-27) when the voice stack moved to LiveKit Agents. The 12 voice AI tools now live at Fastify `/agent-tools/*` (see Phase 4 for backend deploy). Skip to Phase 4.
-
----
-
-## Phase 4: Deploy the Backend API
+## Phase 3: Deploy the Backend API
 
 The Fastify backend serves the dashboard and management API. Deploy options:
 
@@ -218,7 +204,7 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 
 ---
 
-## Phase 5: Deploy the Dashboard
+## Phase 4: Deploy the Dashboard
 
 The dashboard is a Next.js app in the `dashboard/` directory.
 
@@ -243,17 +229,17 @@ Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed backend.
 
 ---
 
-## Phase 6: Telephony Setup (Telnyx + LiveKit Cloud)
+## Phase 5: Telephony Setup (Telnyx + LiveKit Cloud)
 
 The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** (SIP ingress) → **LiveKit Agent worker** (Node, deployed on Railway as `ai-sec-agent`). One LiveKit dispatch rule routes every tenant's number to the same agent worker; tenant identity flows in via SIP dispatch metadata. There are no per-tenant orchestrator entities — buying a Telnyx number and pointing it at the SIP Connection is the entire per-tenant config.
 
-### 6.1 LiveKit Cloud: Project + dispatch rule (one-time)
+### 5.1 LiveKit Cloud: Project + dispatch rule (one-time)
 1. Sign in to [cloud.livekit.io](https://cloud.livekit.io) and create a project (e.g., `AI-Secretary`).
 2. From **Settings → Keys**, copy the WSS URL, API Key, and API Secret. Set them in Railway as `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 3. Create a SIP inbound trunk and a dispatch rule that routes inbound SIP traffic to agent name `ai-secretary-agent`. The agent worker self-registers with this name when it boots.
 4. Note the SIP FQDN LiveKit gives you (looks like `<project-slug>.sip.livekit.cloud:5060`). You'll point Telnyx at it.
 
-### 6.2 Telnyx: SIP Connection pointing at LiveKit (one-time)
+### 5.2 Telnyx: SIP Connection pointing at LiveKit (one-time)
 1. Sign in to [portal.telnyx.com](https://portal.telnyx.com).
 2. **Voice → SIP Connections → Create FQDN Connection** named `livekit-outbound`.
 3. **Inbound** tab → set **Default Primary FQDN** to the LiveKit SIP FQDN from 6.1, port 5060, DNS A record. Sequential routing. Codecs G722/G711U/G711A. DTMF: RFC 2833.
@@ -262,7 +248,7 @@ The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** 
 6. Copy the numeric Connection ID. Set it in Railway as `TELNYX_SIP_CONNECTION_ID`.
 7. Set Telnyx API key in Railway as `TELNYX_API_KEY` (same key handles SMS OTP).
 
-### 6.3 Buying a number (per-tenant, automated)
+### 5.3 Buying a number (per-tenant, automated)
 Buying happens through the backend's `/provisioning/activate` endpoint, not the portal. The flow:
 
 1. SuperAdmin clicks **Activate Phone** on a tenant in the dashboard (or `POST /provisioning/activate` directly).
@@ -273,7 +259,7 @@ Buying happens through the backend's `/provisioning/activate` endpoint, not the 
 
 After step 4, calls to the new number flow Telnyx → LiveKit → agent. No Telnyx-portal clicks per tenant.
 
-### 6.4 Deploy the LiveKit agent worker
+### 5.4 Deploy the LiveKit agent worker
 The agent worker lives in `agent/` and runs as a separate Railway service (`ai-sec-agent`). It registers with LiveKit Cloud on boot using the `LIVEKIT_*` env vars and stays connected. Required env vars on the agent service:
 
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 6.1
@@ -284,7 +270,7 @@ The agent worker lives in `agent/` and runs as a separate Railway service (`ai-s
 
 ---
 
-## Phase 7: Async Work (No n8n Required)
+## Phase 6: Async Work (No n8n Required)
 
 **n8n has been removed from this project.** All async work runs inline in Fastify route handlers:
 
@@ -298,15 +284,15 @@ Required env vars for async integrations are all set in Railway (Google/Outlook 
 
 ---
 
-## Phase 8: Post-Deployment Verification
+## Phase 7: Post-Deployment Verification
 
-### 8.1 Dashboard Smoke Test
+### 7.1 Dashboard Smoke Test
 1. Open the dashboard URL
 2. Log in with the seeded credentials (`admin@secretaryhq.com` / `password`)
 3. Verify you can see appointments, customers, and resources
 4. Try creating a test appointment through the UI
 
-### 8.2 Agent-tools Smoke Test
+### 7.2 Agent-tools Smoke Test
 Test a tool route directly against the deployed backend (the same path the LiveKit agent uses):
 ```bash
 # Get customer context — same payload shape the agent's tool client uses
@@ -320,13 +306,13 @@ curl -X POST https://ai-sec-production.up.railway.app/agent-tools/customer-conte
 ```
 A 200 with a JSON body confirms the route is up and the agent secret is correctly configured. A 401 means `AGENT_SECRET` doesn't match between agent and backend.
 
-### 8.3 Live Call Test
+### 7.3 Live Call Test
 1. Call the Telnyx phone number
 2. The AI should greet you with the tenant's first message
 3. Test the full flow: identify as customer, ask about availability, book an appointment
 4. Verify the appointment appears in the dashboard
 
-### 8.4 Knowledge Base Test
+### 7.4 Knowledge Base Test
 1. Upload a policy PDF via the dashboard's Knowledge Base tab
 2. Call in and ask a policy question (e.g., "What's your cancellation policy?")
 3. Verify the AI answers using the uploaded document content

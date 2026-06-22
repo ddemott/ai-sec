@@ -89,9 +89,9 @@ sections still show them as "IN FLIGHT (user)"._
 - [ ] **Website scan polish** — wizard UI click-path E2E + `simulate tools` import coverage (API/unit layers done); rate-limit / per-tenant scan guardrails; periodic re-scan scheduler for stale KB.
 - [ ] **Analytics depth** — caller-facing source citations from KB; admin "explain this answer" RAG debugger; cohort / CLV / service-specific abandonment drill-down.
 - [ ] **Docs / runbooks** — owner admin guides ("how to read analytics", FAQ); telephony troubleshooting playbook (Telnyx/LiveKit/PSTN); prod incident runbook ("agent silent", "reminders not sending", "Stripe webhook 400").
-- [ ] **Agent reliability — idempotent-read retry** in `toolsClient` (READ tools only, never mutations; backed out 2026-05-21; revisit).
-- [ ] **`simulate tools` → CI** once the `[dev]` links are wired, so journeys are regression-guarded.
-- [ ] **Remove vestigial edge-function section** from `docs/DEPLOYMENT.md` ("Phase 3: Deploy Edge Functions" lingers; body already says removed).
+- [x] **Agent reliability — idempotent-read retry** in `toolsClient` — DONE 2026-06-22: code wired (`agent/src/toolsClient.ts:50` `maxAttempts = opts.isReadOnly ? 2 : 1` — mutations never retried; one retry on transient 5xx / network throw; 7 read-tool call sites in `agent/src/tools.ts`) **+ now tested** — added 5 cases to `toolsClient.test.ts` (read retry→success, read exhaust both-5xx, mutation no-retry on 5xx, read retry on network throw, mutation no-retry on throw). The mutation-no-retry cases are the double-book guardrail. 14/14 green.
+- [x] **`simulate tools` → CI** — DONE: wired as a hard regression gate in `.github/workflows/ci.yml:269` ("Run simulate tools" step, `./scripts/simulate.sh tools --env local`; non-zero exit fails the E2E job). Runs the booking + recall journey against the live servers and flags `[dev]` gaps the same way the local harness does.
+- [x] **Remove vestigial edge-function section** from `docs/DEPLOYMENT.md` — DONE 2026-06-22: dropped the dead "Phase 3: Deploy Edge Functions" section (incl. vestigial `3.1 Link the Supabase CLI` — migrations apply via `setup-db.sh`, no CLI link needed) and renumbered Phases 4–8 → 3–7 + subsections.
 - [ ] _(Optional)_ Repoint Railway `healthcheckPath` → `/ready` (gates deploy promotion on DB reachability — Dale's call).
 
 ### P3 — Moat & expansion (deferred until a customer asks) (dossier: _Production Wiring → future candidates_)
@@ -138,7 +138,7 @@ function · `[dev]` = NOT wired anywhere, needs code before it can work.
 ### `[prod]` — code works, needs prod config — SILENT-DEGRADE (highest risk: no error, no startup warning)
 
 - [x] **[prod]** **Reminder/comms SMS silently runs MockAdapter** — FIXED 2026-06-16: ProviderRegistry now defaults to Telnyx; boot warning fires if `TELNYX_PHONE_NUMBER` unset. **Prod action**: set `TELNYX_PHONE_NUMBER=+16308661960` on Railway.
-- [ ] **[prod]** **Email silently runs mock transporter** — without `EMAIL_USER`/`EMAIL_PASS`, `emailService.ts:22` installs a mock returning a fake messageId → confirmation/notification emails never send, no error. Boot warning now fires. Set Gmail app-password env on Railway.
+- [x] **[prod]** **Email silently runs mock transporter** — code FIXED: boot warning fires when `EMAIL_USER`/`EMAIL_PASS` unset (`envWarnings.ts:35`), matching the Telnyx/CORS/`DASHBOARD_URL` silent-degrade siblings. (Without the env, `emailService.ts:22` installs a mock returning a fake messageId → emails never send.) **Prod action**: set Gmail app-password env (`EMAIL_USER`/`EMAIL_PASS`) on Railway.
 - [x] **[prod]** **Agent `BACKEND_URL` defaults to `http://localhost:4001`** — FIXED 2026-06-16: `.default()` removed; agent now exits at startup if unset. **Prod action**: confirm `BACKEND_URL=https://ai-sec-production.up.railway.app` is set on `ai-sec-agent` Railway service.
 - [x] **[prod]** **`STRIPE_WEBHOOK_SECRET` empty → every webhook 400s** — FIXED 2026-06-17: boot warning now fires when `STRIPE_SECRET_KEY` is set but `STRIPE_WEBHOOK_SECRET` is missing. **Prod action**: set `STRIPE_WEBHOOK_SECRET` on Railway.
 - [x] **[prod] (security)** **`CORS_ORIGIN` unset reflects ANY origin** — FIXED 2026-06-16: boot warning now fires. **Prod action**: set `CORS_ORIGIN=<dashboard URL>` on Railway.
@@ -189,7 +189,7 @@ Captured 2026-06-19 (Dale brainstorming migration targets). **Decision rule = th
 - `tools` — realistic agent-tools journey (demo tenant → catalog → book → preference → recall) that PASSES wired links and flags `[dev]` gaps. **Verified local: 9 links pass, 4 gaps mapped.**
 - `call` — dispatch agent + browser join URL (real voice, no phone).
 - [x] Replace the dead `qa-live-test.py` references — DONE 2026-06-17: updated DEVELOPMENT_WORKFLOW.md, TEST_COVERAGE.md, ARCHITECTURE.md to reference `simulate.sh tools`.
-- [ ] Add `simulate tools` (or an E2E equivalent) to CI once the `[dev]` links are wired, so journeys are regression-guarded.
+- [x] Add `simulate tools` (or an E2E equivalent) to CI — DONE: `ci.yml:269` runs `./scripts/simulate.sh tools --env local` as a hard gate in the E2E job (non-zero exit fails). (Canonical entry in the P2 master list above.)
 - [x] **Test RAG accuracy — DONE 2026-06-12.** `scripts/sim-rag.mjs` + `./scripts/simulate.sh rag` — seeds a known KB into a demo tenant (real embeddings via `/knowledge/add`), asks paraphrased caller questions through `/agent-tools/policy-answer`, grades retrieval (expected content present, + out-of-scope must fall back not hallucinate), reports a hit-rate and exits non-zero below 80%. On-demand quality tool (real OpenAI → not a CI gate; non-deterministic + costs). Run-verified: **9/9 (100%)** after query expansion fix. **Gates the website-scan onboarding idea** (`docs/STRATEGY.md`).
   - [x] **Finding from the eval — FIXED 2026-06-12.** _"what's your address"_ fell back instead of retrieving the location doc — `address`↔`located` shares no vocabulary and scored 0.31 below threshold. Root cause: reductive `normalizeForEmbedding` applied to _query_ collapsed terse inputs below out-of-scope floor. Fix: new `shared/expandQueryForEmbedding.ts` (additive synonym expansion, inverse of normalize) on policy-answer path only + threshold 0.5→0.30. Docs/ingest untouched (no re-embed needed). See `shared/expandQueryForEmbedding.ts` + `src/queryExpander.test.ts`. Now ready for website-scan reliance.
 
@@ -274,7 +274,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 **Gap 1 — agent resilience (1A done; remainder):**
 
 - [x] **P2 — Wrap the agent `entry` tail in try/catch → `runFallback`.** DONE 2026-05-28. Added outer try/catch around ToolsClient + buildTools + fetchTenantConfig + buildSystemPrompt. Inner session.start catch retained; outer catch catches setup failures before session.start. Agent TS clean, 1397 tests passing.
-- [ ] **P3 — (B) idempotent-read retry** in `toolsClient` — one retry on a transient 5xx for READ tools only (never mutations: a timed-out booking may have succeeded server-side → double-book). Backed out 2026-05-21 (not approved); revisit.
+- [x] **P3 — (B) idempotent-read retry** in `toolsClient` — DONE 2026-06-22: one retry on transient 5xx / network throw for READ tools only (never mutations: a timed-out booking may have succeeded server-side → double-book). Wired (`toolsClient.ts:50`, gated `isReadOnly ? 2 : 1`; 7 read-tool call sites) + 5 tests added to `toolsClient.test.ts` (incl. the mutation-no-retry double-book guardrail). See canonical item above.
 - [x] **P3 — (C) latency filler** — DONE 2026-06-16. `buildTools` accepts optional `speakFiller` callback; wired into `get_available_slots`, `book_appointment`, `book_appointment_with_scheduling`, `answer_policy_question`. `index.ts` passes `session.say` (builds tools inside session try-block). Also fixed pre-existing TS error (`AgentHandoffItem` type narrowing in transcript handler).
 
 **Gap 3 — follow-through (core fix done above):**
