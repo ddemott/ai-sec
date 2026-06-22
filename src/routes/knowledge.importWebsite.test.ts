@@ -14,6 +14,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import type { FastifyInstance } from 'fastify';
 import { registerKnowledgeRoutes } from './knowledge';
 import { buildRouteTestApp, type RouteTestAppHandle } from '../test-utils-mock';
+import { scanRateLimiter } from '../services/scanRateLimit';
 
 const TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
@@ -48,6 +49,9 @@ beforeEach(() => {
   handle.queryResponses.length = 0;
   mockGetEmbedding.mockClear();
   openAiPrompts = [];
+  // Per-test isolation for the shared in-process scan limiter so one test's
+  // scans don't drain another's bucket (default capacity is only 3).
+  scanRateLimiter.reset();
   savedOpenAiKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = 'test-key';
 
@@ -190,5 +194,45 @@ describe('POST /knowledge/import-website', () => {
 
     expect(res.statusCode).toBe(500);
     expect(res.json().success).toBe(false);
+  });
+
+  it('SAD: rate-limits a tenant after the burst capacity, returns 429', async () => {
+    // WHO: a tenant (or a bad actor) hammering the scan endpoint
+    // WHAT: the first 3 scans (default bucket capacity) succeed; the 4th in the
+    //        same window is rejected with 429 and never touches OpenAI
+    // WHY: the scan is the most expensive request a tenant can make (external
+    //        multi-page fetch + LLM extract). A per-tenant token bucket caps the
+    //        burn so one tenant can't run up OpenAI cost or proxy abuse.
+    // Prime DB responses for 3 successful scans (custom SELECT + INSERT each).
+    for (let i = 0; i < 3; i++) {
+      handle.queryResponses.push({ rows: [], rowCount: 0 }); // custom-question SELECT
+      handle.queryResponses.push({ rows: [], rowCount: 1 }); // INSERT
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const ok = await app.inject({
+        method: 'POST',
+        url: '/knowledge/import-website',
+        headers: AUTH,
+        payload: { url: 'https://example-shop.com' },
+      });
+      expect(ok.statusCode).toBe(200);
+    }
+
+    const promptsAfterBurst = openAiPrompts.length;
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: '/knowledge/import-website',
+      headers: AUTH,
+      payload: { url: 'https://example-shop.com' },
+    });
+
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().success).toBe(false);
+    expect(limited.json().error).toContain('scan limit');
+    // WHY: the rejected request must short-circuit BEFORE the LLM call — no
+    //       extra OpenAI prompt was sent.
+    expect(openAiPrompts.length).toBe(promptsAfterBurst);
   });
 });

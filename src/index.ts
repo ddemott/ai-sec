@@ -49,6 +49,7 @@ import { registerCommunicationRoutes } from './routes/communications';
 import { registerReminderRoutes } from './routes/reminders';
 import { registerHealthRoutes } from './routes/health';
 import { registerSelfServiceRoutes } from './routes/selfService';
+import { registerExportRoutes } from './routes/exportData';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { createGetEmbedding } from '../shared/getEmbedding';
@@ -260,6 +261,7 @@ registerReminderRoutes(app, pool, withTenantClient);
 registerAgentToolRoutes(app, pool, withTenantClient, getEmbedding, normalizeForEmbedding);
 registerDemoRoutes(app, pool, generateToken);
 registerSelfServiceRoutes(app, withTenantClient);
+registerExportRoutes(app, pool, withTenantClient);
 
 // --- Start Reminder Scheduler ---
 // Only start in production or if explicitly enabled
