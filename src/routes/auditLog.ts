@@ -20,15 +20,14 @@ import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware';
 import { parsePagination, parseDateRange } from './routeHelpers';
-
-const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
 /** Tables the audit trigger actually writes — used to validate the filter. */
 const AUDITED_TABLES = new Set(['appointments', 'customers', 'resources']);
 
 export function registerAuditLogRoutes(
   app: AppFastifyInstance,
-  pool: Pool,
+  _pool: Pool,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
 ) {
   app.get(
