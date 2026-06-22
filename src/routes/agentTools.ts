@@ -805,7 +805,10 @@ export function registerAgentToolRoutes(
         try {
           const titlesRes = await withTenantClient(args.tenant_id, (client) =>
             client.query<{ tenant_doc_id: string; title: string | null }>(
-              'SELECT tenant_doc_id, title FROM tenant_docs WHERE tenant_id = $1 AND tenant_doc_id = ANY($2)',
+              // ANY($2::uuid[]) — without the cast Postgres compares uuid against
+              // a text[] and errors (operator does not exist: uuid = text), which
+              // the catch below would swallow → citations would silently never appear.
+              'SELECT tenant_doc_id, title FROM tenant_docs WHERE tenant_id = $1 AND tenant_doc_id = ANY($2::uuid[])',
               [args.tenant_id, docIds]
             )
           );

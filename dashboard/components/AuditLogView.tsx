@@ -60,6 +60,14 @@ export default function AuditLogView() {
         table_name: tableFilter || undefined,
       });
       if (res.success) {
+        // Offset pagination can't know the total, so when the row count is an
+        // exact multiple of PAGE_SIZE the "Next" button stays enabled and lands
+        // on an empty page. Snap back one page instead of stranding the owner on
+        // a blank table.
+        if (res.entries.length === 0 && offset > 0) {
+          setOffset((o) => Math.max(0, o - PAGE_SIZE));
+          return;
+        }
         setEntries(res.entries);
       } else {
         setError('Failed to load audit log');
