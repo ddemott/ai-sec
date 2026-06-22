@@ -19,6 +19,7 @@ import {
   cleanTenantData,
   BACKEND_URL,
   bookAppointmentAs,
+  isoDateDaysFromNow,
 } from './helpers/fixtures';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
@@ -791,22 +792,27 @@ test('self-service E2E: book → send links (API trigger) → customer uses canc
     );
 
     // Seed supporting data (employee/resource/customer + shifts) so booking can succeed.
+    // Use one UTC date string for BOTH the seeded shift and the booked time, and
+    // build the booking as an explicit `...T10:00:00.000Z`. The booking RPC
+    // compares the appointment's UTC time-of-day against the shift's 09:00-17:00
+    // window, so any local-tz construction (setHours) drifts the instant outside
+    // the window on a non-UTC CI runner → EMPLOYEE_NOT_SCHEDULED (400). This
+    // matches the proven pattern in booking-enforcement.spec.ts.
+    const bookingDate = isoDateDaysFromNow(7);
     const scenario = await seedBookingScenario(apiCtx, pool, tok, tid, {
       employees: ['Self Service Tech'],
       resources: ['Self Service Bay'],
       customer: 'Self Service Customer',
-      shiftDates: [new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10)],
+      shiftDates: [bookingDate],
     });
 
     const empId = scenario.employeeIds[0];
     const resId = scenario.resourceIds[0];
     const custId = scenario.customerId;
 
-    // Pick a time covered by the seeded shift (e.g. 10:00-10:30, 7 days out).
-    const future = new Date(Date.now() + 7 * 86400_000);
-    future.setHours(10, 0, 0, 0);
-    const startIso = future.toISOString();
-    const endIso = new Date(future.getTime() + 30 * 60000).toISOString();
+    // 10:00-10:30 on the seeded shift date, in explicit UTC (covered by 09:00-17:00).
+    const startIso = `${bookingDate}T10:00:00.000Z`;
+    const endIso = `${bookingDate}T10:30:00.000Z`;
 
     // Book a real scheduled appointment (the "book" part of the journey).
     const bookRes = await bookAppointmentAs(apiCtx, tok, {
@@ -822,29 +828,6 @@ test('self-service E2E: book → send links (API trigger) → customer uses canc
     apptId = (bookRes.body as any).appointment_id || (bookRes.body as any).appointment?.appointment_id;
     expect(apptId, 'expected appointment_id from book response').toBeTruthy();
 
-    // Debug: confirm the data the send handler will see (inbound from tenant, customer phone).
-    const tenantCheck = await pool.query(`SELECT inbound_phone FROM tenants WHERE tenant_id = $1`, [tid]);
-    console.log('[E2E self-service debug] tenant inbound_phone:', tenantCheck.rows[0]?.inbound_phone);
-    const custCheck = await pool.query(
-      `SELECT c.phone AS customer_phone, a.status FROM appointments a JOIN customers c ON c.customer_id = a.customer_id WHERE a.appointment_id = $1`,
-      [apptId]
-    );
-    console.log('[E2E self-service debug] appt customer_phone + status:', custCheck.rows[0]);
-
-    // Exact row the handler SELECTs (to see what backend would see if DBs differed, or join issue).
-    const handlerRowCheck = await pool.query(
-      `SELECT a.start_time, a.description, c.phone AS customer_phone, t.inbound_phone
-         FROM appointments a
-         JOIN customers c ON a.customer_id = c.customer_id
-         JOIN tenants t ON t.tenant_id = a.tenant_id
-         WHERE a.appointment_id = $1
-           AND a.tenant_id = $2
-           AND a.status = 'scheduled'
-           AND a.is_deleted = false`,
-      [apptId, tid]
-    );
-    console.log('[E2E self-service debug] handler row query result:', handlerRowCheck.rows[0]);
-
     // 1. Owner "Send Links" trigger (the dashboard surface API; button in AppointmentDetailPanel calls exactly this).
     // Note: omit Content-Type (no JSON body for this endpoint). Including it with no body
     // causes Fastify's JSON parser to 400 "Invalid JSON". The dashboard apiMutate does
@@ -852,12 +835,15 @@ test('self-service E2E: book → send links (API trigger) → customer uses canc
     const sendRes = await apiCtx.post(`${BACKEND_URL}/appointments/${apptId}/send-self-service-links`, {
       headers: { Authorization: `Bearer ${tok}` },
     });
-    const sendBody = await sendRes.json().catch(() => ({} as any));
-    console.log('[E2E self-service debug] sendRes status:', sendRes.status(), 'body:', sendBody);
+    const sendBody = (await sendRes.json().catch(() => ({}))) as {
+      success?: boolean;
+      message?: string;
+      cancelLink?: string;
+      rescheduleLink?: string;
+    };
     // In full E2E env with DASHBOARD_URL set this is 200; if not configured the route returns clear 503 (still exercises the path).
     // 502 can happen if SMS provider (Telnyx) not configured in the test env (smsResult not ok) — the UI/token paths still work.
     if (sendRes.status() === 200) {
-      const sendBody = (await sendRes.json()) as { success: boolean; message?: string; cancelLink?: string; rescheduleLink?: string };
       expect(sendBody.success).toBe(true);
       expect(sendBody.message).toMatch(/sent/i);
       // Links are present when configured (useful for copy or for tests).
