@@ -20,6 +20,7 @@ import {
 import { resolveQuestions } from '../../shared/questionBank';
 import { recordAiCostEvent } from '../services/aiCost';
 import { scanRateLimiter } from '../services/scanRateLimit';
+import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
 // ── Website scrape helpers for onboarding (item 10) ─────────────────────
 
@@ -200,6 +201,10 @@ const knowledgeEntrySchema = z.object({
 
 const websiteImportSchema = z.object({
   url: z.string().url('valid URL required'),
+});
+
+const explainSchema = z.object({
+  question: z.string().min(1, 'question is required').max(1000),
 });
 
 export function registerKnowledgeRoutes(
@@ -762,5 +767,97 @@ export function registerKnowledgeRoutes(
 
       return reply.send({ success: true });
     }, 'Failed to update knowledge suggestion')
+  );
+
+  // POST /knowledge/explain — "explain this answer" RAG debugger.
+  // Runs the SAME retrieval the voice agent uses (search_tenant_docs_normalized
+  // over this tenant's KB embeddings) for a given question, and returns the
+  // ranked chunks + similarity scores so an owner can SEE why the AI answered a
+  // certain way: which chunks matched, how strongly, and which would have been
+  // fed to the model in production (top-N above the threshold).
+  app.post(
+    '/knowledge/explain',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      // Owner-only: this is an admin/debug surface over the whole KB.
+      if (req.auth && req.auth.tenant_id !== SUPER_ADMIN_TENANT_ID && req.auth.role !== 'owner') {
+        return reply
+          .status(403)
+          .send({ success: false, error: 'Only owners can use the answer debugger' });
+      }
+
+      const parsed = explainSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+      }
+      const { question } = parsed.data;
+
+      // Production retrieval params (kept in sync with /agent-tools/policy-answer).
+      const PROD_THRESHOLD = 0.5;
+      const PROD_MATCH_COUNT = 3;
+      // Debug retrieval: pull a wider, lower-threshold candidate set so the
+      // owner can see near-misses too, then annotate each against prod params.
+      const DEBUG_THRESHOLD = 0.0;
+      const DEBUG_MATCH_COUNT = 10;
+
+      // Embed the question EXACTLY as /agent-tools/policy-answer does — normalize
+      // first (same context string), fall back to the raw question on failure —
+      // otherwise the debug similarity scores wouldn't match the ones that drove
+      // the real answer, and the debugger would mislead.
+      let queryText = question;
+      if (normalizeForEmbedding) {
+        try {
+          queryText = await normalizeForEmbedding(question, { context: 'customer phone inquiry' });
+        } catch {
+          // fall back to the raw question
+        }
+      }
+      const embedding = await getEmbedding(queryText);
+      const matches = await withTenantClient(tenantId, (client) =>
+        client.query<{ tenant_doc_id: string; content: string; similarity: number }>(
+          `SELECT tenant_doc_id, content, similarity
+             FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)`,
+          [tenantId, JSON.stringify(embedding), DEBUG_THRESHOLD, DEBUG_MATCH_COUNT]
+        )
+      );
+
+      // Rank order is by similarity DESC (the RPC returns it sorted). The chunks
+      // actually used in production are the top PROD_MATCH_COUNT that also clear
+      // PROD_THRESHOLD.
+      let usedSoFar = 0;
+      const ranked = matches.rows.map((row, i) => {
+        const aboveThreshold = row.similarity >= PROD_THRESHOLD;
+        const usedInProduction = aboveThreshold && usedSoFar < PROD_MATCH_COUNT;
+        if (usedInProduction) usedSoFar += 1;
+        return {
+          rank: i + 1,
+          tenant_doc_id: row.tenant_doc_id,
+          similarity: row.similarity,
+          above_threshold: aboveThreshold,
+          used_in_production: usedInProduction,
+          content: row.content,
+        };
+      });
+
+      logEvent(req, 'knowledge_answer_explained', {
+        tenantId,
+        candidates: ranked.length,
+        usedInProduction: usedSoFar,
+      });
+
+      return reply.send({
+        success: true,
+        question,
+        production_threshold: PROD_THRESHOLD,
+        production_match_count: PROD_MATCH_COUNT,
+        candidates: ranked,
+        // A quick read: did production have anything to answer with at all?
+        would_answer: usedSoFar > 0,
+      });
+    }, 'Failed to explain answer')
   );
 }
