@@ -470,3 +470,84 @@ describe('GET /analytics/ai-cost', () => {
     expect(body.total_estimated_cost_usd).toBe(0);
   });
 });
+
+describe('GET /analytics/cohorts', () => {
+  // WHO: an owner drilling into repeat callers + which services book.
+  // WHAT: returns repeat-caller cohorts, bookings-by-service, and a summary.
+  // WHERE: src/routes/analytics.ts /analytics/cohorts.
+  // WHY: turns raw calls into "who comes back" + "what sells" signals.
+  it('HAPPY: returns repeat callers, by_service, and a summary', async () => {
+    app = buildApp();
+    // FIFO: repeatCallers, byService, summary.
+    queryResponses.push({
+      rows: [
+        {
+          phone: '6305550000',
+          call_count: 3,
+          booked_count: 2,
+          first_call: '2026-06-01T10:00:00Z',
+          last_call: '2026-06-20T10:00:00Z',
+        },
+      ],
+    });
+    queryResponses.push({
+      rows: [
+        { service: 'Oil Change', booked_count: 5 },
+        { service: 'Unknown service', booked_count: 1 },
+      ],
+    });
+    queryResponses.push({
+      rows: [{ distinct_callers: 10, repeat_callers: 1, repeat_call_volume: 3, total_calls: 12 }],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      repeat_callers: Array<{ phone: string; call_count: number }>;
+      by_service: Array<{ service: string; booked_count: number }>;
+      summary: { distinct_callers: number; repeat_callers: number };
+    }>();
+    expect(body.repeat_callers[0]).toMatchObject({
+      phone: '6305550000',
+      call_count: 3,
+      booked_count: 2,
+    });
+    expect(body.by_service[0]).toEqual({ service: 'Oil Change', booked_count: 5 });
+    expect(body.summary).toMatchObject({ distinct_callers: 10, repeat_callers: 1 });
+
+    // WHY: repeat callers must be grouped on phone DIGITS so format variants
+    //       collapse — assert the normalization + the >1 HAVING filter.
+    expect(queries[0].text).toContain("regexp_replace(caller_phone, '[^0-9]', '', 'g')");
+    expect(queries[0].text).toContain('HAVING count(*) > 1');
+    expect(queries[0].params[0]).toBe(TENANT_ID);
+    // by_service joins booked calls → appointment → service.
+    expect(queries[1].text).toContain('JOIN appointments');
+    expect(queries[1].text).toContain('services');
+  });
+
+  it('HAPPY: empty tenant → empty arrays + zeroed summary', async () => {
+    app = buildApp();
+    queryResponses.push({ rows: [] }); // repeatCallers
+    queryResponses.push({ rows: [] }); // byService
+    queryResponses.push({ rows: [] }); // summary (no row)
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      repeat_callers: unknown[];
+      by_service: unknown[];
+      summary: { total_calls: number };
+    }>();
+    expect(body.repeat_callers).toHaveLength(0);
+    expect(body.by_service).toHaveLength(0);
+    expect(body.summary.total_calls).toBe(0); // graceful default when no summary row
+  });
+});

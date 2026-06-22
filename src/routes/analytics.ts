@@ -143,6 +143,99 @@ export function registerAnalyticsRoutes(
     }, 'Failed to load call analytics')
   );
 
+  // Analytics depth: repeat-caller cohorts + bookings-by-service. Both are
+  // derivable from voice_sessions today (no new column). Repeat callers are
+  // grouped on the LAST 10 DIGITS of caller_phone (US-centric) so the same
+  // person reaching out as "+16305559999" (E.164, with the 1 country code) and
+  // "630-555-9999" (10-digit) counts once. Bookings-by-service joins booked
+  // calls → appointment →
+  // service. (Abandonment-by-service is intentionally NOT here: abandoned calls
+  // have appointment_id = NULL so there is no service to join — that needs a new
+  // voice_sessions.requested_service_id column + agent capture; tracked in TODO.)
+  app.get(
+    '/analytics/cohorts',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const data = await withTenantClient(tenantId, async (client) => {
+        const [repeatCallers, byService, summary] = await Promise.all([
+          // Callers who reached out more than once, newest-activity first.
+          client.query<{
+            phone: string;
+            call_count: number;
+            booked_count: number;
+            first_call: string;
+            last_call: string;
+          }>(
+            `SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
+                    count(*)::int AS call_count,
+                    count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked_count,
+                    min(started_at) AS first_call,
+                    max(started_at) AS last_call
+             FROM voice_sessions
+             WHERE tenant_id = $1 AND is_deleted = false
+               AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
+             GROUP BY 1
+             HAVING count(*) > 1
+             ORDER BY last_call DESC
+             LIMIT 100`,
+            [tenantId]
+          ),
+          // Which services the booked calls actually booked.
+          client.query<{ service: string; booked_count: number }>(
+            `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
+                    count(*)::int AS booked_count
+             FROM voice_sessions v
+             JOIN appointments a ON a.appointment_id = v.appointment_id
+             LEFT JOIN services s ON s.service_id = a.service_id
+             WHERE v.tenant_id = $1 AND v.is_deleted = false
+             GROUP BY 1
+             ORDER BY booked_count DESC`,
+            [tenantId]
+          ),
+          // Top-line: how many distinct callers, how many are repeat, and how
+          // much of total call volume comes from repeat callers.
+          client.query<{
+            distinct_callers: number;
+            repeat_callers: number;
+            repeat_call_volume: number;
+            total_calls: number;
+          }>(
+            `WITH per_caller AS (
+               SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
+                      count(*)::int AS c
+               FROM voice_sessions
+               WHERE tenant_id = $1 AND is_deleted = false
+                 AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
+               GROUP BY 1
+             )
+             SELECT count(*)::int AS distinct_callers,
+                    count(*) FILTER (WHERE c > 1)::int AS repeat_callers,
+                    coalesce(sum(c) FILTER (WHERE c > 1), 0)::int AS repeat_call_volume,
+                    coalesce(sum(c), 0)::int AS total_calls
+             FROM per_caller`,
+            [tenantId]
+          ),
+        ]);
+
+        return {
+          repeat_callers: repeatCallers.rows,
+          by_service: byService.rows,
+          summary: summary.rows[0] ?? {
+            distinct_callers: 0,
+            repeat_callers: 0,
+            repeat_call_volume: 0,
+            total_calls: 0,
+          },
+        };
+      });
+
+      logEvent(req, 'analytics_cohorts_viewed', { tenantId });
+      return reply.send(data);
+    }, 'Failed to load cohort analytics')
+  );
+
   // Coverage gap detection — returns per-service coverage status for a date range
   app.get(
     '/coverage',
