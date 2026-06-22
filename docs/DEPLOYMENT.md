@@ -242,7 +242,7 @@ The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** 
 ### 5.2 Telnyx: SIP Connection pointing at LiveKit (one-time)
 1. Sign in to [portal.telnyx.com](https://portal.telnyx.com).
 2. **Voice → SIP Connections → Create FQDN Connection** named `livekit-outbound`.
-3. **Inbound** tab → set **Default Primary FQDN** to the LiveKit SIP FQDN from 6.1, port 5060, DNS A record. Sequential routing. Codecs G722/G711U/G711A. DTMF: RFC 2833.
+3. **Inbound** tab → set **Default Primary FQDN** to the LiveKit SIP FQDN from 5.1, port 5060, DNS A record. Sequential routing. Codecs G722/G711U/G711A. DTMF: RFC 2833.
 4. **Outbound** tab → use credential authentication. Set a strong username/password (`openssl rand -base64 32`). Store in your secret manager.
 5. **Inbound subdomain receive setting**: tighten to `Only my connections` (default `From Anyone` is a toll-fraud target).
 6. Copy the numeric Connection ID. Set it in Railway as `TELNYX_SIP_CONNECTION_ID`.
@@ -254,7 +254,7 @@ Buying happens through the backend's `/provisioning/activate` endpoint, not the 
 1. SuperAdmin clicks **Activate Phone** on a tenant in the dashboard (or `POST /provisioning/activate` directly).
 2. Backend calls `Telnyx /v2/available_phone_numbers` to find a number (optionally filtered by area code).
 3. Backend orders the number via `Telnyx /v2/number_orders`.
-4. Backend `PATCH /v2/phone_numbers/{id}` to assign it to the SIP Connection from 6.2.
+4. Backend `PATCH /v2/phone_numbers/{id}` to assign it to the SIP Connection from 5.2.
 5. Backend writes `telnyx_phone_number_id`, `inbound_phone`, and `phone_status='active'` on the tenant.
 
 After step 4, calls to the new number flow Telnyx → LiveKit → agent. No Telnyx-portal clicks per tenant.
@@ -262,7 +262,7 @@ After step 4, calls to the new number flow Telnyx → LiveKit → agent. No Teln
 ### 5.4 Deploy the LiveKit agent worker
 The agent worker lives in `agent/` and runs as a separate Railway service (`ai-sec-agent`). It registers with LiveKit Cloud on boot using the `LIVEKIT_*` env vars and stays connected. Required env vars on the agent service:
 
-- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 6.1
+- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 5.1
 - `OPENAI_API_KEY` — LLM + TTS used by the agent
 - `DEEPGRAM_API_KEY` — STT (Nova-3)
 - `BACKEND_URL` — base URL for the Fastify backend (e.g., `https://ai-sec-production.up.railway.app`)
