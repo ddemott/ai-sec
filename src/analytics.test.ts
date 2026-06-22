@@ -513,7 +513,7 @@ describe('GET /analytics/cohorts', () => {
     const body = res.json<{
       repeat_callers: Array<{ phone: string; call_count: number }>;
       by_service: Array<{ service: string; booked_count: number }>;
-      top_customers: Array<{ name: string; visits: number; revenue: number }>;
+      top_customers: Array<{ customer_id: string; name: string; visits: number; revenue: number }>;
       summary: { distinct_callers: number; repeat_callers: number };
     }>();
     expect(body.repeat_callers[0]).toMatchObject({

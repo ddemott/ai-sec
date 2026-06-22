@@ -50,21 +50,29 @@ describe('POST /knowledge/explain', () => {
   it('HAPPY: ranks candidates and marks which clear the prod threshold + top-N', async () => {
     // Five candidates, descending similarity. Threshold 0.5, top-3 used.
     // → ranks 1-3 are above 0.5, but only the first 3 above-threshold are "used".
+    // Valid UUIDs — the production composed_answer query casts the id array to
+    // ::uuid[], so real Postgres would reject non-UUID ids; keep the mock data
+    // shaped like the real column so the test mirrors production.
+    const D1 = '11111111-1111-4111-8111-111111111111';
+    const D2 = '22222222-2222-4222-8222-222222222222';
+    const D3 = '33333333-3333-4333-8333-333333333333';
+    const D4 = '44444444-4444-4444-8444-444444444444';
+    const D5 = '55555555-5555-4555-8555-555555555555';
     handle.queryResponses.push({
       rows: [
-        { tenant_doc_id: 'd1', content: 'Mon-Fri 9-5', similarity: 0.92 },
-        { tenant_doc_id: 'd2', content: 'We deliver locally', similarity: 0.71 },
-        { tenant_doc_id: 'd3', content: 'Parking out back', similarity: 0.55 },
-        { tenant_doc_id: 'd4', content: 'Founded in 2010', similarity: 0.41 },
-        { tenant_doc_id: 'd5', content: 'Cat photos', similarity: 0.12 },
+        { tenant_doc_id: D1, content: 'Mon-Fri 9-5', similarity: 0.92 },
+        { tenant_doc_id: D2, content: 'We deliver locally', similarity: 0.71 },
+        { tenant_doc_id: D3, content: 'Parking out back', similarity: 0.55 },
+        { tenant_doc_id: D4, content: 'Founded in 2010', similarity: 0.41 },
+        { tenant_doc_id: D5, content: 'Cat photos', similarity: 0.12 },
       ],
     });
     // titles lookup for the used-in-production docs (composed_answer)
     handle.queryResponses.push({
       rows: [
-        { tenant_doc_id: 'd1', title: 'Hours' },
-        { tenant_doc_id: 'd2', title: 'Delivery' },
-        { tenant_doc_id: 'd3', title: 'Parking' },
+        { tenant_doc_id: D1, title: 'Hours' },
+        { tenant_doc_id: D2, title: 'Delivery' },
+        { tenant_doc_id: D3, title: 'Parking' },
       ],
     });
 
