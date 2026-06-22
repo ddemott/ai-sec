@@ -240,6 +240,10 @@ jobs:
           # Several specs call /agent-tools/* directly with x-agent-secret;
           # must match the value the backend was started with.
           AGENT_SECRET: ci-agent-secret
+          # workflows.spec.ts signs self-service (cancel/reschedule) tokens itself
+          # with JWT_SECRET; must match the backend's value or verifySelfServiceToken
+          # rejects them (400) and the public-page success states never render.
+          JWT_SECRET: ci-test-secret
           # Dashboard runs `next start` (HTTP) in CI; the Playwright baseURL
           # defaults to https for local dev, so override it here.
           DASHBOARD_URL: http://localhost:4000
