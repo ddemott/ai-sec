@@ -24,8 +24,7 @@ Note: each route-adding PR must bump the `route modules` count in `CLAUDE.md` (t
 ## Next Code Items (remaining, independent)
 
 - **GDPR/CCPA hard-purge** + retention/purge worker (destructive — needs Dale's legal-retention scope before building; the purge worker also needs a `last_scanned`/retention column + migration).
-- **Wizard browser click-path E2E** for the website-scan step (the suite tests the wizard via API today; a true browser-drive needs the live stack).
-- **Analytics depth**: cohort / CLV / service-specific abandonment drill-down.
+- **Analytics depth**: cohort / CLV / service-specific abandonment drill-down (abandonment-by-service needs a new `voice_sessions.requested_service_id` column + agent change).
 - `@typescript-eslint/unbound-method` — heavy in tests; deprioritized (may stay `warn`).
 
 Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
