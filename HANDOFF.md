@@ -8,31 +8,23 @@
 
 ---
 
-## Shipped + merged to main this session (PRs #56 / #57 / #58)
+## Shipped + merged + DEPLOYED to prod this session (PRs #56 / #57 / #58 / #59)
+
+All four merged to `main` (merge `a842a19`) and **deployed live to all 3 Railway services**. Verified 2026-06-22 via `./scripts/simulate.sh status --env prod --deep` (4/4: backend `/health`+`/ready`, dashboard 200, agent worker dispatch picked up) and the new routes returning **401 not 404** on prod (`/audit-log`, `/export/tenant-data`, `/knowledge/explain`). **No prod DB migration was needed** — everything reads existing schema.
 
 - **#56** — `toolsClient` idempotent-read retry: 5 tests (read retries once on 5xx/throw; mutations never retry → double-book guard). Also the `docs/DEPLOYMENT.md` edge-function-phase removal.
 - **#57** — `GET /export/tenant-data` (owner-gated JSON export, password_hash-safe); per-tenant website-scan rate-limit (`scanRateLimit.ts`, 429 when dry); `docs/RUNBOOK.md` (incident + telephony playbook).
 - **#58** — `GET /audit-log` (owner-gated, paginated change history); `POST /knowledge/explain` (RAG answer-debugger; embeds the question identically to `policy-answer`); `docs/OWNER_GUIDE.md`.
+- **#59** — dashboard `AuditLogView` + `ExplainAnswerView` (Setup sub-tabs) + "Download my data" button in `BusinessSettingsView`; caller-facing source citations in `policy-answer` (joins `tenant_docs` for each chunk's title → `[From "<title>"]`; agent prompt updated; fixed an `ANY($2::uuid[])` cast review caught — without it citations silently failed); website-scan happy-path + wizard browser-click E2E (stub-gated).
 
-Note: each route-adding PR must bump the `route modules` count in `CLAUDE.md` (the `verify-claude-md` drift guard fails CI otherwise) — it is **merge-order-fragile**: rebase each branch onto the latest main so the count reflects the union (main is now 29).
-
-## Open PR (this session) — branch `feat/dashboard-audit-explain-citations-rescan`
-
-Dashboard surfaces + backend follow-ups that complete the #57/#58 APIs:
-
-- **AuditLogView** (Setup → "Audit Log" sub-tab) + **ExplainAnswerView** (Setup → "Answer Debugger" sub-tab) + a **"Download my data"** export button in `BusinessSettingsView`.
-- **Caller-facing source citations** — `policy-answer` joins `tenant_docs` for each chunk's title, prefixes context with `[From "<title>"]`; agent prompt updated to attribute naturally.
-- **Website-scan happy-path E2E** — `kb-website-import-happy` in `knowledge-base.spec.ts` via `KNOWLEDGE_IMPORT_E2E_STUB` (skips when the stub is off).
-
-Verified locally: backend 140 files/1931 tests, dashboard 62 files/778 tests, agent prompt tests, tsc + lint clean.
+Note: each route-adding PR must bump the `route modules` count in `CLAUDE.md` (the `verify-claude-md` drift guard fails CI otherwise) — it is **merge-order-fragile**: rebase each branch onto the latest main so the count reflects the union (main is now **29**).
 
 ---
 
 ## Next Code Items (remaining, independent)
 
 - **GDPR/CCPA hard-purge** + retention/purge worker (destructive — needs Dale's legal-retention scope before building; the purge worker also needs a `last_scanned`/retention column + migration).
-- **Wizard browser click-path E2E** for the website-scan step (the suite tests the wizard via API today; a true browser-drive needs the live stack).
-- **Analytics depth**: cohort / CLV / service-specific abandonment drill-down.
+- **Analytics depth**: cohort / CLV / service-specific abandonment drill-down (abandonment-by-service needs a new `voice_sessions.requested_service_id` column + agent change).
 - `@typescript-eslint/unbound-method` — heavy in tests; deprioritized (may stay `warn`).
 
 Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
