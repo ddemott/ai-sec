@@ -771,9 +771,11 @@ export function registerAgentToolRoutes(
         })
       ).catch(() => undefined);
 
+      // Also pull tenant_doc_id (the RPC returns it) so we can attribute each
+      // chunk to its source document for caller-facing citations.
       const matches = await withTenantClient(args.tenant_id, (client) =>
-        client.query<{ content: string; similarity: number }>(
-          'SELECT content, similarity FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)',
+        client.query<{ tenant_doc_id: string; content: string; similarity: number }>(
+          'SELECT tenant_doc_id, content, similarity FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)',
           [args.tenant_id, JSON.stringify(embedding), 0.5, 3]
         )
       );
@@ -794,7 +796,37 @@ export function registerAgentToolRoutes(
         );
       }
 
-      const context = matches.rows.map((m) => m.content).join('\n\n---\n\n');
+      // Resolve the source title of each matched chunk so the agent can cite it
+      // ("according to our cancellation policy…"). Best-effort: a failed/empty
+      // lookup just yields un-attributed context, never a failed answer.
+      const docIds = matches.rows.map((m) => m.tenant_doc_id).filter(Boolean);
+      let titleById = new Map<string, string>();
+      if (docIds.length > 0) {
+        try {
+          const titlesRes = await withTenantClient(args.tenant_id, (client) =>
+            client.query<{ tenant_doc_id: string; title: string | null }>(
+              // ANY($2::uuid[]) — without the cast Postgres compares uuid against
+              // a text[] and errors (operator does not exist: uuid = text), which
+              // the catch below would swallow → citations would silently never appear.
+              'SELECT tenant_doc_id, title FROM tenant_docs WHERE tenant_id = $1 AND tenant_doc_id = ANY($2::uuid[])',
+              [args.tenant_id, docIds]
+            )
+          );
+          titleById = new Map(
+            titlesRes.rows.filter((r) => r.title).map((r) => [r.tenant_doc_id, r.title as string])
+          );
+        } catch {
+          // citation lookup is non-critical — fall back to un-attributed context
+        }
+      }
+
+      // Prefix each chunk with its source so the LLM can attribute the answer.
+      const context = matches.rows
+        .map((m) => {
+          const title = titleById.get(m.tenant_doc_id);
+          return title ? `[From "${title}"]\n${m.content}` : m.content;
+        })
+        .join('\n\n---\n\n');
       return ok(reply, context);
     },
     'Failed to answer policy question'

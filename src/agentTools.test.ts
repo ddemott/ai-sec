@@ -640,15 +640,28 @@ describe('agentTools /check-availability', () => {
 });
 
 describe('agentTools /policy-answer', () => {
-  it('HAPPY: matches found returns joined context string', async () => {
+  it('HAPPY: matches found returns joined context string WITH source citations', async () => {
     // WHO: Caller asking about cancellation policy
-    // WHAT: Embedding-based RPC returns top matches; route joins them
+    // WHAT: Embedding-based RPC returns top matches; route joins them and
+    //        prefixes each with its source-doc title so the agent can cite it
+    //        ("according to our Cancellation Policy…").
     const { app, queries } = buildApp({
       queryResponses: [
         {
           rows: [
-            { content: 'Cancellations require 24 hours notice.', similarity: 0.9 },
-            { content: 'No-show fee is $25.', similarity: 0.8 },
+            {
+              tenant_doc_id: 'd1',
+              content: 'Cancellations require 24 hours notice.',
+              similarity: 0.9,
+            },
+            { tenant_doc_id: 'd2', content: 'No-show fee is $25.', similarity: 0.8 },
+          ],
+        },
+        // titles lookup for the matched tenant_doc_ids
+        {
+          rows: [
+            { tenant_doc_id: 'd1', title: 'Cancellation Policy' },
+            { tenant_doc_id: 'd2', title: 'Fees' },
           ],
         },
       ],
@@ -660,8 +673,13 @@ describe('agentTools /policy-answer', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toContain('24 hours notice');
     expect(res.json().result).toContain('No-show fee');
-    // WHY: RPC call receives JSON-stringified embedding vector
+    // WHY: each chunk is attributed to its source document for caller-facing citations.
+    expect(res.json().result).toContain('[From "Cancellation Policy"]');
+    expect(res.json().result).toContain('[From "Fees"]');
+    // WHY: RPC call receives JSON-stringified embedding vector; a second query
+    //       resolves the source titles from tenant_docs.
     expect(queries[0].text).toContain('search_tenant_docs_normalized');
+    expect(queries.some((q) => q.text.includes('FROM tenant_docs'))).toBe(true);
   });
 
   it('HAPPY: no matches returns fallback message AND logs the gap', async () => {
