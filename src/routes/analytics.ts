@@ -145,9 +145,10 @@ export function registerAnalyticsRoutes(
 
   // Analytics depth: repeat-caller cohorts + bookings-by-service. Both are
   // derivable from voice_sessions today (no new column). Repeat callers are
-  // grouped on the DIGITS of caller_phone so the same person reaching out as
-  // "+16305550000" and "630-555-0000" counts once (matches the customer-match
-  // normalization). Bookings-by-service joins booked calls → appointment →
+  // grouped on the LAST 10 DIGITS of caller_phone (US-centric) so the same
+  // person reaching out as "+16305559999" (E.164, with the 1 country code) and
+  // "630-555-9999" (10-digit) counts once. Bookings-by-service joins booked
+  // calls → appointment →
   // service. (Abandonment-by-service is intentionally NOT here: abandoned calls
   // have appointment_id = NULL so there is no service to join — that needs a new
   // voice_sessions.requested_service_id column + agent capture; tracked in TODO.)
@@ -167,14 +168,14 @@ export function registerAnalyticsRoutes(
             first_call: string;
             last_call: string;
           }>(
-            `SELECT regexp_replace(caller_phone, '[^0-9]', '', 'g') AS phone,
+            `SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
                     count(*)::int AS call_count,
                     count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked_count,
                     min(started_at) AS first_call,
                     max(started_at) AS last_call
              FROM voice_sessions
              WHERE tenant_id = $1 AND is_deleted = false
-               AND regexp_replace(caller_phone, '[^0-9]', '', 'g') <> ''
+               AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
              GROUP BY 1
              HAVING count(*) > 1
              ORDER BY last_call DESC
@@ -202,11 +203,11 @@ export function registerAnalyticsRoutes(
             total_calls: number;
           }>(
             `WITH per_caller AS (
-               SELECT regexp_replace(caller_phone, '[^0-9]', '', 'g') AS phone,
+               SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
                       count(*)::int AS c
                FROM voice_sessions
                WHERE tenant_id = $1 AND is_deleted = false
-                 AND regexp_replace(caller_phone, '[^0-9]', '', 'g') <> ''
+                 AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
                GROUP BY 1
              )
              SELECT count(*)::int AS distinct_callers,
