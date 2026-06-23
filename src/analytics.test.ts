@@ -23,7 +23,7 @@ interface MockQuery {
 
 let app: FastifyInstance;
 let mockClient: { query: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn> };
-let queryResponses: Array<{ rows: unknown[]; rowCount?: number }>;
+let queryResponses: Array<{ rows: unknown[]; rowCount?: number } | Error>;
 let queries: MockQuery[];
 
 function buildApp() {
@@ -33,7 +33,11 @@ function buildApp() {
   mockClient = {
     query: vi.fn(async (text: string, params?: unknown[]) => {
       queries.push({ text, params: params || [] });
-      return queryResponses.shift() || { rows: [], rowCount: 0 };
+      const next = queryResponses.shift();
+      // A queued Error simulates a failing query (e.g. a column missing
+      // pre-migration) so we can test graceful degradation.
+      if (next instanceof Error) throw next;
+      return next || { rows: [], rowCount: 0 };
     }),
     release: vi.fn(),
   };
@@ -329,6 +333,32 @@ describe('GET /analytics/cohorts', () => {
     expect(res.statusCode).toBe(200);
     // Both calendar-invalid bounds dropped to null → all-time.
     expect(queries[0].params).toEqual([TENANT_ID, null, null]);
+  });
+
+  it('FORWARD-COMPAT: abandonment query failing (column missing pre-migration) degrades to [], endpoint still 200', async () => {
+    // WHO: prod after #64 deployed but before migration 20260622010000 applied.
+    // WHAT: the abandonment-by-service query reads voice_sessions.requested_service_id;
+    //        if that column is missing the query throws. It MUST NOT take down the
+    //        whole /analytics/cohorts endpoint — the .catch degrades that one panel.
+    // WHEN: an owner loads Analytics on a deploy that's ahead of the prod schema.
+    // WHERE: the .catch on the abandonment query inside the cohorts Promise.all.
+    // WHY: without the .catch, one failing query rejects the Promise.all → 500 on
+    //        every Analytics-tab load (the regression this fix closes).
+    queryResponses.push({ rows: [] }); // repeat callers
+    queryResponses.push({ rows: [] }); // by_service
+    queryResponses.push({ rows: [{ distinct_callers: 0, repeat_callers: 0 }] }); // summary
+    queryResponses.push({ rows: [] }); // top customers
+    queryResponses.push(new Error('column "requested_service_id" does not exist')); // abandonment → throws
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200); // endpoint survives
+    const body = res.json();
+    expect(body.abandonment_by_service).toEqual([]); // just this panel degrades
+    expect(Array.isArray(body.repeat_callers)).toBe(true); // the rest still renders
   });
 });
 
