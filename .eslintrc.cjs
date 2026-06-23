@@ -93,9 +93,12 @@ module.exports = {
     // `require()` in .cjs config files is normal; turn off the rule
     // entirely rather than try to scope it per-file.
     '@typescript-eslint/no-var-requires': 'off',
-    // unbound-method fires heavily inside vitest matchers + test spies
-    // where `this` rebinding is intentional. Warn instead of error.
-    '@typescript-eslint/unbound-method': 'warn',
+    // Catches passing a class/interface method as a value without binding
+    // `this` (a real runtime-crash bug class). The codebase is clean of it, so
+    // this is enforced as an error to keep it that way. (The historical
+    // "fires heavily in test spies" concern never materialized — vitest's
+    // `vi.fn()` mocks are plain object properties, which the rule ignores.)
+    '@typescript-eslint/unbound-method': 'error',
     'no-constant-condition': ['warn', { checkLoops: false }],
   },
   overrides: [
