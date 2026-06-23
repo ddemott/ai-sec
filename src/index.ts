@@ -53,6 +53,7 @@ import { registerExportRoutes } from './routes/exportData';
 import { registerAuditLogRoutes } from './routes/auditLog';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
+import { startRetentionWorker, stopRetentionWorker } from './workers/retentionWorker';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { tenantMiddleware, generateToken, registerJwtAuthHook } from './middleware';
@@ -271,6 +272,13 @@ if (isProduction || process.env.ENABLE_REMINDER_SCHEDULER === 'true') {
   startReminderScheduler();
 }
 
+// --- Start Data-Retention Worker ---
+// DISABLED by default and, unlike the reminder scheduler, deliberately NOT
+// auto-started in production: it performs irreversible PII erasure, so it runs
+// only when ENABLE_RETENTION_WORKER=true AND a valid RETENTION_DAYS window is
+// set. startRetentionWorker() is a no-op otherwise (it re-checks the env).
+startRetentionWorker();
+
 // --- Start Server ---
 
 const port = Number(process.env.PORT || 4001);
@@ -299,6 +307,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
     app.log.info(`Received ${signal}, shutting down...`);
     stopReminderScheduler();
+    stopRetentionWorker();
     await app.close();
     await closePool();
     process.exit(0);
