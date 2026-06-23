@@ -234,17 +234,19 @@ function handleFetchError(err: unknown) {
 /**
  * Build the query record for the analytics endpoints: tenant_id plus an
  * optional From/To window. Empty/absent bounds are dropped so the backend
- * treats them as all-time. Returns undefined when there is nothing to send.
+ * treats them as all-time. Returns undefined when there is no tenant — the
+ * endpoints require tenant_id, so sending date bounds without it would only
+ * produce a tenant-less request (400/404); better to send nothing.
  */
 function analyticsQuery(
   tenantId: string | null,
   range?: { start_date?: string; end_date?: string }
 ): Record<string, string> | undefined {
-  const query: Record<string, string> = {};
-  if (tenantId) query.tenant_id = tenantId;
+  if (!tenantId) return undefined;
+  const query: Record<string, string> = { tenant_id: tenantId };
   if (range?.start_date) query.start_date = range.start_date;
   if (range?.end_date) query.end_date = range.end_date;
-  return Object.keys(query).length > 0 ? query : undefined;
+  return query;
 }
 
 export async function apiFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
