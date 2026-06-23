@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 80PRvGGb5ExxgQJtnRdVRiICyiE2x1xnzEHfetEddlrskd3WSNN4UPsvXKhVW9W
+\restrict AXTX7gZJSgSKwKXBQPc6nY7A8j52mLEe8E5VGe9kGAn1683fB0mvNmhNv72YzoB
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3322,6 +3322,7 @@ CREATE TABLE public.voice_sessions (
     is_deleted boolean DEFAULT false,
     deleted_at timestamp with time zone,
     deleted_by text,
+    requested_service_id uuid,
     CONSTRAINT voice_sessions_status_check CHECK ((status = ANY (ARRAY['active'::text, 'completed'::text, 'failed'::text, 'transferred'::text])))
 );
 
@@ -4147,6 +4148,13 @@ CREATE INDEX idx_voice_sessions_is_deleted ON public.voice_sessions USING btree 
 
 
 --
+-- Name: idx_voice_sessions_requested_service_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_voice_sessions_requested_service_id ON public.voice_sessions USING btree (requested_service_id) WHERE (requested_service_id IS NOT NULL);
+
+
+--
 -- Name: idx_voice_sessions_started_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4753,6 +4761,14 @@ ALTER TABLE ONLY public.voice_sessions
 
 
 --
+-- Name: voice_sessions voice_sessions_requested_service_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.voice_sessions
+    ADD CONSTRAINT voice_sessions_requested_service_id_fkey FOREIGN KEY (requested_service_id) REFERENCES public.services(service_id) ON DELETE SET NULL;
+
+
+--
 -- Name: voice_sessions voice_sessions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5306,5 +5322,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 80PRvGGb5ExxgQJtnRdVRiICyiE2x1xnzEHfetEddlrskd3WSNN4UPsvXKhVW9W
+\unrestrict AXTX7gZJSgSKwKXBQPc6nY7A8j52mLEe8E5VGe9kGAn1683fB0mvNmhNv72YzoB
 

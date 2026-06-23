@@ -153,6 +153,7 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
         { customer_id: 'cust-1', name: 'Jane Doe', visits: 4, revenue: 320 },
         { customer_id: 'cust-2', name: 'Bob Smith', visits: 2, revenue: 90 },
       ],
+      abandonment_by_service: [{ service: 'Detailing', abandoned_count: 4 }],
       summary: {
         distinct_callers: 10,
         repeat_callers: 1,
@@ -170,6 +171,10 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
     expect(screen.getByText('6305550000')).toBeInTheDocument();
     expect(screen.getByText(/3 calls · 2 booked/i)).toBeInTheDocument();
     expect(screen.getByText('Oil Change')).toBeInTheDocument();
+
+    // Abandonment-by-service panel.
+    expect(screen.getByText('Abandoned by Service')).toBeInTheDocument();
+    expect(screen.getByText('Detailing')).toBeInTheDocument();
 
     // CLV panel — top customers by lifetime booked revenue.
     expect(screen.getByText('Top Customers')).toBeInTheDocument();

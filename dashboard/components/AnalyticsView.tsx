@@ -655,6 +655,61 @@ export default function AnalyticsView() {
               </p>
             )}
           </MetricCard>
+
+          {/* 11. Abandoned by service — callers who tried to book a service but didn't */}
+          <MetricCard
+            icon={PhoneOff}
+            title="Abandoned by Service"
+            subtitle="Callers who tried to book but didn't"
+          >
+            {cohorts && cohorts.abandonment_by_service.length > 0 ? (
+              (() => {
+                const maxAb = Math.max(
+                  ...cohorts.abandonment_by_service.map((s) => s.abandoned_count),
+                  1
+                );
+                return (
+                  <div className="space-y-2">
+                    {cohorts.abandonment_by_service.slice(0, 6).map((s) => (
+                      <div key={s.service}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span style={{ color: 'var(--text-secondary)' }} className="truncate mr-2">
+                            {s.service}
+                          </span>
+                          <span
+                            style={{ color: 'var(--text-primary)' }}
+                            className="font-medium shrink-0"
+                          >
+                            {s.abandoned_count}
+                          </span>
+                        </div>
+                        <div
+                          className="h-1 rounded-full"
+                          style={{ backgroundColor: 'var(--border-soft)' }}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.round((s.abandoned_count / maxAb) * 100)}%`,
+                              backgroundColor: 'var(--danger-soft, #ef4444)',
+                              opacity: 0.6,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-xs pt-1" style={{ color: 'var(--text-muted)' }}>
+                      Callers who attempted to book these services but left without an appointment.
+                    </p>
+                  </div>
+                );
+              })()
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No abandoned bookings recorded yet
+              </p>
+            )}
+          </MetricCard>
         </div>
 
         {/* Reminder delivery monitoring */}

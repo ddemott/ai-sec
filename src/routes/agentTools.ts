@@ -1153,6 +1153,29 @@ export function registerAgentToolRoutes(
         return rpc.rows[0];
       });
 
+      // Best-effort: record the service the caller was trying to book on this
+      // call's voice_session — runs whether the booking SUCCEEDED or FAILED, so
+      // an abandoned call (slot taken / no availability → no appointment) still
+      // shows which service they came for (powers abandonment-by-service). The
+      // agent passes a fuzzy service name; map it to a service_id (shortest
+      // ILIKE match). Fire-and-forget — never block or fail the booking on this.
+      if (args.call_id && args.requirements.serviceType) {
+        withTenantClient(args.tenant_id, (client) =>
+          client.query(
+            `UPDATE voice_sessions
+                SET requested_service_id = (
+                  SELECT service_id FROM services
+                   WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
+                     AND (is_deleted IS NULL OR is_deleted = false)
+                   ORDER BY length(name) ASC
+                   LIMIT 1
+                )
+              WHERE tenant_id = $1 AND call_id = $3`,
+            [args.tenant_id, args.requirements.serviceType, args.call_id]
+          )
+        ).catch(() => undefined);
+      }
+
       if (!result || !result.success) {
         // Fetch next-available alternatives so the agent can propose them
         // verbally instead of saying "no availability." Same skill +
