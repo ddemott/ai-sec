@@ -9,6 +9,26 @@ import {
 } from '../middleware';
 import { parseDateRange } from './routeHelpers';
 
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Optional, unbounded-by-default date window for the analytics endpoints.
+ * Unlike parseDateRange (which defaults the start to *today* — right for a
+ * coverage lookup, wrong for analytics where "no filter" means all-time), this
+ * returns null for any missing/malformed bound. Callers pass [tenantId, start,
+ * end] and guard each side with `($n::date IS NULL OR col >= $n::date)` so an
+ * absent bound drops out of the predicate entirely. `end` is treated as
+ * inclusive of the whole day at the SQL site via `< $end::date + interval '1 day'`.
+ */
+function optionalDateBounds(query: Record<string, string>): {
+  start: string | null;
+  end: string | null;
+} {
+  const start = query.start_date && DATE_ONLY_RE.test(query.start_date) ? query.start_date : null;
+  const end = query.end_date && DATE_ONLY_RE.test(query.end_date) ? query.end_date : null;
+  return { start, end };
+}
+
 export function registerAnalyticsRoutes(
   app: AppFastifyInstance,
   pool: Pool,
@@ -94,6 +114,11 @@ export function registerAnalyticsRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
+      // Optional From/To window (YYYY-MM-DD). Absent → all-time. `end` is
+      // inclusive of the whole day. byDay keeps its 30-day default ONLY when no
+      // start is supplied, so the sparkline isn't blank on first load.
+      const { start, end } = optionalDateBounds(req.query as Record<string, string>);
+
       const data = await withTenantClient(tenantId, async (client) => {
         const [byOutcome, byDay, totals] = await Promise.all([
           // Outcome breakdown — powers Conversion, Abandonment, and the WHY cut.
@@ -104,21 +129,25 @@ export function registerAnalyticsRoutes(
                     count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked
              FROM voice_sessions
              WHERE tenant_id = $1 AND is_deleted = false
+               AND ($2::date IS NULL OR started_at >= $2::date)
+               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
              GROUP BY 1
              ORDER BY count DESC`,
-            [tenantId]
+            [tenantId, start, end]
           ),
-          // Per-day call volume over the last 30 days, with booked count.
+          // Per-day call volume, with booked count. Lower bound: the supplied
+          // start, else the last 30 days. Upper bound: the supplied end (inclusive).
           client.query<{ day: string; total: number; booked: number }>(
             `SELECT to_char(date_trunc('day', started_at), 'YYYY-MM-DD') AS day,
                     count(*)::int AS total,
                     count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked
              FROM voice_sessions
              WHERE tenant_id = $1 AND is_deleted = false
-               AND started_at >= now() - interval '30 days'
+               AND started_at >= COALESCE($2::date, (now() - interval '30 days'))
+               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
              GROUP BY 1
              ORDER BY 1 ASC`,
-            [tenantId]
+            [tenantId, start, end]
           ),
           // Top-line totals so the dashboard never has to re-derive the denominator.
           client.query<{ total: number; booked: number; abandoned: number }>(
@@ -127,8 +156,10 @@ export function registerAnalyticsRoutes(
                     count(*) FILTER (WHERE appointment_id IS NULL
                                        AND coalesce(nullif(outcome, ''), 'no_outcome') = 'no_outcome')::int AS abandoned
              FROM voice_sessions
-             WHERE tenant_id = $1 AND is_deleted = false`,
-            [tenantId]
+             WHERE tenant_id = $1 AND is_deleted = false
+               AND ($2::date IS NULL OR started_at >= $2::date)
+               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))`,
+            [tenantId, start, end]
           ),
         ]);
 
@@ -159,6 +190,11 @@ export function registerAnalyticsRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
+      // Optional From/To window (YYYY-MM-DD). Absent → all-time. `end` is
+      // inclusive of the whole day. Voice queries filter on started_at; the
+      // revenue (top-customers) query filters on the appointment's start_time.
+      const { start, end } = optionalDateBounds(req.query as Record<string, string>);
+
       const data = await withTenantClient(tenantId, async (client) => {
         const [repeatCallers, byService, summary, topCustomers, abandonmentByService] =
           await Promise.all([
@@ -178,11 +214,13 @@ export function registerAnalyticsRoutes(
              FROM voice_sessions
              WHERE tenant_id = $1 AND is_deleted = false
                AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
+               AND ($2::date IS NULL OR started_at >= $2::date)
+               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
              GROUP BY 1
              HAVING count(*) > 1
              ORDER BY last_call DESC
              LIMIT 100`,
-              [tenantId]
+              [tenantId, start, end]
             ),
             // Which services the booked calls actually booked.
             client.query<{ service: string; booked_count: number }>(
@@ -192,9 +230,11 @@ export function registerAnalyticsRoutes(
              JOIN appointments a ON a.appointment_id = v.appointment_id
              LEFT JOIN services s ON s.service_id = a.service_id
              WHERE v.tenant_id = $1 AND v.is_deleted = false
+               AND ($2::date IS NULL OR v.started_at >= $2::date)
+               AND ($3::date IS NULL OR v.started_at < ($3::date + interval '1 day'))
              GROUP BY 1
              ORDER BY booked_count DESC`,
-              [tenantId]
+              [tenantId, start, end]
             ),
             // Top-line: how many distinct callers, how many are repeat, and how
             // much of total call volume comes from repeat callers.
@@ -210,6 +250,8 @@ export function registerAnalyticsRoutes(
                FROM voice_sessions
                WHERE tenant_id = $1 AND is_deleted = false
                  AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
+                 AND ($2::date IS NULL OR started_at >= $2::date)
+                 AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
                GROUP BY 1
              )
              SELECT count(*)::int AS distinct_callers,
@@ -217,7 +259,7 @@ export function registerAnalyticsRoutes(
                     coalesce(sum(c) FILTER (WHERE c > 1), 0)::int AS repeat_call_volume,
                     coalesce(sum(c), 0)::int AS total_calls
              FROM per_caller`,
-              [tenantId]
+              [tenantId, start, end]
             ),
             // Customer lifetime value: top customers by total booked revenue
             // (sum of each appointment's service price). services.price defaults
@@ -238,10 +280,12 @@ export function registerAnalyticsRoutes(
              JOIN customers c ON c.customer_id = a.customer_id
              LEFT JOIN services s ON s.service_id = a.service_id
              WHERE a.tenant_id = $1 AND a.is_deleted = false AND c.is_deleted = false
+               AND ($2::date IS NULL OR a.start_time >= $2::date)
+               AND ($3::date IS NULL OR a.start_time < ($3::date + interval '1 day'))
              GROUP BY c.customer_id, c.name
              ORDER BY revenue DESC, visits DESC
              LIMIT 20`,
-              [tenantId]
+              [tenantId, start, end]
             ),
             // Abandonment-by-service: calls that did NOT book (appointment_id NULL)
             // but recorded a requested_service_id (the caller tried to book that
@@ -254,9 +298,11 @@ export function registerAnalyticsRoutes(
              JOIN services s ON s.service_id = v.requested_service_id
              WHERE v.tenant_id = $1 AND v.is_deleted = false
                AND v.appointment_id IS NULL
+               AND ($2::date IS NULL OR v.started_at >= $2::date)
+               AND ($3::date IS NULL OR v.started_at < ($3::date + interval '1 day'))
              GROUP BY 1
              ORDER BY abandoned_count DESC`,
-              [tenantId]
+              [tenantId, start, end]
             ),
           ]);
 
