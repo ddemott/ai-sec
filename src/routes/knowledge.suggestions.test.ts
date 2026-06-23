@@ -85,6 +85,9 @@ describe('PATCH /knowledge/suggestions/:id', () => {
         rows: [{ question: 'Walk-ins?', answer: 'Yes, welcome.' }],
         rowCount: 1,
       });
+      // Best-effort AI-cost telemetry INSERT (recordAiCostEvent) fires on the
+      // approve path before the ingest transaction — fire-and-forget, result ignored.
+      handle.queryResponses.push({ rows: [], rowCount: 1 }); // INSERT ai_cost_events
       handle.queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
       handle.queryResponses.push({ rows: [], rowCount: 1 }); // INSERT tenant_docs
       handle.queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE knowledge_suggestion
