@@ -1,14 +1,14 @@
 # TODO
 
-**See also**: root `GAPS.md` (2026-06-15) for the full deep-dive inventory of missing pieces across every angle (product, integrations, billing, ops, security, scaling, etc.). This file remains the active execution queue.
+**See also**: root `GAPS.md` (created 2026-06-15, last refreshed 2026-06-23) for the full deep-dive inventory of missing pieces across every angle (product, integrations, billing, ops, security, scaling, etc.). This file remains the active execution queue.
 
-**Status at a Glance** (as of 2026-06-22)
+**Status at a Glance** (as of 2026-06-23)
 
-- **This session (2026-06-22)**: merged PRs #56/#57/#58 — `toolsClient` retry tests, tenant-data export API, website-scan rate-limit, incident+telephony runbook, audit-log API, RAG answer-debugger API, owner guide. Open branch `feat/dashboard-audit-explain-citations-rescan`: dashboard surfaces for audit-log + answer-debugger + a "Download my data" button, caller-facing source citations, website-scan happy-path E2E. Tests green: backend ~1,931 · dashboard ~778 · agent prompt. 29 route modules.
+- **Recent (2026-06-22/23)**: merged PRs #56/#57/#58/#59 + #64/#65/#66/#67 (and #70/#71 fixes) — toolsClient retries, export/audit/RAG debugger/dashboard surfaces, website scan E2E, analytics (abandonment-by-service + date filters + cohorts compat), unbound-method lint to error. Tests green per CLAUDE: backend ~1,940 + ~790 dashboard + ~360 agent. 29 route modules. Doc hygiene pass (route counts, Vercel refs, phone quals, REFACTORING comments) done mechanically. **Additional mechanical doc hygiene (2026-06-23, on chore branch)**: 10 independent solo items (stale 134→142 migrations + 26→29 labels + test nums in README; ARCH header (27)→(29) + dedup; CLAUDE 12→17 tools; lingering NEEDS-REFACTORING.md live-ref removal; last-updated bumps; sweep). All per AGENTS mechanical scope. `verify:claude-md` + `npm run checks` + tsc clean. Recorded in RESOLVED.
 - **Drift guard gotcha**: any new `src/routes/*.ts` module must bump the `route modules` count in `CLAUDE.md` (`verify-claude-md`), and it's merge-order-fragile — rebase each route-adding branch onto latest main so the count reflects the union.
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
-- **CI**: green. Agent package gated in CI. Tests (2026-06-11): backend 2,017 · dashboard 744 · agent 122 · E2E 113 (CI green for the first time — getPool db-name bug + 9 other infra fixes in PR #4). Includes the uncommitted live call-transfer feature.
+- **CI**: green. Agent package gated in CI. Tests (as of 2026-06-22 per CLAUDE): backend ~1,940 · dashboard ~790 · agent ~360 · E2E (numbers from recent merges; CI includes simulate tools gate). Full 4-job gate on main.
 - **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Replaced by **`+1 630-866-1960`** — DONE 2026-06-02: account funded + upgraded (trial cap lifted), number purchased (Telnyx id `2973794140900296302`), routed to SIP connection `livekit-outbound` (`2945038451784812111`), connection activated. **Remaining**: local `.env` LiveKit API key is dead (rotated at Railway) → need fresh creds → update LiveKit inbound trunk OLD→`+16308661960` → write tenant phone fields → live test. Full checklist: `docs/BETH_GO_LIVE_TODO.md`. Still zero inbound CDRs until trunk wired.
 - **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See the Production Wiring Checklist above.
 - **Browser validation**: Role gating + invite flow — DONE 2026-06-03, proven by green e2e (`auth-flows` route-gate 403, `workflows:630` front-desk nav-hide/snap-back, `workflows:676` owner invite).
@@ -18,7 +18,7 @@ Everything else complete or tracked below.
 
 ---
 
-## 🎯 Open Work — Master Backlog (canonical, consolidated 2026-06-19)
+## 🎯 Open Work — Master Backlog (canonical, consolidated 2026-06-23; post doc hygiene)
 
 **This is the single canonical list of every OPEN item.** The dated sections that
 follow (Active build queue, Production Wiring, Phase 13, Voice Validation, Back-to-Front,

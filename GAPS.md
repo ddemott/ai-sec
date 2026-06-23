@@ -1,10 +1,10 @@
 # SecretaryHQ — Gaps & Missing Pieces
 
-**Deep dive analysis** — 2026-06-15 (main branch)
+**Deep dive analysis** — 2026-06-23 (main branch; post doc hygiene pass)
 
-This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (136 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, BETH_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
+This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (142 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, BETH_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
 
-**Context**: Multi-tenant Voice AI Reception SaaS for service businesses (tire shops, salons, auto, trades, fitness, food & beverage). **HIPAA verticals are permanently excluded.** Strong foundation in voice (Telnyx + LiveKit), atomic booking, RLS multi-tenancy, dashboard, and recent shipments (live call-transfer + transcripts + summaries + outcomes + analytics + simulate harness + competitor CRM removal).
+**Context**: Multi-tenant Voice AI Reception SaaS for service businesses (tire shops, salons, auto, trades, fitness, food & beverage). **HIPAA verticals are permanently excluded.** Strong foundation in voice (Telnyx + LiveKit), atomic booking, RLS multi-tenancy, dashboard, and recent shipments (live call-transfer + transcripts + summaries + outcomes + analytics + simulate harness + competitor CRM removal + data export/audit/RAG debugger + doc consistency hygiene).
 
 Many items below are already tracked in `docs/TODO.md` (especially Phase 13 production wiring, `[prod]` silent-degrade risks, and BETH checklist). This file expands into unstated angles and provides a single "get to these things" reference. Use it alongside (not instead of) the active TODOs, simulate harness, and prepare-commit workflow.
 
