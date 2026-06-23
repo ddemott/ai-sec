@@ -97,13 +97,26 @@ describe('GET /audit-log', () => {
   });
 
   it('SAD: an un-audited table_name is rejected 400 before any query', async () => {
-    // WHY: only appointments/customers/resources are audited; anything else is
-    //       either a typo or a probe — reject it, do not run a query.
+    // WHY: only the audited tables are valid; anything else is a typo or a probe
+    //       — reject it, do not run a query. `users` is not audited.
     const res = await app.inject({ method: 'GET', url: '/audit-log?table_name=users' });
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toContain('Invalid table_name');
     expect(dataQueries().length).toBe(0);
+  });
+
+  it('HAPPY: services + employees are now accepted filters (audit trail extended)', async () => {
+    // WHY: 2026-06-22 extended fn_audit_trigger to services + employees so owners
+    //       get a change history for prices/staff — both must pass the filter.
+    for (const table of ['services', 'employees']) {
+      handle.queryResponses.push({ rows: [] });
+      const res = await app.inject({ method: 'GET', url: `/audit-log?table_name=${table}` });
+      expect(res.statusCode, `${table} should be an accepted filter`).toBe(200);
+      const q = dataQueries().slice(-1)[0];
+      expect(q.text).toContain('table_name =');
+      expect(q.params).toContain(table);
+    }
   });
 
   it('SAD: a front-desk user is rejected 403 (no PII change-history access)', async () => {

@@ -63,7 +63,7 @@ Use the existing `setup-db.sh` script, passing the production connection string:
 ./scripts/setup-db.sh "postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres"
 ```
 
-This applies all 140 migrations in order and seeds the database with the Bella's Hair Studio demo tenant.
+This applies all 141 migrations in order and seeds the database with the Bella's Hair Studio demo tenant.
 
 ### 2.3 RLS Enforcement
 No separate `api_user` role is needed. The backend connects as the `postgres` role via `DATABASE_URL`, and `FORCE ROW LEVEL SECURITY` on all 20 RLS-enabled tables (migration `20260323000000_force_rls_single_pool.sql`) enforces tenant isolation even under superuser. `withTenantClient()` sets `app.current_tenant_id` per request.
@@ -101,7 +101,7 @@ Railway is configured via `railway.json` + `nixpacks.toml` in the repo root.
 3. **Health check**: `/health` endpoint
 4. **Restart policy**: `ON_FAILURE` with max 10 retries
 
-**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 140 migrations (including `20260323000000_force_rls_single_pool.sql`, `20260427000000_telnyx_provisioning.sql`, `20260430000002_drop_employee_shifts.sql`, the 2026-05-01 atomic-booking exclusion-constraint pair `20260501000000` + `20260501000001`, and the 2026-05-05 user-role column `20260505000000_user_roles.sql`) to Supabase before deploying. The two atomic-booking migrations require a pre-flight scan for any existing overlapping `appointments` rows on the same `(resource_id, time-range)` or `(employee_id, time-range)` — the `ALTER TABLE ... ADD CONSTRAINT EXCLUDE` will fail if any are present. The user-role migration is harmless additive (DEFAULT `'owner'`, no NULL backfill).
+**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 141 migrations (including `20260323000000_force_rls_single_pool.sql`, `20260427000000_telnyx_provisioning.sql`, `20260430000002_drop_employee_shifts.sql`, the 2026-05-01 atomic-booking exclusion-constraint pair `20260501000000` + `20260501000001`, and the 2026-05-05 user-role column `20260505000000_user_roles.sql`) to Supabase before deploying. The two atomic-booking migrations require a pre-flight scan for any existing overlapping `appointments` rows on the same `(resource_id, time-range)` or `(employee_id, time-range)` — the `ALTER TABLE ... ADD CONSTRAINT EXCLUDE` will fail if any are present. The user-role migration is harmless additive (DEFAULT `'owner'`, no NULL backfill).
 
 **Graceful shutdown**: The backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 

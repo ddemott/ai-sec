@@ -22,12 +22,14 @@ import type { AuditLogEntry } from '../lib/types';
 
 const PAGE_SIZE = 50;
 
-// The audit trigger only fires on these tables (see fn_audit_trigger).
+// The audit trigger fires on these tables (see fn_audit_trigger).
 const TABLE_OPTIONS = [
   { label: 'All tables', value: '' },
   { label: 'Appointments', value: 'appointments' },
   { label: 'Customers', value: 'customers' },
   { label: 'Resources', value: 'resources' },
+  { label: 'Services', value: 'services' },
+  { label: 'Team', value: 'employees' },
 ];
 
 /** Union of keys across old + new whose values differ — the changed fields. */

@@ -3,8 +3,8 @@
  *
  * Read-only, owner-gated window onto the tenant's `audit_log` table (written by
  * the SECURITY DEFINER `fn_audit_trigger` on appointments / customers /
- * resources). Lets an owner answer "who changed this booking, and when?"
- * without DB access.
+ * resources / services / employees). Lets an owner answer "who changed this
+ * booking — or this price, or this staff member — and when?" without DB access.
  *
  * - Owner-only: change history can expose old/new field values (PII); front-desk
  *   logins are rejected 403. The super-admin tenant bypasses for support.
@@ -23,7 +23,7 @@ import { parsePagination, parseDateRange } from './routeHelpers';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
 /** Tables the audit trigger actually writes — used to validate the filter. */
-const AUDITED_TABLES = new Set(['appointments', 'customers', 'resources']);
+const AUDITED_TABLES = new Set(['appointments', 'customers', 'resources', 'services', 'employees']);
 
 export function registerAuditLogRoutes(
   app: AppFastifyInstance,
