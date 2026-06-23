@@ -49,6 +49,8 @@ const { mockApi } = vi.hoisted(() => ({
     // QuickBookPanel suggests employees skilled for the picked service,
     // and resources required for the picked service.
     mappings: { listServiceEmployee: vi.fn(), listServiceResource: vi.fn() },
+    // Wired in feat/analytics-reliability-tiles (uses /analytics/stats for home snapshot + reliability).
+    analytics: { getStats: vi.fn() },
   },
 }));
 
@@ -75,6 +77,7 @@ beforeEach(() => {
   mockApi.templates.listFull.mockReset().mockResolvedValue([]);
   mockApi.mappings.listServiceEmployee.mockReset().mockResolvedValue([]);
   mockApi.mappings.listServiceResource.mockReset().mockResolvedValue([]);
+  mockApi.analytics.getStats.mockReset().mockResolvedValue(null);
   // Reset getConfig to baseline: has timezone but no inbound_phone.
   // Individual tests override inbound_phone to test status card states.
   mockApi.tenants.getConfig.mockReset().mockResolvedValue({ timezone: 'America/Chicago', inbound_phone: null });

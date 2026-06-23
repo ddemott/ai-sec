@@ -117,7 +117,7 @@ What we deliberately **do not** adopt:
 - **Plain FK (unambiguous role): `<referenced_table_singular>_id`.** Same name as the target's PK. Example: `appointments.customer_id` → `customers.customer_id`. JOIN can use `USING (customer_id)`.
 - **Role-based FK (ambiguous when there's more than one FK to the same table): `<role>_<referenced_table_singular>_id`.** Keep the `_<table>_id` suffix so the column name still tells you what table it points at.
   - Example: a hypothetical `audit_log.created_by_user_id` and `audit_log.edited_by_user_id` both referencing `users.user_id`. JOIN can't use `USING` for these — falls back to explicit `ON users.user_id = audit_log.created_by_user_id`.
-- **Existing exceptions to be migrated:** `opt_out_records.original_consent_id` should become `original_consent_record_id` to comply with the role-based rule.
+- (Resolved) `opt_out_records.original_consent_id` → `original_consent_record_id` — completed in migration `20260513000002_opt_out_records_fk_rename.sql` (role-based FK naming convention).
 
 ### Junction tables
 

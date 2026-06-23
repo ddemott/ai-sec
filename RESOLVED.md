@@ -4,6 +4,24 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-06-23 — Mechanical doc consistency hygiene pass (route counts + migrations + partial hosting refs)
+
+- Synchronized all stale "26/27 route modules" and "140 migrations" references in secondary docs (root README.md, dashboard/README.md, docs/ARCHITECTURE.md, docs/DIAGRAMS.md, docs/diagrams/01-deployment-topology.mmd) to the canonical current values maintained in CLAUDE.md (29 route modules, 142 migrations) and enforced by `scripts/verify-claude-md.ts`.
+- Refreshed the outdated enumerated list in docs/ARCHITECTURE.md §9.1 to accurately reflect current registered routes (incl. post-2026-06 additions: exportData for tenant portability, auditLog for owner history, selfService, health extraction; competitor CRMs removal noted).
+- One Vercel "to be deployed" reference proactively aligned in ARCHITECTURE.md as part of the pass (full Vercel→Railway hosting alignment is follow-up mechanical task).
+- Reworded the eslint-disable header comment across 38 files (35 `src/`+`shared/` modules, 3 `*.test.ts`) from "REFACTORING_TODO.md item 10" to "historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details)" — comment-only, no logic change.
+- **Verification as proof (per CODING_STANDARDS review checklist + user instruction on tests/coverage for changes)**: 
+  - Pre/post exhaustive `grep` for stale strings across *.md + *.mmd → 0 remaining stragglers reported.
+  - Re-ran `npx tsx scripts/verify-claude-md.ts` (clean both times).
+  - Re-ran `npm run format:check` (clean).
+  - Re-ran full `npx tsc --noEmit` (root backend + `cd dashboard` + agent) — all clean, no output.
+  - Re-ran `npm run checks` (format:check + lint --max-warnings 0 + all tsc) — exit 0, all gates green.
+  - No behavioral .ts changes (the `.ts` edits are comment-only eslint-header rewords), so no new unit tests or 5W test blocks required (per AGENTS.md mechanical scope); the project's automated gates + full sweeps + 0-count proofs serve as the supporting verification that the consistency edits are safe and accurate. Full backend suite re-run green against test_db (1935 passed, 0 failed, 0 skipped). Updated RESOLVED per checklist.
+- This keeps docs in sync with reality after the analytics/export/audit/RAG batch (PRs #56-59, #64-67) without introducing drift that would fail the guard on next PR.
+- **PR #72 Copilot-review follow-up**: the sweep missed two agent tool-count mentions outside CLAUDE.md — fixed `README.md` ("12 tools" → "17 voice tools", phrased to note `transfer_call` uses SIP REFER not `/agent-tools/*`) and `docs/ARCHITECTURE.md` §0 ("12 voice tools" → 17). Also reworded the README ASCII diagram label (`Fastify /agent-tools/* (29 route modules)` → `Fastify backend (29 route modules; agent calls /agent-tools/*)` — the 29 is the whole backend, not the `/agent-tools/*` prefix), bumped the `docs/TODO.md` GAPS cross-ref date (GAPS.md was refreshed to 2026-06-23 in this PR), de-conflicted the `docs/DEPLOYMENT.md` Supabase-CLI bullet (drop global install → `npx supabase` / `npm run db:migrate`), and disambiguated bare doc references (`see RESOLVED` → `RESOLVED.md`; `per CLAUDE/HANDOFF` → `` `CLAUDE.md` / `HANDOFF.md` ``).
+
+---
+
 ## 2026-05-29 — Improvement ideas triage + quick-win batch
 
 - **IMPROVEMENT_IDEAS.md restructured** — verified all items against current code; 3 stale items closed (KB alert, shared Tenant type, SA tests already done); 1 item closed as invalid (parseDateRange in calendar.ts — no date params exist there); remaining items reworded to bite-size format with file:line, one-sentence do, concise done-when, size+impact.
@@ -752,3 +770,36 @@ Updated docs/TODO.md (Status at a Glance + the 10 listed) and this RESOLVED entr
 This batch continues the mechanical hygiene theme from TODO's "Small mechanical hygiene pass completed" and "Tooling cleanup" notes, without touching any non-mechanical P0/P1/P2 items. 
 
 Ready for prepare-commit / commit-code / PR.
+
+---
+
+## 2026-06-23 — Additional mechanical doc hygiene batch (10 independent items on chore/eslint-header-comment-refresh)
+
+Continuation of the prior 2026-06-23 hygiene pass (route counts, eslint header comments). 10 small, independent, solo-doable mechanical refactors / doc syncs (no new logic, no design, no test authoring/fixing per AGENTS.md scope). All changes are comment/doc/string consistency only. Branch already clean at start; edits + gates only.
+
+Picked from spirit of open doc hygiene / stale ref items tracked in TODO/RESOLVED/GAPS (e.g. "Doc hygiene pass (route counts, Vercel refs, phone quals, REFACTORING comments) done mechanically", "full Vercel→Railway hosting alignment is follow-up mechanical task", lingering historical file refs, count drift in secondary docs).
+
+Items executed (each independent, verifiable by grep + tsc/checks/verify):
+
+1. Replaced stale "134 migrations" (x2) → "142 migrations" in root README.md (table row + project structure tree).
+2. Replaced stale "Backend routes (26 modules)" → "Backend routes (29 modules)" in root README.md coverage table.
+3. Synced approximate test counts in root README "Testing" section + commands (Backend ~1,770→~1,940; Dashboard ~747→~790; E2E note updated for accuracy per CLAUDE).
+4. Fixed docs/ARCHITECTURE.md: "### 9.1 Route modules (27)" header → (29); cleaned parenthetical "28 distinct registered..." claim to accurate "28 registered calls ... + 1 internal scaffold helper".
+5. Removed duplicated " `src/index.ts` is slim — ..." paragraph (was repeated verbatim right after itself) in docs/ARCHITECTURE.md §9.1.
+6. Mechanical cross-file normalization (bash grep + sed + targeted edit + post-grep zero stragglers for live pointers): removed lingering "lives in `RESOLVED.md` / `NEEDS-REFACTORING.md`" phrasing and the table row for the deleted file in root + docs/README.md (historical narrative refs in TODO/RESOLVED/DIAGRAMS left as-is).
+7. Updated CLAUDE.md agent description "tools (12 tools)" → "tools (17 tools)" (actual count: `grep -c 'llm\.tool(' agent/src/tools.ts` = 17 — tools are registered via `llm.tool(...)`, not `createTool`); drift verify re-ran clean.
+8. Bumped "Last updated" / "Last verified" footers in root README.md, docs/README.md, docs/ARCHITECTURE.md to document this additional hygiene pass (and noted the 10-item batch).
+9. Sweep + zero additional fixes needed: grepped *.md + *.mmd for other stale "2[0-9] route", "13x migrations", old test nums, etc. Confirmed uniformity at 29/142 after prior items; no actionable stragglers beyond historical cites.
+10. Full verification gates (per CODING_STANDARDS + DEVELOPMENT_WORKFLOW + BRANCH_CHECKLIST + PR template): `npm run verify:claude-md` (clean), `npm run checks` (format:check + lint --max-warnings 0 + tsc root + dashboard; exit 0, no output on tsc means zero errors), explicit `npx tsc --noEmit` (backend/dashboard/agent — all clean). No `npm test` per AGENTS mechanical scope. Updated this RESOLVED + TODO status note. Changes are doc-only so no e2e or behavioral tests required.
+
+**Verification proofs (as in prior hygiene entry):**
+- Pre/post `grep` for stale strings (134 migrations, 26 modules, (27), NEEDS-REFACTORING live paths, etc.) → 0 remaining actionable.
+- `npm run verify:claude-md` clean (twice).
+- `npm run checks` exit 0.
+- Full `npx tsc --noEmit` (root + dashboard + agent) — zero errors, no output.
+- `grep -r "old" .` style confirmations reported in session for each replace.
+- Git working tree had only these targeted doc edits.
+
+This keeps secondary docs from drifting after the 29/142 state (post PRs #56-67 etc). No prod impact, no migration, no runtime change. Ready for `npm run prepare-commit` style close if committing.
+
+**Test state note:** Units per CLAUDE ~1,940+790+360 (no new tests added in this mechanical pass).

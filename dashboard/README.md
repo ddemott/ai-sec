@@ -11,7 +11,7 @@ This is the **management UI** for the SecretaryHQ SaaS. It lets owners and admin
 - Tweak AI persona settings (system prompt, voice, working hours).
 - Manage employee attributes (name, email, phone) and shift schedules.
 
-The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**. It calls the Fastify backend API (20 route modules under `src/routes/`), which enforces RLS via `withTenantClient()` and reads/writes to the shared Postgres database (Supabase or local Docker). Bookings created by the voice AI tools and the dashboard all hit the same source of truth.
+The dashboard is built with **Next.js (App Router)** and **Tailwind CSS**. It calls the Fastify backend API (29 route modules under `src/routes/`), which enforces RLS via `withTenantClient()` and reads/writes to the shared Postgres database (Supabase or local Docker). Bookings created by the voice AI tools and the dashboard all hit the same source of truth.
 
 ---
 
@@ -48,11 +48,19 @@ You should see:
 
 ## Deployment
 
-The dashboard is intended to be deployed on **Vercel**:
+The dashboard (and full stack) is deployed on **Railway** in production (see `docs/DEPLOYMENT.md` for the current setup with `railway.json` + nixpacks for all three services: backend, `ai-sec-agent`, and this dashboard).
 
-1. Push this repo to GitHub.
-2. In Vercel, create a new project from the `dashboard/` directory.
-3. Set `NEXT_PUBLIC_API_BASE_URL` to your deployed backend URL.
-4. Deploy.
+For local/self-host development:
+
+```bash
+cd dashboard
+npm install
+npm run build
+npm start
+```
+
+Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed (or local) backend.
 
 Once deployed, owners log in using the app's own `users`-table-backed login flow (via the backend `/login` endpoint); Supabase Auth can be wired in later if desired but is not required for the current MVP.
+
+(Older references to Vercel as "recommended" have been retired; Railway is the production path for the entire SaaS.)

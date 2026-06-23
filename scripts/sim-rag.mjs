@@ -42,9 +42,18 @@ const CASES = [
   { ask: 'when are you open?', type: 'kb', expect: /8 ?am|monday|5 ?pm/i },
   { ask: 'how much do you charge to change my oil', type: 'kb', expect: /49/ },
   { ask: 'what happens if I have to cancel last minute', type: 'kb', expect: /24 ?hours/i },
+  // Vocabulary-gap case: "address" shares no words with the doc's "located".
+  // Two phrasings — terse and polite — both must retrieve via query expansion
+  // (regression guard for the 2026-06-12 address-gap fix).
   { ask: "what's your address", type: 'kb', expect: /main street|123/i },
+  { ask: 'could you tell me your address?', type: 'kb', expect: /main street|123/i },
   { ask: 'can you rotate my tires', type: 'kb', expect: /rotation|29/i },
+  // True out-of-scope — must fall back, NOT match a wrong doc. Widened beyond a
+  // single negative so the lowered 0.30 threshold is validated against several
+  // distinct out-of-scope topics, not tuned to one point.
   { ask: 'do you sell hamburgers', type: 'fallback', expect: null },
+  { ask: 'can you fix my refrigerator', type: 'fallback', expect: null },
+  { ask: 'what is your wifi password', type: 'fallback', expect: null },
 ];
 
 const FALLBACK_MARK = /don'?t have specific information|take a message/i;
