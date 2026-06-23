@@ -46,10 +46,10 @@ flowchart TB
 
   LiveKit -->|WebSocket| Agent
 
-  Fastify["Fastify Backend<br/>27 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
+  Fastify["Fastify Backend<br/>29 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
-  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>140 migrations")]
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>142 migrations")]
   Stripe["Stripe"]
   Integrations["Google / Outlook calendars<br/>+ Square CRM"]
   Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
@@ -233,7 +233,7 @@ sequenceDiagram
   participant API as Fastify<br/>/agent-tools/*
   participant DB as Postgres
 
-  Caller->>Telnyx: Dial +1 (630) 937-9478
+  Caller->>Telnyx: Dial +1 (630) 937-9478 (historical; current live +1 630-866-1960)
   Telnyx->>LK: SIP INVITE → inbound trunk
   LK->>LK: dispatch rule SDR_if97ky4Zf7e6<br/>→ create room, metadata = { tenant_id }
   LK->>Agent: room.created event (WebSocket)

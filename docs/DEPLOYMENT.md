@@ -11,8 +11,8 @@ This guide walks through migrating from the local Docker development environment
 - **LiveKit Cloud Account**: [livekit.io](https://livekit.io) — voice agent orchestrator + SIP ingress
 - **Deepgram Account**: [deepgram.com](https://deepgram.com) — STT (Nova-3) used by the LiveKit agent
 - **OpenAI API Key**: LLM (GPT-4o-mini) + TTS in the agent, RAG embeddings, post-call summaries
-- **Vercel Account** (optional): For hosting the Next.js dashboard
-- **Supabase CLI**: `npm install -g supabase` (already in devDependencies)
+- **Railway Account**: For hosting the full stack (backend + ai-sec-agent worker + this Next.js dashboard) in production. Self-hosting or other platforms (e.g. Vercel for dashboard only) remain options for the Next.js part.
+- **Supabase CLI**: `npm install -g supabase` (already in devDependencies; note migrations now applied via `scripts/setup-db.sh`, not direct CLI link)
 
 ---
 
@@ -206,18 +206,12 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 
 ## Phase 4: Deploy the Dashboard
 
-The dashboard is a Next.js app in the `dashboard/` directory.
+The dashboard is a Next.js app in the `dashboard/` directory. In production the full stack (including dashboard) is hosted on Railway (see Phase 3 for backend/agent and `railway.json` + `nixpacks.toml` at root; the dashboard service is `dashboard-production-cee3`).
 
-### Option A: Vercel (Recommended)
-1. Connect your GitHub repo to Vercel
-2. Set the **Root Directory** to `dashboard`
-3. Set environment variables:
-   ```
-   NEXT_PUBLIC_API_BASE_URL=https://your-backend-url.com
-   ```
-4. Deploy
+### Option A: Railway (Current Production Path)
+The dashboard is built and deployed as part of the Railway monorepo services alongside the backend and agent worker. Environment variables (e.g. `NEXT_PUBLIC_API_BASE_URL`) are configured in the Railway dashboard for the dashboard service. No separate Vercel project needed.
 
-### Option B: Self-hosted
+### Option B: Self-hosted / Alternative Platforms
 ```bash
 cd dashboard
 npm install
@@ -226,6 +220,8 @@ npm start
 ```
 
 Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed backend.
+
+(Vercel remains a viable alternative for the Next.js dashboard portion only if you prefer it; update `NEXT_PUBLIC_API_BASE_URL` accordingly. Older "Recommended" guidance has been updated to reflect Railway as the integrated production deployment.)
 
 ---
 

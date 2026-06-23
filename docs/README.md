@@ -65,4 +65,4 @@ This folder contains the project's technical and operational documentation.
 
 ---
 
-**Last updated:** 2026-05-27 (major documentation reduction pass: root `improvement-ideas.md`, `ux-review-notes.md`, `docs/BUGS.md`, and `NEEDS-REFACTORING.md` heavily reduced or archived as content is captured in `docs/TODO.md` / `RESOLVED.md`)
+**Last updated:** 2026-06-23 (doc consistency hygiene: synced route counts to 29, Vercel refs to Railway reality, phone history qualifications, REFACTORING comment standardization across source; see recent RESOLVED entry)

@@ -4,6 +4,23 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-06-23 — Mechanical doc consistency hygiene pass (route counts + migrations + partial hosting refs)
+
+- Synchronized all stale "26/27 route modules" and "140 migrations" references in secondary docs (root README.md, dashboard/README.md, docs/ARCHITECTURE.md, docs/DIAGRAMS.md, docs/diagrams/01-deployment-topology.mmd) to the canonical current values maintained in CLAUDE.md (29 route modules, 142 migrations) and enforced by `scripts/verify-claude-md.ts`.
+- Refreshed the outdated enumerated list in docs/ARCHITECTURE.md §9.1 to accurately reflect current registered routes (incl. post-2026-06 additions: exportData for tenant portability, auditLog for owner history, selfService, health extraction; competitor CRMs removal noted).
+- One Vercel "to be deployed" reference proactively aligned in ARCHITECTURE.md as part of the pass (full Vercel→Railway hosting alignment is follow-up mechanical task).
+- Reworded the eslint-disable header comment across 38 files (35 `src/`+`shared/` modules, 3 `*.test.ts`) from "REFACTORING_TODO.md item 10" to "historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details)" — comment-only, no logic change.
+- **Verification as proof (per CODING_STANDARDS review checklist + user instruction on tests/coverage for changes)**: 
+  - Pre/post exhaustive `grep` for stale strings across *.md + *.mmd → 0 remaining stragglers reported.
+  - Re-ran `npx tsx scripts/verify-claude-md.ts` (clean both times).
+  - Re-ran `npm run format:check` (clean).
+  - Re-ran full `npx tsc --noEmit` (root backend + `cd dashboard` + agent) — all clean, no output.
+  - Re-ran `npm run checks` (format:check + lint --max-warnings 0 + all tsc) — exit 0, all gates green.
+  - No behavioral .ts changes (the `.ts` edits are comment-only eslint-header rewords), so no new unit tests or 5W test blocks required (per AGENTS.md mechanical scope); the project's automated gates + full sweeps + 0-count proofs serve as the supporting verification that the consistency edits are safe and accurate. Full backend suite re-run green against test_db (1935 passed, 0 failed, 0 skipped). Updated RESOLVED per checklist.
+- This keeps docs in sync with reality after the analytics/export/audit/RAG batch (PRs #56-59, #64-67) without introducing drift that would fail the guard on next PR.
+
+---
+
 ## 2026-05-29 — Improvement ideas triage + quick-win batch
 
 - **IMPROVEMENT_IDEAS.md restructured** — verified all items against current code; 3 stale items closed (KB alert, shared Tenant type, SA tests already done); 1 item closed as invalid (parseDateRange in calendar.ts — no date params exist there); remaining items reworded to bite-size format with file:line, one-sentence do, concise done-when, size+impact.

@@ -27,7 +27,7 @@
 
 ### Landing Page (before any customer sees it)
 
-- [x] **[P0][S]** Landing demo link → replaced with "Call (630) 937-9478 — try it live" `tel:` link — DONE 2026-05-28
+- [x] **[P0][S]** Landing demo link → replaced with "Call (630) 937-9478 — try it live" `tel:` link — DONE 2026-05-28 (number was current at time of UX item; subsequently decommissioned; live number is now +1 630-866-1960 per CLAUDE/HANDOFF)
 - [x] **[P0][S]** Enterprise Gmail → `sales@secretaryhq.com` — DONE 2026-05-28
 - [x] **[P0][M]** Mobile nav hamburger added to landing page — hamburger button with CSS animate-to-X; dropdown reveals How It Works / Features / Pricing / Industries + CTAs; closes on anchor click — DONE 2026-05-28
 
