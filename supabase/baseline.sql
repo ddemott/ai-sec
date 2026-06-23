@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict fffPn10i3mySg3bkgJ7VTgCZO1cgTB0KEZw72DnwyrjSWDQ9Btfz8dU4EwktHUR
+\restrict 80PRvGGb5ExxgQJtnRdVRiICyiE2x1xnzEHfetEddlrskd3WSNN4UPsvXKhVW9W
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -1082,6 +1082,8 @@ BEGIN
     WHEN 'resources' THEN 'resource_id'
     WHEN 'appointments' THEN 'appointment_id'
     WHEN 'customers' THEN 'customer_id'
+    WHEN 'services' THEN 'service_id'
+    WHEN 'employees' THEN 'employee_id'
     ELSE 'id'
   END;
 
@@ -2401,7 +2403,7 @@ COMMENT ON COLUMN public.communications_history.status IS 'Delivery disposition 
 -- Name: COLUMN communications_history.provider_message_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.communications_history.provider_message_id IS 'Upstream provider message id (nodemailer messageId / provider SID) for cross-referencing';
+COMMENT ON COLUMN public.communications_history.provider_message_id IS 'Upstream provider message id (nodemailer messageId / Telnyx ID; legacy provider SID references in old rows) for cross-referencing';
 
 
 --
@@ -2717,14 +2719,14 @@ CREATE TABLE public.message_delivery_status (
 -- Name: TABLE message_delivery_status; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.message_delivery_status IS 'Latest SMS delivery status per message SID (from Telnyx; legacy provider webhooks removed). Non-RLS event table (webhook tenant-exempt).';
+COMMENT ON TABLE public.message_delivery_status IS 'Latest SMS delivery status per message SID (from Telnyx or legacy provider webhooks). Non-RLS event table (webhook is tenant-exempt, writes via shared pool). Legacy provider support removed 2026-06.';
 
 
 --
 -- Name: COLUMN message_delivery_status.message_sid; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.message_delivery_status.message_sid IS 'Provider Message SID (legacy provider refs) (SMxxx). UNIQUE -- one row per message, upserted as status advances.';
+COMMENT ON COLUMN public.message_delivery_status.message_sid IS 'Provider Message SID/ID. UNIQUE -- one row per message, upserted as status advances.';
 
 
 --
@@ -4271,10 +4273,24 @@ CREATE TRIGGER trg_audit_customers AFTER INSERT OR DELETE OR UPDATE ON public.cu
 
 
 --
+-- Name: employees trg_audit_employees; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_audit_employees AFTER INSERT OR DELETE OR UPDATE ON public.employees FOR EACH ROW EXECUTE FUNCTION public.fn_audit_trigger();
+
+
+--
 -- Name: resources trg_audit_resources; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_audit_resources AFTER INSERT OR DELETE OR UPDATE ON public.resources FOR EACH ROW EXECUTE FUNCTION public.fn_audit_trigger();
+
+
+--
+-- Name: services trg_audit_services; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_audit_services AFTER INSERT OR DELETE OR UPDATE ON public.services FOR EACH ROW EXECUTE FUNCTION public.fn_audit_trigger();
 
 
 --
@@ -5290,5 +5306,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict fffPn10i3mySg3bkgJ7VTgCZO1cgTB0KEZw72DnwyrjSWDQ9Btfz8dU4EwktHUR
+\unrestrict 80PRvGGb5ExxgQJtnRdVRiICyiE2x1xnzEHfetEddlrskd3WSNN4UPsvXKhVW9W
 
