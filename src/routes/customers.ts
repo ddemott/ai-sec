@@ -56,6 +56,13 @@ const CustomerUpdateSchema = z.object({
   notes: z.string().max(2000).optional().nullable(),
 });
 
+// GDPR/CCPA erasure confirmation. The caller must echo the customer's CURRENT
+// phone number — a typed confirmation (like GitHub's "type the repo name to
+// delete") so an irreversible purge can't be a fat-finger on the wrong row.
+const CustomerPurgeSchema = z.object({
+  confirm_phone: z.string().min(1),
+});
+
 export function registerCustomerRoutes(
   app: AppFastifyInstance,
   pool: Pool,
@@ -272,5 +279,105 @@ export function registerCustomerRoutes(
       logEvent(req, 'customer_deleted', { customerId: id });
       return reply.send({ success: true });
     }, 'Failed to delete customer')
+  );
+
+  // POST /customers/:id/purge — GDPR/CCPA "right to erasure" for one customer.
+  //
+  // Owner-only. Anonymizes the customer's PII IN PLACE instead of hard-deleting
+  // the row, so appointment history, audit_log entries, and every FK that
+  // points at customer_id stay referentially intact (a hard DELETE would either
+  // cascade away business records or fail on the FK). After a purge the row
+  // still exists but carries no personal data: name/email/address/etc. → NULL,
+  // phone → an opaque tombstone (kept non-null + unique to satisfy the
+  // (tenant_id, phone) constraint), metadata (which can hold free-text notes) → {}.
+  //
+  // The audit trigger on `customers` records to_jsonb(OLD) on every UPDATE, so
+  // the anonymizing UPDATE would otherwise COPY the PII into audit_log.old_data
+  // and defeat the erasure. We therefore also redact (NULL out) old_data/new_data
+  // on every audit_log row for this customer — including the row this very
+  // UPDATE just produced — keeping the who/when/action trail but dropping the
+  // PII payload. (fn_audit_trigger is not attached to audit_log, so this redact
+  // does not recursively audit.)
+  //
+  // SCOPE — deliberately tight, FLAGGED FOR LEGAL REVIEW before enabling in prod:
+  // this erases the canonical customers row + its audit snapshots only. PII that
+  // may ALSO live in voice_sessions.caller_phone, call transcripts, and
+  // appointment descriptions is NOT scrubbed here — that involves
+  // retention-vs-erasure tradeoffs (e.g. a legal hold on call recordings) that
+  // need a human/legal decision. Tracked as a follow-up; do NOT represent this
+  // as a complete GDPR erasure until that lands.
+  app.post(
+    '/customers/:id/purge',
+    withHandler(async (req: AppRequest, reply) => {
+      const { id } = req.params as { id: string };
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      // Owner-only. Super-admin tenant bypasses for support operations.
+      if (req.auth && req.auth.tenant_id !== SUPER_ADMIN_TENANT_ID && req.auth.role !== 'owner') {
+        return reply
+          .status(403)
+          .send({ success: false, error: 'Only owners can erase customer data' });
+      }
+
+      const parsed = CustomerPurgeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: 'confirm_phone is required (must match the customer’s current phone)',
+        });
+      }
+
+      const purgedBy = req.auth?.email ?? req.auth?.user_id ?? 'unknown';
+
+      const outcome = await withTenantClient(tenantId, async (client) => {
+        // Load the current phone for the typed-confirmation check.
+        const found = await client.query<{ phone: string }>(
+          'SELECT phone FROM customers WHERE customer_id = $1 AND tenant_id = $2',
+          [id, tenantId]
+        );
+        if (found.rows.length === 0) return 'not_found' as const;
+        if (parsed.data.confirm_phone !== found.rows[0].phone) return 'mismatch' as const;
+
+        // Anonymize the customer row. phone gets an opaque tombstone derived
+        // from the id so it stays unique within the tenant and is obviously
+        // non-PII. is_deleted flips so it drops out of all the is_deleted=false
+        // reads (lists, booking, voice context).
+        await client.query(
+          `UPDATE customers
+              SET name = NULL, email = NULL, address = NULL, address_line2 = NULL,
+                  first_name = NULL, last_name = NULL, city = NULL, state = NULL,
+                  postal_code = NULL, metadata = '{}'::jsonb,
+                  phone = 'PURGED-' || customer_id::text,
+                  is_deleted = true, deleted_at = now(), deleted_by = $3, updated_at = now()
+            WHERE customer_id = $1 AND tenant_id = $2`,
+          [id, tenantId, purgedBy]
+        );
+
+        // Redact the PII snapshots the audit trigger captured for this customer
+        // (incl. the row the UPDATE above just produced).
+        await client.query(
+          `UPDATE audit_log
+              SET old_data = NULL, new_data = NULL
+            WHERE tenant_id = $1 AND table_name = 'customers' AND record_id = $2`,
+          [tenantId, id]
+        );
+
+        return 'purged' as const;
+      });
+
+      if (outcome === 'not_found') {
+        return reply.status(404).send({ success: false, error: 'Customer not found' });
+      }
+      if (outcome === 'mismatch') {
+        return reply.status(400).send({
+          success: false,
+          error: 'Confirmation phone does not match this customer',
+        });
+      }
+
+      logEvent(req, 'customer_purged_gdpr', { customerId: id, purgedBy });
+      return reply.send({ success: true, message: 'Customer personal data erased' });
+    }, 'Failed to erase customer data')
   );
 }
