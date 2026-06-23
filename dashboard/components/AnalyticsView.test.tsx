@@ -181,4 +181,44 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByText(/\$320 · 4 visits/i)).toBeInTheDocument();
   });
+
+  test('HAPPY: picking a From date refetches calls + cohorts with that bound', async () => {
+    // WHO: an owner narrowing the Analytics view to a date window.
+    // WHAT: changing the From control re-runs getCalls + getCohorts, this time
+    //        with { start_date } in the range arg — so the backend filters.
+    // WHEN: user types a date into the From input.
+    // WHERE: AnalyticsView startDate state + the [tenantId,startDate,endDate] effect.
+    // WHY: without the refetch the header would say "from May 1" while the numbers
+    //        stayed all-time — a silent lie. This pins the bound reaches the API.
+    const { fireEvent } = await import('@testing-library/react');
+    // total>0 so the main view (which hosts the From/To controls) renders.
+    mockApi.analytics.getCalls.mockResolvedValue({
+      totals: { total: 5, booked: 2, abandoned: 1 },
+      by_outcome: [],
+      by_day: [],
+    });
+
+    render(<AnalyticsView />);
+
+    // Initial load: all-time (no range bound).
+    expect(await screen.findByLabelText('From date')).toBeInTheDocument();
+    expect(mockApi.analytics.getCalls).toHaveBeenLastCalledWith('tenant-123', {
+      start_date: undefined,
+      end_date: undefined,
+    });
+
+    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-05-01' } });
+
+    // Refetch carries the new lower bound to both call + cohort endpoints.
+    await vi.waitFor(() => {
+      expect(mockApi.analytics.getCalls).toHaveBeenLastCalledWith('tenant-123', {
+        start_date: '2026-05-01',
+        end_date: undefined,
+      });
+    });
+    expect(mockApi.analytics.getCohorts).toHaveBeenLastCalledWith('tenant-123', {
+      start_date: '2026-05-01',
+      end_date: undefined,
+    });
+  });
 });

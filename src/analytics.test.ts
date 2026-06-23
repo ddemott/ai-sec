@@ -221,6 +221,115 @@ describe('GET /analytics/calls', () => {
     expect(body.by_outcome).toEqual([]);
     expect(body.by_day).toEqual([]);
   });
+
+  it('HAPPY: a valid start_date + end_date are bound into every query as $2/$3', async () => {
+    // WHO: an owner narrowing the Analytics view to a billing month.
+    // WHAT: start_date/end_date flow through as bound params [tenant, start, end]
+    //       on all three queries (by_outcome, by_day, totals). The end bound is
+    //       applied inclusively at the SQL site (`< end + interval '1 day'`).
+    // WHEN: GET /analytics/calls?start_date=&end_date= from the From/To controls.
+    // WHERE: optionalDateBounds() → $2/$3 guards in the analytics.ts handler.
+    // WHY: without the bound params the window silently does nothing and the
+    //      owner sees all-time numbers under a date-filtered header — a lie.
+    queryResponses.push({ rows: [] }); // by_outcome
+    queryResponses.push({ rows: [] }); // by_day
+    queryResponses.push({ rows: [] }); // totals
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/calls?tenant_id=${TENANT_ID}&start_date=2026-05-01&end_date=2026-05-31`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    for (const q of queries) {
+      expect(q.params).toEqual([TENANT_ID, '2026-05-01', '2026-05-31']);
+      expect(q.text).toContain("interval '1 day'"); // end is day-inclusive
+    }
+  });
+
+  it('HAPPY: a malformed start_date is dropped to null (all-time), not passed through', async () => {
+    // WHO: a hand-edited / probed query string.
+    // WHAT: a non-YYYY-MM-DD start_date must become null so the $2 guard drops
+    //       out of the predicate — never reach Postgres as a bad cast.
+    // WHEN: GET /analytics/calls?start_date=garbage.
+    // WHERE: optionalDateBounds DATE_ONLY_RE validation.
+    // WHY: a bad date must degrade to all-time, not 500 on an invalid ::date cast.
+    queryResponses.push({ rows: [] }); // by_outcome
+    queryResponses.push({ rows: [] }); // by_day
+    queryResponses.push({ rows: [] }); // totals
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/calls?tenant_id=${TENANT_ID}&start_date=not-a-date&end_date=2026-05-31`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(queries[0].params).toEqual([TENANT_ID, null, '2026-05-31']);
+  });
+});
+
+describe('GET /analytics/cohorts', () => {
+  it('HAPPY: date bounds reach all cohort queries; revenue query filters on start_time', async () => {
+    // WHO: an owner scoping repeat-caller + CLV cohorts to a quarter.
+    // WHAT: start/end flow as $2/$3 into all FIVE cohort queries (repeat callers,
+    //       by_service, summary, top_customers, abandonment_by_service). The
+    //       revenue (top-customers) query is appointment-based, so it must bound
+    //       on a.start_time — NOT started_at (which it doesn't have).
+    // WHEN: GET /analytics/cohorts?start_date=&end_date=.
+    // WHERE: optionalDateBounds() in the cohorts handler.
+    // WHY: a missing bound on one of the five would let stale rows leak into a
+    //      date-filtered cohort view; the revenue query binding the wrong column
+    //      would 500 on an unknown column. Mock all five explicitly (FIFO) with
+    //      the real summary shape so this doesn't silently rely on the empty-row
+    //      fallback if the query order changes.
+    queryResponses.push({ rows: [] }); // 1. repeat callers
+    queryResponses.push({ rows: [] }); // 2. by_service
+    queryResponses.push({
+      rows: [{ distinct_callers: 0, repeat_callers: 0, repeat_call_volume: 0, total_calls: 0 }],
+    }); // 3. summary (full shape)
+    queryResponses.push({ rows: [] }); // 4. top customers
+    queryResponses.push({ rows: [] }); // 5. abandonment_by_service
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}&start_date=2026-04-01&end_date=2026-06-30`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(queries).toHaveLength(5); // all five queries ran
+    for (const q of queries) {
+      expect(q.params).toEqual([TENANT_ID, '2026-04-01', '2026-06-30']);
+    }
+    // The revenue query is appointment-based: it must bound on start_time.
+    const revenueQuery = queries.find((q) => q.text.includes('FROM appointments a'));
+    expect(revenueQuery, 'top-customers revenue query should exist').toBeTruthy();
+    expect(revenueQuery!.text).toContain('a.start_time >=');
+    // The abandonment query must also carry the bounds (it's voice_sessions-based).
+    const abandonQuery = queries.find((q) => q.text.includes('requested_service_id'));
+    expect(abandonQuery, 'abandonment-by-service query should exist').toBeTruthy();
+    expect(abandonQuery!.text).toContain('v.started_at >=');
+  });
+
+  it('SAD: a calendar-invalid date (2026-02-30) is dropped to null, not passed to ::date', async () => {
+    // WHO: a hand-crafted / fat-fingered query string.
+    // WHAT: "2026-02-30" is YYYY-MM-DD-shaped but not a real date; it must be
+    //        rejected by isValidDateOnly (→ null) so it never reaches the
+    //        `$2::date` cast, which would 500.
+    // WHEN: GET /analytics/cohorts?start_date=2026-02-30.
+    // WHERE: isValidDateOnly round-trip guard in optionalDateBounds.
+    // WHY: the PR contract is "malformed → all-time", not "malformed → 500". A
+    //        regex-only check would let this through to Postgres and crash.
+    for (let i = 0; i < 5; i++) queryResponses.push({ rows: [] });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}&start_date=2026-02-30&end_date=2026-13-01`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Both calendar-invalid bounds dropped to null → all-time.
+    expect(queries[0].params).toEqual([TENANT_ID, null, null]);
+  });
 });
 
 // =============================================

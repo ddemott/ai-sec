@@ -231,6 +231,24 @@ function handleFetchError(err: unknown) {
 /**
  * Generic Fetcher
  */
+/**
+ * Build the query record for the analytics endpoints: tenant_id plus an
+ * optional From/To window. Empty/absent bounds are dropped so the backend
+ * treats them as all-time. Returns undefined when there is no tenant — the
+ * endpoints require tenant_id, so sending date bounds without it would only
+ * produce a tenant-less request (400/404); better to send nothing.
+ */
+function analyticsQuery(
+  tenantId: string | null,
+  range?: { start_date?: string; end_date?: string }
+): Record<string, string> | undefined {
+  if (!tenantId) return undefined;
+  const query: Record<string, string> = { tenant_id: tenantId };
+  if (range?.start_date) query.start_date = range.start_date;
+  if (range?.end_date) query.end_date = range.end_date;
+  return query;
+}
+
 export async function apiFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
   await ensureTokenFresh();
   let url = `${API_BASE_URL}${endpoint}`;
@@ -635,17 +653,14 @@ export const Api = {
     getStats: (tenantId: string | null) =>
       apiFetch<AnalyticsStats>(`/analytics/stats`, tenantId ? { tenant_id: tenantId } : undefined),
 
-    getCalls: (tenantId: string | null) =>
-      apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
+    getCalls: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
+      apiFetch<AnalyticsCalls>(`/analytics/calls`, analyticsQuery(tenantId, range)),
 
     getAiCost: (tenantId: string | null) =>
       apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantId ? { tenant_id: tenantId } : undefined),
 
-    getCohorts: (tenantId: string | null) =>
-      apiFetch<AnalyticsCohorts>(
-        `/analytics/cohorts`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
+    getCohorts: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
+      apiFetch<AnalyticsCohorts>(`/analytics/cohorts`, analyticsQuery(tenantId, range)),
   },
 
   // --- REMINDERS (delivery monitoring) ---
