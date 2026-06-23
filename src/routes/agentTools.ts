@@ -1162,13 +1162,19 @@ export function registerAgentToolRoutes(
       if (args.call_id && args.requirements.serviceType) {
         withTenantClient(args.tenant_id, (client) =>
           client.query(
+            // COALESCE keeps any already-captured service when this attempt's
+            // serviceType doesn't fuzzy-match (a later, differently-worded
+            // attempt must not erase the signal with NULL).
             `UPDATE voice_sessions
-                SET requested_service_id = (
-                  SELECT service_id FROM services
-                   WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
-                     AND (is_deleted IS NULL OR is_deleted = false)
-                   ORDER BY length(name) ASC
-                   LIMIT 1
+                SET requested_service_id = COALESCE(
+                  (
+                    SELECT service_id FROM services
+                     WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
+                       AND (is_deleted IS NULL OR is_deleted = false)
+                     ORDER BY length(name) ASC
+                     LIMIT 1
+                  ),
+                  requested_service_id
                 )
               WHERE tenant_id = $1 AND call_id = $3`,
             [args.tenant_id, args.requirements.serviceType, args.call_id]
