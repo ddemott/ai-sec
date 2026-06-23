@@ -60,7 +60,9 @@ const CustomerUpdateSchema = z.object({
 // phone number — a typed confirmation (like GitHub's "type the repo name to
 // delete") so an irreversible purge can't be a fat-finger on the wrong row.
 const CustomerPurgeSchema = z.object({
-  confirm_phone: z.string().min(1),
+  // Bounded like every other customer phone field (.max(30)); the DB also has a
+  // (tenant_id, phone) unique constraint. Keeps an oversized payload out.
+  confirm_phone: z.string().min(1).max(30),
 });
 
 export function registerCustomerRoutes(
@@ -306,9 +308,21 @@ export function registerCustomerRoutes(
   // retention-vs-erasure tradeoffs (e.g. a legal hold on call recordings) that
   // need a human/legal decision. Tracked as a follow-up; do NOT represent this
   // as a complete GDPR erasure until that lands.
+  //
+  // RUNTIME KILL-SWITCH: the route is registered unconditionally but is INERT
+  // unless ENABLE_CUSTOMER_PURGE === 'true'. So merging/deploying this PR cannot
+  // ship a live, irreversible purge capability before legal sign-off — the
+  // endpoint 404s (indistinguishable from "no such route") until explicitly
+  // switched on.
   app.post(
     '/customers/:id/purge',
     withHandler(async (req: AppRequest, reply) => {
+      // Kill-switch — disabled by default. 404 (not 403) so a probe can't even
+      // tell the capability exists.
+      if (process.env.ENABLE_CUSTOMER_PURGE !== 'true') {
+        return reply.status(404).send({ success: false, error: 'Not found' });
+      }
+
       const { id } = req.params as { id: string };
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
@@ -324,46 +338,80 @@ export function registerCustomerRoutes(
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: 'confirm_phone is required (must match the customer’s current phone)',
+          error: "confirm_phone is required (must match the customer's current phone)",
         });
       }
-
+      const confirmPhone = parsed.data.confirm_phone;
       const purgedBy = req.auth?.email ?? req.auth?.user_id ?? 'unknown';
 
       const outcome = await withTenantClient(tenantId, async (client) => {
-        // Load the current phone for the typed-confirmation check.
-        const found = await client.query<{ phone: string }>(
-          'SELECT phone FROM customers WHERE customer_id = $1 AND tenant_id = $2',
-          [id, tenantId]
-        );
-        if (found.rows.length === 0) return 'not_found' as const;
-        if (parsed.data.confirm_phone !== found.rows[0].phone) return 'mismatch' as const;
+        // The anonymize UPDATE and the audit_log redact MUST be atomic: the
+        // customers audit trigger writes the pre-purge PII into
+        // audit_log.old_data as part of the UPDATE, so if a concurrent
+        // /audit-log read landed between two autocommit statements it could
+        // observe that PII. Wrap both in one transaction; ROLLBACK on any
+        // failure so we never half-erase.
+        await client.query('BEGIN');
+        try {
+          // Lock the row + read the current phone for the typed-confirmation
+          // check. FOR UPDATE closes the SELECT→UPDATE race (no one can change
+          // the phone out from under us between the check and the write).
+          const found = await client.query<{ phone: string }>(
+            'SELECT phone FROM customers WHERE customer_id = $1 AND tenant_id = $2 FOR UPDATE',
+            [id, tenantId]
+          );
+          if (found.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return 'not_found' as const;
+          }
+          if (confirmPhone !== found.rows[0].phone) {
+            await client.query('ROLLBACK');
+            return 'mismatch' as const;
+          }
 
-        // Anonymize the customer row. phone gets an opaque tombstone derived
-        // from the id so it stays unique within the tenant and is obviously
-        // non-PII. is_deleted flips so it drops out of all the is_deleted=false
-        // reads (lists, booking, voice context).
-        await client.query(
-          `UPDATE customers
-              SET name = NULL, email = NULL, address = NULL, address_line2 = NULL,
-                  first_name = NULL, last_name = NULL, city = NULL, state = NULL,
-                  postal_code = NULL, metadata = '{}'::jsonb,
-                  phone = 'PURGED-' || customer_id::text,
-                  is_deleted = true, deleted_at = now(), deleted_by = $3, updated_at = now()
-            WHERE customer_id = $1 AND tenant_id = $2`,
-          [id, tenantId, purgedBy]
-        );
+          // Anonymize. phone → an opaque tombstone derived from the id (stays
+          // unique within the tenant, obviously non-PII). is_deleted flips so it
+          // drops out of every is_deleted=false read. The UPDATE is additionally
+          // guarded on the phone we just read + must affect exactly one row.
+          const upd = await client.query(
+            `UPDATE customers
+                SET name = NULL, email = NULL, address = NULL, address_line2 = NULL,
+                    first_name = NULL, last_name = NULL, city = NULL, state = NULL,
+                    postal_code = NULL, metadata = '{}'::jsonb,
+                    phone = 'PURGED-' || customer_id::text,
+                    is_deleted = true, deleted_at = now(), deleted_by = $3, updated_at = now()
+              WHERE customer_id = $1 AND tenant_id = $2 AND phone = $4`,
+            [id, tenantId, purgedBy, confirmPhone]
+          );
+          if (upd.rowCount === 0) {
+            // Phone changed under us despite the lock, or the row vanished —
+            // fail safe rather than report a success that didn't happen.
+            await client.query('ROLLBACK');
+            return 'race' as const;
+          }
 
-        // Redact the PII snapshots the audit trigger captured for this customer
-        // (incl. the row the UPDATE above just produced).
-        await client.query(
-          `UPDATE audit_log
-              SET old_data = NULL, new_data = NULL
-            WHERE tenant_id = $1 AND table_name = 'customers' AND record_id = $2`,
-          [tenantId, id]
-        );
+          // Redact the PII snapshots the audit trigger captured for this
+          // customer — including the row the UPDATE above just produced. If this
+          // touches ZERO rows the PII snapshot may still be present (trigger
+          // missing, RLS misconfig, unexpected record_id shape): treat that as a
+          // hard failure and ROLLBACK — privacy fails safe, not open.
+          const redact = await client.query(
+            `UPDATE audit_log
+                SET old_data = NULL, new_data = NULL
+              WHERE tenant_id = $1 AND table_name = 'customers' AND record_id = $2`,
+            [tenantId, id]
+          );
+          if (redact.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return 'audit_redact_failed' as const;
+          }
 
-        return 'purged' as const;
+          await client.query('COMMIT');
+          return 'purged' as const;
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
       });
 
       if (outcome === 'not_found') {
@@ -375,9 +423,31 @@ export function registerCustomerRoutes(
           error: 'Confirmation phone does not match this customer',
         });
       }
+      if (outcome === 'race') {
+        return reply.status(409).send({
+          success: false,
+          error: 'Customer changed during the purge; nothing was erased. Please retry.',
+        });
+      }
+      if (outcome === 'audit_redact_failed') {
+        return reply.status(500).send({
+          success: false,
+          error: 'Erasure aborted: could not redact the audit history. No data was changed.',
+        });
+      }
+
+      // Best-effort: push the anonymized row to any connected CRM so an
+      // integrated provider (e.g. Square) doesn't retain the pre-purge PII.
+      // Fire-and-forget like the create/update/delete paths.
+      syncCustomerToAll(pool, tenantId, id, 'update', req.log);
 
       logEvent(req, 'customer_purged_gdpr', { customerId: id, purgedBy });
-      return reply.send({ success: true, message: 'Customer personal data erased' });
+      // Scope-accurate: this erases the customers record (+ its audit snapshots),
+      // NOT every PII surface (transcripts/voice_sessions are out of scope).
+      return reply.send({
+        success: true,
+        message: 'Customer record anonymized (personal data removed from the customer profile).',
+      });
     }, 'Failed to erase customer data')
   );
 }
