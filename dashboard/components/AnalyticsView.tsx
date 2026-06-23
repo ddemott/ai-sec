@@ -75,23 +75,28 @@ export default function AnalyticsView() {
   const [calls, setCalls] = useState<AnalyticsCalls | null>(null);
   const [aiCost, setAiCost] = useState<AiCostSummary | null>(null);
   const [cohorts, setCohorts] = useState<AnalyticsCohorts | null>(null);
+  // Optional From/To window for the call + cohort cuts. Empty → all-time.
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     if (!tenantId) return;
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId]);
+  }, [tenantId, startDate, endDate]);
 
   async function loadData() {
     setLoading(true);
     try {
+      // The call + cohort cuts honor the From/To window; absent bounds = all-time.
+      const range = { start_date: startDate || undefined, end_date: endDate || undefined };
       // Load appointments (the hour/day/return patterns) and call analytics
       // (volume/conversion/abandonment/outcome) in parallel.
       const [appointments, callStats, aiCostRes, cohortRes] = await Promise.all([
         Api.appointments.list(tenantId),
-        Api.analytics.getCalls(tenantId).catch(() => null),
+        Api.analytics.getCalls(tenantId, range).catch(() => null),
         Api.analytics.getAiCost(tenantId).catch(() => null),
-        Api.analytics.getCohorts(tenantId).catch(() => null),
+        Api.analytics.getCohorts(tenantId, range).catch(() => null),
       ]);
 
       if (callStats) setCalls(callStats);
@@ -153,7 +158,9 @@ export default function AnalyticsView() {
     }
   }
 
-  if (loading) {
+  // Full skeleton only on the very first load; a range-change refetch keeps the
+  // page (and the date controls) on screen so focus isn't yanked mid-edit.
+  if (loading && calls === null && cohorts === null) {
     return (
       <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: 'var(--bg-base)' }}>
         <div className="max-w-5xl mx-auto">
@@ -198,7 +205,12 @@ export default function AnalyticsView() {
   const hasCalls = !!calls && calls.totals.total > 0;
   const hasAppointments = !!summary && summary.total > 0;
 
-  if (!hasCalls && !hasAppointments) {
+  // Bare "no data yet" only when there is no active date filter. With a filter
+  // on, fall through to the main view (empty panels) so the From/To controls
+  // stay reachable — otherwise an owner who filters into an empty window gets
+  // stranded on a dead end with no way to clear it.
+  const hasDateFilter = Boolean(startDate || endDate);
+  if (!hasCalls && !hasAppointments && !hasDateFilter) {
     return (
       <div className="flex-1 flex" style={{ backgroundColor: 'var(--bg-base)' }}>
         <EmptyState
@@ -239,10 +251,51 @@ export default function AnalyticsView() {
         >
           Analytics
         </h1>
-        <p className="text-xs mb-6" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
           Patterns from your calls and bookings. You know your business — these numbers help you see
           it.
         </p>
+
+        {/* From/To window for the call + cohort cuts. Empty → all-time. */}
+        <div className="flex flex-wrap items-end gap-3 mb-6">
+          <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            From
+            <input
+              type="date"
+              aria-label="From date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="rounded-lg px-2 py-1 text-sm border"
+              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-primary)' }}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            To
+            <input
+              type="date"
+              aria-label="To date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="rounded-lg px-2 py-1 text-sm border"
+              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-primary)' }}
+            />
+          </label>
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+              }}
+              className="rounded-lg px-3 py-1 text-xs underline"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* 1. Call Volume Over Time — real, from voice_sessions */}
@@ -628,11 +681,7 @@ export default function AnalyticsView() {
           </MetricCard>
 
           {/* 10. Top customers (CLV) — lifetime booked revenue per customer */}
-          <MetricCard
-            icon={TrendingUp}
-            title="Top Customers"
-            subtitle="By lifetime booked revenue"
-          >
+          <MetricCard icon={TrendingUp} title="Top Customers" subtitle="By lifetime booked revenue">
             {cohorts && cohorts.top_customers.length > 0 ? (
               <div className="space-y-1">
                 {cohorts.top_customers.slice(0, 6).map((c) => (
@@ -646,7 +695,8 @@ export default function AnalyticsView() {
                   </div>
                 ))}
                 <p className="text-xs pt-1" style={{ color: 'var(--text-muted)' }}>
-                  Revenue uses each service&apos;s price — set prices under My Business for accuracy.
+                  Revenue uses each service&apos;s price — set prices under My Business for
+                  accuracy.
                 </p>
               </div>
             ) : (
@@ -673,7 +723,10 @@ export default function AnalyticsView() {
                     {cohorts.abandonment_by_service.slice(0, 6).map((s) => (
                       <div key={s.service}>
                         <div className="flex justify-between text-xs mb-1">
-                          <span style={{ color: 'var(--text-secondary)' }} className="truncate mr-2">
+                          <span
+                            style={{ color: 'var(--text-secondary)' }}
+                            className="truncate mr-2"
+                          >
                             {s.service}
                           </span>
                           <span
