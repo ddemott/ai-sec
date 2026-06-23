@@ -47,7 +47,7 @@
       }
     ],
     "@typescript-eslint/no-var-requires": "off",
-    "@typescript-eslint/unbound-method": "warn"
+    "@typescript-eslint/unbound-method": "error"
   },
   "overrides": [
     {

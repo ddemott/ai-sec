@@ -655,7 +655,7 @@ describe('take_message', () => {
 
     expect(calls[0].path).toBe('/agent-tools/take-message');
     // callback_phone is undefined (dropped on JSON serialization) when not supplied
-    expect((calls[0].body as Record<string, unknown>).callback_phone).toBeUndefined();
+    expect(calls[0].body.callback_phone).toBeUndefined();
   });
 });
 

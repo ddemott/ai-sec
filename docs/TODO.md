@@ -114,7 +114,7 @@ sections still show them as "IN FLIGHT (user)"._
 
 ### Tooling cleanup (dossier: _Tooling cleanup_)
 
-- [ ] `@typescript-eslint/unbound-method` — heavy in tests; may stay `warn` forever.
+- [x] `@typescript-eslint/unbound-method` — DONE 2026-06-22. Zero violations across all 3 packages (the "heavy in tests" concern never materialized — vitest `vi.fn()` mocks are plain object properties the rule ignores); promoted to `error` in all three eslint configs. Also fixed a stray `no-unnecessary-type-assertion` error in `agent/src/tools.test.ts` that had slipped past CI (agent CI runs tsc+tests, not lint).
 
 ---
 
@@ -429,7 +429,7 @@ Most of the 2026-05-17 lint adoption already promoted to `error`. Still at `warn
 - [x] `@typescript-eslint/no-explicit-any` + `no-unsafe-*` family — DONE 2026-05-28. Fixed all 13 files / 59 warnings: typed `response.json()` casts in `api.ts`, `hooks.ts`, `LoginView`, `register`, `forgot-password`, `reset-password`; cast `JSON.parse` returns in `NewSchedulerView`; eslint-disable for `react-big-calendar` third-party `any` (unfixable at source); removed unused `Wrench`/`QuickAction`/`Save`/`rate` symbols; fixed unescaped entities in `Step7CallerQuestions`. Dashboard lint: **0 warnings, 0 errors**.
 - [x] `@typescript-eslint/no-misused-promises` — DONE 2026-05-28. Zero violations across all 3 packages; promoted to `error` in all three eslint configs.
 - [x] `@typescript-eslint/await-thenable` — DONE 2026-05-28. Zero violations; promoted to `error` in all three eslint configs.
-- [ ] `@typescript-eslint/unbound-method` (heavy in tests — may stay warn forever)
+- [x] `@typescript-eslint/unbound-method` — DONE 2026-06-22. Zero violations across all 3 packages; promoted to `error` in all three eslint configs (matches the no-misused-promises / await-thenable pattern above). Stray pre-existing `no-unnecessary-type-assertion` error in `agent/src/tools.test.ts` fixed in the same PR.
 
 Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `require-await`, `restrict-template-expressions`, `no-unnecessary-type-assertion`, `no-base-to-string`, `ban-types`, `prefer-promise-reject-errors` (all promoted to error 2026-05-17/18); Prettier format sweep across all three projects (`79b227c`).
 
