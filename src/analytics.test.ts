@@ -503,6 +503,10 @@ describe('GET /analytics/cohorts', () => {
     queryResponses.push({
       rows: [{ customer_id: 'cust-1', name: 'Jane Doe', visits: 4, revenue: 320 }],
     });
+    // abandonment_by_service — 5th query
+    queryResponses.push({
+      rows: [{ service: 'Oil Change', abandoned_count: 3 }],
+    });
 
     const res = await app.inject({
       method: 'GET',
@@ -514,6 +518,7 @@ describe('GET /analytics/cohorts', () => {
       repeat_callers: Array<{ phone: string; call_count: number }>;
       by_service: Array<{ service: string; booked_count: number }>;
       top_customers: Array<{ customer_id: string; name: string; visits: number; revenue: number }>;
+      abandonment_by_service: Array<{ service: string; abandoned_count: number }>;
       summary: { distinct_callers: number; repeat_callers: number };
     }>();
     expect(body.repeat_callers[0]).toMatchObject({
@@ -528,6 +533,7 @@ describe('GET /analytics/cohorts', () => {
       visits: 4,
       revenue: 320,
     });
+    expect(body.abandonment_by_service[0]).toEqual({ service: 'Oil Change', abandoned_count: 3 });
     expect(body.summary).toMatchObject({ distinct_callers: 10, repeat_callers: 1 });
 
     // WHY: repeat callers must be grouped on phone DIGITS so format variants

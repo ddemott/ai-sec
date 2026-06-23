@@ -265,6 +265,7 @@ export interface AnalyticsCohorts {
     visits: number;
     revenue: number;
   }>;
+  abandonment_by_service: Array<{ service: string; abandoned_count: number }>;
   summary: {
     distinct_callers: number;
     repeat_callers: number;

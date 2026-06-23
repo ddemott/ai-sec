@@ -1397,6 +1397,39 @@ describe('agentTools /book-with-scheduling', () => {
     expect(res.json().error).toContain('good phone number');
     expect(queries).toHaveLength(0);
   });
+
+  it('CAPTURE: records requested_service_id on the call (for abandonment-by-service)', async () => {
+    // WHO: a caller who tried to book "Oil Change" on call e2e-call-1.
+    // WHAT: book-with-scheduling fires a best-effort UPDATE setting the call's
+    //        voice_session.requested_service_id from the fuzzy service name —
+    //        whether the booking succeeded or not — so an abandoned call still
+    //        records which service the caller came for.
+    // WHY:   abandoned calls have appointment_id NULL → no service to join; this
+    //        capture is the only signal for abandonment-by-service analytics.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-1' }] }, // customer SELECT
+        { rows: [] }, // name UPDATE
+        // RPC fails (slot taken) → the call abandons, but the capture must still run.
+        { rows: [{ success: false, error_code: 'TIMESLOT_OCCUPIED', error_message: 'taken' }] },
+      ],
+    });
+    await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      call_id: 'e2e-call-1',
+      phone: '5551234567',
+      requirements: { serviceType: 'Oil Change' },
+      window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
+    });
+
+    // Fire-and-forget — let the microtask flush.
+    await new Promise((r) => setImmediate(r));
+
+    const capture = queries.find((q) => q.text.includes('requested_service_id'));
+    expect(capture, 'a requested_service_id UPDATE must fire').toBeTruthy();
+    expect(capture!.text).toContain('UPDATE voice_sessions');
+    expect(capture!.params).toEqual([TENANT_ID, 'Oil Change', 'e2e-call-1']);
+  });
 });
 
 describe('agentTools /available-slots', () => {

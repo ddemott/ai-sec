@@ -148,10 +148,11 @@ export function registerAnalyticsRoutes(
   // grouped on the LAST 10 DIGITS of caller_phone (US-centric) so the same
   // person reaching out as "+16305559999" (E.164, with the 1 country code) and
   // "630-555-9999" (10-digit) counts once. Bookings-by-service joins booked
-  // calls → appointment →
-  // service. (Abandonment-by-service is intentionally NOT here: abandoned calls
-  // have appointment_id = NULL so there is no service to join — that needs a new
-  // voice_sessions.requested_service_id column + agent capture; tracked in TODO.)
+  // calls → appointment → service. CLV (top_customers) ranks customers by
+  // lifetime booked revenue. Abandonment-by-service uses
+  // voice_sessions.requested_service_id (set best-effort by the
+  // book-with-scheduling agent tool) to group abandoned calls (no appointment)
+  // by the service the caller was trying to book.
   app.get(
     '/analytics/cohorts',
     withHandler(async (req: AppRequest, reply) => {
@@ -159,16 +160,17 @@ export function registerAnalyticsRoutes(
       if (!tenantId) return;
 
       const data = await withTenantClient(tenantId, async (client) => {
-        const [repeatCallers, byService, summary, topCustomers] = await Promise.all([
-          // Callers who reached out more than once, newest-activity first.
-          client.query<{
-            phone: string;
-            call_count: number;
-            booked_count: number;
-            first_call: string;
-            last_call: string;
-          }>(
-            `SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
+        const [repeatCallers, byService, summary, topCustomers, abandonmentByService] =
+          await Promise.all([
+            // Callers who reached out more than once, newest-activity first.
+            client.query<{
+              phone: string;
+              call_count: number;
+              booked_count: number;
+              first_call: string;
+              last_call: string;
+            }>(
+              `SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
                     count(*)::int AS call_count,
                     count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked_count,
                     min(started_at) AS first_call,
@@ -180,11 +182,11 @@ export function registerAnalyticsRoutes(
              HAVING count(*) > 1
              ORDER BY last_call DESC
              LIMIT 100`,
-            [tenantId]
-          ),
-          // Which services the booked calls actually booked.
-          client.query<{ service: string; booked_count: number }>(
-            `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
+              [tenantId]
+            ),
+            // Which services the booked calls actually booked.
+            client.query<{ service: string; booked_count: number }>(
+              `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
                     count(*)::int AS booked_count
              FROM voice_sessions v
              JOIN appointments a ON a.appointment_id = v.appointment_id
@@ -192,17 +194,17 @@ export function registerAnalyticsRoutes(
              WHERE v.tenant_id = $1 AND v.is_deleted = false
              GROUP BY 1
              ORDER BY booked_count DESC`,
-            [tenantId]
-          ),
-          // Top-line: how many distinct callers, how many are repeat, and how
-          // much of total call volume comes from repeat callers.
-          client.query<{
-            distinct_callers: number;
-            repeat_callers: number;
-            repeat_call_volume: number;
-            total_calls: number;
-          }>(
-            `WITH per_caller AS (
+              [tenantId]
+            ),
+            // Top-line: how many distinct callers, how many are repeat, and how
+            // much of total call volume comes from repeat callers.
+            client.query<{
+              distinct_callers: number;
+              repeat_callers: number;
+              repeat_call_volume: number;
+              total_calls: number;
+            }>(
+              `WITH per_caller AS (
                SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
                       count(*)::int AS c
                FROM voice_sessions
@@ -215,20 +217,20 @@ export function registerAnalyticsRoutes(
                     coalesce(sum(c) FILTER (WHERE c > 1), 0)::int AS repeat_call_volume,
                     coalesce(sum(c), 0)::int AS total_calls
              FROM per_caller`,
-            [tenantId]
-          ),
-          // Customer lifetime value: top customers by total booked revenue
-          // (sum of each appointment's service price). services.price defaults
-          // to 0, so a tenant that hasn't priced services sees visits with $0 —
-          // still a useful "who books most" ranking. ::float8 so JSON gets a
-          // number, not a Postgres numeric string.
-          client.query<{
-            customer_id: string;
-            name: string;
-            visits: number;
-            revenue: number;
-          }>(
-            `SELECT c.customer_id,
+              [tenantId]
+            ),
+            // Customer lifetime value: top customers by total booked revenue
+            // (sum of each appointment's service price). services.price defaults
+            // to 0, so a tenant that hasn't priced services sees visits with $0 —
+            // still a useful "who books most" ranking. ::float8 so JSON gets a
+            // number, not a Postgres numeric string.
+            client.query<{
+              customer_id: string;
+              name: string;
+              visits: number;
+              revenue: number;
+            }>(
+              `SELECT c.customer_id,
                     coalesce(nullif(c.name, ''), 'Unknown') AS name,
                     count(a.appointment_id)::int AS visits,
                     coalesce(sum(s.price), 0)::float8 AS revenue
@@ -239,14 +241,30 @@ export function registerAnalyticsRoutes(
              GROUP BY c.customer_id, c.name
              ORDER BY revenue DESC, visits DESC
              LIMIT 20`,
-            [tenantId]
-          ),
-        ]);
+              [tenantId]
+            ),
+            // Abandonment-by-service: calls that did NOT book (appointment_id NULL)
+            // but recorded a requested_service_id (the caller tried to book that
+            // service). Surfaces "what are we losing callers over". Depends on the
+            // book-with-scheduling capture writing requested_service_id.
+            client.query<{ service: string; abandoned_count: number }>(
+              `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
+                    count(*)::int AS abandoned_count
+             FROM voice_sessions v
+             JOIN services s ON s.service_id = v.requested_service_id
+             WHERE v.tenant_id = $1 AND v.is_deleted = false
+               AND v.appointment_id IS NULL
+             GROUP BY 1
+             ORDER BY abandoned_count DESC`,
+              [tenantId]
+            ),
+          ]);
 
         return {
           repeat_callers: repeatCallers.rows,
           by_service: byService.rows,
           top_customers: topCustomers.rows,
+          abandonment_by_service: abandonmentByService.rows,
           summary: summary.rows[0] ?? {
             distinct_callers: 0,
             repeat_callers: 0,
