@@ -308,8 +308,19 @@ export function registerAnalyticsRoutes(
             // but recorded a requested_service_id (the caller tried to book that
             // service). Surfaces "what are we losing callers over". Depends on the
             // book-with-scheduling capture writing requested_service_id.
-            client.query<{ service: string; abandoned_count: number }>(
-              `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
+            //
+            // FORWARD-COMPATIBLE: this is the ONLY query that reads the
+            // voice_sessions.requested_service_id column added by migration
+            // 20260622010000. If a deploy lands before that migration is applied
+            // (as happened on prod), the column is missing and this query throws
+            // — which, inside the Promise.all, would reject the WHOLE /analytics/
+            // cohorts endpoint (500 on every Analytics-tab load). The .catch
+            // degrades just this one panel to empty so the rest of the cohort
+            // data still renders. Once the migration is applied it returns real
+            // rows. (Same "safe pre-migration" stance as the audit-extend work.)
+            client
+              .query<{ service: string; abandoned_count: number }>(
+                `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
                     count(*)::int AS abandoned_count
              FROM voice_sessions v
              JOIN services s ON s.service_id = v.requested_service_id
@@ -319,8 +330,18 @@ export function registerAnalyticsRoutes(
                AND ($3::date IS NULL OR v.started_at < ($3::date + interval '1 day'))
              GROUP BY 1
              ORDER BY abandoned_count DESC`,
-              [tenantId, start, end]
-            ),
+                [tenantId, start, end]
+              )
+              .catch((err: unknown) => {
+                // Degrade ONLY for "column does not exist" (Postgres 42703) — the
+                // pre-migration window where requested_service_id isn't there yet.
+                // Any other failure (permissions, outage, syntax) must surface as a
+                // real error via withHandler, not hide behind an empty panel.
+                if (err && typeof err === 'object' && (err as { code?: string }).code === '42703') {
+                  return { rows: [] as { service: string; abandoned_count: number }[] };
+                }
+                throw err;
+              }),
           ]);
 
         return {
