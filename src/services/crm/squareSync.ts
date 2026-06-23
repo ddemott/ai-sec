@@ -3,7 +3,7 @@
  * no-unsafe-* rules disabled: this CRM sync adapter calls external Square APIs
  * that return dynamic/any-shaped responses. We normalize at the edges.
  *
- * Part of the ESLint debt reduction effort (REFACTORING_TODO.md item 10).
+ * Part of the ESLint debt reduction effort (historical REFACTORING_TODO.md item 10; see RESOLVED.md).
  */
 
 import type { Pool } from 'pg';

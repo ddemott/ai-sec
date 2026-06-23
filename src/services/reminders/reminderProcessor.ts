@@ -3,7 +3,7 @@
  * no-unsafe-* rules disabled: this processor works with the dynamic reminder
  * repository and communication layers that use loose external data shapes.
  *
- * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ * Part of ESLint debt reduction (historical REFACTORING_TODO.md item 10; see RESOLVED.md).
  */
 
 import type { Appointment } from '../../types/index.js';

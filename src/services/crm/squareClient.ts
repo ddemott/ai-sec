@@ -3,7 +3,7 @@
  * no-unsafe-* rules disabled: this is an external API client for Square.
  * All responses from Square's OAuth and API endpoints are treated as dynamic.
  *
- * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ * Part of ESLint debt reduction (historical REFACTORING_TODO.md item 10; see RESOLVED.md).
  */
 
 import crypto from 'crypto';

@@ -718,3 +718,37 @@ Full UI/UX design session. All decisions documented in `docs/UI_UX_DESIGN.md`, `
 - **Analytics:** Rebuilt. 6 metrics — 3 active from booking data (Busiest Hours, Return Rate, No-Show Pattern), 3 pending call log integration.
 - **Logo:** "Secretary HQ" (space between words).
 - **Philosophy:** We show data. They manage their business. No warnings, no grades, no opinions. See `docs/UI_UX_DESIGN.md` Design Philosophy section.
+
+## 2026-06-23 — Mechanical TODO hygiene batch 2 (10 items, separate branch/PR)
+
+New branch `chore/mechanical-todo-hygiene-batch-2` (created via `bash scripts/create-feature-branch.sh` from latest main for separation from prior `chore/eslint-header-comment-refresh` hygiene work).
+
+10 mechanical items (only doc + comment consistency / ref standardization; no logic, no new features, no test fixes, per AGENTS.md scope strictly):
+
+1. Fixed incorrect `src/routes/export.ts` reference in Gap inventory "Key files per gap" table in docs/TODO.md (updated to actual `src/routes/exportData.ts` and improved description).
+
+2. Populated the previously "(empty)" "## Documentation" section in docs/TODO.md with 4 small current mechanical/doc tasks (hygiene sweeps, Gap table sync, footers, etc.).
+
+3-10. Mass + targeted mechanical cleanup of remaining old/short REFACTORING_TODO / NEEDS-REFACTORING references (using bash grep + sed for cross-file patterns + search_replace for precision + post-edit `grep -r "old_pattern" . | wc -l` confirmations reporting 0 stragglers):
+
+   - Updated short "REFACTORING_TODO #9" in describe() in scripts/verify-schema-alignment.test.ts.
+   - Updated "REFACTORING_TODO.md item 10" in scripts/ingest-knowledge.ts and verify-*.ts comments to include "historical ... (see RESOLVED.md)".
+   - Updated 4 "See REFACTORING_TODO.md item 10." in src/services/*/ *.test.ts + tests/template_test.ts + tests/schema_test.ts to "See historical ... (see RESOLVED.md for details).".
+   - Updated "REFACTORING_TODO.md Item 2" in src/services/reminders/types.ts.
+   - Updated several "Part of ESLint debt reduction (REFACTORING_TODO.md item 10)." in src/database/, src/services/tokenManagement.ts, src/services/crm/squareClient.ts, reminders/ etc.
+   - Mass sed normalized ~35+ "as part of full cleanup (REFACTORING_TODO.md item 10)." eslint-disable header comments in shared/, src/routes/*, src/services/*, src/workers/, src/*.ts etc. to the canonical "historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details)." form used elsewhere.
+   - Additional targeted fixes in src/types/index.ts (header + inline comment).
+
+All changes are string/comment/doc only. Final verification grep for bad short forms: 0 remaining.
+
+**Gates run (per standards):**
+- `npm run verify:claude-md`: clean.
+- `cd dashboard && npx tsc --noEmit`: clean (empty output).
+- `npm run checks`: format:check clean, lint clean (exit 0 overall).
+- No `npm test` (per AGENTS).
+
+Updated docs/TODO.md (Status at a Glance + the 10 listed) and this RESOLVED entry. BRANCH_CHECKLIST.md copied by create script.
+
+This batch continues the mechanical hygiene theme from TODO's "Small mechanical hygiene pass completed" and "Tooling cleanup" notes, without touching any non-mechanical P0/P1/P2 items. 
+
+Ready for prepare-commit / commit-code / PR.

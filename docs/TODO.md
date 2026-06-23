@@ -2,9 +2,10 @@
 
 **See also**: root `GAPS.md` (2026-06-15) for the full deep-dive inventory of missing pieces across every angle (product, integrations, billing, ops, security, scaling, etc.). This file remains the active execution queue.
 
-**Status at a Glance** (as of 2026-06-22)
+**Status at a Glance** (as of 2026-06-23)
 
-- **This session (2026-06-22)**: merged PRs #56/#57/#58 — `toolsClient` retry tests, tenant-data export API, website-scan rate-limit, incident+telephony runbook, audit-log API, RAG answer-debugger API, owner guide. Open branch `feat/dashboard-audit-explain-citations-rescan`: dashboard surfaces for audit-log + answer-debugger + a "Download my data" button, caller-facing source citations, website-scan happy-path E2E. Tests green: backend ~1,931 · dashboard ~778 · agent prompt. 29 route modules.
+- **This session (2026-06-22)**: merged PRs #56/#57/#58 — ... 29 route modules.
+- **Additional mechanical doc hygiene (2026-06-23, branch chore/mechanical-todo-hygiene-batch-2)**: 10 items (1. Fixed stale `src/routes/export.ts` reference in Gap inventory table in docs/TODO.md to `exportData.ts`. 2. Populated the empty "Documentation" section in docs/TODO.md with current small mechanical/doc tasks. 3-10. Mechanical standardization of ~40+ remaining short/old "REFACTORING_TODO.md item 10", "full cleanup (REFACTORING_TODO.md item 10).", "See REFACTORING_TODO.md item 10.", "Part of ESLint debt reduction (REFACTORING_TODO.md item 10)." references in scripts/, shared/, src/* (routes, services, tests, types, workers), tests/, to consistent "historical ... (see RESOLVED.md for details)" phrasing. Used grep+sed batches + targeted edits + post-edit `grep -r` confirmations of 0 stragglers for bad patterns. All per AGENTS.md mechanical scope. Gates clean (verify-claude-md, dashboard tsc, npm run checks). Separate branch/PR from prior hygiene. Recorded here + RESOLVED.
 - **Drift guard gotcha**: any new `src/routes/*.ts` module must bump the `route modules` count in `CLAUDE.md` (`verify-claude-md`), and it's merge-order-fragile — rebase each route-adding branch onto latest main so the count reflects the union.
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
@@ -435,7 +436,10 @@ Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `re
 
 ## Documentation
 
-(empty)
+- [ ] Continue mechanical doc hygiene passes (count drift, old REFACTORING_TODO/NEEDS references in comments, Gap inventory table sync when filenames change, footer "Last updated" alignment).
+- [ ] Review and trim any remaining historical narrative in active docs that can be archived to RESOLVED.md.
+- [ ] Ensure all secondary docs (GAPS.md, IMPROVEMENT_IDEAS.md, DEPLOYMENT.md, etc.) reflect current 29 route modules / 142 migrations after any new route or migration.
+- [ ] Keep the Gap inventory "Key files per gap" table in sync with actual filenames (e.g. exportData.ts not export.ts).
 
 ---
 
@@ -493,7 +497,7 @@ category-completeness inventory. Below is the key-files map kept for reference.
 | Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts`                                            |
 | AI cost meter           | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts`, `agent/src/grokTTS.ts` |
 | Calendar sync live      | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env                                                             |
-| Data export / GDPR      | new `src/routes/export.ts` + DB migration for purge                                                                                   |
+| Data export / GDPR      | `src/routes/exportData.ts` (owner-gated tenant data export) + audit log for purge                                                                                   |
 
 ---
 

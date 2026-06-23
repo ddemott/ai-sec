@@ -13,7 +13,7 @@ const migrations = readdirSync('supabase/migrations')
   .filter((f) => f.endsWith('.sql'))
   .map((f) => readFileSync(join('supabase/migrations', f), 'utf8'));
 
-describe('verify-schema-alignment (REFACTORING_TODO #9)', () => {
+describe('verify-schema-alignment (historical REFACTORING_TODO #9 (see RESOLVED.md))', () => {
   it('passes cleanly against current baseline.sql for all critical tables', () => {
     const drifts = checkCriticalIdColumns(baseline);
     expect(drifts).toEqual([]);

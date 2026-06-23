@@ -7,6 +7,6 @@
  * This file exists only so that the reminders service layer can continue
  * to import from './types.js' without a large import-path refactor.
  *
- * See REFACTORING_TODO.md Item 2 (2026-05-27).
+ * See historical REFACTORING_TODO.md Item 2 (2026-05-27; details in RESOLVED.md).
  */
 export type { ReminderSchedule, ReminderData } from '../../types/index.js';

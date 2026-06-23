@@ -5,7 +5,7 @@
  * Each section includes 5W diagnostic context (WHO, WHAT, WHEN, WHERE, WHY).
  *
  * unbound-method disabled due to Vitest mock patterns (standard in this codebase).
- * See REFACTORING_TODO.md item 10.
+ * See historical REFACTORING_TODO.md item 10 (see RESOLVED.md for details).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ReminderService } from './index.js';

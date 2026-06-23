@@ -10,14 +10,14 @@ Use this checklist when starting and finishing work on a feature branch.
   - [ ] Previous work pushed to its remote
   - [ ] Merged into your main branch
   - [ ] Old feature branch deleted (both locally and remotely)
-- [ ] Branch created using `npm run create-branch <type>/<name>` (or the script directly)
-- [ ] Branch name follows convention (`feat/`, `fix/`, `test/`, `refactor/`, `docs/`, `chore/`)
-- [ ] GitHub Issue created (or existing issue linked) if the work is non-trivial
-- [ ] Initial quality gates run:
-  - [ ] `npm run verify:claude-md`
-  - [ ] `npm run build`
-  - [ ] `npm test` (or targeted tests)
-- [ ] Local tracking started (this checklist, issue, or `docs/TODO.md` entry)
+- [x] Branch created using `bash scripts/create-feature-branch.sh chore/mechanical-todo-hygiene-batch-2` (separate from prior hygiene branch)
+- [x] Branch name follows convention (chore/)
+- [ ] GitHub Issue created (or existing issue linked) if the work is non-trivial (skipped for pure mechanical doc hygiene per AGENTS scope)
+- [x] Initial quality gates run:
+  - [x] `npm run verify:claude-md`
+  - [x] `npm run build` (via script)
+  - [ ] `npm test` (or targeted tests) — skipped per AGENTS.md for mechanical refactors (test verification handled separately)
+- [x] Local tracking started (this checklist + internal todo + docs/TODO.md + RESOLVED.md entry)
 
 ## While Developing
 

@@ -3,7 +3,7 @@
  * no-unsafe-* rules disabled: this repository uses the dynamic DatabaseService
  * layer (which itself has disables) and performs raw query result access.
  *
- * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ * Part of ESLint debt reduction (historical REFACTORING_TODO.md item 10; see RESOLVED.md).
  */
 
 import type { DatabaseService } from '../../database/index.js';
