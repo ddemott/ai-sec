@@ -1,10 +1,39 @@
-# HANDOFF — 2026-06-22
+# HANDOFF — 2026-06-23
 
 ## Deploy Rules (always)
 
 - All 3 Railway services deploy from `main` only — branch push deploys nothing
 - Shipping = merge to main via PR with 4 CI jobs green
 - Branch protection requires green CI **+ all review threads resolved**; solo merge = `gh pr merge <N> --merge --admin --delete-branch` (admin overrides the human-review requirement, never the CI/conversation gates without intent)
+
+---
+
+## This session (2026-06-23) — branch backlog cleanup + merges
+
+Reviewed the working tree (docs/comment-only diff → verified, full suite green 1935 vs test_db), then cleaned the entire stale-branch backlog. **Remote now has only `main`** (`git ls-remote --heads origin` = 1).
+
+**Merged to `main` (5 PRs):**
+
+- **#72** (chore/eslint-header-comment-refresh) — doc-hygiene: synced counts (142 migrations, 29 routes, 17 agent tools), ARCHITECTURE §9.1 dedup, reworded the eslint-disable header comment across 38 files (REFACTORING_TODO → RESOLVED). Copilot caught 2 real count-misses (README + ARCHITECTURE "12 tools").
+- **#39** (feat/analytics-reliability-tiles) — RAG query expansion + reliability tiles. Resolved 6 conflicts combining main's citations/cost path with the branch's lowered policy-answer similarity threshold (**0.5 → 0.30**) + `shared/expandQueryForEmbedding.ts`. **Now live in prod voice retrieval.**
+- **#73** (chore/mechanical-todo-hygiene-batch-2) — doc-hygiene batch 2; rebased to keep its unique fixes (export.ts→exportData.ts ref, filled Documentation section), dropped the #72-redundant rewords.
+- **#75** (docs/parked-branch-purposes) — recorded the purpose + landing path of every parked branch in `docs/TODO.md` → "Parked feature branches", BEFORE deleting them.
+- **#78** (fix/rag-address-retrieval-gap) — logged the pre-existing address vocab-gap (below).
+
+**Closed, not merged (3):** #74 (dead twilio code — ProviderRegistry is Telnyx+Mock only), #44 (accounting-addon — off-strategy + Grok overlap), #40 (transfers-invisible-calls — delivery-stats already in main).
+
+**~30 branches deleted; remote = only `main`.** Includes 14 squash-merged (undetected by `git branch --merged`), #26/#23 (also squash-merged), the closed/superseded ones, the merge-auto-deletes, and the 6 parked features.
+
+**RAG threshold verification (#39):** ran `./scripts/simulate.sh rag` against the merged backend → 7/9. The 2 misses are address queries. **Confirmed NOT a #39 regression** — re-ran the eval against pre-#39 main (`65713f1`): address missed there too (at the stricter 0.5). #39 lowered the threshold (more permissive, can't cause new misses) AND widened the eval 6→9 questions. The address gap is pre-existing (vocabulary gap: doc says "located", caller says "address") → logged via #78 in `docs/TODO.md`. Prod `simulate.sh rag --env prod` is now confirmatory-only, no longer urgent.
+
+**Parked-feature branches — purpose captured then deleted, code restorable via closed PRs** (`docs/TODO.md` "Parked feature branches" + memory `project_branch_cleanup_2026_06_23`):
+
+- **#41 feat/default-appointment-buffer** — THE keeper (genuinely missing). `tenantBuffer.ts` + 2 migrations incl. a 627-line booking-enforcement RPC + buffer UI. Booking-critical → land via: apply both migrations to prod first, review the RPC, merge. Restore branch from PR #41.
+- **#42 feat/knowledge-suggestions** — base already in main (`00a9158`); branch is a better variant (txn safety + review-all + AI-cost on approve). Overlaps Grok's `feat/website-knowledge-import` — fold in there. Backend test fix was on the branch (recordAiCostEvent mock).
+- **#68 / #69** (gdpr-purge / retention-worker) — still LEGAL HOLD (see below); branches deleted, PRs closed-but-restorable.
+- **docs/website-import-priority** — Grok's website-import design specs (preservation PR #76). **fix/agent-tenant-resolution** — go-live/Telnyx handover docs (preservation PR #77).
+
+**Process confirmations:** `git branch --merged` misses squash-merges → always check "is the feature already in main?" + `git diff --diff-filter=A` before classifying/deleting (memory `feedback_squash_merge_branch_triage`). Verified every push by `ls-remote` SHA, not exit code.
 
 ---
 
@@ -29,7 +58,9 @@ A second autonomous batch ("next 5 tasks"). Tasks 1–3 merged to `main` → dep
 - **#65 + #66** — optional From/To **date-range filtering** on `/analytics/calls` + `/analytics/cohorts` (`optionalDateBounds`: all-time when absent, end day-inclusive; `AnalyticsView` From/To controls). **#66 is a fix-forward**: a watcher race admin-merged #65 _before_ its review-fix commit reached the PR ref, so three Copilot fixes — including a real **calendar-invalid-date 500** (`2026-02-30` passed the regex → `$n::date` cast threw; now guarded by `isValidDateOnly`) — landed via #66.
 - **#67** — `@typescript-eslint/unbound-method` promoted `warn → error` in all 3 eslint configs (0 violations anywhere) + fixed a stray `no-unnecessary-type-assertion` error in `agent/src/tools.test.ts` that agent CI (tsc+tests, no lint) had missed.
 
-## OPEN PRs — HELD for owner/legal review (do NOT merge without sign-off)
+## HELD for owner/legal review (do NOT merge/enable without sign-off)
+
+> **Status 2026-06-23:** the #68/#69 branches were **deleted** in the branch cleanup (PRs now CLOSED but restorable from their PR page; purpose recorded in `docs/TODO.md` "Parked feature branches"). The legal hold is unchanged — restore + land only after sign-off. Detail kept below for reference.
 
 Both erase customer PII irreversibly. Built conservative + flagged per Dale's standing "destructive needs legal scope" rule; their watchers were deliberately set to **stop at green, not auto-merge**.
 
