@@ -4,7 +4,7 @@
  * with external providers. Responses from token endpoints and DB rows are
  * dynamic by nature.
  *
- * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ * Part of ESLint debt reduction (historical REFACTORING_TODO.md item 10; see RESOLVED.md).
  */
 
 /**

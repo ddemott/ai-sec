@@ -4,7 +4,7 @@
  * (raw SQL strings, pg result row access, error handling from external DB).
  * The dynamic nature is by design for flexibility in the repository layer.
  *
- * Part of ESLint debt reduction (REFACTORING_TODO.md item 10).
+ * Part of ESLint debt reduction (historical REFACTORING_TODO.md item 10; see RESOLVED.md).
  */
 
 /**

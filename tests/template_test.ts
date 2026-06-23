@@ -2,7 +2,7 @@
 /**
  * Heavy dynamic template + error path testing.
  * Disables intentional.
- * See REFACTORING_TODO.md item 10.
+ * See historical REFACTORING_TODO.md item 10 (see RESOLVED.md for details).
  */
 import postgres from "postgres";
 import { assertEquals, assertNotEquals } from "https://deno.land/std@0.220.0/assert/mod.ts";

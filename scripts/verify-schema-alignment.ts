@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Schema ↔ TS alignment guard (REFACTORING_TODO.md item 9).
+ * Schema ↔ TS alignment guard (historical REFACTORING_TODO.md item 9; see RESOLVED.md).
  *
  * Cheap, fast check that the major domain tables that went through the
  * 2026-05 PK rename wave still have their canonical `<table>_id` columns

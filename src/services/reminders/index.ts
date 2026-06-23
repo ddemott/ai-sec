@@ -4,7 +4,7 @@
  * and reminder scheduling logic that works with loosely typed data from
  * the database layer and external scheduling concerns.
  *
- * Part of the ESLint debt reduction effort (REFACTORING_TODO.md item 10).
+ * Part of the ESLint debt reduction effort (historical REFACTORING_TODO.md item 10; see RESOLVED.md).
  */
 
 import type { DatabaseService } from '../../database/index.js';

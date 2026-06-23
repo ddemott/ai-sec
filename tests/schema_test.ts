@@ -2,7 +2,7 @@
 /**
  * Heavy dynamic schema introspection and row manipulation in tests.
  * Disables intentional for dynamic DB testing.
- * See REFACTORING_TODO.md item 10.
+ * See historical REFACTORING_TODO.md item 10 (see RESOLVED.md for details).
  */
 import postgres from "postgres";
 import { assertEquals, assertNotEquals } from "@std/assert";

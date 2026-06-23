@@ -9,7 +9,7 @@
  * Tracks STOP/UNSUBSCRIBE requests for compliance.
  */
 // Stubs for types that were moved or are in the process of being normalized
-// (see REFACTORING_TODO.md and recent shared/ extractions). These allow the
+// (see historical REFACTORING_TODO.md and recent shared/ extractions; see RESOLVED.md). These allow the
 // backend to build and start while the full cleanup completes.
 export interface ConsentRecord {
   consent_record_id: number;
