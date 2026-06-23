@@ -62,6 +62,7 @@ describe('ExplainAnswerView', () => {
         },
       ],
       would_answer: true,
+      composed_answer: '[From "Walk-ins"]\nYes, walk-ins are welcome before 4pm.',
     });
 
     render(<ExplainAnswerView />);
@@ -71,10 +72,14 @@ describe('ExplainAnswerView', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Explain' }));
 
-    expect(await screen.findByText(/Yes, walk-ins are welcome/i)).toBeInTheDocument();
+    // Appears in both the candidate chunk + the composed-answer box.
+    expect((await screen.findAllByText(/Yes, walk-ins are welcome/i)).length).toBeGreaterThan(0);
     expect(screen.getByText('82% match')).toBeInTheDocument();
     expect(screen.getByText('Used by AI')).toBeInTheDocument();
     expect(screen.getByText(/The AI would answer this/i)).toBeInTheDocument();
+    // The composed-answer box shows the exact cited context the AI would draw from.
+    expect(screen.getByText(/What the AI would draw from/i)).toBeInTheDocument();
+    expect(screen.getByText(/\[From "Walk-ins"\]/)).toBeInTheDocument();
     expect(mockApi.knowledge.explain).toHaveBeenCalledWith('tenant-123', 'Do you take walk-ins?');
   });
 

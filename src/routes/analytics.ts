@@ -159,7 +159,7 @@ export function registerAnalyticsRoutes(
       if (!tenantId) return;
 
       const data = await withTenantClient(tenantId, async (client) => {
-        const [repeatCallers, byService, summary] = await Promise.all([
+        const [repeatCallers, byService, summary, topCustomers] = await Promise.all([
           // Callers who reached out more than once, newest-activity first.
           client.query<{
             phone: string;
@@ -217,11 +217,36 @@ export function registerAnalyticsRoutes(
              FROM per_caller`,
             [tenantId]
           ),
+          // Customer lifetime value: top customers by total booked revenue
+          // (sum of each appointment's service price). services.price defaults
+          // to 0, so a tenant that hasn't priced services sees visits with $0 —
+          // still a useful "who books most" ranking. ::float8 so JSON gets a
+          // number, not a Postgres numeric string.
+          client.query<{
+            customer_id: string;
+            name: string;
+            visits: number;
+            revenue: number;
+          }>(
+            `SELECT c.customer_id,
+                    coalesce(nullif(c.name, ''), 'Unknown') AS name,
+                    count(a.appointment_id)::int AS visits,
+                    coalesce(sum(s.price), 0)::float8 AS revenue
+             FROM appointments a
+             JOIN customers c ON c.customer_id = a.customer_id
+             LEFT JOIN services s ON s.service_id = a.service_id
+             WHERE a.tenant_id = $1 AND a.is_deleted = false AND c.is_deleted = false
+             GROUP BY c.customer_id, c.name
+             ORDER BY revenue DESC, visits DESC
+             LIMIT 20`,
+            [tenantId]
+          ),
         ]);
 
         return {
           repeat_callers: repeatCallers.rows,
           by_service: byService.rows,
+          top_customers: topCustomers.rows,
           summary: summary.rows[0] ?? {
             distinct_callers: 0,
             repeat_callers: 0,

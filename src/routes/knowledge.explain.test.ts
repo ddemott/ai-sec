@@ -50,13 +50,29 @@ describe('POST /knowledge/explain', () => {
   it('HAPPY: ranks candidates and marks which clear the prod threshold + top-N', async () => {
     // Five candidates, descending similarity. Threshold 0.5, top-3 used.
     // → ranks 1-3 are above 0.5, but only the first 3 above-threshold are "used".
+    // Valid UUIDs — the production composed_answer query casts the id array to
+    // ::uuid[], so real Postgres would reject non-UUID ids; keep the mock data
+    // shaped like the real column so the test mirrors production.
+    const D1 = '11111111-1111-4111-8111-111111111111';
+    const D2 = '22222222-2222-4222-8222-222222222222';
+    const D3 = '33333333-3333-4333-8333-333333333333';
+    const D4 = '44444444-4444-4444-8444-444444444444';
+    const D5 = '55555555-5555-4555-8555-555555555555';
     handle.queryResponses.push({
       rows: [
-        { tenant_doc_id: 'd1', content: 'Mon-Fri 9-5', similarity: 0.92 },
-        { tenant_doc_id: 'd2', content: 'We deliver locally', similarity: 0.71 },
-        { tenant_doc_id: 'd3', content: 'Parking out back', similarity: 0.55 },
-        { tenant_doc_id: 'd4', content: 'Founded in 2010', similarity: 0.41 },
-        { tenant_doc_id: 'd5', content: 'Cat photos', similarity: 0.12 },
+        { tenant_doc_id: D1, content: 'Mon-Fri 9-5', similarity: 0.92 },
+        { tenant_doc_id: D2, content: 'We deliver locally', similarity: 0.71 },
+        { tenant_doc_id: D3, content: 'Parking out back', similarity: 0.55 },
+        { tenant_doc_id: D4, content: 'Founded in 2010', similarity: 0.41 },
+        { tenant_doc_id: D5, content: 'Cat photos', similarity: 0.12 },
+      ],
+    });
+    // titles lookup for the used-in-production docs (composed_answer)
+    handle.queryResponses.push({
+      rows: [
+        { tenant_doc_id: D1, title: 'Hours' },
+        { tenant_doc_id: D2, title: 'Delivery' },
+        { tenant_doc_id: D3, title: 'Parking' },
       ],
     });
 
@@ -96,11 +112,24 @@ describe('POST /knowledge/explain', () => {
     ).toEqual([true, true, true, false, false]);
     expect(body.would_answer).toBe(true);
 
+    // composed_answer = the EXACT context the agent would relay: the 3 used
+    // chunks, each prefixed with its source-doc title, joined; the un-used d4/d5
+    // are excluded.
+    expect(body.composed_answer).toContain('[From "Hours"]');
+    expect(body.composed_answer).toContain('Mon-Fri 9-5');
+    expect(body.composed_answer).toContain('[From "Parking"]');
+    expect(body.composed_answer).not.toContain('Founded in 2010'); // d4 not used
+    expect(body.composed_answer).not.toContain('Cat photos'); // d5 not used
+
     // The query passed the embedding cast to ::vector + the debug params.
     const q = handle.queries.find((qq) => qq.text.includes('search_tenant_docs_normalized'));
     expect(q).toBeDefined();
     expect(q!.text).toContain('::vector');
     expect(q!.params[0]).toBe(TENANT_ID);
+    // composed_answer's title lookup casts to ::uuid[].
+    const titleQ = handle.queries.find((qq) => qq.text.includes('FROM tenant_docs'));
+    expect(titleQ).toBeDefined();
+    expect(titleQ!.text).toContain('::uuid[]');
   });
 
   it('HAPPY: caps used_in_production at top-3 even when more clear the threshold', async () => {
@@ -151,6 +180,8 @@ describe('POST /knowledge/explain', () => {
     expect(
       body.candidates.every((c: { used_in_production: boolean }) => !c.used_in_production)
     ).toBe(true);
+    // Nothing used → no composed answer.
+    expect(body.composed_answer).toBeNull();
   });
 
   it('SAD: a front-desk user is rejected 403', async () => {

@@ -259,6 +259,12 @@ export interface AnalyticsCohorts {
     last_call: string;
   }>;
   by_service: Array<{ service: string; booked_count: number }>;
+  top_customers: Array<{
+    customer_id: string;
+    name: string;
+    visits: number;
+    revenue: number;
+  }>;
   summary: {
     distinct_callers: number;
     repeat_callers: number;
@@ -437,6 +443,8 @@ export interface KnowledgeExplainResponse {
   production_match_count: number;
   candidates: KnowledgeExplainCandidate[];
   would_answer: boolean;
+  /** The exact context string the agent would relay (cited), or null. */
+  composed_answer: string | null;
 }
 
 // --- Tenant data export (GET /export/tenant-data) ---

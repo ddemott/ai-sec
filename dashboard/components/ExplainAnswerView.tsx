@@ -90,6 +90,17 @@ export default function ExplainAnswerView() {
                 : 'The AI would NOT answer this from the knowledge base — nothing clears the match threshold. Consider adding or rewording content for this topic.'}
             </div>
 
+            {result.composed_answer && (
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
+                <p className="text-xs font-semibold text-gray-500 mb-1">
+                  What the AI would draw from
+                </p>
+                <pre className="text-sm whitespace-pre-wrap break-words text-gray-700 dark:text-gray-300 font-sans">
+                  {result.composed_answer}
+                </pre>
+              </div>
+            )}
+
             {result.candidates.length === 0 ? (
               <EmptyState
                 title="No knowledge entries matched"
