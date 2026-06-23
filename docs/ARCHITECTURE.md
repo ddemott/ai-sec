@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-06-23 (29 route modules, 142 migrations — synced via mechanical doc consistency; confirmed by `npm run verify:claude-md` drift detector, which checks the same route + migration counts referenced here)
+**Last verified:** 2026-06-23 (29 route modules, 142 migrations — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
@@ -371,11 +371,9 @@ Releases the Telnyx number via the API and clears `telnyx_phone_number_id`, `inb
 
 ## 9. Backend API (Fastify)
 
-### 9.1 Route modules (27)
+### 9.1 Route modules (29)
 
-29 route modules under `src/routes/` (per the canonical count maintained in CLAUDE.md and enforced by the `verify:claude-md` drift guard; 28 distinct registered in `src/index.ts` + supporting), covering: auth, tenants, appointments, customers, employees, users, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, square (sole surviving external CRM after competitor removals 2026-06-12), agentTools, demo, voice, versionHistory, communications, reminders, health (extracted), selfService, exportData (tenant data portability), and auditLog (owner change history). Recent additions include data export and audit surfaces (2026-06). `src/index.ts` is slim — imports each `register*Routes(...)` and wires them. The `withTenantClient` it passes is built from `createWithTenantClient(pool)` (see `src/database/index.ts`); the pool itself comes from `getPool()` so the reminder scheduler and communications service share the same singleton.
-
-`src/index.ts` is slim — imports each `register*Routes(app, pool, withTenantClient)` and wires them. The `withTenantClient` it passes is built from `createWithTenantClient(pool)` (see `src/database/index.ts`); the pool itself comes from `getPool()` so the reminder scheduler and communications service share the same singleton.
+29 route modules under `src/routes/` (per the canonical count maintained in CLAUDE.md and enforced by the `verify:claude-md` drift guard; 28 registered calls in `src/index.ts` + 1 internal scaffold helper), covering: auth, tenants, appointments, customers, employees, users, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, square (sole surviving external CRM after competitor removals 2026-06-12), agentTools, demo, voice, versionHistory, communications, reminders, health (extracted), selfService, exportData (tenant data portability), and auditLog (owner change history). Recent additions include data export and audit surfaces (2026-06). `src/index.ts` is slim — imports each `register*Routes(...)` and wires them. The `withTenantClient` it passes is built from `createWithTenantClient(pool)` (see `src/database/index.ts`); the pool itself comes from `getPool()` so the reminder scheduler and communications service share the same singleton.
 
 ### 9.2 Middleware layer (`src/middleware.ts`)
 

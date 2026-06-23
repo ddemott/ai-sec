@@ -147,7 +147,7 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
 | **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), xAI Grok TTS (default voice `ara` — warm & friendly secretary tone; any custom cloned voice_id also supported; OpenAI TTS retained as `runFallback()` dead-air guard) |
 | **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                                        |
 | **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                |
-| **Database**      | PostgreSQL + pgvector, 134 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                 |
+| **Database**      | PostgreSQL + pgvector, 142 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                 |
 | **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; 12 tools calling Fastify `/agent-tools/*`                                                                                                                                                                             |
 | **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                 |
 | **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                                                  |
@@ -227,7 +227,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   ├── lib/                API client, hooks, types, SessionContext
 │   └── e2e/                Playwright tests
 ├── supabase/
-│   ├── migrations/         134 SQL migrations
+│   ├── migrations/         142 SQL migrations
 │   └── seed.sql            Platform admin + Bella's Hair Studio demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling, voice CRM types + prompt formatter)
 ├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
@@ -239,16 +239,16 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (~1,770 tests)
-cd dashboard && npx vitest run        # Dashboard (~747 tests)
-cd dashboard && npx playwright test   # E2e (29 spec files, ~212 tests)
+npm test                              # Backend (~1,940 tests)
+cd dashboard && npx vitest run        # Dashboard (~790 tests)
+cd dashboard && npx playwright test   # E2E (~30 spec files; ~110-120 tests in recent runs)
 ```
 
 ### Coverage
 
 | Area                              | Tests |
 | --------------------------------- | ----- |
-| Backend routes (26 modules)       | ~700  |
+| Backend routes (29 modules)       | ~700  |
 | Backend services                  | ~570  |
 | Middleware, scheduling, constants | ~500  |
 | Dashboard components + views      | ~747  |
@@ -329,7 +329,6 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | `docs/PLAN.md`                               | Historical phases (1-12) + post-launch backlog                                              |
 | `docs/BUGS.md`                               | Historical bug tracker (72 bugs + 47 UX items, all resolved)                                |
 | `docs/FRAMEWORK_MIGRATIONS.md`               | Migration index — Vapi→LiveKit (shipped), Edge→Fastify (shipped), OpenAI TTS→Grok (shipped) |
-| `NEEDS-REFACTORING.md`                       | Historical major structural refactor archive (all mechanical/convention refactors complete) |
 | `docs/IMPROVEMENT_IDEAS.md`                  | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11)                         |
 
 ---
@@ -337,3 +336,5 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 ## License
 
 Proprietary. All rights reserved.
+
+**Docs hygiene note (2026-06-23):** Additional mechanical sync pass on this branch (stale migration/route/test counts in this file, ARCHITECTURE section header/dedup, CLAUDE tools count, removed references to deleted NEEDS-REFACTORING.md file). See docs/README.md + RESOLVED.md.

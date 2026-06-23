@@ -735,3 +735,34 @@ Full UI/UX design session. All decisions documented in `docs/UI_UX_DESIGN.md`, `
 - **Analytics:** Rebuilt. 6 metrics — 3 active from booking data (Busiest Hours, Return Rate, No-Show Pattern), 3 pending call log integration.
 - **Logo:** "Secretary HQ" (space between words).
 - **Philosophy:** We show data. They manage their business. No warnings, no grades, no opinions. See `docs/UI_UX_DESIGN.md` Design Philosophy section.
+
+## 2026-06-23 — Additional mechanical doc hygiene batch (10 independent items on chore/eslint-header-comment-refresh)
+
+Continuation of the prior 2026-06-23 hygiene pass (route counts, eslint header comments). 10 small, independent, solo-doable mechanical refactors / doc syncs (no new logic, no design, no test authoring/fixing per AGENTS.md scope). All changes are comment/doc/string consistency only. Branch already clean at start; edits + gates only.
+
+Picked from spirit of open doc hygiene / stale ref items tracked in TODO/RESOLVED/GAPS (e.g. "Doc hygiene pass (route counts, Vercel refs, phone quals, REFACTORING comments) done mechanically", "full Vercel→Railway hosting alignment is follow-up mechanical task", lingering historical file refs, count drift in secondary docs).
+
+Items executed (each independent, verifiable by grep + tsc/checks/verify):
+
+1. Replaced stale "134 migrations" (x2) → "142 migrations" in root README.md (table row + project structure tree).
+2. Replaced stale "Backend routes (26 modules)" → "Backend routes (29 modules)" in root README.md coverage table.
+3. Synced approximate test counts in root README "Testing" section + commands (Backend ~1,770→~1,940; Dashboard ~747→~790; E2E note updated for accuracy per CLAUDE).
+4. Fixed docs/ARCHITECTURE.md: "### 9.1 Route modules (27)" header → (29); cleaned parenthetical "28 distinct registered..." claim to accurate "28 registered calls ... + 1 internal scaffold helper".
+5. Removed duplicated " `src/index.ts` is slim — ..." paragraph (was repeated verbatim right after itself) in docs/ARCHITECTURE.md §9.1.
+6. Mechanical cross-file normalization (bash grep + sed + targeted edit + post-grep zero stragglers for live pointers): removed lingering "lives in `RESOLVED.md` / `NEEDS-REFACTORING.md`" phrasing and the table row for the deleted file in root + docs/README.md (historical narrative refs in TODO/RESOLVED/DIAGRAMS left as-is).
+7. Updated CLAUDE.md agent description "tools (12 tools)" → "tools (17 tools)" (actual count: `grep -c 'llm\.tool(' agent/src/tools.ts` = 17 — tools are registered via `llm.tool(...)`, not `createTool`); drift verify re-ran clean.
+8. Bumped "Last updated" / "Last verified" footers in root README.md, docs/README.md, docs/ARCHITECTURE.md to document this additional hygiene pass (and noted the 10-item batch).
+9. Sweep + zero additional fixes needed: grepped *.md + *.mmd for other stale "2[0-9] route", "13x migrations", old test nums, etc. Confirmed uniformity at 29/142 after prior items; no actionable stragglers beyond historical cites.
+10. Full verification gates (per CODING_STANDARDS + DEVELOPMENT_WORKFLOW + BRANCH_CHECKLIST + PR template): `npm run verify:claude-md` (clean), `npm run checks` (format:check + lint --max-warnings 0 + tsc root + dashboard; exit 0, no output on tsc means zero errors), explicit `npx tsc --noEmit` (backend/dashboard/agent — all clean). No `npm test` per AGENTS mechanical scope. Updated this RESOLVED + TODO status note. Changes are doc-only so no e2e or behavioral tests required.
+
+**Verification proofs (as in prior hygiene entry):**
+- Pre/post `grep` for stale strings (134 migrations, 26 modules, (27), NEEDS-REFACTORING live paths, etc.) → 0 remaining actionable.
+- `npm run verify:claude-md` clean (twice).
+- `npm run checks` exit 0.
+- Full `npx tsc --noEmit` (root + dashboard + agent) — zero errors, no output.
+- `grep -r "old" .` style confirmations reported in session for each replace.
+- Git working tree had only these targeted doc edits.
+
+This keeps secondary docs from drifting after the 29/142 state (post PRs #56-67 etc). No prod impact, no migration, no runtime change. Ready for `npm run prepare-commit` style close if committing.
+
+**Test state note:** Units per CLAUDE ~1,940+790+360 (no new tests added in this mechanical pass).
