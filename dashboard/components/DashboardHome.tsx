@@ -16,6 +16,7 @@ import { Api } from '../lib/api';
 import { formatPhone } from '../lib/phone';
 import { useActiveTenantId, useSessionContext } from '../lib/SessionContext';
 import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext';
+import type { AnalyticsStats } from '../lib/types';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser';
@@ -87,6 +88,7 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   // undefined = not yet fetched, null = fetched but not configured, string = active phone
   const [tenantPhone, setTenantPhone] = useState<string | null | undefined>(undefined);
+  const [analyticsStats, setAnalyticsStats] = useState<AnalyticsStats | null>(null);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -111,9 +113,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       Api.resources.list(tenantId),
       Api.customers.list(tenantId),
       Api.tenants.getConfig(tenantId),
+      Api.analytics.getStats(tenantId).catch(() => null), // fail-soft; powers top-line + reliability tiles
     ]);
 
-    const [apptsR, empsR, svcsR, resR, custR, configR] = results;
+    const [apptsR, empsR, svcsR, resR, custR, configR, statsR] = results;
 
     setAppointments(
       apptsR.status === 'fulfilled' && Array.isArray(apptsR.value) ? apptsR.value : []
@@ -128,6 +131,9 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     setCustomers(custR.status === 'fulfilled' && Array.isArray(custR.value) ? custR.value : []);
     if (configR.status === 'fulfilled') {
       setTenantPhone((configR.value as import('../lib/types').Tenant)?.inbound_phone ?? null);
+    }
+    if (statsR.status === 'fulfilled' && statsR.value) {
+      setAnalyticsStats(statsR.value as AnalyticsStats);
     }
 
     const anyFailed = results.some((r) => r.status === 'rejected');
@@ -391,6 +397,53 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
             >
               Configure <ArrowRight className="w-3 h-3" aria-hidden="true" />
             </button>
+          )}
+        </div>
+      )}
+
+      {/* Analytics reliability snapshot — wires the backend /analytics/stats
+          (which was implemented but previously unused on the owner home).
+          Shows pre-aggregated top-line numbers + note that they are reliable
+          server-side aggregates (not client recomputes). Recent activity feed
+          gives a quick "what just happened" without opening Calls or Schedule.
+          This finishes the stubbed stats consumption + adds explicit
+          owner-facing reliability/freshness UI. */}
+      {analyticsStats && (
+        <div
+          className="mb-6 p-4 rounded-xl border"
+          style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)' }}
+        >
+          <div
+            className="text-[10px] uppercase tracking-[1px] mb-2 flex items-center gap-2"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <span>Analytics data (reliable aggregates)</span>
+            <span className="text-[9px] normal-case opacity-60">— from voice_sessions + appointments</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-sm">
+            <div>
+              Calls this week: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{analyticsStats.calls.week}</span>
+              <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>(total {analyticsStats.calls.total})</span>
+            </div>
+            <div>
+              Upcoming appts: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{analyticsStats.appointments.upcoming}</span>
+            </div>
+            <div>
+              New customers (7d): <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{analyticsStats.customers.new_this_week}</span>
+            </div>
+            <div>
+              Appts (week): <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{analyticsStats.appointments.week}</span>
+            </div>
+          </div>
+          {analyticsStats.recent_activity && analyticsStats.recent_activity.length > 0 && (
+            <div className="mt-2 pt-2 border-t text-xs" style={{ borderColor: 'var(--border-soft)', color: 'var(--text-secondary)' }}>
+              Recent: {analyticsStats.recent_activity.slice(0, 3).map((a, i) => (
+                <span key={i}>
+                  {a.description}
+                  {i < 2 && analyticsStats.recent_activity.length > i + 1 ? ' · ' : ''}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       )}

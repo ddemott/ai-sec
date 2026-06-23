@@ -10,7 +10,7 @@
  * chunks should be retrieved for which queries without going through real
  * OpenAI — the stub is calibrated so two texts that share at least one of
  * the test KEYWORDS produce vectors whose cosine similarity clears the
- * route's 0.5 threshold. This pins:
+ * route's 0.3 threshold. This pins:
  *
  *   1. /knowledge/add writes content + embedding to tenant_docs correctly.
  *   2. /agent-tools/policy-answer reads via search_tenant_docs_normalized
@@ -135,7 +135,7 @@ describe('Knowledge upload → policy-answer retrieval (real DB + pgvector)', ()
     //       function returns the matched row, and the route surfaces
     //       its content as the conversational response.
     // WHEN: every caller who asks a question whose embedding clears
-    //       the 0.5 similarity threshold against at least one stored
+    //       the 0.3 similarity threshold against at least one stored
     //       doc — the load-bearing happy path.
     // WHERE: /knowledge/add (knowledge.ts) + /agent-tools/policy-answer
     //        (agentTools.ts) + search_tenant_docs_normalized RPC.
@@ -248,7 +248,7 @@ describe('Knowledge upload → policy-answer retrieval (real DB + pgvector)', ()
     expect(body2.success).toBe(true);
     expect(body2.result).toContain('parking');
     // The hours chunk shares no keyword overlap with the parking
-    // question — vector similarity is 0, threshold is 0.5, so it
+    // question — vector similarity is 0, threshold is 0.3, so it
     // must not appear in the response.
     expect(body2.result).not.toContain('Our hours are');
     expect(body2.result).not.toContain('Pricing');

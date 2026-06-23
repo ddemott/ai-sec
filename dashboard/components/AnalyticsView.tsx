@@ -12,7 +12,7 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { Api } from '../lib/api';
-import type { AnalyticsCalls, AiCostSummary, AnalyticsCohorts } from '../lib/types';
+import type { AnalyticsCalls, AnalyticsStats, AiCostSummary, AnalyticsCohorts } from '../lib/types';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { formatHour } from '../lib/utils';
 import { EmptyState } from './ui/EmptyState';
@@ -73,6 +73,7 @@ export default function AnalyticsView() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<AppointmentSummary | null>(null);
   const [calls, setCalls] = useState<AnalyticsCalls | null>(null);
+  const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [aiCost, setAiCost] = useState<AiCostSummary | null>(null);
   const [cohorts, setCohorts] = useState<AnalyticsCohorts | null>(null);
   // Optional From/To window for the call + cohort cuts. Empty → all-time.
@@ -92,14 +93,16 @@ export default function AnalyticsView() {
       const range = { start_date: startDate || undefined, end_date: endDate || undefined };
       // Load appointments (the hour/day/return patterns) and call analytics
       // (volume/conversion/abandonment/outcome) in parallel.
-      const [appointments, callStats, aiCostRes, cohortRes] = await Promise.all([
+      const [appointments, callStats, statsData, aiCostRes, cohortRes] = await Promise.all([
         Api.appointments.list(tenantId),
         Api.analytics.getCalls(tenantId, range).catch(() => null),
+        Api.analytics.getStats(tenantId).catch(() => null),
         Api.analytics.getAiCost(tenantId).catch(() => null),
         Api.analytics.getCohorts(tenantId, range).catch(() => null),
       ]);
 
       if (callStats) setCalls(callStats);
+      if (statsData) setStats(statsData);
       if (aiCostRes) setAiCost(aiCostRes);
       // Set unconditionally (null on fetch error) so switching tenants never
       // leaves the previous tenant's cohort data on screen.
@@ -255,6 +258,11 @@ export default function AnalyticsView() {
           Patterns from your calls and bookings. You know your business — these numbers help you see
           it.
         </p>
+        {stats && (
+          <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+            Reliability snapshot: {stats.calls.total} calls / {stats.appointments.total} appts tracked (server aggregates via /analytics/stats)
+          </p>
+        )}
 
         {/* From/To window for the call + cohort cuts. Empty → all-time. */}
         <div className="flex flex-wrap items-end gap-3 mb-6">
