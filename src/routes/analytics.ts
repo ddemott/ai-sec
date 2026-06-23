@@ -332,7 +332,16 @@ export function registerAnalyticsRoutes(
              ORDER BY abandoned_count DESC`,
                 [tenantId, start, end]
               )
-              .catch(() => ({ rows: [] as { service: string; abandoned_count: number }[] })),
+              .catch((err: unknown) => {
+                // Degrade ONLY for "column does not exist" (Postgres 42703) — the
+                // pre-migration window where requested_service_id isn't there yet.
+                // Any other failure (permissions, outage, syntax) must surface as a
+                // real error via withHandler, not hide behind an empty panel.
+                if (err && typeof err === 'object' && (err as { code?: string }).code === '42703') {
+                  return { rows: [] as { service: string; abandoned_count: number }[] };
+                }
+                throw err;
+              }),
           ]);
 
         return {

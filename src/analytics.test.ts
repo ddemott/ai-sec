@@ -344,11 +344,17 @@ describe('GET /analytics/cohorts', () => {
     // WHERE: the .catch on the abandonment query inside the cohorts Promise.all.
     // WHY: without the .catch, one failing query rejects the Promise.all → 500 on
     //        every Analytics-tab load (the regression this fix closes).
+    const undefinedColumn = Object.assign(
+      new Error('column "requested_service_id" does not exist'),
+      { code: '42703' } // Postgres undefined_column — the only error we degrade on
+    );
     queryResponses.push({ rows: [] }); // repeat callers
     queryResponses.push({ rows: [] }); // by_service
-    queryResponses.push({ rows: [{ distinct_callers: 0, repeat_callers: 0 }] }); // summary
+    queryResponses.push({
+      rows: [{ distinct_callers: 0, repeat_callers: 0, repeat_call_volume: 0, total_calls: 0 }],
+    }); // summary (full shape)
     queryResponses.push({ rows: [] }); // top customers
-    queryResponses.push(new Error('column "requested_service_id" does not exist')); // abandonment → throws
+    queryResponses.push(undefinedColumn); // abandonment → throws 42703
 
     const res = await app.inject({
       method: 'GET',
@@ -359,6 +365,29 @@ describe('GET /analytics/cohorts', () => {
     const body = res.json();
     expect(body.abandonment_by_service).toEqual([]); // just this panel degrades
     expect(Array.isArray(body.repeat_callers)).toBe(true); // the rest still renders
+  });
+
+  it('does NOT swallow a non-42703 error — a real failure still surfaces (500)', async () => {
+    // WHY: the .catch degrades ONLY the pre-migration missing-column case. A
+    //       permissions/outage/syntax error must NOT be hidden behind an empty
+    //       panel — it must reject the Promise.all → withHandler → 500.
+    const realError = Object.assign(new Error('permission denied for table services'), {
+      code: '42501', // insufficient_privilege — NOT the column-missing code
+    });
+    queryResponses.push({ rows: [] }); // repeat callers
+    queryResponses.push({ rows: [] }); // by_service
+    queryResponses.push({
+      rows: [{ distinct_callers: 0, repeat_callers: 0, repeat_call_volume: 0, total_calls: 0 }],
+    }); // summary
+    queryResponses.push({ rows: [] }); // top customers
+    queryResponses.push(realError); // abandonment → throws a NON-42703 error
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(500); // real error surfaces, not silently swallowed
   });
 });
 
