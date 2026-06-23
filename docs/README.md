@@ -65,4 +65,4 @@ This folder contains the project's technical and operational documentation.
 
 ---
 
-**Last updated:** 2026-06-23 (additional mechanical doc hygiene: fixed 134→142 migrations + 26→29 route labels in root README, (27)→(29) + dedup in ARCHITECTURE, tools count 12→17 in CLAUDE, removed lingering NEEDS-REFACTORING.md live pointers, synced test counts; + prior pass; see RESOLVED)
+**Last updated:** 2026-06-23 (additional mechanical doc hygiene: fixed 134→142 migrations + 26→29 route labels in root README, (27)→(29) + dedup in ARCHITECTURE, tools count 12→17 in CLAUDE, removed lingering NEEDS-REFACTORING.md live pointers, synced test counts; + prior pass; see RESOLVED.md)

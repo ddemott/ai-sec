@@ -40,7 +40,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 
 **Layering:**
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via xAI Grok with OpenAI TTS as the `runFallback()` dead-air guard)
-- **Tools**: 12 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
+- **Tools**: 17 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (29 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
 - **DB**: Postgres + pgvector on Supabase, 142 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — deployed on Railway (production dashboard service)

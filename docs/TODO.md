@@ -1,6 +1,6 @@
 # TODO
 
-**See also**: root `GAPS.md` (2026-06-15) for the full deep-dive inventory of missing pieces across every angle (product, integrations, billing, ops, security, scaling, etc.). This file remains the active execution queue.
+**See also**: root `GAPS.md` (created 2026-06-15, last refreshed 2026-06-23) for the full deep-dive inventory of missing pieces across every angle (product, integrations, billing, ops, security, scaling, etc.). This file remains the active execution queue.
 
 **Status at a Glance** (as of 2026-06-23)
 

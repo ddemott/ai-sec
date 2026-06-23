@@ -12,7 +12,7 @@ This guide walks through migrating from the local Docker development environment
 - **Deepgram Account**: [deepgram.com](https://deepgram.com) — STT (Nova-3) used by the LiveKit agent
 - **OpenAI API Key**: LLM (GPT-4o-mini) + TTS in the agent, RAG embeddings, post-call summaries
 - **Railway Account**: For hosting the full stack (backend + ai-sec-agent worker + this Next.js dashboard) in production. Self-hosting or other platforms (e.g. Vercel for dashboard only) remain options for the Next.js part.
-- **Supabase CLI**: `npm install -g supabase` (already in devDependencies; note migrations now applied via `scripts/setup-db.sh`, not direct CLI link)
+- **Supabase CLI**: already in devDependencies — invoke via `npx supabase` (no global install needed). Migrations are applied via `npm run db:migrate` / `scripts/setup-db.sh`, not a direct CLI link.
 
 ---
 

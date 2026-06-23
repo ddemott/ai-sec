@@ -92,7 +92,7 @@ Below is a full list of its features:
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                 |
 | **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + xAI Grok TTS. See `docs/BETH_GO_LIVE_TODO.md` for remaining PSTN verification steps. |
 | **Phone**     | `+1 630-866-1960` purchased + routed via Telnyx (2026-06-02). Old `+1-630-937-9478` is dead.                                                                            |
-| **Tests**     | ~2,658 passing (~1,770 backend + 747 dashboard + 141 agent) + 0 skips, zero TypeScript errors                                                                           |
+| **Tests**     | ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent) + 0 skips, zero TypeScript errors                                                                         |
 | **E2e**       | 29 Playwright spec files (~212 tests)                                                                                                                                   |
 
 **Quick status commands** (see `scripts/simulate.sh`):
@@ -135,7 +135,7 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                 — OpenAI GPT-4o-mini (LLM)
                                 — xAI Grok (TTS, default voice `ara`; OpenAI TTS fallback)
                                           |
-                                Fastify /agent-tools/* (29 route modules)
+                                Fastify backend (29 route modules; agent calls /agent-tools/*)
                                           |
                                 PostgreSQL + pgvector (RLS multi-tenancy)
                                           |
@@ -148,7 +148,7 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
 | **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                                        |
 | **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                |
 | **Database**      | PostgreSQL + pgvector, 142 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                 |
-| **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; 12 tools calling Fastify `/agent-tools/*`                                                                                                                                                                             |
+| **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; 17 voice tools (most backed by Fastify `/agent-tools/*`; `transfer_call` uses SIP REFER)                                                                                                                              |
 | **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                 |
 | **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                                                  |
 | **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                                                          |
