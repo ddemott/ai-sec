@@ -11,7 +11,7 @@ import { BACKOFF_MIN, MAX_RETRIES, decideRetry, isRetryable, nextRetryAt } from 
 
 describe('isRetryable', () => {
   it('HAPPY: returns true for a 5xx error (transient provider issue)', () => {
-    // WHO   : worker catch block — Twilio threw a 503 Service Unavailable
+    // WHO   : worker catch block — the SMS provider threw a 503 Service Unavailable
     // WHAT  : isRetryable inspects the error's HTTP status field
     // WHEN  : every send-attempt failure
     // WHERE : retryPolicy.isRetryable
@@ -39,7 +39,7 @@ describe('isRetryable', () => {
 
   it('HAPPY: 429 (Too Many Requests) is retryable despite being 4xx', () => {
     // WHO   : SMSService throws RateLimitedError when the per-tenant
-    //         token bucket is dry; Twilio's account-wide throttle also
+    //         token bucket is dry; the SMS provider's account-wide throttle also
     //         returns 429.
     // WHAT  : isRetryable({status: 429}) → true (special-cased above
     //         the generic 4xx → false rule)
@@ -71,7 +71,7 @@ describe('isRetryable', () => {
     // WHY: only 4xx is non-retryable; anything else is either transient
     //      (5xx) or doesn't fit the HTTP error model at all. Belt-and-
     //      braces against future provider clients that abuse the status
-    //      field (Twilio sometimes returns 0 for network errors).
+    //      field (the SMS provider sometimes returns 0 for network errors).
     expect(isRetryable({ status: 300 })).toBe(true);
     expect(isRetryable({ status: 0 })).toBe(true);
     expect(isRetryable({ status: 600 })).toBe(true);
@@ -134,7 +134,7 @@ describe('decideRetry', () => {
   const FIXED_NOW = new Date('2026-05-14T10:00:00.000Z');
 
   it('HAPPY: 5xx error with retries available → retry decision with next_retry_at + retry_count+1', () => {
-    // WHO   : worker calling decideRetry after a Twilio 503
+    // WHO   : worker calling decideRetry after a the SMS provider 503
     // WHAT  : { action: 'retry', nextRetryCount: 1, nextRetryAt: now+5m }
     // WHEN  : first send attempt fails transiently
     // WHERE : retryPolicy.decideRetry composing isRetryable + nextRetryAt

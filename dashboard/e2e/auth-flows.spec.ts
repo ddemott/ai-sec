@@ -11,7 +11,7 @@
  * The dev environment's email + SMS senders are no-ops (sendPasswordResetEmail
  * logs only; sendSms returns true without dispatching), so the test
  * pulls the reset token / OTP code from the DB tables instead of an
- * inbox or Twilio mock — same data path the real provider would
+ * inbox or legacy provider mock — same data path the real (Telnyx) provider would
  * deliver, just intercepted at the persistence layer.
  */
 import { test, expect } from './helpers/test';

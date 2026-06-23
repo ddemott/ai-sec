@@ -27,7 +27,7 @@ export class TelnyxSmsAdapter implements TelephonyProvider {
     }
 
     // Attach per-message webhook_url (delivery receipts) when a backend public
-    // base URL is configured, same pattern as TwilioAdapter.statusCallback.
+    // base URL is configured.
     // tenant_id rides on the query param so the webhook can attribute the row.
     const baseUrl = process.env.BACKEND_PUBLIC_URL;
     const webhookUrl =

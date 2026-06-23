@@ -11,8 +11,8 @@ This guide walks through migrating from the local Docker development environment
 - **LiveKit Cloud Account**: [livekit.io](https://livekit.io) — voice agent orchestrator + SIP ingress
 - **Deepgram Account**: [deepgram.com](https://deepgram.com) — STT (Nova-3) used by the LiveKit agent
 - **OpenAI API Key**: LLM (GPT-4o-mini) + TTS in the agent, RAG embeddings, post-call summaries
-- **Vercel Account** (optional): For hosting the Next.js dashboard
-- **Supabase CLI**: `npm install -g supabase` (already in devDependencies)
+- **Railway Account**: For hosting the full stack (backend + ai-sec-agent worker + this Next.js dashboard) in production. Self-hosting or other platforms (e.g. Vercel for dashboard only) remain options for the Next.js part.
+- **Supabase CLI**: already in devDependencies — invoke via `npx supabase` (no global install needed). Migrations are applied via `npm run db:migrate` / `scripts/setup-db.sh`, not a direct CLI link.
 
 ---
 
@@ -63,7 +63,7 @@ Use the existing `setup-db.sh` script, passing the production connection string:
 ./scripts/setup-db.sh "postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres"
 ```
 
-This applies all 74 migrations in order and seeds the database with the DynaTire demo tenant.
+This applies all 142 migrations in order and seeds the database with the Bella's Hair Studio demo tenant.
 
 ### 2.3 RLS Enforcement
 No separate `api_user` role is needed. The backend connects as the `postgres` role via `DATABASE_URL`, and `FORCE ROW LEVEL SECURITY` on all 20 RLS-enabled tables (migration `20260323000000_force_rls_single_pool.sql`) enforces tenant isolation even under superuser. `withTenantClient()` sets `app.current_tenant_id` per request.
@@ -89,21 +89,7 @@ WHERE schemaname = 'public' AND rowsecurity = true;
 
 ---
 
-## Phase 3: Deploy Edge Functions
-
-### 3.1 Link the Supabase CLI
-```bash
-npx supabase login
-npx supabase link --project-ref <PROJECT_ID>
-```
-
-### 3.2 (Removed — no edge functions)
-
-The earlier `vapi-tools` Supabase edge function was deleted in commit `661d21d` (2026-04-27) when the voice stack moved to LiveKit Agents. The 10 voice AI tools now live at Fastify `/agent-tools/*` (see Phase 4 for backend deploy). Skip to Phase 4.
-
----
-
-## Phase 4: Deploy the Backend API
+## Phase 3: Deploy the Backend API
 
 The Fastify backend serves the dashboard and management API. Deploy options:
 
@@ -115,7 +101,7 @@ Railway is configured via `railway.json` + `nixpacks.toml` in the repo root.
 3. **Health check**: `/health` endpoint
 4. **Restart policy**: `ON_FAILURE` with max 10 retries
 
-**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 83 migrations (including `20260323000000_force_rls_single_pool.sql`, `20260427000000_telnyx_provisioning.sql`, `20260430000002_drop_employee_shifts.sql`, the 2026-05-01 atomic-booking exclusion-constraint pair `20260501000000` + `20260501000001`, and the 2026-05-05 user-role column `20260505000000_user_roles.sql`) to Supabase before deploying. The two atomic-booking migrations require a pre-flight scan for any existing overlapping `appointments` rows on the same `(resource_id, time-range)` or `(employee_id, time-range)` — the `ALTER TABLE ... ADD CONSTRAINT EXCLUDE` will fail if any are present. The user-role migration is harmless additive (DEFAULT `'owner'`, no NULL backfill).
+**Database compatibility**: The backend uses a single DB pool via `DATABASE_URL`. All 20 RLS-enabled tables have `FORCE ROW LEVEL SECURITY` so tenant isolation works even with the Supabase `postgres` role (no separate `api_user` needed). Apply all 142 migrations (including `20260323000000_force_rls_single_pool.sql`, `20260427000000_telnyx_provisioning.sql`, `20260430000002_drop_employee_shifts.sql`, the 2026-05-01 atomic-booking exclusion-constraint pair `20260501000000` + `20260501000001`, and the 2026-05-05 user-role column `20260505000000_user_roles.sql`) to Supabase before deploying. The two atomic-booking migrations require a pre-flight scan for any existing overlapping `appointments` rows on the same `(resource_id, time-range)` or `(employee_id, time-range)` — the `ALTER TABLE ... ADD CONSTRAINT EXCLUDE` will fail if any are present. The user-role migration is harmless additive (DEFAULT `'owner'`, no NULL backfill).
 
 **Graceful shutdown**: The backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
@@ -169,30 +155,26 @@ The backend boots without these but specific features fail or warn loudly.
 | `CORS_ORIGIN` | (none) | Permitted CORS origin for cross-domain dashboard requests |
 | `STRIPE_ENTERPRISE_PRICE_ID` | (none) | Stripe price ID for Enterprise plan (not yet shipped) |
 | `ENABLE_REMINDER_SCHEDULER` | `false` outside prod | Forces the appointment-reminder background worker on in dev |
-| `TELEPHONY_PROVIDER` | `telnyx` | Switch SMS provider (`telnyx` or `twilio`) |
+| `TELEPHONY_PROVIDER` | `telnyx` | (Optional) Override default SMS provider (Telnyx is the only supported provider; legacy support removed) |
 | `TELEPHONY_SIMULATION_MODE` | `false` | If `true`, voice/SMS providers no-op (test/dev) |
 | `SMS_SIMULATION_MODE` | `false` | If `true`, SMS service no-ops (test/dev) |
 | `EMAIL_USER`, `EMAIL_PASS` | (none) | nodemailer SMTP creds for transactional email |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | (none) | Used only when `TELEPHONY_PROVIDER=twilio` |
+| `TELNYX_*` (API_KEY, SIP_CONNECTION_ID, PHONE_NUMBER, WEBHOOK_SECRET) | (required for prod) | Telnyx for numbers, SIP, SMS, OTP |
 | `BETTER_STACK_TOKEN` | (none) | Source token for Better Stack (Logtail) log aggregation. When set, backend + agent forward Pino logs in addition to writing to stdout. Unset = stdout only (local dev / no aggregation). See "Observability" below. |
 | `LOG_LEVEL` | `info` (prod) / `debug` (dev) | Pino log level (`trace` `debug` `info` `warn` `error` `fatal`). Env knob for dialing back verbosity if free-tier ingest is approached without redeploy. |
 | `SENTRY_DSN` | (none) | DSN for Sentry error monitoring. When set, backend + agent send unhandled exceptions and `logError` calls to Sentry for grouping + alert-on-spike. Unset = no Sentry calls (local dev / tests). See "Observability" below. |
 | `SENTRY_ENVIRONMENT` | `$NODE_ENV` | Override the Sentry environment tag (`production` / `staging` / `development`). Defaults to `NODE_ENV` when unset. |
 | `SENTRY_RELEASE` | (none) | Optional release tag (e.g. git SHA) so Sentry can group events by build. Set to `$RAILWAY_GIT_COMMIT_SHA` on Railway. |
 
-#### Backend — CRM + Calendar OAuth (set per integration you use)
+#### Backend — Calendar OAuth (set per integration you use)
 
-Each integration is independent — set the trio for the ones you wire up. All optional at boot.
+Each integration is independent — set the trio for the ones you wire up. All optional at boot. (The competitor-CRM integrations — Jobber, HubSpot, ServiceTitan, GoHighLevel — were removed from the codebase 2026-06-12; their env vars are no longer used. **Square sync remains live** — see its row below.)
 
 | Provider | Variables |
 |---|---|
 | Google Calendar | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` (e.g. `https://your-backend/calendar/auth/google/callback`) |
 | Outlook Calendar | `OUTLOOK_CLIENT_ID`, `OUTLOOK_CLIENT_SECRET`, `OUTLOOK_CALLBACK_URL` |
-| Jobber | `JOBBER_CLIENT_ID`, `JOBBER_CLIENT_SECRET`, `JOBBER_CALLBACK_URL` |
-| HubSpot | `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET`, `HUBSPOT_CALLBACK_URL` |
-| Square | `SQUARE_CLIENT_ID`, `SQUARE_CLIENT_SECRET`, `SQUARE_CALLBACK_URL`, `SQUARE_WEBHOOK_SIGNATURE_KEY` |
-| ServiceTitan | `SERVICETITAN_CLIENT_ID`, `SERVICETITAN_CLIENT_SECRET`, `SERVICETITAN_APP_KEY` (ST-App-Key header), `SERVICETITAN_CALLBACK_URL`, `SERVICETITAN_WEBHOOK_SECRET` |
-| GoHighLevel | `GHL_CLIENT_ID`, `GHL_CLIENT_SECRET`, `GHL_REDIRECT_URI` (adapter exists but not yet wired to a route) |
+| Square (CRM sync) | `SQUARE_CLIENT_ID`, `SQUARE_CLIENT_SECRET`, `SQUARE_CALLBACK_URL` (OAuth) + `SQUARE_WEBHOOK_SIGNATURE_KEY` (HMAC-SHA256 verification for the `/square/webhook` receiver). Square is the one surviving external CRM sync provider — bidirectional push/pull via `src/services/crm/squareClient.ts` + `squareSync.ts`. |
 
 #### Agent worker (`agent/`) — validated by Zod at startup
 
@@ -222,20 +204,14 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 
 ---
 
-## Phase 5: Deploy the Dashboard
+## Phase 4: Deploy the Dashboard
 
-The dashboard is a Next.js app in the `dashboard/` directory.
+The dashboard is a Next.js app in the `dashboard/` directory. In production the full stack (including dashboard) is hosted on Railway (see Phase 3 for backend/agent and `railway.json` + `nixpacks.toml` at root; the dashboard service is `dashboard-production-cee3`).
 
-### Option A: Vercel (Recommended)
-1. Connect your GitHub repo to Vercel
-2. Set the **Root Directory** to `dashboard`
-3. Set environment variables:
-   ```
-   NEXT_PUBLIC_API_BASE_URL=https://your-backend-url.com
-   ```
-4. Deploy
+### Option A: Railway (Current Production Path)
+The dashboard is built and deployed as part of the Railway monorepo services alongside the backend and agent worker. Environment variables (e.g. `NEXT_PUBLIC_API_BASE_URL`) are configured in the Railway dashboard for the dashboard service. No separate Vercel project needed.
 
-### Option B: Self-hosted
+### Option B: Self-hosted / Alternative Platforms
 ```bash
 cd dashboard
 npm install
@@ -245,42 +221,44 @@ npm start
 
 Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed backend.
 
+(Vercel remains a viable alternative for the Next.js dashboard portion only if you prefer it; update `NEXT_PUBLIC_API_BASE_URL` accordingly. Older "Recommended" guidance has been updated to reflect Railway as the integrated production deployment.)
+
 ---
 
-## Phase 6: Telephony Setup (Telnyx + LiveKit Cloud)
+## Phase 5: Telephony Setup (Telnyx + LiveKit Cloud)
 
 The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** (SIP ingress) → **LiveKit Agent worker** (Node, deployed on Railway as `ai-sec-agent`). One LiveKit dispatch rule routes every tenant's number to the same agent worker; tenant identity flows in via SIP dispatch metadata. There are no per-tenant orchestrator entities — buying a Telnyx number and pointing it at the SIP Connection is the entire per-tenant config.
 
-### 6.1 LiveKit Cloud: Project + dispatch rule (one-time)
+### 5.1 LiveKit Cloud: Project + dispatch rule (one-time)
 1. Sign in to [cloud.livekit.io](https://cloud.livekit.io) and create a project (e.g., `AI-Secretary`).
 2. From **Settings → Keys**, copy the WSS URL, API Key, and API Secret. Set them in Railway as `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 3. Create a SIP inbound trunk and a dispatch rule that routes inbound SIP traffic to agent name `ai-secretary-agent`. The agent worker self-registers with this name when it boots.
 4. Note the SIP FQDN LiveKit gives you (looks like `<project-slug>.sip.livekit.cloud:5060`). You'll point Telnyx at it.
 
-### 6.2 Telnyx: SIP Connection pointing at LiveKit (one-time)
+### 5.2 Telnyx: SIP Connection pointing at LiveKit (one-time)
 1. Sign in to [portal.telnyx.com](https://portal.telnyx.com).
 2. **Voice → SIP Connections → Create FQDN Connection** named `livekit-outbound`.
-3. **Inbound** tab → set **Default Primary FQDN** to the LiveKit SIP FQDN from 6.1, port 5060, DNS A record. Sequential routing. Codecs G722/G711U/G711A. DTMF: RFC 2833.
+3. **Inbound** tab → set **Default Primary FQDN** to the LiveKit SIP FQDN from 5.1, port 5060, DNS A record. Sequential routing. Codecs G722/G711U/G711A. DTMF: RFC 2833.
 4. **Outbound** tab → use credential authentication. Set a strong username/password (`openssl rand -base64 32`). Store in your secret manager.
 5. **Inbound subdomain receive setting**: tighten to `Only my connections` (default `From Anyone` is a toll-fraud target).
 6. Copy the numeric Connection ID. Set it in Railway as `TELNYX_SIP_CONNECTION_ID`.
 7. Set Telnyx API key in Railway as `TELNYX_API_KEY` (same key handles SMS OTP).
 
-### 6.3 Buying a number (per-tenant, automated)
+### 5.3 Buying a number (per-tenant, automated)
 Buying happens through the backend's `/provisioning/activate` endpoint, not the portal. The flow:
 
 1. SuperAdmin clicks **Activate Phone** on a tenant in the dashboard (or `POST /provisioning/activate` directly).
 2. Backend calls `Telnyx /v2/available_phone_numbers` to find a number (optionally filtered by area code).
 3. Backend orders the number via `Telnyx /v2/number_orders`.
-4. Backend `PATCH /v2/phone_numbers/{id}` to assign it to the SIP Connection from 6.2.
+4. Backend `PATCH /v2/phone_numbers/{id}` to assign it to the SIP Connection from 5.2.
 5. Backend writes `telnyx_phone_number_id`, `inbound_phone`, and `phone_status='active'` on the tenant.
 
 After step 4, calls to the new number flow Telnyx → LiveKit → agent. No Telnyx-portal clicks per tenant.
 
-### 6.4 Deploy the LiveKit agent worker
+### 5.4 Deploy the LiveKit agent worker
 The agent worker lives in `agent/` and runs as a separate Railway service (`ai-sec-agent`). It registers with LiveKit Cloud on boot using the `LIVEKIT_*` env vars and stays connected. Required env vars on the agent service:
 
-- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 6.1
+- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 5.1
 - `OPENAI_API_KEY` — LLM + TTS used by the agent
 - `DEEPGRAM_API_KEY` — STT (Nova-3)
 - `BACKEND_URL` — base URL for the Fastify backend (e.g., `https://ai-sec-production.up.railway.app`)
@@ -288,28 +266,29 @@ The agent worker lives in `agent/` and runs as a separate Railway service (`ai-s
 
 ---
 
-## Phase 7: Async Work (No n8n Required)
+## Phase 6: Async Work (No n8n Required)
 
 **n8n has been removed from this project.** All async work runs inline in Fastify route handlers:
 
 - **Post-call summarization** — `src/routes/voice.ts` handles the LiveKit agent's `call-ended` event, calls OpenAI for summary + sentiment, stores in `call_summaries`.
-- **Calendar sync** — `src/services/calendarSync.ts` fires on every appointment mutation (Google + Outlook).
-- **CRM sync** — `src/services/syncOrchestrator.ts` fans out to Jobber/HubSpot/Square/ServiceTitan on appointment + customer mutations.
+- **Calendar + CRM sync** — `src/services/syncOrchestrator.ts` fans appointment mutations out to the connected Google/Outlook calendars **and** to Square (the surviving external CRM sync). Each provider fails independently.
 - **SMS / reminders** — `src/routes/communications.ts` + `src/routes/reminders.ts` (routes and Zod schemas exist; provider integration stubbed).
 
-Required env vars for async integrations are all set in Railway (Google/Outlook OAuth creds, CRM OAuth creds, Stripe keys). No separate workflow engine to deploy.
+(The competitor-CRM integrations — Jobber/HubSpot/ServiceTitan/GoHighLevel — were removed from the codebase 2026-06-12. **Square sync remains live.**)
+
+Required env vars for async integrations are all set in Railway (Google/Outlook OAuth creds, Square OAuth + webhook signature key, Stripe keys). No separate workflow engine to deploy.
 
 ---
 
-## Phase 8: Post-Deployment Verification
+## Phase 7: Post-Deployment Verification
 
-### 8.1 Dashboard Smoke Test
+### 7.1 Dashboard Smoke Test
 1. Open the dashboard URL
 2. Log in with the seeded credentials (`admin@secretaryhq.com` / `password`)
 3. Verify you can see appointments, customers, and resources
 4. Try creating a test appointment through the UI
 
-### 8.2 Agent-tools Smoke Test
+### 7.2 Agent-tools Smoke Test
 Test a tool route directly against the deployed backend (the same path the LiveKit agent uses):
 ```bash
 # Get customer context — same payload shape the agent's tool client uses
@@ -323,13 +302,13 @@ curl -X POST https://ai-sec-production.up.railway.app/agent-tools/customer-conte
 ```
 A 200 with a JSON body confirms the route is up and the agent secret is correctly configured. A 401 means `AGENT_SECRET` doesn't match between agent and backend.
 
-### 8.3 Live Call Test
+### 7.3 Live Call Test
 1. Call the Telnyx phone number
 2. The AI should greet you with the tenant's first message
 3. Test the full flow: identify as customer, ask about availability, book an appointment
 4. Verify the appointment appears in the dashboard
 
-### 8.4 Knowledge Base Test
+### 7.4 Knowledge Base Test
 1. Upload a policy PDF via the dashboard's Knowledge Base tab
 2. Call in and ask a policy question (e.g., "What's your cancellation policy?")
 3. Verify the AI answers using the uploaded document content
@@ -398,7 +377,7 @@ If `SENTRY_DSN` is unset, both services keep running with logging-only error obs
 
 ### What gets captured
 
-- **Backend.** Everything routed through `logError()` in `src/middleware.ts` (route handler errors via `withHandler`, post-call summary failures, booking RPC errors, CRM sync errors) plus Fastify's `setErrorHandler` for unhandled throws inside plugins. Auto-tagged with `tenant_id` + `route` + `event`.
+- **Backend.** Everything routed through `logError()` in `src/middleware.ts` (route handler errors via `withHandler`, post-call summary failures, booking RPC errors, calendar sync errors) plus Fastify's `setErrorHandler` for unhandled throws inside plugins. Auto-tagged with `tenant_id` + `route` + `event`.
 - **Agent.** Fallback-triggered events (`dispatch_metadata_invalid`, `session_context_lost`) plus Sentry's default Node integrations (uncaughtException, unhandledRejection). Auto-tagged with `tenant_id` + `call_id`.
 
 ### Performance + cost knobs

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
- * ESLint rules disabled for this file as part of full cleanup (REFACTORING_TODO.md item 10).
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
@@ -311,7 +311,7 @@ export const errorsTotal = registry.counter(
 
 // Reminder delivery outcomes per channel. Closes TODO.md Phase 5
 // "Monitoring dashboard for reminder delivery rates." A regression that
-// silently breaks Twilio or Gmail SMTP shows up here as
+// silently breaks the SMS provider or Gmail SMTP shows up here as
 // outcome="failure" climbing while outcome="success" flattens — long
 // before a customer reports a missed appointment. Plot
 // `rate(reminders_sent_total{outcome="success"}[5m]) /
@@ -330,9 +330,9 @@ export const remindersSkippedTotal = registry.counter(
   'Reminders that skipped delivery, partitioned by reason (appointment_not_found, appointment_cancelled, no_consent, processing_error)'
 );
 
-// Twilio SMS delivery receipts — the *carrier-confirmed* outcome, distinct
-// from reminders_sent_total (which counts send ATTEMPTS, i.e. "Twilio
-// accepted the request"). This counter increments when Twilio's
+// the SMS provider SMS delivery receipts — the *carrier-confirmed* outcome, distinct
+// from reminders_sent_total (which counts send ATTEMPTS, i.e. "the SMS provider
+// accepted the request"). This counter increments when the SMS provider's
 // statusCallback fires; status is a bounded enum
 // (queued|sending|sent|delivered|undelivered|failed|received) so label
 // cardinality is safe. A reminder can be sent (success) yet later land here
@@ -342,5 +342,5 @@ export const remindersSkippedTotal = registry.counter(
 //  rate(message_delivery_receipts_total[5m])` for true delivery rate.
 export const messageDeliveryReceiptsTotal = registry.counter(
   'message_delivery_receipts_total',
-  'Twilio SMS delivery-status callbacks received, partitioned by status (queued|sending|sent|delivered|undelivered|failed|received)'
+  'the SMS provider SMS delivery-status callbacks received, partitioned by status (queued|sending|sent|delivered|undelivered|failed|received)'
 );

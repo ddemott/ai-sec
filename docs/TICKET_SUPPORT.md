@@ -22,7 +22,7 @@
 > they're not routing inbound" conclusion is **downgraded** — it rested on a broken
 > test (Dale dialing from his own cursed/​unsynced carrier, which never reaches
 > Telnyx, so `listRooms()=0` proved nothing). The real symptoms are **PSTN-layer
-> number problems, which are carrier-agnostic** (Twilio would behave the same):
+> number problems, which are carrier-agnostic** (any provider would behave the same):
 > 1. **`+16308661960` is a recycled DID** with a stuck "disconnected" record cached
 >    in carrier routing tables → spoken "not in service" intercept (EL402IL53).
 > 2. A **brand-new** number `+16308229086` (bought 2026-06-04, different exchange)

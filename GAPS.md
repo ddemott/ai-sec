@@ -1,10 +1,10 @@
 # SecretaryHQ — Gaps & Missing Pieces
 
-**Deep dive analysis** — 2026-06-15 (main branch)
+**Deep dive analysis** — 2026-06-23 (main branch; post doc hygiene pass)
 
-This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (136 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, BETH_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
+This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (142 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, BETH_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
 
-**Context**: Multi-tenant Voice AI Reception SaaS for service businesses (tire shops, salons, auto, trades, fitness, food & beverage). **HIPAA verticals are permanently excluded.** Strong foundation in voice (Telnyx + LiveKit), atomic booking, RLS multi-tenancy, dashboard, and recent shipments (live call-transfer + transcripts + summaries + outcomes + analytics + simulate harness + competitor CRM removal).
+**Context**: Multi-tenant Voice AI Reception SaaS for service businesses (tire shops, salons, auto, trades, fitness, food & beverage). **HIPAA verticals are permanently excluded.** Strong foundation in voice (Telnyx + LiveKit), atomic booking, RLS multi-tenancy, dashboard, and recent shipments (live call-transfer + transcripts + summaries + outcomes + analytics + simulate harness + competitor CRM removal + data export/audit/RAG debugger + doc consistency hygiene).
 
 Many items below are already tracked in `docs/TODO.md` (especially Phase 13 production wiring, `[prod]` silent-degrade risks, and BETH checklist). This file expands into unstated angles and provides a single "get to these things" reference. Use it alongside (not instead of) the active TODOs, simulate harness, and prepare-commit workflow.
 
@@ -40,7 +40,7 @@ From `docs/TODO.md` + `BETH_GO_LIVE_TODO.md` + source:
   - ~~`CORS_ORIGIN` unset reflects ANY origin~~ — boot warning fires; set on Railway.
   - ~~`DASHBOARD_URL` defaults to localhost~~ — boot warning fires; set on Railway.
 - **Observability completely dark in prod**: `METRICS_TOKEN`, `BETTER_STACK_TOKEN` (backend + agent), `SENTRY_DSN` (backend + agent) not set on Railway. `/metrics` 404s; logs are stdout-only; no error grouping or alerts.
-- **Railway deploy gated on CI green via GitHub** (progress 2026-06-15): branch protection applied on `main` requiring the 4 CI jobs (Backend, Dashboard, Agent, E2E) + PR + enforce admins. Auto-deploys from `main` now blocked on red CI. **Remaining**: Enable "Wait for CI" on Railway services. (See TODO_GAPS.md subtasks.)
+- **Railway deploy gated on CI green via GitHub** (progress 2026-06-15): branch protection applied on `main` requiring the 4 CI jobs (Backend, Dashboard, Agent, E2E) + PR + enforce admins. Auto-deploys from `main` now blocked on red CI. **Remaining**: Enable "Wait for CI" on Railway services. (See `docs/TODO.md` Production Wiring Checklist.)
 - **Stripe never verified live** (test mode + CLI webhook replay outstanding per TODO). Checkout + 3-event webhook + `/billing/status` + `subscriptionGate` exist, but automatic tax missing, price IDs not on prod, no owner-facing flow.
 - **Legal / insurance / ops (user actions)**: Bonterms ToS/Privacy/DPA, TCPA-compliant SMS opt-in language at booking time, E&O + Cyber Liability insurance, LLC bank account (Stripe payouts), S-Corp election later. No in-app customer support/ticketing.
 - **Env/config surface risks**: Telnyx for provisioning/OTP; calendars and remaining CRM need their OAuth triples. No single "feature readiness" boot report beyond `envWarnings.ts`.
@@ -132,7 +132,7 @@ Risk of ignoring: Customers treat the AI as a one-way black box; every change be
 
 - **CRM**: Only Square remains (strategic removal of Jobber/HubSpot/ServiceTitan — they bundle competing AI receptionists; see `docs/STRATEGY.md` and `COMPETITOR_WEAKPOINTS.md`). Full `src/services/crm/` (client + sync + status + disconnect + webhook + scaffold). Tested via `SYNC_TEST_RECORDER`. No deep bidirectional reads (pull open jobs/tickets into voice context).
 - **Calendar**: Google + Outlook fully coded (`googleCalendar.ts`, `outlookCalendar.ts`, `calendarSync.ts`, OAuth factory, mutation-driven sync) but entirely env-gated (`GOOGLE_*` / `OUTLOOK_*`) and unproven in production. No per-tenant calendar view or live conflict surface beyond the internal scheduler grid.
-- **Communications (SMS/Email)**: Routes + history (`communications_history` table + `GET /communications/history`) + consent + opt-out + Twilio delivery receipts + per-tenant rate limiting + retry policy all wired. Providers default to mocks without creds (see silent-degrade section). `telnyxSms.ts` exists alongside Twilio — decision pending. Email is nodemailer-only (no SendGrid/etc.). Templates are basic Handlebars.
+- **Communications (SMS/Email)**: Routes + history (`communications_history` table + `GET /communications/history`) + consent + opt-out + delivery receipts + per-tenant rate limiting + retry policy all wired. ProviderRegistry defaults to Telnyx (see silent-degrade section). Email is nodemailer-only (no SendGrid/etc.). Templates are basic Handlebars.
   - **Actionability gap** (ties directly to self-service): Current SMS (smsService.ts applySMSTemplate) are 1-2 sentences with only STOP. No "tap here to reschedule", no deep links, no structured replies parsed back into the system. Reminders are scheduled in `reminderScheduler.ts` (polling) + `scheduleForAppointment.ts`; delivery stats added recently but no owner drill-down into specific failed deliveries beyond aggregate.
   - Reliability: retryPolicy + rate limiter good on paper; live behavior unknown until providers are set (mock always "succeeds"). No bounce / complaint handling beyond basic opt-out.
 - **Provisioning/Phone**: Excellent — `/provisioning/activate` does search → purchase → assign to SIP connection and writes tenant fields. Telnyx + LiveKit plumbing mature. No porting, vanity numbers, or easy multi-number support.
@@ -409,7 +409,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 **P1 — Customer success & trust**
 
 - Customer self-service (detailed design above). Entry points: `src/services/communications/{smsService.ts, appointmentService.ts, emailTemplates.ts}`, `src/routes/appointments.ts` (add token-gated handlers or new `selfService.ts` route), `dashboard/lib/api.ts`, new or extended components in `AppointmentDetailPanel.tsx` or a new `SelfServiceLinks.tsx`. Add `?token=` handling that bypasses normal auth for these actions only. Start with cancel link (easiest).
-- Live comms providers (decide Twilio vs Telnyx path and set creds on Railway). Currently `ProviderRegistry.ts:43` silently chooses Mock. Also wire Telnyx SMS fully if chosen (see `telnyxSms.ts` + `TELEPHONY_PROVIDER` env).
+- Live comms providers: Telnyx is default (SMS + provisioning + SIP for LiveKit). ProviderRegistry + direct telnyxSms paths wired. Set TELNYX\_\* creds on Railway. (See `TELEPHONY_PROVIDER` for any override, though none planned.)
 - Billing UI for owners (current plan, upgrade buttons, invoices). See expanded Billing section. Start with Stripe Customer Portal session creation (quick) + status display. Entry: `src/routes/billing.ts` + `dashboard/components/` (new card or Settings subsection) + api.ts extension (add `createPortalSession`).
 - Richer outcome-driven automations (follow-up on "price" or "no_availability" calls). Wire `callClassify.ts` results into reminder or post-call comms paths.
 - Owner-facing cost/usage meter (calls + AI spend). See Cost subsection. Instrument the 5-6 points listed; surface in Analytics or new Usage card.

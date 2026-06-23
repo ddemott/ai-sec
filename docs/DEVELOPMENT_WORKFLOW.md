@@ -169,7 +169,7 @@ See the skill at `.claude/skills/commit-code/SKILL.md` for the exact expectation
 - `npm run ci:watch` — live-follows the latest CI run using the gh CLI (great while waiting for a PR check)
   These surface the exact stages (typecheck, migration apply, vitest, playwright, simulate tools gate in e2e, etc.) without leaving the terminal. See `scripts/simulate.sh` for implementation.
 
-**CI gate on merges**: As of 2026-06-15, branch protection on `main` requires all 4 CI jobs (plus PR + up-to-date + conversation resolution) before a merge is allowed. Use `npm run ci:status` before merging. This gates Railway deploys from `main`. (See `.github/BRANCH_PROTECTION.md` and root `TODO_GAPS.md`.)
+**CI gate on merges**: As of 2026-06-15, branch protection on `main` requires all 4 CI jobs (plus PR + up-to-date + conversation resolution) before a merge is allowed. Use `npm run ci:status` before merging. This gates Railway deploys from `main`. (See `.github/BRANCH_PROTECTION.md` and `docs/TODO.md`.)
 
 ## Branch & PR Hygiene (Critical Rule)
 

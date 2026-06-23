@@ -106,33 +106,40 @@ async function main() {
     fail('webhook sig gate', `status ${wh.status} (expected 400 or 503)`);
   }
 
-  // ── 4. POST /billing/checkout — detects key presence ────────────────────
-  // Backend field is `plan`, not `planId`. Send intentionally invalid plan name
-  // so we get a predictable 400 if the key is present (the key check happens
-  // first, so a 503 means key missing and a 400 means key present).
-  const co = await req('/billing/checkout', {
-    method: 'POST',
-    body: { plan: '__probe__' },
-    auth: jwt,
-  });
-  if (co.status === 200 && co.json?.url) {
-    pass('checkout session', 'Stripe key works, session URL returned');
-  } else if (co.status === 503) {
-    gap('checkout session', 'STRIPE_SECRET_KEY not set on this env — billing inactive');
-  } else if (co.status === 400) {
-    // 400 = key present (got past the key check), schema/plan rejected — expected for probe input
-    pass('checkout session', 'Stripe key present; 400 on invalid plan ✓');
-  } else if (co.status === 200 && co.json?.success === false) {
-    const err = co.json?.error ?? 'unknown error';
-    if (err.toLowerCase().includes('price')) {
-      gap('checkout session', `key present but price ID missing — ${err}`);
-    } else {
-      fail('checkout session', `200 but failed: ${err}`);
+  // ── 4. POST /billing/checkout — per-plan price-ID wiring ─────────────────
+  // The backend checks STRIPE_SECRET_KEY first (→ 503), then resolves the plan's
+  // STRIPE_<PLAN>_PRICE_ID (missing → 503/error mentioning "price"), then creates
+  // a Checkout Session (→ 200 url). Probe each plan so the path-check reports
+  // exactly which of Solo/Growth/Professional are wired — the "plan gating"
+  // half of the TODO. A 503 on the FIRST plan means the key is missing; we note
+  // that once and stop probing the rest (they'd all 503 for the same reason).
+  const PLANS = ['solo', 'growth', 'professional'];
+  let keyMissing = false;
+  for (const plan of PLANS) {
+    if (keyMissing) {
+      gap(`checkout: ${plan}`, 'skipped — STRIPE_SECRET_KEY not set');
+      continue;
     }
-  } else if (co.status === 404) {
-    fail('checkout session', '404 — route not registered');
-  } else {
-    fail('checkout session', `status ${co.status} ${co.json?.error ?? ''}`);
+    const co = await req('/billing/checkout', { method: 'POST', body: { plan }, auth: jwt });
+    const err = (co.json?.error ?? '').toString().toLowerCase();
+    if (co.status === 200 && co.json?.url) {
+      pass(`checkout: ${plan}`, 'price wired → session URL ✓');
+    } else if (err.includes('price')) {
+      // A missing price ID ALSO returns 503 ("Price ID not configured for …"),
+      // so check it BEFORE the generic key-missing 503 branch — otherwise one
+      // unpriced plan would be misreported as "key missing" and skip the rest.
+      gap(`checkout: ${plan}`, `key present but STRIPE_${plan.toUpperCase()}_PRICE_ID missing`);
+    } else if (co.status === 503 || err.includes('not configured') || err.includes('stripe_secret')) {
+      keyMissing = true;
+      gap(`checkout: ${plan}`, 'STRIPE_SECRET_KEY not set on this env — billing inactive');
+    } else if (co.status === 400) {
+      // key present, plan accepted by schema but rejected downstream — surface it
+      fail(`checkout: ${plan}`, `400 ${co.json?.error ?? ''}`);
+    } else if (co.status === 404) {
+      fail(`checkout: ${plan}`, '404 — route not registered');
+    } else {
+      fail(`checkout: ${plan}`, `status ${co.status} ${co.json?.error ?? ''}`);
+    }
   }
 
   // ── 5. POST /billing/portal — route reachable ────────────────────────────

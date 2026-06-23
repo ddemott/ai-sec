@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
- * ESLint rules disabled for this file as part of full cleanup (REFACTORING_TODO.md item 10).
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
@@ -731,7 +731,12 @@ export function registerAppointmentRoutes(
       }
 
       logEvent(req, 'self_service_links_sent', { appointmentId: id });
-      return reply.send({ success: true, message: `Links sent to ${normalizedTo}.` });
+      return reply.send({
+        success: true,
+        message: `Links sent to ${normalizedTo}.`,
+        cancelLink,
+        rescheduleLink,
+      });
     }, 'Failed to send self-service links')
   );
 }

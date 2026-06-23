@@ -1,5 +1,4 @@
 import { type TelephonyProvider } from './TelephonyProvider.interface.js';
-import { TwilioAdapter } from './TwilioAdapter.js';
 import { TelnyxSmsAdapter } from './TelnyxSmsAdapter.js';
 import { MockAdapter } from './MockAdapter.js';
 
@@ -9,19 +8,21 @@ export class ProviderRegistry {
 
   constructor() {
     // Register available providers
-    const twilio = new TwilioAdapter();
     const telnyx = new TelnyxSmsAdapter();
     const mock = new MockAdapter();
 
-    this.registerProvider(twilio);
     this.registerProvider(telnyx);
     this.registerProvider(mock);
 
-    // Determine default provider
+    // Determine default provider. Validate against the registered set: a stale
+    // TELEPHONY_PROVIDER (e.g. 'twilio' after Twilio removal) must NOT become the
+    // default, or getProvider()'s fallback `.get(defaultProviderName)!` returns
+    // undefined and crashes. Unknown values fall back to 'telnyx'.
     if (this.shouldUseSimulationMode()) {
       this.defaultProviderName = 'mock';
     } else {
-      this.defaultProviderName = process.env.TELEPHONY_PROVIDER || 'telnyx';
+      const requested = process.env.TELEPHONY_PROVIDER || 'telnyx';
+      this.defaultProviderName = this.providers.has(requested) ? requested : 'telnyx';
     }
   }
 
@@ -43,10 +44,6 @@ export class ProviderRegistry {
     }
 
     // Fallback to mock if the selected provider has no credentials
-    const provider = process.env.TELEPHONY_PROVIDER || 'telnyx';
-    if (provider === 'twilio') {
-      return !process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN;
-    }
     return !process.env.TELNYX_API_KEY;
   }
 

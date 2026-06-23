@@ -105,8 +105,15 @@ vi.mock('../lib/api', () => ({
       disconnect: vi.fn(),
       triggerSync: vi.fn(),
     },
+    exportData: {
+      tenantData: (...args: unknown[]) => mockExportTenantData(...args),
+    },
   },
 }));
+
+const mockExportTenantData = vi.fn();
+const mockExportToast = vi.fn();
+vi.mock('./ui/Toast', () => ({ showToast: (...args: unknown[]) => mockExportToast(...args) }));
 
 // Mock CRMIntegrationCard to simplify tests
 vi.mock('./CRMIntegrationCard', () => ({
@@ -352,7 +359,9 @@ describe('BusinessSettingsView', () => {
       mockServices = [];
       render(<BusinessSettingsView />);
       await waitFor(() => {
-        expect(screen.getByText(/No services yet — tap to add what you offer/i)).toBeInTheDocument();
+        expect(
+          screen.getByText(/No services yet — tap to add what you offer/i)
+        ).toBeInTheDocument();
       });
     });
   });
@@ -427,7 +436,6 @@ describe('BusinessSettingsView', () => {
       });
     });
 
-
     test('shows shifts loading state', async () => {
       mockGetConfig.mockResolvedValue({ team_size: 1 });
       mockEmployees = [{ employee_id: 'emp-1', name: 'Dale' }];
@@ -499,6 +507,57 @@ describe('BusinessSettingsView', () => {
       await waitFor(() => {
         expect(screen.getByText(/2 services — tap to add, edit, or remove/i)).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Data export', () => {
+    test('HAPPY: "Download my data" fetches the export and triggers a file download', async () => {
+      // WHO: an owner exercising their data-portability right.
+      // WHAT: clicking the button calls Api.exportData.tenantData and downloads
+      //        the returned JSON as a file (Blob → anchor click).
+      // WHEN: the export succeeds with a record count.
+      // WHERE: the "Your data" card in Business Settings.
+      // WHY: completes the export API with an actual owner-facing surface.
+      const createObjectURL = vi.fn(() => 'blob:mock');
+      const revokeObjectURL = vi.fn();
+      // jsdom doesn't implement these — stub them for the download path.
+      (URL as unknown as { createObjectURL: unknown }).createObjectURL = createObjectURL;
+      (URL as unknown as { revokeObjectURL: unknown }).revokeObjectURL = revokeObjectURL;
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      mockExportTenantData.mockResolvedValue({
+        success: true,
+        tenant_id: 'test-tenant-123',
+        generated_at: '2026-06-22T00:00:00Z',
+        record_counts: { customers: 2 },
+        total_records: 2,
+        tables: { customers: [{}, {}] },
+      });
+
+      render(<BusinessSettingsView />);
+      const btn = await screen.findByRole('button', { name: /Download my data/i });
+      fireEvent.click(btn);
+
+      await waitFor(() => expect(mockExportTenantData).toHaveBeenCalledWith('test-tenant-123'));
+      await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+      expect(clickSpy).toHaveBeenCalled();
+      expect(mockExportToast).toHaveBeenCalledWith('Exported 2 records', 'success');
+
+      clickSpy.mockRestore();
+    });
+
+    test('SAD: an export failure toasts an error and does not download', async () => {
+      mockExportTenantData.mockResolvedValue({ success: false, error: 'nope' });
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      render(<BusinessSettingsView />);
+      fireEvent.click(await screen.findByRole('button', { name: /Download my data/i }));
+
+      await waitFor(() =>
+        expect(mockExportToast).toHaveBeenCalledWith('Failed to export your data', 'error')
+      );
+      expect(clickSpy).not.toHaveBeenCalled();
+      clickSpy.mockRestore();
     });
   });
 });

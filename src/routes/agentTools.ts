@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
- * ESLint rules disabled for this file as part of full cleanup (REFACTORING_TODO.md item 10).
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
@@ -29,6 +29,7 @@ import { validateAppointmentTimeRange } from '../services/appointmentValidation'
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../services/customerLookup';
 import { findNextAvailableSlots } from '../services/availabilitySearch';
+import { recordAiCostEvent } from '../services/aiCost';
 import {
   findOverlappingAppointment,
   isOverlapError,
@@ -768,14 +769,30 @@ export function registerAgentToolRoutes(
       }
       const embedding = await getEmbedding(queryText);
 
+      // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+      const embTokens = Math.ceil(queryText.length / 4);
+      const embCost = embTokens * 0.02e-6;
+      withTenantClient(args.tenant_id, (client) =>
+        recordAiCostEvent(client, {
+          tenantId: args.tenant_id,
+          source: 'kb_query',
+          provider: 'openai',
+          model: 'text-embedding-3-small',
+          inputTokens: embTokens,
+          estimatedCostUsd: embCost,
+        })
+      ).catch(() => undefined);
+
       // Threshold 0.30 (down from 0.5): validated against a widened eval set
       // (8 paraphrased positives + true out-of-scope negatives). text-embedding-3-small
       // cosine clusters tightly (~0.2–0.65 here); 0.5 was unreachable for any
       // vocabulary-gap query. 0.30 sits in the measured ~0.13 gap between the
       // lowest expanded positive (0.377) and the highest true negative (0.248).
+      // Also pull tenant_doc_id (the RPC returns it) so we can attribute each
+      // chunk to its source document for caller-facing citations.
       const matches = await withTenantClient(args.tenant_id, (client) =>
-        client.query<{ content: string; similarity: number }>(
-          'SELECT content, similarity FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)',
+        client.query<{ tenant_doc_id: string; content: string; similarity: number }>(
+          'SELECT tenant_doc_id, content, similarity FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)',
           [args.tenant_id, JSON.stringify(embedding), 0.3, 3]
         )
       );
@@ -796,7 +813,37 @@ export function registerAgentToolRoutes(
         );
       }
 
-      const context = matches.rows.map((m) => m.content).join('\n\n---\n\n');
+      // Resolve the source title of each matched chunk so the agent can cite it
+      // ("according to our cancellation policy…"). Best-effort: a failed/empty
+      // lookup just yields un-attributed context, never a failed answer.
+      const docIds = matches.rows.map((m) => m.tenant_doc_id).filter(Boolean);
+      let titleById = new Map<string, string>();
+      if (docIds.length > 0) {
+        try {
+          const titlesRes = await withTenantClient(args.tenant_id, (client) =>
+            client.query<{ tenant_doc_id: string; title: string | null }>(
+              // ANY($2::uuid[]) — without the cast Postgres compares uuid against
+              // a text[] and errors (operator does not exist: uuid = text), which
+              // the catch below would swallow → citations would silently never appear.
+              'SELECT tenant_doc_id, title FROM tenant_docs WHERE tenant_id = $1 AND tenant_doc_id = ANY($2::uuid[])',
+              [args.tenant_id, docIds]
+            )
+          );
+          titleById = new Map(
+            titlesRes.rows.filter((r) => r.title).map((r) => [r.tenant_doc_id, r.title as string])
+          );
+        } catch {
+          // citation lookup is non-critical — fall back to un-attributed context
+        }
+      }
+
+      // Prefix each chunk with its source so the LLM can attribute the answer.
+      const context = matches.rows
+        .map((m) => {
+          const title = titleById.get(m.tenant_doc_id);
+          return title ? `[From "${title}"]\n${m.content}` : m.content;
+        })
+        .join('\n\n---\n\n');
       return ok(reply, context);
     },
     'Failed to answer policy question'
@@ -1122,6 +1169,35 @@ export function registerAgentToolRoutes(
         );
         return rpc.rows[0];
       });
+
+      // Best-effort: record the service the caller was trying to book on this
+      // call's voice_session — runs whether the booking SUCCEEDED or FAILED, so
+      // an abandoned call (slot taken / no availability → no appointment) still
+      // shows which service they came for (powers abandonment-by-service). The
+      // agent passes a fuzzy service name; map it to a service_id (shortest
+      // ILIKE match). Fire-and-forget — never block or fail the booking on this.
+      if (args.call_id && args.requirements.serviceType) {
+        withTenantClient(args.tenant_id, (client) =>
+          client.query(
+            // COALESCE keeps any already-captured service when this attempt's
+            // serviceType doesn't fuzzy-match (a later, differently-worded
+            // attempt must not erase the signal with NULL).
+            `UPDATE voice_sessions
+                SET requested_service_id = COALESCE(
+                  (
+                    SELECT service_id FROM services
+                     WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
+                       AND (is_deleted IS NULL OR is_deleted = false)
+                     ORDER BY length(name) ASC
+                     LIMIT 1
+                  ),
+                  requested_service_id
+                )
+              WHERE tenant_id = $1 AND call_id = $3`,
+            [args.tenant_id, args.requirements.serviceType, args.call_id]
+          )
+        ).catch(() => undefined);
+      }
 
       if (!result || !result.success) {
         // Fetch next-available alternatives so the agent can propose them

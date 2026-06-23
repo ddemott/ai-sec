@@ -2,11 +2,12 @@
 --
 -- WHY this exists. `src/workers/reminderScheduler.ts` previously marked
 -- a reminder as `status='failed'` on the first send error and never
--- retried — meaning a single transient Twilio 5xx or network blip lost
--- the reminder permanently. Per docs/TODO.md "Retry logic for failed
--- sends": Twilio/email-provider 5xx + network errors retry with
--- exponential backoff; 4xx (invalid number, blocked recipient, etc.)
--- does NOT retry because the same input will produce the same error.
+-- retried — meaning a single transient (legacy provider) 5xx or network blip lost
+-- the reminder permanently. (Legacy SMS provider support removed 2026-06;
+-- Telnyx is now sole provider.) Per docs/TODO.md "Retry logic for failed
+-- sends": provider/email 5xx + network errors retry with exponential backoff;
+-- 4xx (invalid number, blocked recipient, etc.) does NOT retry because the
+-- same input will produce the same error.
 --
 -- WHAT the new columns mean.
 --   retry_count    — how many retry attempts have already been spent.

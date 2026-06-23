@@ -17,9 +17,9 @@ export async function summarizeCall(
   transcript: string,
   apiKey: string,
   opts: { timeoutMs?: number } = {}
-): Promise<string | null> {
-  if (!transcript || transcript.trim().length === 0) return null;
-  if (!apiKey) return null;
+): Promise<{ summary: string | null; usage?: { inputTokens: number; outputTokens: number } }> {
+  if (!transcript || transcript.trim().length === 0) return { summary: null };
+  if (!apiKey) return { summary: null };
 
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
@@ -44,15 +44,21 @@ export async function summarizeCall(
       }),
       signal: controller.signal,
     });
-    if (!res.ok) return null;
-    const data: unknown = await res.json();
-    const content = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]
-      ?.message?.content;
+    if (!res.ok) return { summary: null };
+    const data: any = await res.json();
+    const content = data.choices?.[0]?.message?.content;
     const summary = typeof content === 'string' ? content.trim() : '';
-    return summary.length > 0 ? summary.slice(0, 2000) : null;
+    const usage = data.usage
+      ? {
+          inputTokens: data.usage.prompt_tokens || 0,
+          outputTokens: data.usage.completion_tokens || 0,
+        }
+      : undefined;
+    const s = summary.length > 0 ? summary.slice(0, 2000) : null;
+    return { summary: s, usage };
   } catch {
     // Aborted, network error, bad JSON — all degrade to "no summary".
-    return null;
+    return { summary: null };
   } finally {
     clearTimeout(timer);
   }
