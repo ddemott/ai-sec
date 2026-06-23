@@ -23,7 +23,7 @@ interface MockQuery {
 
 let app: FastifyInstance;
 let mockClient: { query: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn> };
-let queryResponses: Array<{ rows: unknown[]; rowCount?: number }>;
+let queryResponses: Array<{ rows: unknown[]; rowCount?: number } | Error>;
 let queries: MockQuery[];
 
 function buildApp() {
@@ -33,7 +33,11 @@ function buildApp() {
   mockClient = {
     query: vi.fn(async (text: string, params?: unknown[]) => {
       queries.push({ text, params: params || [] });
-      return queryResponses.shift() || { rows: [], rowCount: 0 };
+      const next = queryResponses.shift();
+      // A queued Error simulates a failing query (e.g. a column missing
+      // pre-migration) so we can test graceful degradation.
+      if (next instanceof Error) throw next;
+      return next || { rows: [], rowCount: 0 };
     }),
     release: vi.fn(),
   };
@@ -220,6 +224,170 @@ describe('GET /analytics/calls', () => {
     expect(body.totals).toEqual({ total: 0, booked: 0, abandoned: 0 });
     expect(body.by_outcome).toEqual([]);
     expect(body.by_day).toEqual([]);
+  });
+
+  it('HAPPY: a valid start_date + end_date are bound into every query as $2/$3', async () => {
+    // WHO: an owner narrowing the Analytics view to a billing month.
+    // WHAT: start_date/end_date flow through as bound params [tenant, start, end]
+    //       on all three queries (by_outcome, by_day, totals). The end bound is
+    //       applied inclusively at the SQL site (`< end + interval '1 day'`).
+    // WHEN: GET /analytics/calls?start_date=&end_date= from the From/To controls.
+    // WHERE: optionalDateBounds() → $2/$3 guards in the analytics.ts handler.
+    // WHY: without the bound params the window silently does nothing and the
+    //      owner sees all-time numbers under a date-filtered header — a lie.
+    queryResponses.push({ rows: [] }); // by_outcome
+    queryResponses.push({ rows: [] }); // by_day
+    queryResponses.push({ rows: [] }); // totals
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/calls?tenant_id=${TENANT_ID}&start_date=2026-05-01&end_date=2026-05-31`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    for (const q of queries) {
+      expect(q.params).toEqual([TENANT_ID, '2026-05-01', '2026-05-31']);
+      expect(q.text).toContain("interval '1 day'"); // end is day-inclusive
+    }
+  });
+
+  it('HAPPY: a malformed start_date is dropped to null (all-time), not passed through', async () => {
+    // WHO: a hand-edited / probed query string.
+    // WHAT: a non-YYYY-MM-DD start_date must become null so the $2 guard drops
+    //       out of the predicate — never reach Postgres as a bad cast.
+    // WHEN: GET /analytics/calls?start_date=garbage.
+    // WHERE: optionalDateBounds DATE_ONLY_RE validation.
+    // WHY: a bad date must degrade to all-time, not 500 on an invalid ::date cast.
+    queryResponses.push({ rows: [] }); // by_outcome
+    queryResponses.push({ rows: [] }); // by_day
+    queryResponses.push({ rows: [] }); // totals
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/calls?tenant_id=${TENANT_ID}&start_date=not-a-date&end_date=2026-05-31`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(queries[0].params).toEqual([TENANT_ID, null, '2026-05-31']);
+  });
+});
+
+describe('GET /analytics/cohorts', () => {
+  it('HAPPY: date bounds reach all cohort queries; revenue query filters on start_time', async () => {
+    // WHO: an owner scoping repeat-caller + CLV cohorts to a quarter.
+    // WHAT: start/end flow as $2/$3 into all FIVE cohort queries (repeat callers,
+    //       by_service, summary, top_customers, abandonment_by_service). The
+    //       revenue (top-customers) query is appointment-based, so it must bound
+    //       on a.start_time — NOT started_at (which it doesn't have).
+    // WHEN: GET /analytics/cohorts?start_date=&end_date=.
+    // WHERE: optionalDateBounds() in the cohorts handler.
+    // WHY: a missing bound on one of the five would let stale rows leak into a
+    //      date-filtered cohort view; the revenue query binding the wrong column
+    //      would 500 on an unknown column. Mock all five explicitly (FIFO) with
+    //      the real summary shape so this doesn't silently rely on the empty-row
+    //      fallback if the query order changes.
+    queryResponses.push({ rows: [] }); // 1. repeat callers
+    queryResponses.push({ rows: [] }); // 2. by_service
+    queryResponses.push({
+      rows: [{ distinct_callers: 0, repeat_callers: 0, repeat_call_volume: 0, total_calls: 0 }],
+    }); // 3. summary (full shape)
+    queryResponses.push({ rows: [] }); // 4. top customers
+    queryResponses.push({ rows: [] }); // 5. abandonment_by_service
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}&start_date=2026-04-01&end_date=2026-06-30`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(queries).toHaveLength(5); // all five queries ran
+    for (const q of queries) {
+      expect(q.params).toEqual([TENANT_ID, '2026-04-01', '2026-06-30']);
+    }
+    // The revenue query is appointment-based: it must bound on start_time.
+    const revenueQuery = queries.find((q) => q.text.includes('FROM appointments a'));
+    expect(revenueQuery, 'top-customers revenue query should exist').toBeTruthy();
+    expect(revenueQuery!.text).toContain('a.start_time >=');
+    // The abandonment query must also carry the bounds (it's voice_sessions-based).
+    const abandonQuery = queries.find((q) => q.text.includes('requested_service_id'));
+    expect(abandonQuery, 'abandonment-by-service query should exist').toBeTruthy();
+    expect(abandonQuery!.text).toContain('v.started_at >=');
+  });
+
+  it('SAD: a calendar-invalid date (2026-02-30) is dropped to null, not passed to ::date', async () => {
+    // WHO: a hand-crafted / fat-fingered query string.
+    // WHAT: "2026-02-30" is YYYY-MM-DD-shaped but not a real date; it must be
+    //        rejected by isValidDateOnly (→ null) so it never reaches the
+    //        `$2::date` cast, which would 500.
+    // WHEN: GET /analytics/cohorts?start_date=2026-02-30.
+    // WHERE: isValidDateOnly round-trip guard in optionalDateBounds.
+    // WHY: the PR contract is "malformed → all-time", not "malformed → 500". A
+    //        regex-only check would let this through to Postgres and crash.
+    for (let i = 0; i < 5; i++) queryResponses.push({ rows: [] });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}&start_date=2026-02-30&end_date=2026-13-01`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Both calendar-invalid bounds dropped to null → all-time.
+    expect(queries[0].params).toEqual([TENANT_ID, null, null]);
+  });
+
+  it('FORWARD-COMPAT: abandonment query failing (column missing pre-migration) degrades to [], endpoint still 200', async () => {
+    // WHO: prod after #64 deployed but before migration 20260622010000 applied.
+    // WHAT: the abandonment-by-service query reads voice_sessions.requested_service_id;
+    //        if that column is missing the query throws. It MUST NOT take down the
+    //        whole /analytics/cohorts endpoint — the .catch degrades that one panel.
+    // WHEN: an owner loads Analytics on a deploy that's ahead of the prod schema.
+    // WHERE: the .catch on the abandonment query inside the cohorts Promise.all.
+    // WHY: without the .catch, one failing query rejects the Promise.all → 500 on
+    //        every Analytics-tab load (the regression this fix closes).
+    const undefinedColumn = Object.assign(
+      new Error('column "requested_service_id" does not exist'),
+      { code: '42703' } // Postgres undefined_column — the only error we degrade on
+    );
+    queryResponses.push({ rows: [] }); // repeat callers
+    queryResponses.push({ rows: [] }); // by_service
+    queryResponses.push({
+      rows: [{ distinct_callers: 0, repeat_callers: 0, repeat_call_volume: 0, total_calls: 0 }],
+    }); // summary (full shape)
+    queryResponses.push({ rows: [] }); // top customers
+    queryResponses.push(undefinedColumn); // abandonment → throws 42703
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200); // endpoint survives
+    const body = res.json();
+    expect(body.abandonment_by_service).toEqual([]); // just this panel degrades
+    expect(Array.isArray(body.repeat_callers)).toBe(true); // the rest still renders
+  });
+
+  it('does NOT swallow a non-42703 error — a real failure still surfaces (500)', async () => {
+    // WHY: the .catch degrades ONLY the pre-migration missing-column case. A
+    //       permissions/outage/syntax error must NOT be hidden behind an empty
+    //       panel — it must reject the Promise.all → withHandler → 500.
+    const realError = Object.assign(new Error('permission denied for table services'), {
+      code: '42501', // insufficient_privilege — NOT the column-missing code
+    });
+    queryResponses.push({ rows: [] }); // repeat callers
+    queryResponses.push({ rows: [] }); // by_service
+    queryResponses.push({
+      rows: [{ distinct_callers: 0, repeat_callers: 0, repeat_call_volume: 0, total_calls: 0 }],
+    }); // summary
+    queryResponses.push({ rows: [] }); // top customers
+    queryResponses.push(realError); // abandonment → throws a NON-42703 error
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(500); // real error surfaces, not silently swallowed
   });
 });
 
@@ -468,5 +636,108 @@ describe('GET /analytics/ai-cost', () => {
     const body = res.json<{ breakdown: unknown[]; total_estimated_cost_usd: number }>();
     expect(body.breakdown).toHaveLength(0);
     expect(body.total_estimated_cost_usd).toBe(0);
+  });
+});
+
+describe('GET /analytics/cohorts', () => {
+  // WHO: an owner drilling into repeat callers + which services book.
+  // WHAT: returns repeat-caller cohorts, bookings-by-service, and a summary.
+  // WHERE: src/routes/analytics.ts /analytics/cohorts.
+  // WHY: turns raw calls into "who comes back" + "what sells" signals.
+  it('HAPPY: returns repeat callers, by_service, and a summary', async () => {
+    app = buildApp();
+    // FIFO: repeatCallers, byService, summary.
+    queryResponses.push({
+      rows: [
+        {
+          phone: '6305550000',
+          call_count: 3,
+          booked_count: 2,
+          first_call: '2026-06-01T10:00:00Z',
+          last_call: '2026-06-20T10:00:00Z',
+        },
+      ],
+    });
+    queryResponses.push({
+      rows: [
+        { service: 'Oil Change', booked_count: 5 },
+        { service: 'Unknown service', booked_count: 1 },
+      ],
+    });
+    queryResponses.push({
+      rows: [{ distinct_callers: 10, repeat_callers: 1, repeat_call_volume: 3, total_calls: 12 }],
+    });
+    // top_customers (CLV) — 4th query in the Promise.all
+    queryResponses.push({
+      rows: [{ customer_id: 'cust-1', name: 'Jane Doe', visits: 4, revenue: 320 }],
+    });
+    // abandonment_by_service — 5th query
+    queryResponses.push({
+      rows: [{ service: 'Oil Change', abandoned_count: 3 }],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      repeat_callers: Array<{ phone: string; call_count: number }>;
+      by_service: Array<{ service: string; booked_count: number }>;
+      top_customers: Array<{ customer_id: string; name: string; visits: number; revenue: number }>;
+      abandonment_by_service: Array<{ service: string; abandoned_count: number }>;
+      summary: { distinct_callers: number; repeat_callers: number };
+    }>();
+    expect(body.repeat_callers[0]).toMatchObject({
+      phone: '6305550000',
+      call_count: 3,
+      booked_count: 2,
+    });
+    expect(body.by_service[0]).toEqual({ service: 'Oil Change', booked_count: 5 });
+    expect(body.top_customers[0]).toEqual({
+      customer_id: 'cust-1',
+      name: 'Jane Doe',
+      visits: 4,
+      revenue: 320,
+    });
+    expect(body.abandonment_by_service[0]).toEqual({ service: 'Oil Change', abandoned_count: 3 });
+    expect(body.summary).toMatchObject({ distinct_callers: 10, repeat_callers: 1 });
+
+    // WHY: repeat callers must be grouped on phone DIGITS so format variants
+    //       collapse — assert the normalization + the >1 HAVING filter.
+    expect(queries[0].text).toContain("regexp_replace(caller_phone, '[^0-9]', '', 'g')");
+    expect(queries[0].text).toContain('HAVING count(*) > 1');
+    expect(queries[0].params[0]).toBe(TENANT_ID);
+    // by_service joins booked calls → appointment → service.
+    expect(queries[1].text).toContain('JOIN appointments');
+    expect(queries[1].text).toContain('services');
+    // top_customers (CLV) sums service price per customer.
+    expect(queries[3].text).toContain('sum(s.price)');
+    expect(queries[3].text).toContain('JOIN customers');
+  });
+
+  it('HAPPY: empty tenant → empty arrays + zeroed summary', async () => {
+    app = buildApp();
+    queryResponses.push({ rows: [] }); // repeatCallers
+    queryResponses.push({ rows: [] }); // byService
+    queryResponses.push({ rows: [] }); // summary (no row)
+    queryResponses.push({ rows: [] }); // top_customers
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/analytics/cohorts?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      repeat_callers: unknown[];
+      by_service: unknown[];
+      summary: { total_calls: number };
+    }>();
+    expect(body.repeat_callers).toHaveLength(0);
+    expect(body.by_service).toHaveLength(0);
+    expect((body as { top_customers: unknown[] }).top_customers).toHaveLength(0);
+    expect(body.summary.total_calls).toBe(0); // graceful default when no summary row
   });
 });

@@ -5,12 +5,12 @@
  *         and the on-call engineer reading message_delivery_status later.
  * WHAT  : TelnyxSmsAdapter.sendSMS must attach a webhook_url (with tenant_id)
  *         WHEN a backend public base URL is configured, and OMIT it entirely
- *         when not — same contract as TwilioAdapter.statusCallback.
+ *         when not.
  * WHEN  : every outbound SMS. BACKEND_PUBLIC_URL is read at send time so tests
  *         toggle it per case.
  * WHERE : src/services/communications/TelnyxSmsAdapter.ts sendSMS().
  * WHY   : without webhook_url, Telnyx silently succeeds but we never learn
- *         sent-vs-delivered; same gap that existed in Twilio before 2026-06-12.
+ *         sent-vs-delivered; same gap that existed in the previous SMS provider before 2026-06-12.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 

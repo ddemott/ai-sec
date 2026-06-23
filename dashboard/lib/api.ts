@@ -2,6 +2,7 @@ import { normalizePhone } from './phone';
 import type {
   Appointment,
   Customer,
+  ReminderDeliveryStats,
   Resource,
   Employee,
   Service,
@@ -16,6 +17,7 @@ import type {
   CalendarSettings,
   AnalyticsStats,
   AnalyticsCalls,
+  AnalyticsCohorts,
   AiCostSummary,
   Vocabulary,
   CoverageItem,
@@ -35,6 +37,9 @@ import type {
   VersionComparison,
   TeamUser,
   CustomerMessage,
+  AuditLogResponse,
+  KnowledgeExplainResponse,
+  TenantDataExportResponse,
 } from './types';
 
 export const API_BASE_URL =
@@ -226,6 +231,24 @@ function handleFetchError(err: unknown) {
 /**
  * Generic Fetcher
  */
+/**
+ * Build the query record for the analytics endpoints: tenant_id plus an
+ * optional From/To window. Empty/absent bounds are dropped so the backend
+ * treats them as all-time. Returns undefined when there is no tenant — the
+ * endpoints require tenant_id, so sending date bounds without it would only
+ * produce a tenant-less request (400/404); better to send nothing.
+ */
+function analyticsQuery(
+  tenantId: string | null,
+  range?: { start_date?: string; end_date?: string }
+): Record<string, string> | undefined {
+  if (!tenantId) return undefined;
+  const query: Record<string, string> = { tenant_id: tenantId };
+  if (range?.start_date) query.start_date = range.start_date;
+  if (range?.end_date) query.end_date = range.end_date;
+  return query;
+}
+
 export async function apiFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
   await ensureTokenFresh();
   let url = `${API_BASE_URL}${endpoint}`;
@@ -404,8 +427,12 @@ export const Api = {
         };
       }>(`/appointments/${id}/reactivate`, 'POST', { tenant_id: tenantId }),
 
-    sendSelfServiceLinks: (id: string) =>
-      apiMutate<{ message?: string }>(`/appointments/${id}/send-self-service-links`, 'POST'),
+    sendSelfServiceLinks: (id: string, tenantId?: string | null) =>
+      apiMutate<{ message?: string; cancelLink?: string; rescheduleLink?: string }>(
+        `/appointments/${id}/send-self-service-links`,
+        'POST',
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- RESOURCES ---
@@ -626,12 +653,21 @@ export const Api = {
     getStats: (tenantId: string | null) =>
       apiFetch<AnalyticsStats>(`/analytics/stats`, tenantId ? { tenant_id: tenantId } : undefined),
 
-    getCalls: (tenantId: string | null) =>
-      apiFetch<AnalyticsCalls>(`/analytics/calls`, tenantId ? { tenant_id: tenantId } : undefined),
+    getCalls: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
+      apiFetch<AnalyticsCalls>(`/analytics/calls`, analyticsQuery(tenantId, range)),
 
     getAiCost: (tenantId: string | null) =>
-      apiFetch<AiCostSummary>(
-        `/analytics/ai-cost`,
+      apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantId ? { tenant_id: tenantId } : undefined),
+
+    getCohorts: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
+      apiFetch<AnalyticsCohorts>(`/analytics/cohorts`, analyticsQuery(tenantId, range)),
+  },
+
+  // --- REMINDERS (delivery monitoring) ---
+  reminders: {
+    deliveryStats: (tenantId: string | null) =>
+      apiFetch<ReminderDeliveryStats>(
+        `/reminders/delivery-stats`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
   },
@@ -835,6 +871,49 @@ export const Api = {
         tenant_id: tenantId,
         status: 'rejected',
       }),
+
+    // "Explain this answer" RAG debugger — shows which KB chunks the AI
+    // retrieves for a question + their scores (owner-only on the backend).
+    explain: (tenantId: string | null, question: string) =>
+      apiMutate<KnowledgeExplainResponse>(`/knowledge/explain`, 'POST', {
+        tenant_id: tenantId,
+        question,
+      }),
+  },
+
+  // --- AUDIT LOG (owner-only change history) ---
+  auditLog: {
+    list: (
+      tenantId: string | null,
+      params?: {
+        limit?: number;
+        offset?: number;
+        table_name?: string;
+        start_date?: string;
+        end_date?: string;
+      }
+    ) => {
+      const query: Record<string, string> = {};
+      if (tenantId) query.tenant_id = tenantId;
+      if (params?.limit != null) query.limit = String(params.limit);
+      if (params?.offset != null) query.offset = String(params.offset);
+      if (params?.table_name) query.table_name = params.table_name;
+      if (params?.start_date) query.start_date = params.start_date;
+      if (params?.end_date) query.end_date = params.end_date;
+      return apiFetch<AuditLogResponse>(
+        `/audit-log`,
+        Object.keys(query).length > 0 ? query : undefined
+      );
+    },
+  },
+
+  // --- DATA EXPORT (owner-only data portability) ---
+  exportData: {
+    tenantData: (tenantId: string | null) =>
+      apiFetch<TenantDataExportResponse>(
+        `/export/tenant-data`,
+        tenantId ? { tenant_id: tenantId } : undefined
+      ),
   },
 
   // --- BILLING ---

@@ -1,42 +1,38 @@
--- Twilio SMS delivery-receipt tracking.
+-- SMS delivery-receipt tracking (initially implemented for legacy provider).
 --
--- Background: TwilioAdapter.sendSMS() previously called messages.create()
+-- Background: The (legacy) legacy adapter.sendSMS() previously called messages.create()
 -- with NO statusCallback, so the system never learned whether an SMS that
--- was *accepted* by Twilio actually got *delivered* to the handset. A
--- transient-flake audit (2026-06-12) flagged this blind spot: a reminder
--- could be "sent" (Twilio accepted it) yet silently undelivered (carrier
--- rejected, number unreachable) with no signal anywhere in the product.
+-- was *accepted* actually got *delivered* to the handset. A transient-flake
+-- audit (2026-06-12) flagged this blind spot. (legacy provider support fully removed
+-- 2026-06; Telnyx is the only provider and uses an equivalent webhook.)
 --
--- Fix: the adapter now passes a statusCallback URL pointing at
--- POST /communications/twilio/status. Twilio POSTs the message lifecycle
--- (queued -> sent -> delivered, or -> undelivered/failed) as form-encoded
--- callbacks. This table is where the webhook records the latest status per
--- message SID so it can be read back.
+-- Fix: adapters pass a statusCallback/webhook_url pointing at
+-- POST /communications/{provider}/status. Providers POST the message lifecycle.
+-- This table is where the webhook records the latest status per message SID.
 --
 -- Why NOT an RLS-scoped table: the webhook is a public, tenant-exempt route
--- (Twilio sends no JWT and no app.current_tenant_id GUC). It writes via the
--- shared pool with no tenant context, so an RLS USING(tenant_id = ...current
--- setting) policy would reject every insert. This is an append/upsert event
--- table -- same shape rationale as reminder_schedules / consent_records:
--- tenant_id is carried as a plain UUID column (sourced from the
--- statusCallback URL's ?tenant_id= param) for read-side filtering, not as an
--- RLS gate. SERIAL surrogate PK (internal sequence number, never referenced
--- from outside this table); message_sid is the natural lookup key (UNIQUE).
+-- (provider sends no JWT and no app.current_tenant_id GUC). It writes via the
+-- shared pool with no tenant context, so an RLS policy would reject inserts.
+-- This is an append/upsert event table -- same shape as reminder_schedules /
+-- consent_records: tenant_id is a plain UUID column (from the ?tenant_id=
+-- query param on the callback URL) for read-side filtering, not RLS.
+-- SERIAL surrogate PK; message_sid is the natural key (UNIQUE).
 --
--- Forward-only safe: CREATE TABLE IF NOT EXISTS, no backfill.
+-- Forward-only safe: CREATE TABLE IF NOT EXISTS, no backfill. (legacy-specific
+-- comments updated on removal of legacy provider support.)
 
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS message_delivery_status (
   message_delivery_status_id SERIAL PRIMARY KEY,
-  -- Twilio Message SID (SMxx...). Natural key -- one row per message, updated
-  -- in place as the status advances (queued -> sent -> delivered).
+  -- Message SID from provider (e.g. Telnyx ID; historical legacy provider SIDs like SMxx... in old rows). Natural key.
+  -- One row per message, updated in place as status advances.
   message_sid TEXT NOT NULL UNIQUE,
-  -- Latest Twilio MessageStatus: queued|sending|sent|delivered|undelivered|failed|received.
+  -- Latest MessageStatus (queued|sending|sent|delivered|undelivered|failed|received).
   message_status TEXT NOT NULL,
-  -- Twilio ErrorCode (e.g. 30008) when status is undelivered/failed; NULL otherwise.
+  -- Provider ErrorCode when undelivered/failed; NULL otherwise.
   error_code TEXT,
-  -- Owning tenant, read back from the statusCallback URL's ?tenant_id= param.
+  -- Owning tenant, read back from the webhook's ?tenant_id= query param.
   -- Plain column (not RLS-enforced) so the tenant-exempt webhook can insert.
   tenant_id UUID REFERENCES tenants(tenant_id) ON DELETE CASCADE,
   -- First time we saw any callback for this SID.
@@ -49,8 +45,8 @@ CREATE TABLE IF NOT EXISTS message_delivery_status (
 CREATE INDEX IF NOT EXISTS idx_message_delivery_status_tenant
   ON message_delivery_status(tenant_id, updated_at DESC);
 
-COMMENT ON TABLE message_delivery_status IS 'Latest Twilio SMS delivery status per message SID, recorded by POST /communications/twilio/status. Non-RLS event table (webhook is tenant-exempt, writes via shared pool).';
-COMMENT ON COLUMN message_delivery_status.message_sid IS 'Twilio Message SID (SMxxx). UNIQUE -- one row per message, upserted as status advances.';
-COMMENT ON COLUMN message_delivery_status.message_status IS 'Latest Twilio MessageStatus (queued|sending|sent|delivered|undelivered|failed|received).';
+COMMENT ON TABLE message_delivery_status IS 'Latest SMS delivery status per message SID (from Telnyx or legacy provider webhooks). Non-RLS event table (webhook is tenant-exempt, writes via shared pool). Legacy provider support removed 2026-06.';
+COMMENT ON COLUMN message_delivery_status.message_sid IS 'Provider Message SID/ID. UNIQUE -- one row per message, upserted as status advances.';
+COMMENT ON COLUMN message_delivery_status.message_status IS 'Latest MessageStatus (queued|sending|sent|delivered|undelivered|failed|received).';
 
 COMMIT;

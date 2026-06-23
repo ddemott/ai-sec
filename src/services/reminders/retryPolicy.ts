@@ -3,7 +3,7 @@
  *
  * Pure helpers — no DB, no provider calls. The worker
  * (src/workers/reminderScheduler.ts) calls these to decide:
- *   - Is this error worth retrying? (Twilio/email 5xx + network → yes;
+ *   - Is this error worth retrying? (the SMS provider/email 5xx + network → yes;
  *     4xx → no, because the same input will produce the same error.)
  *   - When should the next attempt fire? (Exponential backoff:
  *     5 min, 30 min, 2 hours.)
@@ -12,7 +12,7 @@
  *
  * Origin: docs/TODO.md — "Retry logic for failed sends." Pre-fix the
  * worker marked a reminder `status='failed'` on the first send error
- * and never retried, meaning a single transient Twilio 5xx or network
+ * and never retried, meaning a single transient SMS provider 5xx or network
  * blip lost the reminder permanently. Added 2026-05-14 alongside
  * migration 20260514000000 (retry_count + next_retry_at columns).
  */
@@ -46,7 +46,7 @@ export const BACKOFF_MIN: readonly number[] = [5, 30, 120];
  * problems — retry could succeed without operator intervention.
  *
  * Recognized error shapes:
- *   - Twilio: throws an Error with `status: number` (the HTTP status).
+ *   - the SMS provider: throws an Error with `status: number` (the HTTP status).
  *   - Generic HTTP: `statusCode: number` is the common Node/Fastify shape.
  *   - Fetch errors / generic Error: no status field present → treat as
  *     retryable (conservative — better to over-retry than lose).
@@ -57,7 +57,7 @@ export function isRetryable(error: unknown): boolean {
   const status = e.status ?? e.statusCode;
   if (typeof status !== 'number') return true; // no HTTP status info → retryable
   // 429 (Too Many Requests) is technically a 4xx but it's the canonical
-  // "wait and retry later" signal — both Twilio's per-account throttle
+  // "wait and retry later" signal — both the SMS provider's per-account throttle
   // and our own per-tenant SMS rate limiter
   // (src/services/communications/smsRateLimit.ts) emit it. Treating it
   // as retryable lets the existing 5m/30m/2h backoff naturally handle

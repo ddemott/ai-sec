@@ -132,6 +132,7 @@ export function BusinessTypePicker({ onSelect, onClose, onBack }: BusinessTypePi
                         {items.map((t) => (
                           <button
                             key={t.business_type}
+                            data-testid="wizard-biztype-option"
                             onClick={() => onSelect(t.business_type)}
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors group"
                             style={{ color: 'var(--text-primary)' }}

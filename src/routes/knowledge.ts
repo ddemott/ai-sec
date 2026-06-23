@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
- * ESLint rules disabled for this file as part of full cleanup (REFACTORING_TODO.md item 10).
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
@@ -17,8 +17,29 @@ import {
   prepareQADocument,
   ALLOWED_EXTENSIONS,
 } from '../services/knowledgeIngestion';
+import { resolveQuestions } from '../../shared/questionBank';
+import { recordAiCostEvent } from '../services/aiCost';
+import { scanRateLimiter } from '../services/scanRateLimit';
+import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
 // ── Website scrape helpers for onboarding (item 10) ─────────────────────
+
+// Bound every outbound call in the scan path so a slow/hung site page or a slow
+// OpenAI response can't hold a request (and a pool slot) open indefinitely —
+// same AbortController discipline the rest of the codebase uses on OpenAI calls.
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function fetchAndExtractSiteText(
   startUrl: string
@@ -36,10 +57,14 @@ async function fetchAndExtractSiteText(
       if (visited.has(u)) continue;
       visited.add(u);
       try {
-        const resp = await fetch(u, {
-          headers: { 'User-Agent': 'SecretaryHQ-Bot/1.0' },
-          redirect: 'follow',
-        });
+        const resp = await fetchWithTimeout(
+          u,
+          {
+            headers: { 'User-Agent': 'SecretaryHQ-Bot/1.0' },
+            redirect: 'follow',
+          },
+          8000
+        );
         if (!resp.ok) continue;
         const html = await resp.text();
         const text = html
@@ -82,26 +107,29 @@ async function fetchAndExtractSiteText(
 
 async function extractAnswersWithLLM(
   siteText: string,
-  questions: Array<{ id: string; question: string }>,
+  questions: Array<{ id: string | null; question: string }>,
   baseUrl: string,
   apiKey: string
 ): Promise<
   | {
       success: true;
       answers: Array<{
-        questionId: string;
+        questionId: string | null;
         question: string;
         answer: string | null;
         sourceUrl: string;
         confidence: number;
       }>;
       discovered: Array<any>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
     }
   | { success: false; error: string }
 > {
   if (!apiKey) return { success: false, error: 'OPENAI_API_KEY not configured' };
 
-  const qList = questions.map((q, i) => `${i + 1}. [${q.id}] ${q.question}`).join('\n');
+  const qList = questions
+    .map((q, i) => `${i + 1}. ${q.id ? `[${q.id}] ` : ''}${q.question}`)
+    .join('\n');
 
   const prompt = `You are a precise business policy extractor. 
 Given the cleaned text from a small business website below, answer ONLY the listed questions with direct or closely paraphrased info from the text. 
@@ -121,17 +149,27 @@ ${qList}
 Return only the JSON.`;
 
   try {
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 3000,
-        response_format: { type: 'json_object' },
-      }),
-    });
+    const resp = await fetchWithTimeout(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 3000,
+          response_format: { type: 'json_object' },
+        }),
+      },
+      30000
+    );
+    // Surface OpenAI failures (401 bad key, 429 rate limit, 5xx) as an error
+    // instead of silently parsing the error body to {} and returning an empty
+    // "successful" extraction — which would look like "scanned, found nothing".
+    if (!resp.ok) {
+      return { success: false, error: `OpenAI extract failed: HTTP ${resp.status}` };
+    }
     const data: any = await resp.json();
     const content = data.choices?.[0]?.message?.content || '{}';
     const parsed = JSON.parse(content);
@@ -148,7 +186,7 @@ Return only the JSON.`;
       sourceUrl: d.sourceUrl || '',
       confidence: d.confidence || 0.5,
     }));
-    return { success: true, answers, discovered };
+    return { success: true, answers, discovered, usage: data.usage };
   } catch (e: any) {
     return { success: false, error: 'LLM extract failed: ' + (e.message || e) };
   }
@@ -163,6 +201,10 @@ const knowledgeEntrySchema = z.object({
 
 const websiteImportSchema = z.object({
   url: z.string().url('valid URL required'),
+});
+
+const explainSchema = z.object({
+  question: z.string().min(1, 'question is required').max(1000),
 });
 
 export function registerKnowledgeRoutes(
@@ -251,6 +293,23 @@ export function registerKnowledgeRoutes(
             ? await normalizeForEmbedding(trimmedChunk, { context: 'knowledge base document' })
             : trimmedChunk;
           const embedding = await getEmbedding(normalizedText);
+          // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+          const embTokens = Math.ceil(normalizedText.length / 4);
+          const embCost = embTokens * 0.02e-6;
+          // Cost telemetry is best-effort: a ledger write failure (missing table
+          // in dev/test, transient DB error) must NOT abort document ingestion.
+          try {
+            await recordAiCostEvent(client, {
+              tenantId,
+              source: 'kb_ingestion',
+              provider: 'openai',
+              model: 'text-embedding-3-small',
+              inputTokens: embTokens,
+              estimatedCostUsd: embCost,
+            });
+          } catch {
+            /* swallow — ingestion continues */
+          }
           await client.query(
             'INSERT INTO tenant_docs (tenant_id, content, normalized_text, source, embedding) VALUES ($1, $2, $3, $4, $5::vector)',
             [tenantId, trimmedChunk, normalizedText, filename, JSON.stringify(embedding)]
@@ -283,6 +342,20 @@ export function registerKnowledgeRoutes(
         getEmbedding,
         normalizeForEmbedding
       );
+
+      // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+      const embTokens = Math.ceil(normalizedText.length / 4);
+      const embCost = embTokens * 0.02e-6;
+      withTenantClient(tenantId, (client) =>
+        recordAiCostEvent(client, {
+          tenantId,
+          source: source === 'website-scan' ? 'kb_ingestion' : 'policy-questionnaire',
+          provider: 'openai',
+          model: 'text-embedding-3-small',
+          inputTokens: embTokens,
+          estimatedCostUsd: embCost,
+        })
+      ).catch(() => undefined);
 
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
@@ -325,6 +398,20 @@ export function registerKnowledgeRoutes(
         getEmbedding,
         normalizeForEmbedding
       );
+
+      // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+      const embTokens = Math.ceil(normalizedText.length / 4);
+      const embCost = embTokens * 0.02e-6;
+      withTenantClient(tenantId, (client) =>
+        recordAiCostEvent(client, {
+          tenantId,
+          source: source === 'website-scan' ? 'kb_ingestion' : 'policy-questionnaire',
+          provider: 'openai',
+          model: 'text-embedding-3-small',
+          inputTokens: embTokens,
+          estimatedCostUsd: embCost,
+        })
+      ).catch(() => undefined);
 
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
@@ -410,28 +497,97 @@ export function registerKnowledgeRoutes(
       }
       const { url } = parsed.data;
 
-      // Use static for now (until question bank merged)
-      const { POLICY_QUESTIONS } = await import('../../dashboard/lib/policyQuestions.js').catch(
-        () => ({ POLICY_QUESTIONS: [] as any[] })
-      );
-      const questions = (POLICY_QUESTIONS || []).map((q: any) => ({
-        id: q.id,
-        question: q.question,
-      }));
-
-      const siteText = await fetchAndExtractSiteText(url);
-      if (!siteText.success) {
-        return reply.status(400).send({ success: false, error: siteText.error });
+      // Per-tenant guardrail on the expensive scan (external multi-page fetch +
+      // OpenAI extraction). Rejects with 429 once the tenant's bucket is dry so
+      // one tenant can't burn OpenAI budget or hammer external sites through us.
+      // Skipped in the E2E stub path (deterministic, zero external cost).
+      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1' && !scanRateLimiter.tryAcquire(tenantId)) {
+        logEvent(req, 'website_scan_rate_limited', { tenantId });
+        return reply.status(429).send({
+          success: false,
+          error: 'Website scan limit reached. Please wait a bit before scanning again.',
+        });
       }
 
-      const extract = await extractAnswersWithLLM(
-        siteText.text,
-        questions,
-        url,
-        process.env.OPENAI_API_KEY || ''
+      // Resolve the questions to extract: the shared static policy bank plus this
+      // tenant's owner-authored custom questions (tenant_docs source='custom-question'),
+      // so the scan also targets what this owner specifically cares about.
+      // Bounded: cap how many custom questions feed the extract prompt so a tenant
+      // with a huge custom-question list can't blow up prompt size / OpenAI cost.
+      const customRows = await withTenantClient(tenantId, async (client) =>
+        client.query(
+          `SELECT title FROM tenant_docs
+           WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL
+           ORDER BY created_at DESC
+           LIMIT 50`,
+          [tenantId]
+        )
       );
-      if (!extract.success) {
-        return reply.status(500).send({ success: false, error: extract.error });
+      const customs = customRows.rows.map((r: any) => r.title as string);
+      const questions = resolveQuestions({ customs });
+
+      // KNOWLEDGE_IMPORT_E2E_STUB: strict opt-in (literal "1") that swaps the real
+      // site fetch + OpenAI extraction for deterministic canned output, so E2E can
+      // exercise the REAL resolver → staging-INSERT path against a real DB without
+      // a live OpenAI key or external network (CI runs with OPENAI_API_KEY=sk-dummy).
+      // Same env-gated test-hook discipline as SYNC_TEST_RECORDER. Off by default.
+      let extract: { answers: any[]; discovered: any[] };
+      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB === '1') {
+        // Confirm every resolved custom question (id null) + the first two bank
+        // questions, plus one discovered topic — lets a test assert customs flow
+        // through the resolver into staging.
+        const picks = [
+          ...questions.filter((q) => q.id === null),
+          ...questions.filter((q) => q.id !== null).slice(0, 2),
+        ];
+        extract = {
+          answers: picks.map((q) => ({
+            questionId: q.id,
+            question: q.question,
+            answer: `Stubbed answer for: ${q.question}`,
+            sourceUrl: url,
+            confidence: 0.9,
+          })),
+          discovered: [
+            {
+              question: 'Stubbed discovered topic?',
+              answer: 'Stubbed discovered answer.',
+              sourceUrl: url,
+              confidence: 0.5,
+            },
+          ],
+        };
+      } else {
+        const siteText = await fetchAndExtractSiteText(url);
+        if (!siteText.success) {
+          return reply.status(400).send({ success: false, error: siteText.error });
+        }
+        const llm = await extractAnswersWithLLM(
+          siteText.text,
+          questions,
+          url,
+          process.env.OPENAI_API_KEY || ''
+        );
+        if (!llm.success) {
+          return reply.status(500).send({ success: false, error: llm.error });
+        }
+        extract = { answers: llm.answers, discovered: llm.discovered };
+        if (llm.usage && tenantId) {
+          const input = llm.usage.prompt_tokens || 0;
+          const output = llm.usage.completion_tokens || 0;
+          const cost = input * 0.15e-6 + output * 0.6e-6;
+          withTenantClient(tenantId, (client) =>
+            recordAiCostEvent(client, {
+              tenantId,
+              source: 'kb_ingestion',
+              provider: 'openai',
+              model: 'gpt-4o-mini',
+              inputTokens: input,
+              outputTokens: output,
+              estimatedCostUsd: cost,
+            })
+          ).catch(() => undefined);
+        }
       }
 
       // Persist extracted (matched) + discovered items to knowledge_suggestion for review.
@@ -562,6 +718,20 @@ export function registerKnowledgeRoutes(
           normalizeForEmbedding
         );
 
+        // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
+        const embTokens = Math.ceil(normalizedText.length / 4);
+        const embCost = embTokens * 0.02e-6;
+        withTenantClient(tenantId, (client) =>
+          recordAiCostEvent(client, {
+            tenantId,
+            source: 'kb_ingestion',
+            provider: 'openai',
+            model: 'text-embedding-3-small',
+            inputTokens: embTokens,
+            estimatedCostUsd: embCost,
+          })
+        ).catch(() => undefined);
+
         await withTenantClient(tenantId, async (client) => {
           await client.query('BEGIN');
           try {
@@ -610,5 +780,131 @@ export function registerKnowledgeRoutes(
 
       return reply.send({ success: true });
     }, 'Failed to update knowledge suggestion')
+  );
+
+  // POST /knowledge/explain — "explain this answer" RAG debugger.
+  // Runs the SAME retrieval the voice agent uses (search_tenant_docs_normalized
+  // over this tenant's KB embeddings) for a given question, and returns the
+  // ranked chunks + similarity scores so an owner can SEE why the AI answered a
+  // certain way: which chunks matched, how strongly, and which would have been
+  // fed to the model in production (top-N above the threshold).
+  app.post(
+    '/knowledge/explain',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      // Owner-only: this is an admin/debug surface over the whole KB.
+      if (req.auth && req.auth.tenant_id !== SUPER_ADMIN_TENANT_ID && req.auth.role !== 'owner') {
+        return reply
+          .status(403)
+          .send({ success: false, error: 'Only owners can use the answer debugger' });
+      }
+
+      const parsed = explainSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+      }
+      const { question } = parsed.data;
+
+      // Production retrieval params (kept in sync with /agent-tools/policy-answer).
+      const PROD_THRESHOLD = 0.5;
+      const PROD_MATCH_COUNT = 3;
+      // Debug retrieval: pull a wider, lower-threshold candidate set so the
+      // owner can see near-misses too, then annotate each against prod params.
+      const DEBUG_THRESHOLD = 0.0;
+      const DEBUG_MATCH_COUNT = 10;
+
+      // Embed the question EXACTLY as /agent-tools/policy-answer does — normalize
+      // first (same context string), fall back to the raw question on failure —
+      // otherwise the debug similarity scores wouldn't match the ones that drove
+      // the real answer, and the debugger would mislead.
+      let queryText = question;
+      if (normalizeForEmbedding) {
+        try {
+          queryText = await normalizeForEmbedding(question, { context: 'customer phone inquiry' });
+        } catch {
+          // fall back to the raw question
+        }
+      }
+      const embedding = await getEmbedding(queryText);
+      const matches = await withTenantClient(tenantId, (client) =>
+        client.query<{ tenant_doc_id: string; content: string; similarity: number }>(
+          `SELECT tenant_doc_id, content, similarity
+             FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)`,
+          [tenantId, JSON.stringify(embedding), DEBUG_THRESHOLD, DEBUG_MATCH_COUNT]
+        )
+      );
+
+      // Rank order is by similarity DESC (the RPC returns it sorted). The chunks
+      // actually used in production are the top PROD_MATCH_COUNT that also clear
+      // PROD_THRESHOLD.
+      let usedSoFar = 0;
+      const ranked = matches.rows.map((row, i) => {
+        const aboveThreshold = row.similarity >= PROD_THRESHOLD;
+        const usedInProduction = aboveThreshold && usedSoFar < PROD_MATCH_COUNT;
+        if (usedInProduction) usedSoFar += 1;
+        return {
+          rank: i + 1,
+          tenant_doc_id: row.tenant_doc_id,
+          similarity: row.similarity,
+          above_threshold: aboveThreshold,
+          used_in_production: usedInProduction,
+          content: row.content,
+        };
+      });
+
+      // Compose the EXACT context the agent would receive from
+      // /agent-tools/policy-answer (the used chunks joined, each prefixed with
+      // its source-doc title) so the owner sees the real answer the AI gets —
+      // not just the ranked chunks. Null when nothing clears the threshold.
+      const usedDocs = ranked.filter((r) => r.used_in_production);
+      let composedAnswer: string | null = null;
+      if (usedDocs.length > 0) {
+        const usedIds = usedDocs.map((d) => d.tenant_doc_id).filter(Boolean);
+        let titleById = new Map<string, string>();
+        try {
+          const titlesRes = await withTenantClient(tenantId, (client) =>
+            client.query<{ tenant_doc_id: string; title: string | null }>(
+              // ::uuid[] cast — without it Postgres compares uuid against text[]
+              // and errors (same fix as the policy-answer citation lookup).
+              'SELECT tenant_doc_id, title FROM tenant_docs WHERE tenant_id = $1 AND tenant_doc_id = ANY($2::uuid[])',
+              [tenantId, usedIds]
+            )
+          );
+          titleById = new Map(
+            titlesRes.rows.filter((r) => r.title).map((r) => [r.tenant_doc_id, r.title as string])
+          );
+        } catch {
+          // title lookup is non-critical — fall back to un-attributed content
+        }
+        composedAnswer = usedDocs
+          .map((d) => {
+            const title = titleById.get(d.tenant_doc_id);
+            return title ? `[From "${title}"]\n${d.content}` : d.content;
+          })
+          .join('\n\n---\n\n');
+      }
+
+      logEvent(req, 'knowledge_answer_explained', {
+        tenantId,
+        candidates: ranked.length,
+        usedInProduction: usedSoFar,
+      });
+
+      return reply.send({
+        success: true,
+        question,
+        production_threshold: PROD_THRESHOLD,
+        production_match_count: PROD_MATCH_COUNT,
+        candidates: ranked,
+        // A quick read: did production have anything to answer with at all?
+        would_answer: usedSoFar > 0,
+        // The exact context string the agent would relay for this question.
+        composed_answer: composedAnswer,
+      });
+    }, 'Failed to explain answer')
   );
 }

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
- * ESLint rules disabled for this file as part of full cleanup (REFACTORING_TODO.md item 10).
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
@@ -238,7 +238,6 @@ const TENANT_EXEMPT_ROUTES = [
   '/square/webhook',
   // SMS delivery-status callbacks (verified via provider signature, not JWT;
   // tenant_id rides on the query string, not the body)
-  '/communications/twilio/status',
   '/communications/telnyx/status',
   '/tenants',
   '/templates',
@@ -534,7 +533,6 @@ const PUBLIC_ROUTES = [
   // CRM webhooks (authenticated via HMAC/signature, not JWT)
   '/square/webhook',
   // SMS delivery-status callbacks (verified via provider signature, not JWT)
-  '/communications/twilio/status',
   '/communications/telnyx/status',
   // Self-service appointment actions — token-gated, no session JWT
   '/self/cancel',

@@ -36,6 +36,13 @@ function buildApp(opts: {
 
   const mockClient = {
     query: vi.fn(async (text: string, params?: unknown[]) => {
+      // Cost-ledger writes are out-of-band telemetry (fire-and-forget in the
+      // routes); they must not consume a queued response or appear in the
+      // asserted query log, otherwise they'd shift every other test's
+      // expectations by one.
+      if (typeof text === 'string' && text.includes('ai_cost_events')) {
+        return { rows: [], rowCount: 1 };
+      }
       queries.push({ text, params: params || [] });
       return responses.shift() || { rows: [], rowCount: 0 };
     }),
@@ -633,15 +640,28 @@ describe('agentTools /check-availability', () => {
 });
 
 describe('agentTools /policy-answer', () => {
-  it('HAPPY: matches found returns joined context string', async () => {
+  it('HAPPY: matches found returns joined context string WITH source citations', async () => {
     // WHO: Caller asking about cancellation policy
-    // WHAT: Embedding-based RPC returns top matches; route joins them
+    // WHAT: Embedding-based RPC returns top matches; route joins them and
+    //        prefixes each with its source-doc title so the agent can cite it
+    //        ("according to our Cancellation Policy…").
     const { app, queries } = buildApp({
       queryResponses: [
         {
           rows: [
-            { content: 'Cancellations require 24 hours notice.', similarity: 0.9 },
-            { content: 'No-show fee is $25.', similarity: 0.8 },
+            {
+              tenant_doc_id: 'd1',
+              content: 'Cancellations require 24 hours notice.',
+              similarity: 0.9,
+            },
+            { tenant_doc_id: 'd2', content: 'No-show fee is $25.', similarity: 0.8 },
+          ],
+        },
+        // titles lookup for the matched tenant_doc_ids
+        {
+          rows: [
+            { tenant_doc_id: 'd1', title: 'Cancellation Policy' },
+            { tenant_doc_id: 'd2', title: 'Fees' },
           ],
         },
       ],
@@ -653,8 +673,13 @@ describe('agentTools /policy-answer', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toContain('24 hours notice');
     expect(res.json().result).toContain('No-show fee');
-    // WHY: RPC call receives JSON-stringified embedding vector
+    // WHY: each chunk is attributed to its source document for caller-facing citations.
+    expect(res.json().result).toContain('[From "Cancellation Policy"]');
+    expect(res.json().result).toContain('[From "Fees"]');
+    // WHY: RPC call receives JSON-stringified embedding vector; a second query
+    //       resolves the source titles from tenant_docs.
     expect(queries[0].text).toContain('search_tenant_docs_normalized');
+    expect(queries.some((q) => q.text.includes('FROM tenant_docs'))).toBe(true);
   });
 
   it('HAPPY: no matches returns fallback message AND logs the gap', async () => {
@@ -1371,6 +1396,39 @@ describe('agentTools /book-with-scheduling', () => {
     expect(res.json().success).toBe(false);
     expect(res.json().error).toContain('good phone number');
     expect(queries).toHaveLength(0);
+  });
+
+  it('CAPTURE: records requested_service_id on the call (for abandonment-by-service)', async () => {
+    // WHO: a caller who tried to book "Oil Change" on call e2e-call-1.
+    // WHAT: book-with-scheduling fires a best-effort UPDATE setting the call's
+    //        voice_session.requested_service_id from the fuzzy service name —
+    //        whether the booking succeeded or not — so an abandoned call still
+    //        records which service the caller came for.
+    // WHY:   abandoned calls have appointment_id NULL → no service to join; this
+    //        capture is the only signal for abandonment-by-service analytics.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-1' }] }, // customer SELECT
+        { rows: [] }, // name UPDATE
+        // RPC fails (slot taken) → the call abandons, but the capture must still run.
+        { rows: [{ success: false, error_code: 'TIMESLOT_OCCUPIED', error_message: 'taken' }] },
+      ],
+    });
+    await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      call_id: 'e2e-call-1',
+      phone: '5551234567',
+      requirements: { serviceType: 'Oil Change' },
+      window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
+    });
+
+    // Fire-and-forget — let the microtask flush.
+    await new Promise((r) => setImmediate(r));
+
+    const capture = queries.find((q) => q.text.includes('requested_service_id'));
+    expect(capture, 'a requested_service_id UPDATE must fire').toBeTruthy();
+    expect(capture!.text).toContain('UPDATE voice_sessions');
+    expect(capture!.params).toEqual([TENANT_ID, 'Oil Change', 'e2e-call-1']);
   });
 });
 

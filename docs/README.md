@@ -6,8 +6,9 @@ This folder contains the project's technical and operational documentation.
 
 - **Single sources of truth**:
   - Active work, bugs, UX tasks, and near-term priorities → `docs/TODO.md` (the main living list).
-  - Mechanical / type / duplication / convention refactors → `REFACTORING_TODO.md` (narrow scope).
   - Raw UX audit findings → `ux-review-notes.md` (archived / reduced; actionable findings live in `docs/TODO.md`).
+
+  (The mechanical/type/convention refactor backlog `REFACTORING_TODO.md` was completed and removed 2026-06-19; its history lives in `RESOLVED.md`.)
 - **Curated vs generator noise**: The root `improvement-ideas.md` is retired generator output (see its own header). Curated ideas live in `docs/IMPROVEMENT_IDEAS.md`.
 - **Historical vs living**: Big completed work and session journals go to `RESOLVED.md` or `docs/sessions/`. `CLAUDE.md` is deliberately kept lean and points at the docs/ folder for details.
 - **Succinctness over completeness**: When in doubt, link instead of duplicate. Long idea entries are acceptable only while they are active proposals.
@@ -22,7 +23,6 @@ This folder contains the project's technical and operational documentation.
 | [DEPLOYMENT.md](DEPLOYMENT.md) | How to run, deploy, and configure the system |
 | [SECURITY.md](SECURITY.md) | Security model, RLS, auth, and hardening |
 | [TODO.md](TODO.md) | Current work items and status (**single source of truth for active tasks**) |
-| [REFACTORING_TODO.md](../REFACTORING_TODO.md) | Mechanical, structural, and convention-enforcement refactors only |
 
 ## Onboarding & Operations
 
@@ -65,4 +65,4 @@ This folder contains the project's technical and operational documentation.
 
 ---
 
-**Last updated:** 2026-05-27 (major documentation reduction pass: root `improvement-ideas.md`, `ux-review-notes.md`, `docs/BUGS.md`, and `NEEDS-REFACTORING.md` heavily reduced or archived as content is captured in `docs/TODO.md` / `RESOLVED.md`)
+**Last updated:** 2026-06-23 (additional mechanical doc hygiene: fixed 134→142 migrations + 26→29 route labels in root README, (27)→(29) + dedup in ARCHITECTURE, tools count 12→17 in CLAUDE, removed lingering NEEDS-REFACTORING.md live pointers, synced test counts; + prior pass; see RESOLVED.md)

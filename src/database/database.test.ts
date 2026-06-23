@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
- * ESLint rules disabled for this file as part of full cleanup (REFACTORING_TODO.md item 10).
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
@@ -749,7 +749,7 @@ describe('PostgresDatabaseService', () => {
       it('updates status with error message', async () => {
         // WHO: ReminderProcessor recording delivery failure details
         // WHAT: Updating status and error message together
-        // WHEN: External service (Twilio/SendGrid) returned error
+        // WHEN: External service (the SMS provider/SendGrid) returned error
         // WHERE: updateReminderSchedule method
         // WHY: Error details needed for debugging and retry logic
 

@@ -18,10 +18,14 @@ PTYPE="$(get_project_type)"
 
 echo "==> Running pre-push checks (projectType: $PTYPE)..."
 
+# Each command runs in its own subshell `( ... )` so a `cd` inside one step
+# (e.g. `checks` ends with `cd dashboard && tsc`) can't leak its cwd into the
+# next step. Without this, `unitTests` ("npm test") was silently running from
+# dashboard/ — so the backend suite never ran on push.
 CHECKS_CMD="$(get_command checks)"
 if is_real_command "$CHECKS_CMD"; then
     echo "  - Running quality checks..."
-    if eval "$CHECKS_CMD"; then
+    if ( eval "$CHECKS_CMD" ); then
         echo "    ✅ Quality checks passed"
     else
         echo "    ❌ Quality checks failed. Fix before pushing."
@@ -34,7 +38,7 @@ fi
 UNIT_CMD="$(get_command unitTests)"
 if is_real_command "$UNIT_CMD"; then
     echo "  - Running unit tests..."
-    if eval "$UNIT_CMD"; then
+    if ( eval "$UNIT_CMD" ); then
         echo "    ✅ Unit tests passed"
     else
         echo "    ❌ Some unit tests are failing. Fix before pushing."

@@ -1602,9 +1602,16 @@ describe('POST /appointments/:id/send-self-service-links', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body) as { success: boolean; message: string };
+    const body = JSON.parse(res.body) as {
+      success: boolean;
+      message: string;
+      cancelLink?: string;
+      rescheduleLink?: string;
+    };
     expect(body.success).toBe(true);
     expect(body.message).toMatch(/sent/i);
+    expect(body.cancelLink).toMatch(/\/self\/cancel\?token=/);
+    expect(body.rescheduleLink).toMatch(/\/self\/reschedule\?token=/);
     expect(sendSms).toHaveBeenCalledOnce();
     const callArgs = (sendSms as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
       body: string;

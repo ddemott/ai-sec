@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
- * ESLint rules disabled for this file as part of full cleanup (REFACTORING_TODO.md item 10).
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
@@ -234,6 +234,48 @@ export function registerReminderRoutes(
         message: 'Reminder cancelled',
       });
     }, 'Failed to cancel reminder')
+  );
+
+  /**
+   * GET /reminders/delivery-stats - Owner-facing delivery monitoring stats (sent/failed/scheduled/cancelled counts by status + recency buckets).
+   * Uses table aggregates (tenant-isolated) rather than global in-memory metrics so owners see *their* numbers.
+   * Powers the reminder delivery monitoring view.
+   */
+  app.get(
+    '/reminders/delivery-stats',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const stats = await withTenantClient(tenantId, async (client) => {
+        const result = await client.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE status = 'sent')::int AS sent_total,
+             COUNT(*) FILTER (WHERE status = 'sent' AND sent_at > now() - interval '7 days')::int AS sent_7d,
+             COUNT(*) FILTER (WHERE status = 'sent' AND sent_at > now() - interval '30 days')::int AS sent_30d,
+             COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_total,
+             COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > now() - interval '7 days')::int AS failed_7d,
+             COUNT(*) FILTER (WHERE status = 'scheduled')::int AS scheduled,
+             COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled
+           FROM reminder_schedules
+           WHERE tenant_id = $1`,
+          [tenantId]
+        );
+        return (
+          result.rows[0] || {
+            sent_total: 0,
+            sent_7d: 0,
+            sent_30d: 0,
+            failed_total: 0,
+            failed_7d: 0,
+            scheduled: 0,
+            cancelled: 0,
+          }
+        );
+      });
+
+      return reply.send(stats);
+    }, 'Failed to load reminder delivery stats')
   );
 
   /**

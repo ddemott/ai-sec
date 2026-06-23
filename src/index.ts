@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
- * ESLint rules disabled for this file as part of full cleanup (REFACTORING_TODO.md item 10).
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
@@ -22,7 +22,6 @@ import { buildLogger } from './services/logger';
 import { httpRequestsTotal, httpRequestDurationMs, errorsTotal } from './services/metrics';
 import fs from 'node:fs';
 import path from 'node:path';
-import querystring from 'node:querystring';
 
 import { registerAuthRoutes } from './routes/auth';
 import { registerTenantRoutes } from './routes/tenants';
@@ -50,6 +49,8 @@ import { registerCommunicationRoutes } from './routes/communications';
 import { registerReminderRoutes } from './routes/reminders';
 import { registerHealthRoutes } from './routes/health';
 import { registerSelfServiceRoutes } from './routes/selfService';
+import { registerExportRoutes } from './routes/exportData';
+import { registerAuditLogRoutes } from './routes/auditLog';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { createGetEmbedding } from '../shared/getEmbedding';
@@ -150,26 +151,6 @@ void app.register(multipart, {
 // parses JSON via done(). See src/jsonContentTypeParser.ts for the why
 // (and the unit test that pins the done()-callback contract).
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, jsonContentTypeParser);
-
-// --- Form-Encoded Body Parsing for Twilio Webhooks ---
-// Twilio POSTs its SMS delivery-status callbacks as
-// application/x-www-form-urlencoded (MessageSid=…&MessageStatus=…). Fastify
-// ships no parser for that content type by default, so without this the
-// webhook would 415 and req.body would be undefined. Parse into a plain
-// object via querystring so POST /communications/twilio/status reads the
-// fields off req.body. (No @fastify/formbody dependency added — the built-in
-// querystring module covers this single, simple webhook surface.)
-app.addContentTypeParser(
-  'application/x-www-form-urlencoded',
-  { parseAs: 'string' },
-  (_req, body, done) => {
-    try {
-      done(null, querystring.parse(body as string));
-    } catch (err) {
-      done(err as Error, undefined);
-    }
-  }
-);
 
 // --- Database Pool ---
 // Single shared pool (see src/database/index.ts) — same instance is used by
@@ -281,6 +262,8 @@ registerReminderRoutes(app, pool, withTenantClient);
 registerAgentToolRoutes(app, pool, withTenantClient, getEmbedding, normalizeForEmbedding);
 registerDemoRoutes(app, pool, generateToken);
 registerSelfServiceRoutes(app, withTenantClient);
+registerExportRoutes(app, pool, withTenantClient);
+registerAuditLogRoutes(app, pool, withTenantClient);
 
 // --- Start Reminder Scheduler ---
 // Only start in production or if explicitly enabled

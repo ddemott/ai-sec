@@ -174,6 +174,12 @@ describe('Knowledge upload → policy-answer retrieval (real DB + pgvector)', ()
     // distinctive content phrase from the doc (matches "5pm").
     expect(body.result).toContain('5pm');
     expect(body.result).toContain('Monday through Friday');
+    // Caller-facing source citation: the chunk is attributed to its source-doc
+    // title. This runs against the REAL DB, so it pins the tenant_doc_id = ANY()
+    // title lookup against actual Postgres (the mocked agentTools test can't —
+    // it would pass even if the uuid[]/text[] cast were wrong and the lookup
+    // silently failed).
+    expect(body.result).toContain('[From "What are your business hours?"]');
   });
 
   it('HAPPY: doc uploaded via /knowledge/ingest is retrieved the same way', async () => {

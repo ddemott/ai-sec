@@ -183,6 +183,119 @@ describe('ToolsClient.call', () => {
     }
   });
 
+  it('HAPPY: READ tool retries once on transient 5xx, then succeeds', async () => {
+    // WHO: A read tool (e.g. service-catalog) hits the backend during a
+    //       deploy blip — the first request lands on a pod mid-restart (502),
+    //       the retry lands on a healthy pod
+    // WHAT: With isReadOnly:true the client makes a SECOND attempt and returns
+    //        the success envelope from it — the caller never sees the blip
+    // WHY: Read tools are safe to retry (no state mutated); a one-shot
+    //        transient 5xx shouldn't make the AI tell the caller "something
+    //        went wrong" when an immediate retry would have worked
+    const { fetchImpl, calls } = mockFetch([
+      { status: 502, body: { error: 'Bad Gateway' } },
+      { status: 200, body: { success: true, result: { services: ['oil change'] } } },
+    ]);
+    const client = new ToolsClient({ backendUrl: BACKEND, agentSecret: SECRET, fetchImpl });
+
+    const res = await client.call('/agent-tools/service-catalog', {}, { isReadOnly: true });
+
+    expect(res).toEqual({ ok: true, result: { services: ['oil change'] } });
+    // WHY: Exactly two attempts — one retry, not an infinite loop
+    expect(calls).toHaveLength(2);
+  });
+
+  it('SAD: READ tool retries once, both attempts 5xx → fails with "after 1 read retry"', async () => {
+    // WHO: Backend is genuinely down (not a one-pod blip) during a read
+    // WHAT: After the single retry also 5xxes, the client gives up and tags
+    //        the error so logs show the retry already happened
+    // WHY: The "(after 1 read retry)" suffix tells ops the client did its job
+    //        and the backend is actually unhealthy — not a missing retry
+    const { fetchImpl, calls } = mockFetch([
+      { status: 500, body: { error: 'Internal Server Error' } },
+      { status: 500, body: { error: 'Internal Server Error' } },
+    ]);
+    const client = new ToolsClient({ backendUrl: BACKEND, agentSecret: SECRET, fetchImpl });
+
+    const res = await client.call('/agent-tools/service-catalog', {}, { isReadOnly: true });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error).toContain('500');
+      expect(res.error).toContain('after 1 read retry');
+      expect(res.status).toBe(500);
+    }
+    expect(calls).toHaveLength(2);
+  });
+
+  it('SAD: MUTATION never retries on 5xx → exactly one attempt, no "read retry" tag', async () => {
+    // WHO: A booking call (book-with-scheduling) gets a 500 — the request may
+    //       have ALREADY succeeded server-side before the error response
+    // WHAT: With isReadOnly omitted (default mutation), the client makes
+    //        EXACTLY ONE attempt and surfaces the bare 500
+    // WHY: Retrying a write that might have committed risks a DOUBLE-BOOKING.
+    //        This is the whole reason the retry is gated on isReadOnly — this
+    //        test is the guardrail against someone "helpfully" retrying writes
+    const { fetchImpl, calls } = mockFetch([
+      { status: 500, body: { error: 'Internal Server Error' } },
+    ]);
+    const client = new ToolsClient({ backendUrl: BACKEND, agentSecret: SECRET, fetchImpl });
+
+    const res = await client.call('/agent-tools/book-with-scheduling', {});
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error).toContain('500');
+      expect(res.error).not.toContain('read retry');
+    }
+    // WHY: One call only — if a future change retries mutations this fails
+    //       (mockFetch would also throw "no more responses queued")
+    expect(calls).toHaveLength(1);
+  });
+
+  it('HAPPY: READ tool retries once on a network throw, then succeeds', async () => {
+    // WHO: Backend socket drops on the first read attempt (ECONNRESET during
+    //       a rolling deploy), recovers immediately after
+    // WHAT: The catch-path retry (also gated on isReadOnly) makes a second
+    //        attempt and returns its success
+    // WHY: A dropped connection is as transient as a 5xx for a read — same
+    //        safe-to-retry reasoning
+    let attempts = 0;
+    const fetchImpl: typeof fetch = async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('ECONNRESET');
+      return new Response(JSON.stringify({ success: true, result: 'ok' }), { status: 200 });
+    };
+    const client = new ToolsClient({ backendUrl: BACKEND, agentSecret: SECRET, fetchImpl });
+
+    const res = await client.call('/agent-tools/service-catalog', {}, { isReadOnly: true });
+
+    expect(res).toEqual({ ok: true, result: 'ok' });
+    expect(attempts).toBe(2);
+  });
+
+  it('SAD: MUTATION never retries on a network throw → exactly one attempt', async () => {
+    // WHO: A booking write throws mid-flight (connection refused) — the write
+    //       may have reached Postgres before the socket died
+    // WHAT: Mutation default makes ONE attempt only and returns the error
+    // WHY: Same double-book guard as the 5xx case, but for the throw path
+    //       (catch branch checks isReadOnly explicitly at toolsClient.ts:120)
+    let attempts = 0;
+    const fetchImpl: typeof fetch = async () => {
+      attempts += 1;
+      throw new Error('ECONNREFUSED');
+    };
+    const client = new ToolsClient({ backendUrl: BACKEND, agentSecret: SECRET, fetchImpl });
+
+    const res = await client.call('/agent-tools/book-with-scheduling', {});
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error).toBe('ECONNREFUSED');
+    }
+    expect(attempts).toBe(1);
+  });
+
   it('HAPPY: normalizes paths — works with or without leading slash', async () => {
     // WHAT: Tool registration in tools.ts defines paths as "/agent-tools/x"
     //        but internal callers sometimes omit the slash; client should

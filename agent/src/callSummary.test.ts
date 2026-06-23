@@ -19,14 +19,14 @@ describe('summarizeCall (failsafe post-call summary)', () => {
   it('returns null for an empty transcript without calling OpenAI', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
-    expect(await summarizeCall('   ', KEY)).toBeNull();
+    expect((await summarizeCall('   ', KEY)).summary).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('returns null when no API key is provided', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
-    expect(await summarizeCall('Caller: hi', '')).toBeNull();
+    expect((await summarizeCall('Caller: hi', '')).summary).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -40,7 +40,7 @@ describe('summarizeCall (failsafe post-call summary)', () => {
         }),
       }))
     );
-    expect(await summarizeCall('Caller: I need an oil change.', KEY)).toBe(
+    expect((await summarizeCall('Caller: I need an oil change.', KEY)).summary).toBe(
       'Caller booked an oil change.'
     );
   });
@@ -50,7 +50,7 @@ describe('summarizeCall (failsafe post-call summary)', () => {
       'fetch',
       vi.fn(async () => ({ ok: false, json: async () => ({}) }))
     );
-    expect(await summarizeCall('Caller: hi', KEY)).toBeNull();
+    expect((await summarizeCall('Caller: hi', KEY)).summary).toBeNull();
   });
 
   it('returns null (never throws) when fetch rejects', async () => {
@@ -60,7 +60,7 @@ describe('summarizeCall (failsafe post-call summary)', () => {
         throw new Error('network down');
       })
     );
-    await expect(summarizeCall('Caller: hi', KEY)).resolves.toBeNull();
+    await expect(summarizeCall('Caller: hi', KEY)).resolves.toEqual({ summary: null });
   });
 
   it('returns null when the model returns empty content', async () => {
@@ -71,6 +71,6 @@ describe('summarizeCall (failsafe post-call summary)', () => {
         json: async () => ({ choices: [{ message: { content: '' } }] }),
       }))
     );
-    expect(await summarizeCall('Caller: hi', KEY)).toBeNull();
+    expect((await summarizeCall('Caller: hi', KEY)).summary).toBeNull();
   });
 });

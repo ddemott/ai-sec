@@ -9,6 +9,43 @@ import {
 } from '../middleware';
 import { parseDateRange } from './routeHelpers';
 
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * True only for a real calendar date in YYYY-MM-DD form. The regex alone is not
+ * enough: "2026-02-30" and "2026-13-01" are correctly *shaped* but not real
+ * dates, and would pass straight through to a `$n::date` cast and throw a 500.
+ * We round-trip through a UTC Date and require every component to survive, so a
+ * calendar-invalid bound is rejected here (→ null → all-time), never at the DB.
+ */
+function isValidDateOnly(s: string): boolean {
+  const m = DATE_ONLY_RE.exec(s);
+  if (!m) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day;
+}
+
+/**
+ * Optional, unbounded-by-default date window for the analytics endpoints.
+ * Unlike parseDateRange (which defaults the start to *today* — right for a
+ * coverage lookup, wrong for analytics where "no filter" means all-time), this
+ * returns null for any missing/malformed/calendar-invalid bound. Callers pass
+ * [tenantId, start, end] and guard each side with `($n::date IS NULL OR col >=
+ * $n::date)` so an absent bound drops out of the predicate entirely. `end` is
+ * treated as inclusive of the whole day via `< $end::date + interval '1 day'`.
+ */
+function optionalDateBounds(query: Record<string, string>): {
+  start: string | null;
+  end: string | null;
+} {
+  const start = query.start_date && isValidDateOnly(query.start_date) ? query.start_date : null;
+  const end = query.end_date && isValidDateOnly(query.end_date) ? query.end_date : null;
+  return { start, end };
+}
+
 export function registerAnalyticsRoutes(
   app: AppFastifyInstance,
   pool: Pool,
@@ -94,6 +131,11 @@ export function registerAnalyticsRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
+      // Optional From/To window (YYYY-MM-DD). Absent → all-time. `end` is
+      // inclusive of the whole day. byDay keeps its 30-day default ONLY when no
+      // start is supplied, so the sparkline isn't blank on first load.
+      const { start, end } = optionalDateBounds(req.query as Record<string, string>);
+
       const data = await withTenantClient(tenantId, async (client) => {
         const [byOutcome, byDay, totals] = await Promise.all([
           // Outcome breakdown — powers Conversion, Abandonment, and the WHY cut.
@@ -104,21 +146,25 @@ export function registerAnalyticsRoutes(
                     count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked
              FROM voice_sessions
              WHERE tenant_id = $1 AND is_deleted = false
+               AND ($2::date IS NULL OR started_at >= $2::date)
+               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
              GROUP BY 1
              ORDER BY count DESC`,
-            [tenantId]
+            [tenantId, start, end]
           ),
-          // Per-day call volume over the last 30 days, with booked count.
+          // Per-day call volume, with booked count. Lower bound: the supplied
+          // start, else the last 30 days. Upper bound: the supplied end (inclusive).
           client.query<{ day: string; total: number; booked: number }>(
             `SELECT to_char(date_trunc('day', started_at), 'YYYY-MM-DD') AS day,
                     count(*)::int AS total,
                     count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked
              FROM voice_sessions
              WHERE tenant_id = $1 AND is_deleted = false
-               AND started_at >= now() - interval '30 days'
+               AND started_at >= COALESCE($2::date, (now() - interval '30 days'))
+               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
              GROUP BY 1
              ORDER BY 1 ASC`,
-            [tenantId]
+            [tenantId, start, end]
           ),
           // Top-line totals so the dashboard never has to re-derive the denominator.
           client.query<{ total: number; booked: number; abandoned: number }>(
@@ -127,8 +173,10 @@ export function registerAnalyticsRoutes(
                     count(*) FILTER (WHERE appointment_id IS NULL
                                        AND coalesce(nullif(outcome, ''), 'no_outcome') = 'no_outcome')::int AS abandoned
              FROM voice_sessions
-             WHERE tenant_id = $1 AND is_deleted = false`,
-            [tenantId]
+             WHERE tenant_id = $1 AND is_deleted = false
+               AND ($2::date IS NULL OR started_at >= $2::date)
+               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))`,
+            [tenantId, start, end]
           ),
         ]);
 
@@ -141,6 +189,178 @@ export function registerAnalyticsRoutes(
 
       return reply.send(data);
     }, 'Failed to load call analytics')
+  );
+
+  // Analytics depth: repeat-caller cohorts + bookings-by-service. Both are
+  // derivable from voice_sessions today (no new column). Repeat callers are
+  // grouped on the LAST 10 DIGITS of caller_phone (US-centric) so the same
+  // person reaching out as "+16305559999" (E.164, with the 1 country code) and
+  // "630-555-9999" (10-digit) counts once. Bookings-by-service joins booked
+  // calls → appointment → service. CLV (top_customers) ranks customers by
+  // lifetime booked revenue. Abandonment-by-service uses
+  // voice_sessions.requested_service_id (set best-effort by the
+  // book-with-scheduling agent tool) to group abandoned calls (no appointment)
+  // by the service the caller was trying to book.
+  app.get(
+    '/analytics/cohorts',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      // Optional From/To window (YYYY-MM-DD). Absent → all-time. `end` is
+      // inclusive of the whole day. Voice queries filter on started_at; the
+      // revenue (top-customers) query filters on the appointment's start_time.
+      const { start, end } = optionalDateBounds(req.query as Record<string, string>);
+
+      const data = await withTenantClient(tenantId, async (client) => {
+        const [repeatCallers, byService, summary, topCustomers, abandonmentByService] =
+          await Promise.all([
+            // Callers who reached out more than once, newest-activity first.
+            client.query<{
+              phone: string;
+              call_count: number;
+              booked_count: number;
+              first_call: string;
+              last_call: string;
+            }>(
+              `SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
+                    count(*)::int AS call_count,
+                    count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked_count,
+                    min(started_at) AS first_call,
+                    max(started_at) AS last_call
+             FROM voice_sessions
+             WHERE tenant_id = $1 AND is_deleted = false
+               AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
+               AND ($2::date IS NULL OR started_at >= $2::date)
+               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
+             GROUP BY 1
+             HAVING count(*) > 1
+             ORDER BY last_call DESC
+             LIMIT 100`,
+              [tenantId, start, end]
+            ),
+            // Which services the booked calls actually booked.
+            client.query<{ service: string; booked_count: number }>(
+              `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
+                    count(*)::int AS booked_count
+             FROM voice_sessions v
+             JOIN appointments a ON a.appointment_id = v.appointment_id
+             LEFT JOIN services s ON s.service_id = a.service_id
+             WHERE v.tenant_id = $1 AND v.is_deleted = false
+               AND ($2::date IS NULL OR v.started_at >= $2::date)
+               AND ($3::date IS NULL OR v.started_at < ($3::date + interval '1 day'))
+             GROUP BY 1
+             ORDER BY booked_count DESC`,
+              [tenantId, start, end]
+            ),
+            // Top-line: how many distinct callers, how many are repeat, and how
+            // much of total call volume comes from repeat callers.
+            client.query<{
+              distinct_callers: number;
+              repeat_callers: number;
+              repeat_call_volume: number;
+              total_calls: number;
+            }>(
+              `WITH per_caller AS (
+               SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
+                      count(*)::int AS c
+               FROM voice_sessions
+               WHERE tenant_id = $1 AND is_deleted = false
+                 AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
+                 AND ($2::date IS NULL OR started_at >= $2::date)
+                 AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
+               GROUP BY 1
+             )
+             SELECT count(*)::int AS distinct_callers,
+                    count(*) FILTER (WHERE c > 1)::int AS repeat_callers,
+                    coalesce(sum(c) FILTER (WHERE c > 1), 0)::int AS repeat_call_volume,
+                    coalesce(sum(c), 0)::int AS total_calls
+             FROM per_caller`,
+              [tenantId, start, end]
+            ),
+            // Customer lifetime value: top customers by total booked revenue
+            // (sum of each appointment's service price). services.price defaults
+            // to 0, so a tenant that hasn't priced services sees visits with $0 —
+            // still a useful "who books most" ranking. ::float8 so JSON gets a
+            // number, not a Postgres numeric string.
+            client.query<{
+              customer_id: string;
+              name: string;
+              visits: number;
+              revenue: number;
+            }>(
+              `SELECT c.customer_id,
+                    coalesce(nullif(c.name, ''), 'Unknown') AS name,
+                    count(a.appointment_id)::int AS visits,
+                    coalesce(sum(s.price), 0)::float8 AS revenue
+             FROM appointments a
+             JOIN customers c ON c.customer_id = a.customer_id
+             LEFT JOIN services s ON s.service_id = a.service_id
+             WHERE a.tenant_id = $1 AND a.is_deleted = false AND c.is_deleted = false
+               AND ($2::date IS NULL OR a.start_time >= $2::date)
+               AND ($3::date IS NULL OR a.start_time < ($3::date + interval '1 day'))
+             GROUP BY c.customer_id, c.name
+             ORDER BY revenue DESC, visits DESC
+             LIMIT 20`,
+              [tenantId, start, end]
+            ),
+            // Abandonment-by-service: calls that did NOT book (appointment_id NULL)
+            // but recorded a requested_service_id (the caller tried to book that
+            // service). Surfaces "what are we losing callers over". Depends on the
+            // book-with-scheduling capture writing requested_service_id.
+            //
+            // FORWARD-COMPATIBLE: this is the ONLY query that reads the
+            // voice_sessions.requested_service_id column added by migration
+            // 20260622010000. If a deploy lands before that migration is applied
+            // (as happened on prod), the column is missing and this query throws
+            // — which, inside the Promise.all, would reject the WHOLE /analytics/
+            // cohorts endpoint (500 on every Analytics-tab load). The .catch
+            // degrades just this one panel to empty so the rest of the cohort
+            // data still renders. Once the migration is applied it returns real
+            // rows. (Same "safe pre-migration" stance as the audit-extend work.)
+            client
+              .query<{ service: string; abandoned_count: number }>(
+                `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
+                    count(*)::int AS abandoned_count
+             FROM voice_sessions v
+             JOIN services s ON s.service_id = v.requested_service_id
+             WHERE v.tenant_id = $1 AND v.is_deleted = false
+               AND v.appointment_id IS NULL
+               AND ($2::date IS NULL OR v.started_at >= $2::date)
+               AND ($3::date IS NULL OR v.started_at < ($3::date + interval '1 day'))
+             GROUP BY 1
+             ORDER BY abandoned_count DESC`,
+                [tenantId, start, end]
+              )
+              .catch((err: unknown) => {
+                // Degrade ONLY for "column does not exist" (Postgres 42703) — the
+                // pre-migration window where requested_service_id isn't there yet.
+                // Any other failure (permissions, outage, syntax) must surface as a
+                // real error via withHandler, not hide behind an empty panel.
+                if (err && typeof err === 'object' && (err as { code?: string }).code === '42703') {
+                  return { rows: [] as { service: string; abandoned_count: number }[] };
+                }
+                throw err;
+              }),
+          ]);
+
+        return {
+          repeat_callers: repeatCallers.rows,
+          by_service: byService.rows,
+          top_customers: topCustomers.rows,
+          abandonment_by_service: abandonmentByService.rows,
+          summary: summary.rows[0] ?? {
+            distinct_callers: 0,
+            repeat_callers: 0,
+            repeat_call_volume: 0,
+            total_calls: 0,
+          },
+        };
+      });
+
+      logEvent(req, 'analytics_cohorts_viewed', { tenantId });
+      return reply.send(data);
+    }, 'Failed to load cohort analytics')
   );
 
   // Coverage gap detection — returns per-service coverage status for a date range

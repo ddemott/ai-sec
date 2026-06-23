@@ -72,6 +72,6 @@ COMMENT ON COLUMN communications_history.channel IS 'Communication channel: emai
 COMMENT ON COLUMN communications_history.direction IS 'Message direction: outbound (default) or inbound';
 COMMENT ON COLUMN communications_history.recipient IS 'Destination address (email address or E.164 phone number)';
 COMMENT ON COLUMN communications_history.status IS 'Delivery disposition recorded at send time: sent, failed, or queued';
-COMMENT ON COLUMN communications_history.provider_message_id IS 'Upstream provider message id (nodemailer messageId / Twilio SID) for cross-referencing';
+COMMENT ON COLUMN communications_history.provider_message_id IS 'Upstream provider message id (nodemailer messageId / Telnyx ID; legacy provider SID references in old rows) for cross-referencing';
 
 COMMIT;
