@@ -108,10 +108,20 @@ describe('findEligibleCustomerIds — query shape', () => {
 });
 
 describe('anonymizeCustomerInTx — erasure shape', () => {
-  it('nulls PII, tombstones the phone, and redacts the audit_log snapshots', async () => {
-    const { client, queries } = mockClient([{ rows: [] }, { rows: [] }]);
+  it('wraps PII null + phone tombstone + audit redact in ONE transaction', async () => {
+    const { client, queries } = mockClient([
+      { rows: [] }, // BEGIN
+      { rows: [] }, // UPDATE customers
+      { rows: [] }, // UPDATE audit_log
+      { rows: [] }, // COMMIT
+    ]);
 
     await anonymizeCustomerInTx(client, 'tenant-1', 'c1', 'retention-worker');
+
+    // Atomic: both UPDATEs inside BEGIN/COMMIT so a crash between them can't
+    // leave the customer anonymized while audit_log still holds the PII.
+    expect(queries[0].text.trim()).toBe('BEGIN');
+    expect(queries[queries.length - 1].text.trim()).toBe('COMMIT');
 
     const upd = queries.find((x) => x.text.includes('UPDATE customers'));
     expect(upd!.text).toContain('name = NULL');

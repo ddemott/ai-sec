@@ -19,16 +19,17 @@
  * FLAGGED FOR LEGAL REVIEW — do not enable in prod until retention periods are
  * signed off.
  */
-import type { Pool, PoolClient } from 'pg';
-import { getPool, createWithTenantClient } from '../database/index.js';
+import type { Pool } from 'pg';
+import { getPool, createWithTenantClient, type WithTenantClient } from '../database/index.js';
 import { sweepTenant, listTenantIds } from '../services/retention/retentionService.js';
-
-type WithTenantClient = <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>;
 
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 const DEFAULT_BATCH_SIZE = 100;
 
 let workerInterval: NodeJS.Timeout | null = null;
+// Tracks the in-flight pass so (a) overlapping ticks are skipped and (b)
+// shutdown can await a sweep that's mid-flight before the pool closes.
+let activePass: Promise<number> | null = null;
 
 export interface RetentionConfig {
   retentionDays: number;
@@ -119,16 +120,36 @@ export function startRetentionWorker(poolOverride?: Pool): void {
   // Run on the interval. Deliberately NOT immediate-on-start: an erasure pass
   // should not fire the instant a process boots/redeploys.
   workerInterval = setInterval(() => {
-    runRetentionPass(pool, config).catch(console.error);
+    // Skip this tick if the previous pass is still running — overlapping sweeps
+    // would double-process the same customers (extra load, lock contention).
+    if (activePass) return;
+    activePass = runRetentionPass(pool, config)
+      .catch((err) => {
+        console.error('Retention pass failed', err);
+        return 0;
+      })
+      .finally(() => {
+        activePass = null;
+      }) as Promise<number>;
   }, config.intervalMs);
 }
 
-/** Stop the retention worker (graceful shutdown). */
-export function stopRetentionWorker(): void {
+/**
+ * Stop the retention worker (graceful shutdown). Clears the interval AND awaits
+ * any in-flight pass so the pool isn't closed out from under a sweep mid-erasure.
+ */
+export async function stopRetentionWorker(): Promise<void> {
   if (workerInterval) {
     console.log('🛑 Stopping retention worker');
     clearInterval(workerInterval);
     workerInterval = null;
+  }
+  if (activePass) {
+    try {
+      await activePass;
+    } catch {
+      // already logged inside the tick
+    }
   }
 }
 

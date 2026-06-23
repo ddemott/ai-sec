@@ -28,6 +28,13 @@ export interface RetentionSweepResult {
  * (RLS-scoped) client. Mirrors the manual purge endpoint's SQL exactly; the two
  * should be unified into a single shared statement once both land. `deletedBy`
  * is recorded for the audit trail of who/what triggered the erasure.
+ *
+ * The two UPDATEs run in a single transaction (BEGIN/COMMIT, ROLLBACK on error):
+ * the customers audit trigger writes the pre-purge PII into audit_log.old_data
+ * as part of the first UPDATE, so a crash or failure between the two autocommit
+ * statements would otherwise leave the customer anonymized while the audit
+ * snapshot still held the original PII — defeating the "audit leak closed"
+ * guarantee. Atomicity makes the redaction all-or-nothing.
  */
 export async function anonymizeCustomerInTx(
   client: PoolClient,
@@ -35,22 +42,29 @@ export async function anonymizeCustomerInTx(
   customerId: string,
   deletedBy: string
 ): Promise<void> {
-  await client.query(
-    `UPDATE customers
-        SET name = NULL, email = NULL, address = NULL, address_line2 = NULL,
-            first_name = NULL, last_name = NULL, city = NULL, state = NULL,
-            postal_code = NULL, metadata = '{}'::jsonb,
-            phone = 'PURGED-' || customer_id::text,
-            is_deleted = true, deleted_at = now(), deleted_by = $3, updated_at = now()
-      WHERE customer_id = $1 AND tenant_id = $2`,
-    [customerId, tenantId, deletedBy]
-  );
-  await client.query(
-    `UPDATE audit_log
-        SET old_data = NULL, new_data = NULL
-      WHERE tenant_id = $1 AND table_name = 'customers' AND record_id = $2`,
-    [tenantId, customerId]
-  );
+  await client.query('BEGIN');
+  try {
+    await client.query(
+      `UPDATE customers
+          SET name = NULL, email = NULL, address = NULL, address_line2 = NULL,
+              first_name = NULL, last_name = NULL, city = NULL, state = NULL,
+              postal_code = NULL, metadata = '{}'::jsonb,
+              phone = 'PURGED-' || customer_id::text,
+              is_deleted = true, deleted_at = now(), deleted_by = $3, updated_at = now()
+        WHERE customer_id = $1 AND tenant_id = $2`,
+      [customerId, tenantId, deletedBy]
+    );
+    await client.query(
+      `UPDATE audit_log
+          SET old_data = NULL, new_data = NULL
+        WHERE tenant_id = $1 AND table_name = 'customers' AND record_id = $2`,
+      [tenantId, customerId]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  }
 }
 
 /**

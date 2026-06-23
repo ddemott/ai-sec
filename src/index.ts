@@ -307,7 +307,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
     app.log.info(`Received ${signal}, shutting down...`);
     stopReminderScheduler();
-    stopRetentionWorker();
+    await stopRetentionWorker(); // awaits any in-flight erasure pass before the pool closes
     await app.close();
     await closePool();
     process.exit(0);
