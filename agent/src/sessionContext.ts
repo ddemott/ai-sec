@@ -101,10 +101,18 @@ export function buildSessionContext(args: {
   const meta = parseRoomMetadata(args.jobMetadata) ?? parseRoomMetadata(args.roomMetadata);
   if (!meta) return null;
   const caller = extractCallerInfo(args.participantAttributes);
+  // Fall back to the room name when the carrier call-ID attribute is missing.
+  // LiveKit attaches `sip.callID` asynchronously, so it can be absent at the
+  // instant we read participant attributes (a race). Call-logging is gated on
+  // a non-null callId — without this fallback, a call whose attribute arrives
+  // late never creates a voice_sessions row (no Calls-tab entry, no transcript
+  // saved on hangup). The room name is unique per call, so it's a safe key for
+  // session correlation when the carrier id isn't available.
+  const callId = caller.callId ?? (args.roomName ? `room:${args.roomName}` : null);
   return {
     tenantId: meta.tenantId,
     callerPhone: caller.callerPhone,
-    callId: caller.callId,
+    callId,
     roomName: args.roomName ?? null,
     participantIdentity: args.participantIdentity ?? null,
   };
