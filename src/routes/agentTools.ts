@@ -41,7 +41,7 @@ import {
   clearSyncRecorder,
   syncAppointmentToAll,
 } from '../services/syncOrchestrator';
-import { toolCallsTotal, bookingAttemptsTotal } from '../services/metrics';
+import { toolCallsTotal, bookingAttemptsTotal, errorsTotal } from '../services/metrics';
 import {
   selectAssignments,
   type ResourceCandidate,
@@ -291,6 +291,43 @@ function parseOrFail<T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply
 }
 
 /**
+ * Pull the diagnostic fields off a node-postgres error so a call-logging
+ * failure names its own cause in ONE structured log line — no guessing from
+ * a generic 500. `code` is the Postgres SQLSTATE (e.g. 23502 = not_null_violation,
+ * 23503 = foreign_key_violation, 23505 = unique_violation); `constraint`,
+ * `column`, `table`, and `detail` pinpoint exactly what the RPC rejected.
+ * Origin: 2026-06-24 — the first real Beth call never logged because
+ * start_voice_session() threw on a NULL caller_phone, but the fire-and-forget
+ * failure left no diagnosable trace (see feedback_sad_path_instrumentation).
+ */
+function pgErrorFields(err: unknown): {
+  error_message: string;
+  sqlstate: string | null;
+  constraint: string | null;
+  column: string | null;
+  table: string | null;
+  detail: string | null;
+} {
+  const e = (err ?? {}) as {
+    message?: unknown;
+    code?: unknown;
+    constraint?: unknown;
+    column?: unknown;
+    table?: unknown;
+    detail?: unknown;
+  };
+  const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+  return {
+    error_message: err instanceof Error ? err.message : String(err),
+    sqlstate: str(e.code),
+    constraint: str(e.constraint),
+    column: str(e.column),
+    table: str(e.table),
+    detail: str(e.detail),
+  };
+}
+
+/**
  * Register a POST /agent-tools/* route with schema validation.
  * Collapses the repeated `app.post + withHandler + parseOrFail` boilerplate.
  * Handler receives already-parsed args; return value is ignored (respond
@@ -458,13 +495,34 @@ export function registerAgentToolRoutes(
     '/agent-tools/voice-session-start',
     VoiceSessionStartSchema,
     async (args, reply) => {
-      await withTenantClient(args.tenant_id, (client) =>
-        client.query('SELECT start_voice_session($1, $2, $3) AS context', [
-          args.tenant_id,
-          args.call_id,
-          args.caller_phone ?? null,
-        ])
-      );
+      try {
+        await withTenantClient(args.tenant_id, (client) =>
+          client.query('SELECT start_voice_session($1, $2, $3) AS context', [
+            args.tenant_id,
+            args.call_id,
+            args.caller_phone ?? null,
+          ])
+        );
+      } catch (err) {
+        // 5W sad-path log so a call that fails to log is diagnosable from ONE
+        // line. WHO: tenant_id. WHAT: voice_session_start (caller_phone null =
+        // forwarded/anonymous line). WHEN: now (call connect). WHERE: this RPC.
+        // WHY: the pg SQLSTATE/constraint/column. Plus errors_total{event} so the
+        // failure survives log truncation. The agent calls this fire-and-forget,
+        // so without this the call simply vanishes (Calls tab empty, no trace).
+        errorsTotal.inc({ event: 'voice_session_start_failed' });
+        app.log.error(
+          {
+            event: 'voice_session_start_failed',
+            tenant_id: args.tenant_id,
+            call_id: args.call_id,
+            caller_phone_present: args.caller_phone != null,
+            ...pgErrorFields(err),
+          },
+          'voice-session-start failed — call will NOT appear in the Calls tab'
+        );
+        return fail(reply, 'Failed to start voice session', 500);
+      }
       return ok(reply, { started: true });
     },
     'Failed to start voice session'
@@ -479,9 +537,9 @@ export function registerAgentToolRoutes(
     '/agent-tools/voice-session-end',
     VoiceSessionEndSchema,
     async (args, reply) => {
-      const { ended, forwardPhone, inboundPhone } = await withTenantClient(
-        args.tenant_id,
-        async (client) => {
+      let sessionEnd: { ended: boolean; forwardPhone: string | null; inboundPhone: string | null };
+      try {
+        sessionEnd = await withTenantClient(args.tenant_id, async (client) => {
           const res = await client.query<{ ended: boolean }>(
             'SELECT end_voice_session($1, $2, $3, $4, $5, $6, $7) AS ended',
             [
@@ -508,8 +566,26 @@ export function registerAgentToolRoutes(
             forwardPhone: tenant.rows[0]?.forward_phone ?? null,
             inboundPhone: tenant.rows[0]?.inbound_phone ?? null,
           };
-        }
-      );
+        });
+      } catch (err) {
+        // 5W sad-path log: an end failure means duration/transcript/outcome/
+        // summary never persisted and the row is stranded 'active'. WHO tenant,
+        // WHAT voice_session_end, WHERE this RPC, WHY the pg SQLSTATE/constraint.
+        errorsTotal.inc({ event: 'voice_session_end_failed' });
+        app.log.error(
+          {
+            event: 'voice_session_end_failed',
+            tenant_id: args.tenant_id,
+            call_id: args.call_id,
+            outcome: args.outcome ?? null,
+            has_transcript: args.transcript != null,
+            ...pgErrorFields(err),
+          },
+          'voice-session-end failed — transcript/duration/summary NOT saved; row left active'
+        );
+        return fail(reply, 'Failed to end voice session', 500);
+      }
+      const { ended, forwardPhone, inboundPhone } = sessionEnd;
 
       if (ended && forwardPhone && inboundPhone) {
         const normalizedForward = normalizePhone(forwardPhone);

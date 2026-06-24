@@ -31,6 +31,10 @@ function buildApp(opts: {
   embedding?: number[];
   normalizer?: (text: string) => Promise<string>;
   expander?: (text: string) => Promise<string>;
+  // Sad-path hook: when set and it returns an Error for a given SQL text, the
+  // mock query REJECTS with it (simulating a Postgres failure, e.g. a 23502
+  // not_null_violation from start_voice_session). Returns null to run normally.
+  queryThrows?: (text: string) => Error | null;
 }): { app: FastifyInstance; queries: MockQuery[] } {
   const queries: MockQuery[] = [];
   const responses = [...opts.queryResponses];
@@ -45,6 +49,8 @@ function buildApp(opts: {
         return { rows: [], rowCount: 1 };
       }
       queries.push({ text, params: params || [] });
+      const thrown = opts.queryThrows?.(typeof text === 'string' ? text : '');
+      if (thrown) throw thrown;
       return responses.shift() || { rows: [], rowCount: 0 };
     }),
     release: vi.fn(),
@@ -2321,6 +2327,37 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
       tenant_id: TENANT_ID,
     });
     expectValidationFailure(res, queries);
+  });
+
+  it('SAD: start returns 500 (not silent) when start_voice_session throws', async () => {
+    // WHO: a forwarded-line/anonymous caller whose caller_phone is null.
+    // WHAT: start_voice_session() rejects (e.g. a NOT NULL / 23502 violation) →
+    //        the route must surface a failure (500, success:false), NOT a 200
+    //        success, so the agent's fire-and-forget .catch fires and the
+    //        backend logs the 5W diagnostic + bumps errors_total.
+    // WHEN: call connect, the exact path that left the first real Beth call
+    //        unlogged with no trace (feedback_sad_path_instrumentation).
+    // WHERE: /agent-tools/voice-session-start → catch → fail(reply, …, 500).
+    // WHY: a swallowed failure here = empty Calls tab + zero diagnosability;
+    //       the fix makes the sad path loud.
+    const pgErr = Object.assign(new Error('null value in column "caller_phone"'), {
+      code: '23502',
+      column: 'caller_phone',
+      table: 'voice_sessions',
+    });
+    const { app, queries } = buildApp({
+      queryResponses: [],
+      queryThrows: (text) => (text.includes('start_voice_session') ? pgErr : null),
+    });
+    const res = await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-forwarded-1',
+      caller_phone: null,
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.json().success).toBe(false);
+    // The RPC was actually attempted (not short-circuited) before failing.
+    expect(queries[0].text).toContain('start_voice_session');
   });
 
   it('HAPPY: end records duration via end_voice_session and returns ended', async () => {

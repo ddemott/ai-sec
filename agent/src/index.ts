@@ -224,12 +224,18 @@ export default defineAgent({
             caller_phone: sessionCtx.callerPhone ?? null,
           })
           .catch((e: unknown) =>
-            callLog.warn(
+            // 5W sad path: callLog already carries tenant_id/call_id/caller_phone/
+            // room (WHO/WHERE). Add the WHY + an explicit forwarded-line flag so
+            // it's obvious WHY caller_phone may be null. The backend logs the pg
+            // SQLSTATE/constraint; this is the agent-side breadcrumb that the call
+            // never created a voice_sessions row (so it won't show in the Calls tab).
+            callLog.error(
               {
                 event: 'voice_session_start_failed',
+                forwarded_line: sessionCtx.callerPhone == null,
                 error_message: e instanceof Error ? e.message : String(e),
               },
-              'call-logging start failed (non-fatal)'
+              'call-logging START failed (non-fatal to the live call) — this call will NOT appear in the Calls tab'
             )
           );
         ctx.addShutdownCallback(async () => {
@@ -309,12 +315,16 @@ export default defineAgent({
                 );
             }
           } catch (e) {
-            callLog.warn(
+            // 5W sad path: callLog carries tenant_id/call_id/caller_phone/room.
+            // Add WHY + which write was in flight so a stranded 'active' row (no
+            // duration/transcript/summary) is diagnosable. Backend logs the pg
+            // SQLSTATE; this is the agent-side breadcrumb at shutdown.
+            callLog.error(
               {
                 event: 'voice_session_end_failed',
                 error_message: e instanceof Error ? e.message : String(e),
               },
-              'call-logging end failed (non-fatal)'
+              'call-logging END failed (non-fatal to the caller) — duration/transcript/summary NOT saved; row may stay active'
             );
           }
         });
