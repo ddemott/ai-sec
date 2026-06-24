@@ -164,6 +164,23 @@ describe('buildSessionContext', () => {
     expect(ctx?.participantIdentity).toBe('sip_caller_42');
   });
 
+  it('HAPPY: callId falls back to room name when carrier sip.callID is missing', () => {
+    // WHO: a real SIP call where LiveKit attaches sip.callID late (a race), so
+    //       the attribute is absent the instant we read it
+    // WHAT: no sip.callID in attributes, but roomName is present → callId uses
+    //       the room name (prefixed) instead of staying null
+    // WHY: call-logging (voice_sessions row + transcript-on-hangup) is gated on
+    //       a non-null callId. Without this fallback a late-attribute call never
+    //       records — no Calls-tab entry, nothing saved even when the caller
+    //       hangs up. Room name is unique per call, a safe correlation key.
+    const ctx = buildSessionContext({
+      roomMetadata: JSON.stringify({ tenant_id: TENANT_ID }),
+      participantAttributes: { 'sip.phoneNumber': '+15551234567' }, // no sip.callID
+      roomName: 'call-_6085551234_xyz',
+    });
+    expect(ctx?.callId).toBe('room:call-_6085551234_xyz');
+  });
+
   it('HAPPY: omitted room/identity default to null (participant not yet joined)', () => {
     // WHAT: the preliminary context (built before waitForParticipant) carries
     //       nulls so a missing participant degrades transfer gracefully

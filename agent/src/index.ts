@@ -27,7 +27,6 @@ import { fileURLToPath } from 'node:url';
 
 import { config, untrustedCallerIdTenants } from './config.js';
 import { runFallback } from './fallback.js';
-import { GrokTTS } from './grokTTS.js';
 import { getLogger } from './logger.js';
 import { buildSessionContext } from './sessionContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
@@ -44,12 +43,12 @@ export default defineAgent({
   prewarm: async (proc) => {
     // Boot-version marker. Printed once when the worker process starts, so the
     // Railway logs unambiguously show WHICH code is live (vs guessing from a
-    // redeploy). If you don't see build 'spoken-phone-v2' + these features in
+    // redeploy). If you don't see build 'spoken-phone-v3-openai-tts' + these features in
     // the logs, the worker is running an older deployment.
     getLogger().info(
       {
         event: 'agent_boot',
-        build: 'spoken-phone-v2',
+        build: 'spoken-phone-v3-openai-tts',
         features: ['find_caller_by_name', 'untrusted_caller_id', 'spoken_phone_params'],
       },
       'ai-sec-agent worker booting'
@@ -365,14 +364,16 @@ export default defineAgent({
           vad: ctx.proc.userData.vad as silero.VAD,
           stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
           llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-          tts: new GrokTTS({
-            apiKey: config.XAI_API_KEY,
-            // Per-tenant Grok voice + delivery (2026-06-10), falling back to the
-            // platform env defaults when the tenant hasn't picked one.
-            voice: tenantConfig.ttsVoice ?? config.XAI_TTS_VOICE,
-            speed: tenantConfig.ttsSpeed ?? config.XAI_TTS_SPEED,
-            soft: tenantConfig.ttsSoft ?? config.XAI_TTS_SOFT,
-            cheerful: tenantConfig.ttsCheerful ?? false,
+          // 2026-06-24: switched primary TTS Grok → OpenAI. Grok TTS is
+          // non-streaming (whole-utterance buffer) and rendered choppy over the
+          // 8kHz PSTN leg on multiple voices (eve, ara). OpenAI's plugin streams,
+          // which paces smoothly over the phone. Per-tenant Grok voice config
+          // (tenants.tts_voice/speed/soft) is bypassed while OpenAI is primary;
+          // 'shimmer' is a warm, calm female voice that fits "Beth". GrokTTS is
+          // retained in the tree and can be restored if/when streaming lands.
+          tts: new openai.TTS({
+            apiKey: config.OPENAI_API_KEY,
+            voice: 'shimmer',
           }),
         });
 
