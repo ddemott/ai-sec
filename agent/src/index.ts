@@ -42,6 +42,18 @@ import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
 export default defineAgent({
   prewarm: async (proc) => {
+    // Boot-version marker. Printed once when the worker process starts, so the
+    // Railway logs unambiguously show WHICH code is live (vs guessing from a
+    // redeploy). If you don't see build 'spoken-phone-v2' + these features in
+    // the logs, the worker is running an older deployment.
+    getLogger().info(
+      {
+        event: 'agent_boot',
+        build: 'spoken-phone-v2',
+        features: ['find_caller_by_name', 'untrusted_caller_id', 'spoken_phone_params'],
+      },
+      'ai-sec-agent worker booting'
+    );
     proc.userData.vad = await silero.VAD.load();
   },
 
