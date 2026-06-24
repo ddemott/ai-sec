@@ -1,6 +1,6 @@
 /**
- * E2E: Voice Style checkboxes (Soft, Cheerful, Formal, Warm, Concise) persist
- * through the real browser → Next.js → backend → Postgres stack.
+ * E2E: Voice Style checkboxes (Formal, Warm, Concise) persist through the real
+ * browser → Next.js → backend → Postgres stack.
  *
  * WHY THIS EXISTS
  * AIConfigView.test.tsx proves the component renders the checkboxes with a
@@ -9,6 +9,11 @@
  * checked. This spec pins that wiring so a regression in the form binding,
  * Api.tenants.updateConfig, or the route handler shows up as a failed reload
  * assertion — not a cosmetic toggle that silently stops persisting.
+ *
+ * NOTE (2026-06-24): Soft + Cheerful were removed from the picker when primary
+ * TTS switched Grok → OpenAI — they were Grok-only prosody tags with no OpenAI
+ * equivalent. Only the prompt-level styles (Formal/Warm/Concise) remain; their
+ * tts_* columns persist unchanged.
  *
  * Auth: the shared auth.setup logs in as admin@secretaryhq.com (super-admin,
  * platform tenant). We edit that tenant's AI config and reset it afterward.
@@ -29,8 +34,6 @@ test.afterAll(async () => {
   await pool
     .query(
       `UPDATE tenants SET
-         tts_soft      = NULL,
-         tts_cheerful  = NULL,
          tts_formal    = NULL,
          tts_warm      = NULL,
          tts_concise   = NULL`
@@ -57,9 +60,9 @@ async function openAiPersona(page: Page) {
   });
 }
 
-test('HAPPY: all 5 voice style checkboxes render on the AI Persona page', async ({ page }) => {
+test('HAPPY: all 3 voice style checkboxes render on the AI Persona page', async ({ page }) => {
   // WHO: any owner visiting Phone Assistant → AI Persona
-  // WHAT: all five checkbox labels and their descriptions are visible so the
+  // WHAT: all three checkbox labels and their descriptions are visible so the
   //        owner can discover and toggle each style independently
   // WHEN: the first visit to the AI Persona tab after the feature ships
   // WHERE: AIConfigView voice-style section
@@ -67,16 +70,18 @@ test('HAPPY: all 5 voice style checkboxes render on the AI Persona page', async 
   //       the feature exists in the backend but is invisible to the owner
   await openAiPersona(page);
 
-  // All five checkboxes must be present and labelled.
-  await expect(page.getByRole('checkbox', { name: /Soft/i })).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: /Cheerful/i })).toBeVisible();
+  // The three prompt-level style checkboxes must be present and labelled.
   await expect(page.getByRole('checkbox', { name: /Formal/i })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /Warm/i })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /Concise/i })).toBeVisible();
 
-  // Descriptive text for each style must also be visible so the owner knows
-  // what each option does without consulting documentation.
-  await expect(page.getByText(/Soothing, gentle delivery/i)).toBeVisible();
+  // Soft + Cheerful were Grok-only and are intentionally gone after the OpenAI
+  // TTS switch — guard against them creeping back in.
+  await expect(page.getByRole('checkbox', { name: /Soft/i })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: /Cheerful/i })).toHaveCount(0);
+
+  // Descriptive text must be visible so the owner knows what each does.
+  await expect(page.getByText(/Professional, no contractions/i)).toBeVisible();
 });
 
 test('HAPPY: checking Formal + saving persists through reload', async ({ page }) => {
@@ -108,46 +113,46 @@ test('HAPPY: checking Formal + saving persists through reload', async ({ page })
   await expect(page.getByRole('checkbox', { name: /Formal/i })).toBeChecked();
 });
 
-test('HAPPY: unchecking Soft + saving persists through reload', async ({ page }) => {
-  // WHO: an owner who enabled Soft, then decided to turn it off
-  // WHAT: check Soft, save, reload, uncheck Soft, save, reload — Soft is unchecked
+test('HAPPY: unchecking Warm + saving persists through reload', async ({ page }) => {
+  // WHO: an owner who enabled Warm, then decided to turn it off
+  // WHAT: check Warm, save, reload, uncheck Warm, save, reload — Warm is unchecked
   // WHEN: the owner changes their mind about a voice style they previously set
-  // WHERE: AIConfigView → POST /tenants/:id/update-config → tts_soft column
+  // WHERE: AIConfigView → POST /tenants/:id/update-config → tts_warm column
   // WHY: the uncheck path is equally load-bearing; a bug that persists checks
   //       but not unchecks would leave the owner stuck
   await openAiPersona(page);
 
-  const softCheckbox = page.getByRole('checkbox', { name: /Soft/i });
+  const warmCheckbox = page.getByRole('checkbox', { name: /Warm/i });
 
-  // Step 1: ensure Soft is checked and saved.
-  if (!(await softCheckbox.isChecked())) {
-    await softCheckbox.check();
+  // Step 1: ensure Warm is checked and saved.
+  if (!(await warmCheckbox.isChecked())) {
+    await warmCheckbox.check();
     await page.getByRole('button', { name: /Save Changes/i }).click();
     await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
     await openAiPersona(page);
   }
 
   // Step 2: uncheck and save.
-  await page.getByRole('checkbox', { name: /Soft/i }).uncheck();
+  await page.getByRole('checkbox', { name: /Warm/i }).uncheck();
   await page.getByRole('button', { name: /Save Changes/i }).click();
   await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
 
-  // Step 3: reload — Soft must now be unchecked.
+  // Step 3: reload — Warm must now be unchecked.
   await openAiPersona(page);
-  await expect(page.getByRole('checkbox', { name: /Soft/i })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: /Warm/i })).not.toBeChecked();
 });
 
 test('HAPPY: multiple styles (Warm + Concise) save and reload correctly', async ({ page }) => {
   // WHO: an owner who wants both warmth and brevity from their AI
-  // WHAT: check Warm and Concise, save, reload — both still checked; others unchecked
+  // WHAT: check Warm and Concise, save, reload — both still checked; Formal unchecked
   // WHEN: any multi-flag save
   // WHERE: AIConfigView → PUT /tenants/:id/update-config — two flags in payload
   // WHY: verifies that saving multiple flags simultaneously works and that
   //       flags not included in the save remain at their correct state
   await openAiPersona(page);
 
-  // Start from a clean state: uncheck all 5 and save.
-  for (const name of [/Soft/i, /Cheerful/i, /Formal/i, /Warm/i, /Concise/i]) {
+  // Start from a clean state: uncheck all 3 and save.
+  for (const name of [/Formal/i, /Warm/i, /Concise/i]) {
     const cb = page.getByRole('checkbox', { name });
     if (await cb.isChecked()) await cb.uncheck();
   }
@@ -165,21 +170,19 @@ test('HAPPY: multiple styles (Warm + Concise) save and reload correctly', async 
   await openAiPersona(page);
   await expect(page.getByRole('checkbox', { name: /Warm/i })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: /Concise/i })).toBeChecked();
-  await expect(page.getByRole('checkbox', { name: /Soft/i })).not.toBeChecked();
-  await expect(page.getByRole('checkbox', { name: /Cheerful/i })).not.toBeChecked();
   await expect(page.getByRole('checkbox', { name: /Formal/i })).not.toBeChecked();
 });
 
-test('HAPPY: all 5 styles checked + save + reload — all 5 still checked', async ({ page }) => {
+test('HAPPY: all 3 styles checked + save + reload — all 3 still checked', async ({ page }) => {
   // WHO: an owner who wants every style modifier applied simultaneously
-  // WHAT: check all 5, save, reload — all 5 are still checked
+  // WHAT: check all 3, save, reload — all 3 are still checked
   // WHEN: the maximum-configuration save path
-  // WHERE: AIConfigView → POST /tenants/:id/update-config — five true flags
+  // WHERE: AIConfigView → POST /tenants/:id/update-config — three true flags
   // WHY: ensures no flag is silently capped, ignored, or overwritten when all
-  //       five are sent together
+  //       three are sent together
   await openAiPersona(page);
 
-  for (const name of [/Soft/i, /Cheerful/i, /Formal/i, /Warm/i, /Concise/i]) {
+  for (const name of [/Formal/i, /Warm/i, /Concise/i]) {
     const cb = page.getByRole('checkbox', { name });
     if (!(await cb.isChecked())) await cb.check();
   }
@@ -187,24 +190,24 @@ test('HAPPY: all 5 styles checked + save + reload — all 5 still checked', asyn
   await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
 
   await openAiPersona(page);
-  for (const name of [/Soft/i, /Cheerful/i, /Formal/i, /Warm/i, /Concise/i]) {
+  for (const name of [/Formal/i, /Warm/i, /Concise/i]) {
     await expect(page.getByRole('checkbox', { name })).toBeChecked();
   }
 });
 
 test('HAPPY: uncheck all styles + save + reload — all unchecked', async ({ page }) => {
   // WHO: an owner reverting to the default voice after experimenting with styles
-  // WHAT: check all 5, save, then uncheck all 5, save, reload — all unchecked
+  // WHAT: check all 3, save, then uncheck all 3, save, reload — all unchecked
   // WHEN: the full check-then-uncheck lifecycle for all style flags
-  // WHERE: AIConfigView → POST /tenants/:id/update-config — five false flags
+  // WHERE: AIConfigView → POST /tenants/:id/update-config — three false flags
   // WHY: ensures the route correctly persists false/null for all flags
   //       rather than leaving previously-true values in the DB
   await openAiPersona(page);
 
-  // First, ensure all 5 are checked. Toggle each one off+on so the form is
+  // First, ensure all 3 are checked. Toggle each one off+on so the form is
   // always dirty (even when a prior test left them all checked already —
   // a conditional `if (!isChecked) check()` is a no-op in that case).
-  for (const name of [/Soft/i, /Cheerful/i, /Formal/i, /Warm/i, /Concise/i]) {
+  for (const name of [/Formal/i, /Warm/i, /Concise/i]) {
     const cb = page.getByRole('checkbox', { name });
     await cb.uncheck();
     await cb.check();
@@ -213,8 +216,8 @@ test('HAPPY: uncheck all styles + save + reload — all unchecked', async ({ pag
   await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
   await openAiPersona(page);
 
-  // Now uncheck all 5 and save.
-  for (const name of [/Soft/i, /Cheerful/i, /Formal/i, /Warm/i, /Concise/i]) {
+  // Now uncheck all 3 and save.
+  for (const name of [/Formal/i, /Warm/i, /Concise/i]) {
     const cb = page.getByRole('checkbox', { name });
     if (await cb.isChecked()) await cb.uncheck();
   }
@@ -223,42 +226,45 @@ test('HAPPY: uncheck all styles + save + reload — all unchecked', async ({ pag
 
   // Reload — all must be unchecked.
   await openAiPersona(page);
-  for (const name of [/Soft/i, /Cheerful/i, /Formal/i, /Warm/i, /Concise/i]) {
+  for (const name of [/Formal/i, /Warm/i, /Concise/i]) {
     await expect(page.getByRole('checkbox', { name })).not.toBeChecked();
   }
 });
 
 test('HAPPY: checking + unchecking without saving does not persist', async ({ page }) => {
-  // WHO: an owner who toggles Cheerful but then navigates away before saving
-  // WHAT: toggle Cheerful (ensure it changes state), navigate to Home,
-  //        return to AI Persona — Cheerful is back to its pre-toggle state
+  // WHO: an owner who toggles Concise but then navigates away before saving
+  // WHAT: toggle Concise (ensure it changes state), navigate to Home,
+  //        return to AI Persona — Concise is back to its pre-toggle state
   // WHEN: any unsaved change followed by navigation away
   // WHERE: AIConfigView form state (useFormState / local React state)
   // WHY: a form that auto-saves on toggle would surprise owners who are
   //       just exploring options; persistence must require an explicit save
   await openAiPersona(page);
 
-  const cheerfulCheckbox = page.getByRole('checkbox', { name: /Cheerful/i });
-  const wasChecked = await cheerfulCheckbox.isChecked();
+  const conciseCheckbox = page.getByRole('checkbox', { name: /Concise/i });
+  const wasChecked = await conciseCheckbox.isChecked();
 
-  // Toggle Cheerful without saving.
+  // Toggle Concise without saving.
   if (wasChecked) {
-    await cheerfulCheckbox.uncheck();
+    await conciseCheckbox.uncheck();
   } else {
-    await cheerfulCheckbox.check();
+    await conciseCheckbox.check();
   }
 
   // Navigate away WITHOUT clicking Save.
-  await page.getByRole('tab', { name: /^Home$/i }).first().click();
+  await page
+    .getByRole('tab', { name: /^Home$/i })
+    .first()
+    .click();
 
   // Return to AI Persona.
   await openAiPersona(page);
 
-  // Cheerful must be back to its original state (unsaved change discarded).
+  // Concise must be back to its original state (unsaved change discarded).
   if (wasChecked) {
-    await expect(page.getByRole('checkbox', { name: /Cheerful/i })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Concise/i })).toBeChecked();
   } else {
-    await expect(page.getByRole('checkbox', { name: /Cheerful/i })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: /Concise/i })).not.toBeChecked();
   }
 });
 
@@ -306,9 +312,11 @@ test('SAD: rapid double-click on Save does not cause duplicate requests or broke
   await saveBtn.dblclick();
 
   // No error toast must appear.
-  await expect(page.getByText(/error/i)).not.toBeVisible({ timeout: 3000 }).catch(() => {
-    // If the locator doesn't exist at all, that's fine — no error shown.
-  });
+  await expect(page.getByText(/error/i))
+    .not.toBeVisible({ timeout: 3000 })
+    .catch(() => {
+      // If the locator doesn't exist at all, that's fine — no error shown.
+    });
 
   // Save completes successfully.
   await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
