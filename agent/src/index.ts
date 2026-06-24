@@ -130,6 +130,20 @@ export default defineAgent({
       return;
     }
 
+    // Forwarded-line guard: for tenants whose inbound number is a forwarded
+    // line (env UNTRUSTED_CALLER_ID_TENANTS), the SIP caller ID is the
+    // forwarding cell, NOT the caller. Null it BEFORE anything reads it — the
+    // child logger, the fire-and-forget voice-session-start record, the prompt,
+    // and every tool — so nothing ever keys off the forwarding number. The
+    // agent collects the caller's real number verbally instead.
+    if (untrustedCallerIdTenants.has(sessionCtx.tenantId) && sessionCtx.callerPhone) {
+      log.info(
+        { event: 'caller_id_ignored', tenant_id: sessionCtx.tenantId, room: ctx.room.name },
+        'caller ID ignored for forwarded-line tenant — collecting number verbally'
+      );
+      sessionCtx.callerPhone = null;
+    }
+
     // Per-call child logger — every subsequent line on this call carries
     // tenant_id + call_id + caller_phone so a Better Stack filter pulls
     // the full timeline for "the call at 2:14pm" support questions.
@@ -296,20 +310,6 @@ export default defineAgent({
         },
         'tenant config resolved'
       );
-
-      // Forwarded-line guard: for tenants whose inbound number is a forwarded
-      // line, the SIP caller ID is the forwarding cell, not the caller. Null it
-      // so the prompt switches to "collect the number verbally" and every tool
-      // keys off the number the caller actually says — never the caller ID.
-      if (untrustedCallerIdTenants.has(sessionCtx.tenantId)) {
-        if (sessionCtx.callerPhone) {
-          callLog.info(
-            { event: 'caller_id_ignored', tenant_id: sessionCtx.tenantId },
-            'caller ID ignored for forwarded-line tenant — collecting number verbally'
-          );
-        }
-        sessionCtx.callerPhone = null;
-      }
 
       // Live-transfer capability. The executor is null when the call lacks the
       // room/participant context needed to REFER (SIP participant never joined),

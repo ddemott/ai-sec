@@ -722,7 +722,14 @@ export function registerAgentToolRoutes(
 
       const matches = await withTenantClient(args.tenant_id, async (client) => {
         const res = await client.query<{ name: string | null; phone: string | null }>(
-          `SELECT name, phone
+          // Derive a display name from first/last when the `name` column is
+          // empty (common for imported rows) so a real match never surfaces as
+          // "Unknown" to the agent.
+          `SELECT COALESCE(
+                    NULLIF(name, ''),
+                    NULLIF(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), '')
+                  ) AS name,
+                  phone
              FROM customers
             WHERE tenant_id = $1
               AND (is_deleted IS NULL OR is_deleted = false)
