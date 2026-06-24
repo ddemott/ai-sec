@@ -26,7 +26,15 @@ export function KnowledgeSuggestions({ tenantId, onCountChange }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!tenantId) return;
+    if (!tenantId) {
+      // No active tenant — clear any state carried over from a previous session
+      // and report 0 so the parent badge resets instead of showing a stale count.
+      setSuggestions([]);
+      setError(null);
+      setLoading(false);
+      onCountChange?.(0);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

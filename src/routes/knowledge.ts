@@ -593,8 +593,9 @@ export function registerKnowledgeRoutes(
       // Persist extracted (matched) + discovered items to knowledge_suggestion for review.
       // extractAnswersWithLLM returns camelCase (questionId, sourceUrl) — map to snake_case here.
       // Skip matched items with null answers — they carry no KB value and inflate the count.
-      // Matched items (questionId set) are pre-confirmed; discovered items start as 'suggested'.
-      const confirmedItems = extract.answers
+      // All items enter as 'suggested' — even matched ones — so the owner reviews
+      // everything before it lands in the live KB. The approve route handles ingestion.
+      const matchedItems = extract.answers
         .filter((a: any) => a.answer != null && (a.answer as string).trim().length > 0)
         .map((a: any) => ({
           question_id: a.questionId || null,
@@ -602,7 +603,7 @@ export function registerKnowledgeRoutes(
           answer: a.answer as string,
           source_url: a.sourceUrl || url,
           confidence: a.confidence ?? null,
-          status: 'confirmed' as const,
+          status: 'suggested' as const,
         }));
       const suggestedItems = (extract.discovered || []).map((d: any) => ({
         question_id: null,
@@ -612,7 +613,7 @@ export function registerKnowledgeRoutes(
         confidence: d.confidence ?? null,
         status: 'suggested' as const,
       }));
-      const allItems = [...confirmedItems, ...suggestedItems];
+      const allItems = [...matchedItems, ...suggestedItems];
 
       if (allItems.length > 0) {
         await withTenantClient(tenantId, async (client) => {
@@ -635,7 +636,10 @@ export function registerKnowledgeRoutes(
         });
       }
 
-      const confirmed = confirmedItems.length;
+      // `confirmed` here is the COUNT of bank/custom-matched items (response-field
+      // name kept for API/dashboard compatibility). They are staged as 'suggested'
+      // like everything else — nothing is auto-confirmed into the live KB anymore.
+      const confirmed = matchedItems.length;
       const suggestions = suggestedItems.length;
 
       logEvent(req, 'website_knowledge_import', { url, confirmed, suggestions, tenantId });
@@ -733,25 +737,42 @@ export function registerKnowledgeRoutes(
 
         await withTenantClient(tenantId, async (client) => {
           await client.query('BEGIN');
-          await client.query(
-            `INSERT INTO tenant_docs (tenant_id, title, content, source, normalized_text, embedding)
-             VALUES ($1, $2, $3, $4, $5, $6::vector)`,
-            [
-              tenantId,
-              question,
-              combined,
-              'website-scan',
-              normalizedText,
-              JSON.stringify(embedding),
-            ]
-          );
-          // Guard status='suggested' so a concurrent or retried approve can't re-confirm
-          await client.query(
-            `UPDATE knowledge_suggestion SET status = 'confirmed', updated_at = now()
-             WHERE id = $1 AND tenant_id = $2 AND status = 'suggested'`,
-            [id, tenantId]
-          );
-          await client.query('COMMIT');
+          try {
+            await client.query(
+              `INSERT INTO tenant_docs (tenant_id, title, content, source, normalized_text, embedding)
+               VALUES ($1, $2, $3, $4, $5, $6::vector)`,
+              [
+                tenantId,
+                question,
+                combined,
+                'website-scan',
+                normalizedText,
+                JSON.stringify(embedding),
+              ]
+            );
+            // Guard status='suggested' so a concurrent or retried approve can't re-confirm.
+            // If 0 rows affected the suggestion was already processed — roll back the doc insert.
+            const upd = await client.query(
+              `UPDATE knowledge_suggestion SET status = 'confirmed', updated_at = now()
+               WHERE id = $1 AND tenant_id = $2 AND status = 'suggested'`,
+              [id, tenantId]
+            );
+            if ((upd.rowCount ?? 0) === 0) {
+              // Concurrent/retried approve already reviewed this row. Throw a
+              // 409 and let the catch ROLLBACK + withHandler format the reply —
+              // a reply.send() here only exits the callback, so the outer handler
+              // would still logEvent + send {success:true}, double-sending.
+              const conflict = new Error('Suggestion not found or already reviewed') as Error & {
+                statusCode?: number;
+              };
+              conflict.statusCode = 409;
+              throw conflict;
+            }
+            await client.query('COMMIT');
+          } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+          }
         });
         logEvent(req, 'knowledge_suggestion_approved', { suggestionId: id, tenantId });
       } else {

@@ -85,6 +85,9 @@ describe('PATCH /knowledge/suggestions/:id', () => {
         rows: [{ question: 'Walk-ins?', answer: 'Yes, welcome.' }],
         rowCount: 1,
       });
+      // Best-effort AI-cost telemetry INSERT (recordAiCostEvent) fires on the
+      // approve path before the ingest transaction — fire-and-forget, result ignored.
+      handle.queryResponses.push({ rows: [], rowCount: 1 }); // INSERT ai_cost_events
       handle.queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
       handle.queryResponses.push({ rows: [], rowCount: 1 }); // INSERT tenant_docs
       handle.queryResponses.push({ rows: [], rowCount: 1 }); // UPDATE knowledge_suggestion
@@ -140,6 +143,37 @@ describe('PATCH /knowledge/suggestions/:id', () => {
         body: JSON.stringify({ status: 'confirmed' }),
       });
       expect(res.statusCode).toBe(404);
+      const body = JSON.parse(res.body) as { success: boolean; error: string };
+      expect(body.success).toBe(false);
+      expect(body.error).toMatch(/not found or already reviewed/i);
+    });
+
+    it('returns 409 when a concurrent approve wins the status-guard race', async () => {
+      // WHO: two owners (or a retried request) approve the same suggestion at once
+      // WHAT: fetch still sees 'suggested', but the guarded UPDATE inside the txn
+      //       affects 0 rows because the other request already confirmed it
+      // WHEN: the gap between the fetch and the guarded UPDATE
+      // WHERE: PATCH approve path — in-transaction status guard (knowledge.ts)
+      // WHY:   must ROLLBACK the tenant_docs insert and 409 cleanly, NOT double-send
+      //        (a reply.send() inside the txn callback used to fall through to the
+      //        outer logEvent + {success:true}); throwing lets withHandler format it
+      handle.queryResponses.push({
+        rows: [{ question: 'Walk-ins?', answer: 'Yes, welcome.' }],
+        rowCount: 1,
+      }); // fetch — still 'suggested'
+      handle.queryResponses.push({ rows: [], rowCount: 1 }); // INSERT ai_cost_events (fire-and-forget)
+      handle.queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+      handle.queryResponses.push({ rows: [], rowCount: 1 }); // INSERT tenant_docs
+      handle.queryResponses.push({ rows: [], rowCount: 0 }); // UPDATE — 0 rows: lost the race
+      handle.queryResponses.push({ rows: [], rowCount: 0 }); // ROLLBACK
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/knowledge/suggestions/${SUGGESTION_ID}`,
+        headers: { ...AUTH, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'confirmed' }),
+      });
+      expect(res.statusCode).toBe(409);
       const body = JSON.parse(res.body) as { success: boolean; error: string };
       expect(body.success).toBe(false);
       expect(body.error).toMatch(/not found or already reviewed/i);

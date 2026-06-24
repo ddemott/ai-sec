@@ -804,9 +804,10 @@ test('kb-import-website-stub: scan resolves bank + custom questions into staged 
   request,
 }) => {
   // WHO: owner who added a custom question, then runs a website scan in onboarding
-  // WHAT: POST /knowledge/import-website (stubbed) stages confirmed suggestions
-  //       for the resolved questions — INCLUDING the owner's custom question —
-  //       plus a discovered topic, all as real knowledge_suggestion rows
+  // WHAT: POST /knowledge/import-website (stubbed) stages every resolved item
+  //       as a 'suggested' knowledge_suggestion row — INCLUDING the owner's
+  //       custom question and a discovered topic. Matched items are no longer
+  //       auto-confirmed; the owner reviews everything before the live KB.
   // WHEN: setup wizard "Import from website" step
   // WHERE: import-website handler → resolveQuestions → staging INSERT (knowledge.ts)
   // WHY: guards the exact wiring shipped in feat/question-bank-shared — that the
@@ -850,18 +851,21 @@ test('kb-import-website-stub: scan resolves bank + custom questions into staged 
       'custom question must flow through resolveQuestions into the scan'
     ).toBe(true);
 
-    // Real DB: confirmed rows staged, including the custom question; discovered staged 'suggested'
+    // Real DB: every scanned item is staged as 'suggested' so the owner reviews
+    // everything before it reaches the live KB (matched items are no longer
+    // auto-confirmed). Expect 3 matched + 1 discovered = >=4 suggested, 0 confirmed,
+    // and the custom question among the staged suggestions.
     const rows = await pool.query(
       `SELECT question, status FROM knowledge_suggestion WHERE tenant_id = $1`,
       [tenant.tenantId]
     );
     const confirmed = rows.rows.filter((r) => r.status === 'confirmed');
     const suggested = rows.rows.filter((r) => r.status === 'suggested');
-    expect(confirmed.length).toBeGreaterThanOrEqual(3);
-    expect(suggested.length).toBeGreaterThanOrEqual(1);
+    expect(confirmed.length).toBe(0);
+    expect(suggested.length).toBeGreaterThanOrEqual(4);
     expect(
-      confirmed.some((r) => r.question === customQuestion),
-      'custom question must be staged as a confirmed suggestion in the DB'
+      suggested.some((r) => r.question === customQuestion),
+      'custom question must be staged as a suggested item in the DB'
     ).toBe(true);
   } finally {
     if (tenant) await cleanTenantData(pool, tenant.tenantId);
