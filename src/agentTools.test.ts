@@ -514,6 +514,44 @@ describe('agentTools /customer-context', () => {
   });
 });
 
+describe('agentTools /find-customer-by-name', () => {
+  it('HAPPY: returns name + phone matches for confirmation', async () => {
+    // WHO: Caller on the forwarded line who gives their name first
+    // WHAT: Route searches customers by name and returns {name, phone} matches
+    //        so the agent can read back the number on file to confirm
+    // WHERE: src/routes/agentTools.ts /agent-tools/find-customer-by-name
+    // WHEN: Beth asks the caller's name on this forwarded inbound line
+    // WHY: Caller ID is the forwarding cell, not the caller — name is the only
+    //        trustworthy first identifier, so name-search is the entry point
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ name: 'Jane Doe', phone: '+16125551234' }] }],
+    });
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Jane',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({
+      matches: [{ name: 'Jane Doe', phone: '+16125551234' }],
+    });
+    // WHY: the trimmed name is passed to the ILIKE search
+    expect(queries[0].params).toEqual([TENANT_ID, 'Jane']);
+  });
+
+  it('HAPPY: no match returns an empty list (signal to create a new entry)', async () => {
+    // WHO: First-time caller whose name is not in the CRM
+    // WHAT: Empty matches array, not an error — the agent treats them as new
+    // WHY: An empty list is the explicit "new caller, create an entry" signal
+    const { app } = buildApp({ queryResponses: [{ rows: [] }] });
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Nobody Known',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({ matches: [] });
+  });
+});
+
 describe('agentTools /identify-caller', () => {
   it('HAPPY: new phone creates a customer row', async () => {
     // WHO: First-time caller who gives their name during a non-booking call

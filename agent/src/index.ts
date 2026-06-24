@@ -25,7 +25,7 @@ import * as openai from '@livekit/agents-plugin-openai';
 import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
 
-import { config } from './config.js';
+import { config, untrustedCallerIdTenants } from './config.js';
 import { runFallback } from './fallback.js';
 import { GrokTTS } from './grokTTS.js';
 import { getLogger } from './logger.js';
@@ -296,6 +296,20 @@ export default defineAgent({
         },
         'tenant config resolved'
       );
+
+      // Forwarded-line guard: for tenants whose inbound number is a forwarded
+      // line, the SIP caller ID is the forwarding cell, not the caller. Null it
+      // so the prompt switches to "collect the number verbally" and every tool
+      // keys off the number the caller actually says — never the caller ID.
+      if (untrustedCallerIdTenants.has(sessionCtx.tenantId)) {
+        if (sessionCtx.callerPhone) {
+          callLog.info(
+            { event: 'caller_id_ignored', tenant_id: sessionCtx.tenantId },
+            'caller ID ignored for forwarded-line tenant — collecting number verbally'
+          );
+        }
+        sessionCtx.callerPhone = null;
+      }
 
       // Live-transfer capability. The executor is null when the call lacks the
       // room/participant context needed to REFER (SIP participant never joined),

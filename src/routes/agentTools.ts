@@ -72,6 +72,11 @@ const GetContextSchema = z.object({
   tenant_id: z.string().uuid(),
 });
 
+const FindByNameSchema = z.object({
+  name: z.string().min(1),
+  tenant_id: z.string().uuid(),
+});
+
 const CheckAvailabilitySchema = z.object({
   tenant_id: z.string().uuid(),
   resource_id: z.string().uuid(),
@@ -696,6 +701,52 @@ export function registerAgentToolRoutes(
       });
     },
     'Failed to fetch customer context'
+  );
+
+  // find-customer-by-name — name-first caller identification. The agent asks
+  // the caller's name, looks them up by it, and (when found) reads back the
+  // stored number to confirm "is this still your number?". Needed because the
+  // inbound line is forwarded — caller ID is the forwarding cell, not the
+  // caller — so name is the only identifier we can trust on first contact.
+  // Returns up to 5 matches (name + phone) so the agent can confirm or, if the
+  // number is stale/wrong, collect a new one and create a fresh entry.
+  toolRoute(
+    app,
+    '/agent-tools/find-customer-by-name',
+    FindByNameSchema,
+    async (args, reply) => {
+      const trimmed = args.name.trim();
+      if (!trimmed) {
+        return ok(reply, { matches: [] });
+      }
+
+      const matches = await withTenantClient(args.tenant_id, async (client) => {
+        const res = await client.query<{ name: string | null; phone: string | null }>(
+          `SELECT name, phone
+             FROM customers
+            WHERE tenant_id = $1
+              AND (is_deleted IS NULL OR is_deleted = false)
+              AND (
+                name ILIKE '%' || $2 || '%'
+                OR TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) ILIKE '%' || $2 || '%'
+              )
+            ORDER BY updated_at DESC NULLS LAST
+            LIMIT 5`,
+          [args.tenant_id, trimmed]
+        );
+        return res.rows;
+      });
+
+      // Shape kept LLM-friendly: a plain list of {name, phone}. Empty list =
+      // no match → the agent treats them as a new caller.
+      return ok(reply, {
+        matches: matches.map((m) => ({
+          name: m.name || 'Unknown',
+          phone: m.phone || null,
+        })),
+      });
+    },
+    'Failed to search customers by name'
   );
 
   // check_availability — wraps check_availability_with_tz() RPC. The agent
