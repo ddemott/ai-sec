@@ -39,6 +39,16 @@ import { classifyCallOutcome } from './callClassify.js';
 import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
+/** OpenAI TTS voices offered in the dashboard picker. Validate the tenant's
+ *  saved voice against this set so a legacy Grok value (e.g. 'ara') or anything
+ *  unexpected falls back to 'shimmer' instead of erroring at the OpenAI API. */
+const OPENAI_VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'onyx', 'fable'] as const;
+function toOpenAIVoice(v: string | null | undefined): (typeof OPENAI_VOICES)[number] {
+  return v && (OPENAI_VOICES as readonly string[]).includes(v)
+    ? (v as (typeof OPENAI_VOICES)[number])
+    : 'shimmer';
+}
+
 export default defineAgent({
   prewarm: async (proc) => {
     // Boot-version marker. Printed once when the worker process starts, so the
@@ -364,16 +374,15 @@ export default defineAgent({
           vad: ctx.proc.userData.vad as silero.VAD,
           stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
           llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-          // 2026-06-24: switched primary TTS Grok → OpenAI. Grok TTS is
-          // non-streaming (whole-utterance buffer) and rendered choppy over the
-          // 8kHz PSTN leg on multiple voices (eve, ara). OpenAI's plugin streams,
-          // which paces smoothly over the phone. Per-tenant Grok voice config
-          // (tenants.tts_voice/speed/soft) is bypassed while OpenAI is primary;
-          // 'shimmer' is a warm, calm female voice that fits "Beth". GrokTTS is
-          // retained in the tree and can be restored if/when streaming lands.
+          // 2026-06-24: primary TTS is OpenAI (streaming → smooth over the 8kHz
+          // PSTN leg; Grok's non-streaming buffer was choppy). Per-tenant voice +
+          // speed come from the dashboard (tenants.tts_voice/tts_speed). tts_voice
+          // now holds an OpenAI voice id; an unset/legacy (Grok) value falls back
+          // to 'shimmer'. soft/cheerful are Grok-only prosody and don't apply.
           tts: new openai.TTS({
             apiKey: config.OPENAI_API_KEY,
-            voice: 'shimmer',
+            voice: toOpenAIVoice(tenantConfig.ttsVoice),
+            speed: tenantConfig.ttsSpeed ?? 1.0,
           }),
         });
 

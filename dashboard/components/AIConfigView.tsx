@@ -279,19 +279,20 @@ export default function AIConfigView() {
             <Mic className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
             Voice Identity
           </h2>
-          {/* xAI Grok TTS voices — the actual voices the live agent uses.
-              Selection writes tts_voice; null = platform default (Eve). */}
+          {/* OpenAI TTS voices — the actual voices the live agent uses.
+              Selection writes tts_voice; null = platform default (Shimmer). */}
           <div
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
             role="radiogroup"
             aria-label="Voice selection"
           >
             {[
-              { id: 'eve', name: 'Eve — British Female', desc: 'Warm, calm, soothing (default)' },
-              { id: 'ara', name: 'Ara — Female', desc: 'Warm, friendly, conversational' },
-              { id: 'rex', name: 'Rex — Male', desc: 'Confident, clear — tuned for business' },
-              { id: 'sal', name: 'Sal — Neutral', desc: 'Smooth, balanced' },
-              { id: 'leo', name: 'Leo — British Male', desc: 'Authoritative, strong' },
+              { id: 'shimmer', name: 'Shimmer — Female', desc: 'Warm, calm, gentle (default)' },
+              { id: 'nova', name: 'Nova — Female', desc: 'Bright, friendly, upbeat' },
+              { id: 'alloy', name: 'Alloy — Neutral', desc: 'Balanced, even-toned' },
+              { id: 'echo', name: 'Echo — Male', desc: 'Clear, steady' },
+              { id: 'onyx', name: 'Onyx — Male', desc: 'Deep, authoritative' },
+              { id: 'fable', name: 'Fable — Expressive', desc: 'Animated, storytelling tone' },
             ].map((voice) => (
               <Card
                 key={voice.id}
@@ -337,7 +338,7 @@ export default function AIConfigView() {
               className="block text-sm font-semibold mb-1"
               style={{ color: 'var(--text-primary)' }}
             >
-              Speaking pace — {(config?.tts_speed ?? 0.85).toFixed(2)}×
+              Speaking pace — {(config?.tts_speed ?? 1.0).toFixed(2)}×
             </label>
             <input
               id="tts-speed"
@@ -345,7 +346,7 @@ export default function AIConfigView() {
               min={0.7}
               max={1.5}
               step={0.05}
-              value={config?.tts_speed ?? 0.85}
+              value={config?.tts_speed ?? 1.0}
               onChange={(e) => {
                 const v = parseFloat(e.target.value);
                 setConfig((prev) => (prev ? { ...prev, tts_speed: v } : null));
@@ -355,7 +356,7 @@ export default function AIConfigView() {
               aria-label="Speaking pace"
             />
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Lower = slower, calmer. 0.85 is an unhurried, caring pace.
+              1.0 is normal pace. Lower = slower and calmer; higher = brisker.
             </p>
           </div>
 
@@ -367,8 +368,6 @@ export default function AIConfigView() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {(
                 [
-                  { key: 'tts_soft', label: 'Soft', description: 'Soothing, gentle delivery' },
-                  { key: 'tts_cheerful', label: 'Cheerful', description: 'Upbeat, positive tone' },
                   { key: 'tts_formal', label: 'Formal', description: 'Professional, no contractions' },
                   { key: 'tts_warm', label: 'Warm', description: 'Empathetic, caring' },
                   { key: 'tts_concise', label: 'Concise', description: 'Fewer words, faster to the point' },
