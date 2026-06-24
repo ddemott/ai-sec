@@ -154,6 +154,43 @@ describe('/agent-tools/take-message', () => {
     expect(smsCall.body).toContain('Please call me back');
   });
 
+  it('HAPPY: texts owner_phone (not forward_phone) when set — alerts decoupled from transfer', async () => {
+    // WHO: a tenant who takes messages with NO live transfer (forward_phone blank)
+    //       but still wants a text when a caller leaves a message
+    // WHAT: the owner notification SMS goes to the dedicated owner_phone, even
+    //       though forward_phone is null
+    // WHEN: owner_phone set, forward_phone null (the "message-only" config)
+    // WHERE: take-message owner-notification block (owner_phone ?? forward_phone)
+    // WHY: forward_phone doubles as the live-transfer destination; coupling the
+    //       alert to it meant message-only tenants got no text. owner_phone fixes that.
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [] }, // customer not found
+        { rows: [{ message_id: MESSAGE_ID }] },
+        {
+          rows: [
+            { owner_phone: '+16082175303', forward_phone: null, inbound_phone: '+16308661960' },
+          ],
+        },
+      ],
+    });
+
+    vi.mocked(telnyxSms.sendSms).mockResolvedValueOnce({ ok: true });
+
+    const res = await post(app, {
+      tenant_id: TENANT_ID,
+      caller_name: 'Carol Lin',
+      callback_phone: '+15559991234',
+      message: 'Interested in a meeting',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ success: boolean; result: { saved: boolean; notified: boolean } }>();
+    expect(body.result.notified).toBe(true);
+    const smsCall = vi.mocked(telnyxSms.sendSms).mock.calls[0][0];
+    expect(smsCall.to).toBe('+16082175303'); // owner_phone, NOT forward_phone (null)
+  });
+
   it('HAPPY: no phone provided → skips customer lookup, still saves message', async () => {
     // WHO: Anonymous caller (blocked CID, no callback number given)
     // WHAT: Customer lookup skipped entirely — customer_id is null in INSERT
