@@ -1736,12 +1736,12 @@ export function registerAgentToolRoutes(
       // SMS the owner at the notification number. Fire-and-forget; failure
       // doesn't un-save the message.
       let notified = false;
-      const normalizedForward = row.notifyPhone ? normalizePhone(row.notifyPhone) : null;
+      const normalizedNotify = row.notifyPhone ? normalizePhone(row.notifyPhone) : null;
       const normalizedInbound = row.inboundPhone ? normalizePhone(row.inboundPhone) : null;
       if (
-        normalizedForward &&
+        normalizedNotify &&
         normalizedInbound &&
-        isValidPhone(normalizedForward) &&
+        isValidPhone(normalizedNotify) &&
         isValidPhone(normalizedInbound)
       ) {
         const callbackDisplay = callbackPhone ?? callerPhone ?? 'no number left';
@@ -1749,11 +1749,11 @@ export function registerAgentToolRoutes(
           `New message from ${args.caller_name} (${callbackDisplay}): ` +
           `${args.message.slice(0, 300)}${args.message.length > 300 ? '…' : ''}` +
           ' — via SecretaryHQ';
-        const sms = await sendSms({ from: normalizedInbound, to: normalizedForward, body });
+        const sms = await sendSms({ from: normalizedInbound, to: normalizedNotify, body });
         notified = sms.ok;
         if (!sms.ok) {
           app.log.warn(
-            { tenantId: args.tenant_id, notifyPhone: normalizedForward, error: sms.error },
+            { tenantId: args.tenant_id, notifyPhone: normalizedNotify, error: sms.error },
             'take_message: owner SMS notification failed — message saved but owner not alerted'
           );
         }
