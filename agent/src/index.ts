@@ -217,47 +217,119 @@ export default defineAgent({
       if (sessionCtx.callId) {
         const callId = sessionCtx.callId;
         const startedAtMs = Date.now();
+        // 5W sad path: callLog already carries tenant_id/call_id/caller_phone/
+        // room (WHO/WHERE). ToolsClient.call() does NOT throw on a backend 5xx —
+        // it RESOLVES to { ok:false, error, status } — so we must inspect the
+        // result, not only .catch() (which fires only on a network/throw). Both
+        // branches log the breadcrumb that this call never created a
+        // voice_sessions row (so it won't show in the Calls tab). The backend
+        // logs the pg SQLSTATE/constraint; this is the agent-side marker.
         void client
           .call('/agent-tools/voice-session-start', {
             tenant_id: sessionCtx.tenantId,
             call_id: callId,
             caller_phone: sessionCtx.callerPhone ?? null,
           })
+          .then((res) => {
+            if (!res.ok) {
+              callLog.error(
+                {
+                  event: 'voice_session_start_failed',
+                  forwarded_line: sessionCtx.callerPhone == null,
+                  status: res.status ?? null,
+                  error_message: res.error,
+                },
+                'call-logging START failed (non-fatal to the live call) — this call will NOT appear in the Calls tab'
+              );
+            }
+          })
           .catch((e: unknown) =>
-            callLog.warn(
+            callLog.error(
               {
                 event: 'voice_session_start_failed',
+                forwarded_line: sessionCtx.callerPhone == null,
                 error_message: e instanceof Error ? e.message : String(e),
               },
-              'call-logging start failed (non-fatal)'
+              'call-logging START threw (non-fatal to the live call) — this call will NOT appear in the Calls tab'
             )
           );
         ctx.addShutdownCallback(async () => {
           try {
             const rendered = transcript.render();
             const { outcome: trackedOutcome, appointmentId } = outcomeTracker.result();
-            // Post-call summary is best-effort: summarizeCall is bounded + never
-            // throws (resolves null on timeout/error), so it can never drop the
-            // duration/transcript/outcome write below.
-            const summaryResult = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
-            const summary = summaryResult.summary;
-            // If no booking/transfer tool already set the outcome, classify WHY
-            // the caller reached out (no_availability / wrong_service / price /
-            // message / info). classifyCallOutcome is bounded + failsafe and
-            // returns null when unclear — a null outcome stays 'no_outcome'
-            // server-side, i.e. counted as abandoned. So we never guess.
-            const classifyResult = await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY);
-            const outcome = trackedOutcome ?? classifyResult.outcome;
-            await client.call('/agent-tools/voice-session-end', {
+            const durationSeconds = Math.round((Date.now() - startedAtMs) / 1000);
+
+            // 1. FINALIZE FIRST — close the row with the data we already have,
+            //    BEFORE the slow LLM steps below. An abrupt disconnect/process
+            //    teardown during summarize/classify must not strand the row
+            //    'active' with no duration/transcript (the exact bug seen on the
+            //    first real Beth call). end_voice_session overwrites by
+            //    (tenant_id, call_id) with no status guard, so the enrich pass
+            //    can safely add summary/outcome afterward. trackedOutcome is only
+            //    ever a real tool outcome (booked/transferred) — never the
+            //    classify-only price/no_availability that triggers the owner SMS
+            //    — so this first write can't double-send that alert.
+            const finalizeRes = await client.call('/agent-tools/voice-session-end', {
               tenant_id: sessionCtx.tenantId,
               call_id: callId,
-              duration_seconds: Math.round((Date.now() - startedAtMs) / 1000),
+              duration_seconds: durationSeconds,
               // null when nothing was spoken (e.g. silent hang-up) → SQL NULL.
               transcript: rendered,
-              outcome,
+              outcome: trackedOutcome,
               appointment_id: appointmentId,
-              summary,
             });
+            // ToolsClient.call() resolves { ok:false } on a backend 5xx (does NOT
+            // throw), so the catch below won't fire on a 500 — inspect the result
+            // so a finalize failure (row left active, no duration/transcript) is
+            // actually logged, not silently swallowed.
+            if (!finalizeRes.ok) {
+              callLog.error(
+                {
+                  event: 'voice_session_end_failed',
+                  phase: 'finalize',
+                  status: finalizeRes.status ?? null,
+                  outcome: trackedOutcome,
+                  has_transcript: rendered != null,
+                  error_message: finalizeRes.error,
+                },
+                'call-logging FINALIZE failed — row may stay active with no duration/transcript'
+              );
+            }
+
+            // 2. Best-effort enrichment — bounded LLM summary + outcome class.
+            //    Both are bounded + failsafe (resolve null on timeout/error), so
+            //    they can never undo the finalize above. classifyCallOutcome
+            //    names WHY the caller reached out when no tool set an outcome.
+            const summaryResult = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
+            const summary = summaryResult.summary;
+            const classifyResult = await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY);
+            const outcome = trackedOutcome ?? classifyResult.outcome;
+
+            // 3. ENRICH PASS — re-call only when there's something new (a summary,
+            //    or a classified outcome we didn't already have). Re-pass the
+            //    durable fields because end_voice_session SETs every column — a
+            //    partial call would null out the duration/transcript just saved.
+            if (summary != null || outcome !== trackedOutcome) {
+              const enrichRes = await client.call('/agent-tools/voice-session-end', {
+                tenant_id: sessionCtx.tenantId,
+                call_id: callId,
+                duration_seconds: durationSeconds,
+                transcript: rendered,
+                outcome,
+                appointment_id: appointmentId,
+                summary,
+              });
+              if (!enrichRes.ok) {
+                callLog.warn(
+                  {
+                    event: 'voice_session_enrich_failed',
+                    status: enrichRes.status ?? null,
+                    error_message: enrichRes.error,
+                  },
+                  'call-logging summary/outcome enrich failed — row already finalized, summary not attached'
+                );
+              }
+            }
             // Fire-and-forget: POST session AI usage to the cost ledger.
             // sessionModelUsage is empty when the session never started (e.g.
             // fallback path) — skip silently rather than inserting a zero row.
@@ -309,12 +381,16 @@ export default defineAgent({
                 );
             }
           } catch (e) {
-            callLog.warn(
+            // 5W sad path: callLog carries tenant_id/call_id/caller_phone/room.
+            // Add WHY + which write was in flight so a stranded 'active' row (no
+            // duration/transcript/summary) is diagnosable. Backend logs the pg
+            // SQLSTATE; this is the agent-side breadcrumb at shutdown.
+            callLog.error(
               {
                 event: 'voice_session_end_failed',
                 error_message: e instanceof Error ? e.message : String(e),
               },
-              'call-logging end failed (non-fatal)'
+              'call-logging END failed (non-fatal to the caller) — duration/transcript/summary NOT saved; row may stay active'
             );
           }
         });
