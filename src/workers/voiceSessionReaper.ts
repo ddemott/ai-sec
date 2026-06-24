@@ -61,7 +61,9 @@ async function tick(maxAgeMinutes: number): Promise<void> {
     }
   } catch (err) {
     errorsTotal.inc({ event: 'voice_session_reaper_failed' });
-    console.error('voiceSessionReaper tick failed:', err instanceof Error ? err.message : err);
+    // Log the error object itself (not just .message) so the stack survives for
+    // production debugging.
+    console.error('voiceSessionReaper tick failed:', err);
   } finally {
     isRunning = false;
   }

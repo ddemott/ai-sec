@@ -264,10 +264,14 @@ export default defineAgent({
         // callback may never run; 'close' is what actually fires. The guard makes
         // the first caller win; the other no-ops. (A server-side reaper catches
         // anything that still slips through.)
+        // callFinalized flips true ONLY after a successful finalize write, so a
+        // failed 'close' attempt leaves the shutdown backstop free to retry.
+        // finalizing dedupes concurrent entry (close + shutdown firing together).
         let callFinalized = false;
+        let finalizing = false;
         finalizeCall = async (hook: 'close' | 'shutdown'): Promise<void> => {
-          if (callFinalized) return;
-          callFinalized = true;
+          if (callFinalized || finalizing) return;
+          finalizing = true;
           callLog.info({ event: 'voice_session_finalize_entered', hook }, 'finalizing call record');
           try {
             const rendered = transcript.render();
@@ -309,7 +313,12 @@ export default defineAgent({
                 },
                 'call-logging FINALIZE failed — row may stay active with no duration/transcript'
               );
+              // Leave callFinalized=false so the shutdown backstop (or, failing
+              // everything, the server-side reaper) can still close this row.
+              return;
             }
+            // Finalize succeeded — safe to suppress retries now.
+            callFinalized = true;
 
             // 2. Best-effort enrichment — bounded LLM summary + outcome class.
             //    Both are bounded + failsafe (resolve null on timeout/error), so
@@ -407,10 +416,14 @@ export default defineAgent({
               },
               'call-logging END failed (non-fatal to the caller) — duration/transcript/summary NOT saved; row may stay active'
             );
+            // callFinalized stays false (set only on success) → backstop retries.
+          } finally {
+            finalizing = false;
           }
         };
         // Hangup ('close') is the reliable finalize signal; job-shutdown is the
-        // backstop. Whichever fires first wins via the callFinalized guard.
+        // backstop. callFinalized (set only after a successful write) dedupes;
+        // finalizing guards against the two hooks racing into a double-write.
         ctx.addShutdownCallback(() => finalizeCall?.('shutdown') ?? Promise.resolve());
       }
 

@@ -19,6 +19,10 @@ CREATE OR REPLACE FUNCTION reap_stale_voice_sessions(p_max_age_minutes INTEGER D
 RETURNS INTEGER AS $$
 DECLARE
     v_count INTEGER;
+    -- Clamp to >= 1 minute. p_max_age_minutes reaches a SECURITY DEFINER
+    -- function; a 0 or negative value would push the cutoff into the future and
+    -- finalize LIVE, in-progress calls. Never reap anything younger than a minute.
+    v_min_age INTEGER := GREATEST(COALESCE(p_max_age_minutes, 15), 1);
 BEGIN
     UPDATE voice_sessions
     SET
@@ -36,9 +40,29 @@ BEGIN
         ),
         updated_at = now()
     WHERE status = 'active'
-      AND started_at < now() - make_interval(mins => p_max_age_minutes);
+      AND started_at < now() - make_interval(mins => v_min_age);
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
     RETURN v_count;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- search_path pinned: a SECURITY DEFINER function with a mutable search_path can
+-- be hijacked (an attacker-created object shadowing an unqualified name would run
+-- with the definer's rights). pg_catalog first so built-ins can't be shadowed.
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public;
+
+-- Don't leave this cross-tenant maintenance RPC executable by untrusted roles.
+-- REVOKE FROM PUBLIC drops the default grant; but Supabase ALTER DEFAULT
+-- PRIVILEGES also auto-grants EXECUTE to anon/authenticated (the roles PostgREST
+-- exposes), so revoke those explicitly too. Guarded by role existence so this is
+-- a no-op on local/CI Postgres (which has no anon/authenticated). The function's
+-- owning role (which the app connects as) keeps EXECUTE as owner regardless.
+REVOKE ALL ON FUNCTION reap_stale_voice_sessions(INTEGER) FROM PUBLIC;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION reap_stale_voice_sessions(INTEGER) FROM anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION reap_stale_voice_sessions(INTEGER) FROM authenticated';
+  END IF;
+END $$;
