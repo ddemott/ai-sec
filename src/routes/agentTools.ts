@@ -317,8 +317,12 @@ function pgErrorFields(err: unknown): {
     detail?: unknown;
   };
   const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+  // Prefer a string `message` field even when the throw isn't an Error instance
+  // (some pg/driver layers throw plain objects) — otherwise String(err) yields
+  // "[object Object]" and defeats the one-line-diagnosable goal.
+  const error_message = err instanceof Error ? err.message : (str(e.message) ?? String(err));
   return {
-    error_message: err instanceof Error ? err.message : String(err),
+    error_message,
     sqlstate: str(e.code),
     constraint: str(e.constraint),
     column: str(e.column),

@@ -217,25 +217,40 @@ export default defineAgent({
       if (sessionCtx.callId) {
         const callId = sessionCtx.callId;
         const startedAtMs = Date.now();
+        // 5W sad path: callLog already carries tenant_id/call_id/caller_phone/
+        // room (WHO/WHERE). ToolsClient.call() does NOT throw on a backend 5xx —
+        // it RESOLVES to { ok:false, error, status } — so we must inspect the
+        // result, not only .catch() (which fires only on a network/throw). Both
+        // branches log the breadcrumb that this call never created a
+        // voice_sessions row (so it won't show in the Calls tab). The backend
+        // logs the pg SQLSTATE/constraint; this is the agent-side marker.
         void client
           .call('/agent-tools/voice-session-start', {
             tenant_id: sessionCtx.tenantId,
             call_id: callId,
             caller_phone: sessionCtx.callerPhone ?? null,
           })
+          .then((res) => {
+            if (!res.ok) {
+              callLog.error(
+                {
+                  event: 'voice_session_start_failed',
+                  forwarded_line: sessionCtx.callerPhone == null,
+                  status: res.status ?? null,
+                  error_message: res.error,
+                },
+                'call-logging START failed (non-fatal to the live call) — this call will NOT appear in the Calls tab'
+              );
+            }
+          })
           .catch((e: unknown) =>
-            // 5W sad path: callLog already carries tenant_id/call_id/caller_phone/
-            // room (WHO/WHERE). Add the WHY + an explicit forwarded-line flag so
-            // it's obvious WHY caller_phone may be null. The backend logs the pg
-            // SQLSTATE/constraint; this is the agent-side breadcrumb that the call
-            // never created a voice_sessions row (so it won't show in the Calls tab).
             callLog.error(
               {
                 event: 'voice_session_start_failed',
                 forwarded_line: sessionCtx.callerPhone == null,
                 error_message: e instanceof Error ? e.message : String(e),
               },
-              'call-logging START failed (non-fatal to the live call) — this call will NOT appear in the Calls tab'
+              'call-logging START threw (non-fatal to the live call) — this call will NOT appear in the Calls tab'
             )
           );
         ctx.addShutdownCallback(async () => {
@@ -254,7 +269,7 @@ export default defineAgent({
             // server-side, i.e. counted as abandoned. So we never guess.
             const classifyResult = await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY);
             const outcome = trackedOutcome ?? classifyResult.outcome;
-            await client.call('/agent-tools/voice-session-end', {
+            const endRes = await client.call('/agent-tools/voice-session-end', {
               tenant_id: sessionCtx.tenantId,
               call_id: callId,
               duration_seconds: Math.round((Date.now() - startedAtMs) / 1000),
@@ -264,6 +279,22 @@ export default defineAgent({
               appointment_id: appointmentId,
               summary,
             });
+            // ToolsClient.call() resolves { ok:false } on a backend 5xx (does
+            // NOT throw), so the catch below won't fire on a 500 — inspect the
+            // result so an end failure (duration/transcript/summary not saved,
+            // row left active) is actually logged, not silently swallowed.
+            if (!endRes.ok) {
+              callLog.error(
+                {
+                  event: 'voice_session_end_failed',
+                  status: endRes.status ?? null,
+                  outcome,
+                  has_transcript: rendered != null,
+                  error_message: endRes.error,
+                },
+                'call-logging END failed (non-fatal to the caller) — duration/transcript/summary NOT saved; row may stay active'
+              );
+            }
             // Fire-and-forget: POST session AI usage to the cost ledger.
             // sessionModelUsage is empty when the session never started (e.g.
             // fallback path) — skip silently rather than inserting a zero row.
