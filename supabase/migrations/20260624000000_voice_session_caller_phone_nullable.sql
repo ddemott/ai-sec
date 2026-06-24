@@ -1,0 +1,12 @@
+-- voice_sessions.caller_phone made nullable.
+--
+-- Why: the UNTRUSTED_CALLER_ID_TENANTS feature (forwarded-line tenants whose SIP
+-- caller ID is the forwarding number, not the caller) nulls the caller phone, and
+-- anonymous / blocked-caller-ID calls have no caller ID at all. Both legitimately
+-- produce a NULL caller_phone. The prior NOT NULL constraint made
+-- start_voice_session() throw on those calls, so the call never logged — no
+-- voice_sessions row, no Calls-tab entry, and no transcript saved on hangup.
+--
+-- Applied to prod 2026-06-24 ahead of this migration; this file keeps db:rebuild
+-- and baseline.sql in sync. DROP NOT NULL on an already-nullable column is a no-op.
+ALTER TABLE voice_sessions ALTER COLUMN caller_phone DROP NOT NULL;

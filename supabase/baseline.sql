@@ -3305,7 +3305,7 @@ CREATE TABLE public.voice_sessions (
     voice_session_id uuid DEFAULT gen_random_uuid() NOT NULL,
     tenant_id uuid NOT NULL,
     call_id text NOT NULL,
-    caller_phone text NOT NULL,
+    caller_phone text,
     customer_id uuid,
     customer_context jsonb DEFAULT '{}'::jsonb,
     status text DEFAULT 'active'::text NOT NULL,

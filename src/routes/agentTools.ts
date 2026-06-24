@@ -1712,24 +1712,31 @@ export function registerAgentToolRoutes(
           ]
         );
 
-        // Fetch forward_phone + inbound_phone for owner notification.
+        // Fetch the owner-notification number + inbound (from) number.
+        // Prefer the dedicated owner_phone (the dashboard "Owner Notification
+        // Phone") so message alerts are decoupled from forward_phone (the live
+        // call-transfer destination): a tenant can take messages with no live
+        // transfer (forward_phone blank) yet still get texted. Fall back to
+        // forward_phone for tenants that only set that.
         const tenant = await client.query<{
+          owner_phone: string | null;
           forward_phone: string | null;
           inbound_phone: string | null;
-        }>(`SELECT forward_phone, inbound_phone FROM tenants WHERE tenant_id = $1`, [
+        }>(`SELECT owner_phone, forward_phone, inbound_phone FROM tenants WHERE tenant_id = $1`, [
           args.tenant_id,
         ]);
 
         return {
           message_id: res.rows[0]?.message_id ?? null,
-          forwardPhone: tenant.rows[0]?.forward_phone ?? null,
+          notifyPhone: tenant.rows[0]?.owner_phone ?? tenant.rows[0]?.forward_phone ?? null,
           inboundPhone: tenant.rows[0]?.inbound_phone ?? null,
         };
       });
 
-      // SMS the owner at forward_phone. Fire-and-forget; failure doesn't un-save the message.
+      // SMS the owner at the notification number. Fire-and-forget; failure
+      // doesn't un-save the message.
       let notified = false;
-      const normalizedForward = row.forwardPhone ? normalizePhone(row.forwardPhone) : null;
+      const normalizedForward = row.notifyPhone ? normalizePhone(row.notifyPhone) : null;
       const normalizedInbound = row.inboundPhone ? normalizePhone(row.inboundPhone) : null;
       if (
         normalizedForward &&
@@ -1746,18 +1753,18 @@ export function registerAgentToolRoutes(
         notified = sms.ok;
         if (!sms.ok) {
           app.log.warn(
-            { tenantId: args.tenant_id, forwardPhone: normalizedForward, error: sms.error },
+            { tenantId: args.tenant_id, notifyPhone: normalizedForward, error: sms.error },
             'take_message: owner SMS notification failed — message saved but owner not alerted'
           );
         }
-      } else if (row.forwardPhone || row.inboundPhone) {
+      } else if (row.notifyPhone || row.inboundPhone) {
         app.log.warn(
           {
             tenantId: args.tenant_id,
-            forwardPhone: row.forwardPhone,
+            notifyPhone: row.notifyPhone,
             inboundPhone: row.inboundPhone,
           },
-          'take_message: owner SMS skipped — forward_phone or inbound_phone is invalid/unnormalizable'
+          'take_message: owner SMS skipped — notify phone or inbound_phone is invalid/unnormalizable'
         );
       }
 
