@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict AXTX7gZJSgSKwKXBQPc6nY7A8j52mLEe8E5VGe9kGAn1683fB0mvNmhNv72YzoB
+\restrict X4iUqaklTf3HC5eQ8yZfLvOtL4IKdxGFFFfMtDF2qv9bl3KTUnibLLT6JXtINPn
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -1488,6 +1488,40 @@ BEGIN
     DELETE FROM soft_reservations WHERE expires_at < NOW();
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
     RETURN deleted_count;
+END;
+$$;
+
+
+--
+-- Name: reap_stale_voice_sessions(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.reap_stale_voice_sessions(p_max_age_minutes integer DEFAULT 15) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+    v_count INTEGER;
+BEGIN
+    UPDATE voice_sessions
+    SET
+        status = 'completed',
+        ended_at = now(),
+        duration_seconds = COALESCE(
+            duration_seconds,
+            EXTRACT(EPOCH FROM (now() - started_at))::INTEGER
+        ),
+        -- Human-visible marker so the Calls tab explains WHY this row has no
+        -- transcript/outcome: the agent never sent its end. Only set when blank.
+        summary = COALESCE(
+            NULLIF(summary, ''),
+            'Auto-finalized: the call ended but the agent did not send a completion record.'
+        ),
+        updated_at = now()
+    WHERE status = 'active'
+      AND started_at < now() - make_interval(mins => p_max_age_minutes);
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
 END;
 $$;
 
@@ -5322,5 +5356,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict AXTX7gZJSgSKwKXBQPc6nY7A8j52mLEe8E5VGe9kGAn1683fB0mvNmhNv72YzoB
+\unrestrict X4iUqaklTf3HC5eQ8yZfLvOtL4IKdxGFFFfMtDF2qv9bl3KTUnibLLT6JXtINPn
 
