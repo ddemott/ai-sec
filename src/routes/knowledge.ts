@@ -595,7 +595,7 @@ export function registerKnowledgeRoutes(
       // Skip matched items with null answers — they carry no KB value and inflate the count.
       // All items enter as 'suggested' — even matched ones — so the owner reviews
       // everything before it lands in the live KB. The approve route handles ingestion.
-      const confirmedItems = extract.answers
+      const matchedItems = extract.answers
         .filter((a: any) => a.answer != null && (a.answer as string).trim().length > 0)
         .map((a: any) => ({
           question_id: a.questionId || null,
@@ -613,7 +613,7 @@ export function registerKnowledgeRoutes(
         confidence: d.confidence ?? null,
         status: 'suggested' as const,
       }));
-      const allItems = [...confirmedItems, ...suggestedItems];
+      const allItems = [...matchedItems, ...suggestedItems];
 
       if (allItems.length > 0) {
         await withTenantClient(tenantId, async (client) => {
@@ -636,7 +636,10 @@ export function registerKnowledgeRoutes(
         });
       }
 
-      const confirmed = confirmedItems.length;
+      // `confirmed` here is the COUNT of bank/custom-matched items (response-field
+      // name kept for API/dashboard compatibility). They are staged as 'suggested'
+      // like everything else — nothing is auto-confirmed into the live KB anymore.
+      const confirmed = matchedItems.length;
       const suggestions = suggestedItems.length;
 
       logEvent(req, 'website_knowledge_import', { url, confirmed, suggestions, tenantId });
@@ -755,10 +758,15 @@ export function registerKnowledgeRoutes(
               [id, tenantId]
             );
             if ((upd.rowCount ?? 0) === 0) {
-              await client.query('ROLLBACK');
-              return reply
-                .status(409)
-                .send({ success: false, error: 'Suggestion not found or already reviewed' });
+              // Concurrent/retried approve already reviewed this row. Throw a
+              // 409 and let the catch ROLLBACK + withHandler format the reply —
+              // a reply.send() here only exits the callback, so the outer handler
+              // would still logEvent + send {success:true}, double-sending.
+              const conflict = new Error('Suggestion not found or already reviewed') as Error & {
+                statusCode?: number;
+              };
+              conflict.statusCode = 409;
+              throw conflict;
             }
             await client.query('COMMIT');
           } catch (err) {
