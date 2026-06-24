@@ -71,7 +71,7 @@ Both erase customer PII irreversibly. Built conservative + flagged per Dale's st
 
 ## Prod actions outstanding (Dale)
 
-- Apply migrations `20260622000000` (audit-extend) + `20260622010000` (requested_service_id) to the prod DB.
+- ~~Apply migrations `20260622000000` (audit-extend) + `20260622010000` (requested_service_id) to the prod DB.~~ **DONE 2026-06-23** — applied (`APPLIED=2 SKIPPED=140 FAILED=0`) + verified on prod: `voice_sessions.requested_service_id` column present, `trg_audit_services`/`trg_audit_employees` triggers present, `schema_migrations` now at `20260622010000`.
 - Review + decide on #68 / #69 (legal retention scope). Do not set `ENABLE_CUSTOMER_PURGE` / `ENABLE_RETENTION_WORKER` in prod without sign-off.
 
 ## Process notes (this session)
