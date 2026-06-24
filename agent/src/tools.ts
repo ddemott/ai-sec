@@ -63,21 +63,55 @@ export function buildTools(
   return {
     get_customer_context: llm.tool({
       description:
-        "Look up the caller in the CRM by their caller-ID phone. Returns the customer's name, a short history, and any saved preferences (preferred staff, last service, likes) to personalize the call. Call this ONCE at the start of the call when a phone is available.",
+        "Look up a caller in the CRM by phone. Returns the customer's name, a short history, and any saved preferences (preferred staff, last service, likes) to personalize the call. Pass the phone number the caller gave you verbally when you have it; otherwise it falls back to the caller-ID phone. Use this to recognize returning callers.",
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          phone: {
+            type: 'string',
+            description:
+              "The caller's phone number, preferably the one they gave you out loud. Omit only if you have not collected one yet (the caller-ID phone is used as a fallback).",
+          },
+        },
         additionalProperties: false,
       },
-      execute: async () => {
-        if (!ctx.callerPhone) {
+      execute: async (args: { phone?: string }) => {
+        const lookupPhone = args.phone?.trim() || ctx.callerPhone;
+        if (!lookupPhone) {
           return 'New caller - no history found.';
         }
         const res = await client.call(
           '/agent-tools/customer-context',
           {
             tenant_id: ctx.tenantId,
-            phone: ctx.callerPhone,
+            phone: lookupPhone,
+          },
+          { isReadOnly: true }
+        );
+        return formatResponse(res);
+      },
+    }),
+
+    find_caller_by_name: llm.tool({
+      description:
+        "Look up callers by name in the CRM. Call this right after the caller gives you their name. Returns matching contacts with the phone number on file so you can confirm 'is this still your number?'. An empty list means no match — treat them as a new caller. Use this for name-first identification on this forwarded line, since caller ID is not the caller's own number.",
+      parameters: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+            description: 'The caller\'s name as they stated it, e.g. "Jane Doe".',
+          },
+        },
+        required: ['name'],
+        additionalProperties: false,
+      },
+      execute: async (args: { name: string }) => {
+        const res = await client.call(
+          '/agent-tools/find-customer-by-name',
+          {
+            tenant_id: ctx.tenantId,
+            name: args.name,
           },
           { isReadOnly: true }
         );
@@ -406,7 +440,7 @@ export function buildTools(
 
     identify_caller: llm.tool({
       description:
-        "Save or update the caller's contact record (phone + name). Call this as soon as the caller gives you their name — even if they're not booking. Keeps the address book current without duplicating records.",
+        "Save or update the caller's contact record (phone + name). Call this as soon as the caller gives you their name and number — even if they're not booking. Pass the phone number the caller gave you verbally; it falls back to the caller-ID phone only when you have not collected one. Keeps the address book current without duplicating records.",
       parameters: {
         type: 'object',
         properties: {
@@ -414,17 +448,23 @@ export function buildTools(
             type: 'string',
             description: 'The caller\'s full name as they stated it, e.g. "Dale DeMott".',
           },
+          phone: {
+            type: 'string',
+            description:
+              "The caller's phone number as they gave it to you out loud. Always pass this when you have it — do not rely on caller ID.",
+          },
         },
         required: ['name'],
         additionalProperties: false,
       },
-      execute: async (args: { name: string }) => {
-        if (!ctx.callerPhone) {
-          return 'No caller-ID phone available — contact not saved.';
+      execute: async (args: { name: string; phone?: string }) => {
+        const contactPhone = args.phone?.trim() || ctx.callerPhone;
+        if (!contactPhone) {
+          return 'No phone number available — ask the caller for their number, then save the contact.';
         }
         const res = await client.call('/agent-tools/identify-caller', {
           tenant_id: ctx.tenantId,
-          phone: ctx.callerPhone,
+          phone: contactPhone,
           name: args.name,
         });
         return formatResponse(res);

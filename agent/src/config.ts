@@ -31,6 +31,14 @@ const envSchema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
 
+  // Comma-separated tenant IDs whose inbound line is a FORWARDED number (e.g.
+  // the owner's cell forwards to the AI), so the SIP caller ID is the
+  // forwarding line — NOT the caller. For these tenants the agent ignores
+  // caller ID entirely (treats it as absent) and collects the caller's real
+  // number verbally. Runtime toggle set on Railway — no schema change, instantly
+  // reversible. Empty (default) = trust caller ID as before for every tenant.
+  UNTRUSTED_CALLER_ID_TENANTS: z.string().default(''),
+
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
 
@@ -46,3 +54,14 @@ if (!parsed.success) {
 
 export const config = parsed.data;
 export type Config = typeof config;
+
+/**
+ * Tenants whose SIP caller ID must NOT be trusted (forwarded inbound lines).
+ * Parsed once from UNTRUSTED_CALLER_ID_TENANTS. The agent nulls callerPhone for
+ * any tenant in this set so it collects the caller's real number verbally.
+ */
+export const untrustedCallerIdTenants = new Set(
+  config.UNTRUSTED_CALLER_ID_TENANTS.split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+);

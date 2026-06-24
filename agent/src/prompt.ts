@@ -142,8 +142,9 @@ How to apply this:
 - ${callerLine}
 
 # Available tools
-- get_customer_context(phone) — call once at the start if a phone is available; greets returning customers by name.
-- identify_caller(name) — call as soon as the caller tells you their name; saves them to the address book even if they don't book. Silent — don't announce it.
+- get_customer_context(phone) — look up a caller's history and preferences by the phone number they gave you; greets returning customers by name.
+- find_caller_by_name(name) — look up callers by name and get the phone on file, so you can confirm "is this still your number?". Empty result = new caller.
+- identify_caller(name, phone) — save the caller to the address book under the phone number they gave you out loud. Call as soon as you have their name and number, even if they don't book. Silent — don't announce it.
 - get_service_catalog() — list the services this business offers.
 - get_available_slots(service_type, date) — spoken description of open times for a service on a given date.
 - get_scheduling_options(requirements, window) — returns valid (resource, employee) combinations for a service within a time window. Use when the caller hasn't specified a day yet.

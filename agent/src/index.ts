@@ -25,7 +25,7 @@ import * as openai from '@livekit/agents-plugin-openai';
 import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
 
-import { config } from './config.js';
+import { config, untrustedCallerIdTenants } from './config.js';
 import { runFallback } from './fallback.js';
 import { GrokTTS } from './grokTTS.js';
 import { getLogger } from './logger.js';
@@ -128,6 +128,20 @@ export default defineAgent({
       });
       await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
       return;
+    }
+
+    // Forwarded-line guard: for tenants whose inbound number is a forwarded
+    // line (env UNTRUSTED_CALLER_ID_TENANTS), the SIP caller ID is the
+    // forwarding cell, NOT the caller. Null it BEFORE anything reads it — the
+    // child logger, the fire-and-forget voice-session-start record, the prompt,
+    // and every tool — so nothing ever keys off the forwarding number. The
+    // agent collects the caller's real number verbally instead.
+    if (untrustedCallerIdTenants.has(sessionCtx.tenantId) && sessionCtx.callerPhone) {
+      log.info(
+        { event: 'caller_id_ignored', tenant_id: sessionCtx.tenantId, room: ctx.room.name },
+        'caller ID ignored for forwarded-line tenant — collecting number verbally'
+      );
+      sessionCtx.callerPhone = null;
     }
 
     // Per-call child logger — every subsequent line on this call carries

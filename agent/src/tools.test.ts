@@ -55,7 +55,7 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 17 expected tool names', () => {
+  it('HAPPY: exposes exactly the 18 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
@@ -66,6 +66,7 @@ describe('buildTools', () => {
         'book_with_scheduling',
         'cancel_appointment',
         'check_availability',
+        'find_caller_by_name',
         'get_available_slots',
         'get_company_policy_answer',
         'get_customer_context',
@@ -117,8 +118,27 @@ describe('get_customer_context', () => {
     });
   });
 
-  it('HAPPY: anonymous caller → short-circuits, no backend call', async () => {
-    // WHO: Caller-ID blocked → context.callerPhone is null
+  it('HAPPY: looks up by the LLM-supplied spoken phone when provided', async () => {
+    // WHO: Returning caller on a forwarded line — caller ID is the forwarding cell
+    // WHAT: When the LLM passes a phone (the number the caller said), the lookup
+    //        uses THAT number, not ctx.callerPhone, so repeat callers are
+    //        recognized by their real number
+    // WHY: Caller ID on a forwarded line is not the caller; the spoken number is
+    const { client, calls } = makeClient([
+      { ok: true, result: { name: 'Bob', history: 'Spoke last week' } },
+    ]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.get_customer_context, { phone: '+16125559999' });
+
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: '+16125559999',
+    });
+  });
+
+  it('HAPPY: anonymous caller, no spoken phone → short-circuits, no backend call', async () => {
+    // WHO: Caller-ID blocked → context.callerPhone is null, no number collected yet
     // WHAT: Skip the backend call entirely and return the "new caller"
     //        string so the LLM moves on instead of waiting for an
     //        HTTP round trip that will also return "new caller"
@@ -129,6 +149,41 @@ describe('get_customer_context', () => {
 
     expect(result).toContain('New caller');
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('find_caller_by_name', () => {
+  it('HAPPY: posts tenant_id + name, returns matches for confirmation', async () => {
+    // WHO: Caller on the forwarded line who gives their name first
+    // WHAT: Tool posts tenant_id (context) + name (LLM) to find-customer-by-name
+    //        and surfaces the matches so Beth can confirm the number on file
+    // WHEN: Right after the caller states their name — caller ID is the
+    //        forwarding cell, so name is the only trustworthy first identifier
+    // WHERE: agent/src/tools.ts find_caller_by_name → /agent-tools/find-customer-by-name
+    // WHY: Name-first identification is the whole point of this tool
+    const { client, calls } = makeClient([
+      { ok: true, result: { matches: [{ name: 'Jane Doe', phone: '+16125551234' }] } },
+    ]);
+    const tools = buildTools(makeCtx(), client);
+
+    const result = await exec(tools.find_caller_by_name, { name: 'Jane Doe' });
+
+    expect(calls[0].path).toBe('/agent-tools/find-customer-by-name');
+    expect(calls[0].body).toEqual({ tenant_id: TENANT_ID, name: 'Jane Doe' });
+    expect(result).toContain('Jane Doe');
+  });
+
+  it('HAPPY: empty match list relays cleanly so the LLM treats them as new', async () => {
+    // WHO: First-time caller whose name is not in the CRM
+    // WHAT: Backend returns an empty matches array; tool relays it
+    // WHY: An empty list is the signal to create a new entry, not an error
+    const { client, calls } = makeClient([{ ok: true, result: { matches: [] } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    const result = await exec(tools.find_caller_by_name, { name: 'Nobody Known' });
+
+    expect(calls).toHaveLength(1);
+    expect(result).toContain('matches');
   });
 });
 
@@ -589,7 +644,9 @@ describe('cancel_appointment', () => {
     // WHERE: agent/src/tools.ts cancel_appointment → /agent-tools/cancel-appointment
     // WHY: Phone ownership gate on the backend requires the correct caller phone;
     //       LLM must never supply it — prevents canceling another caller's appointment
-    const { client, calls } = makeClient([{ ok: true, result: { cancelled: true, appointment_id: APPT_ID } }]);
+    const { client, calls } = makeClient([
+      { ok: true, result: { cancelled: true, appointment_id: APPT_ID } },
+    ]);
     const tools = buildTools(makeCtx(), client);
 
     await exec(tools.cancel_appointment, { appointment_id: APPT_ID });
@@ -679,8 +736,28 @@ describe('identify_caller', () => {
     });
   });
 
-  it('SAD: anonymous caller → returns plain string, no backend call', async () => {
-    // WHO: Caller with blocked caller-ID who gives their name
+  it('HAPPY: prefers the LLM-supplied spoken phone over caller ID', async () => {
+    // WHO: Forwarded-line caller whose caller ID is NOT their own number
+    // WHAT: When the LLM passes a phone (the number the caller said out loud),
+    //        the tool saves the contact under THAT number, not ctx.callerPhone
+    // WHEN: Beth asks for the number, reads it back, then calls identify_caller(name, phone)
+    // WHERE: agent/src/tools.ts identify_caller → /agent-tools/identify-caller
+    // WHY: On a forwarded line the caller ID is the forwarding cell; the spoken
+    //        number is the caller's true number and must be what lands in the CRM
+    const { client, calls } = makeClient([{ ok: true, result: { identified: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.identify_caller, { name: 'Jane Doe', phone: '+16125551234' });
+
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: '+16125551234',
+      name: 'Jane Doe',
+    });
+  });
+
+  it('SAD: no spoken phone and no caller ID → asks for a number, no backend call', async () => {
+    // WHO: Caller with blocked caller-ID who has not yet given a number
     // WHAT: Tool returns a plain string (not JSON) and skips the backend
     // WHY: Backend requires a real phone to upsert; null phone would fail validation
     const { client, calls } = makeClient([]);
@@ -688,7 +765,7 @@ describe('identify_caller', () => {
 
     const result = await exec(tools.identify_caller, { name: 'Jane Doe' });
 
-    expect(result).toContain('No caller-ID');
+    expect(result).toContain('ask the caller for their number');
     expect(calls).toHaveLength(0);
   });
 });
