@@ -492,9 +492,10 @@ export default defineAgent({
           }),
         });
 
-        // Tools built here so speakFiller can reference session.say —
-        // execute() closures fire only after session.start(), so session is
-        // always initialized by the time a filler phrase is spoken.
+        // Tools are built after the session exists. speakFiller is now a no-op
+        // (it used to call session.say() from inside execute(), which stalled the
+        // generation — see the no-op comment below), so it no longer depends on
+        // session being initialized; the ordering is harmless either way.
         const tools = buildTools(
           sessionCtx,
           client,
