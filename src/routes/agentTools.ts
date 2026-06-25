@@ -1021,7 +1021,11 @@ export function registerAgentToolRoutes(
       } catch (err) {
         errorsTotal.inc({ event: 'policy_answer_embedding_failed' });
         app.log.error(
-          { tenantId: args.tenant_id, ...pgErrorFields(err) },
+          {
+            event: 'policy_answer_embedding_failed',
+            tenant_id: args.tenant_id,
+            ...pgErrorFields(err),
+          },
           'policy-answer: embedding failed — degraded to graceful fallback (caller not left silent)'
         );
         return ok(reply, policyFallback);
