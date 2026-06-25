@@ -792,12 +792,16 @@ export default defineAgent({
               // Realtime is speech-to-speech with NO TTS plugin, so say(text)
               // throws "trying to generate speech from text without a TTS model".
               // Have the model SPEAK the opener via generateReply instead.
+              // NOTE: no allowInterruptions here — RealtimeModel uses server-side
+              // turn detection and rejects allowInterruptions:false on
+              // generateReply ("...cannot be false..."), which left the session
+              // not listening after the greeting → the caller's next turn was
+              // dropped → silence. Let server VAD own turn-taking.
               await session.generateReply({
                 // Greeting on its own lines (not quote-wrapped) so a tenant
                 // greeting containing a " or newline can't make the instruction
                 // ambiguous.
                 instructions: `Greet the caller now by speaking this exact opening line verbatim, then wait for their reply:\n\n${greeting}`,
-                allowInterruptions: false,
               });
             } else {
               await session.say(greeting, { allowInterruptions: false });
