@@ -494,7 +494,22 @@ export default function VoiceCallsView() {
       const data = await Api.voice.getHistory(tenantId, { limit: 20, offset });
       if (offset === 0) {
         const fresh = data.calls || [];
-        setCallHistory(fresh);
+        if (opts.silent) {
+          // Background poll: MERGE the fresh first page into the existing list so
+          // we don't collapse pagination (a user who clicked "Load more" keeps
+          // their older rows). Update matched rows in place; prepend brand-new
+          // calls (newest-first). Dedupe by voice_session_id.
+          setCallHistory((prev) => {
+            if (prev.length <= fresh.length) return fresh; // not paginated → just take fresh
+            const freshById = new Map(fresh.map((c) => [c.voice_session_id, c]));
+            const prevIds = new Set(prev.map((c) => c.voice_session_id));
+            const updated = prev.map((c) => freshById.get(c.voice_session_id) ?? c);
+            const brandNew = fresh.filter((c) => !prevIds.has(c.voice_session_id));
+            return [...brandNew, ...updated];
+          });
+        } else {
+          setCallHistory(fresh);
+        }
         // Keep the open detail pane in sync with the poll: refresh the selected
         // call from its freshly-fetched row so status/duration/transcript update
         // live (a call that just finalized stops showing stale "active / 0:00").

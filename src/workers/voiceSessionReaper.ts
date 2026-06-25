@@ -25,7 +25,7 @@ const DEFAULT_INTERVAL_MS = 60_000; // 1 minute
 // A call left 'active' past this (measured from started_at) is treated as
 // stranded and force-closed. 15 min is deliberately conservative so a genuinely
 // long-but-live call is never reaped mid-conversation (which would freeze its
-// transcript — the incremental-transcript route only updates 'active' rows). The
+// transcript — /agent-tools/voice-session-transcript only updates 'active' rows). The
 // dashboard auto-refresh surfaces a live call's transcript in real time, so the
 // reaper is just the final-status backstop and doesn't need to be aggressive.
 // (Follow-up: switch the SQL to inactivity-based reaping on updated_at, which
