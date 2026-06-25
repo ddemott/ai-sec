@@ -14,6 +14,16 @@ import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
 
 import { registerAgentToolRoutes } from './routes/agentTools';
+import { sendJobInquiryEmail } from './services/communications/systemEmail';
+
+// The capture-job-inquiry route emails the owner via systemEmail. Mock it so we
+// can (a) assert it's called with the resolved recipient + collected fields and
+// (b) simulate an SMTP failure to exercise the best-effort/instrumented sad path
+// without standing up a real transporter. Everything else is real.
+vi.mock('./services/communications/systemEmail', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, sendJobInquiryEmail: vi.fn() };
+});
 
 // Zod v4's .uuid() requires a proper version/variant nibble, so these
 // are real v4 UUIDs — not pattern fillers.
@@ -656,6 +666,143 @@ describe('agentTools /identify-caller', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(false);
     expect(queries).toHaveLength(0);
+  });
+});
+
+describe('agentTools /capture-job-inquiry', () => {
+  // The mock is module-level; reset call history + default to a resolving
+  // send before each test so one test's expectations don't leak into another.
+  beforeEach(() => {
+    vi.mocked(sendJobInquiryEmail).mockReset();
+    vi.mocked(sendJobInquiryEmail).mockResolvedValue(undefined);
+  });
+
+  it('HAPPY: contract inquiry inserts the row and emails the resolved recipient', async () => {
+    // WHO: a recruiter who gave a callback number and full contract details.
+    // WHAT: route looks up customer by callback phone, INSERTs job_inquiries,
+    //        resolves the recipient (job_inquiry_email), and emails it.
+    // WHY: Dale must receive the structured inquiry; the call must not freeze.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] }, // customer lookup by callback phone — none
+        { rows: [{ job_inquiry_id: 'ji-1' }] }, // INSERT ... RETURNING
+        { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient resolve
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Rhonda Recruiter',
+      callback_phone: '3128651186',
+      company: 'Acme Corp',
+      represents_company: false,
+      employment_type: 'contract',
+      rate_range: '$120-140/hr',
+      duration: '6 months',
+      location_type: 'remote',
+      timezone: 'America/Chicago',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { emailed: true } });
+    expect(queries[1].text).toContain('INSERT INTO job_inquiries');
+    expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
+      'DaleDeMott@thinkinghammer.com',
+      expect.objectContaining({
+        company: 'Acme Corp',
+        employmentType: 'contract',
+        duration: '6 months',
+        locationType: 'remote',
+        timezone: 'America/Chicago',
+        callbackPhone: '+13128651186',
+      })
+    );
+  });
+
+  it('HAPPY: full-time inquiry with no callback phone skips the customer lookup', async () => {
+    // WHO: a caller about a full-time role who left no callback number.
+    // WHAT: with no callback phone the customer-lookup query is skipped, so the
+    //        first query is the INSERT and the second resolves the recipient.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ job_inquiry_id: 'ji-2' }] }, // INSERT
+        { rows: [{ email: 'owner@example.com' }] }, // recipient (fell back to owner email)
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Frank FullTime',
+      company: 'Globex',
+      employment_type: 'full_time',
+      rate_range: '$180k-200k',
+      location_type: 'onsite',
+      address: '1 Globex Plaza, Chicago IL',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { emailed: true } });
+    expect(queries).toHaveLength(2);
+    expect(queries[0].text).toContain('INSERT INTO job_inquiries');
+    expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
+      'owner@example.com',
+      expect.objectContaining({
+        employmentType: 'full_time',
+        address: '1 Globex Plaza, Chicago IL',
+      })
+    );
+  });
+
+  it('SAD: email send failure still saves the inquiry and returns success', async () => {
+    // WHO: a valid inquiry where SMTP / the transporter throws.
+    // WHAT: the row is already persisted, so the route swallows the email error
+    //        (metric + 5W log) and returns success with emailed:false — the call
+    //        must NOT fail just because the notification didn't go out.
+    vi.mocked(sendJobInquiryEmail).mockRejectedValueOnce(new Error('SMTP unavailable'));
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ job_inquiry_id: 'ji-3' }] }, // INSERT
+        { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Erin Error',
+      company: 'Initech',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { emailed: false } });
+  });
+
+  it('SAD: no recipient configured saves the inquiry but does not email', async () => {
+    // WHO: a tenant with neither job_inquiry_email nor an owner email.
+    // WHAT: recipient resolves to null → route does not call the email sender,
+    //        increments job_inquiry_no_recipient, and returns emailed:false.
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ job_inquiry_id: 'ji-4' }] }, // INSERT
+        { rows: [{ email: null }] }, // recipient resolve — none
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Nora NoEmail',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { emailed: false } });
+    expect(vi.mocked(sendJobInquiryEmail)).not.toHaveBeenCalled();
+  });
+
+  it('SAD: invalid employment_type enum is rejected before any DB write', async () => {
+    // WHO: a malformed tool call (LLM emitted an out-of-enum value).
+    // WHAT: Zod rejects it → success:false, no queries run, no email sent.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Val Validation',
+      employment_type: 'permanent', // not 'contract' | 'full_time'
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
+    expect(res.json().error).toContain('employment_type');
+    expect(queries).toHaveLength(0);
+    expect(vi.mocked(sendJobInquiryEmail)).not.toHaveBeenCalled();
   });
 });
 
