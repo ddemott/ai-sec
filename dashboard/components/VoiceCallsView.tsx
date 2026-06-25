@@ -459,10 +459,15 @@ export default function VoiceCallsView() {
       void fetchActiveCalls();
       void fetchCallHistory();
     }
-    // Set up polling for active calls
+    // Poll every 10s. Refresh active calls AND call history + the open detail
+    // pane (silent) so a call that just ended/finalized updates without a manual
+    // reload — fixes the stale "active / 0:00 / no transcript" view.
     const interval = setInterval(() => {
-      if (tenantId) void fetchActiveCalls();
-    }, 10000); // Poll every 10 seconds
+      if (tenantId) {
+        void fetchActiveCalls();
+        void fetchCallHistory(0, { silent: true });
+      }
+    }, 10000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
@@ -477,17 +482,27 @@ export default function VoiceCallsView() {
     }
   }
 
-  async function fetchCallHistory(offset = 0) {
-    if (offset === 0) setLoading(true);
-    else setHistoryLoading(true);
+  async function fetchCallHistory(offset = 0, opts: { silent?: boolean } = {}) {
+    // silent = a background poll refresh: don't flip loading spinners or wipe
+    // the list on a transient error (avoids flicker every 10s).
+    if (!opts.silent) {
+      if (offset === 0) setLoading(true);
+      else setHistoryLoading(true);
+    }
 
     try {
       const data = await Api.voice.getHistory(tenantId, { limit: 20, offset });
       if (offset === 0) {
-        setCallHistory(data.calls || []);
-        if (!selectedCall && data.calls?.length > 0) {
-          setSelectedCall(data.calls[0]);
-        }
+        const fresh = data.calls || [];
+        setCallHistory(fresh);
+        // Keep the open detail pane in sync with the poll: refresh the selected
+        // call from its freshly-fetched row so status/duration/transcript update
+        // live (a call that just finalized stops showing stale "active / 0:00").
+        // Functional update avoids a stale `selectedCall` closure in the poll.
+        setSelectedCall((prev) => {
+          if (!prev) return fresh.length > 0 ? fresh[0] : null;
+          return fresh.find((c) => c.voice_session_id === prev.voice_session_id) ?? prev;
+        });
       } else {
         setCallHistory((prev) => [...prev, ...(data.calls || [])]);
       }
@@ -495,10 +510,12 @@ export default function VoiceCallsView() {
       setHasMore(data.has_more || false);
     } catch (err) {
       console.error('Failed to fetch call history:', err);
-      setCallHistory([]);
+      if (!opts.silent) setCallHistory([]);
     } finally {
-      setLoading(false);
-      setHistoryLoading(false);
+      if (!opts.silent) {
+        setLoading(false);
+        setHistoryLoading(false);
+      }
     }
   }
 

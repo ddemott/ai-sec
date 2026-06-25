@@ -22,8 +22,15 @@ import { getPool } from '../database/index.js';
 import { errorsTotal } from '../services/metrics.js';
 
 const DEFAULT_INTERVAL_MS = 60_000; // 1 minute
-// Calls almost never run longer than a few minutes; 15 min is a safe "this is
-// definitely stranded, not in-progress" threshold. Override via env.
+// A call left 'active' past this (measured from started_at) is treated as
+// stranded and force-closed. 15 min is deliberately conservative so a genuinely
+// long-but-live call is never reaped mid-conversation (which would freeze its
+// transcript — the incremental-transcript route only updates 'active' rows). The
+// dashboard auto-refresh surfaces a live call's transcript in real time, so the
+// reaper is just the final-status backstop and doesn't need to be aggressive.
+// (Follow-up: switch the SQL to inactivity-based reaping on updated_at, which
+// would let this be much shorter without the long-call risk.) Override via
+// VOICE_SESSION_REAP_MINUTES.
 const DEFAULT_MAX_AGE_MINUTES = Number(process.env.VOICE_SESSION_REAP_MINUTES) || 15;
 
 let reaperInterval: NodeJS.Timeout | null = null;
