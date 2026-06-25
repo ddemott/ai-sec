@@ -4,6 +4,7 @@ import './globals.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { Providers } from './providers';
+import { VersionBadge } from '../components/VersionBadge';
 
 const bebasNeue = Bebas_Neue({
   weight: '400',
@@ -65,6 +66,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased" style={{ fontFamily: 'var(--font-body)' }}>
         <Providers>{children}</Providers>
+        <VersionBadge />
       </body>
     </html>
   );
