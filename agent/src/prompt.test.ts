@@ -39,6 +39,24 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/take a message/i);
   });
 
+  it('HAPPY: instructs the agent to read back a phone number + never go silent on partial input', () => {
+    // WHO: a caller whose spoken number came through partial (STT split/dropped
+    //       digits), e.g. only 6 of 10 captured.
+    // WHAT: the prompt must tell the agent to read the number back, ask for the
+    //        missing digits when it has fewer than 10, and ALWAYS respond rather
+    //        than wait silently.
+    // WHY: Beth was stalling after an incomplete number (dead air = "frozen
+    //        call"). The fix is prompt guidance to confirm/re-prompt, never hang.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toMatch(/read it back|read back/i);
+    expect(prompt).toMatch(/10 digits/i);
+    expect(prompt).toMatch(/never (go silent|leave dead air)/i);
+    // partial-number recovery: ask for the rest, don't stall
+    expect(prompt).toMatch(/fewer than 10|the rest|only caught/i);
+    // an 11-digit "1-..." must not be treated as incomplete
+    expect(prompt).toMatch(/leading 1 or \+1|country code/i);
+  });
+
   it('HAPPY: caller-ID present → includes the phone with a verified-by-caller-ID note', () => {
     // WHO: Normal inbound call, caller-ID came through clean
     // WHAT: Prompt tells the LLM the phone is trusted so it can skip
