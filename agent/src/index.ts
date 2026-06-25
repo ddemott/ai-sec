@@ -496,12 +496,26 @@ export default defineAgent({
           // Don't let a short backchannel ("hello?", "ok") during the TTS gap
           // cancel/discard Beth's in-flight reply (the failure in the trace:
           // a 1-word turn pre-empted the generation, orphaning the tool output).
-          // Require a slightly longer/wordier utterance to count as a real
-          // interruption. (Defaults are minWords:0, minDuration:500.)
           turnHandling: {
             interruption: {
+              // 'adaptive' = LiveKit's CNN barge-in model: it decides whether to
+              // yield the turn from the ACOUSTICS of the overlapping speech, not
+              // from a raw VAD/duration threshold — so a brief "hello?"/backchannel
+              // during the TTS gap no longer cancels the in-flight reply. Default-on
+              // for LiveKit Cloud + Node ≥1.2.0 + VAD (we have silero); set
+              // explicitly so intent survives a self-host path. Requires a
+              // non-realtime LLM + aligned-transcript STT (Deepgram qualifies).
+              mode: 'adaptive',
+              // minWords is the EFFECTIVE lever when STT is on: a verified LiveKit
+              // maintainer note says STT-detected speech bypasses minDuration, so
+              // raising duration alone does nothing — require ≥2 words to interrupt.
               minWords: 2,
-              minDuration: 800,
+              // If speech is detected but NO transcript follows within 2s (a false
+              // trigger — line noise, a cough, a half-word), resume speaking from
+              // where Beth left off instead of staying silent. Direct guard against
+              // a phantom "interruption" killing the reply → dead air.
+              falseInterruptionTimeout: 2000,
+              resumeFalseInterruption: true,
             },
             // Endpointing = how long of a pause ends the caller's turn. Default
             // minDelay 500ms ends the turn on the brief pause BETWEEN spoken
@@ -689,8 +703,11 @@ export default defineAgent({
         const greeting =
           tenantConfig.firstMessage?.trim() ||
           `Thanks for calling ${tenantConfig.name}. How can I help you today?`;
+        // Greeting plays through uninterrupted — a caller's "hi?"/line noise at
+        // pickup shouldn't truncate Beth's opening line (which sets the framing
+        // for the whole call). Scoped to this one say(); normal turns re-enable.
         void session.say(greeting, {
-          allowInterruptions: true,
+          allowInterruptions: false,
         });
       } catch (err) {
         callLog.error(
