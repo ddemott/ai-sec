@@ -42,8 +42,11 @@ export async function warmFillers(
 ): Promise<{ warmed: string[]; failed: string[] }> {
   const warmed: string[] = [];
   const failed: string[] = [];
+  // Dedupe so a repeated line isn't synthesized twice concurrently (the cache
+  // check below races until the first synth resolves).
+  const unique = [...new Set(texts)];
   await Promise.all(
-    texts.map(async (text) => {
+    unique.map(async (text) => {
       if (cache.has(key(voice, text))) {
         warmed.push(text);
         return;

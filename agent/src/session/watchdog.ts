@@ -52,8 +52,9 @@ const DEFAULT_DEADLINE_1 = 2500;
 const DEFAULT_DEADLINE_2 = 4000;
 
 /**
- * Attach the watchdog to a live AgentSession. Idempotent per session; returns a
- * detach function (clears timers + listeners) for teardown/tests.
+ * Attach the watchdog to a live AgentSession. Call once per session (index.ts
+ * does); attaching twice would register duplicate listeners and double-fire.
+ * Returns a detach function (clears timers + listeners) for teardown/tests.
  */
 export function attachOutputWatchdog(
   session: voice.AgentSession,
@@ -129,7 +130,11 @@ export function attachOutputWatchdog(
 
   const fireRecovery = () => {
     timer2 = undefined;
-    if (session.agentState !== 'thinking') return;
+    // No agentState gate here: disarm() clears timer2 the moment real audio plays
+    // (or the turn ends), so if this timer SURVIVED to fire, no real audio has
+    // happened since the filler — we're still in dead air and should recover.
+    // (Gating on agentState==='thinking' would wrongly skip recovery, because the
+    // filler we just played transitions the agent into 'speaking'.)
     // Return value (the SpeechHandle thenable) intentionally unused — fire-and-forget.
     void speakHold(opts.recoveryText, 'recovery');
   };
