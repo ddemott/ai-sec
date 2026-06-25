@@ -85,6 +85,19 @@ describe('buildTools', () => {
     );
   });
 
+  it('HAPPY: capabilities filter returns only the selected groups (composability for other agents)', () => {
+    // WHO: a customer agent (e.g. a message-only line) composing a subset.
+    // WHAT: buildTools({capabilities}) returns only tools in those groups, so a
+    //        simpler agent can reuse just RAG + message-taking.
+    // WHY: the reuse contract — pick capabilities, not copy-paste the whole set.
+    const tools = buildTools(makeCtx(), makeClient([]).client, undefined, undefined, undefined, {
+      capabilities: ['knowledge', 'messaging'],
+    });
+    expect(Object.keys(tools).sort()).toEqual(
+      ['capture_job_inquiry', 'get_company_policy_answer', 'take_message'].sort()
+    );
+  });
+
   it('HAPPY: every tool has a non-empty description and is recognized as a FunctionTool', () => {
     // WHY: Empty descriptions ship tools the LLM won't know when to use.
     //       isFunctionTool guards against accidentally returning a
