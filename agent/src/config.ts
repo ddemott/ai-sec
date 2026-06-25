@@ -50,8 +50,16 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === 'true'),
-  REALTIME_MODEL: z.string().default('gpt-realtime'),
-  REALTIME_VOICE: z.string().default('shimmer'),
+  // Coerce unset/blank/whitespace → the default (a blank env var in a deploy UI
+  // would otherwise bypass .default() and break RealtimeModel init).
+  REALTIME_MODEL: z
+    .string()
+    .optional()
+    .transform((v) => (v?.trim() ? v.trim() : 'gpt-realtime')),
+  REALTIME_VOICE: z
+    .string()
+    .optional()
+    .transform((v) => (v?.trim() ? v.trim() : 'shimmer')),
 
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
