@@ -524,6 +524,24 @@ export default defineAgent({
         session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
           if (ev.item.type !== 'message') return;
           transcript.add(ev.item.role, ev.item.textContent);
+          // Incremental durability: persist the transcript-so-far after EVERY
+          // turn (fire-and-forget), not only at finalize. So a call that hangs or
+          // never sends voice-session-end still shows its conversation in the DB
+          // up to the last turn — the record reflects what was actually said,
+          // regardless of agent lifecycle. status stays 'active'; finalize/reaper
+          // fill duration/outcome later. Best-effort: a failed update just means
+          // this turn isn't persisted yet; the next turn (or finalize) catches up.
+          const cid = sessionCtx.callId;
+          const soFar = transcript.render();
+          if (cid && soFar) {
+            void client
+              .call('/agent-tools/voice-session-transcript', {
+                tenant_id: sessionCtx.tenantId,
+                call_id: cid,
+                transcript: soFar,
+              })
+              .catch(() => undefined);
+          }
         });
 
         // Accumulate per-model usage so the shutdown callback can POST it.
@@ -531,6 +549,64 @@ export default defineAgent({
         // the running totals — keeping the last snapshot is sufficient.
         session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => {
           sessionModelUsage = ev.usage.modelUsage;
+        });
+
+        // ── Turn-state instrumentation (5W) ──────────────────────────────
+        // Traces EXACTLY where a call stalls — the dead-air / name-loop bug.
+        // callLog already carries WHO/WHERE (tenant_id/call_id/caller_phone/room).
+        //  - user_input_transcribed: did STT capture the caller's speech at all?
+        //    (If a short answer like a name never appears here → STT/turn-detection
+        //     dropped it. If it appears but no agent_state→thinking follows →
+        //     the LLM turn never started.)
+        //  - agent_state_changed: listening→thinking→speaking. Stuck in 'speaking'
+        //    = a TTS playout that never completed (agent stops listening) = dead air.
+        //  - user_state_changed: caller speaking/listening/away.
+        //  - function_tools_executed: which tools the LLM actually invoked — proves
+        //    whether find_caller_by_name/identify_caller fired on the name turn.
+        //  - error: STT/LLM/TTS/realtime errors surfaced by the session — the most
+        //    likely direct cause of a mid-call hang.
+        session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+          callLog.info(
+            {
+              event: 'user_input_transcribed',
+              is_final: ev.isFinal,
+              text_len: ev.transcript?.length ?? 0,
+              text: (ev.transcript ?? '').slice(0, 300),
+            },
+            'caller speech transcribed (STT)'
+          );
+        });
+        session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
+          callLog.info(
+            { event: 'agent_state_changed', from: ev.oldState, to: ev.newState },
+            `agent state ${ev.oldState} -> ${ev.newState}`
+          );
+        });
+        session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
+          callLog.info(
+            { event: 'user_state_changed', from: ev.oldState, to: ev.newState },
+            `caller state ${ev.oldState} -> ${ev.newState}`
+          );
+        });
+        session.on(voice.AgentSessionEventTypes.FunctionToolsExecuted, (ev) => {
+          const tools = (ev.functionCalls ?? []).map((c) => c?.name ?? '(unknown)');
+          callLog.info({ event: 'function_tools_executed', tools }, `tools executed: ${tools.join(', ')}`);
+        });
+        session.on(voice.AgentSessionEventTypes.Error, (ev) => {
+          const e: unknown = ev.error;
+          callLog.error(
+            {
+              event: 'agent_session_error',
+              error_message: e instanceof Error ? e.message : String(e),
+              error_name: e instanceof Error ? e.name : typeof e,
+            },
+            'AgentSession error (STT/LLM/TTS/realtime) — a prime suspect for mid-call dead air'
+          );
+          captureSentry(e instanceof Error ? e : new Error(String(e)), {
+            event: 'agent_session_error',
+            tenant_id: sessionCtx.tenantId,
+            call_id: sessionCtx.callId ?? null,
+          });
         });
 
         // Finalize the call record the instant the caller hangs up. The job
