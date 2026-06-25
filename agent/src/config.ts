@@ -41,6 +41,26 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
 
+  // OpenAI Realtime (speech-to-speech) mode: when "true", the agent uses
+  // openai.realtime.RealtimeModel as the llm instead of the STT→LLM→TTS pipeline,
+  // removing the TTS synthesis step (measured 2–3s/reply, non-streaming = dead
+  // air). OFF by default — A/B test on Railway, instantly reversible. MODEL/VOICE
+  // are the realtime model id + voice (realtime has its own voice set).
+  ENABLE_REALTIME: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  // Coerce unset/blank/whitespace → the default (a blank env var in a deploy UI
+  // would otherwise bypass .default() and break RealtimeModel init).
+  REALTIME_MODEL: z
+    .string()
+    .optional()
+    .transform((v) => (v?.trim() ? v.trim() : 'gpt-realtime')),
+  REALTIME_VOICE: z
+    .string()
+    .optional()
+    .transform((v) => (v?.trim() ? v.trim() : 'shimmer')),
+
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
 

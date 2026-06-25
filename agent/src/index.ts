@@ -479,60 +479,76 @@ export default defineAgent({
       //    speaks a short message so the call degrades to "sorry" instead of
       //    silence. (2026-05-21 — closes the gap-1 outer-throw dead-air path.)
       try {
-        const session = new voice.AgentSession({
-          vad: ctx.proc.userData.vad as silero.VAD,
-          stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
-          llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-          // TTS is OpenAI. The plugin is non-streaming (buffers the whole clip
-          // before any audio plays), so model latency = dead air on every reply.
-          // tts-1 measured 2–5s/sentence → multi-second silent gaps that callers
-          // fill with "hello?", which cancelled the reply. gpt-4o-mini-tts is
-          // ~1.3s and consistent. Per-tenant voice/speed from the dashboard;
-          // tts_voice is an OpenAI voice id (unset/legacy → 'shimmer'). 2026-06-25.
-          tts: new openai.TTS({
-            apiKey: config.OPENAI_API_KEY,
-            model: 'gpt-4o-mini-tts',
-            voice: toOpenAIVoice(tenantConfig.ttsVoice),
-            speed: tenantConfig.ttsSpeed ?? 1.0,
-          }),
-          // Don't let a short backchannel ("hello?", "ok") during the TTS gap
-          // cancel/discard Beth's in-flight reply (the failure in the trace:
-          // a 1-word turn pre-empted the generation, orphaning the tool output).
-          turnHandling: {
-            interruption: {
-              // 'adaptive' = LiveKit's CNN barge-in model: it decides whether to
-              // yield the turn from the ACOUSTICS of the overlapping speech, not
-              // from a raw VAD/duration threshold — so a brief "hello?"/backchannel
-              // during the TTS gap no longer cancels the in-flight reply. Default-on
-              // for LiveKit Cloud + Node ≥1.2.0 + VAD (we have silero); set
-              // explicitly so intent survives a self-host path. Requires a
-              // non-realtime LLM + aligned-transcript STT (Deepgram qualifies).
-              mode: 'adaptive',
-              // minWords is the EFFECTIVE lever when STT is on: a verified LiveKit
-              // maintainer note says STT-detected speech bypasses minDuration, so
-              // raising duration alone does nothing — require ≥2 words to interrupt.
-              minWords: 2,
-              // If speech is detected but NO transcript follows within 2s (a false
-              // trigger — line noise, a cough, a half-word), resume speaking from
-              // where Beth left off instead of staying silent. Direct guard against
-              // a phantom "interruption" killing the reply → dead air.
-              falseInterruptionTimeout: 2000,
-              resumeFalseInterruption: true,
-            },
-            // Endpointing = how long of a pause ends the caller's turn. Default
-            // minDelay 500ms ends the turn on the brief pause BETWEEN spoken
-            // fragments — so a phone number ("312 865" … "1186") or a multi-part
-            // answer ("it's W2" … "in Chicago" … "$65/hr") arrives as several
-            // turns, each starting a generation the next fragment then discards →
-            // Beth never finishes a reply → freeze. Wait ~1.3s of silence so a
-            // multi-part answer AGGREGATES into one turn → one reply. maxDelay
-            // caps the wait so a truly-finished caller isn't left hanging.
-            endpointing: {
-              minDelay: 1300,
-              maxDelay: 4000,
-            },
-          },
-        });
+        const session = config.ENABLE_REALTIME
+          ? new voice.AgentSession({
+              // OpenAI Realtime (speech-to-speech) — one model does STT+LLM+TTS
+              // over a streamed connection with server-side VAD/turn detection,
+              // removing the separate TTS synthesis step whose 2–3s non-streaming
+              // latency was the dead air on every reply. Pass it as the llm and
+              // omit stt/tts/turnHandling. inputAudioTranscription keeps the
+              // caller-side transcript populated for the Calls tab. A/B behind a
+              // flag (2026-06-25) — default OFF, set ENABLE_REALTIME on Railway.
+              llm: new openai.realtime.RealtimeModel({
+                apiKey: config.OPENAI_API_KEY,
+                model: config.REALTIME_MODEL,
+                voice: config.REALTIME_VOICE,
+                inputAudioTranscription: { model: 'whisper-1' },
+              }),
+            })
+          : new voice.AgentSession({
+              vad: ctx.proc.userData.vad as silero.VAD,
+              stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
+              llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
+              // TTS is OpenAI. The plugin is non-streaming (buffers the whole clip
+              // before any audio plays), so model latency = dead air on every reply.
+              // tts-1 measured 2–5s/sentence → multi-second silent gaps that callers
+              // fill with "hello?", which cancelled the reply. gpt-4o-mini-tts is
+              // ~1.3s and consistent. Per-tenant voice/speed from the dashboard;
+              // tts_voice is an OpenAI voice id (unset/legacy → 'shimmer'). 2026-06-25.
+              tts: new openai.TTS({
+                apiKey: config.OPENAI_API_KEY,
+                model: 'gpt-4o-mini-tts',
+                voice: toOpenAIVoice(tenantConfig.ttsVoice),
+                speed: tenantConfig.ttsSpeed ?? 1.0,
+              }),
+              // Don't let a short backchannel ("hello?", "ok") during the TTS gap
+              // cancel/discard Beth's in-flight reply (the failure in the trace:
+              // a 1-word turn pre-empted the generation, orphaning the tool output).
+              turnHandling: {
+                interruption: {
+                  // 'adaptive' = LiveKit's CNN barge-in model: it decides whether to
+                  // yield the turn from the ACOUSTICS of the overlapping speech, not
+                  // from a raw VAD/duration threshold — so a brief "hello?"/backchannel
+                  // during the TTS gap no longer cancels the in-flight reply. Default-on
+                  // for LiveKit Cloud + Node ≥1.2.0 + VAD (we have silero); set
+                  // explicitly so intent survives a self-host path. Requires a
+                  // non-realtime LLM + aligned-transcript STT (Deepgram qualifies).
+                  mode: 'adaptive',
+                  // minWords is the EFFECTIVE lever when STT is on: a verified LiveKit
+                  // maintainer note says STT-detected speech bypasses minDuration, so
+                  // raising duration alone does nothing — require ≥2 words to interrupt.
+                  minWords: 2,
+                  // If speech is detected but NO transcript follows within 2s (a false
+                  // trigger — line noise, a cough, a half-word), resume speaking from
+                  // where Beth left off instead of staying silent. Direct guard against
+                  // a phantom "interruption" killing the reply → dead air.
+                  falseInterruptionTimeout: 2000,
+                  resumeFalseInterruption: true,
+                },
+                // Endpointing = how long of a pause ends the caller's turn. Default
+                // minDelay 500ms ends the turn on the brief pause BETWEEN spoken
+                // fragments — so a phone number ("312 865" … "1186") or a multi-part
+                // answer ("it's W2" … "in Chicago" … "$65/hr") arrives as several
+                // turns, each starting a generation the next fragment then discards →
+                // Beth never finishes a reply → freeze. Wait ~1.3s of silence so a
+                // multi-part answer AGGREGATES into one turn → one reply. maxDelay
+                // caps the wait so a truly-finished caller isn't left hanging.
+                endpointing: {
+                  minDelay: 1300,
+                  maxDelay: 4000,
+                },
+              },
+            });
 
         // Tools are built after the session exists. speakFiller is now a no-op
         // (it used to call session.say() from inside execute(), which stalled the
