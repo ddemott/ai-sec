@@ -503,8 +503,17 @@ export default defineAgent({
             execute: transferExecutor,
           },
           outcomeTracker,
-          (phrase) => {
-            void session.say(phrase, { allowInterruptions: true });
+          // speakFiller is intentionally a NO-OP. It used to call
+          // session.say('one moment…') from INSIDE a tool's execute() — but
+          // injecting a say() into the middle of the LLM's function-call
+          // generation is an unsupported LiveKit pattern that can stall the
+          // generation loop (the agent froze exactly when a tool fired —
+          // get_scheduling_options / policy-answer / take_message — and the
+          // tool's HTTP call never reached the backend). Tools are fast; a brief
+          // pause beats a frozen call. (Re-add a filler later via a supported
+          // mechanism if perceived latency is an issue.) 2026-06-25.
+          () => {
+            /* no-op — see comment above */
           }
         );
 
