@@ -706,9 +706,25 @@ export default defineAgent({
         // Greeting plays through uninterrupted — a caller's "hi?"/line noise at
         // pickup shouldn't truncate Beth's opening line (which sets the framing
         // for the whole call). Scoped to this one say(); normal turns re-enable.
-        void session.say(greeting, {
-          allowInterruptions: false,
-        });
+        // Fire-and-forget (don't block entry on full playout), but guard the
+        // rejection: a say()/TTS failure here is OUTSIDE the enclosing try/catch,
+        // so unguarded it becomes an unhandled promise rejection that can
+        // destabilize the worker. SpeechHandle is a thenable WITHOUT a .catch
+        // method, so wrap in an async IIFE + try/catch (await uses .then). Log
+        // and continue; the session lives on.
+        void (async () => {
+          try {
+            await session.say(greeting, { allowInterruptions: false });
+          } catch (e) {
+            callLog.error(
+              {
+                event: 'greeting_say_failed',
+                error_message: e instanceof Error ? e.message : String(e),
+              },
+              'greeting say() failed — caller may not hear the opening line; session continues'
+            );
+          }
+        })();
       } catch (err) {
         callLog.error(
           {
