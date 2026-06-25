@@ -35,7 +35,19 @@ export interface TransferDeps {
 
 export type TransferResult =
   | { ok: true }
-  | { ok: false; reason: 'not_configured' | 'missing_call_context' | 'transfer_failed' };
+  | {
+      ok: false;
+      reason: 'not_configured' | 'missing_call_context' | 'transfer_failed' | 'transfer_timeout';
+    };
+
+/**
+ * Hard ceiling on the SIP REFER. `sip.transferSipParticipant` has NO built-in
+ * timeout — if Telnyx/the carrier never answers the REFER, the promise never
+ * settles, the tool's execute() awaits forever, and the caller hears dead air
+ * with no recovery. Bound it so a stuck transfer degrades to "I couldn't
+ * connect you — can I take a message?" instead of silence.
+ */
+const TRANSFER_TIMEOUT_MS = 10_000;
 
 /**
  * Build a transfer executor bound to a single live call. Returns null when the
@@ -65,27 +77,47 @@ export function createTransferExecutor(
     // tel: URI is the LiveKit cold-transfer form for a PSTN destination.
     const transferTo = `tel:${sanitized}`;
     try {
-      await sip.transferSipParticipant(roomName, participantIdentity, transferTo, {
-        // Play a dialtone to the caller while the destination rings so they
-        // know the call is being connected rather than sitting in silence.
-        playDialtone: true,
+      // Race the REFER against a timeout — transferSipParticipant has no timeout
+      // of its own, so a carrier that never answers would hang the turn forever.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('transfer_timeout')),
+          TRANSFER_TIMEOUT_MS
+        );
       });
+      try {
+        await Promise.race([
+          sip.transferSipParticipant(roomName, participantIdentity, transferTo, {
+            // Play a dialtone to the caller while the destination rings so they
+            // know the call is being connected rather than sitting in silence.
+            playDialtone: true,
+          }),
+          timeout,
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
       log.info(
         { event: 'call_transferred', room: roomName, transfer_to: transferTo },
         'live call transferred via SIP REFER'
       );
       return { ok: true };
     } catch (err) {
+      const timedOut = err instanceof Error && err.message === 'transfer_timeout';
       log.error(
         {
-          event: 'call_transfer_failed',
+          event: timedOut ? 'call_transfer_timeout' : 'call_transfer_failed',
           room: roomName,
           transfer_to: transferTo,
+          timeout_ms: timedOut ? TRANSFER_TIMEOUT_MS : undefined,
           error_message: err instanceof Error ? err.message : String(err),
         },
-        'SIP transfer failed — caller stays on the line with the agent'
+        timedOut
+          ? `SIP transfer timed out after ${TRANSFER_TIMEOUT_MS}ms — caller stays on the line with the agent`
+          : 'SIP transfer failed — caller stays on the line with the agent'
       );
-      return { ok: false, reason: 'transfer_failed' };
+      return { ok: false, reason: timedOut ? 'transfer_timeout' : 'transfer_failed' };
     }
   };
 }

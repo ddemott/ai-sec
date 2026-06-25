@@ -44,7 +44,12 @@ export interface TransferCapability {
 /** Format a tool response for the LLM. Keeps success + error shapes uniform. */
 function formatResponse(res: ToolResponse): string {
   if (res.ok) {
-    return typeof res.result === 'string' ? res.result : JSON.stringify(res.result);
+    if (typeof res.result === 'string') return res.result;
+    // JSON.stringify(undefined) returns the JS value `undefined` (NOT the
+    // string "undefined") — handing the LLM nothing to relay → a silent turn.
+    // Guard so a success-with-no-result never produces dead air.
+    const encoded = JSON.stringify(res.result);
+    return encoded ?? 'Done.';
   }
   // Surface error_code for the LLM so the prompt's translation table fires.
   if (res.errorCode) {

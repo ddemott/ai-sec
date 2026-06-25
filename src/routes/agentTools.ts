@@ -1006,7 +1006,26 @@ export function registerAgentToolRoutes(
           // fall back to the raw question
         }
       }
-      const embedding = await getEmbedding(queryText);
+      // Graceful "I can't answer that" line, reused for BOTH zero RAG hits and
+      // an embedding/lookup failure. A caller must never hear a raw 500/JSON.
+      const policyFallback =
+        "I don't have specific information on that topic right now. I'd be happy to take a message so the owner can get back to you, or if there's anything else I can help with — like booking an appointment or answering questions about our services — I'm here for you.";
+
+      // getEmbedding hits OpenAI — if it's down/slow/over-quota it THROWS, which
+      // (unguarded) becomes an HTTP 500 the agent relays as technical JSON
+      // ("Backend returned 500") instead of the warm fallback. Catch it and
+      // degrade to the same graceful message the zero-hits path uses.
+      let embedding: number[];
+      try {
+        embedding = await getEmbedding(queryText);
+      } catch (err) {
+        errorsTotal.inc({ event: 'policy_answer_embedding_failed' });
+        app.log.error(
+          { tenantId: args.tenant_id, ...pgErrorFields(err) },
+          'policy-answer: embedding failed — degraded to graceful fallback (caller not left silent)'
+        );
+        return ok(reply, policyFallback);
+      }
 
       // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
       const embTokens = Math.ceil(queryText.length / 4);
@@ -1046,10 +1065,7 @@ export function registerAgentToolRoutes(
             [args.tenant_id, args.question]
           )
         ).catch(() => undefined);
-        return ok(
-          reply,
-          "I don't have specific information on that topic right now. I'd be happy to take a message so the owner can get back to you, or if there's anything else I can help with — like booking an appointment or answering questions about our services — I'm here for you."
-        );
+        return ok(reply, policyFallback);
       }
 
       // Resolve the source title of each matched chunk so the agent can cite it
