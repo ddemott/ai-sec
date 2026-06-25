@@ -581,6 +581,33 @@ describe('agentTools /identify-caller', () => {
     expect(queries[0].params).toEqual([TENANT_ID, '+15551234567', 'Dale DeMott']);
   });
 
+  it('HAPPY: with call_id, links the captured number + customer onto the voice_sessions row', async () => {
+    // WHO: a forwarded-line caller (voice_sessions.caller_phone started null)
+    //       who gives their number verbally mid-call.
+    // WHAT: identify-caller upserts the customer (RETURNING customer_id) AND
+    //        backfills voice_sessions.caller_phone + customer_id for that call_id
+    //        so the Calls tab row/detail show the verbally-captured number.
+    // WHY: without this, the number was saved to customers but the call record
+    //       still showed "new caller / no number" (Dale's observation).
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-1' }] }, // INSERT ... RETURNING customer_id
+        { rows: [], rowCount: 1 }, // UPDATE voice_sessions
+      ],
+    });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '3128651186',
+      name: 'Bob Jones',
+      call_id: 'SCL_abc',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true });
+    expect(queries).toHaveLength(2);
+    expect(queries[1].text).toContain('UPDATE voice_sessions');
+    expect(queries[1].params).toEqual([TENANT_ID, 'SCL_abc', '+13128651186', 'cust-1']);
+  });
+
   it('HAPPY: existing customer with placeholder name gets name updated', async () => {
     // WHO: Returning caller who finally gives their name
     // WHAT: ON CONFLICT DO UPDATE SET name only when stored name is blank/placeholder

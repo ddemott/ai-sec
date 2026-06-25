@@ -466,6 +466,9 @@ export function buildTools(
           tenant_id: ctx.tenantId,
           phone: contactPhone,
           name: args.name,
+          // Link the verbally-captured number to THIS call so the Calls tab row +
+          // detail show it (forwarded-line calls start with caller_phone null).
+          call_id: ctx.callId ?? undefined,
         });
         return formatResponse(res);
       },

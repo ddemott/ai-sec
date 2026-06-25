@@ -159,6 +159,10 @@ const IdentifyCallerSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
   name: z.string().min(1).max(200).optional(),
+  // When present, link the captured number + customer onto this call's
+  // voice_sessions row so the Calls tab shows the verbally-collected number
+  // (forwarded-line calls start with caller_phone null).
+  call_id: z.string().min(1).optional(),
 });
 
 const GetAvailableSlotsSchema = z.object({
@@ -745,7 +749,7 @@ export function registerAgentToolRoutes(
         return fail(reply, 'Invalid phone number — cannot create contact.');
       }
       await withTenantClient(args.tenant_id, async (client) => {
-        await client.query(
+        const cust = await client.query<{ customer_id: string }>(
           `INSERT INTO customers (tenant_id, phone, name)
            VALUES ($1, $2, $3)
            ON CONFLICT (tenant_id, phone) DO UPDATE
@@ -753,9 +757,21 @@ export function registerAgentToolRoutes(
                WHEN customers.name IS NULL OR customers.name = '' OR customers.name = 'Valued Customer'
                THEN EXCLUDED.name
                ELSE customers.name
-             END`,
+             END
+           RETURNING customer_id`,
           [args.tenant_id, normalized, args.name ?? null]
         );
+        // Backfill the verbally-captured number + customer onto the live call row
+        // so the Calls tab shows it (forwarded-line calls started caller_phone
+        // null). Best-effort: only the active row for this call; never fatal.
+        if (args.call_id) {
+          await client.query(
+            `UPDATE voice_sessions
+               SET caller_phone = $3, customer_id = $4, updated_at = now()
+             WHERE tenant_id = $1 AND call_id = $2 AND status = 'active'`,
+            [args.tenant_id, args.call_id, normalized, cust.rows[0]?.customer_id ?? null]
+          );
+        }
       });
       return ok(reply, { saved: true });
     },
