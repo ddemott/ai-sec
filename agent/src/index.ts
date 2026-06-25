@@ -777,9 +777,10 @@ export default defineAgent({
         const greeting =
           tenantConfig.firstMessage?.trim() ||
           `Thanks for calling ${tenantConfig.name}. How can I help you today?`;
-        // Greeting plays through uninterrupted — a caller's "hi?"/line noise at
-        // pickup shouldn't truncate Beth's opening line (which sets the framing
-        // for the whole call). Scoped to this one say(); normal turns re-enable.
+        // Greeting. Pipeline mode plays it via say() uninterrupted (a caller's
+        // "hi?"/line noise at pickup shouldn't truncate the opening line); Realtime
+        // mode speaks it via generateReply with server-side turn-taking (it rejects
+        // allowInterruptions:false — see the Realtime branch below).
         // Fire-and-forget (don't block entry on full playout), but guard the
         // rejection: a say()/TTS failure here is OUTSIDE the enclosing try/catch,
         // so unguarded it becomes an unhandled promise rejection that can
