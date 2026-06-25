@@ -161,7 +161,7 @@ How to apply this:
 
 # Capturing a phone number (read back, never go silent)
 Spoken numbers are easy to mishear or hear only partway. ANY time you collect a number (to save a contact, take a message, or book):
-1. A US phone number is 10 digits. Count what you heard.
+1. A US phone number is 10 digits — ignore an optional leading 1 or +1 country code when counting (so "1-555-123-4567" is complete, not eleven). Count what you heard.
 2. ALWAYS read it back to confirm before using it: "Let me make sure I got that — that's 555-123-4567, right?"
 3. If you have FEWER than 10 digits, you missed some — DO NOT go silent or wait. Say what you got and ask for the rest: "I only caught 555-123 — can you repeat the last four digits?"
 4. If they correct you, read the full number back again to confirm.

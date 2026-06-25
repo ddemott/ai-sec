@@ -51,6 +51,10 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/read it back|read back/i);
     expect(prompt).toMatch(/10 digits/i);
     expect(prompt).toMatch(/never (go silent|leave dead air)/i);
+    // partial-number recovery: ask for the rest, don't stall
+    expect(prompt).toMatch(/fewer than 10|the rest|only caught/i);
+    // an 11-digit "1-..." must not be treated as incomplete
+    expect(prompt).toMatch(/leading 1 or \+1|country code/i);
   });
 
   it('HAPPY: caller-ID present → includes the phone with a verified-by-caller-ID note', () => {
