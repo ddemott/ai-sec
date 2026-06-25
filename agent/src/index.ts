@@ -573,7 +573,17 @@ export default defineAgent({
           // mechanism if perceived latency is an issue.) 2026-06-25.
           () => {
             /* no-op — see comment above */
-          }
+          },
+          // Realtime is token-constrained (a big persona + every tool schema +
+          // audio tokens overflowed the context → "error type: tokens" mid-call).
+          // Trim the tool set to what Beth actually uses — drop the OTP/
+          // verification tools (her persona never does phone verification) to
+          // shrink the schema context sent to the model. Pipeline mode = all tools.
+          config.ENABLE_REALTIME
+            ? {
+                capabilities: ['knowledge', 'messaging', 'identity', 'scheduling', 'transfer'],
+              }
+            : undefined
         );
 
         const agent = new voice.Agent({
@@ -692,11 +702,22 @@ export default defineAgent({
         });
         session.on(voice.AgentSessionEventTypes.Error, (ev) => {
           const e: unknown = ev.error;
+          // Surface the provider error body too — a RealtimeModel APIError carries
+          // a `body` with the precise cause (e.g. token/context-limit details);
+          // without it the message is just "...error type: tokens" with no numbers.
+          let errorBody: string | undefined;
+          try {
+            const b = (e as { body?: unknown }).body;
+            if (b != null) errorBody = JSON.stringify(b).slice(0, 1000);
+          } catch {
+            /* body not serializable — skip */
+          }
           callLog.error(
             {
               event: 'agent_session_error',
               error_message: e instanceof Error ? e.message : String(e),
               error_name: e instanceof Error ? e.name : typeof e,
+              error_body: errorBody,
             },
             'AgentSession error (STT/LLM/TTS/realtime) — a prime suspect for mid-call dead air'
           );
@@ -767,14 +788,27 @@ export default defineAgent({
         // and continue; the session lives on.
         void (async () => {
           try {
-            await session.say(greeting, { allowInterruptions: false });
+            if (config.ENABLE_REALTIME) {
+              // Realtime is speech-to-speech with NO TTS plugin, so say(text)
+              // throws "trying to generate speech from text without a TTS model".
+              // Have the model SPEAK the opener via generateReply instead.
+              await session.generateReply({
+                // Greeting on its own lines (not quote-wrapped) so a tenant
+                // greeting containing a " or newline can't make the instruction
+                // ambiguous.
+                instructions: `Greet the caller now by speaking this exact opening line verbatim, then wait for their reply:\n\n${greeting}`,
+                allowInterruptions: false,
+              });
+            } else {
+              await session.say(greeting, { allowInterruptions: false });
+            }
           } catch (e) {
             callLog.error(
               {
                 event: 'greeting_say_failed',
                 error_message: e instanceof Error ? e.message : String(e),
               },
-              'greeting say() failed — caller may not hear the opening line; session continues'
+              'greeting failed — caller may not hear the opening line; session continues'
             );
           }
         })();
