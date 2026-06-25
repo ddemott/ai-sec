@@ -481,15 +481,29 @@ export default defineAgent({
           vad: ctx.proc.userData.vad as silero.VAD,
           stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
           llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-          // TTS is OpenAI (streaming → smooth over the 8kHz PSTN leg). Per-tenant
-          // voice + speed come from the dashboard (tenants.tts_voice/tts_speed);
-          // tts_voice holds an OpenAI voice id, an unset/legacy value falls back
-          // to 'shimmer'. (Fully OpenAI as of 2026-06-25 — Grok TTS removed.)
+          // TTS is OpenAI. The plugin is non-streaming (buffers the whole clip
+          // before any audio plays), so model latency = dead air on every reply.
+          // tts-1 measured 2–5s/sentence → multi-second silent gaps that callers
+          // fill with "hello?", which cancelled the reply. gpt-4o-mini-tts is
+          // ~1.3s and consistent. Per-tenant voice/speed from the dashboard;
+          // tts_voice is an OpenAI voice id (unset/legacy → 'shimmer'). 2026-06-25.
           tts: new openai.TTS({
             apiKey: config.OPENAI_API_KEY,
+            model: 'gpt-4o-mini-tts',
             voice: toOpenAIVoice(tenantConfig.ttsVoice),
             speed: tenantConfig.ttsSpeed ?? 1.0,
           }),
+          // Don't let a short backchannel ("hello?", "ok") during the TTS gap
+          // cancel/​discard Beth's in-flight reply (the failure in the trace:
+          // a 1-word turn pre-empted the generation, orphaning the tool output).
+          // Require a slightly longer/​wordier utterance to count as a real
+          // interruption. (Defaults are minWords:0, minDuration:500.)
+          turnHandling: {
+            interruption: {
+              minWords: 2,
+              minDuration: 800,
+            },
+          },
         });
 
         // Tools are built after the session exists. speakFiller is now a no-op
