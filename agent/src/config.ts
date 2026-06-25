@@ -31,6 +31,16 @@ const envSchema = z.object({
   // reversible. Empty (default) = trust caller ID as before for every tenant.
   UNTRUSTED_CALLER_ID_TENANTS: z.string().default(''),
 
+  // Output watchdog (the "never silent" backstop): when "true", a session-level
+  // timer plays a cached holding phrase if no agent audio is produced within the
+  // deadline after the caller's turn, then a recovery line. OFF by default — its
+  // acoustic behavior can't be CI-verified, so it ships inert and is enabled on
+  // Railway after a real-call validation. Instantly reversible.
+  ENABLE_OUTPUT_WATCHDOG: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
 
