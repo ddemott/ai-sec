@@ -23,7 +23,7 @@ These looked like one bug ("calls are broken") and got conflated. They were sepa
   - The transcript was only written at finalize → a call that hung lost its transcript. (Fixed: persist the transcript-so-far after **every turn**.)
   - The dashboard polled only *active* calls, never history/detail → a finalized call kept showing stale `active / 0:00 / no transcript` until manual reload. **This caused most of the false "nothing logged" reports.** (Fixed: auto-refresh history + selected call.)
 
-- **The freeze (the real one):** **OpenAI TTS latency.** Direct timing settled it — `gpt-4o-mini` LLM = ~1s, but OpenAI **TTS (tts-1) = 2–5s per sentence**, and the LiveKit OpenAI TTS plugin is **non-streaming** (`{ streaming: false }` — buffers the whole clip before any audio plays). So every reply had a multi-second silent gap; the caller said "hello?" into the gap, which **completed a new turn during the in-flight generation and discarded the reply** (trace: `playout interrupted, playbackPositionInS=0`, `function call missing the corresponding function output, ignoring`). (Fix: `gpt-4o-mini-tts` ~1.3s + raise interruption `minWords`/`minDuration` so a 1-word backchannel can't discard the reply. Planned: pre-rendered/cached TTS for routine lines.)
+- **The freeze (the real one):** **OpenAI TTS latency.** Direct timing settled it — `gpt-4o-mini` LLM = ~1s, but OpenAI **TTS (tts-1) = 2–5s per sentence**, and the `@livekit/agents-plugin-openai` TTS does **not stream** — observable behavior: no audio plays until the whole clip is synthesized (verified by reading the installed package: `super(..., { streaming: false })` and `stream()` throws). So every reply had a multi-second silent gap; the caller said "hello?" into the gap, which **completed a new turn during the in-flight generation and discarded the reply** (trace: `playout interrupted, playbackPositionInS=0`, `function call missing the corresponding function output, ignoring`). (**Fixed in PR #98**: switched the TTS model to `gpt-4o-mini-tts` ~1.3s + raised interruption `minWords` 0→2 / `minDuration` 500→800ms so a 1-word backchannel can't discard the reply. Planned: pre-rendered/cached TTS for routine lines.)
 
 ### Meta-lessons (the expensive ones)
 
@@ -41,10 +41,12 @@ These looked like one bug ("calls are broken") and got conflated. They were sepa
 
 ### LiveKit Agents (Node) specifics learned
 
+(All "specifics" below are behaviors of the **`@livekit/agents`** packages — inspect them under `agent/node_modules/@livekit/agents*`, not this repo's source.)
+
 - `ctx.addShutdownCallback` runs on **job shutdown**, not per-call. A reused worker doesn't shut down between calls → use the session **`Close`** event (`CloseReason.PARTICIPANT_DISCONNECTED`) to run per-call teardown.
-- `ToolsClient.call()` (this repo) **resolves `{ ok:false, status }` on 5xx/401 — it does NOT throw.** A bare `.catch()` won't catch a backend failure; inspect `res.ok`.
-- The `agents-plugin-openai` **TTS is non-streaming** (`{ streaming:false }`; `stream()` throws). It buffers the entire clip → model latency = dead air. (The old Grok plugin was also non-streaming.)
-- `agent_activity.js`: `userTurnCompleted()` **skips the reply** (`"skipping user input, current speech generation cannot be interrupted"`) when current speech isn't interruptible; a new short user turn during in-flight generation can orphan a function-call output.
+- `ToolsClient.call()` (this repo, `agent/src/toolsClient.ts`) **resolves `{ ok:false, status }` on 5xx/401 — it does NOT throw.** A bare `.catch()` won't catch a backend failure; inspect `res.ok`.
+- The `@livekit/agents-plugin-openai` **TTS does not stream** (package source: `super(..., { streaming:false })`; `stream()` throws). Audio only plays after the full clip synthesizes → model latency = dead air. (The old Grok plugin was also non-streaming.)
+- `@livekit/agents` internals (`dist/voice/agent_activity.js`): `userTurnCompleted()` **skips the reply** (logs `"skipping user input, current speech generation cannot be interrupted"`) when current speech isn't interruptible; a new short user turn during in-flight generation can orphan a function-call output.
 - `turnHandling.interruption` defaults: `minWords: 0`, `minDuration: 500` → *any* sound (even "hello?") counts as an interruption. Raise them so backchannels don't cancel a reply.
 - Calling `session.say()` from **inside** a tool's `execute()` (the old `speakFiller`) is an unsupported pattern — avoid it. (It turned out not to be the freeze cause, but it's still wrong.)
 
