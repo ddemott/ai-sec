@@ -494,9 +494,9 @@ export default defineAgent({
             speed: tenantConfig.ttsSpeed ?? 1.0,
           }),
           // Don't let a short backchannel ("hello?", "ok") during the TTS gap
-          // cancel/​discard Beth's in-flight reply (the failure in the trace:
+          // cancel/discard Beth's in-flight reply (the failure in the trace:
           // a 1-word turn pre-empted the generation, orphaning the tool output).
-          // Require a slightly longer/​wordier utterance to count as a real
+          // Require a slightly longer/wordier utterance to count as a real
           // interruption. (Defaults are minWords:0, minDuration:500.)
           turnHandling: {
             interruption: {
