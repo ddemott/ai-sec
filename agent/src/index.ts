@@ -777,9 +777,10 @@ export default defineAgent({
         const greeting =
           tenantConfig.firstMessage?.trim() ||
           `Thanks for calling ${tenantConfig.name}. How can I help you today?`;
-        // Greeting plays through uninterrupted — a caller's "hi?"/line noise at
-        // pickup shouldn't truncate Beth's opening line (which sets the framing
-        // for the whole call). Scoped to this one say(); normal turns re-enable.
+        // Greeting. Pipeline mode plays it via say() uninterrupted (a caller's
+        // "hi?"/line noise at pickup shouldn't truncate the opening line); Realtime
+        // mode speaks it via generateReply with server-side turn-taking (it rejects
+        // allowInterruptions:false — see the Realtime branch below).
         // Fire-and-forget (don't block entry on full playout), but guard the
         // rejection: a say()/TTS failure here is OUTSIDE the enclosing try/catch,
         // so unguarded it becomes an unhandled promise rejection that can
@@ -792,12 +793,16 @@ export default defineAgent({
               // Realtime is speech-to-speech with NO TTS plugin, so say(text)
               // throws "trying to generate speech from text without a TTS model".
               // Have the model SPEAK the opener via generateReply instead.
+              // NOTE: no allowInterruptions here — RealtimeModel uses server-side
+              // turn detection and rejects allowInterruptions:false on
+              // generateReply ("...cannot be false..."), which left the session
+              // not listening after the greeting → the caller's next turn was
+              // dropped → silence. Let server VAD own turn-taking.
               await session.generateReply({
                 // Greeting on its own lines (not quote-wrapped) so a tenant
                 // greeting containing a " or newline can't make the instruction
                 // ambiguous.
                 instructions: `Greet the caller now by speaking this exact opening line verbatim, then wait for their reply:\n\n${greeting}`,
-                allowInterruptions: false,
               });
             } else {
               await session.say(greeting, { allowInterruptions: false });
