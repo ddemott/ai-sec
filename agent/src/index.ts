@@ -540,7 +540,31 @@ export default defineAgent({
                 call_id: cid,
                 transcript: soFar,
               })
-              .catch(() => undefined);
+              .then((res) => {
+                // ToolsClient.call() resolves { ok:false } on 5xx/401/{success:false}
+                // (it does NOT throw), so .catch alone would hide a persistent
+                // failure (auth/route-missing). Surface it — best-effort, but not
+                // silent. Finalize/reaper remain the durability backstops.
+                if (!res.ok) {
+                  callLog.warn(
+                    {
+                      event: 'voice_session_transcript_failed',
+                      status: res.status ?? null,
+                      error_message: res.error,
+                    },
+                    'incremental transcript save failed (non-fatal; finalize/reaper backstop)'
+                  );
+                }
+              })
+              .catch((e: unknown) =>
+                callLog.warn(
+                  {
+                    event: 'voice_session_transcript_failed',
+                    error_message: e instanceof Error ? e.message : String(e),
+                  },
+                  'incremental transcript save threw (non-fatal)'
+                )
+              );
           }
         });
 
@@ -566,12 +590,16 @@ export default defineAgent({
         //  - error: STT/LLM/TTS/realtime errors surfaced by the session — the most
         //    likely direct cause of a mid-call hang.
         session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+          // Mask digit runs (phone numbers, card numbers) before logging the
+          // caller's transcribed speech to centralized logs — keep the words
+          // (names/intent, what we need to debug the turn) but not raw PII digits.
+          const preview = (ev.transcript ?? '').slice(0, 300).replace(/\d/g, '•');
           callLog.info(
             {
               event: 'user_input_transcribed',
               is_final: ev.isFinal,
               text_len: ev.transcript?.length ?? 0,
-              text: (ev.transcript ?? '').slice(0, 300),
+              text_preview: preview,
             },
             'caller speech transcribed (STT)'
           );
@@ -590,7 +618,10 @@ export default defineAgent({
         });
         session.on(voice.AgentSessionEventTypes.FunctionToolsExecuted, (ev) => {
           const tools = (ev.functionCalls ?? []).map((c) => c?.name ?? '(unknown)');
-          callLog.info({ event: 'function_tools_executed', tools }, `tools executed: ${tools.join(', ')}`);
+          callLog.info(
+            { event: 'function_tools_executed', tools },
+            `tools executed: ${tools.join(', ')}`
+          );
         });
         session.on(voice.AgentSessionEventTypes.Error, (ev) => {
           const e: unknown = ev.error;

@@ -222,7 +222,10 @@ const VoiceSessionEndSchema = z.object({
 const VoiceSessionTranscriptSchema = z.object({
   tenant_id: z.string().uuid(),
   call_id: z.string().min(1),
-  transcript: z.string().max(100_000),
+  // min(1): never accept an empty transcript — it would blank an active row's
+  // existing transcript (accidental data loss). The agent only ever sends a
+  // non-empty render(), so this is a boundary guard.
+  transcript: z.string().min(1).max(100_000),
 });
 
 const MyAppointmentsSchema = z.object({
