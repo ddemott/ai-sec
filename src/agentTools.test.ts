@@ -39,6 +39,9 @@ interface MockQuery {
 function buildApp(opts: {
   queryResponses: Array<{ rows: unknown[]; rowCount?: number }>;
   embedding?: number[];
+  // When true, getEmbedding rejects — simulates OpenAI embeddings down/over-quota
+  // so the policy-answer route's graceful-degrade path can be exercised.
+  embeddingThrows?: boolean;
   normalizer?: (text: string) => Promise<string>;
   expander?: (text: string) => Promise<string>;
   // Sad-path hook: when set and it returns an Error for a given SQL text, the
@@ -71,7 +74,10 @@ function buildApp(opts: {
     fn: (client: PoolClient) => Promise<T>
   ): Promise<T> => fn(mockClient);
 
-  const getEmbedding = async () => opts.embedding ?? new Array(1536).fill(0);
+  const getEmbedding = async () => {
+    if (opts.embeddingThrows) throw new Error('OpenAI embeddings unavailable (429)');
+    return opts.embedding ?? new Array(1536).fill(0);
+  };
 
   const app = Fastify({ logger: false });
   registerAgentToolRoutes(
@@ -869,6 +875,25 @@ describe('agentTools /check-availability', () => {
 });
 
 describe('agentTools /policy-answer', () => {
+  it('SAD: embedding failure degrades to the graceful fallback, never a 500/JSON', async () => {
+    // WHO: a caller asking a question while OpenAI embeddings are down/over-quota.
+    // WHAT: getEmbedding throws; the route must catch it and return success:true
+    //        with the warm "I don't have that, want to leave a message?" line —
+    //        NOT propagate a 500 the agent would relay as technical JSON.
+    // WHERE: POST /agent-tools/policy-answer → getEmbedding try/catch (agentTools.ts).
+    // WHEN: every knowledge query when the embeddings provider is unavailable.
+    // WHY: a raw 500 → '{"error":"Backend returned 500"}' is dead-air-adjacent —
+    //        the caller hears a technical error, the #1 thing "never silent" forbids.
+    const { app } = buildApp({ queryResponses: [], embeddingThrows: true });
+    const res = await post(app, '/agent-tools/policy-answer', {
+      tenant_id: TENANT_ID,
+      question: 'Do you offer financing?',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(res.json().result).toContain('take a message');
+  });
+
   it('HAPPY: matches found returns joined context string WITH source citations', async () => {
     // WHO: Caller asking about cancellation policy
     // WHAT: Embedding-based RPC returns top matches; route joins them and

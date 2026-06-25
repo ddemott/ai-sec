@@ -88,4 +88,26 @@ describe('createTransferExecutor', () => {
     const result = await exec!('+16082175303');
     expect(result).toEqual({ ok: false, reason: 'transfer_failed' });
   });
+
+  it('SAD: SDK hangs (no timeout of its own) → transfer_timeout after 10s, never hangs the turn', async () => {
+    // WHO: a live transfer where Telnyx/the carrier never answers the SIP REFER.
+    // WHAT: transferSipParticipant never resolves; the executor must NOT await
+    //        forever — it races a 10s timeout and returns reason 'transfer_timeout'.
+    // WHERE: createTransferExecutor → Promise.race(refer, timeout) in transferClient.ts.
+    // WHEN: carrier/network glitch on a cold transfer.
+    // WHY: an unbounded REFER stalls the tool's execute() indefinitely → the
+    //        caller hears dead air with no recovery — the exact never-silent failure.
+    vi.useFakeTimers();
+    try {
+      // Never settles → only the timeout can resolve the race.
+      transferSipParticipant.mockReturnValueOnce(new Promise(() => {}));
+      const exec = createTransferExecutor(FULL_DEPS);
+      const resultPromise = exec!('+16082175303');
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await resultPromise;
+      expect(result).toEqual({ ok: false, reason: 'transfer_timeout' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

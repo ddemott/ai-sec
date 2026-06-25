@@ -98,6 +98,22 @@ describe('buildTools', () => {
   });
 });
 
+describe('formatResponse (never-empty guard)', () => {
+  it('SAD: an ok response with an undefined result yields a non-empty string, never silence', async () => {
+    // WHO: a tool whose backend returned { success:true } with no result field.
+    // WHAT: formatResponse must not hand the LLM JSON.stringify(undefined) (the JS
+    //        value `undefined`) — that gives the model nothing to relay → a silent
+    //        turn. It returns a non-empty fallback instead.
+    // WHERE: agent/src/tools.ts formatResponse, via any tool's execute().
+    // WHY: never-silent contract — a success-with-no-payload must still speak.
+    const { client } = makeClient([{ ok: true, result: undefined }]);
+    const tools = buildTools(makeCtx(), client);
+    const out = await exec(tools.get_service_catalog, {});
+    expect(typeof out).toBe('string');
+    expect(out.length).toBeGreaterThan(0);
+  });
+});
+
 describe('get_customer_context', () => {
   it('HAPPY: uses context caller phone (LLM never supplies it)', async () => {
     // WHO: Returning customer calls in, caller-ID intact
