@@ -549,6 +549,88 @@ export function buildTools(
       },
     }),
 
+    capture_job_inquiry: llm.tool({
+      description:
+        "Record a work/job inquiry for the business owner and email it to them. Use when a caller asks whether the owner is available for work or about a specific position, AFTER you have walked through the intake questions (company, whether they work there, contract vs full-time, rate/salary range, contract length if applicable, onsite/remote/hybrid, and address or timezone). Always collect at least the caller's name. You MUST call this tool once you have the answers — do not tell the caller you'll pass it along without calling it. Fields you didn't get may be omitted.",
+      parameters: {
+        type: 'object',
+        properties: {
+          caller_name: { type: 'string', description: "The caller's name as they gave it." },
+          callback_phone: {
+            type: 'string',
+            description: 'Phone number the owner should call back, if given.',
+          },
+          company: {
+            type: 'string',
+            description: 'The hiring company the caller represents.',
+          },
+          represents_company: {
+            type: 'boolean',
+            description: 'True if the caller works for the hiring company (vs. a recruiter/agency).',
+          },
+          employment_type: {
+            type: 'string',
+            enum: ['contract', 'full_time'],
+            description: 'Whether the position is a contract or full time.',
+          },
+          rate_range: {
+            type: 'string',
+            description: 'The rate range (contract) or salary range (full time) offered.',
+          },
+          duration: {
+            type: 'string',
+            description: 'Length of the contract. Omit for full-time roles.',
+          },
+          location_type: {
+            type: 'string',
+            enum: ['onsite', 'remote', 'hybrid'],
+            description: 'Whether the position is onsite, remote, or hybrid.',
+          },
+          address: {
+            type: 'string',
+            description: 'Address of the position. Collect for onsite or hybrid roles.',
+          },
+          timezone: {
+            type: 'string',
+            description: 'Timezone of the position. Collect for remote roles (so the owner knows office hours).',
+          },
+        },
+        required: ['caller_name'],
+        additionalProperties: false,
+      },
+      execute: async (args: {
+        caller_name: string;
+        callback_phone?: string;
+        company?: string;
+        represents_company?: boolean;
+        employment_type?: 'contract' | 'full_time';
+        rate_range?: string;
+        duration?: string;
+        location_type?: 'onsite' | 'remote' | 'hybrid';
+        address?: string;
+        timezone?: string;
+      }) => {
+        speakFiller?.('One moment while I pass that along to Dale...');
+        const res = await client.call('/agent-tools/capture-job-inquiry', {
+          tenant_id: ctx.tenantId,
+          caller_name: args.caller_name,
+          callback_phone: args.callback_phone ?? ctx.callerPhone ?? undefined,
+          company: args.company,
+          represents_company: args.represents_company,
+          employment_type: args.employment_type,
+          rate_range: args.rate_range,
+          duration: args.duration,
+          location_type: args.location_type,
+          address: args.address,
+          timezone: args.timezone,
+          // Truthy check (not ??) so an empty-string callId is omitted — the
+          // backend call_id is min(1) and would 400 on ''.
+          call_id: ctx.callId || undefined,
+        });
+        return formatResponse(res);
+      },
+    }),
+
     get_my_appointments: llm.tool({
       description:
         "Fetch the caller's upcoming scheduled appointments. Call this when the caller says they want to cancel or reschedule — show them their appointments before acting. Does not require any input from the caller; phone is from caller-ID.",
