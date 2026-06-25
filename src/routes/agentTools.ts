@@ -763,14 +763,27 @@ export function registerAgentToolRoutes(
         );
         // Backfill the verbally-captured number + customer onto the live call row
         // so the Calls tab shows it (forwarded-line calls started caller_phone
-        // null). Best-effort: only the active row for this call; never fatal.
+        // null). Best-effort: only the active row for this call; never fatal —
+        // a backfill failure (RLS/FK/transient) must not fail the contact save,
+        // which is the whole point of identify_caller. COALESCE keeps any
+        // existing customer_id rather than nulling it if the upsert RETURNING
+        // unexpectedly yielded no row.
         if (args.call_id) {
-          await client.query(
-            `UPDATE voice_sessions
-               SET caller_phone = $3, customer_id = $4, updated_at = now()
-             WHERE tenant_id = $1 AND call_id = $2 AND status = 'active'`,
-            [args.tenant_id, args.call_id, normalized, cust.rows[0]?.customer_id ?? null]
-          );
+          try {
+            await client.query(
+              `UPDATE voice_sessions
+                 SET caller_phone = $3,
+                     customer_id = COALESCE($4, customer_id),
+                     updated_at = now()
+               WHERE tenant_id = $1 AND call_id = $2 AND status = 'active'`,
+              [args.tenant_id, args.call_id, normalized, cust.rows[0]?.customer_id ?? null]
+            );
+          } catch (err) {
+            app.log.warn(
+              { tenantId: args.tenant_id, callId: args.call_id, ...pgErrorFields(err) },
+              'identify_caller: voice_sessions backfill failed — contact saved, call row not updated'
+            );
+          }
         }
       });
       return ok(reply, { saved: true });

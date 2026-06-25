@@ -468,7 +468,9 @@ export function buildTools(
           name: args.name,
           // Link the verbally-captured number to THIS call so the Calls tab row +
           // detail show it (forwarded-line calls start with caller_phone null).
-          call_id: ctx.callId ?? undefined,
+          // Truthy check (not ?? ) so an empty-string callId is omitted rather
+          // than sent — the backend's call_id is min(1) and would 400 on ''.
+          call_id: ctx.callId || undefined,
         });
         return formatResponse(res);
       },

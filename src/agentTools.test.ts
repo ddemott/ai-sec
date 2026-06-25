@@ -587,6 +587,9 @@ describe('agentTools /identify-caller', () => {
     // WHAT: identify-caller upserts the customer (RETURNING customer_id) AND
     //        backfills voice_sessions.caller_phone + customer_id for that call_id
     //        so the Calls tab row/detail show the verbally-captured number.
+    // WHERE: POST /agent-tools/identify-caller → src/routes/agentTools.ts (the
+    //        UPDATE voice_sessions backfill branch, gated on args.call_id).
+    // WHEN: mid-call, right after Beth collects + reads back the spoken number.
     // WHY: without this, the number was saved to customers but the call record
     //       still showed "new caller / no number" (Dale's observation).
     const { app, queries } = buildApp({
