@@ -733,6 +733,7 @@ describe('identify_caller', () => {
       tenant_id: TENANT_ID,
       phone: CALLER_PHONE,
       name: 'Dale DeMott',
+      call_id: CALL_ID,
     });
   });
 
@@ -753,6 +754,7 @@ describe('identify_caller', () => {
       tenant_id: TENANT_ID,
       phone: '+16125551234',
       name: 'Jane Doe',
+      call_id: CALL_ID,
     });
   });
 

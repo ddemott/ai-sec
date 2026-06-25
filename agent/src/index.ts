@@ -503,6 +503,18 @@ export default defineAgent({
               minWords: 2,
               minDuration: 800,
             },
+            // Endpointing = how long of a pause ends the caller's turn. Default
+            // minDelay 500ms ends the turn on the brief pause BETWEEN spoken
+            // fragments — so a phone number ("312 865" … "1186") or a multi-part
+            // answer ("it's W2" … "in Chicago" … "$65/hr") arrives as several
+            // turns, each starting a generation the next fragment then discards →
+            // Beth never finishes a reply → freeze. Wait ~1.3s of silence so a
+            // multi-part answer AGGREGATES into one turn → one reply. maxDelay
+            // caps the wait so a truly-finished caller isn't left hanging.
+            endpointing: {
+              minDelay: 1300,
+              maxDelay: 4000,
+            },
           },
         });
 
