@@ -24,7 +24,7 @@ export function VersionBadge() {
   return (
     <div
       title={`Build ${sha} — ${buildTime || 'unknown time'}`}
-      className="fixed bottom-1 right-2 z-50 select-none text-[10px] leading-none text-gray-500/50 transition-opacity hover:text-gray-400/90"
+      className="fixed bottom-1 right-2 z-50 select-none text-[10px] leading-none text-gray-500/50 transition-colors hover:text-gray-400/90"
       data-testid="version-badge"
     >
       {label}
