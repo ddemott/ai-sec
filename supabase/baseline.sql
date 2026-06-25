@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dwx9xdbj36z5heMaJXHoyyaNYSchPt8VS9bc2aUDwg2eVtW59sZV3z5srPuiGwV
+\restrict sg93rhWyUEj2MahAMIcOBjk4BoEL2lWQ3OvQMmy8tkN9Yn1fWO1CufJ2hwL8DXa
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2716,6 +2716,31 @@ ALTER TABLE ONLY public.entity_sync_map FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: job_inquiries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.job_inquiries (
+    job_inquiry_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    customer_id uuid,
+    company text,
+    represents_company boolean,
+    employment_type text,
+    rate_range text,
+    duration text,
+    location_type text,
+    address text,
+    timezone text,
+    caller_name text,
+    callback_phone text,
+    call_id text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.job_inquiries FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: knowledge_suggestion; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3205,7 +3230,8 @@ CREATE TABLE public.tenants (
     tts_cheerful boolean,
     tts_formal boolean,
     tts_warm boolean,
-    tts_concise boolean
+    tts_concise boolean,
+    job_inquiry_email text
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3578,6 +3604,14 @@ ALTER TABLE ONLY public.entity_sync_map
 
 ALTER TABLE ONLY public.entity_sync_map
     ADD CONSTRAINT entity_sync_map_tenant_id_provider_entity_type_local_id_key UNIQUE (tenant_id, provider, entity_type, local_id);
+
+
+--
+-- Name: job_inquiries job_inquiries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.job_inquiries
+    ADD CONSTRAINT job_inquiries_pkey PRIMARY KEY (job_inquiry_id);
 
 
 --
@@ -3991,6 +4025,13 @@ CREATE INDEX idx_entity_sync_map_local ON public.entity_sync_map USING btree (te
 --
 
 CREATE INDEX idx_entity_sync_map_pending ON public.entity_sync_map USING btree (sync_status) WHERE (sync_status <> 'synced'::text);
+
+
+--
+-- Name: idx_job_inquiries_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_job_inquiries_tenant ON public.job_inquiries USING btree (tenant_id, created_at DESC);
 
 
 --
@@ -4555,6 +4596,22 @@ ALTER TABLE ONLY public.entity_sync_map
 
 
 --
+-- Name: job_inquiries job_inquiries_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.job_inquiries
+    ADD CONSTRAINT job_inquiries_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(customer_id);
+
+
+--
+-- Name: job_inquiries job_inquiries_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.job_inquiries
+    ADD CONSTRAINT job_inquiries_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
 -- Name: knowledge_suggestion knowledge_suggestion_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5066,6 +5123,19 @@ CREATE POLICY feedback_tenant_isolation ON public.user_feedback USING ((tenant_i
 
 
 --
+-- Name: job_inquiries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.job_inquiries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: job_inquiries job_inquiries_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY job_inquiries_tenant_isolation ON public.job_inquiries USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+
+
+--
 -- Name: knowledge_suggestion; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -5364,5 +5434,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dwx9xdbj36z5heMaJXHoyyaNYSchPt8VS9bc2aUDwg2eVtW59sZV3z5srPuiGwV
+\unrestrict sg93rhWyUEj2MahAMIcOBjk4BoEL2lWQ3OvQMmy8tkN9Yn1fWO1CufJ2hwL8DXa
 

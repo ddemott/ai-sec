@@ -42,6 +42,7 @@ import {
   syncAppointmentToAll,
 } from '../services/syncOrchestrator';
 import { toolCallsTotal, bookingAttemptsTotal, errorsTotal } from '../services/metrics';
+import { sendJobInquiryEmail } from '../services/communications/systemEmail';
 import {
   selectAssignments,
   type ResourceCandidate,
@@ -192,6 +193,26 @@ const TakeMessageSchema = z.object({
   callback_phone: z.string().optional(),
   caller_phone: z.string().optional(),
   message: z.string().min(1).max(2000),
+  call_id: z.string().optional(),
+});
+
+// capture-job-inquiry — structured intake when a recruiter asks whether the
+// owner is available for work. Persists a job_inquiries row + emails the owner.
+// All position fields optional: the contract vs full-time branches collect
+// different subsets and a caller may bail mid-intake — a partial inquiry is
+// still worth saving + notifying on. caller_name is the only required field.
+const CaptureJobInquirySchema = z.object({
+  tenant_id: z.string().uuid(),
+  caller_name: z.string().min(1).max(200),
+  callback_phone: z.string().max(50).optional(),
+  company: z.string().max(300).optional(),
+  represents_company: z.boolean().optional(),
+  employment_type: z.enum(['contract', 'full_time']).optional(),
+  rate_range: z.string().max(200).optional(),
+  duration: z.string().max(200).optional(),
+  location_type: z.enum(['onsite', 'remote', 'hybrid']).optional(),
+  address: z.string().max(500).optional(),
+  timezone: z.string().max(100).optional(),
   call_id: z.string().optional(),
 });
 
@@ -1925,6 +1946,122 @@ export function registerAgentToolRoutes(
       });
     },
     'Failed to save message'
+  );
+
+  // capture-job-inquiry — persist a structured work/job inquiry + email the owner.
+  // The agent runs a deterministic intake (company, contract vs full-time, rate,
+  // duration, onsite/remote/hybrid, address/timezone) and calls this once it has
+  // the answers. Email is best-effort and instrumented; the DB row is the durable
+  // record (owner can still see it if email is in simulation mode or fails).
+  toolRoute(
+    app,
+    '/agent-tools/capture-job-inquiry',
+    CaptureJobInquirySchema,
+    async (args, reply) => {
+      const callbackPhone = args.callback_phone ? normalizePhone(args.callback_phone) : null;
+
+      const row = await withTenantClient(args.tenant_id, async (client) => {
+        // Link to an existing customer if the callback number matches one. Non-fatal.
+        let customerId: string | null = null;
+        if (callbackPhone && isValidPhone(callbackPhone)) {
+          const cust = await client.query<{ customer_id: string }>(
+            `SELECT customer_id FROM customers
+             WHERE tenant_id = $1 AND phone = $2
+               AND (is_deleted IS NULL OR is_deleted = false)
+             LIMIT 1`,
+            [args.tenant_id, callbackPhone]
+          );
+          customerId = cust.rows[0]?.customer_id ?? null;
+        }
+
+        const res = await client.query<{ job_inquiry_id: string }>(
+          `INSERT INTO job_inquiries
+             (tenant_id, customer_id, company, represents_company, employment_type,
+              rate_range, duration, location_type, address, timezone,
+              caller_name, callback_phone, call_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           RETURNING job_inquiry_id`,
+          [
+            args.tenant_id,
+            customerId,
+            args.company ?? null,
+            args.represents_company ?? null,
+            args.employment_type ?? null,
+            args.rate_range ?? null,
+            args.duration ?? null,
+            args.location_type ?? null,
+            args.address ?? null,
+            args.timezone ?? null,
+            args.caller_name,
+            callbackPhone,
+            args.call_id ?? null,
+          ]
+        );
+
+        // Resolve the notification recipient: the dedicated job_inquiry_email,
+        // else the tenant owner's user email.
+        const recip = await client.query<{ email: string | null }>(
+          `SELECT COALESCE(
+                    t.job_inquiry_email,
+                    (SELECT u.email FROM users u
+                      WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
+                      ORDER BY u.created_at ASC LIMIT 1)
+                  ) AS email
+             FROM tenants t WHERE t.tenant_id = $1`,
+          [args.tenant_id]
+        );
+
+        return {
+          job_inquiry_id: res.rows[0]?.job_inquiry_id ?? null,
+          recipient: recip.rows[0]?.email ?? null,
+        };
+      });
+
+      // Email the owner. Best-effort: the row is already persisted, so a failure
+      // here never un-saves the inquiry — instrument it (metric + 5W log) so a
+      // silent simulation-mode / SMTP failure is diagnosable, not invisible.
+      let emailed = false;
+      if (row.recipient) {
+        try {
+          await sendJobInquiryEmail(row.recipient, {
+            company: args.company,
+            representsCompany: args.represents_company,
+            employmentType: args.employment_type,
+            rateRange: args.rate_range,
+            duration: args.duration,
+            locationType: args.location_type,
+            address: args.address,
+            timezone: args.timezone,
+            callerName: args.caller_name,
+            callbackPhone,
+          });
+          emailed = true;
+        } catch (err) {
+          errorsTotal.inc({ event: 'job_inquiry_email_failed' });
+          app.log.error(
+            { tenantId: args.tenant_id, recipient: row.recipient, ...pgErrorFields(err) },
+            'capture_job_inquiry: owner email failed — inquiry saved but owner not emailed'
+          );
+        }
+      } else {
+        // No recipient configured at all — surface it; the owner gets nothing.
+        errorsTotal.inc({ event: 'job_inquiry_no_recipient' });
+        app.log.warn(
+          { tenantId: args.tenant_id },
+          'capture_job_inquiry: no job_inquiry_email and no owner email — inquiry saved but not emailed'
+        );
+      }
+
+      return ok(reply, {
+        saved: true,
+        job_inquiry_id: row.job_inquiry_id,
+        emailed,
+        message:
+          "Thanks — I've passed those details along to Dale and he'll get back to you. " +
+          'Please also email a job description to his inbox with your name and company in the subject line.',
+      });
+    },
+    'Failed to capture job inquiry'
   );
 
   // my-appointments — return upcoming scheduled appointments for the calling phone.
