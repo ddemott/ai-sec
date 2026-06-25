@@ -793,7 +793,10 @@ export default defineAgent({
               // throws "trying to generate speech from text without a TTS model".
               // Have the model SPEAK the opener via generateReply instead.
               await session.generateReply({
-                instructions: `Greet the caller now. Say exactly: "${greeting}"`,
+                // Greeting on its own lines (not quote-wrapped) so a tenant
+                // greeting containing a " or newline can't make the instruction
+                // ambiguous.
+                instructions: `Greet the caller now by speaking this exact opening line verbatim, then wait for their reply:\n\n${greeting}`,
                 allowInterruptions: false,
               });
             } else {
