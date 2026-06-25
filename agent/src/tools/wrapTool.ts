@@ -45,6 +45,17 @@ export function wrapToolExecute<A, O>(
   const timeoutMs = options?.timeoutMs ?? WRAP_TOOL_TIMEOUT_MS;
   const fallback = options?.fallback ?? DEFAULT_FALLBACK;
 
+  // onError is diagnostic-only and MUST NOT be able to break the contract — if
+  // a caller's logger throws, swallow it (a failed log can't be allowed to turn
+  // a graceful fallback back into a rejected promise / silent turn).
+  const report = (info: Parameters<NonNullable<WrapToolOptions['onError']>>[0]): void => {
+    try {
+      options?.onError?.(info);
+    } catch {
+      /* diagnostics are best-effort */
+    }
+  };
+
   return async (args: A, opts: O): Promise<string> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
@@ -54,17 +65,17 @@ export function wrapToolExecute<A, O>(
       const result = await Promise.race([fn(args, opts), timeout]);
       if (typeof result === 'string') {
         if (result.length > 0) return result;
-        options?.onError?.({ tool: toolName, reason: 'empty' });
+        report({ tool: toolName, reason: 'empty' });
         return fallback;
       }
       // Non-string (object/undefined) — stringify, but never hand back nothing.
       const encoded = result === undefined || result === null ? '' : JSON.stringify(result);
       if (encoded.length > 0) return encoded;
-      options?.onError?.({ tool: toolName, reason: 'empty' });
+      report({ tool: toolName, reason: 'empty' });
       return fallback;
     } catch (err) {
       const timedOut = err instanceof Error && err.message.startsWith('tool_timeout:');
-      options?.onError?.({ tool: toolName, reason: timedOut ? 'timeout' : 'threw', error: err });
+      report({ tool: toolName, reason: timedOut ? 'timeout' : 'threw', error: err });
       return fallback;
     } finally {
       if (timer) clearTimeout(timer);
