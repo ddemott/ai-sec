@@ -2492,4 +2492,39 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true, result: { ended: false } });
   });
+
+  it('HAPPY: incremental transcript update writes to the active row', async () => {
+    // WHO: the agent, after each conversation turn.
+    // WHAT: posts the transcript-so-far → UPDATE voice_sessions SET transcript
+    //        WHERE status='active'; returns updated:true when a row matched.
+    // WHEN: every turn — so a hung/never-finalized call still shows its content.
+    // WHERE: /agent-tools/voice-session-transcript.
+    // WHY: durability — the conversation must persist even if voice-session-end
+    //       never fires (the dead-air bug left rows with no transcript).
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [], rowCount: 1 }] });
+    const res = await post(app, '/agent-tools/voice-session-transcript', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-live-1',
+      transcript: 'Assistant: Hi, this is Beth.\nCaller: I need to reach Dale.',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { updated: true } });
+    expect(queries[0].text).toContain('UPDATE voice_sessions');
+    expect(queries[0].text).toContain("status = 'active'");
+    expect(queries[0].params?.[1]).toBe('call-live-1');
+  });
+
+  it('SAD: incremental transcript update returns updated:false when no active row', async () => {
+    // WHAT: a finalized/missing row matches 0 rows → updated:false (NOT an error).
+    // WHY: a late straggler after finalize must not error or overwrite the
+    //       authoritative finalized transcript.
+    const { app } = buildApp({ queryResponses: [{ rows: [], rowCount: 0 }] });
+    const res = await post(app, '/agent-tools/voice-session-transcript', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-already-done',
+      transcript: 'Caller: late line',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { updated: false } });
+  });
 });

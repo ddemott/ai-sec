@@ -217,6 +217,17 @@ const VoiceSessionEndSchema = z.object({
   appointment_id: z.string().uuid().nullable().optional(),
 });
 
+// Incremental transcript save — the agent posts the transcript-so-far after each
+// turn so a call that hangs/never finalizes still has its conversation persisted.
+const VoiceSessionTranscriptSchema = z.object({
+  tenant_id: z.string().uuid(),
+  call_id: z.string().min(1),
+  // min(1): never accept an empty transcript — it would blank an active row's
+  // existing transcript (accidental data loss). The agent only ever sends a
+  // non-empty render(), so this is a boundary guard.
+  transcript: z.string().min(1).max(100_000),
+});
+
 const MyAppointmentsSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
@@ -616,6 +627,46 @@ export function registerAgentToolRoutes(
       return ok(reply, { ended });
     },
     'Failed to end voice session'
+  );
+
+  // voice-session-transcript — incremental transcript save. The agent posts the
+  // transcript-so-far after EVERY turn so a call that hangs or never sends
+  // voice-session-end still has its conversation persisted up to the last turn.
+  // Updates ONLY while the row is still 'active' (a finalized row's transcript is
+  // authoritative — don't let a late straggler overwrite it). status is NOT
+  // changed here; finalize/reaper own that.
+  toolRoute(
+    app,
+    '/agent-tools/voice-session-transcript',
+    VoiceSessionTranscriptSchema,
+    async (args, reply) => {
+      try {
+        const res = await withTenantClient(args.tenant_id, (client) =>
+          client.query(
+            `UPDATE voice_sessions SET transcript = $3, updated_at = now()
+             WHERE tenant_id = $1 AND call_id = $2 AND status = 'active'`,
+            [args.tenant_id, args.call_id, args.transcript]
+          )
+        );
+        return ok(reply, { updated: (res.rowCount ?? 0) > 0 });
+      } catch (err) {
+        // 5W sad-path: a failed incremental save is non-fatal (the next turn or
+        // finalize/reaper catches up) but still worth a counter + named cause.
+        errorsTotal.inc({ event: 'voice_session_transcript_failed' });
+        app.log.error(
+          {
+            event: 'voice_session_transcript_failed',
+            tenant_id: args.tenant_id,
+            call_id: args.call_id,
+            transcript_len: args.transcript.length,
+            ...pgErrorFields(err),
+          },
+          'voice-session-transcript incremental save failed (non-fatal)'
+        );
+        return fail(reply, 'Failed to save transcript', 500);
+      }
+    },
+    'Failed to save transcript'
   );
 
   // save_customer_preference — persist a durable fact about a known caller
