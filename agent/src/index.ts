@@ -32,6 +32,8 @@ import { buildSessionContext } from './sessionContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
+import { warmFillers } from './session/fillerCache.js';
+import { attachOutputWatchdog } from './session/watchdog.js';
 import { TranscriptRecorder } from './transcript.js';
 import { CallOutcomeTracker } from './callOutcome.js';
 import { summarizeCall } from './callSummary.js';
@@ -696,6 +698,41 @@ export default defineAgent({
         session.on(voice.AgentSessionEventTypes.Close, () => {
           void finalizeCall?.('close');
         });
+
+        // Output watchdog (never-silent backstop) — OFF unless ENABLE_OUTPUT_WATCHDOG.
+        // Pre-synthesize the fixed hold lines once (per voice, async — never blocks
+        // the call; until warm, the watchdog falls back to live TTS), then attach
+        // the session-level deadline timer.
+        if (config.ENABLE_OUTPUT_WATCHDOG) {
+          const watchdogVoice = toOpenAIVoice(tenantConfig.ttsVoice);
+          const fillerText = 'One moment while I check that for you.';
+          const recoveryText =
+            "Sorry, this is taking me a moment. If you'd like, I can take a message and have someone get right back to you.";
+          const fillerTts = new openai.TTS({
+            apiKey: config.OPENAI_API_KEY,
+            model: 'gpt-4o-mini-tts',
+            voice: watchdogVoice,
+            speed: tenantConfig.ttsSpeed ?? 1.0,
+          });
+          void warmFillers(fillerTts, watchdogVoice, [fillerText, recoveryText]).then(
+            ({ failed }) => {
+              if (failed.length > 0) {
+                callLog.warn(
+                  { event: 'watchdog_filler_warm_failed', failed_count: failed.length },
+                  'watchdog filler pre-synthesis failed — will fall back to live TTS on the hold line'
+                );
+              }
+            },
+            () => undefined
+          );
+          const detachWatchdog = attachOutputWatchdog(session, {
+            voice: watchdogVoice,
+            fillerText,
+            recoveryText,
+            log: callLog,
+          });
+          session.on(voice.AgentSessionEventTypes.Close, detachWatchdog);
+        }
 
         // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)
         // is spoken verbatim when set; otherwise a short hardcoded fallback —
