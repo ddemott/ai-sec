@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict AXTX7gZJSgSKwKXBQPc6nY7A8j52mLEe8E5VGe9kGAn1683fB0mvNmhNv72YzoB
+\restrict dwx9xdbj36z5heMaJXHoyyaNYSchPt8VS9bc2aUDwg2eVtW59sZV3z5srPuiGwV
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -1489,6 +1489,48 @@ BEGIN
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
     RETURN deleted_count;
 END;
+$$;
+
+
+--
+-- Name: reap_stale_voice_sessions(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.reap_stale_voice_sessions(p_max_age_minutes integer DEFAULT 15) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+    v_count INTEGER;
+    -- Clamp to >= 1 minute. p_max_age_minutes reaches a SECURITY DEFINER
+    -- function; a 0 or negative value would push the cutoff into the future and
+    -- finalize LIVE, in-progress calls. Never reap anything younger than a minute.
+    v_min_age INTEGER := GREATEST(COALESCE(p_max_age_minutes, 15), 1);
+BEGIN
+    UPDATE voice_sessions
+    SET
+        status = 'completed',
+        ended_at = now(),
+        duration_seconds = COALESCE(
+            duration_seconds,
+            EXTRACT(EPOCH FROM (now() - started_at))::INTEGER
+        ),
+        -- Human-visible marker so the Calls tab explains WHY this row has no
+        -- transcript/outcome: the agent never sent its end. Only set when blank.
+        summary = COALESCE(
+            NULLIF(summary, ''),
+            'Auto-finalized: the call ended but the agent did not send a completion record.'
+        ),
+        updated_at = now()
+    WHERE status = 'active'
+      AND started_at < now() - make_interval(mins => v_min_age);
+
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
+END;
+-- search_path pinned: a SECURITY DEFINER function with a mutable search_path can
+-- be hijacked (an attacker-created object shadowing an unqualified name would run
+-- with the definer's rights). pg_catalog first so built-ins can't be shadowed.
 $$;
 
 
@@ -5322,5 +5364,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict AXTX7gZJSgSKwKXBQPc6nY7A8j52mLEe8E5VGe9kGAn1683fB0mvNmhNv72YzoB
+\unrestrict dwx9xdbj36z5heMaJXHoyyaNYSchPt8VS9bc2aUDwg2eVtW59sZV3z5srPuiGwV
 

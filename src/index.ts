@@ -53,6 +53,7 @@ import { registerExportRoutes } from './routes/exportData';
 import { registerAuditLogRoutes } from './routes/auditLog';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
+import { startVoiceSessionReaper, stopVoiceSessionReaper } from './workers/voiceSessionReaper';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { createQueryExpander } from '../shared/expandQueryForEmbedding';
@@ -280,6 +281,13 @@ if (isProduction || process.env.ENABLE_REMINDER_SCHEDULER === 'true') {
   startReminderScheduler();
 }
 
+// --- Start Voice Session Reaper ---
+// Backstop that finalizes calls the agent never closed (so every call has a
+// record). Same gating as the reminder scheduler.
+if (isProduction || process.env.ENABLE_VOICE_SESSION_REAPER === 'true') {
+  startVoiceSessionReaper();
+}
+
 // --- Start Server ---
 
 const port = Number(process.env.PORT || 4001);
@@ -308,6 +316,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
     app.log.info(`Received ${signal}, shutting down...`);
     stopReminderScheduler();
+    stopVoiceSessionReaper();
     await app.close();
     await closePool();
     process.exit(0);

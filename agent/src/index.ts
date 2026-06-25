@@ -213,6 +213,10 @@ export default defineAgent({
       // fire-and-forget — it must NEVER delay the greeting or risk dead air,
       // so a failure is logged and swallowed. END is awaited inside the
       // shutdown callback so duration lands before the job tears down.
+      // finalizeCall is assigned inside the callId block below and invoked from
+      // the session 'close' event (registered after session.start). Declared at
+      // this scope so the close handler can see it. Null when there's no callId.
+      let finalizeCall: ((hook: 'close' | 'shutdown') => Promise<void>) | null = null;
       // Skipped when callId is absent (nothing to key the session on).
       if (sessionCtx.callId) {
         const callId = sessionCtx.callId;
@@ -253,7 +257,22 @@ export default defineAgent({
               'call-logging START threw (non-fatal to the live call) — this call will NOT appear in the Calls tab'
             )
           );
-        ctx.addShutdownCallback(async () => {
+        // Fire-once writer of the call's completion record. Invoked from BOTH
+        // the session 'close' event (participant hangup — the reliable signal)
+        // and ctx.addShutdownCallback (job teardown — backstop). On a single
+        // hangup the worker often stays alive for the next job, so the shutdown
+        // callback may never run; 'close' is what actually fires. The guard makes
+        // the first caller win; the other no-ops. (A server-side reaper catches
+        // anything that still slips through.)
+        // callFinalized flips true ONLY after a successful finalize write, so a
+        // failed 'close' attempt leaves the shutdown backstop free to retry.
+        // finalizing dedupes concurrent entry (close + shutdown firing together).
+        let callFinalized = false;
+        let finalizing = false;
+        finalizeCall = async (hook: 'close' | 'shutdown'): Promise<void> => {
+          if (callFinalized || finalizing) return;
+          finalizing = true;
+          callLog.info({ event: 'voice_session_finalize_entered', hook }, 'finalizing call record');
           try {
             const rendered = transcript.render();
             const { outcome: trackedOutcome, appointmentId } = outcomeTracker.result();
@@ -294,7 +313,12 @@ export default defineAgent({
                 },
                 'call-logging FINALIZE failed — row may stay active with no duration/transcript'
               );
+              // Leave callFinalized=false so the shutdown backstop (or, failing
+              // everything, the server-side reaper) can still close this row.
+              return;
             }
+            // Finalize succeeded — safe to suppress retries now.
+            callFinalized = true;
 
             // 2. Best-effort enrichment — bounded LLM summary + outcome class.
             //    Both are bounded + failsafe (resolve null on timeout/error), so
@@ -392,8 +416,15 @@ export default defineAgent({
               },
               'call-logging END failed (non-fatal to the caller) — duration/transcript/summary NOT saved; row may stay active'
             );
+            // callFinalized stays false (set only on success) → backstop retries.
+          } finally {
+            finalizing = false;
           }
-        });
+        };
+        // Hangup ('close') is the reliable finalize signal; job-shutdown is the
+        // backstop. callFinalized (set only after a successful write) dedupes;
+        // finalizing guards against the two hooks racing into a double-write.
+        ctx.addShutdownCallback(() => finalizeCall?.('shutdown') ?? Promise.resolve());
       }
 
       // Fetch tenant config first — the transfer destination (forward_phone)
@@ -500,6 +531,14 @@ export default defineAgent({
         // the running totals — keeping the last snapshot is sufficient.
         session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => {
           sessionModelUsage = ev.usage.modelUsage;
+        });
+
+        // Finalize the call record the instant the caller hangs up. The job
+        // often outlives a single call (worker reused for the next one), so the
+        // 'close' event — not the job-shutdown backstop — is what normally writes
+        // voice-session-end. Fire-once guard dedupes against the shutdown hook.
+        session.on(voice.AgentSessionEventTypes.Close, () => {
+          void finalizeCall?.('close');
         });
 
         // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)
