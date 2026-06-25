@@ -186,10 +186,8 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 | `LIVEKIT_API_KEY` | Yes | LiveKit Cloud API key |
 | `LIVEKIT_API_SECRET` | Yes | LiveKit Cloud API secret |
 | `AGENT_SECRET` | Yes | Min 32 chars. Must match backend's `AGENT_SECRET`. |
-| `OPENAI_API_KEY` | Yes | LLM (GPT-4o-mini) + `runFallback()` last-resort TTS |
+| `OPENAI_API_KEY` | Yes | LLM (GPT-4o-mini) + TTS (primary, voice `shimmer` default) + fallback TTS |
 | `DEEPGRAM_API_KEY` | Yes | STT (Nova-3) |
-| `XAI_API_KEY` | Yes | Primary TTS (Grok). Without this the agent worker refuses to start. |
-| `XAI_TTS_VOICE` | No | One of `eve` \| `ara` \| `rex` \| `sal` \| `leo`. Default `ara`. |
 | `BACKEND_URL` | No | Where the agent posts `/agent-tools/*` calls. Default `http://localhost:4001`. |
 | `BETTER_STACK_TOKEN` | No | Same value as the backend's `BETTER_STACK_TOKEN`. When set, agent forwards Pino logs to Better Stack alongside stdout; unset = stdout only. Per-call child logger adds `tenant_id` + `call_id` to every line so support can pull a specific call's full timeline with one filter. See "Observability" below. |
 | `LOG_LEVEL` | No | `trace` \| `debug` \| `info` (default) \| `warn` \| `error` |

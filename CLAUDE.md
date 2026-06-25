@@ -10,7 +10,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Full cr
 
 ## Architecture
 
-- **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + xAI Grok (TTS) → Fastify `/agent-tools/*`
+- **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + OpenAI (TTS) → Fastify `/agent-tools/*`
 - **Backend**: Fastify (29 route modules under `src/routes/`) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `ai-sec-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind + TS
@@ -24,7 +24,7 @@ Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Full cr
 - **Frontend**: Next.js 14, React 18, Tailwind 3.4, Lucide, react-big-calendar
 - **Voice agent**: LiveKit Agents (Node), `@livekit/agents-plugin-{deepgram,openai}`, `livekit-server-sdk`
 - **DB**: PostgreSQL + pgvector (ankane/pgvector Docker)
-- **Voice stack**: Telnyx + LiveKit Cloud + Deepgram Nova-3 + OpenAI GPT-4o-mini + xAI Grok TTS (default voice `ara`; OpenAI TTS retained as fallback). Voice + delivery (speed, soft) are **per-tenant** via `tenants.tts_voice/tts_speed/tts_soft` (NULL = `XAI_TTS_*` env default), set on the dashboard Phone Assistant → AI Persona page
+- **Voice stack**: Telnyx + LiveKit Cloud + Deepgram Nova-3 + OpenAI GPT-4o-mini + OpenAI TTS (default voice `shimmer`). Fully OpenAI as of 2026-06-25 — Grok/xAI TTS removed (no `XAI_API_KEY` needed). Voice + speed are **per-tenant** via `tenants.tts_voice` (an OpenAI voice id: shimmer/nova/alloy/echo/onyx/fable) `/tts_speed`, set on the dashboard Phone Assistant → AI Persona page. (The legacy `tts_soft/tts_cheerful` columns are inert — Grok-only prosody.)
 - **Testing**: Vitest (backend + dashboard), Playwright (e2e), `scripts/simulate.sh` (on-demand system harness: `status` health board, `tools` agent-tools journey, `call` browser voice test — see Development)
 
 ## Key Directories

@@ -47,7 +47,7 @@ describe('fetchTenantConfig', () => {
     });
     const cfg = await fetchTenantConfig(client, TENANT_ID);
     // Preference field absent from the response defaults to true (on by default).
-    // Grok-voice fields absent default to null (agent uses XAI_TTS_* env defaults).
+    // TTS fields absent default to null (agent uses the platform default voice).
     expect(cfg).toEqual({
       name: 'DynaTire',
       timezone: 'America/Chicago',
@@ -57,8 +57,6 @@ describe('fetchTenantConfig', () => {
       preferencesInstructions: null,
       ttsVoice: null,
       ttsSpeed: null,
-      ttsSoft: null,
-      ttsCheerful: null,
       ttsFormal: null,
       ttsWarm: null,
       ttsConcise: null,
@@ -92,11 +90,11 @@ describe('fetchTenantConfig', () => {
     expect(cfg.firstMessage).toBe("Hi, I'm Beth — business or personal?");
   });
 
-  it('HAPPY: surfaces per-tenant Grok voice (tts_voice/speed/soft, snake → camel)', async () => {
-    // WHO: an owner who picked "Eve", slowed her down, and turned on soft delivery.
-    // WHAT: the three tts_* fields convert snake → camel at the boundary so the
-    //        agent passes the tenant's voice/speed/soft to GrokTTS instead of
-    //        the global env defaults.
+  it('HAPPY: surfaces per-tenant OpenAI voice (tts_voice/speed, snake → camel)', async () => {
+    // WHO: an owner who picked "Nova" and slowed her down a touch.
+    // WHAT: tts_voice/tts_speed convert snake → camel at the boundary so the
+    //        agent passes the tenant's voice/speed to OpenAI TTS instead of the
+    //        platform default.
     // WHY: per-tenant voice is the whole feature — if these don't surface, every
     //        tenant sounds identical.
     const client = clientWith({
@@ -107,16 +105,14 @@ describe('fetchTenantConfig', () => {
           name: 'DynaTire',
           timezone: 'America/Chicago',
           system_prompt: null,
-          tts_voice: 'eve',
+          tts_voice: 'nova',
           tts_speed: 0.85,
-          tts_soft: true,
         },
       },
     });
     const cfg = await fetchTenantConfig(client, TENANT_ID);
-    expect(cfg.ttsVoice).toBe('eve');
+    expect(cfg.ttsVoice).toBe('nova');
     expect(cfg.ttsSpeed).toBe(0.85);
-    expect(cfg.ttsSoft).toBe(true);
   });
 
   it('HAPPY: explicit save_preferences_enabled=false + preferences_instructions pass through (snake → camel)', async () => {

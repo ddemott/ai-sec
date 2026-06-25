@@ -18,18 +18,10 @@ const envSchema = z.object({
 
   OPENAI_API_KEY: z.string().min(1),
   DEEPGRAM_API_KEY: z.string().min(1),
-  XAI_API_KEY: z.string().min(1),
-  // ara = warm & friendly (recommended default for AI secretary)
-  XAI_TTS_VOICE: z.enum(['eve', 'ara', 'rex', 'sal', 'leo']).default('ara'),
-  // Speech pace multiplier (xAI /v1/tts `speed`, range 0.7–1.5). <1 = slower,
-  // calmer delivery. Default 0.85 = unhurried "caring friend" pace; tune by ear.
-  XAI_TTS_SPEED: z.coerce.number().min(0.7).max(1.5).default(0.85),
-  // When true, the synthesized text is wrapped in xAI's <soft> prosody tag for a
-  // softer, soothing delivery. Env arrives as a string; transform to boolean.
-  XAI_TTS_SOFT: z
-    .enum(['true', 'false'])
-    .default('true')
-    .transform((v) => v === 'true'),
+  // TTS is OpenAI. Voice + speed are per-tenant (dashboard → tenants.tts_voice/
+  // tts_speed), not env. The old xAI/Grok TTS vars (XAI_API_KEY, XAI_TTS_VOICE/
+  // SPEED/SOFT) were removed 2026-06-25 when the agent went fully OpenAI — they
+  // are no longer required for the worker to boot.
 
   // Comma-separated tenant IDs whose inbound line is a FORWARDED number (e.g.
   // the owner's cell forwards to the AI), so the SIP caller ID is the
