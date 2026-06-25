@@ -21,6 +21,45 @@ import type { SessionContext } from './sessionContext.js';
 import type { ToolResponse, ToolsClient } from './toolsClient.js';
 import type { TransferResult } from './transferClient.js';
 import type { CallOutcomeTracker } from './callOutcome.js';
+import { wrapToolExecute } from './tools/wrapTool.js';
+import { getLogger } from './logger.js';
+
+/**
+ * Capability groups. Every tool belongs to exactly one; a customer agent can
+ * compose a subset via `buildTools(..., { capabilities: [...] })` (e.g. a
+ * message-taking line needs only 'knowledge' + 'messaging'). Default = all.
+ * The grouping also documents which tools to lift together when copying a
+ * capability into another agent.
+ */
+export type Capability =
+  | 'knowledge'
+  | 'messaging'
+  | 'identity'
+  | 'scheduling'
+  | 'verification'
+  | 'transfer';
+
+const CAPABILITY_OF: Record<string, Capability> = {
+  get_company_policy_answer: 'knowledge',
+  take_message: 'messaging',
+  capture_job_inquiry: 'messaging',
+  get_customer_context: 'identity',
+  find_caller_by_name: 'identity',
+  identify_caller: 'identity',
+  save_customer_preference: 'identity',
+  get_service_catalog: 'scheduling',
+  get_available_slots: 'scheduling',
+  get_scheduling_options: 'scheduling',
+  check_availability: 'scheduling',
+  book_appointment: 'scheduling',
+  book_with_scheduling: 'scheduling',
+  get_my_appointments: 'scheduling',
+  cancel_appointment: 'scheduling',
+  reschedule_appointment: 'scheduling',
+  send_verification_code: 'verification',
+  verify_phone_code: 'verification',
+  transfer_call: 'transfer',
+};
 
 /** Pull a UUID appointment_id out of a successful booking response, if present. */
 function extractAppointmentId(res: ToolResponse): string | null {
@@ -63,9 +102,10 @@ export function buildTools(
   client: ToolsClient,
   transfer?: TransferCapability,
   outcome?: CallOutcomeTracker,
-  speakFiller?: (phrase: string) => void
+  speakFiller?: (phrase: string) => void,
+  opts?: { capabilities?: readonly Capability[] }
 ): llm.ToolContext {
-  return {
+  const allTools: llm.ToolContext = {
     get_customer_context: llm.tool({
       description:
         "Look up a caller in the CRM by phone. Returns the customer's name, a short history, and any saved preferences (preferred staff, last service, likes) to personalize the call. Pass the phone number the caller gave you verbally when you have it; otherwise it falls back to the caller-ID phone. Use this to recognize returning callers.",
@@ -771,4 +811,31 @@ export function buildTools(
       },
     }),
   };
+
+  // Harden + compose. Wrap every tool's execute with the never-freeze contract
+  // (timeout + catch→string + never-empty) IN PLACE, then return only the
+  // selected capabilities (default: all). Wrapping at this one boundary means a
+  // tool a customer adds is non-freezing BY CONSTRUCTION — it can't stall the
+  // turn or hand the model an empty result.
+  const wanted = opts?.capabilities;
+  const result: llm.ToolContext = {};
+  for (const [name, ft] of Object.entries(allTools)) {
+    const cap = CAPABILITY_OF[name];
+    if (wanted && (cap === undefined || !wanted.includes(cap))) continue;
+    const mutable = ft as unknown as { execute: (args: never, opts: never) => Promise<unknown> };
+    mutable.execute = wrapToolExecute(name, mutable.execute, {
+      onError: ({ tool, reason, error }) =>
+        getLogger().warn(
+          {
+            event: 'tool_contract_fallback',
+            tool,
+            reason,
+            error_message: error instanceof Error ? error.message : undefined,
+          },
+          `tool ${tool} ${reason} — returned a graceful fallback so the caller is not left in silence`
+        ),
+    });
+    result[name] = ft;
+  }
+  return result;
 }
