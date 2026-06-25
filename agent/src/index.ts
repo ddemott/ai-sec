@@ -481,11 +481,10 @@ export default defineAgent({
           vad: ctx.proc.userData.vad as silero.VAD,
           stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
           llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-          // 2026-06-24: primary TTS is OpenAI (streaming → smooth over the 8kHz
-          // PSTN leg; Grok's non-streaming buffer was choppy). Per-tenant voice +
-          // speed come from the dashboard (tenants.tts_voice/tts_speed). tts_voice
-          // now holds an OpenAI voice id; an unset/legacy (Grok) value falls back
-          // to 'shimmer'. soft/cheerful are Grok-only prosody and don't apply.
+          // TTS is OpenAI (streaming → smooth over the 8kHz PSTN leg). Per-tenant
+          // voice + speed come from the dashboard (tenants.tts_voice/tts_speed);
+          // tts_voice holds an OpenAI voice id, an unset/legacy value falls back
+          // to 'shimmer'. (Fully OpenAI as of 2026-06-25 — Grok TTS removed.)
           tts: new openai.TTS({
             apiKey: config.OPENAI_API_KEY,
             voice: toOpenAIVoice(tenantConfig.ttsVoice),

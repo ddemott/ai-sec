@@ -4,19 +4,10 @@
  * metadata). Goal: the caller hears a coherent message instead of dead
  * air. Anything beats silence.
  *
- * Provider choice rationale: this path uses OpenAI TTS (not Grok) for two
- * reasons.
- *
- *   1. **Independence from the primary path.** The primary AgentSession
- *      uses GrokTTS. If the reason we're in fallback is "Grok upstream is
- *      down" or "XAI_API_KEY rotated and the rotation hasn't redeployed",
- *      the fallback must not depend on the same provider. OpenAI TTS uses
- *      `OPENAI_API_KEY` which we already validate at boot for the LLM, so
- *      it's strictly more available than Grok.
- *
- *   2. **No greeting work.** The fallback only ever speaks one short
- *      string and ends the call. OpenAI TTS's lack of streaming or voice
- *      tuning is irrelevant for a 12-word message.
+ * Provider: OpenAI TTS, same as the primary path (the agent is fully OpenAI
+ * as of 2026-06-25). The fallback only ever speaks one short string and ends
+ * the call, so voice tuning is irrelevant; it uses `OPENAI_API_KEY`, already
+ * validated at boot for the LLM.
  *
  * Errors anywhere in this function are deliberately swallowed. At the
  * point fallback is reached, the call is already a degraded experience —

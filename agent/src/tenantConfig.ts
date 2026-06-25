@@ -40,15 +40,14 @@ export interface TenantDisplayConfig {
    */
   preferencesInstructions: string | null;
   /**
-   * Per-tenant xAI Grok TTS settings (2026-06-10). NULL means "use the agent's
-   * XAI_TTS_VOICE / XAI_TTS_SPEED / XAI_TTS_SOFT env default", so a tenant that
-   * hasn't picked a voice keeps the platform default. ttsVoice is a Grok
-   * voice_id (eve/ara/rex/sal/leo or a custom clone id).
+   * Per-tenant OpenAI TTS settings. ttsVoice is an OpenAI voice id
+   * (shimmer/nova/alloy/echo/onyx/fable); NULL = platform default (shimmer).
+   * ttsSpeed is the OpenAI speech rate. (The old Grok-only soft/cheerful prosody
+   * tags were dropped 2026-06-25 in the full OpenAI conversion.)
    */
   ttsVoice: string | null;
   ttsSpeed: number | null;
-  ttsSoft: boolean | null;
-  ttsCheerful: boolean | null;
+  // Persona-tone toggles below feed the SYSTEM PROMPT (prompt.ts), not TTS.
   ttsFormal: boolean | null;
   ttsWarm: boolean | null;
   ttsConcise: boolean | null;
@@ -70,8 +69,6 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   preferencesInstructions: null,
   ttsVoice: null,
   ttsSpeed: null,
-  ttsSoft: null,
-  ttsCheerful: null,
   ttsFormal: null,
   ttsWarm: null,
   ttsConcise: null,
@@ -93,8 +90,6 @@ export async function fetchTenantConfig(
     preferences_instructions?: string | null;
     tts_voice?: string | null;
     tts_speed?: number | null;
-    tts_soft?: boolean | null;
-    tts_cheerful?: boolean | null;
     tts_formal?: boolean | null;
     tts_warm?: boolean | null;
     tts_concise?: boolean | null;
@@ -110,8 +105,6 @@ export async function fetchTenantConfig(
       preferencesInstructions: res.result.preferences_instructions ?? null,
       ttsVoice: res.result.tts_voice ?? null,
       ttsSpeed: res.result.tts_speed ?? null,
-      ttsSoft: res.result.tts_soft ?? null,
-      ttsCheerful: res.result.tts_cheerful ?? null,
       ttsFormal: res.result.tts_formal ?? null,
       ttsWarm: res.result.tts_warm ?? null,
       ttsConcise: res.result.tts_concise ?? null,

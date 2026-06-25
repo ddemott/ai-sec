@@ -30,7 +30,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { runFallback, type FallbackDeps, type FallbackConfig } from './fallback.js';
-import { GrokTTS } from './grokTTS.js';
 
 /**
  * Build a minimal `JobContext`-shaped object. The fallback path only
@@ -289,28 +288,6 @@ describe('runFallback — provider choice (the dead-air-guard contract)', () => 
     // sessionArgs.tts would not be an instance of FakeTTSClass and
     // this fails. The next test pins the negative case (Grok absent).
     expect(sessionArgs.tts).toBeInstanceOf(Classes.FakeTTSClass);
-  });
-
-  it('SAD: a real GrokTTS instance is never constructed in fallback', async () => {
-    // WHO: A future maintainer tempted to "simplify" by reusing the
-    //       primary path's GrokTTS in fallback
-    // WHAT: GrokTTS's constructor is never called during fallback —
-    //        verified by confirming no GrokTTS instance is in the
-    //        session's tts slot
-    // WHEN: Across the entire runFallback call
-    // WHERE: Same TTS slot as above, viewed through a different lens
-    // WHY: This is a defense-in-depth assertion against drift. The
-    //       previous test pins the *positive* case (OpenAI used);
-    //       this pins the *negative* (Grok absent). Both can fail
-    //       independently — Grok could be added back as a third
-    //       provider for example — and we want a clear test for each.
-    const ctx = makeCtx();
-    const { deps, AgentSessionCalls } = buildSpyDeps();
-
-    await runFallback(ctx, 'msg', TEST_CONFIG, deps);
-
-    const sessionArgs = AgentSessionCalls[0].args[0] as { tts: unknown };
-    expect(sessionArgs.tts).not.toBeInstanceOf(GrokTTS);
   });
 
   it('HAPPY: configures OpenAI TTS with the OpenAI API key (not Grok key)', async () => {
