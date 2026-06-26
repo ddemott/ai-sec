@@ -10,10 +10,11 @@
  * Api.tenants.updateConfig, or the route handler shows up as a failed reload
  * assertion — not a cosmetic toggle that silently stops persisting.
  *
- * NOTE (2026-06-24): Soft + Cheerful were removed from the picker when primary
- * TTS switched Grok → OpenAI — they were Grok-only prosody tags with no OpenAI
- * equivalent. Only the prompt-level styles (Formal/Warm/Concise) remain; their
- * tts_* columns persist unchanged.
+ * NOTE (2026-06-25+): Soft + Cheerful were removed from the picker when primary
+ * TTS switched Grok → OpenAI (final removal of all Grok/xAI remnants). They were
+ * Grok-only prosody tags with no OpenAI equivalent. Only the prompt-level styles
+ * (Formal/Warm/Concise) remain; their tts_* columns (and the voice/speed ones)
+ * persist for the OpenAI configuration.
  *
  * Auth: the shared auth.setup logs in as admin@secretaryhq.com (super-admin,
  * platform tenant). We edit that tenant's AI config and reset it afterward.
@@ -76,7 +77,7 @@ test('HAPPY: all 3 voice style checkboxes render on the AI Persona page', async 
   await expect(page.getByRole('checkbox', { name: /Concise/i })).toBeVisible();
 
   // Soft + Cheerful were Grok-only and are intentionally gone after the OpenAI
-  // TTS switch — guard against them creeping back in.
+  // TTS switch + full Grok removal — guard against them creeping back in.
   await expect(page.getByRole('checkbox', { name: /Soft/i })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: /Cheerful/i })).toHaveCount(0);
 

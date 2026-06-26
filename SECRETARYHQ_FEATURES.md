@@ -13,7 +13,7 @@
 ## 1. AI Voice Receptionist (the core)
 
 - ✅ Answers business calls 24/7 (Telnyx → LiveKit Cloud → AI agent)
-- ✅ Natural conversation — Deepgram (speech-to-text), GPT-4o-mini (reasoning), xAI Grok (voice)
+- ✅ Natural conversation — Deepgram (speech-to-text), GPT-4o-mini (reasoning), OpenAI TTS (voice; fully OpenAI since 2026-06-25 removal of xAI Grok)
 - ✅ Knows the business — answers hours / prices / services / policies from a per-tenant knowledge base (RAG / vector search)
 - ✅ Books appointments live during the call
 - ✅ Recognizes returning callers + recalls their history and preferences
@@ -66,7 +66,7 @@
 
 - ✅ Calendar sync — Google Calendar, Outlook (booking → owner's calendar)
 - ✅ CRM sync — Square only (`src/services/crm/squareSync.ts` + `squareClient.ts`, route `src/routes/square.ts`). _(Jobber, HubSpot, ServiceTitan **removed** 2026-06-12 as competitors — see `docs/STRATEGY.md`; the provider-agnostic sync layer was kept and drives Square.)_
-- ✅ Voice + telephony stack — Telnyx (PSTN), LiveKit (media), Deepgram, OpenAI, xAI Grok
+- ✅ Voice + telephony stack — Telnyx (PSTN), LiveKit (media), Deepgram, OpenAI (LLM + TTS; xAI Grok removed 2026-06-25)
 - ✅ Phone provisioning — search / buy / route a phone number (Telnyx)
 
 ## 8. Owner Dashboard

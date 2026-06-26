@@ -88,5 +88,5 @@ This is its own branch + live verification. Until then the message-taking interi
 ---
 
 ## Tuning notes (after a live call)
-- Pace: `XAI_TTS_SPEED` 0.8 (slower) ↔ 0.9 (faster). Too breathy → `XAI_TTS_SOFT=false`.
-- All `ai-sec-agent` Railway env vars → change = redeploy → call to judge by ear.
+- Pace: `tts_speed` 0.8 (slower) ↔ 0.9–1.0 (faster) via dashboard (OpenAI TTS; old XAI_TTS_* envs removed 2026-06-25).
+- All `ai-sec-agent` Railway env vars → change = redeploy → call to judge by ear. (Voice now configured primarily in DB per-tenant + dashboard AI Persona.)

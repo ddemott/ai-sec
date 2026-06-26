@@ -46,7 +46,8 @@ const UpdateConfigSchema = z.object({
   first_message: z.string().optional().nullable(),
   save_preferences_enabled: z.boolean().optional(),
   preferences_instructions: z.string().optional().nullable(),
-  // Per-tenant xAI Grok TTS settings (NULL = use agent env defaults).
+  // Per-tenant OpenAI TTS settings (NULL = use agent/platform defaults `shimmer`).
+  // (Legacy comments referred to xAI Grok; the columns were reused after the 2026-06-25 full OpenAI conversion.)
   tts_voice: z.string().max(100).optional().nullable(),
   tts_speed: z.number().min(0.7).max(1.5).optional().nullable(),
   tts_soft: z.boolean().optional().nullable(),

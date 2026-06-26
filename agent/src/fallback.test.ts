@@ -261,20 +261,19 @@ describe('runFallback — provider choice (the dead-air-guard contract)', () => 
   });
 
   it('HAPPY: uses OpenAI TTS, NOT Grok TTS, for fallback', async () => {
-    // WHO: A caller who is in fallback specifically *because* Grok is
-    //       down (or the XAI key has rotated mid-deploy and the worker
-    //       still has the stale value)
+    // WHO: A caller who is in fallback (primary path problem of any kind,
+    //      including former Grok/xAI outage pre-2026-06-25, or key rotation).
     // WHAT: The TTS instance constructed for the fallback path comes
-    //        from the OpenAI TTS class, not GrokTTS
+    //        from the OpenAI TTS class, not any GrokTTS
     // WHEN: AgentSession construction inside runFallback
     // WHERE: The `tts:` slot of the AgentSession constructor in
     //         fallback.ts
-    // WHY: This is the *whole point* of the fallback path. Using
-    //       GrokTTS in fallback would leave the caller with dead air
-    //       in exactly the failure scenario the path was supposed to
-    //       guard against. The CLAUDE.md / ARCHITECTURE.md docs
-    //       claim OpenAI TTS is the dead-air guard; this test makes
-    //       that claim load-bearing instead of aspirational.
+    // WHY: The fallback must be independent of whatever the primary TTS
+    //      provider is (was Grok, now OpenAI). Using the same provider
+    //      codepath in fallback would leave the caller with dead air in
+    //      exactly the failure scenario the path was supposed to guard
+    //      against. The tests make the "OpenAI in fallback" contract
+    //      load-bearing.
     const ctx = makeCtx();
     const { deps, AgentSessionCalls, TTSCalls, Classes } = buildSpyDeps();
 
@@ -284,9 +283,9 @@ describe('runFallback — provider choice (the dead-air-guard contract)', () => 
     expect(TTSCalls).toHaveLength(1);
     const sessionArgs = AgentSessionCalls[0].args[0] as { tts: unknown };
     // The tts slot received an instance of the *injected* OpenAI TTS
-    // spy class. If a future refactor wires GrokTTS here instead, the
+    // spy class. If a future refactor wires a non-OpenAI TTS here instead, the
     // sessionArgs.tts would not be an instance of FakeTTSClass and
-    // this fails. The next test pins the negative case (Grok absent).
+    // this fails. The next test pins the negative case (primary provider absent).
     expect(sessionArgs.tts).toBeInstanceOf(Classes.FakeTTSClass);
   });
 
@@ -295,10 +294,12 @@ describe('runFallback — provider choice (the dead-air-guard contract)', () => 
     // WHAT: The api key passed in is `OPENAI_API_KEY`, not `XAI_API_KEY`
     // WHEN: TTS construction
     // WHERE: The `new TTS({ apiKey: ... })` in fallback.ts
-    // WHY: If we accidentally passed the Grok key into the OpenAI TTS
-    //       client, the fallback would 401 on every call and produce
-    //       — yes — dead air. Pinning the key plumbing prevents that
-    //       silent regression.
+    // WHY: (Historical) If we accidentally passed a former Grok/XAI key
+    //      into the OpenAI TTS client, the fallback would 401. The test
+    //      pins that the fallback always uses the OPENAI key (primary
+    //      path is also OpenAI post-removal, but independence contract
+    //      remains valuable). Pinning the key plumbing prevents silent
+    //      regression.
     const ctx = makeCtx();
     const { deps, TTSCalls } = buildSpyDeps();
 

@@ -8,7 +8,7 @@ export interface RecordAiCostParams {
   tenantId: string;
   callId?: string | null;
   source: string; // 'kb_ingestion' | 'kb_query' | 'call_summary' | etc.
-  provider: string; // 'openai' | 'xai' | 'deepgram'
+  provider: string; // 'openai' | 'xai' | 'deepgram'  ( 'xai' kept for legacy rows pre-2026-06-25 Grok TTS removal )
   model: string;
   inputTokens?: number;
   outputTokens?: number;

@@ -43,7 +43,7 @@ Check in order:
 1. **Agent worker alive?** `./scripts/simulate.sh status --env prod --deep` dispatch-tests the `ai-sec-agent` worker. If the deep check fails, the worker is down → redeploy `ai-sec-agent` on Railway, confirm it booted (Railway logs show the LiveKit worker registering).
 2. **Agent → backend auth.** The worker calls `/agent-tools/*` with `x-agent-secret`. A mismatch returns 401 and the agent can't fetch tenant context. Symptom in logs: `Agent not authorized — check AGENT_SECRET config`. Fix: ensure `AGENT_SECRET` is identical on `ai-sec` and `ai-sec-agent`.
 3. **Agent `BACKEND_URL`.** Must be `https://ai-sec-production.up.railway.app` on `ai-sec-agent` (the worker exits at boot if unset). A wrong URL = every tool call fails.
-4. **TTS / LLM provider down.** Dead air after the greeting can be the xAI Grok TTS or OpenAI LLM timing out. Check the OpenAI fallback-TTS dead-air guard logs (`agent/src/fallback.ts`). Check OpenAI quota (a 429 from OpenAI surfaces as a tool 500).
+4. **TTS / LLM provider down.** Dead air after the greeting can be OpenAI TTS or LLM timing out (Grok/xAI fully removed 2026-06-25). Check the OpenAI fallback-TTS dead-air guard logs (`agent/src/fallback.ts`). Check OpenAI quota (a 429 from OpenAI surfaces as a tool 500).
 5. **Inbound never reached the agent at all** → this is a telephony-path problem, not an agent problem → §7.
 
 ---

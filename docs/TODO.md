@@ -214,7 +214,7 @@ Captured 2026-06-19 (Dale brainstorming migration targets). **Decision rule = th
 
 ### Reassuring — audited and found FULLY wired (no action)
 
-CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry policy · calendar-sync orchestration · all 4 CRM client API/OAuth/webhook code · Telnyx agent OTP path · LiveKit/Deepgram/OpenAI/Grok voice stack. None are scaffold — all real code.
+CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry policy · calendar-sync orchestration · all 4 CRM client API/OAuth/webhook code · Telnyx agent OTP path · LiveKit/Deepgram/OpenAI (TTS fully OpenAI post-2026-06-25 Grok removal) voice stack. None are scaffold — all real code.
 
 ---
 
@@ -459,7 +459,7 @@ Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `re
 
 - [ ] Continue mechanical doc hygiene passes (count drift, old REFACTORING_TODO/NEEDS references in comments, Gap inventory table sync when filenames change, footer "Last updated" alignment).
 - [ ] Review and trim any remaining historical narrative in active docs that can be archived to RESOLVED.md.
-- [ ] Ensure all secondary docs (GAPS.md, IMPROVEMENT_IDEAS.md, DEPLOYMENT.md, etc.) reflect current 29 route modules / 142 migrations after any new route or migration.
+- [ ] Ensure all secondary docs (GAPS.md, IMPROVEMENT_IDEAS.md, DEPLOYMENT.md, etc.) reflect current 29 route modules / 145 migrations after any new route or migration.
 - [ ] Keep the Gap inventory "Key files per gap" table in sync with actual filenames (e.g. exportData.ts not export.ts).
 
 ---
@@ -516,7 +516,7 @@ category-completeness inventory. Below is the key-files map kept for reference.
 | Gap                     | Primary files                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts`                                            |
-| AI cost meter           | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts`, `agent/src/grokTTS.ts` |
+| AI cost meter           | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` (Grok TTS path removed 2026-06-25; historical rows may reference 'xai') |
 | Calendar sync live      | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env                                                             |
 | Data export / GDPR      | `src/routes/exportData.ts` (owner-gated tenant data export) + audit log for purge                                                     |
 

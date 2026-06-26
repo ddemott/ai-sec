@@ -506,8 +506,9 @@ export function registerAgentToolRoutes(
         // to call save_customer_preference. Default false / null is "off".
         save_preferences_enabled: row.save_preferences_enabled ?? false,
         preferences_instructions: row.preferences_instructions ?? null,
-        // 2026-06-10: per-tenant xAI Grok TTS voice + delivery. NULL means the
-        // agent falls back to its XAI_TTS_VOICE / XAI_TTS_SPEED / XAI_TTS_SOFT
+        // 2026-06-10 (Grok era): per-tenant TTS voice + delivery. NULL means the
+        // agent uses platform defaults. Post-2026-06-25 these are OpenAI voice/speed
+        // (the columns were kept; legacy Grok-only prosody flags tts_soft etc. are inert).
         // env defaults, so tenants who haven't picked a voice are unaffected.
         tts_voice: row.tts_voice ?? null,
         tts_speed: row.tts_speed ?? null,
@@ -2252,7 +2253,7 @@ export function registerAgentToolRoutes(
   // Called by the agent worker at the end of every voice call with the
   // session's model usage (LLM tokens, STT audio, TTS characters).
   // Also callable from backend KB routes for ingestion/query costs.
-  // Computes estimated_cost_usd using known published rates; xAI TTS
+  // Computes estimated_cost_usd using known published rates; TTS (historical xAI rows may exist)
   // pricing is not public so that row gets 0 (chars stored for later).
 
   const COST_PER_INPUT_TOKEN: Record<string, number> = {

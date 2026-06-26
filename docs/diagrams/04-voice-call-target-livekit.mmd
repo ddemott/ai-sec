@@ -6,7 +6,7 @@ sequenceDiagram
   participant Agent as Agent Worker<br/>(Node on Railway)
   participant DG as Deepgram STT
   participant OAI as OpenAI LLM
-  participant XAI as xAI Grok TTS
+  participant TTS as OpenAI TTS (per-tenant voice/speed)
   participant API as Fastify<br/>/agent-tools/*
   participant DB as Postgres
 
@@ -30,8 +30,8 @@ sequenceDiagram
       DB-->>API: result
       API-->>Agent: { success: true, result: ... }
     end
-    Agent->>XAI: TTS (native plugin)
-    XAI-->>Agent: audio
+    Agent->>TTS: TTS (OpenAI plugin)
+    TTS-->>Agent: audio
     Agent->>LK: publish audio
     LK->>Caller: audio
   end

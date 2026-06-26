@@ -62,10 +62,10 @@ export interface Tenant {
   // agent's built-in default guidance.
   save_preferences_enabled?: boolean;
   preferences_instructions?: string | null;
-  // Per-tenant xAI Grok TTS voice + delivery (2026-06-10). `tts_voice` is a Grok
-  // voice_id (eve/ara/rex/sal/leo or a custom clone id). null = use the agent's
-  // platform default. These replace the dead legacy `voice_id` (Vapi/ElevenLabs)
-  // for the live Grok agent.
+  // Per-tenant OpenAI TTS voice + delivery (reused columns from 2026-06-10 Grok era).
+  // `tts_voice` is now an OpenAI voice id (shimmer/nova/alloy/echo/onyx/fable).
+  // null = platform default `shimmer`. Legacy Grok-only prosody columns (tts_soft,
+  // tts_cheerful) are inert. These replaced the earlier `voice_id` (Vapi/ElevenLabs).
   tts_voice?: string | null;
   tts_speed?: number | null;
   tts_soft?: boolean | null;

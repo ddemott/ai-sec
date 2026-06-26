@@ -31,7 +31,7 @@ Telnyx (Carrier & SIP Trunk) ──> LiveKit Cloud (SIP Ingress)
                                  LiveKit Agent Worker (Node)
                                  ├── Deepgram (STT)
                                  ├── OpenAI GPT-4o-mini (LLM)
-                                 └── xAI Grok (TTS / OpenAI Fallback)
+                                 └── OpenAI TTS (fully since 2026-06-25; no xAI)
                                            │
                                  Fastify Backend API (/agent-tools/*)
                                            │
@@ -42,7 +42,7 @@ Telnyx (Carrier & SIP Trunk) ──> LiveKit Cloud (SIP Ingress)
 
 ### Technology Matrix
 
-- **Voice & AI Worker** (`/agent`): Deployed as `ai-sec-agent` on Railway. Powered by LiveKit Agents (Node SDK) using Deepgram Nova-3 for Speech-to-Text (STT), OpenAI GPT-4o-mini for LLM, and xAI Grok TTS (`ara` default voice) for Text-to-Speech (TTS). Fastify `/agent-tools/*` provides the tool runtime.
+- **Voice & AI Worker** (`/agent`): Deployed as `ai-sec-agent` on Railway. Powered by LiveKit Agents (Node SDK) using Deepgram Nova-3 for Speech-to-Text (STT), OpenAI GPT-4o-mini for LLM, and OpenAI TTS (default `shimmer`; per-tenant voice/speed; xAI Grok fully removed 2026-06-25) for Text-to-Speech (TTS). Fastify `/agent-tools/*` provides the tool runtime.
 - **Backend API** (`/src`): Fastify v5 server handling JWT auth, business logic, RLS isolation context, integrations, and scheduler rules. Deployed as `ai-sec-backend` on Railway.
 - **Frontend Dashboard** (`/dashboard`): Next.js 14 (App Router) + React 18, Styled with Tailwind CSS 3.4, icons via Lucide. Deployed as `dashboard-production-cee3` on Railway.
 - **Database**: PostgreSQL + pgvector (handling vector embeddings) with Row Level Security (RLS) enabled on all 20 data tables.
@@ -186,7 +186,7 @@ RLS is strictly enforced on all 20 multi-tenant tables.
 ## 10. Voice Agent & Tools Mechanics
 
 - **SIP Triggering:** When an inbound call lands on Telnyx, the LiveKit SIP ingress triggers a Node worker instance under `/agent`. The tenant's identity is resolved from incoming SIP metadata.
-- **Grok Voice Persona:** Deployed on LiveKit Cloud, using OpenAI for tools execution and `xAI Grok TTS` for the voice (`ara` model) with per-tenant speed and soft characteristics fetched from `tenants.tts_voice`.
+- **Voice Persona:** Deployed on LiveKit Cloud, using OpenAI for tools execution and OpenAI TTS for the voice (per-tenant `tts_voice`/`tts_speed` from `tenants`; legacy Grok-era columns like tts_soft are inert).
 - **Agent Tool Gating:** Agent tools exposed at `/agent-tools/*` require an `x-agent-secret` header. Success/failure states are transmitted as `{ success: true, result }` or `{ success: false, error }` with a HTTP 200 status so the LLM handles both results gracefully.
 - **Local Simulation Testing:** The repository includes a robust local simulation suite in `./scripts/simulate.sh`:
   - `./scripts/simulate.sh status` — System health board across local backend, agent, and dashboard.
