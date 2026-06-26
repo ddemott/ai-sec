@@ -21,7 +21,7 @@ const envSchema = z.object({
   // TTS is OpenAI. Voice + speed are per-tenant (dashboard → tenants.tts_voice/
   // tts_speed), not env. The old xAI/Grok TTS vars (XAI_API_KEY, XAI_TTS_VOICE/
   // SPEED/SOFT) were removed 2026-06-25 when the agent went fully OpenAI — they
-  // are no longer required for the worker to boot.
+  // are no longer required for the worker to boot (no XAI_API_KEY needed).
 
   // Comma-separated tenant IDs whose inbound line is a FORWARDED number (e.g.
   // the owner's cell forwards to the AI), so the SIP caller ID is the

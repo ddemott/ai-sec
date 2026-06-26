@@ -1,10 +1,10 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-06-23 (29 route modules, 142 migrations — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
+**Last verified:** 2026-06-26 (29 route modules, 145 migrations — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
-> **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. The OpenAI TTS → xAI Grok swap is also code-complete (commit `f6cc1d4`, 2026-05-01) — see `docs/FRAMEWORK_MIGRATIONS.md` for the index.
+> **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. TTS provider history: OpenAI → xAI Grok (2026-05) → fully back to OpenAI (2026-06-25 removal of all Grok/xAI remnants; see `docs/FRAMEWORK_MIGRATIONS.md` for the index and reversal rationale — OpenAI TTS is now smoother).
 
 ## Contents
 - [1. Overview](#1-overview)
@@ -39,10 +39,10 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 **Core loop:** Caller dials a tenant's Telnyx number → voice AI answers, identifies intent, checks the database (availability, customer history, skills, shifts, services, policies), books an appointment atomically, and syncs the result to the owner's dashboard + connected calendars + Square CRM.
 
 **Layering:**
-- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via xAI Grok with OpenAI TTS as the `runFallback()` dead-air guard)
-- **Tools**: 17 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
+- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via OpenAI (fully since 2026-06-25 Grok removal; no XAI key; runFallback also OpenAI))
+- **Tools**: 19 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (29 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 142 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
+- **DB**: Postgres + pgvector on Supabase, 145 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — deployed on Railway (production dashboard service)
 
 ---
@@ -125,8 +125,8 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
           ▼                    ▼                     ▼
     ┌──────────┐        ┌────────────┐        ┌──────────────┐
     │ Postgres │        │  OpenAI /  │        │ Integrations │
-    │ Supabase │        │  Deepgram /│        │ Google /     │
-    │ + vector │        │  xAI Grok  │        │ Outlook /    │
+    │ Supabase │        │  Deepgram  │        │ Google /     │
+    │ + vector │        │  (TTS too) │        │ Outlook /    │
     └──────────┘        └────────────┘        │ Stripe       │
                                               └──────────────┘
           ▲
@@ -289,22 +289,24 @@ Super-admin operations (cross-tenant queries, tenant listing, user registration)
 1. **Inbound call** — Telnyx SIP trunk → LiveKit Cloud SIP inbound trunk.
 2. **Room creation** — LiveKit dispatch rule `SDR_if97ky4Zf7e6` creates a room with metadata `{ tenant_id }` (agent name `ai-secretary-agent`).
 3. **Agent worker** — Node.js worker (Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn`) joins the room, runs `VoicePipelineAgent`.
-4. **Conversation** — Deepgram Nova-3 (STT) → OpenAI GPT-4o-mini (LLM) → xAI Grok TTS (default voice `ara`, default-fallback to `openai.TTS` only inside `runFallback()` so a missing `XAI_API_KEY` never produces dead air).
+4. **Conversation** — Deepgram Nova-3 (STT) → OpenAI GPT-4o-mini (LLM) → OpenAI TTS (default voice `shimmer`; per-tenant `tts_voice`/`tts_speed` from `tenants` table; fully OpenAI since 2026-06-25 — no Grok/xAI remnants, no `XAI_API_KEY` required).
 5. **Tool execution** — LLM issues tool calls → HTTP POST to `https://ai-sec-production.up.railway.app/agent-tools/*` with `x-agent-secret` header.
 6. **Business logic** — Fastify route → `withTenantClient()` → Postgres RPCs and pgvector queries.
 7. **Response** — JSON `{ success: true, result: ... }` or `{ success: false, error: ... }` with HTTP 200 — the LLM relays both shapes naturally.
 8. **Call end** — LiveKit room close event → `src/routes/voice.ts` handles summary generation + embedding + `link_orphaned_transcripts()`.
 9. **Post-call async** — Appointment mutations trigger fire-and-forget sync (via `syncOrchestrator.ts`) to Google/Outlook calendars **and** Square from route handlers.
 
-### 6.2 TTS swap — OpenAI TTS → xAI Grok (code-complete 2026-05-01)
+### 6.2 TTS history — OpenAI TTS → xAI Grok (2026-05) → full OpenAI (2026-06-25)
 
-Done in commit `f6cc1d4`. `agent/src/grokTTS.ts` implements the LiveKit `tts.TTS` plugin against `https://api.x.ai/v1/tts` (PCM 24kHz mono); the primary `voice.AgentSession` uses GrokTTS, with `runFallback()` retaining `openai.TTS` so a missing/invalid `XAI_API_KEY` never produces dead air on a live call. Voice configurable via `XAI_TTS_VOICE` env (`eve | ara | rex | sal | leo`, default `ara`). End-to-end PSTN validation pending the Telnyx ticket — see `TICKET_SUPPORT.md`.
+**Grok phase (historical):** Done in commit `f6cc1d4`. `agent/src/grokTTS.ts` implemented the LiveKit `tts.TTS` plugin against `https://api.x.ai/v1/tts`. Primary used GrokTTS; `runFallback()` retained `openai.TTS` as dead-air guard. Voice via `XAI_TTS_VOICE` env etc. (see `docs/FRAMEWORK_MIGRATIONS.md` §3 for details).
+
+**Final state (2026-06-25):** All Grok/xAI code, files (`grokTTS.ts`), and env vars removed (chore #94). Primary path + fallback both use OpenAI TTS via the official LiveKit plugin. Per-tenant configuration is now exclusively `tenants.tts_voice` (OpenAI ids: shimmer/nova/alloy/echo/onyx/fable) + `tts_speed`, set from the dashboard Phone Assistant → AI Persona page. Legacy Grok voice ids (e.g. `ara`) fall back to `shimmer`. OpenAI TTS is the current provider because it is smoother. See `docs/FRAMEWORK_MIGRATIONS.md` §4 and `agent/src/index.ts` (toOpenAIVoice + session construction) + `agent/src/tenantConfig.ts`. No `XAI_API_KEY` is referenced or required anywhere.
 
 ---
 
 ## 7. Voice AI Tools Catalog
 
-The 10 core booking/knowledge tools below are exposed to the LLM, implemented in `src/routes/agentTools.ts` as POST routes (verified against code 2026-04-30). Two later additions — `transfer_call` (live SIP cold-transfer) and `identify_caller` (address-book capture) — bring the live total to 12 and are not catalogued in this table.
+The core booking/knowledge/identity/messaging/transfer tools (17+ as of 2026-06) are exposed to the LLM via capability composition in `agent/src/tools.ts` (buildTools) and implemented primarily as POST routes in `src/routes/agentTools.ts`. Later additions (transfer_call via SIP REFER, job inquiries, get_my_appointments, cancel/reschedule, etc.) are documented in `CLAUDE.md` and `docs/FRAMEWORK_MIGRATIONS.md`. See the full list and `wrapTool` contract in the agent sources and `docs/VOICE_AGENT_PLAYBOOK.md`.
 
 ### 7.1 Auth contract
 

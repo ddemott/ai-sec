@@ -38,7 +38,7 @@ flowchart TB
     Agent["Node + LiveKit Agents SDK<br/>worker AW_vPmGExrgTeGn"]
     DG["Deepgram Nova-3 STT"]
     OAI["OpenAI GPT-4o-mini LLM"]
-    TTS["xAI Grok TTS<br/>(default; OpenAI TTS fallback)"]
+    TTS["OpenAI TTS<br/>(default `shimmer`; per-tenant via tenants.tts_voice)"]
     Agent --> DG
     Agent --> OAI
     Agent --> TTS
@@ -49,7 +49,7 @@ flowchart TB
   Fastify["Fastify Backend<br/>29 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
-  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>142 migrations")]
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>145 migrations")]
   Stripe["Stripe"]
   Integrations["Google / Outlook calendars<br/>+ Square CRM"]
   Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
@@ -218,7 +218,7 @@ erDiagram
 
 ## 3. Voice Call Flow — Current (LiveKit Agent)
 
-Post-migration (`661d21d`, 2026-04-27). Tool calls hit Fastify `/agent-tools/*` directly. TTS is currently OpenAI's; the xAI Grok native plugin is the open follow-up (NEEDS-REFACTORING.md #9).
+Post-migration (`661d21d`, 2026-04-27). Tool calls hit Fastify `/agent-tools/*` directly. TTS is OpenAI (fully since 2026-06-25 Grok removal; see FRAMEWORK_MIGRATIONS.md).
 
 ```mermaid
 sequenceDiagram
@@ -229,7 +229,7 @@ sequenceDiagram
   participant Agent as Agent Worker<br/>(Node on Railway)
   participant DG as Deepgram STT
   participant OAI as OpenAI LLM
-  participant TTS as xAI Grok TTS<br/>(OpenAI fallback)
+  participant TTS as OpenAI TTS (per-tenant voice)
   participant API as Fastify<br/>/agent-tools/*
   participant DB as Postgres
 
@@ -280,7 +280,7 @@ sequenceDiagram
   participant Telnyx
   participant Vapi as Vapi Orchestrator
   participant TTS as TTS Proxy<br/>src/routes/tts.ts
-  participant XAI as xAI Grok TTS
+  participant XAI as xAI Grok TTS (historical Vapi-era retired flow)
   participant Edge as Edge Fn<br/>vapi-tools
   participant DB as Postgres
   participant API as Fastify /voice

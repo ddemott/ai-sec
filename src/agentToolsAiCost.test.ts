@@ -116,7 +116,7 @@ describe('POST /agent-tools/record-ai-cost', () => {
           outputTokens: 0,
           charactersCount: 480,
           audioDurationMs: 8500,
-        },
+        }, // historical xAI/Grok TTS usage row (pre full OpenAI removal 2026-06-25); estimator must still handle legacy provider values from DB
       ],
     });
 

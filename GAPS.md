@@ -2,7 +2,7 @@
 
 **Deep dive analysis** — 2026-06-23 (main branch; post doc hygiene pass)
 
-This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (142 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, BETH_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
+This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (145 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, BETH_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
 
 **Context**: Multi-tenant Voice AI Reception SaaS for service businesses (tire shops, salons, auto, trades, fitness, food & beverage). **HIPAA verticals are permanently excluded.** Strong foundation in voice (Telnyx + LiveKit), atomic booking, RLS multi-tenancy, dashboard, and recent shipments (live call-transfer + transcripts + summaries + outcomes + analytics + simulate harness + competitor CRM removal + data export/audit/RAG debugger + doc consistency hygiene).
 
@@ -62,9 +62,10 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - **No rich media during calls** (e.g., photo of tire damage for auto shops).
 - **Outcome classification is good** (`callClassify.ts`: booked / no_availability / wrong_service / price / message / info + abandoned) but not yet driving automations (e.g., price-sensitive follow-up SMS).
 
-**Agent tools** (`agent/src/tools.ts` — 17 tools as of 2026-06-18):
+**Agent tools** (`agent/src/tools.ts` — 19 tools as of 2026-06-26):
 
 - `get_customer_context`: CRM lookup + history + preferences (called early when caller ID present).
+- `find_caller_by_name`: name-first CRM lookup for forwarded lines (caller ID is not the caller's own number); returns matching contacts + phone on file to confirm. Empty list = new caller.
 - `get_service_catalog`: list services with duration/price.
 - `get_available_slots`: open times for a service_type on a YYYY-MM-DD (tenant TZ).
 - `get_scheduling_options`: (resource, employee) combos in a window + capability/skill filters.
@@ -80,6 +81,7 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - `get_my_appointments`: list caller's upcoming scheduled appointments by phone (server-injected — LLM never supplies it). Returns service_name + employee_name for natural voice ("your Oil Change with Mike"). (Added 2026-06-16.)
 - `cancel_appointment`: cancel caller's own appointment by UUID; phone ownership gate at backend — LLM can never cancel another caller's booking. (Added 2026-06-16.)
 - `reschedule_appointment`: move appointment to new start/end; same phone ownership gate; backend validates future time + non-overlap via GiST exclusion. (Backend endpoint + reminder reschedule added 2026-06-18.)
+- `capture_job_inquiry`: record a work/job inquiry (company, contract vs full-time, rate, onsite/remote, etc.) after intake and email it to the owner. (Added 2026-06-25.)
 
 Current vs. desired for a complete receptionist:
 
@@ -225,7 +227,7 @@ Prompt system (tenant persona override via `{{ }}` placeholders, customer prefer
 - Occasional filler phrases ("Absolutely!", etc.) still slip through.
 - Agent resilience: Outer try/catch + fallback shipped; "speak filler before slow tools" (getAvailableSlots etc.) and idempotent-read retry still open (P3 items).
 - Single LiveKit agent worker per tenant (no automatic scaling for high-volume shops).
-- No multi-language or accent surface (English primary; per-tenant `tts_voice`/`tts_speed`/`tts_soft` via `tenants` columns + Grok voices; OpenAI TTS fallback).
+- No multi-language or accent surface (English primary; per-tenant `tts_voice` (OpenAI ids: shimmer/nova/...) / `tts_speed` via `tenants` columns; legacy `tts_soft`/`tts_cheerful` columns are inert Grok-only artifacts).
 - No real-time owner listen-in or coaching during calls.
 
 ---
@@ -235,14 +237,8 @@ Prompt system (tenant persona override via `{{ }}` placeholders, customer prefer
 - DB pool well-tuned (`max=10`, `connectionTimeoutMillis=5000` fail-fast, server-side GUC timeouts, RLS via `withTenantClient`).
 - Load testing of the booking path (concurrent calls until pool exhaustion or latency cliff) deferred (explicit note in TODO).
 - Reminders: Pure polling worker (`src/workers/reminderScheduler.ts`, 60s tick, batch ≤100). Not event-driven or queue-backed.
-- **AI cost blind spot**: Per-call spend (OpenAI GPT-4o-mini + embeddings + summaries + xAI Grok TTS + Deepgram) is completely untracked per-tenant or globally. No caps, alerts, or pass-through billing.
-  - **Current instrumentation points** (where to add cheap logging/counters):
-    - Agent: `agent/src/toolsClient.ts` (every `/agent-tools/*` roundtrip — wrap fetch, record model + prompt tokens + estimated $ from known pricing).
-    - Agent: `callSummary.ts` (the bounded OpenAI call in shutdown).
-    - Backend: `src/services/knowledgeIngestion.ts` (embeddings on upload).
-    - Backend: `src/routes/knowledge.ts` and agent-tools policy-answer path (query embeddings).
-    - Backend: `src/routes/voice.ts` (post-call summary if still using OpenAI there).
-    - Grok TTS calls are in `agent/src/grokTTS.ts`.
+- **AI cost blind spot (historical at time of writing)**: Per-call spend (OpenAI GPT-4o-mini + embeddings + summaries + Grok TTS + Deepgram) was completely untracked per-tenant or globally at one point. (AI cost metering via `ai_cost_events` + /analytics/ai-cost has since shipped; see CLAUDE.md and recent PRs. Legacy 'xai' provider rows may exist in the table from before the 2026-06-25 removal.)
+  - Instrumentation points included (and former Grok TTS calls were in the now-deleted `agent/src/grokTTS.ts`).
   - Proposed data model (additive, low risk):
     - New table `tenant_usage` or daily aggregates `tenant_daily_usage (tenant_id, date, calls: int, llm_tokens: bigint, tts_chars: bigint, stt_seconds: int, embedding_calls: int, estimated_cost_usd: numeric)`.
     - Or simpler start: append to `voice_sessions` a `cost_usd` column + `models_used` json (populated in the `voice-session-end` handler).
@@ -372,7 +368,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 ## 15. Scalability, Performance & Cost
 
 - Known limits: pool `max=10` + single agent worker per tenant. Never load-tested under realistic concurrent voice load.
-- AI spend (OpenAI + xAI + Deepgram per call) is invisible and uncapped.
+- AI spend (OpenAI + former xAI + Deepgram per call) is invisible and uncapped. (Note: ai_cost_events metering has been added since this inventory was first written.)
 - RAG is pure pgvector cosine + expansion; no hybrid search, reranking, or response caching.
 - No CDN/edge story for dashboard or static KB.
 - Reminder scheduler is simple polling.

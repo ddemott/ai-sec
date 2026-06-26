@@ -21,6 +21,10 @@ Everything else complete or tracked below.
 
 ## 🎯 Open Work — Master Backlog (canonical, consolidated 2026-06-23; post doc hygiene)
 
+- **Voice: "thinking" cover — spoken "let me look that up" + looping key-typing bed** (requested 2026-06-26, Dale; polish, AFTER lean flow + token tier settled). When the agent is processing (tool call / slow generation / off-script think), speak a cached "one moment, let me look that up" AND play a looping keyboard-clack ambiance track underneath, stopping both when the real reply starts. Pieces: (a) the output watchdog (PR-C, `agent/src/session/watchdog.ts` — spoken cached filler, currently inert behind `ENABLE_OUTPUT_WATCHDOG`); (b) NEW: publish a 2nd looping SFX audio track on `agent_state=thinking`, stop on `speaking`. Caveats: Realtime turns are usually sub-second (rare need); a bed MASKS a rate-limit stall but the response still fails — not a substitute for raising TPM. LiveKit docs endorse a "thinking sound during tool execution."
+- **Dashboard: "Delete old calls" button** (requested 2026-06-26, Dale; NOT top priority). Owner-facing control on the Calls tab to delete old `voice_sessions` rows (single + bulk/older-than). Needs an owner-gated, tenant-scoped (RLS) DELETE route, a `useConfirm()` dialog, and the Calls-tab button. Decide soft- vs hard-delete + transcript/summary handling. Mirror the customer-purge gating pattern.
+
+
 **This is the single canonical list of every OPEN item.** The dated sections that
 follow (Active build queue, Production Wiring, Phase 13, Voice Validation, Back-to-Front,
 UX audit pass 2, …) are the **detail/history dossier** — full IDs, env specifics, status
@@ -210,7 +214,7 @@ Captured 2026-06-19 (Dale brainstorming migration targets). **Decision rule = th
 
 ### Reassuring — audited and found FULLY wired (no action)
 
-CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry policy · calendar-sync orchestration · all 4 CRM client API/OAuth/webhook code · Telnyx agent OTP path · LiveKit/Deepgram/OpenAI/Grok voice stack. None are scaffold — all real code.
+CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry policy · calendar-sync orchestration · all 4 CRM client API/OAuth/webhook code · Telnyx agent OTP path · LiveKit/Deepgram/OpenAI (TTS fully OpenAI post-2026-06-25 Grok removal) voice stack. None are scaffold — all real code.
 
 ---
 
@@ -455,7 +459,7 @@ Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `re
 
 - [ ] Continue mechanical doc hygiene passes (count drift, old REFACTORING_TODO/NEEDS references in comments, Gap inventory table sync when filenames change, footer "Last updated" alignment).
 - [ ] Review and trim any remaining historical narrative in active docs that can be archived to RESOLVED.md.
-- [ ] Ensure all secondary docs (GAPS.md, IMPROVEMENT_IDEAS.md, DEPLOYMENT.md, etc.) reflect current 29 route modules / 142 migrations after any new route or migration.
+- [ ] Ensure all secondary docs (GAPS.md, IMPROVEMENT_IDEAS.md, DEPLOYMENT.md, etc.) reflect current 29 route modules / 145 migrations after any new route or migration.
 - [ ] Keep the Gap inventory "Key files per gap" table in sync with actual filenames (e.g. exportData.ts not export.ts).
 
 ---
@@ -512,7 +516,7 @@ category-completeness inventory. Below is the key-files map kept for reference.
 | Gap                     | Primary files                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts`                                            |
-| AI cost meter           | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts`, `agent/src/grokTTS.ts` |
+| AI cost meter           | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` (Grok TTS path removed 2026-06-25; historical rows may reference 'xai') |
 | Calendar sync live      | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env                                                             |
 | Data export / GDPR      | `src/routes/exportData.ts` (owner-gated tenant data export) + audit log for purge                                                     |
 

@@ -7,7 +7,7 @@ flowchart TB
     direction TB
     Vapi["Vapi Orchestrator<br/>STT Deepgram + LLM OpenAI + TTS Clara"]
     TTSProxy["src/routes/tts.ts<br/>TTS proxy"]
-    XAI["xAI Grok TTS"]
+    XAI["xAI Grok TTS (historical in this retired 'current' box)"]
     EdgeFn["Supabase Edge Function<br/>vapi-tools (Deno)"]
     Vapi -->|TTS provider=custom-voice| TTSProxy
     TTSProxy --> XAI
@@ -20,11 +20,11 @@ flowchart TB
     Agent["Agent Worker (Node)<br/>separate Railway service"]
     DG["Deepgram STT"]
     OAI["OpenAI LLM"]
-    XAINative["xAI Grok TTS<br/>native plugin"]
+    TTSNative["OpenAI TTS<br/>(native plugin; per-tenant)"]
     LiveKit -->|WebSocket| Agent
     Agent --> DG
     Agent --> OAI
-    Agent --> XAINative
+    Agent --> TTSNative
   end
 
   Telnyx -.current.-> Vapi

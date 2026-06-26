@@ -42,8 +42,9 @@ import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
 /** OpenAI TTS voices offered in the dashboard picker. Validate the tenant's
- *  saved voice against this set so a legacy Grok value (e.g. 'ara') or anything
- *  unexpected falls back to 'shimmer' instead of erroring at the OpenAI API. */
+ *  saved voice against this set so a legacy value (e.g. old Grok 'ara' from
+ *  pre-2026-06-25) or anything unexpected falls back to 'shimmer' instead of
+ *  erroring at the OpenAI API. */
 const OPENAI_VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'onyx', 'fable'] as const;
 function toOpenAIVoice(v: string | null | undefined): (typeof OPENAI_VOICES)[number] {
   return v && (OPENAI_VOICES as readonly string[]).includes(v)
