@@ -575,15 +575,14 @@ export default defineAgent({
           () => {
             /* no-op — see comment above */
           },
-          // Realtime is token-constrained (a big persona + every tool schema +
-          // audio tokens overflowed the context → "error type: tokens" mid-call).
-          // Trim the tool set to what __PERSONA_NAME__ actually uses — drop the OTP/
-          // verification tools (her persona never does phone verification) to
-          // shrink the schema context sent to the model. Pipeline mode = all tools.
+          // Realtime is rate-limited on tokens/min (Tier-1 = 40k TPM); audio +
+          // a growing context burn fast. For the lean "message + meeting" flow we
+          // expose ONLY the tools that flow needs — identity (who's calling),
+          // scheduling (book a meeting), messaging (take a message) — dropping
+          // knowledge/RAG, transfer, and OTP to shrink the per-turn schema tokens.
+          // Pipeline mode = all tools. Widen this back out once on a higher tier.
           config.ENABLE_REALTIME
-            ? {
-                capabilities: ['knowledge', 'messaging', 'identity', 'scheduling', 'transfer'],
-              }
+            ? { capabilities: ['identity', 'scheduling', 'messaging'] }
             : undefined
         );
 
