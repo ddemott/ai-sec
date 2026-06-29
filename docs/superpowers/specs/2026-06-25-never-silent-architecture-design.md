@@ -5,7 +5,7 @@
 **Stack:** LiveKit Agents (Node/TS) **1.4.5** + Deepgram STT + OpenAI GPT-4o-mini + OpenAI `gpt-4o-mini-tts` (non-streaming) + Telnyx/SIP
 **Supersedes:** `2026-06-25-filler-interruption-tuning-design.md` (that spec is now Layer 4 of this one)
 **Evidence base:** four parallel investigations (2026-06-25), all saved in session scratch:
-- Real prod trace (`voice_sessions` for tenant `d5e3c6a1`)
+- Real prod trace (`voice_sessions` for a production tenant)
 - LiveKit 1.4.5 internals (cited, `deepdive-livekit-internals.md`)
 - Our silence-surface code audit (cited, `deepdive-silence-surface.md`)
 - Two deep-research web passes (LiveKit/Pipecat/OpenAI Realtime/ElevenLabs, adversarially verified)
@@ -31,12 +31,12 @@ the caller in dead air. "Never silent" is a guaranteed property of the harness, 
 4. **#97 freeze root cause = circular wait**, not a throw: a tool called `say()`+`waitForPlayout()`
    on its own handle and blocked `mainTask`. Now guarded by `SpeechHandleCircularWaitError`.
    → `say()` is safe from **timer/event callbacks**, never from inside `execute()`.
-5. **Documented dead-air mode with NO error event (#3418):** an interruption race can leave the agent
+5. **Documented dead-air mode with NO error event (livekit/agents#3418):** an interruption race can leave the agent
    in **`'speaking'` state producing no audio**, indefinitely, with no exception. **Consequence: the
    watchdog must key off *actual audio output*, not merely the `'speaking'` state.**
-6. **Double-speak bug (#1365)** only triggers with `preemptiveGeneration` enabled. **We don't enable
+6. **Double-speak bug (livekit/agents#1365)** only triggers with `preemptiveGeneration` enabled. **We don't enable
    it** (default off) → not a current risk. Rule: do not enable it on tool-bearing turns until
-   PR #1369 is confirmed in our version.
+   PR livekit/agents#1369 is confirmed in our version.
 7. **Framework has NO per-tool timeout.** A stalled tool blocks the turn forever. Our `ToolsClient`
    *does* bound HTTP calls (8s write / 16s read, never throws) — but `transfer_call` bypasses it and
    is **unbounded**. → a per-tool wrapper is mandatory.
@@ -57,7 +57,7 @@ the caller in dead air. "Never silent" is a guaranteed property of the harness, 
 | Tool throws | framework catches; Layer 2 also catch→string |
 | Tool returns empty | Layer 2 never-empty contract + backend route helper |
 | RAG embedding failure → 500 → JSON | Layer 3 fix + backend route helper |
-| Agent 'speaking' but no audio (#3418) | Layer 1 watchdog (keys off actual audio) |
+| Agent 'speaking' but no audio (livekit/agents#3418) | Layer 1 watchdog (keys off actual audio) |
 | LLM stalls / says nothing | Layer 1 watchdog (cause-agnostic backstop) |
 | Session-init throws | Layer 3: pre-rendered STATIC-audio fallback (no TTS) |
 | Provider/key outage | Layer 3 static fallback (no shared TTS failure domain) |
@@ -77,13 +77,13 @@ Realtime on our SIP path before committing. Layers 1–4 stand regardless of the
 Session-level, **cause-agnostic**, keys off **actual audio**:
 - Arm a deadline timer on `AgentStateChanged → 'thinking'` (caller turn ended, agent should respond).
 - **Cancel only on evidence of real audio** — the `SpeechCreated{source:'generate_reply'}` handle
-  actually starting playout (track its `SpeechHandle`; not the bare `'speaking'` state, per #3418).
+  actually starting playout (track its `SpeechHandle`; not the bare `'speaking'` state, per livekit/agents#3418).
 - Deadline 1 (~2.5s, tunable post-measurement) → play a **cached filler** clip via
   `say(text,{audio, allowInterruptions:true, addToChatCtx:false})`; keep its `SpeechHandle`.
 - When the real reply produces audio → `fillerHandle.interrupt()` to prevent double-speak.
 - Deadline 2 (~+4s, still no real audio) → play a **cached recovery** clip ("Sorry, give me one
   moment — or I can take a message") and re-prompt.
-- **#3418 guard:** if `'speaking'` persists with the same handle and no completion for an abnormal
+- **livekit/agents#3418 guard:** if `'speaking'` persists with the same handle and no completion for an abnormal
   window, treat as stuck → recovery. (Validate the exact signal on a real call.)
 - Guard `say()` with try/catch for `SchedulingPausedError` (draining). Re-check `agentState` inside
   the timer callback before firing.
@@ -142,10 +142,10 @@ or copies a module; the harness (watchdog + wrapper + static fallback) guarantee
 
 ## Open items — resolve by MEASUREMENT (our #1 rule)
 1. First-audio latency: current `gpt-4o-mini-tts` vs ElevenLabs Flash vs OpenAI Realtime on SIP → picks Layer 0.
-2. Does #3418 ('speaking' but silent) reproduce on 1.4.5 Node → confirms the watchdog's audio-keyed cancel.
+2. Does livekit/agents#3418 ('speaking' but silent) reproduce on 1.4.5 Node → confirms the watchdog's audio-keyed cancel.
 3. ElevenLabs LiveKit Node plugin actual config surface (model default, streaming params) — refuted claims, must verify.
 4. Watchdog real-call validation: filler→reply transition has no double-speak / overlap; deadline values feel right.
-5. Confirm `preemptiveGeneration` stays off (it is) — do not enable on tool turns until #1369 verified.
+5. Confirm `preemptiveGeneration` stays off (it is) — do not enable on tool turns until livekit/agents#1369 verified.
 
 ## Phased implementation plan (each its own PR, agent tests green per step)
 - **PR-A (point fixes, ship now, low risk):** transfer_call timeout + RAG embedding try/catch +
@@ -161,6 +161,6 @@ or copies a module; the harness (watchdog + wrapper + static fallback) guarantee
 
 ## Risks
 - Watchdog double-speak / overlap — mitigated by serialized queue + interrupt; real-call validate.
-- #3418 stuck-speaking detection signal — confirm empirically before relying on it.
+- livekit/agents#3418 stuck-speaking detection signal — confirm empirically before relying on it.
 - Layer 0 provider swap (ElevenLabs/Realtime) changes voice + cost — measure + owner sign-off.
 - Scope: this is large; PR-A delivers the biggest safety win first and is independently shippable.

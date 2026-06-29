@@ -10,7 +10,7 @@ harness (105 agents, 22 claims verified 3-vote, 3 refuted). Sources are LiveKit-
 
 **Consensus (high confidence).** LiveKit's latency guide recommends *"Playing a 'Thinking' sound
 during tool execution, and notifying the user prior to making the call, so they are not kept
-waiting without feedback."* Tool calls are a recognized dead-air source (GitHub #4460).
+waiting without feedback."* Tool calls are a recognized dead-air source (livekit/agents#4460).
 
 Trigger the filler **at the tool-execution boundary** (just before / during the tool call), driven
 by agent state — NOT from inside the tool's `execute()`. (Our own #97 freeze was caused by
@@ -72,7 +72,7 @@ Four tunable layers (all present in 1.4.5 `InterruptionOptions`):
   they play through uninterrupted. Scoped to that one call.
 
 Sources: docs.livekit.io/agents/logic/turns/adaptive-interruption-handling/,
-docs.livekit.io/reference/agents/turn-handling-options/, github.com/livekit/agents/issues/2339, #3515, #2197
+docs.livekit.io/reference/agents/turn-handling-options/, livekit/agents#2339, livekit/agents#3515, livekit/agents#2197
 
 ## 5. Endpointing — latency vs. naturalness tradeoff
 
@@ -90,19 +90,31 @@ Sources: livekit.com/blog/understand-and-improve-agent-latency, livekit.com/blog
 
 ## How this maps to our current config
 
-`agent/src/index.ts` today:
+> **Status (updated 2026-06-29):** most of the interruption-tuning items below have since
+> shipped. `agent/src/index.ts` is the source of truth; this section reflects what's actually
+> in the non-Realtime pipeline today.
+
+`agent/src/index.ts` (non-Realtime path):
 ```
 turnHandling: {
-  interruption: { minWords: 2, minDuration: 800 },   // minWords:2 = effective; minDuration:800 = likely inert
+  interruption: {
+    mode: 'adaptive',              // ✅ CNN barge-in — backchannels don't cancel the reply
+    minWords: 2,                   // ✅ effective lever when STT is on
+    falseInterruptionTimeout: 2000,// ✅ resume if a detected interruption has no transcript
+    resumeFalseInterruption: true, // ✅
+  },
   endpointing:  { minDelay: 1300, maxDelay: 4000 },  // conservative, aggregates multi-part answers
 }
-allowInterruptions: true   // on the greeting say()
+session.say(greeting, { allowInterruptions: false })  // ✅ greeting plays through uninterrupted
 speakFiller = () => {}      // NO-OP since #97 — awaiting a supported re-enable
 ```
 
-**Gaps vs. the research:** no cached filler (speakFiller is a no-op); not explicitly opting into
-`mode:'adaptive'`; not setting `falseInterruptionTimeout`/`resumeFalseInterruption`; greeting is
-interruptible. Implementation plan: `docs/superpowers/specs/2026-06-25-filler-interruption-tuning-design.md`.
+**Remaining gap vs. the research:** the one item NOT yet done is **cached filler audio**
+(`speakFiller` is still a no-op — pre-rendered phrase audio at the tool boundary, section 2).
+Adaptive interruption, false-interruption resume, and the non-interruptible greeting all landed
+(shipped via #103/#104/#108/#109). Cached-filler plan:
+`docs/superpowers/specs/2026-06-25-filler-interruption-tuning-design.md` and the
+`tts-phrase-cache-design` work.
 
 ## Open questions (need our own measurement)
 - Actual `gpt-4o-mini-tts` per-synthesis latency on our SIP pipeline (decides cached-filler vs.

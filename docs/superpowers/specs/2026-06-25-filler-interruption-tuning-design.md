@@ -5,15 +5,24 @@
 **Stack:** `@livekit/agents` 1.4.5 (Node) + Deepgram + GPT-4o-mini + OpenAI `gpt-4o-mini-tts` + Telnyx/SIP
 **Research basis:** `docs/VOICE_DEADAIR_RESEARCH.md`
 
+> **Status (updated 2026-06-29):** sections **2 (adaptive interruption + false-interruption resume)**
+> and **3 (non-interruptible greeting)** have **shipped** (`agent/src/index.ts`, via #103/#104/#108/#109)
+> and are retained below as a verification record. Section **1 (cached filler audio)** is the only
+> part still **outstanding** — `speakFiller` remains a no-op. This spec is also folded in as Layer 4 of
+> `2026-06-25-never-silent-architecture-design.md`.
+
 ## Problem
 
 Beth has a measured TTS gap (2–5s, non-streaming OpenAI TTS). During that gap callers say "hello?",
-which can cancel the in-flight reply → the freeze family. Today: `speakFiller` is a no-op (the #97
-freeze removed the unsafe `session.say()`-inside-`execute()` version), and we don't use adaptive
-interruption or false-interruption resume. Research says the high-ROI fixes are (1) cached filler
-audio at the tool boundary and (2) adaptive interruption + resume-on-false-interruption.
+which can cancel the in-flight reply → the freeze family. When this spec was written, `speakFiller`
+was a no-op (the #97 freeze removed the unsafe `session.say()`-inside-`execute()` version) and the
+pipeline did not yet use adaptive interruption or false-interruption resume. Research said the
+high-ROI fixes are (1) cached filler audio at the tool boundary and (2) adaptive interruption +
+resume-on-false-interruption. **(2) has since shipped; (1) is still open** — see the Status note above.
 
 ## Scope — three changes in `agent/src/index.ts`, no backend/DB
+
+> Of the three below, **#2 and #3 are implemented**; **#1 (cached filler) is the remaining work.**
 
 ### 1. Cached filler audio, played at the tool boundary
 - **At session start (prewarm or session init):** pre-synthesize a small set of fixed filler lines
@@ -37,14 +46,14 @@ audio at the tool boundary and (2) adaptive interruption + resume-on-false-inter
   `rotateSegment` audio-overlap (the choppy-voice bug); if it does, gate the filler to only fire
   when the tool is expected to be slow (e.g. RAG/policy-answer), not every tool.
 
-### 2. Adaptive interruption + false-interruption resume
-In the existing `turnHandling.interruption` block, add:
+### 2. Adaptive interruption + false-interruption resume — ✅ SHIPPED
+**Implemented** in the `turnHandling.interruption` block of `agent/src/index.ts` (verify there;
+`minDuration` was dropped as inert on the STT path):
 ```ts
 interruption: {
   mode: 'adaptive',              // ML barge-in detection (filters "hello?"/backchannels acoustically)
-  minWords: 2,                   // keep — the effective lever when STT is enabled
-  // minDuration: 800,           // REMOVE or keep noting it's inert on the STT path
-  falseInterruptionTimeout: 2000, // default; if no transcript follows a detected interruption…
+  minWords: 2,                   // the effective lever when STT is enabled
+  falseInterruptionTimeout: 2000, // if no transcript follows a detected interruption…
   resumeFalseInterruption: true,  // …resume speaking from where Beth left off
 }
 ```
@@ -55,9 +64,11 @@ interruption: {
   (confirmed present in 1.4.5: `mode`, `minDuration`, `minWords`, `falseInterruptionTimeout`,
   `resumeFalseInterruption`).
 
-### 3. Greeting plays through
-- The greeting `session.say(greeting, { allowInterruptions: true })` (~line 693) → set
-  `allowInterruptions: false` so the opening line can't be cut by line noise / an eager caller.
+### 3. Greeting plays through — ✅ SHIPPED
+- The non-Realtime greeting already uses `session.say(greeting, { allowInterruptions: false })` in
+  `agent/src/index.ts` (the exact line moves as the file evolves — grep `allowInterruptions: false`),
+  so the opening line can't be cut by line noise / an eager caller. (The Realtime path uses
+  server-side turn detection and rejects `allowInterruptions:false`, so it's intentionally omitted there.)
 
 ## Out of scope (note, don't build)
 - **ElevenLabs / streaming TTS** — the bigger latency lever (sum→max), but a provider change with
