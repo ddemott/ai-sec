@@ -170,21 +170,75 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Detect whether this change can affect the E2E result. A docs-/config-only
+      # PR skips the heavy steps below (the job still RUNS and reports success, so
+      # the "E2E (Playwright)" required status check is always satisfied — never
+      # skip the whole job/workflow, or branch protection would block the merge
+      # waiting for a check that never reports). Pushes to main always run the
+      # full suite (the `!= pull_request` clause on each guard below).
+      - name: Detect relevant changes
+        # PR-only: on pushes to main the heavy steps always run (the
+        # `!= pull_request` clause on each guard), so the filter — which would
+        # need non-shallow history to diff a push — never has to run here.
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'dashboard/**'
+              - 'agent/**'
+              - 'scripts/**'
+              - 'supabase/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/**'
+              # Markdown anywhere (incl. inside code dirs) doesn't affect E2E.
+              - '!**/*.md'
+
       - name: Set up Node.js 20
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
+      # Cache the downloaded browser binaries so `playwright install` is a no-op
+      # on a hit (saves the ~30-60s Chromium download every run).
+      - name: Cache Playwright browsers
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('dashboard/package-lock.json') }}
+
+      # Cache Next.js's incremental build cache to speed up `next build`.
+      - name: Cache Next.js build
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        uses: actions/cache@v4
+        with:
+          path: dashboard/.next/cache
+          # Key on the dashboard source hash (not github.sha): a real cache HIT
+          # when source is unchanged, a new entry only when it changes — avoids
+          # writing a fresh cache every single commit.
+          key: nextbuild-${{ runner.os }}-${{ hashFiles('dashboard/package-lock.json') }}-${{ hashFiles('dashboard/**/*.js', 'dashboard/**/*.jsx', 'dashboard/**/*.ts', 'dashboard/**/*.tsx') }}
+          restore-keys: |
+            nextbuild-${{ runner.os }}-${{ hashFiles('dashboard/package-lock.json') }}-
+
       - name: Install root + dashboard dependencies
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npm ci --no-audit --no-fund && cd dashboard && npm ci --no-audit --no-fund
 
       - name: Apply migrations and seed
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: bash scripts/setup-db.sh && bash scripts/seed-db.sh
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
       - name: Build backend
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npm run build
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
@@ -194,6 +248,7 @@ jobs:
           AGENT_SECRET: ci-agent-secret
 
       - name: Start backend
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: node dist/src/index.js > /tmp/backend.log 2>&1 &
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
@@ -211,24 +266,29 @@ jobs:
           USE_HTTPS: 'false'
 
       - name: Build dashboard
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: cd dashboard && npm run build
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
 
       - name: Start dashboard
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: cd dashboard && npm run start > /tmp/dashboard.log 2>&1 &
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
           PORT: 4000
 
       - name: Wait for servers
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: |
           npx wait-on http://localhost:4001/health http://localhost:4000 --timeout 60000
 
       - name: Install Playwright browsers
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: cd dashboard && npx playwright install --with-deps chromium
 
       - name: Run Playwright E2E
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: cd dashboard && npx playwright test
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
@@ -267,6 +327,7 @@ jobs:
           KNOWLEDGE_IMPORT_E2E_STUB: '1'
 
       - name: Run simulate tools (agent-tools journey as regression guard)
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         # Runs the realistic booking + recall journey against the live servers
         # in this job. Flags [dev] gaps the same way `simulate.sh tools` does
         # locally. Non-zero exit will fail the job (like other steps).
