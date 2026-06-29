@@ -127,14 +127,15 @@ describe('splitIntoChunks', () => {
 // ── prepareQADocument ─────────────────────────────────────────────────────────
 
 describe('prepareQADocument', () => {
-  it('HAPPY: combines Q&A, normalizes, and calls getEmbedding', async () => {
+  it('HAPPY: combines Q&A, normalizes, and embeds the raw question + normalized body', async () => {
     // WHO: operator adding a Q&A pair via the knowledge base form
-    // WHAT: combined = "Q: {q}\nA: {a}"; normalizeForEmbedding called;
-    //       getEmbedding called with normalized text
+    // WHAT: combined = "Q: {q}\nA: {a}"; normalizeForEmbedding called on it;
+    //       getEmbedding called with "{rawQuestion}\n{normalizedBody}"
     // WHEN: /knowledge/add or PUT /knowledge/:id with valid body
     // WHERE: prepareQADocument in knowledgeIngestion.ts
-    // WHY: pins the exact combined format (route and agent both depend on
-    //      "Q: … \nA: …" structure for question extraction from docs)
+    // WHY: pins the combined format AND that the raw question is prepended to
+    //      the embedded text — the reductive normalize was dropping the
+    //      interrogative form (the address↔located retrieval signal).
     const getEmbedding = vi.fn(async () => [0.1, 0.2, 0.3]);
     const normalize = vi.fn(async (text: string) => `normalized:${text}`);
 
@@ -147,17 +148,46 @@ describe('prepareQADocument', () => {
 
     expect(result.combined).toBe('Q: What are your hours?\nA: Mon-Fri 8-6');
     expect(normalize).toHaveBeenCalledWith(result.combined, { context: 'knowledge base Q&A' });
-    expect(getEmbedding).toHaveBeenCalledWith(`normalized:${result.combined}`);
+    expect(result.normalizedText).toBe(`What are your hours?\nnormalized:${result.combined}`);
+    expect(getEmbedding).toHaveBeenCalledWith(
+      `What are your hours?\nnormalized:${result.combined}`
+    );
     expect(result.embedding).toEqual([0.1, 0.2, 0.3]);
   });
 
-  it('HAPPY: works without normalizeForEmbedding (uses combined directly)', async () => {
+  it('REGRESSION: raw question survives even when the normalizer would drop it', async () => {
+    // WHO: a caller asking "what's your address" against a "Where are you
+    //      located?" KB doc (the 2026-06-23 address vocabulary gap)
+    // WHAT: even when normalize reduces the Q/A to a declarative answer that
+    //       loses "Where", the embedded text still begins with the verbatim
+    //       question — so the doc vector carries the interrogative signal
+    // WHEN: a location Q/A is ingested
+    // WHERE: prepareQADocument prepend step
+    // WHY: dropping the question form starved the address case to cosine
+    //      ~0.302 (knife-edge of the 0.30 threshold, run-to-run flaky)
+    const getEmbedding = vi.fn(async () => [0.9]);
+    // Simulate the real reductive normalizer dropping the interrogative form.
+    const normalize = vi.fn(async () => 'We are located at 123 Main Street downtown.');
+
+    const result = await prepareQADocument(
+      'Where are you located?',
+      'We are located at 123 Main Street in downtown.',
+      getEmbedding,
+      normalize
+    );
+
+    expect(result.normalizedText.startsWith('Where are you located?')).toBe(true);
+    expect(result.normalizedText).toContain('123 Main Street');
+    expect(getEmbedding).toHaveBeenCalledWith(result.normalizedText);
+  });
+
+  it('HAPPY: works without normalizeForEmbedding (embeds question + raw combined)', async () => {
     // WHO: deployment where normalization is not configured
-    // WHAT: normalizedText = combined; getEmbedding called with raw combined
+    // WHAT: normalizedBody = combined; embedded text = question + combined
     // WHEN: normalizeForEmbedding is undefined
     // WHERE: prepareQADocument optional-normalization branch
     // WHY: the function must degrade gracefully — normalization is an
-    //      enhancement, not a hard requirement
+    //      enhancement, not a hard requirement — and still preserve the question
     const getEmbedding = vi.fn(async () => [0.5]);
     const result = await prepareQADocument(
       'Do you offer mobile service?',
@@ -165,14 +195,14 @@ describe('prepareQADocument', () => {
       getEmbedding
     );
 
-    expect(result.normalizedText).toBe(result.combined);
-    expect(getEmbedding).toHaveBeenCalledWith(result.combined);
+    expect(result.normalizedText).toBe(`Do you offer mobile service?\n${result.combined}`);
+    expect(getEmbedding).toHaveBeenCalledWith(result.normalizedText);
   });
 
-  it('SAD: falls back to combined text when normalization throws', async () => {
+  it('SAD: falls back to combined text when normalization throws (question still kept)', async () => {
     // WHO: operator adding an entry when the normalization service is down
-    // WHAT: normalization throws → catch sets normalizedText = combined →
-    //       getEmbedding called with raw combined; no error propagated
+    // WHAT: normalization throws → catch sets normalizedBody = combined →
+    //       embedded text = question + combined; no error propagated
     // WHEN: normalizeForEmbedding raises an exception
     // WHERE: try/catch in prepareQADocument
     // WHY: a normalization outage must not block KB edits — degraded
@@ -189,7 +219,7 @@ describe('prepareQADocument', () => {
       normalize
     );
 
-    expect(result.normalizedText).toBe(result.combined);
-    expect(getEmbedding).toHaveBeenCalledWith(result.combined);
+    expect(result.normalizedText).toBe(`Test question\n${result.combined}`);
+    expect(getEmbedding).toHaveBeenCalledWith(result.normalizedText);
   });
 });

@@ -87,7 +87,19 @@ export interface QADocument {
 
 /**
  * Combine a Q&A pair, optionally normalize it, and generate an embedding.
- * Falls back to the raw combined text when normalization throws.
+ * On a normalization throw the body falls back to the raw combined text (the
+ * raw question is still prepended either way — see below).
+ *
+ * The embedded text is the RAW question prepended to the normalized body. The
+ * reductive `normalizeForEmbedding` was collapsing a Q/A pair like
+ * "Q: Where are you located? A: We are located at 123 Main St" down to a
+ * declarative "Located at 123 Main Street downtown." — dropping the
+ * interrogative form ("Where"), which is exactly the retrieval signal a caller
+ * asking "what's your address" needs to bridge the address↔located vocabulary
+ * gap. Keeping the verbatim question in the embedded vector keeps the doc
+ * reachable across paraphrases. (See docs/TODO.md "RAG address gap".)
+ * `normalizedText` is set to the embedded text so /knowledge/explain reflects
+ * what was actually vectorized.
  */
 export async function prepareQADocument(
   question: string,
@@ -97,15 +109,17 @@ export async function prepareQADocument(
 ): Promise<QADocument> {
   const combined = `Q: ${question}\nA: ${answer}`;
 
-  let normalizedText = combined;
+  let normalizedBody = combined;
   if (normalizeForEmbedding) {
     try {
-      normalizedText = await normalizeForEmbedding(combined, { context: 'knowledge base Q&A' });
+      normalizedBody = await normalizeForEmbedding(combined, { context: 'knowledge base Q&A' });
     } catch {
-      normalizedText = combined;
+      normalizedBody = combined;
     }
   }
 
+  // Prepend the raw question so its interrogative form survives normalization.
+  const normalizedText = `${question}\n${normalizedBody}`;
   const embedding = await getEmbedding(normalizedText);
   return { combined, normalizedText, embedding };
 }
