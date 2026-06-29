@@ -67,8 +67,19 @@ export interface PromptContext {
   /**
    * The tool capability subset active for this session. MUST match the array
    * passed to buildTools(..., { capabilities }) — index.ts threads the SAME
-   * literal into both so the prompt never advertises a tool that isn't in the
-   * ToolContext. `undefined` means all capabilities (pipeline mode, default).
+   * literal into both. `undefined` means all capabilities (pipeline mode, default).
+   *
+   * Scope of gating: this builder gates the three OPTIONAL capabilities the
+   * prompt can stand without — `knowledge` (policy tool + KB section),
+   * `verification` (OTP tools + section), and `transfer` (transfer tool). It
+   * ASSUMES `identity` + `scheduling` + `messaging` are always present: they are
+   * the base every real consumer passes (pipeline = all; the Realtime subset is
+   * exactly identity/scheduling/messaging — see index.ts `activeCapabilities`),
+   * and the booking/availability/identity sections are woven throughout the
+   * prompt. A subset that DROPS one of those three is not supported for prompt
+   * rendering — the prompt would still describe its tools. If such a subset ever
+   * ships, extend the gating here (tool lines AND their dependent sections)
+   * rather than relying on this assumption.
    *
    * Origin (GH issue #113): Realtime mode trims tools to a lean subset
    * (identity/scheduling/messaging), but the prompt used to describe

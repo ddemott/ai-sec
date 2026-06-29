@@ -579,11 +579,12 @@ describe('buildSystemPrompt — capability gating (Realtime tool subset)', () =>
     expect(prompt).toContain('# Phone Verification');
   });
 
-  it('HAPPY: a subset that includes knowledge keeps the KB section but still drops transfer', () => {
-    // WHO: a hypothetical message-line agent with knowledge but no transfer.
+  it('HAPPY: a scheduling+knowledge subset keeps the KB section but still drops transfer/verification', () => {
+    // WHO: a scheduling + knowledge subset (no transfer, no verification) — the
+    //       array passed is exactly ['scheduling','knowledge'].
     // WHAT: gating is per-capability and independent — knowledge present keeps
-    //        get_company_policy_answer + # Knowledge base; transfer absent drops
-    //        transfer_call.
+    //        get_company_policy_answer + # Knowledge base; transfer + verification
+    //        absent drop transfer_call + send_verification_code.
     // WHY: pins that the gates are independent booleans, not an all-or-nothing
     //        realtime flag — so future capability mixes render correctly.
     const prompt = buildSystemPrompt({
