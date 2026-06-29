@@ -17,10 +17,14 @@ import {
   Filter,
   Mail,
   MailOpen,
+  Trash2,
 } from 'lucide-react';
 import { Api } from '../lib/api';
 import { formatPhone } from '../lib/phone';
-import { useActiveTenantId } from '../lib/SessionContext';
+import { useActiveTenantId, useSessionContext } from '../lib/SessionContext';
+import { useConfirm } from '../lib/useConfirm';
+import { ConfirmModal } from './ui/ConfirmModal';
+import { showToast } from './ui/Toast';
 import { FolderTab, FolderTabBar } from './ui/FolderTabs';
 import AnalyticsView from './AnalyticsView';
 import { CommsSentView } from './CommsSentView';
@@ -453,6 +457,11 @@ export default function VoiceCallsView() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
+  // Soft-delete controls are owner-only — call records carry caller PII.
+  const { role } = useSessionContext();
+  const isOwner = role === 'owner';
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
+  const [deleteWindowDays, setDeleteWindowDays] = useState(90);
 
   useEffect(() => {
     if (tenantId) {
@@ -543,6 +552,63 @@ export default function VoiceCallsView() {
     if (!historyLoading && hasMore) {
       void fetchCallHistory(callHistory.length);
     }
+  }
+
+  // Soft-delete a single call (owner-only). Recoverable; hides it from lists +
+  // analytics. Clears the detail pane if the deleted call was open.
+  function handleDeleteCall(call: VoiceSession) {
+    confirmAction({
+      title: 'Delete this call?',
+      message:
+        'It will be removed from your call history and analytics. The record is kept hidden and can be restored by support if needed.',
+      confirmLabel: 'Delete call',
+      confirmVariant: 'danger',
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await Api.voice.deleteCall(tenantId, call.voice_session_id);
+            showToast('Call deleted', 'success');
+            setSelectedCall((prev) =>
+              prev?.voice_session_id === call.voice_session_id ? null : prev
+            );
+            void fetchCallHistory();
+            void fetchActiveCalls();
+          } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Failed to delete call', 'error');
+          }
+        })();
+      },
+    });
+  }
+
+  // Bulk soft-delete finished calls older than the chosen window (owner-only).
+  function handleDeleteOld() {
+    confirmAction({
+      title: `Delete calls older than ${deleteWindowDays} days?`,
+      message:
+        'All finished calls older than this will be removed from your history and analytics (active calls are kept). Records are hidden, not erased.',
+      confirmLabel: 'Delete old calls',
+      confirmVariant: 'danger',
+      onConfirm: () => {
+        void (async () => {
+          try {
+            const res = await Api.voice.deleteOldCalls(tenantId, deleteWindowDays);
+            const n = res.result?.deleted ?? 0;
+            showToast(
+              n === 0 ? 'No calls were old enough to delete' : `Deleted ${n} old call(s)`,
+              'success'
+            );
+            // The open call may have been one of the bulk-deleted rows — clear
+            // the detail pane so it doesn't linger as a stale selection.
+            if (n > 0) setSelectedCall(null);
+            void fetchCallHistory();
+            void fetchActiveCalls();
+          } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Failed to delete old calls', 'error');
+          }
+        })();
+      },
+    });
   }
 
   const customerContext = selectedCall?.customer_context;
@@ -665,6 +731,35 @@ export default function VoiceCallsView() {
                   <option value="voicemail">Voicemail</option>
                   <option value="abandoned">Abandoned</option>
                 </select>
+                {isOwner && (
+                  <div className="flex items-center gap-1">
+                    <select
+                      value={deleteWindowDays}
+                      onChange={(e) => setDeleteWindowDays(Number(e.target.value))}
+                      aria-label="Call deletion age window"
+                      className="text-xs border rounded px-1.5 py-1"
+                      style={{
+                        backgroundColor: 'var(--bg-surface)',
+                        borderColor: 'var(--border-soft)',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      <option value={30}>30 days</option>
+                      <option value={90}>90 days</option>
+                      <option value={180}>180 days</option>
+                      <option value={365}>1 year</option>
+                    </select>
+                    <button
+                      onClick={handleDeleteOld}
+                      title={`Delete calls older than ${deleteWindowDays} days`}
+                      aria-label={`Delete calls older than ${deleteWindowDays} days`}
+                      className="p-1 rounded transition-colors"
+                      style={{ color: 'var(--danger)' }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {loading ? (
@@ -752,6 +847,17 @@ export default function VoiceCallsView() {
                       <p className="text-gray-500">{formatPhone(selectedCall.caller_phone)}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {isOwner && selectedCall.status !== 'active' && (
+                        <button
+                          onClick={() => handleDeleteCall(selectedCall)}
+                          title="Delete this call"
+                          aria-label="Delete this call"
+                          className="p-2 rounded-lg transition-colors"
+                          style={{ color: 'var(--danger)' }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                       {selectedCall.status === 'active' ? (
                         <span
                           className="px-3 py-1 rounded-full text-sm flex items-center gap-1"
@@ -980,6 +1086,7 @@ export default function VoiceCallsView() {
           </div>
         </div>
       )}
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }

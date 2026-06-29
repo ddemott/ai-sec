@@ -17,8 +17,12 @@ let mockClient: ReturnType<typeof createMockClient>['mockClient'];
 let queryResponses: ReturnType<typeof createMockClient>['queryResponses'];
 let mockPool: Pool;
 
-// Test-only request shape: the preHandler injects tenantId for the route to read.
-type TenantRequest = FastifyRequest & { tenantId?: string };
+// Test-only request shape: the preHandler injects tenantId (and optionally an
+// auth identity, for owner-gated routes) for the route to read.
+type TenantRequest = FastifyRequest & {
+  tenantId?: string;
+  auth?: { tenant_id: string; user_id: string; email: string; role: 'owner' | 'front_desk' };
+};
 
 function buildApp() {
   const created = createMockClient();
@@ -37,6 +41,18 @@ function buildApp() {
       (request.headers['x-tenant-id'] as string);
     if (tenantId) {
       request.tenantId = tenantId;
+    }
+    // Owner-gated routes read req.auth.role. Inject it from x-role when present
+    // so tests can exercise owner vs front_desk; absent header → no auth (the
+    // existing tests don't set it and must keep passing).
+    const role = request.headers['x-role'] as 'owner' | 'front_desk' | undefined;
+    if (role && tenantId) {
+      request.auth = {
+        tenant_id: tenantId,
+        user_id: '99999999-9999-4999-8999-999999999999',
+        email: 'tester@example.com',
+        role,
+      };
     }
   });
 
@@ -839,5 +855,174 @@ describe('Voice Routes — Edge Cases', () => {
     const query = mockClient.query.mock.calls[0];
     const params = query[1] as unknown[];
     expect(params).toContain(100);
+  });
+});
+
+// =============================================
+// SOFT-DELETE OLD CALLS (owner-gated)
+// =============================================
+
+describe('Voice Routes — Soft-delete calls', () => {
+  const VOICE_SESSION_ID = '77777777-8888-4999-8aaa-bbbbbbbbbbbb';
+
+  it('32. GET /voice/active excludes soft-deleted rows', async () => {
+    // WHO: Owner viewing the live Calls tab after deleting an old call.
+    // WHAT: The active-calls query must carry `is_deleted = false` so a
+    //       soft-deleted row never resurfaces in the list.
+    // WHERE: src/routes/voice.ts GET /voice/active WHERE clause.
+    // WHEN: Every active-calls fetch.
+    // WHY: Soft-delete is meaningless if the list endpoints don't honor it.
+    queryResponses.push({ rows: [] });
+    const res = await app.inject({ method: 'GET', url: `/voice/active?tenant_id=${TENANT_ID}` });
+    expect(res.statusCode).toBe(200);
+    const sql = mockClient.query.mock.calls[0][0] as string;
+    expect(sql).toContain('is_deleted = false');
+  });
+
+  it('33. GET /voice/history excludes soft-deleted rows (count + select)', async () => {
+    // WHO: Owner browsing call history after a bulk delete.
+    // WHAT: BOTH the count and the page query must filter `is_deleted = false`.
+    // WHERE: src/routes/voice.ts GET /voice/history whereClause.
+    // WHEN: Every history fetch.
+    // WHY: A mismatched count vs rows (one filtered, one not) breaks paging.
+    queryResponses.push({ rows: [{ count: '0' }] });
+    queryResponses.push({ rows: [] });
+    const res = await app.inject({ method: 'GET', url: `/voice/history?tenant_id=${TENANT_ID}` });
+    expect(res.statusCode).toBe(200);
+    const countSql = mockClient.query.mock.calls[0][0] as string;
+    const selectSql = mockClient.query.mock.calls[1][0] as string;
+    expect(countSql).toContain('is_deleted = false');
+    expect(selectSql).toContain('is_deleted = false');
+  });
+
+  it('34. DELETE /voice/session/:id soft-deletes one call for an owner', async () => {
+    // WHO: Owner clicking "delete" on a single old call.
+    // WHAT: UPDATE sets is_deleted=true + deleted_at + deleted_by; 200 success.
+    // WHERE: src/routes/voice.ts DELETE /voice/session/:id.
+    // WHEN: Owner-initiated single delete.
+    // WHY: Recoverable soft-delete, not a hard DELETE (PII retained, hidden).
+    queryResponses.push({ rows: [{ voice_session_id: VOICE_SESSION_ID }] });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/voice/session/${VOICE_SESSION_ID}?tenant_id=${TENANT_ID}`,
+      headers: { 'x-role': 'owner' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    const sql = mockClient.query.mock.calls[0][0] as string;
+    expect(sql).toContain('UPDATE voice_sessions');
+    expect(sql).toContain('is_deleted = true');
+    expect(sql).toContain('voice_session_id = $1');
+    // Guard: never re-delete an already-deleted row.
+    expect(sql).toContain('is_deleted = false');
+    // Guard: never hide a live/in-progress call.
+    expect(sql).toContain("status != 'active'");
+  });
+
+  it('34b. DELETE /voice/session/:id rejects a non-UUID id with 400 (not a 500)', async () => {
+    // WHO: a malformed / probing request with a non-UUID id segment.
+    // WHAT: 400 up front — never reach the UUID column with a bad value.
+    // WHERE: requireValidUUID guard in DELETE /voice/session/:id.
+    // WHEN: id is not a UUID.
+    // WHY: `voice_session_id = 'notauuid'` throws Postgres 22P02 → a 500; the
+    //      guard turns it into a clean 400 and avoids any DB round-trip.
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/voice/session/not-a-uuid?tenant_id=${TENANT_ID}`,
+      headers: { 'x-role': 'owner' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockClient.query.mock.calls.length).toBe(0);
+  });
+
+  it('35. DELETE /voice/session/:id returns 404 when nothing matched', async () => {
+    // WHO: Owner deleting a call that does not exist / is already deleted.
+    // WHAT: zero rows updated → 404 (never silent success).
+    // WHERE: assertRowAffected in DELETE /voice/session/:id.
+    // WHEN: id wrong, cross-tenant, or already soft-deleted.
+    // WHY: assertRowAffected discipline — zero-row mutation is a 404.
+    queryResponses.push({ rows: [] });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/voice/session/${VOICE_SESSION_ID}?tenant_id=${TENANT_ID}`,
+      headers: { 'x-role': 'owner' },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().success).toBe(false);
+  });
+
+  it('36. DELETE /voice/session/:id is forbidden for front_desk', async () => {
+    // WHO: A front-desk login attempting to delete a call.
+    // WHAT: 403 — deleting call records (caller PII) is owner-only.
+    // WHERE: owner-gate in DELETE /voice/session/:id.
+    // WHEN: role === 'front_desk'.
+    // WHY: Mirrors audit-log/export gating; front-desk can view, not purge.
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/voice/session/${VOICE_SESSION_ID}?tenant_id=${TENANT_ID}`,
+      headers: { 'x-role': 'front_desk' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().success).toBe(false);
+    // No DB write should have been attempted.
+    expect(mockClient.query.mock.calls.length).toBe(0);
+  });
+
+  it('37. POST /voice/delete-old bulk soft-deletes finished calls older than N days', async () => {
+    // WHO: Owner clearing out calls older than 90 days.
+    // WHAT: UPDATE all non-deleted, non-active rows older than the cutoff;
+    //       returns the count deleted.
+    // WHERE: src/routes/voice.ts POST /voice/delete-old.
+    // WHEN: Owner-initiated bulk cleanup.
+    // WHY: Bulk path excludes active calls so a live call is never killed.
+    queryResponses.push({ rows: [{ voice_session_id: 'a' }, { voice_session_id: 'b' }] });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/voice/delete-old?tenant_id=${TENANT_ID}`,
+      headers: { 'x-role': 'owner' },
+      payload: { older_than_days: 90 },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.result.deleted).toBe(2);
+    const sql = mockClient.query.mock.calls[0][0] as string;
+    expect(sql).toContain('UPDATE voice_sessions');
+    expect(sql).toContain('is_deleted = true');
+    expect(sql).toContain("status != 'active'");
+    const params = mockClient.query.mock.calls[0][1] as unknown[];
+    expect(params).toContain(90);
+  });
+
+  it('38. POST /voice/delete-old rejects older_than_days < 1', async () => {
+    // WHO: Owner (or a buggy client) sending older_than_days=0.
+    // WHAT: 400 — a 0/negative window would delete everything; min is 1.
+    // WHERE: zod validation in POST /voice/delete-old.
+    // WHEN: older_than_days out of range.
+    // WHY: Guardrail against an accidental delete-all.
+    const res = await app.inject({
+      method: 'POST',
+      url: `/voice/delete-old?tenant_id=${TENANT_ID}`,
+      headers: { 'x-role': 'owner' },
+      payload: { older_than_days: 0 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().success).toBe(false);
+  });
+
+  it('39. POST /voice/delete-old is forbidden for front_desk', async () => {
+    // WHO: A front-desk login attempting a bulk purge.
+    // WHAT: 403 before any DB write.
+    // WHERE: owner-gate in POST /voice/delete-old.
+    // WHEN: role === 'front_desk'.
+    // WHY: Bulk PII deletion is owner-only.
+    const res = await app.inject({
+      method: 'POST',
+      url: `/voice/delete-old?tenant_id=${TENANT_ID}`,
+      headers: { 'x-role': 'front_desk' },
+      payload: { older_than_days: 30 },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockClient.query.mock.calls.length).toBe(0);
   });
 });
