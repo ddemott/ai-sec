@@ -72,3 +72,9 @@ test-results/
 
 # Local Netlify folder
 .netlify
+
+# Obsidian — keep shared config, ignore per-machine/volatile state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.trash/
