@@ -8,7 +8,7 @@
 > execute the checkboxes below — they describe an abandoned approach. Source of
 > truth: `shared/questionBank.ts`.
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** ⚠️ This plan is SUPERSEDED and NOT actionable (see the banner above) — do NOT implement it. The original instruction here was to execute it via superpowers:subagent-driven-development; that no longer applies. The checkboxes below are historical and must not be worked. Source of truth: `shared/questionBank.ts`.
 
 **Goal:** Replace the static global policy-question list with a database-backed question bank that serves each tenant a question set filtered by business type, plus per-tenant custom questions.
 
