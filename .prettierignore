@@ -20,6 +20,7 @@ supabase/migrations/
 
 # Docs that have intentional formatting
 RESOLVED.md
+LESSONS_LEARNED.md
 docs/CURRENT_STATUS_ARCHIVED_*.md
 
 # Auth state for E2E (JSON snapshots)

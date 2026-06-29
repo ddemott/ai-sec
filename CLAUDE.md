@@ -6,7 +6,7 @@ Multi-tenant AI receptionist for service businesses (tire shops, salons, auto sh
 
 **HIPAA verticals are permanently excluded** (medical, dental, chiropractic, optometry, veterinary).
 
-Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Full cross-angle gap inventory (what's missing from every direction) lives in root `GAPS.md` (created 2026-06-15). Framework-migration history (Vapi → LiveKit, Edge Functions → Fastify, OpenAI TTS → xAI Grok (2026-05) then full reversal to OpenAI TTS 2026-06-25) in `docs/FRAMEWORK_MIGRATIONS.md`. Historical session notes archived in `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md`.
+Completed phases live in `RESOLVED.md`. Current tasks in `docs/TODO.md`. Full cross-angle gap inventory (what's missing from every direction) lives in root `GAPS.md` (created 2026-06-15). Framework-migration history (Vapi → LiveKit, Edge Functions → Fastify, OpenAI TTS → xAI Grok (2026-05) then full reversal to OpenAI TTS 2026-06-25) in `docs/FRAMEWORK_MIGRATIONS.md`. Historical session notes archived in `docs/CURRENT_STATUS_ARCHIVED_2026-05-15.md`. Hard-won debugging lessons (incl. the voice-agent go-live) in root `LESSONS_LEARNED.md`.
 
 ## Architecture
 
@@ -102,6 +102,7 @@ Logins (all `/ password`):
 
 Durable rules-of-engagement that override "build for the future":
 
+- **Debugging discipline (full log: `LESSONS_LEARNED.md`).** When stuck: (1) **MEASURE before fixing** a latency/perf problem — one direct timing test beats hours of guessing (the voice "freeze" was OpenAI TTS at 2–5s, not the LLM/turn-detection/etc. I guessed). (2) **Don't blind-patch** — a wrong fix costs a full CI+deploy+retest cycle and the user's next test. (3) **Get the real trace first**, then fix. (4) **Instrument every sad path** (esp. fire-and-forget) with a **metric** (survives log truncation) + a 5W log naming the cause. (5) Observability that bypasses a throttled Railway API: the app's own `/metrics`, the prod **DB directly**, `railway logs`, Sentry/Better Stack. Append new lessons to `LESSONS_LEARNED.md`.
 - **Test it or delete it.** Code that can't be exercised against a real external surface (real CRM, real provider API, real billing event) doesn't ship. Mocked-API tests prove the mock works, not the integration. Origin: deleted 21 dormant CRM adapters 2026-05-02 (none had ever touched a real CRM; two were HIPAA-vertical violations).
 - **Build for real customers, not the imagined Pro tier.** No provider integrations, billing tiers, dashboard sections, or service layers because we _might_ need them. Wait for a beta customer or sales call that names the need.
 - **Working flat code beats a dormant abstraction.** When a "shared interface" or "registry" exists alongside the working flat-file equivalent, the flat files are the source of truth. Extract a shared shape after the third or fourth real consumer asks for it.
