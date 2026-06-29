@@ -72,8 +72,11 @@ export function registerAuthRoutes(
         // returns them in arbitrary order), so the caller could land on a random
         // tenant. Pick the oldest row deterministically and warn so a real
         // multi-tenant collision becomes observable instead of silent.
+        // NULLS LAST: created_at is nullable, and a bare ASC sorts NULLs FIRST in
+        // Postgres — a legacy row with no created_at would otherwise win the
+        // tie-break. user_id ASC is the final deterministic fallback.
         const res = await client.query(
-          'SELECT * FROM users WHERE email = $1 ORDER BY created_at ASC, user_id ASC',
+          'SELECT * FROM users WHERE email = $1 ORDER BY created_at ASC NULLS LAST, user_id ASC',
           [email]
         );
         if (res.rows.length > 1) {

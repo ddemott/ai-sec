@@ -250,7 +250,7 @@ describe('Auth Routes — Handler-Level', () => {
     //   user into a RANDOM tenant call-to-call. Determinism + a warning makes
     //   the behavior predictable and the duplicate visible to ops.
     it('logs a warning and picks the first row deterministically when an email spans multiple tenants', async () => {
-      const { mockClient: client, queryResponses } = createMockClient();
+      const { mockClient: client, queryResponses, queries } = createMockClient();
       const pool = createMockPool(client);
       const { app, routes } = captureRoutes();
       registerAuthRoutes(app, pool, generateToken);
@@ -293,6 +293,11 @@ describe('Auth Routes — Handler-Level', () => {
         expect.objectContaining({ event: 'login_email_multi_tenant', tenant_count: 2 }),
         'login_email_multi_tenant'
       );
+      // Guard the determinism at the source: the SQL must carry the ORDER BY,
+      // else a future edit could regress to arbitrary row order and this test
+      // (which only sees the mock's scripted order) would still pass blindly.
+      const loginQuery = queries.find((q) => /FROM users WHERE email/i.test(q.text));
+      expect(loginQuery?.text).toMatch(/ORDER BY created_at ASC NULLS LAST, user_id ASC/i);
     });
 
     it('returns 400 on invalid email (WHO: client | WHAT: Zod rejects bad email | WHERE: /login validation | WHY: prevents DB query with garbage)', async () => {
