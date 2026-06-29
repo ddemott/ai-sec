@@ -56,22 +56,26 @@ const normalize = createNormalizer(OPENAI_API_KEY);
 const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 
 // Split a stored "Q: <question>\nA: <answer>" combined doc back into its parts.
-// Falls back to the title for the question when the content shape is unexpected.
-function parseQA(content, title) {
+// Returns empty strings on any shape mismatch so the caller's skip path fires —
+// a backfill must never rewrite a non-Q/A row (e.g. a file chunk that merely
+// happens to start with "Q:").
+function parseQA(content) {
   const m = /^Q:\s*([\s\S]*?)\nA:\s*([\s\S]*)$/.exec(content ?? '');
   if (m) return { question: m[1].trim(), answer: m[2].trim() };
-  return { question: (title ?? '').trim(), answer: (content ?? '').trim() };
+  return { question: '', answer: '' };
 }
 
 async function main() {
   const pool = new pg.Pool({ connectionString: DATABASE_URL });
-  const where = ["content LIKE 'Q: %'"];
+  // Require BOTH a "Q: " start and an "A:" line so only real Q/A pairs match —
+  // a free-text chunk that merely starts with "Q:" must not be selected.
+  const where = ["content LIKE 'Q: %'", "content LIKE '%' || E'\\nA:' || '%'"];
   const params = [];
   if (TENANT) {
     params.push(TENANT);
     where.push(`tenant_id = $${params.length}`);
   }
-  const sql = `SELECT tenant_doc_id, tenant_id, title, content
+  const sql = `SELECT tenant_doc_id, tenant_id, content
                FROM tenant_docs WHERE ${where.join(' AND ')}
                ORDER BY tenant_id, created_at`;
   const { rows } = await pool.query(sql, params);
@@ -84,7 +88,7 @@ async function main() {
   let done = 0;
   let failed = 0;
   for (const r of rows) {
-    const { question, answer } = parseQA(r.content, r.title);
+    const { question, answer } = parseQA(r.content);
     if (!question || !answer) {
       console.warn(`  skip ${r.tenant_doc_id} — could not parse Q/A`);
       continue;

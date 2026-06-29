@@ -87,7 +87,8 @@ export interface QADocument {
 
 /**
  * Combine a Q&A pair, optionally normalize it, and generate an embedding.
- * Falls back to the raw combined text when normalization throws.
+ * On a normalization throw the body falls back to the raw combined text (the
+ * raw question is still prepended either way — see below).
  *
  * The embedded text is the RAW question prepended to the normalized body. The
  * reductive `normalizeForEmbedding` was collapsing a Q/A pair like
