@@ -75,6 +75,40 @@ describe('attachThinkingSound', () => {
 
     detach();
     detach();
+    // close() is chained on the settled start() promise — flush microtasks.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(player.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('detach before start() resolves still closes once start settles (no leaked track)', async () => {
+    // WHO: a call that ends almost immediately (session closes before the bed's
+    //      async start() has finished publishing its track).
+    // WHAT: detach must NOT close before start settles — otherwise start()
+    //       publishes a track AFTER close() already ran, leaking it.
+    // WHEN: detach() is called while start() is still in-flight.
+    // WHERE: the `started.then(close)` chaining in attachThinkingSound.
+    // WHY: the long-lived worker would bleed the leaked bed into the next call.
+    let resolveStart!: () => void;
+    const startGate = new Promise<void>((r) => {
+      resolveStart = r;
+    });
+    const { player, createPlayer } = makeFakePlayer(() => startGate);
+
+    const detach = attachThinkingSound(fakeSession, fakeRoom, {
+      volume: 0.5,
+      log: makeLog(),
+      createPlayer,
+    });
+
+    // Close arrives BEFORE start() has resolved.
+    detach();
+    expect(player.close).not.toHaveBeenCalled(); // must wait for start to settle
+
+    resolveStart();
+    await Promise.resolve();
+    await Promise.resolve();
 
     expect(player.close).toHaveBeenCalledTimes(1);
   });

@@ -67,8 +67,12 @@ export function attachThinkingSound(
   const player = create(opts.volume);
 
   // Fire-and-forget start: a failure to publish the bed must never break the
-  // call — the caller just gets the normal (bed-less) experience.
-  void (async () => {
+  // call — the caller just gets the normal (bed-less) experience. `started`
+  // never rejects (errors are swallowed here) and is awaited by detach so a
+  // fast session-close can't close() BEFORE start() publishes the track (which
+  // would leave the track published after close already ran — a leak across the
+  // long-lived worker).
+  const started = (async () => {
     try {
       await player.start({ room, agentSession: session });
       opts.log.info(
@@ -90,6 +94,7 @@ export function attachThinkingSound(
   return () => {
     if (closed) return;
     closed = true;
-    void player.close().catch(() => undefined);
+    // Close only after start() has settled — never mid-publish.
+    void started.then(() => player.close()).catch(() => undefined);
   };
 }
