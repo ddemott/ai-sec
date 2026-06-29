@@ -238,6 +238,68 @@ describe('Auth Routes — Handler-Level', () => {
       expect(reply.body.role).toBe('owner');
     });
 
+    // WHO: a person whose email exists as an owner on more than one tenant
+    //   (email is unique PER-TENANT — users_email_tenant_unique — not globally;
+    //   a stray duplicate Bella tenant in prod exposed this on 2026-06-29).
+    // WHAT: the login query now orders by created_at and the handler takes the
+    //   oldest row deterministically, AND emits a `login_email_multi_tenant`
+    //   warning so the collision is observable instead of silent.
+    // WHERE: /login handler — the user lookup before bcrypt.
+    // WHY: the old bare `rows[0]` with no ORDER BY let Postgres return the
+    //   matching rows in arbitrary order, so the same credentials could log the
+    //   user into a RANDOM tenant call-to-call. Determinism + a warning makes
+    //   the behavior predictable and the duplicate visible to ops.
+    it('logs a warning and picks the first row deterministically when an email spans multiple tenants', async () => {
+      const { mockClient: client, queryResponses, queries } = createMockClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      const realHash = await bcrypt.hash('pass123', 10);
+      const OTHER_TENANT = 'ffffffff-bbbb-cccc-dddd-eeeeeeeeeeee';
+      // Two rows for the same email — the query's ORDER BY guarantees the first
+      // is the oldest; the handler must consume rows[0] and warn about the rest.
+      queryResponses.push({
+        rows: [
+          {
+            user_id: USER_ID_MOCK,
+            tenant_id: TENANT_ID_MOCK,
+            email: 'dup@example.com',
+            password_hash: realHash,
+            full_name: 'First Tenant',
+            role: 'owner',
+          },
+          {
+            user_id: '99999999-2222-3333-4444-555555555555',
+            tenant_id: OTHER_TENANT,
+            email: 'dup@example.com',
+            password_hash: realHash,
+            full_name: 'Second Tenant',
+            role: 'owner',
+          },
+        ],
+      });
+
+      const route = findRoute(routes, '/login');
+      const req = createMockRequest({ email: 'dup@example.com', password: 'pass123' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.body.success).toBe(true);
+      expect(reply.body.tenant_id).toBe(TENANT_ID_MOCK);
+      expect(reply.body.user_id).toBe(USER_ID_MOCK);
+      expect(req.log.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'login_email_multi_tenant', tenant_count: 2 }),
+        'login_email_multi_tenant'
+      );
+      // Guard the determinism at the source: the SQL must carry the ORDER BY,
+      // else a future edit could regress to arbitrary row order and this test
+      // (which only sees the mock's scripted order) would still pass blindly.
+      const loginQuery = queries.find((q) => /FROM users WHERE email/i.test(q.text));
+      expect(loginQuery?.text).toMatch(/ORDER BY created_at ASC NULLS LAST, user_id ASC/i);
+    });
+
     it('returns 400 on invalid email (WHO: client | WHAT: Zod rejects bad email | WHERE: /login validation | WHY: prevents DB query with garbage)', async () => {
       const { mockClient: client } = createMockClient();
       const pool = createMockPool(client);

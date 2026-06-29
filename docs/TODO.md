@@ -24,7 +24,6 @@ Everything else complete or tracked below.
 - [x] **Voice: "thinking" cover — looping key-typing bed** — DONE 2026-06-29 (`feat/thinking-sound-bed`), part (b). The SFX bed ships via LiveKit's built-in `voice.BackgroundAudioPlayer` (`thinkingSound: KEYBOARD_TYPING`, the clip ships in `@livekit/agents/resources` — no asset to source). `agent/src/session/thinkingSound.ts` (`attachThinkingSound`) wires it on a started session whose room is connected; the framework owns the 2nd-track publish, loop, mix, and `agent_state=thinking`→play / `speaking`→stop. Flag `ENABLE_THINKING_SOUND` (default OFF, RULE 10.2) + `THINKING_SOUND_VOLUME` env (0–1, default 0.5, live-tunable). 3 wiring unit tests (start / detach-idempotent / start-failure-swallowed); 402 agent tests green. **Part (a)** — the spoken cached filler — was already built as the output watchdog (`watchdog.ts`, `ENABLE_OUTPUT_WATCHDOG`); left as-is. The two are **independent, not layered** (watchdog `say()`→`speaking` would stop the bed; composing is a future real-call design). **Caveats stand:** the bed plays before ~every reply in pipeline (no per-turn deadline; fine as ambient); it MASKS a stall, doesn't fix it (RULE 2.4 — raise TPM / fix the tool). **Real-call validation (Dale, not CI):** does the 2nd track mix through to PSTN, volume, feel — flag stays OFF until confirmed. See VOICE_AGENT_PLAYBOOK §8.2.
 - [x] **Dashboard: "Delete old calls" button** — DONE 2026-06-29 (`feat/delete-old-calls`). Owner-gated **soft-delete** (recoverable; sets the already-existing `voice_sessions.is_deleted/deleted_at/deleted_by` — no migration needed). Backend: `DELETE /voice/session/:id` (single) + `POST /voice/delete-old {older_than_days}` (bulk, excludes `status='active'`); both owner-gated (front-desk 403, super-admin bypass) + RLS-scoped; also fixed `/voice/active` + `/voice/history` to filter `is_deleted = false` (they were leaking soft-deleted rows). Dashboard: `useConfirm()` dialogs + per-call delete (detail pane) + bulk "older than 30/90/180/365 days" control in the Call History header — both owner-only. Hard-delete (true PII erasure of caller_phone/transcripts) deliberately deferred to the legal-held GDPR/retention work (#68/#69). Tests: 8 backend (`src/voice.test.ts`) + 3 dashboard (`VoiceCallsView.test.tsx`); SQL + full owner JWT→gate→RLS path smoke-verified against a real local DB. Analytics already filtered `is_deleted = false`, so deleted calls drop out of stats too.
 
-
 **This is the single canonical list of every OPEN item.** The dated sections that
 follow (Active build queue, Production Wiring, Phase 13, Voice Validation, Back-to-Front,
 UX audit pass 2, …) are the **detail/history dossier** — full IDs, env specifics, status
@@ -86,7 +85,7 @@ These branches survived the 2026-06-23 cleanup because each holds real unmerged 
 **Security housekeeping**
 
 - [ ] **Rotate Railway team token** created 2026-06-12 — pasted into a Claude session; burn + reissue.
-- [ ] **Remove DynaTire rows from prod DB** (local already clean; gated on the Railway token).
+- [x] **Remove DynaTire rows from prod DB** — DONE 2026-06-29: prod inspected, **zero DynaTire rows** present — already clean, no-op. Same pass found + removed a **stray duplicate demo-tenant row** (older seed superseded by the canonical one; no transactional data). The dup carried a second owner row for the same email → nondeterministic login (email is unique PER-tenant, not global). Removed; canonical intact. Login query hardened in PR #123 (`ORDER BY` + multi-tenant warning). Operational specifics in session memory, not the repo.
 
 ### P1 — Customer success & trust (dossier: _Back-to-Front_, _Non-blocking_)
 
@@ -242,7 +241,7 @@ CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry
   - Regulatory fines if the FTC or a state AG investigates
   - You hold phone numbers, call recordings, names, and appointment history — this is real exposure
 - [~] **Telnyx provisioning — DONE 2026-06-02.** Account for Thinking Hammer LLC funded ($10) + upgraded (trial 1-order cap lifted). SIP Connection `livekit-outbound` (`2945038451784812111`) → FQDN `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060`. `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` set (local `.env`; verify on Railway `ai-sec`). Number **`+1 630-866-1960`** purchased (id `2973794140900296302`), routed to `livekit-outbound`, connection activated. Old `+1-630-937-9478` is dead (order deleted). **2026-06-04 UPDATE:** LiveKit creds work (not dead); inbound trunk `ST_aUM3GuCuc9wL` already points at the numbers (normalized to +E.164). `+16308661960` is a dead recycled DID — **new test number `+1 630-822-9086` (id `2975078589701031880`) bought + fully wired.** Config verified clean end-to-end; remaining blocker is PSTN carrier propagation, not config. **NEXT:** different-carrier call to `+16308229086` while watching LiveKit `listRooms()`. See `docs/TICKET_SUPPORT.md` + `docs/PROVISIONING_AUDIT.md` (2026-06-04).
-**2026-06-26 UPDATE:** Live number `+1 630-866-9086`. Test verification number `+1 630-822-9086`. Previous 1960 dead. Updated current refs (landing page shows 9086, TELNYX ex 9086, etc.). History of 822 as test kept. Open PSTN items above use test number.
+  **2026-06-26 UPDATE:** Live number `+1 630-866-9086`. Test verification number `+1 630-822-9086`. Previous 1960 dead. Updated current refs (landing page shows 9086, TELNYX ex 9086, etc.). History of 822 as test kept. Open PSTN items above use test number.
 - [ ] **IN FLIGHT (user)** Set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway `ai-sec` service
 - [ ] **IN FLIGHT (user)** Set `SENTRY_DSN` on Railway backend + agent (dashboard Sentry already wired client+server, just needs DSN)
 - [ ] **IN FLIGHT (user)** Stripe setup — set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID` on Railway. Register webhook at `https://ai-sec-production.up.railway.app/billing/webhook` (3 events). See `docs/DEPLOYMENT.md` for full env-var list.
@@ -515,12 +514,12 @@ category-completeness inventory. Below is the key-files map kept for reference.
 
 ### Key files per gap
 
-| Gap                     | Primary files                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts`                                            |
+| Gap                     | Primary files                                                                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Self-service reschedule | `src/routes/selfService.ts`, `smsService.ts`, `appointmentService.ts`, `emailTemplates.ts`                                                                                            |
 | AI cost meter           | `agent/src/toolsClient.ts`, `callSummary.ts`, `src/services/knowledgeIngestion.ts`, `src/routes/knowledge.ts` (Grok TTS path removed 2026-06-25; historical rows may reference 'xai') |
-| Calendar sync live      | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env                                                             |
-| Data export / GDPR      | `src/routes/exportData.ts` (owner-gated tenant data export) + audit log for purge                                                     |
+| Calendar sync live      | `src/services/calendar/googleCalendar.ts`, `calendarSync.ts`, Railway env                                                                                                             |
+| Data export / GDPR      | `src/routes/exportData.ts` (owner-gated tenant data export) + audit log for purge                                                                                                     |
 
 ---
 

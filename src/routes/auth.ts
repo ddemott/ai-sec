@@ -8,7 +8,13 @@ import { createHash, randomBytes } from 'crypto';
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { withHandler, withPoolClient, type AppRequest, type UserRole } from '../middleware';
+import {
+  withHandler,
+  withPoolClient,
+  logWarning,
+  type AppRequest,
+  type UserRole,
+} from '../middleware';
 import { sendPasswordResetEmail } from '../services/communications/systemEmail';
 import { createTenantWithOwner } from '../services/tenants/bootstrap';
 
@@ -60,7 +66,25 @@ export function registerAuthRoutes(
       }
       const { email, password } = parsed.data;
       const user = await withPoolClient(pool, async (client) => {
-        const res = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+        // Email is unique per-tenant (users_email_tenant_unique), NOT globally — the
+        // same address can legitimately exist on multiple tenants. A bare `rows[0]`
+        // with no ORDER BY made login NONDETERMINISTIC across those rows (Postgres
+        // returns them in arbitrary order), so the caller could land on a random
+        // tenant. Pick the oldest row deterministically and warn so a real
+        // multi-tenant collision becomes observable instead of silent.
+        // NULLS LAST: created_at is nullable, and a bare ASC sorts NULLs FIRST in
+        // Postgres — a legacy row with no created_at would otherwise win the
+        // tie-break. user_id ASC is the final deterministic fallback.
+        const res = await client.query(
+          'SELECT * FROM users WHERE email = $1 ORDER BY created_at ASC NULLS LAST, user_id ASC',
+          [email]
+        );
+        if (res.rows.length > 1) {
+          logWarning(req, 'login_email_multi_tenant', {
+            email,
+            tenant_count: res.rows.length,
+          });
+        }
         return res.rows[0];
       });
       if (!user) {
