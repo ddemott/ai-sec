@@ -13,7 +13,7 @@ import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
-import { assertRowAffected } from './routeHelpers';
+import { assertRowAffected, requireValidUUID } from './routeHelpers';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import type { CustomerContext, VoiceSession, VoiceSessionDisplay } from '../types/voiceCrm';
 
@@ -578,18 +578,28 @@ export function registerVoiceRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
-      if (req.auth && req.auth.tenant_id !== SUPER_ADMIN_TENANT_ID && req.auth.role !== 'owner') {
+      // Owner-only (super-admin bypasses). Affirmative gate: anything that is not
+      // a proven owner/super-admin is rejected — a request without req.auth is
+      // also blocked here, not just front-desk. (requireTenantId already 401s a
+      // no-auth request first; this is defense-in-depth.)
+      if (!(req.auth?.tenant_id === SUPER_ADMIN_TENANT_ID || req.auth?.role === 'owner')) {
         return reply.status(403).send({ success: false, error: 'Only owners can delete calls' });
       }
 
       const { id } = req.params as { id: string };
+      // voice_session_id is a UUID column; a non-UUID id would throw 22P02 (→500)
+      // instead of a clean 404. Validate up front.
+      if (!requireValidUUID(id, reply, 'voice_session_id')) return;
       const deletedBy = req.auth?.email ?? 'owner';
 
+      // Exclude active calls: never hide a live/in-progress call out from under the
+      // agent (matches the bulk route). An active id → 0 rows → 404.
       const res = await withTenantClient(tenantId, (client) =>
         client.query(
           `UPDATE voice_sessions
               SET is_deleted = true, deleted_at = now(), deleted_by = $3
             WHERE voice_session_id = $1 AND tenant_id = $2 AND is_deleted = false
+              AND status != 'active'
             RETURNING voice_session_id`,
           [id, tenantId, deletedBy]
         )
@@ -616,7 +626,8 @@ export function registerVoiceRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
-      if (req.auth && req.auth.tenant_id !== SUPER_ADMIN_TENANT_ID && req.auth.role !== 'owner') {
+      // Owner-only (super-admin bypasses) — affirmative gate (see single-delete).
+      if (!(req.auth?.tenant_id === SUPER_ADMIN_TENANT_ID || req.auth?.role === 'owner')) {
         return reply.status(403).send({ success: false, error: 'Only owners can delete calls' });
       }
 

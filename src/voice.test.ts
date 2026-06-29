@@ -915,6 +915,24 @@ describe('Voice Routes — Soft-delete calls', () => {
     expect(sql).toContain('voice_session_id = $1');
     // Guard: never re-delete an already-deleted row.
     expect(sql).toContain('is_deleted = false');
+    // Guard: never hide a live/in-progress call.
+    expect(sql).toContain("status != 'active'");
+  });
+
+  it('34b. DELETE /voice/session/:id rejects a non-UUID id with 400 (not a 500)', async () => {
+    // WHO: a malformed / probing request with a non-UUID id segment.
+    // WHAT: 400 up front — never reach the UUID column with a bad value.
+    // WHERE: requireValidUUID guard in DELETE /voice/session/:id.
+    // WHEN: id is not a UUID.
+    // WHY: `voice_session_id = 'notauuid'` throws Postgres 22P02 → a 500; the
+    //      guard turns it into a clean 400 and avoids any DB round-trip.
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/voice/session/not-a-uuid?tenant_id=${TENANT_ID}`,
+      headers: { 'x-role': 'owner' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockClient.query.mock.calls.length).toBe(0);
   });
 
   it('35. DELETE /voice/session/:id returns 404 when nothing matched', async () => {
