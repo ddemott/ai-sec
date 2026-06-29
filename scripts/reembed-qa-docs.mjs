@@ -21,9 +21,14 @@
 // chunks (no question form) are left alone.
 
 import pg from 'pg';
-import { prepareQADocument } from '../dist/src/services/knowledgeIngestion.js';
-import { getEmbedding } from '../dist/shared/getEmbedding.js';
-import { createNormalizer } from '../dist/shared/normalizeForEmbedding.js';
+// dist/ is CommonJS (tsc + esModuleInterop) — import the default then destructure;
+// named ESM imports from these modules are not statically detectable.
+import knowledgeIngestion from '../dist/src/services/knowledgeIngestion.js';
+import getEmbeddingModule from '../dist/shared/getEmbedding.js';
+import normalizeModule from '../dist/shared/normalizeForEmbedding.js';
+const { prepareQADocument } = knowledgeIngestion;
+const { createGetEmbedding } = getEmbeddingModule;
+const { createNormalizer } = normalizeModule;
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
@@ -48,6 +53,7 @@ if (!CONFIRMED) {
 }
 
 const normalize = createNormalizer(OPENAI_API_KEY);
+const getEmbedding = createGetEmbedding(OPENAI_API_KEY);
 
 // Split a stored "Q: <question>\nA: <answer>" combined doc back into its parts.
 // Falls back to the title for the question when the content shape is unexpected.
