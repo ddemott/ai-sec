@@ -2,7 +2,12 @@
  * Tests for session context extraction — pure unit, no LiveKit runtime.
  */
 import { describe, it, expect } from 'vitest';
-import { parseRoomMetadata, extractCallerInfo, buildSessionContext } from './sessionContext.js';
+import {
+  parseRoomMetadata,
+  extractCallerInfo,
+  buildSessionContext,
+  callerIdIsForwardNumber,
+} from './sessionContext.js';
 
 const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 
@@ -201,5 +206,58 @@ describe('buildSessionContext', () => {
         participantAttributes: { 'sip.phoneNumber': '+15551234567' },
       })
     ).toBeNull();
+  });
+});
+
+describe('callerIdIsForwardNumber', () => {
+  // Origin: Dale's forwarded business line (2026-06-29). When he forwards his
+  // personal cell (+1 608-217-5303) INTO the business, the SIP caller-ID is HIS
+  // forwarding line, not the customer. The entry point nulls callerPhone on a
+  // match so the agent collects the customer's real number verbally; a different
+  // (good) caller-ID is kept and only the name is collected.
+  const FORWARD = '+16082175303';
+
+  it('HAPPY: caller-ID equals the forward number (same format) → true (forwarded call)', () => {
+    // WHO: Dale forwards his cell into the AI; caller-ID arrives as the cell.
+    // WHAT: a match means "this is the forwarding line, not the caller".
+    // WHY: the agent must NOT key the call/contact on the forwarding number.
+    expect(callerIdIsForwardNumber('+16082175303', FORWARD)).toBe(true);
+  });
+
+  it('HAPPY: match is format-insensitive (caller-ID and forward stored differently)', () => {
+    // WHO: caller-ID may arrive bare-10-digit, 1-prefixed, or punctuated while
+    //       forward_phone is stored E.164 — the comparison normalizes both.
+    // WHY: a real caller-ID like "6082175303" must still match a stored
+    //       "+16082175303"; otherwise the guard silently never fires.
+    expect(callerIdIsForwardNumber('6082175303', FORWARD)).toBe(true);
+    expect(callerIdIsForwardNumber('16082175303', FORWARD)).toBe(true);
+    expect(callerIdIsForwardNumber('(608) 217-5303', FORWARD)).toBe(true);
+    expect(callerIdIsForwardNumber('+16082175303', '608-217-5303')).toBe(true);
+  });
+
+  it('SAD: a different (good) caller-ID → false (real customer, keep caller-ID)', () => {
+    // WHO: a customer who dialed the business number directly.
+    // WHAT: their caller-ID is genuine — must be preserved, not nulled.
+    // WHY: requirement — for a good caller-ID the agent uses it for the CRM and
+    //       only collects the caller's name. A false here would null it wrongly.
+    expect(callerIdIsForwardNumber('+15551234567', FORWARD)).toBe(false);
+  });
+
+  it('SAD: null/blank caller-ID or forward number → false (nothing to match)', () => {
+    // WHO: anonymous caller (null caller-ID), or a tenant with no forward set.
+    // WHY: a null forward number must never match a null caller-ID into a
+    //       "forwarded" verdict — there is simply nothing to compare.
+    expect(callerIdIsForwardNumber(null, FORWARD)).toBe(false);
+    expect(callerIdIsForwardNumber('+16082175303', null)).toBe(false);
+    expect(callerIdIsForwardNumber(null, null)).toBe(false);
+    expect(callerIdIsForwardNumber('', '')).toBe(false);
+  });
+
+  it('SAD: partial/garbage caller-ID never matches', () => {
+    // WHO: STT/carrier delivers a partial number.
+    // WHY: tenDigits returns null for <10 digits, so a partial like "608217"
+    //       must not coincidentally match anything.
+    expect(callerIdIsForwardNumber('608217', '608217')).toBe(false);
+    expect(callerIdIsForwardNumber('not-a-number', FORWARD)).toBe(false);
   });
 });

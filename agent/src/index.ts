@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { config, untrustedCallerIdTenants } from './config.js';
 import { runFallback } from './fallback.js';
 import { getLogger } from './logger.js';
-import { buildSessionContext } from './sessionContext.js';
+import { buildSessionContext, callerIdIsForwardNumber } from './sessionContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
@@ -441,6 +441,28 @@ export default defineAgent({
         },
         'tenant config resolved'
       );
+
+      // Forwarded-line guard (number match): when the SIP caller-ID equals the
+      // tenant's OWN forward number, the call was forwarded from the owner's
+      // line — so the caller-ID is the forwarding line, NOT the customer. Null
+      // it so the prompt's blocked-caller path + tools collect the customer's
+      // real number verbally (identify_caller then saves name+number to the
+      // CRM). A different (good) caller-ID is left intact — the agent only needs
+      // the caller's name. This is the precise complement to the env tenant-list
+      // guard above (UNTRUSTED_CALLER_ID_TENANTS), which nulls EVERY call to a
+      // tenant; number-match keeps direct customers' caller-ID. Requires the
+      // tenant's forward_phone to be set (transfer destination). Known v1 gap:
+      // because this runs after fetchTenantConfig, the forwarding number already
+      // reached the child logger + voice-session-start record for this call —
+      // tracked as a follow-up (move the match before those once config is
+      // fetched earlier). Origin: Dale's forwarded business line (2026-06-29).
+      if (callerIdIsForwardNumber(sessionCtx.callerPhone, tenantConfig.forwardPhone)) {
+        callLog.info(
+          { event: 'caller_id_is_forward_number', tenant_id: sessionCtx.tenantId },
+          'caller ID equals tenant forward number (forwarded line) — collecting number verbally'
+        );
+        sessionCtx.callerPhone = null;
+      }
 
       // Live-transfer capability. The executor is null when the call lacks the
       // room/participant context needed to REFER (SIP participant never joined),
