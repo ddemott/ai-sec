@@ -135,6 +135,8 @@ Sources of silence + the layer that covers each:
 
 **RULE 8.1** — the **output watchdog** (`agent/src/session/watchdog.ts`, behind `ENABLE_OUTPUT_WATCHDOG`) is the cause-agnostic backstop: arms on `agent_state=thinking`, plays a cached filler if no audio by a deadline, cancels on real audio. **Tuning matters:** its deadline must be LONGER than normal reply latency or it fires every turn (it did, at 2.5s, when pipeline TTS was 2–3s). With Realtime (sub-second) a 2.5s deadline is fine. Currently OFF pending rework.
 
+**RULE 8.2 (thinking-sound bed)** — the **SFX cover** (`agent/src/session/thinkingSound.ts`, behind `ENABLE_THINKING_SOUND`) is a looping keyboard-typing ambiance played while `agent_state=thinking`, stopped on `speaking`. It uses LiveKit's built-in `voice.BackgroundAudioPlayer` (`thinkingSound: { source: voice.BuiltinAudioClip.KEYBOARD_TYPING, volume }`) — the framework owns the 2nd-track publish, looping, mixing, and agent-state wiring; we just attach/detach it. **Key difference from the watchdog:** `thinkingSound` has **no deadline knob** — it plays on *every* `thinking` transition. Under pipeline (~2–3s thinking every reply) that means a typing bed before essentially every turn. That's acceptable for an *ambient* bed (reads as "receptionist typing") where a spoken filler every turn was not (RULE 8.1). It's all-or-nothing per turn. **It MASKS dead air, doesn't fix it** (RULE 2.4) — a stalled/failed turn still fails. The bed and the watchdog filler are **independent flags and not layered** (the watchdog's `say()` → `speaking` would stop the bed; composing them is a future real-call design). Volume is an env knob (`THINKING_SOUND_VOLUME`, 0–1, default 0.5) so it's dial-able on a live call without a redeploy-by-merge. **Validate on a real call** (does the 2nd track mix through to PSTN, volume, feel) — OFF by default until then.
+
 ---
 
 ## 9. Observability — how to actually debug a call (don't guess)
@@ -159,7 +161,7 @@ The `agent_session_error` log's `error_body` carries the provider's exact error 
 
 **RULE 10.2** — Ship risky/unvalidatable-in-CI features **flag-gated, default OFF**, so merge is inert; enable on Railway + validate on a real call; instantly reversible. (`ENABLE_REALTIME`, `ENABLE_OUTPUT_WATCHDOG`, `UNTRUSTED_CALLER_ID_TENANTS`.)
 
-**RULE 10.3 — config knobs (env on `ai-sec-agent`):** `ENABLE_REALTIME`, `REALTIME_MODEL` (verify id!), `REALTIME_VOICE`, `ENABLE_OUTPUT_WATCHDOG`, `UNTRUSTED_CALLER_ID_TENANTS`. Blank-in-UI env values bypass `.default()` — coerce blank→default (we do for `REALTIME_MODEL`/`VOICE`).
+**RULE 10.3 — config knobs (env on `ai-sec-agent`):** `ENABLE_REALTIME`, `REALTIME_MODEL` (verify id!), `REALTIME_VOICE`, `ENABLE_OUTPUT_WATCHDOG`, `ENABLE_THINKING_SOUND` + `THINKING_SOUND_VOLUME` (0–1, default 0.5), `UNTRUSTED_CALLER_ID_TENANTS`. Blank-in-UI env values bypass `.default()` — coerce blank→default (we do for `REALTIME_MODEL`/`VOICE`, and `THINKING_SOUND_VOLUME` clamps blank/invalid→0.5).
 
 **RULE 10.4 — validate on a real/sim call, never CI alone.** Acoustic/timing/turn behavior has no unit-test seam. `./scripts/simulate.sh call --env prod --tenant <id>` → browser join URL → headphones. CI-green ≠ behavior-verified for voice.
 
@@ -185,4 +187,5 @@ The `agent_session_error` log's `error_body` carries the provider's exact error 
 - 2026-06-26 — Realtime TPM 40k (Tier 1) → mid-call dead space + failed appointment read-back (`rate_limit_exceeded`). Lean flow + mini model under Tier 1; Tier 2 ($50+7d) to widen.
 - 2026-06-25 — output watchdog fires every turn if its deadline < reply latency; harmful under pipeline TTS; OK under Realtime. Keep it OFF until reworked.
 - 2026-06-25 — browser sim echo creates false interruptions; use headphones.
+- 2026-06-29 — thinking-sound bed shipped (`ENABLE_THINKING_SOUND`, OFF) via LiveKit `BackgroundAudioPlayer` + bundled `KEYBOARD_TYPING` clip (no asset to source — ships in `@livekit/agents/resources`). `thinkingSound` has no per-turn deadline → plays before every reply in pipeline; fine as ambient, unlike a spoken filler. Independent of the watchdog; not layered. Volume = `THINKING_SOUND_VOLUME` env. Real-call validate PSTN mix + volume.
 - 2026-06-24 — `caller_phone NOT NULL` blocked forwarded-line calls from logging; finalize on session `Close` (not job shutdown); transcript per-turn; dashboard auto-refresh.

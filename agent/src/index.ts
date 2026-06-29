@@ -34,6 +34,7 @@ import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { warmFillers } from './session/fillerCache.js';
 import { attachOutputWatchdog } from './session/watchdog.js';
+import { attachThinkingSound } from './session/thinkingSound.js';
 import { TranscriptRecorder } from './transcript.js';
 import { CallOutcomeTracker } from './callOutcome.js';
 import { summarizeCall } from './callSummary.js';
@@ -801,6 +802,19 @@ export default defineAgent({
             log: callLog,
           });
           session.on(voice.AgentSessionEventTypes.Close, detachWatchdog);
+        }
+
+        // Thinking-sound bed (never-silent polish) — OFF unless ENABLE_THINKING_SOUND.
+        // A looping keyboard-typing ambiance plays while the agent is 'thinking'
+        // and stops on 'speaking' (LiveKit BackgroundAudioPlayer owns the track,
+        // loop, mix, and agent_state wiring). ctx.room is connected (ctx.connect
+        // above) and the session is started, so the bed's track can publish.
+        if (config.ENABLE_THINKING_SOUND) {
+          const detachThinkingSound = attachThinkingSound(session, ctx.room, {
+            volume: config.THINKING_SOUND_VOLUME,
+            log: callLog,
+          });
+          session.on(voice.AgentSessionEventTypes.Close, detachThinkingSound);
         }
 
         // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)
