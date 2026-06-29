@@ -41,6 +41,30 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
 
+  // Thinking-sound bed: when "true", a looping keyboard-typing ambiance plays
+  // while the agent is in the 'thinking' state and stops the instant it starts
+  // speaking — covers the pipeline TTS gap / slow tool with a "receptionist is
+  // typing" feel instead of dead air. Uses LiveKit's BackgroundAudioPlayer + the
+  // bundled KEYBOARD_TYPING clip. OFF by default — acoustic + PSTN-mix behavior
+  // can't be CI-verified; enable on Railway after a real-call check, instantly
+  // reversible. NOTE: in pipeline mode the agent sits in 'thinking' ~2-3s every
+  // reply, so the bed plays before essentially every turn (intended — ambient,
+  // unlike a spoken filler that would read as broken). It MASKS dead air; it does
+  // NOT fix a slow/failed turn (raise TPM / fix the tool for that — playbook §2.4).
+  ENABLE_THINKING_SOUND: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  // Volume (0-1) of the thinking-sound bed. Env knob so it can be dialed in on a
+  // real call with no code change (env edits auto-redeploy). Blank/invalid → 0.5.
+  THINKING_SOUND_VOLUME: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const n = v?.trim() ? Number(v.trim()) : NaN;
+      return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.5;
+    }),
+
   // OpenAI Realtime (speech-to-speech) mode: when "true", the agent uses
   // openai.realtime.RealtimeModel as the llm instead of the STT→LLM→TTS pipeline,
   // removing the TTS synthesis step (measured 2–3s/reply, non-streaming = dead
