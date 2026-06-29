@@ -86,7 +86,7 @@ These branches survived the 2026-06-23 cleanup because each holds real unmerged 
 **Security housekeeping**
 
 - [ ] **Rotate Railway team token** created 2026-06-12 — pasted into a Claude session; burn + reissue.
-- [ ] **Remove DynaTire rows from prod DB** (local already clean; gated on the Railway token).
+- [x] **Remove DynaTire rows from prod DB** — DONE 2026-06-29: prod inspected via decrypted `db_url`, **zero DynaTire rows** present (tenants/users/tenant_docs all 0) — already clean, no-op. Same pass found + removed a **stray duplicate `Bella's Hair Studio` tenant** (`bbe1d652-984d-4ad4-82de-df19e991f94a`, original 2026-03-30 seed, superseded by canonical `b3e1aaaa…` 2026-06-02; 0 transactional rows, only 1 owner user + 1 auto-seeded resource). The dup carried a second `bella@bellashair.com` owner → nondeterministic login (email is unique PER-tenant, not global). Deleted (cascade), canonical intact. Login query hardened on branch `fix/login-ambiguous-email` (ORDER BY + multi-tenant warning).
 
 ### P1 — Customer success & trust (dossier: _Back-to-Front_, _Non-blocking_)
 
