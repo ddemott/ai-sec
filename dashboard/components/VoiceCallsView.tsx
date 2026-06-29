@@ -598,6 +598,9 @@ export default function VoiceCallsView() {
               n === 0 ? 'No calls were old enough to delete' : `Deleted ${n} old call(s)`,
               'success'
             );
+            // The open call may have been one of the bulk-deleted rows — clear
+            // the detail pane so it doesn't linger as a stale selection.
+            if (n > 0) setSelectedCall(null);
             void fetchCallHistory();
             void fetchActiveCalls();
           } catch (err) {
