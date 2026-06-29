@@ -9,10 +9,18 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
+// Mutable role for owner-gating tests (hoisted so the vi.mock factory can read it).
+const { roleRef } = vi.hoisted(() => ({ roleRef: { current: 'owner' as 'owner' | 'front_desk' } }));
+
 // Mock tenant context
 vi.mock('../lib/SessionContext', () => ({
   useActiveTenantId: () => 'test-tenant-123',
+  useSessionContext: () => ({ role: roleRef.current }),
 }));
+
+// Toast is fired on delete success/failure.
+const mockToast = vi.fn();
+vi.mock('./ui/Toast', () => ({ showToast: (...args: unknown[]) => mockToast(...args) }));
 
 // Mock phone formatting
 vi.mock('../lib/phone', () => ({
@@ -24,6 +32,8 @@ const mockActiveCalls = vi.fn();
 const mockCallHistory = vi.fn();
 const mockGetSession = vi.fn();
 const mockCommsHistory = vi.fn();
+const mockDeleteCall = vi.fn();
+const mockDeleteOldCalls = vi.fn();
 
 vi.mock('../lib/api', () => ({
   Api: {
@@ -31,6 +41,8 @@ vi.mock('../lib/api', () => ({
       getActiveCalls: (...args: unknown[]) => mockActiveCalls(...args),
       getHistory: (...args: unknown[]) => mockCallHistory(...args),
       getSession: (...args: unknown[]) => mockGetSession(...args),
+      deleteCall: (...args: unknown[]) => mockDeleteCall(...args),
+      deleteOldCalls: (...args: unknown[]) => mockDeleteOldCalls(...args),
     },
     communications: {
       history: (...args: unknown[]) => mockCommsHistory(...args),
@@ -101,6 +113,9 @@ describe('VoiceCallsView', () => {
     });
     mockGetSession.mockResolvedValue(mockCall);
     mockCommsHistory.mockResolvedValue({ success: true, history: [], total: 0 });
+    mockDeleteCall.mockResolvedValue({ success: true });
+    mockDeleteOldCalls.mockResolvedValue({ success: true, result: { deleted: 3 } });
+    roleRef.current = 'owner';
   });
 
   afterEach(() => {
@@ -494,6 +509,51 @@ describe('VoiceCallsView', () => {
       await waitFor(() => {
         expect(screen.getByText('failed')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Soft-delete controls (owner-gated)', () => {
+    test('HAPPY: owner sees the bulk "delete old calls" control', async () => {
+      // WHO: an owner on the Calls tab.
+      // WHAT: the bulk delete-old icon button is shown (with its day-window select).
+      // WHEN: role === 'owner'.
+      // WHERE: the Call History header.
+      // WHY: owners can prune old call records to reduce retained caller PII.
+      render(<VoiceCallsView />);
+      await waitFor(() => expect(mockCallHistory).toHaveBeenCalled());
+      expect(screen.getByLabelText(/delete calls older than/i)).toBeInTheDocument();
+    });
+
+    test('SAD: front-desk does NOT see the bulk delete control', async () => {
+      // WHO: a front-desk login on the Calls tab.
+      // WHAT: the delete-old control is hidden.
+      // WHEN: role === 'front_desk'.
+      // WHERE: isOwner gate in the Call History header.
+      // WHY: deleting call records (caller PII) is owner-only; front-desk can view.
+      roleRef.current = 'front_desk';
+      render(<VoiceCallsView />);
+      await waitFor(() => expect(mockCallHistory).toHaveBeenCalled());
+      expect(screen.queryByLabelText(/delete calls older than/i)).not.toBeInTheDocument();
+    });
+
+    test('HAPPY: bulk delete confirms, then calls the Api with the chosen window', async () => {
+      // WHO: an owner clearing calls older than the default 90-day window.
+      // WHAT: clicking the control opens a confirm; confirming calls
+      //       deleteOldCalls(tenantId, 90) and toasts the deleted count.
+      // WHEN: owner clicks delete-old then confirms.
+      // WHERE: handleDeleteOld + ConfirmModal.
+      // WHY: a destructive bulk action must be guarded by an explicit confirm.
+      render(<VoiceCallsView />);
+      await waitFor(() => expect(mockCallHistory).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByLabelText(/delete calls older than/i));
+      const confirmBtn = await screen.findByRole('button', { name: 'Delete old calls' });
+      fireEvent.click(confirmBtn);
+
+      await waitFor(() => expect(mockDeleteOldCalls).toHaveBeenCalledWith('test-tenant-123', 90));
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith(expect.stringContaining('3'), 'success')
+      );
     });
   });
 });

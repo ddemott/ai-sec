@@ -1039,6 +1039,19 @@ export const Api = {
         ...data,
       }),
 
+    // Soft-delete a single call record (owner-only; recoverable, hidden from
+    // lists + analytics).
+    deleteCall: (tenantId: string | null, voiceSessionId: string) =>
+      apiMutate(`/voice/session/${voiceSessionId}`, 'DELETE', { tenant_id: tenantId }),
+
+    // Bulk soft-delete finished calls older than N days (owner-only). Returns
+    // the number of calls removed.
+    deleteOldCalls: (tenantId: string | null, olderThanDays: number) =>
+      apiMutate<{ result?: { deleted: number } }>(`/voice/delete-old`, 'POST', {
+        tenant_id: tenantId,
+        older_than_days: olderThanDays,
+      }),
+
     // Get customer context by phone (used during active calls)
     getContextByPhone: (tenantId: string | null, phone: string) =>
       apiFetch<CustomerContext>(

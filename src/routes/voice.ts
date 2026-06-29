@@ -13,6 +13,8 @@ import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import { assertRowAffected } from './routeHelpers';
+import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import type { CustomerContext, VoiceSession, VoiceSessionDisplay } from '../types/voiceCrm';
 
 const StartSessionSchema = z.object({
@@ -38,6 +40,11 @@ const EndSessionSchema = z.object({
   transcript: z.string().optional(),
   summary: z.string().optional(),
   appointment_id: z.string().uuid().optional(),
+});
+
+const DeleteOldCallsSchema = z.object({
+  // Min 1 day: a 0/negative window would soft-delete every call. Max ~10y cap.
+  older_than_days: z.number().int().min(1).max(3650),
 });
 
 const AddNoteSchema = z.object({
@@ -246,7 +253,7 @@ export function registerVoiceRoutes(
           (vs.customer_context->>'is_known_customer')::boolean as is_known_customer
         FROM voice_sessions vs
         LEFT JOIN customers c ON c.customer_id = vs.customer_id
-        WHERE vs.tenant_id = $1 AND vs.status = 'active'
+        WHERE vs.tenant_id = $1 AND vs.is_deleted = false AND vs.status = 'active'
         ORDER BY vs.started_at DESC`,
           [tenantId]
         );
@@ -281,7 +288,7 @@ export function registerVoiceRoutes(
       const offset = parseInt(query.offset || '0');
 
       const { calls, total } = await withTenantClient(tenantId, async (client) => {
-        let whereClause = 'WHERE vs.tenant_id = $1';
+        let whereClause = 'WHERE vs.tenant_id = $1 AND vs.is_deleted = false';
         const params: (string | number)[] = [tenantId];
         let paramIndex = 2;
 
@@ -552,5 +559,97 @@ export function registerVoiceRoutes(
       }
       return reply.send({ success: true });
     }, 'Failed to update message status')
+  );
+
+  /**
+   * DELETE /voice/session/:id
+   * Soft-delete a single call record (owner-gated).
+   *
+   * Sets is_deleted/deleted_at/deleted_by — the row + its caller PII and
+   * transcript are RETAINED but hidden from every list + analytics query (all of
+   * which filter `is_deleted = false`). Recoverable; this is deliberately NOT a
+   * hard DELETE (hard erasure of caller_phone/transcripts is the legal-held
+   * GDPR/retention work). Owner-only because call records carry caller PII —
+   * mirrors the audit-log / export gating; front-desk logins get 403.
+   */
+  app.delete(
+    '/voice/session/:id',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      if (req.auth && req.auth.tenant_id !== SUPER_ADMIN_TENANT_ID && req.auth.role !== 'owner') {
+        return reply.status(403).send({ success: false, error: 'Only owners can delete calls' });
+      }
+
+      const { id } = req.params as { id: string };
+      const deletedBy = req.auth?.email ?? 'owner';
+
+      const res = await withTenantClient(tenantId, (client) =>
+        client.query(
+          `UPDATE voice_sessions
+              SET is_deleted = true, deleted_at = now(), deleted_by = $3
+            WHERE voice_session_id = $1 AND tenant_id = $2 AND is_deleted = false
+            RETURNING voice_session_id`,
+          [id, tenantId, deletedBy]
+        )
+      );
+
+      if (!assertRowAffected(res, reply, 'Voice session')) return;
+
+      logEvent(req, 'voice_session_deleted', { voice_session_id: id, deleted_by: deletedBy });
+      return reply.send({ success: true });
+    }, 'Failed to delete voice session')
+  );
+
+  /**
+   * POST /voice/delete-old  { older_than_days }
+   * Bulk soft-delete finished call records older than N days (owner-gated).
+   *
+   * Excludes `status = 'active'` so a live/in-progress call is never deleted out
+   * from under the agent. Returns the number of rows soft-deleted. Same
+   * owner-gating + recoverable-soft-delete semantics as the single-delete route.
+   */
+  app.post(
+    '/voice/delete-old',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      if (req.auth && req.auth.tenant_id !== SUPER_ADMIN_TENANT_ID && req.auth.role !== 'owner') {
+        return reply.status(403).send({ success: false, error: 'Only owners can delete calls' });
+      }
+
+      const parsed = DeleteOldCallsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+      }
+
+      const { older_than_days } = parsed.data;
+      const deletedBy = req.auth?.email ?? 'owner';
+
+      const res = await withTenantClient(tenantId, (client) =>
+        client.query(
+          `UPDATE voice_sessions
+              SET is_deleted = true, deleted_at = now(), deleted_by = $3
+            WHERE tenant_id = $1
+              AND is_deleted = false
+              AND status != 'active'
+              AND started_at < now() - make_interval(days => $2)
+            RETURNING voice_session_id`,
+          [tenantId, older_than_days, deletedBy]
+        )
+      );
+
+      const deleted = res.rowCount ?? res.rows.length;
+      logEvent(req, 'voice_sessions_bulk_deleted', {
+        older_than_days,
+        deleted,
+        deleted_by: deletedBy,
+      });
+      return reply.send({ success: true, result: { deleted } });
+    }, 'Failed to delete old voice sessions')
   );
 }
