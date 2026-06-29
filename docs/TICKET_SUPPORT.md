@@ -1,6 +1,6 @@
 # Telnyx Support — Active Ticket
 
-**Number**: `+1 630-866-1960` (active, Thinking Hammer LLC). Telnyx id `2973794140900296302`.
+**Number**: `+1 630-866-9086` (live, Thinking Hammer LLC). Previous `+1 630-866-1960` dead. Test verification `+1 630-822-9086`. (Ticket history below covers the prior numbers.)
 
 > ## 📩 UPDATE 2026-06-05 — Telnyx escalated to their internal team
 > Support agent **Mark Morse** replied (2026-06-05 13:55 UTC, via Pylon →
@@ -64,7 +64,7 @@ intercept: "The number you dialed is not in service… Message EL402IL53." This 
 support's "the FQDN connection lacks inbound call handling." Earlier "recycled-DID propagation"
 theory is superseded; LiveKit `+`/format theory is ruled out (no INVITE arrives to reject).
 
-> **Full evidence in `docs/BETH_GO_LIVE_TODO.md` → Step 5 (2026-06-03 ~16:00 UTC entry).**
+> **Full evidence in `docs/AIASSISTANT_GO_LIVE_TODO.md` → Step 5 (2026-06-03 ~16:00 UTC entry).**
 
 **Added evidence (2026-06-03):** Telnyx's own Elastic SIP Trunking dashboard shows
 **0 inbound calls / 0 minutes** for this number — inbound never reaches the trunk at

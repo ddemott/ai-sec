@@ -4,7 +4,7 @@
  * WHEN:  on each tick (and on-demand via reapStaleVoiceSessionsNow)
  * WHERE: src/workers/voiceSessionReaper.ts → reap_stale_voice_sessions() RPC
  * WHY:   guarantees every call has a completed record even if the agent never
- *        sends voice-session-end (the bug seen on the first real Beth calls,
+ *        sends voice-session-end (the bug seen on the first real __PERSONA_NAME__ calls,
  *        which left rows stranded 'active' with no duration/transcript)
  */
 

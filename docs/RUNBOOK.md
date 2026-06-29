@@ -15,7 +15,7 @@ Pairs with `docs/DEPLOYMENT.md` (how prod is wired) and `docs/SECURITY.md`.
 | Liveness      | `GET /health` — process up only, no DB (`{status, started_at}`)                            |
 | Readiness     | `GET /ready` — pings DB + reports pool saturation; 503 when DB unreachable                 |
 | Metrics       | `GET /metrics` — Prometheus text, Bearer `METRICS_TOKEN` (404 if token unset)              |
-| Phone (prod)  | `+1 630-866-1960` (Telnyx, tenant Thinking Hammer LLC)                                     |
+| Phone (prod)  | `+1 630-866-9086` (Telnyx, tenant Thinking Hammer LLC; current)            |
 | Inbound trunk | LiveKit trunk `ST_aUM3GuCuc9wL`                                                            |
 | Logs          | Railway live-tail (stdout) + Better Stack (if `BETTER_STACK_TOKEN` set)                    |
 | Errors        | Sentry (if `SENTRY_DSN` set)                                                               |
@@ -55,7 +55,7 @@ Symptom: appointments booked but no confirmation/reminder SMS or email.
 Check in order:
 
 1. **Scheduler running?** `reminderScheduler` ticks every 60s, only in prod or when `ENABLE_REMINDER_SCHEDULER=true`. Confirm the backend booted in production mode. Logs show the scheduler batch tick.
-2. **SMS silently in mock mode.** Without `TELNYX_PHONE_NUMBER`, the ProviderRegistry still defaults to Telnyx but a missing number means sends fail; without Telnyx creds it can fall to MockAdapter (a boot warning fires). Symptom: `reminder_schedules` rows flip to `sent` but no SMS arrives. Fix: confirm `TELNYX_PHONE_NUMBER=+16308661960` + `TELNYX_API_KEY` on Railway.
+2. **SMS silently in mock mode.** Without `TELNYX_PHONE_NUMBER`, the ProviderRegistry still defaults to Telnyx but a missing number means sends fail; without Telnyx creds it can fall to MockAdapter (a boot warning fires). Symptom: `reminder_schedules` rows flip to `sent` but no SMS arrives. Fix: confirm `TELNYX_PHONE_NUMBER=+16308669086` + `TELNYX_API_KEY` on Railway.
 3. **Email silently in mock mode.** Without `EMAIL_USER`/`EMAIL_PASS`, a mock transporter returns a fake messageId and nothing sends (boot warning fires — `envWarnings.ts`). Fix: set the Gmail app-password env on Railway.
 4. **Per-tenant SMS rate limit.** A tenant batching many sends can hit the token bucket (`smsRateLimit.ts`, 429 → retryable). Rate-limited reminders fall into the 5m/30m/2h retry queue — check `reminder_schedules` retry columns, not a true failure.
 5. **Consent gate.** Comms are consent-gated. A customer with an `opt_out_records` row (or no consent) is skipped by design — check `consent_records` / `opt_out_records`.
@@ -105,7 +105,7 @@ The inbound path: **PSTN caller → Telnyx DID → Telnyx SIP Connection → Liv
 
 ### 7a. Call doesn't connect at all (busy / fast-busy / no ring)
 
-1. Confirm you dialed the **live** DID `+1 630-866-1960` (Telnyx id `2973794140900296302`). `+1 630-937-9478` and `+1 630-866-1960`'s predecessors are **dead** (orders deleted).
+1. Confirm you dialed the **live** DID `+1 630-866-9086`. Previous `+1 630-866-1960` (Telnyx id `2973794140900296302`) dead. Test verification number `+1 630-822-9086`; `+1 630-937-9478` long dead (orders deleted).
 2. Telnyx portal → the number is assigned to SIP Connection `livekit-outbound` (`2945038451784812111`) and the connection is **active**.
 3. Telnyx creds present in prod: `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` (else provisioning/OTP 503, though inbound routing is portal-side).
 

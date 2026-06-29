@@ -543,7 +543,7 @@ describe('agentTools /find-customer-by-name', () => {
     // WHAT: Route searches customers by name and returns {name, phone} matches
     //        so the agent can read back the number on file to confirm
     // WHERE: src/routes/agentTools.ts /agent-tools/find-customer-by-name
-    // WHEN: Beth asks the caller's name on this forwarded inbound line
+    // WHEN: __PERSONA_NAME__ asks the caller's name on this forwarded inbound line
     // WHY: Caller ID is the forwarding cell, not the caller — name is the only
     //        trustworthy first identifier, so name-search is the entry point
     const { app, queries } = buildApp({
@@ -606,7 +606,7 @@ describe('agentTools /identify-caller', () => {
     //        so the Calls tab row/detail show the verbally-captured number.
     // WHERE: POST /agent-tools/identify-caller → src/routes/agentTools.ts (the
     //        UPDATE voice_sessions backfill branch, gated on args.call_id).
-    // WHEN: mid-call, right after Beth collects + reads back the spoken number.
+    // WHEN: mid-call, right after __PERSONA_NAME__ collects + reads back the spoken number.
     // WHY: without this, the number was saved to customers but the call record
     //       still showed "new caller / no number" (Dale's observation).
     const { app, queries } = buildApp({
@@ -2538,7 +2538,7 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     //        the route must surface a failure (500, success:false), NOT a 200
     //        success, so the agent's fire-and-forget .catch fires and the
     //        backend logs the 5W diagnostic + bumps errors_total.
-    // WHEN: call connect, the exact path that left the first real Beth call
+    // WHEN: call connect, the exact path that left the first real __PERSONA_NAME__ call
     //        unlogged with no trace (feedback_sad_path_instrumentation).
     // WHERE: /agent-tools/voice-session-start → catch → fail(reply, …, 500).
     // WHY: a swallowed failure here = empty Calls tab + zero diagnosability;
@@ -2708,7 +2708,7 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     const res = await post(app, '/agent-tools/voice-session-transcript', {
       tenant_id: TENANT_ID,
       call_id: 'call-live-1',
-      transcript: 'Assistant: Hi, this is Beth.\nCaller: I need to reach Dale.',
+      transcript: 'Assistant: Hi, this is Chris.\nCaller: I need to reach Dale.',
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true, result: { updated: true } });

@@ -82,12 +82,12 @@ describe('fetchTenantConfig', () => {
           name: 'DynaTire',
           timezone: 'America/Chicago',
           system_prompt: null,
-          first_message: "Hi, I'm Beth — business or personal?",
+          first_message: "Hi, I'm Chris — business or personal?",
         },
       },
     });
     const cfg = await fetchTenantConfig(client, TENANT_ID);
-    expect(cfg.firstMessage).toBe("Hi, I'm Beth — business or personal?");
+    expect(cfg.firstMessage).toBe("Hi, I'm Chris — business or personal?");
   });
 
   it('HAPPY: surfaces per-tenant OpenAI voice (tts_voice/speed, snake → camel)', async () => {

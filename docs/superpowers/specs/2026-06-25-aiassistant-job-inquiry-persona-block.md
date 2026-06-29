@@ -1,7 +1,9 @@
-# Beth persona — job-inquiry section (to insert into `tenants.system_prompt`)
+# __PERSONA_NAME__ job-inquiry section (to insert into `tenants.system_prompt`)
+# Persona name variable in seed (currently 'Chris')
+# Marker: __PERSONA_NAME__  (use in docs/comments for the name; change only in seed var)
 
-Insert this block into Beth's existing system prompt (tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`),
-after the screener/identity rules and before the closing pitch. Keep the rest of the persona intact.
+Insert this block into __PERSONA_NAME__'s existing system prompt (tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`),
+after the screener/identity rules and before the closing pitch. Keep the rest of __PERSONA_NAME__ intact.
 
 ---
 

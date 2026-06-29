@@ -27,7 +27,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('HAPPY: instructs the agent to offer the service menu, not ask blind', () => {
-    // WHO: Caller wants to book but Beth previously asked "what service?"
+    // WHO: Caller wants to book but __PERSONA_NAME__ previously asked "what service?"
     //       without listing the options, so the caller couldn't answer.
     // WHAT: The prompt must tell the agent to call get_service_catalog FIRST
     //        and read the real options back, plus offer to take a message.
@@ -45,7 +45,7 @@ describe('buildSystemPrompt', () => {
     // WHAT: the prompt must tell the agent to read the number back, ask for the
     //        missing digits when it has fewer than 10, and ALWAYS respond rather
     //        than wait silently.
-    // WHY: Beth was stalling after an incomplete number (dead air = "frozen
+    // WHY: __PERSONA_NAME__ was stalling after an incomplete number (dead air = "frozen
     //        call"). The fix is prompt guidance to confirm/re-prompt, never hang.
     const prompt = buildSystemPrompt(BASE_CTX);
     expect(prompt).toMatch(/read it back|read back/i);
@@ -359,7 +359,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('CUSTOM PROMPT: platform-level sections (tools, OTP, booking) still appear below the custom identity', () => {
-    // WHY: customization is for the persona only. Booking discipline +
+    // WHY: customization is for __PERSONA_NAME__ only. Booking discipline +
     //      tool listings are load-bearing for correctness and must NOT
     //      be replaceable by a tenant who edits their persona.
     const prompt = buildSystemPrompt({

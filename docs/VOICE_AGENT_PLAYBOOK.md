@@ -49,7 +49,7 @@ type: tokens, code: rate_limit_exceeded
 **RULE 2.1 — Reduce burn (controllable, no spend), highest impact first:**
 1. **Concise replies.** Output audio tokens scale with how much it says. Persona MUST enforce "1–2 short sentences, never long-winded." (Wordy bios are a top burner.)
 2. **Use `gpt-realtime-mini`** — fewer tokens/sec + higher TPM.
-3. **Slim the persona.** We cut Beth 9.3k→1.5k chars. Persona is sent as instructions every turn.
+3. **Slim __PERSONA_NAME__.** We cut __PERSONA_NAME__ 9.3k→1.5k chars. Persona is sent as instructions every turn.
 4. **Fewer tools.** Each tool JSON schema is input tokens every turn. Use the `buildTools` capability filter — expose only what the flow needs (e.g. `['identity','scheduling','messaging']` for a message+meeting bot).
 
 **RULE 2.2 — Raise the wall (durable):** advance OpenAI usage tier. **Tier 2 = $50 cumulative *paid* + 7 days since first payment** (not monthly, not a post-$50 timer — the 7 days is account-payment age). Tier 2 ≈ 5× TPM (~200k). Prepaid credits count + last ~1 year. Cost per token is unchanged by tier — tier only widens the per-minute *flow*.
@@ -96,13 +96,13 @@ type: tokens, code: rate_limit_exceeded
 
 **RULE 5.4** — backend `/agent-tools/*` must NEVER return a raw 500/JSON to the agent (it gets read aloud). On a handled failure (e.g. embeddings down) return a graceful `{success:true, result:"I don't have that — want to leave a message?"}` (see the RAG embedding try/catch).
 
-**RULE 5.5 (anti-"LLM theater")** — the persona MUST explicitly mandate the tool call ("you MUST call take_message; saying you'll pass it along without calling it means it's lost"). Models will otherwise *say* they did something without calling the tool.
+**RULE 5.5 (anti-"LLM theater")** — __PERSONA_NAME__ MUST explicitly mandate the tool call ("you MUST call take_message; saying you'll pass it along without calling it means it's lost"). Models will otherwise *say* they did something without calling the tool.
 
 ---
 
 ## 6. Persona / prompt rules (per-tenant `tenants.system_prompt`)
 
-**RULE 6.1** — The persona lives ONLY in the prod DB (`tenants.system_prompt`), not the repo. Back it up before editing (`SELECT system_prompt ...` → file). Restore-points matter — we keep `docs/beth-persona-rich-backup-*.txt`.
+**RULE 6.1** — The persona lives ONLY in the prod DB (`tenants.system_prompt`), not the repo. Back it up before editing (`SELECT system_prompt ...` → file). Restore-points matter — we keep `docs/aiassistant-persona-rich-backup-*.txt`.
 
 **RULE 6.2** — `customPrompt` replaces only the identity line; the platform prompt (conversation style, tools, OTP, booking discipline) is appended below it by `agent/src/prompt.ts`. So per-tenant personas inherit the platform rules.
 

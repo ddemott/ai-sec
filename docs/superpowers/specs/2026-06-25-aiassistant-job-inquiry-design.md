@@ -1,17 +1,19 @@
-# Beth job-inquiry capture — design
+# __PERSONA_NAME__ job-inquiry capture — design
+# Persona name variable in seed (currently 'Chris')
+# Marker: __PERSONA_NAME__  (use in docs/comments for the name; change only in seed var)
 
 **Date:** 2026-06-25
-**Tenant:** Thinking Hammer LLC (`d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`), voice assistant "Beth"
-**Branch:** `feat/beth-job-inquiry`
+**Tenant:** Thinking Hammer LLC (`d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`), voice assistant "__PERSONA_NAME__"
+**Branch:** `feat/aiassistant-job-inquiry`
 
 ## Problem
 
-A caller asked whether Dale was available for work. Beth "went to look," found no answer
+A caller asked whether Dale was available for work. __PERSONA_NAME__ "went to look," found no answer
 (no RAG doc covers Dale's hiring availability), and never came back to the call — dead air,
 caller hung up. This is the freeze family: an LLM with no scripted branch tries to retrieve
 something that doesn't exist and goes silent.
 
-Dale wants Beth to instead run a deterministic intake script for work/job inquiries, collect
+Dale wants __PERSONA_NAME__ to instead run a deterministic intake script for work/job inquiries, collect
 the position details, persist them, and route them to him — then tell the caller to email a
 job description to `DaleDeMott@thinkinghammer.com` (name + company in the subject).
 
@@ -43,17 +45,17 @@ Close (always):
 ## Architecture / data flow
 
 ```
-Caller → Beth (persona if-tree, collects fields)
+Caller → __PERSONA_NAME__ (persona if-tree, collects fields)
        → identify_caller (logs recruiter as a contact, backfills the call row)
        → capture_job_inquiry (agent tool) → POST /agent-tools/capture-job-inquiry
             ├─ INSERT job_inquiries row (RLS-scoped to tenant)
             ├─ sendJobInquiryEmail() → tenants.job_inquiry_email (fallback: owner email)
             └─ returns { success: true }
-       → Beth closing line (email-the-JD instruction)
+       → __PERSONA_NAME__ closing line (email-the-JD instruction)
 ```
 
 The persona drives the *conversation*; the tool persists + notifies. The tool call is
-**mandated** in the persona (LLM-theater fix, PR #88 lesson): Beth must not say "I'll pass it
+**mandated** in __PERSONA_NAME__ (LLM-theater fix, PR #88 lesson): __PERSONA_NAME__ must not say "I'll pass it
 along" without actually calling `capture_job_inquiry`.
 
 ## Components
@@ -136,11 +138,11 @@ prior persona edits); back up the current value first.
 3. Agent code change → **merge to main → Railway redeploys `ai-sec-agent`** (auto-deploy is on).
    A branch push deploys nothing.
 4. Write persona + `job_inquiry_email='DaleDeMott@thinkinghammer.com'` directly to prod `tenants`.
-5. **Real-call verification** (Dale's transport test): confirm Beth walks the branch and the tool
+5. **Real-call verification** (Dale's transport test): confirm __PERSONA_NAME__ walks the branch and the tool
    fires (`tool_calls_total{tool="capture-job-inquiry"}` increments; row appears; email arrives).
 
 ## Out of scope (YAGNI)
 - Dashboard surface for `job_inquiries` (query the table directly for now).
-- Multi-tenant generalization — only Beth's tenant invokes the tool; the table/column/route are
+- Multi-tenant generalization — only __PERSONA_NAME__'s tenant invokes the tool; the table/column/route are
   generic but no other persona references them.
 - Parsing the JD attachment — the caller emails it to Dale separately.

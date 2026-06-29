@@ -186,7 +186,7 @@ describe('find_caller_by_name', () => {
   it('HAPPY: posts tenant_id + name, returns matches for confirmation', async () => {
     // WHO: Caller on the forwarded line who gives their name first
     // WHAT: Tool posts tenant_id (context) + name (LLM) to find-customer-by-name
-    //        and surfaces the matches so Beth can confirm the number on file
+    //        and surfaces the matches so __PERSONA_NAME__ can confirm the number on file
     // WHEN: Right after the caller states their name — caller ID is the
     //        forwarding cell, so name is the only trustworthy first identifier
     // WHERE: agent/src/tools.ts find_caller_by_name → /agent-tools/find-customer-by-name
@@ -771,7 +771,7 @@ describe('identify_caller', () => {
     // WHO: Forwarded-line caller whose caller ID is NOT their own number
     // WHAT: When the LLM passes a phone (the number the caller said out loud),
     //        the tool saves the contact under THAT number, not ctx.callerPhone
-    // WHEN: Beth asks for the number, reads it back, then calls identify_caller(name, phone)
+    // WHEN: __PERSONA_NAME__ asks for the number, reads it back, then calls identify_caller(name, phone)
     // WHERE: agent/src/tools.ts identify_caller → /agent-tools/identify-caller
     // WHY: On a forwarded line the caller ID is the forwarding cell; the spoken
     //        number is the caller's true number and must be what lands in the CRM

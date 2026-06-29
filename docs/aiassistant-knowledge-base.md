@@ -1,8 +1,11 @@
-# Beth — Thinking Hammer LLC Knowledge Base
+# __PERSONA_NAME__ — Thinking Hammer LLC Knowledge Base
+# (file renamed to aiassistant-knowledge-base.md for generic codename, was beth-knowledge-base.md)
+# Persona name is a variable: see supabase/seed_thinkinghammer_aiassistant.sql persona_name (currently 'Chris')
+# Marker: __PERSONA_NAME__  (use in docs/comments for the name; change only in seed var)
 
-Source content for the AI assistant ("Beth") that answers Dale DeMott's
+Source content for the AI assistant ("__PERSONA_NAME__") that answers Dale DeMott's
 business line. These Q&A pairs are ingested into `tenant_docs` (with
-embeddings) via the `/knowledge` API so Beth can answer FAQs through
+embeddings) via the `/knowledge` API so __PERSONA_NAME__ can answer FAQs through
 `get_company_policy_answer`. Tenant: Thinking Hammer LLC
 (`d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`).
 

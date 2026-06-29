@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # ============================================================================
-# seed-beth-knowledge.sh — load Beth's business knowledge base into tenant_docs
+# seed-aiassistant-knowledge.sh — load __PERSONA_NAME__'s business knowledge base into tenant_docs
+# (renamed from beth for generic aiassistant filename)
 # ============================================================================
 # Posts Q&A pairs to POST /knowledge/add. The backend generates pgvector
 # embeddings server-side (uses its own OPENAI_API_KEY), so no local key is
@@ -11,38 +12,38 @@ set -euo pipefail
 # for the tenant first.
 #
 # Usage:
-#   BACKEND_URL=https://ai-sec-production.up.railway.app ./scripts/seed-beth-knowledge.sh
+#   BACKEND_URL=https://ai-sec-production.up.railway.app ./scripts/seed-aiassistant-knowledge.sh
 # ============================================================================
 
 BACKEND_URL="${BACKEND_URL:-https://ai-sec-production.up.railway.app}"
 OWNER_EMAIL="${OWNER_EMAIL:-daledemott@gmail.com}"
 OWNER_PASS="${OWNER_PASS:-password}"
 
-echo "[beth-kb] Logging in as $OWNER_EMAIL ..."
+echo "[chris-kb] Logging in as $OWNER_EMAIL ..."
 TOKEN=$(curl -s -X POST "$BACKEND_URL/login" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$OWNER_EMAIL\",\"password\":\"$OWNER_PASS\"}" \
   | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 
 if [ -z "$TOKEN" ]; then
-  echo "[beth-kb] ERROR: login failed — no token returned." >&2
+  echo "[chris-kb] ERROR: login failed — no token returned." >&2
   exit 1
 fi
-echo "[beth-kb] Authenticated."
+echo "[chris-kb] Authenticated."
 
 add_qa() {
   local q="$1" a="$2"
   local payload
-  payload=$(printf '{"question":"%s","answer":"%s","source":"beth-knowledge-base"}' "$q" "$a")
+  payload=$(printf '{"question":"%s","answer":"%s","source":"aiassistant-knowledge-base"}' "$q" "$a")
   local resp
   resp=$(curl -s -X POST "$BACKEND_URL/knowledge/add" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
     -d "$payload")
   if echo "$resp" | grep -q '"success":true'; then
-    echo "[beth-kb]  + $q"
+    echo "[chris-kb]  + $q"
   else
-    echo "[beth-kb]  ! FAILED: $q -> $resp" >&2
+    echo "[chris-kb]  ! FAILED: $q -> $resp" >&2
   fi
 }
 
@@ -75,4 +76,4 @@ add_qa "What can the AI assistant do?" "Quite a lot. I can answer your calls any
 add_qa "When is Dale available to meet?" "Dale takes meetings Monday through Friday, with meetings wrapping up by 5 o'clock. I can find a time that works and book it for you right now."
 add_qa "How do I schedule a call with Dale?" "I can do that for you right now. Just let me know roughly when works, and I will find an open time and book it."
 
-echo "[beth-kb] Done."
+echo "[chris-kb] Done."
