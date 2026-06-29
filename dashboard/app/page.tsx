@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DEMO_PHONE_DISPLAY, DEMO_PHONE_E164, DEMO_PHONE_NUMBER } from '../lib/constants';
+import { DEMO_PHONE_DISPLAY, DEMO_PHONE_E164 } from '../lib/constants';
 
 const LANDING_CSS = `
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -572,8 +572,8 @@ const LANDING_HTML = `
     <li><a href="#industries">Industries</a></li>
   </ul>
   <div class="nav-cta">
-    <a href={`tel:${DEMO_PHONE_E164}`} class="nav-phone" aria-label="Call our demo line">
-      <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;vertical-align:middle;margin-right:5px"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>{DEMO_PHONE_DISPLAY}
+    <a href="tel:${DEMO_PHONE_E164}" class="nav-phone" aria-label="Call our demo line">
+      <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;vertical-align:middle;margin-right:5px"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014 12.5a19.8 19.8 0 01-3-8.61A2 2 0 013 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>${DEMO_PHONE_DISPLAY}
     </a>
     <a href="/dashboard" class="btn-login">Log in</a>
     <a href="/register" class="btn-primary">Start free trial</a>
@@ -589,7 +589,7 @@ const LANDING_HTML = `
   <a href="#pricing" onclick="closeMobileMenu()">Pricing</a>
   <a href="#industries" onclick="closeMobileMenu()">Industries</a>
   <div class="nav-mobile-cta">
-    <a href={`tel:${DEMO_PHONE_E164}`} style="font-family:var(--ff-mono);font-size:14px;color:var(--blue-lt);text-decoration:none;text-align:center;padding:10px 0;">{DEMO_PHONE_DISPLAY} — try it live</a>
+    <a href="tel:${DEMO_PHONE_E164}" style="font-family:var(--ff-mono);font-size:14px;color:var(--blue-lt);text-decoration:none;text-align:center;padding:10px 0;">${DEMO_PHONE_DISPLAY} — try it live</a>
     <a href="/dashboard" class="btn-login">Log in</a>
     <a href="/register" class="btn-primary">Start free trial</a>
   </div>
@@ -956,7 +956,7 @@ const LANDING_HTML = `
     <a href="/register" class="btn-hero">Start free trial<svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
     <div class="cta-number">
       <span class="cta-number-label">Try it live →</span>
-      <span style="color:var(--blue-lt)">{DEMO_PHONE_DISPLAY}</span>
+      <span style="color:var(--blue-lt)">${DEMO_PHONE_DISPLAY}</span>
     </div>
   </div>
 </section>
