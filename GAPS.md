@@ -2,11 +2,11 @@
 
 **Deep dive analysis** — 2026-06-23 (main branch; post doc hygiene pass)
 
-This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (145 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, BETH_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
+This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (145 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, AIASSISTANT_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
 
 **Context**: Multi-tenant Voice AI Reception SaaS for service businesses (tire shops, salons, auto, trades, fitness, food & beverage). **HIPAA verticals are permanently excluded.** Strong foundation in voice (Telnyx + LiveKit), atomic booking, RLS multi-tenancy, dashboard, and recent shipments (live call-transfer + transcripts + summaries + outcomes + analytics + simulate harness + competitor CRM removal + data export/audit/RAG debugger + doc consistency hygiene).
 
-Many items below are already tracked in `docs/TODO.md` (especially Phase 13 production wiring, `[prod]` silent-degrade risks, and BETH checklist). This file expands into unstated angles and provides a single "get to these things" reference. Use it alongside (not instead of) the active TODOs, simulate harness, and prepare-commit workflow.
+Many items below are already tracked in `docs/TODO.md` (especially Phase 13 production wiring, `[prod]` silent-degrade risks, and AIASSISTANT checklist). This file expands into unstated angles and provides a single "get to these things" reference. Use it alongside (not instead of) the active TODOs, simulate harness, and prepare-commit workflow.
 
 **Update rule**: Refresh this file after major shipments or when a new class of gap surfaces. Cross-link back to specific files/lines and docs when possible.
 
@@ -22,18 +22,18 @@ The project is unusually mature for a solo-dev codebase. Core engine (booking RP
 - **Ops visibility** (observability tokens, cost metering, load testing).
 - **Business surface** (legal docs, support tooling, plan management).
 
-Focus next sessions on the BETH checklist + all `[prod]` silent items + Stripe verification. That unblocks paid customers and makes everything else visible.
+Focus next sessions on the AIASSISTANT checklist + all `[prod]` silent items + Stripe verification. That unblocks paid customers and makes everything else visible.
 
 ---
 
 ## 1. Production Readiness & Go-Live Blockers (Highest Risk)
 
-From `docs/TODO.md` + `BETH_GO_LIVE_TODO.md` + source:
+From `docs/TODO.md` + `AIASSISTANT_GO_LIVE_TODO.md` + source:
 
-- **PSTN inbound path unverified** for the live number (`+1 630-866-1960` and test `+1 630-822-9086`). Different-carrier dial + `listRooms()` monitoring still required. Carrier propagation / recycled-DID issues diagnosed; Telnyx ticket escalated. Agent + LiveKit + Telnyx SIP config proven in isolation, but real voice is the blocker for Beth (tenant `d5e3c6a1...`) and any paying customer.
+- **PSTN inbound path unverified** for the live number (`+1 630-866-9086`). Different-carrier dial to test number `+1 630-822-9086` + `listRooms()` monitoring still required. Previous `+1 630-866-1960` dead. Carrier propagation / recycled-DID issues diagnosed; Telnyx ticket escalated. Agent + LiveKit + Telnyx SIP config proven in isolation, but real voice is the blocker for `__PERSONA_NAME__` (tenant `d5e3c6a1...`) and any paying customer.
 - **Telnyx REFER / call transfer not enabled** on the SIP Connection. `transfer_call` tool (shipped) degrades to "take a message" when `forward_phone` is set.
 - **`[prod]` silent-degrade risks — code fixes shipped 2026-06-16/17** (boot warnings now fire for all of these; prod env vars still need to be set):
-  - ~~Reminders/comms SMS → MockAdapter~~ — FIXED: `ProviderRegistry` defaults to Telnyx. Set `TELNYX_PHONE_NUMBER=+16308661960` on Railway.
+  - ~~Reminders/comms SMS → MockAdapter~~ — FIXED: `ProviderRegistry` defaults to Telnyx. Set `TELNYX_PHONE_NUMBER=+16308669086` on Railway.
   - Email → mock transporter without `EMAIL_USER`/`EMAIL_PASS` — boot warning fires; set Gmail app-password on Railway.
   - ~~Agent `BACKEND_URL` defaults to localhost~~ — FIXED: config validation now fails at startup if unset. Set `BACKEND_URL` on `ai-sec-agent`.
   - ~~`STRIPE_WEBHOOK_SECRET` empty → webhooks 400~~ — boot warning fires; set on Railway.
@@ -309,7 +309,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 
 **Gaps**:
 
-- Live PSTN voice end-to-end (the Beth blocker; one E2E skip is voice calls).
+- Live PSTN voice end-to-end (the `__PERSONA_NAME__` blocker; one E2E skip is voice calls).
 - Real external OAuth + Stripe + live CRM paths (orchestration only via recorder).
 - RAG eval is manual/on-demand (costs money, non-deterministic).
 - No property-based or sustained load tests.
@@ -393,9 +393,9 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 
 ## Prioritized Action Clusters (Rough Order)
 
-**P0 — Unblock any real customer / Beth go-live**
+**P0 — Unblock any real customer / `__PERSONA_NAME__` go-live**
 
-- Complete BETH checklist (different-carrier PSTN test + Telnyx REFER enable + forward_phone set on dashboard).
+- Complete AIASSISTANT checklist (different-carrier PSTN test + Telnyx REFER enable + forward_phone set on dashboard).
 - Set remaining Railway env vars (TELNYX*PHONE_NUMBER, DASHBOARD_URL, CORS_ORIGIN, STRIPE*\* vars, EMAIL_USER/PASS, BACKEND_URL on agent) — code fixes shipped, boot warns on missing.
 - Set Railway observability tokens + basic alerts (`errors_total`, booking failures, pool waiting, etc.).
 - Gate Railway deploys on CI green (branch protection or Railway "wait for CI").
@@ -449,4 +449,4 @@ This file was generated from a full-repo deep dive on 2026-06-15 and expanded sa
 
 ---
 
-**Next step for the reader**: Open `docs/TODO.md` and `docs/BETH_GO_LIVE_TODO.md`, pick the top unblocked item from the P0 cluster, create a feature branch, and start executing. The simulate harness will tell you immediately when a link is wired.
+**Next step for the reader**: Open `docs/TODO.md` and `docs/AIASSISTANT_GO_LIVE_TODO.md`, pick the top unblocked item from the P0 cluster, create a feature branch, and start executing. The simulate harness will tell you immediately when a link is wired.

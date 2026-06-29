@@ -332,7 +332,7 @@ function parseOrFail<T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply
  * a generic 500. `code` is the Postgres SQLSTATE (e.g. 23502 = not_null_violation,
  * 23503 = foreign_key_violation, 23505 = unique_violation); `constraint`,
  * `column`, `table`, and `detail` pinpoint exactly what the RPC rejected.
- * Origin: 2026-06-24 — the first real Beth call never logged because
+ * Origin: 2026-06-24 — the first real __PERSONA_NAME__ call never logged because
  * start_voice_session() threw on a NULL caller_phone, but the fire-and-forget
  * failure left no diagnosable trace (see feedback_sad_path_instrumentation).
  */

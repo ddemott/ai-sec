@@ -1,9 +1,12 @@
-# Beth Go-Live — Resume Checklist
+# __PERSONA_NAME__ Go-Live — Resume Checklist
+# (file renamed to AIASSISTANT_ for generic codename, was BETH_GO_LIVE_TODO.md)
+# Persona name variable in seed (currently 'Chris')
+# Marker: __PERSONA_NAME__  (use in docs/comments for the name; change only in seed var)
 
 Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 
-**Goal:** Beth answers real calls on `+1 630-866-1960` for Thinking Hammer LLC
-(tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`).
+**Goal:** __PERSONA_NAME__ answers real calls on `+1 630-866-9086` (live) for Thinking Hammer LLC
+(tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`). Test verification number `+1 630-822-9086`. (Previous `+1 630-866-1960` dead.)
 
 > ## 📩 2026-06-05 — Telnyx support escalated; account healthy
 > Telnyx (Mark Morse, 13:55 UTC) replied: *"We have escalated these call examples to
@@ -13,6 +16,12 @@ Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 > upgraded → ID + account verification approved. Full thread in `docs/TICKET_SUPPORT.md`.
 > **Still blocked on:** (a) Telnyx's escalation findings, AND (b) the different-carrier
 > dial test below.
+
+> ## 🔄 2026-06-26 UPDATE — new current number
+> Live number `+1 630-866-9086`. Test verification number `+1 630-822-9086` (the one to dial for PSTN test).
+> Landing page, CLAUDE, RUNBOOK, TODO, tests, TELNYX ex now use 9086 as main. Fixtures for inbound_phone use 9086.
+> Previous 1960 dead. Update trunk/Telnyx for 822-9086 if needed for verification.
+> Open PSTN verification steps now target the 9086 number. Last worked date bumped.
 
 > ## ⚠️ 2026-06-04 UPDATE — supersedes the "NOT LiveKit / Telnyx-domain / do NOT
 > ## mutate the trunk" conclusion below.
@@ -47,7 +56,7 @@ Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 
 ## DONE (verified)
 
-- [x] Beth persona + booking model + 19 KB docs seeded on tenant d5e3c6a1 (prod DB).
+- [x] __PERSONA_NAME__ persona + booking model + 19 KB docs seeded on tenant d5e3c6a1 (prod DB).
 - [x] Telnyx account funded ($10) + upgraded (trial 1-order cap lifted).
 - [x] Number **`+1 630-866-1960`** purchased. Resource id `2973794140900296302`. Status: active.
 - [x] Number routed to Telnyx SIP connection **`livekit-outbound`** (`2945038451784812111`).
@@ -85,7 +94,7 @@ Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 > Steps 1–4 COMPLETE 2026-06-03 (see DONE section). Only the live test remains.
 
 ### 5. LIVE TEST — call `+1 630-866-1960`  ← ONLY REMAINING STEP (Dale dials)
-- Beth should greet (name + recording notice + 3-path question).
+- __PERSONA_NAME__ should greet (name + recording notice + 3-path question).
 - Walk each path: personal / programming / SecretaryHQ.
 - Try a real booking → confirm row lands in `appointments` for tenant d5e3c6a1
   inside Dale's Mon–Fri 1–5pm window (out-of-window should reject).
@@ -165,7 +174,7 @@ correctly, but the wider PSTN has not refreshed.
 > Minor config note for whoever picks this up: connection inbound has `dnis_number_format=e164`
 > (Telnyx sends `+16308661960` with leading `+`), but the LiveKit trunk number list is
 > `["16308661960"]` (no `+`). Irrelevant while calls never reach Telnyx, but verify the match
-> once the PSTN intercept clears — if Beth still doesn't answer after a real INVITE lands,
+> once the PSTN intercept clears — if __PERSONA_NAME__ still doesn't answer after a real INVITE lands,
 > normalize one side.
 
 **If the call fails, the symptom tells you the layer:**
@@ -177,7 +186,7 @@ correctly, but the wider PSTN has not refreshed.
   *right now*. Deployment shows SUCCESS but that only proves it booted 2026-06-02; pull
   FRESH `ai-sec-agent` logs (Railway token method: memory `reference-railway-headless`)
   and look for a recent reconnect/crash. Redeploy the service to force a fresh registration.
-- **Beth answers but booking fails** → tenant data / booking RPC, not telephony.
+- **__PERSONA_NAME__ answers but booking fails** → tenant data / booking RPC, not telephony.
 
 ---
 
@@ -189,7 +198,7 @@ correctly, but the wider PSTN has not refreshed.
       "Thanks for calling…").
 - [ ] Personal-call transfer tool → Dale's cell, via
       `livekit-server-sdk` TransferSipParticipant. Depends on Telnyx outbound PSTN
-      (now that account is upgraded, may work — untested). v1 fallback: Beth books
+      (now that account is upgraded, may work — untested). v1 fallback: __PERSONA_NAME__ books
       a callback / takes a message.
 
 ---

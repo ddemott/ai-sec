@@ -40,5 +40,5 @@ CREATE POLICY job_inquiries_tenant_isolation ON job_inquiries
 
 -- Per-tenant override for where job-inquiry notifications are emailed. When
 -- null, the route falls back to the tenant owner's user email. Set to
--- DaleDeMott@thinkinghammer.com for Thinking Hammer (Beth's tenant).
+-- DaleDeMott@thinkinghammer.com for Thinking Hammer (__PERSONA_NAME__'s tenant).
 ALTER TABLE tenants ADD COLUMN job_inquiry_email TEXT;

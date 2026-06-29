@@ -285,7 +285,7 @@ export default defineAgent({
             //    BEFORE the slow LLM steps below. An abrupt disconnect/process
             //    teardown during summarize/classify must not strand the row
             //    'active' with no duration/transcript (the exact bug seen on the
-            //    first real Beth call). end_voice_session overwrites by
+            //    first real __PERSONA_NAME__ call). end_voice_session overwrites by
             //    (tenant_id, call_id) with no status guard, so the enrich pass
             //    can safely add summary/outcome afterward. trackedOutcome is only
             //    ever a real tool outcome (booked/transferred) — never the
@@ -513,7 +513,7 @@ export default defineAgent({
                 speed: tenantConfig.ttsSpeed ?? 1.0,
               }),
               // Don't let a short backchannel ("hello?", "ok") during the TTS gap
-              // cancel/discard Beth's in-flight reply (the failure in the trace:
+              // cancel/discard __PERSONA_NAME__'s in-flight reply (the failure in the trace:
               // a 1-word turn pre-empted the generation, orphaning the tool output).
               turnHandling: {
                 interruption: {
@@ -531,7 +531,7 @@ export default defineAgent({
                   minWords: 2,
                   // If speech is detected but NO transcript follows within 2s (a false
                   // trigger — line noise, a cough, a half-word), resume speaking from
-                  // where Beth left off instead of staying silent. Direct guard against
+                  // where __PERSONA_NAME__ left off instead of staying silent. Direct guard against
                   // a phantom "interruption" killing the reply → dead air.
                   falseInterruptionTimeout: 2000,
                   resumeFalseInterruption: true,
@@ -541,7 +541,7 @@ export default defineAgent({
                 // fragments — so a phone number ("312 865" … "1186") or a multi-part
                 // answer ("it's W2" … "in Chicago" … "$65/hr") arrives as several
                 // turns, each starting a generation the next fragment then discards →
-                // Beth never finishes a reply → freeze. Wait ~1.3s of silence so a
+                // __PERSONA_NAME__ never finishes a reply → freeze. Wait ~1.3s of silence so a
                 // multi-part answer AGGREGATES into one turn → one reply. maxDelay
                 // caps the wait so a truly-finished caller isn't left hanging.
                 endpointing: {
@@ -577,7 +577,7 @@ export default defineAgent({
           },
           // Realtime is token-constrained (a big persona + every tool schema +
           // audio tokens overflowed the context → "error type: tokens" mid-call).
-          // Trim the tool set to what Beth actually uses — drop the OTP/
+          // Trim the tool set to what __PERSONA_NAME__ actually uses — drop the OTP/
           // verification tools (her persona never does phone verification) to
           // shrink the schema context sent to the model. Pipeline mode = all tools.
           config.ENABLE_REALTIME

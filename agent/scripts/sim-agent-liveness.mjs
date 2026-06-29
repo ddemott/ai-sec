@@ -1,7 +1,7 @@
 // sim-agent-liveness.mjs — prove the LiveKit agent worker is registered + picks
 // up work RIGHT NOW. Driven by scripts/simulate.sh `status --deep`.
 //
-// Method (the one proven in the Beth go-live notes): create an explicit agent
+// Method (the one proven in the __PERSONA_NAME__ go-live notes): create an explicit agent
 // dispatch into a throwaway room and wait for the agent participant to join.
 // A participant appearing in a room we just created = the worker is live (only
 // the dispatched agent can be there). Cleans the room up afterward.
@@ -18,7 +18,7 @@ const url = process.env.LIVEKIT_URL;
 const key = process.env.LIVEKIT_API_KEY;
 const secret = process.env.LIVEKIT_API_SECRET;
 // Any real tenant works — the agent only needs it to fetch config; the JOIN is
-// the signal. Defaults to the Thinking Hammer (Beth) prod tenant.
+// the signal. Defaults to the Thinking Hammer (__PERSONA_NAME__) prod tenant.
 const tenant = process.env.SIM_TENANT || 'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0';
 const AGENT_NAME = 'ai-secretary-agent';
 const TIMEOUT_MS = 10000;

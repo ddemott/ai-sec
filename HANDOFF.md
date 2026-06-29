@@ -94,7 +94,7 @@ Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
 ## User Actions Pending (not code)
 
 - LLC bank account; Stripe test round-trip (`stripe listen --forward-to localhost:4001/billing/webhook`) + Stripe Tax dashboard setup
-- Dial `+1 630-866-1960` from a different carrier while watching `listRooms()` — PSTN verify (blocked on a 2nd phone)
+- Dial `+1 630-822-9086` (test verification) from a different carrier while watching `listRooms()` — PSTN verify (blocked on a 2nd phone)
 - Enable Telnyx REFER on SIP Connection `livekit-outbound`; set forward number (Phone Assistant → AI Persona)
 - Enable "Wait for CI" on the 3 Railway services
 - Set `SENTRY_DSN` + `BETTER_STACK_TOKEN` + `EMAIL_USER`/`EMAIL_PASS` on Railway (silent-degrade until set; boot warnings fire)
@@ -105,7 +105,7 @@ Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
 ## Key Facts
 
 - Prod: `https://ai-sec-production.up.railway.app/`
-- Phone: `+1 630-866-1960` (Telnyx, tenant Thinking Hammer LLC `d5e3c6a1-…`)
+- Phone: `+1 630-866-9086` (Telnyx, tenant Thinking Hammer LLC `d5e3c6a1-…`; current)
 - Logins: `admin@secretaryhq.com` / `daledemott@gmail.com` / `bella@bellashair.com` — password `/ password`
 - Local DB: port 5433
 - Prod DB URL: encrypted at `~/.claude/projects/-home-dale-projects-secretary-hq/memory/db_url.enc`

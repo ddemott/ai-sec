@@ -221,3 +221,8 @@ export function detectTimezone(city: string, state: string): string | null {
   if (STATE_TIMEZONE_MAP[state]) return STATE_TIMEZONE_MAP[state];
   return null;
 }
+
+// Demo / marketing phone number (Thinking Hammer / platform demo line)
+export const DEMO_PHONE_NUMBER = '630-866-9086';
+export const DEMO_PHONE_E164 = '+16308669086';
+export const DEMO_PHONE_DISPLAY = '(630) 866-9086';
