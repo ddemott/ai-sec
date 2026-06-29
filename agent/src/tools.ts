@@ -302,7 +302,7 @@ export function buildTools(
 
     book_appointment: llm.tool({
       description:
-        "Book an appointment at a specific slot. Requires a VERIFIED phone (either caller-ID or OTP-confirmed). If the response contains 'I'll need a good phone number', pivot to the Phone Verification flow in the instructions.",
+        "Book an appointment at a specific slot. Requires a good phone number (caller-ID or one the caller gives you). If the response contains 'I'll need a good phone number', collect and confirm a number from the caller per the phone-handling guidance in the instructions, then retry.",
       parameters: {
         type: 'object',
         properties: {

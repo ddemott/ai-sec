@@ -10,6 +10,8 @@
  * standing up a LiveKit session.
  */
 
+import type { Capability } from './tools.js';
+
 export interface PromptContext {
   /** Display name of the tenant business, e.g., "DynaTire". */
   tenantName: string;
@@ -62,6 +64,19 @@ export interface PromptContext {
   ttsWarm?: boolean | null;
   /** When true, inject concise style instructions (shorter replies). */
   ttsConcise?: boolean | null;
+  /**
+   * The tool capability subset active for this session. MUST match the array
+   * passed to buildTools(..., { capabilities }) — index.ts threads the SAME
+   * literal into both so the prompt never advertises a tool that isn't in the
+   * ToolContext. `undefined` means all capabilities (pipeline mode, default).
+   *
+   * Origin (GH issue #113): Realtime mode trims tools to a lean subset
+   * (identity/scheduling/messaging), but the prompt used to describe
+   * knowledge/verification/transfer tools unconditionally — the model would try
+   * to call tools that don't exist → error/hallucination → dead air on a voice
+   * call. Gating the prompt on the same subset closes that drift.
+   */
+  capabilities?: readonly Capability[];
 }
 
 /**
@@ -78,9 +93,21 @@ function substitutePlaceholders(template: string, ctx: PromptContext): string {
 }
 
 export function buildSystemPrompt(ctx: PromptContext): string {
+  // Capability gating (GH issue #113). A capability is present when no subset
+  // was passed (pipeline mode = all tools) OR it's explicitly in the subset.
+  // Each gate drives BOTH the matching tool line(s) in "# Available tools" AND
+  // any dedicated section, so the prompt describes exactly the tools the
+  // ToolContext exposes — never one the model can't actually call.
+  const has = (c: Capability): boolean => !ctx.capabilities || ctx.capabilities.includes(c);
+  const hasKnowledge = has('knowledge');
+  const hasVerification = has('verification');
+  const hasTransfer = has('transfer');
+
   const callerLine = ctx.callerPhone
     ? `The caller's number is ${ctx.callerPhone} (verified by caller ID).`
-    : `The caller's number is NOT available (blocked or withheld caller ID). You MUST collect and verify a phone number before booking any appointment — see the "Phone Verification" section below.`;
+    : hasVerification
+      ? `The caller's number is NOT available (blocked or withheld caller ID). You MUST collect and verify a phone number before booking any appointment — see the "Phone Verification" section below.`
+      : `The caller's number is NOT available (blocked or withheld caller ID). Ask for a good callback number, read it back to confirm (see the phone-capture rules below), and use that for any booking. If the caller can't give a number, offer to take a message.`;
 
   const trimmedCustom = ctx.customPrompt?.trim();
   const identitySection = trimmedCustom
@@ -111,6 +138,48 @@ How to apply this:
 
   const preferenceToolLine = preferencesEnabled
     ? `\n- save_customer_preference(phone, key, value) — remember a durable fact about this customer (preferred staff, last service, likes/dislikes) for future calls.`
+    : '';
+
+  // Capability-gated tool lines (same pattern as preferenceToolLine). Each is
+  // emitted only when its capability is in the active subset, so "# Available
+  // tools" lists exactly what the ToolContext exposes.
+  const knowledgeToolLine = hasKnowledge
+    ? `\n- get_company_policy_answer(question) — semantic search the knowledge base for policy/FAQ answers.`
+    : '';
+  const verificationToolLines = hasVerification
+    ? `\n- send_verification_code(phone) — SMS a 6-digit code for phone verification (OTP flow).\n- verify_phone_code(phone, code) — check a spoken code against the sent one.`
+    : '';
+  const transferToolLine = hasTransfer
+    ? `\n- transfer_call() — connect the live call to a real person (the owner/staff cell). Use when the caller needs a human: a personal call for the owner, an urgent issue you can't handle, or an explicit request to be connected. Tell the caller you're connecting them BEFORE calling it; if it reports it can't transfer, apologize briefly and offer to take a message.`
+    : '';
+
+  // OTP flow section — only when verification is available. Without it (Realtime
+  // subset) the blocked-caller path collects a number verbally (callerLine
+  // above) instead of pointing at a section that no longer exists.
+  const otpSection = hasVerification
+    ? `
+
+# Phone Verification (OTP flow)
+If a booking tool returns an error containing "I'll need a good phone number", the caller needs to provide one and verify it. Follow this script:
+
+1. Ask verbally: "What's the best number to text or call you at?"
+2. When they give you a number, confirm it briefly: "Got it — let me send you a quick code to confirm, one moment."
+3. Call send_verification_code(phone) with the full 10-digit number.
+4. Read the returned message VERBATIM to the caller (it contains the "I just sent you a text..." line).
+5. When the caller reads back the code, call verify_phone_code(phone, code).
+6. On success: proceed with the original booking using the verified phone.
+7. On "didn't quite match": relay the error and ask them to try again.
+8. On "expired" or "too many tries": offer to take a message instead.
+
+If the caller says they can't receive texts, apologize and offer to take a message with their number.`
+    : '';
+
+  // Knowledge base section — only when the knowledge capability is available.
+  const knowledgeSection = hasKnowledge
+    ? `
+
+# Knowledge base
+For questions about hours, pricing beyond what's in the catalog, return policies, warranties, etc. — always call get_company_policy_answer BEFORE answering. If it returns the "I don't have specific information" message, offer to take a message. The result may prefix each passage with a \`[From "<source>"]\` marker — use it to attribute the answer naturally when it helps ("according to our cancellation policy, …"); never read the bracket marker aloud verbatim.`
     : '';
 
   const styleLines: string[] = [];
@@ -150,14 +219,10 @@ How to apply this:
 - get_scheduling_options(requirements, window) — returns valid (resource, employee) combinations for a service within a time window. Use when the caller hasn't specified a day yet.
 - check_availability(resource_id, start_time, end_time) — boolean availability for a specific resource + time.
 - book_appointment(resource_id, start_time, end_time, phone, name?, employee_id?) — direct booking when the caller has picked a specific slot.
-- book_with_scheduling(requirements, window, phone, name?) — single-call booking that finds the slot AND books it.
-- get_company_policy_answer(question) — semantic search the knowledge base for policy/FAQ answers.
-- send_verification_code(phone) — SMS a 6-digit code for phone verification (OTP flow).
-- verify_phone_code(phone, code) — check a spoken code against the sent one.
+- book_with_scheduling(requirements, window, phone, name?) — single-call booking that finds the slot AND books it.${knowledgeToolLine}${verificationToolLines}
 - get_my_appointments() — fetch the caller's upcoming scheduled appointments by caller-ID. Call before canceling or rescheduling.
 - cancel_appointment(appointment_id) — cancel one of the caller's appointments. Always confirm with the caller first. For rescheduling use reschedule_appointment instead.
-- reschedule_appointment(appointment_id, new_start_time, new_end_time) — move an existing appointment to a new slot. Always confirm the new time with the caller before calling. Use book_with_scheduling first if they don't have a new time yet.
-- transfer_call() — connect the live call to a real person (the owner/staff cell). Use when the caller needs a human: a personal call for the owner, an urgent issue you can't handle, or an explicit request to be connected. Tell the caller you're connecting them BEFORE calling it; if it reports it can't transfer, apologize briefly and offer to take a message.${preferenceToolLine}
+- reschedule_appointment(appointment_id, new_start_time, new_end_time) — move an existing appointment to a new slot. Always confirm the new time with the caller before calling. Use book_with_scheduling first if they don't have a new time yet.${transferToolLine}${preferenceToolLine}
 
 # Capturing a phone number (read back, never go silent)
 Spoken numbers are easy to mishear or hear only partway. ANY time you collect a number (to save a contact, take a message, or book):
@@ -167,21 +232,7 @@ Spoken numbers are easy to mishear or hear only partway. ANY time you collect a 
 4. If they correct you, read the full number back again to confirm.
 5. Only once you have a confirmed 10-digit number do you proceed (save the contact, continue the booking, etc.).
 6. After two or three tries without a complete number, don't stall — offer to take a message and move the call forward.
-The rule under all of this: after the caller speaks, you ALWAYS say something next — confirm, ask for what's missing, or move on. Never leave dead air waiting for more input.
-
-# Phone Verification (OTP flow)
-If a booking tool returns an error containing "I'll need a good phone number", the caller needs to provide one and verify it. Follow this script:
-
-1. Ask verbally: "What's the best number to text or call you at?"
-2. When they give you a number, confirm it briefly: "Got it — let me send you a quick code to confirm, one moment."
-3. Call send_verification_code(phone) with the full 10-digit number.
-4. Read the returned message VERBATIM to the caller (it contains the "I just sent you a text..." line).
-5. When the caller reads back the code, call verify_phone_code(phone, code).
-6. On success: proceed with the original booking using the verified phone.
-7. On "didn't quite match": relay the error and ask them to try again.
-8. On "expired" or "too many tries": offer to take a message instead.
-
-If the caller says they can't receive texts, apologize and offer to take a message with their number.
+The rule under all of this: after the caller speaks, you ALWAYS say something next — confirm, ask for what's missing, or move on. Never leave dead air waiting for more input.${otpSection}
 
 # Offer the service menu — never ask "which service?" blind
 When a caller wants to book, or hasn't said which service they need, FIRST call get_service_catalog() and read the real options back as a short spoken menu, ending with the option to leave a message:
@@ -269,10 +320,7 @@ something the caller did.
 
 Don't read every slot if there are five — three is plenty for the caller to choose from. If they don't like any of those, you can call get_scheduling_options with a wider window to look further out.
 
-If next_available is empty or missing, fall back to the generic "want to pick another time?" prompt and let the caller propose.
-
-# Knowledge base
-For questions about hours, pricing beyond what's in the catalog, return policies, warranties, etc. — always call get_company_policy_answer BEFORE answering. If it returns the "I don't have specific information" message, offer to take a message. The result may prefix each passage with a \`[From "<source>"]\` marker — use it to attribute the answer naturally when it helps ("according to our cancellation policy, …"); never read the bracket marker aloud verbatim.${preferencesSection}
+If next_available is empty or missing, fall back to the generic "want to pick another time?" prompt and let the caller propose.${knowledgeSection}${preferencesSection}
 
 # Ending the call
 If the caller says goodbye, confirms their booking, or the conversation is clearly done, say a brief thank-you and end the call. Do NOT keep the call open waiting for more.`;
