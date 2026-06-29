@@ -487,6 +487,117 @@ describe('buildSystemPrompt', () => {
   });
 });
 
+describe('buildSystemPrompt — capability gating (Realtime tool subset)', () => {
+  // Origin: GH issue #113. In Realtime mode the tool set is trimmed to a
+  // capability subset (identity/scheduling/messaging), but the prompt used to
+  // advertise knowledge/verification/transfer tools unconditionally. The model
+  // would then try to call tools that aren't in the ToolContext → error or
+  // hallucination → dead air on a voice call. The prompt must describe ONLY the
+  // tools the active capability set actually exposes. `capabilities` undefined =
+  // all capabilities (pipeline mode, backward compatible).
+  const REALTIME = ['identity', 'scheduling', 'messaging'] as const;
+
+  it('HAPPY: undefined capabilities = all tools/sections present (backward compatible)', () => {
+    // WHO: pipeline-mode call (the default, ENABLE_REALTIME off).
+    // WHAT: with no capabilities passed, every tool + section renders exactly
+    //        as before — knowledge, verification, transfer all included.
+    // WHY: capability gating must be strictly additive; the no-capabilities
+    //        path is the production default and must not change.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toContain('get_company_policy_answer');
+    expect(prompt).toContain('send_verification_code');
+    expect(prompt).toContain('verify_phone_code');
+    expect(prompt).toContain('transfer_call');
+    expect(prompt).toContain('# Phone Verification');
+    expect(prompt).toContain('# Knowledge base');
+  });
+
+  it('HAPPY: Realtime subset omits EVERY reference to dropped tools (zero-occurrence)', () => {
+    // WHO: a Realtime (speech-to-speech) call where tools are trimmed to
+    //       identity/scheduling/messaging.
+    // WHAT: the prompt must contain NONE of the dropped tools or their
+    //        dedicated sections — a single lingering mention is enough for the
+    //        LLM to attempt a non-existent tool call.
+    // WHY: issue #113 — prompt↔tool drift causes dead air. A zero-occurrence
+    //        assertion (not an enumerated eyeball) is what proves we caught
+    //        every reference.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, capabilities: REALTIME });
+    for (const dropped of [
+      'get_company_policy_answer',
+      'send_verification_code',
+      'verify_phone_code',
+      'transfer_call',
+      '# Phone Verification',
+      '# Knowledge base',
+    ]) {
+      expect(prompt, `dropped reference still present: ${dropped}`).not.toContain(dropped);
+    }
+  });
+
+  it('HAPPY: Realtime subset KEEPS identity + scheduling + messaging content', () => {
+    // WHO: same Realtime call.
+    // WHAT: the tools that ARE in the subset must still be described so the
+    //        model knows its actual toolkit.
+    // WHY: over-trimming would strand the model with no booking/identity tools.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, capabilities: REALTIME });
+    expect(prompt).toContain('get_customer_context'); // identity
+    expect(prompt).toContain('identify_caller'); // identity
+    expect(prompt).toContain('get_service_catalog'); // scheduling
+    expect(prompt).toContain('book_with_scheduling'); // scheduling
+    expect(prompt).toContain('TIMESLOT_OCCUPIED'); // scheduling error map kept
+    expect(prompt).toMatch(/take a message/i); // messaging path kept
+  });
+
+  it('HAPPY: blocked caller WITHOUT verification → no OTP, steer to read-back + message (no dangling section ref)', () => {
+    // WHO: anonymous caller (no caller-ID) on a Realtime call where the
+    //       verification capability is NOT available.
+    // WHAT: the caller line must NOT promise an OTP flow that no longer exists
+    //        (no "Phone Verification section below" pointer, no "verify"); it
+    //        steers to collecting/confirming a number verbally and offering a
+    //        message instead.
+    // WHY: issue #113 — gating verification out while leaving the blocked-caller
+    //        line pointing at the deleted "# Phone Verification" section is the
+    //        same dead-air bug class (a dangling reference the model can't act on).
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      callerPhone: null,
+      capabilities: REALTIME,
+    });
+    expect(prompt).toContain('NOT available'); // still tells the model caller-ID is missing
+    expect(prompt).not.toContain('Phone Verification section'); // no dangling pointer
+    expect(prompt).not.toContain('MUST collect and verify'); // no OTP promise
+    expect(prompt).not.toContain('# Phone Verification');
+  });
+
+  it('HAPPY: blocked caller WITH verification (pipeline) → keeps the OTP MUST-verify line', () => {
+    // WHO: anonymous caller in pipeline mode (verification available).
+    // WHAT: the existing OTP behavior is unchanged — collect + verify.
+    // WHY: regression guard — capability gating must not weaken the verified
+    //        path when verification IS present.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, callerPhone: null });
+    expect(prompt).toContain('MUST collect and verify');
+    expect(prompt).toContain('# Phone Verification');
+  });
+
+  it('HAPPY: a scheduling+knowledge subset keeps the KB section but still drops transfer/verification', () => {
+    // WHO: a scheduling + knowledge subset (no transfer, no verification) — the
+    //       array passed is exactly ['scheduling','knowledge'].
+    // WHAT: gating is per-capability and independent — knowledge present keeps
+    //        get_company_policy_answer + # Knowledge base; transfer + verification
+    //        absent drop transfer_call + send_verification_code.
+    // WHY: pins that the gates are independent booleans, not an all-or-nothing
+    //        realtime flag — so future capability mixes render correctly.
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      capabilities: ['scheduling', 'knowledge'] as const,
+    });
+    expect(prompt).toContain('get_company_policy_answer');
+    expect(prompt).toContain('# Knowledge base');
+    expect(prompt).not.toContain('transfer_call');
+    expect(prompt).not.toContain('send_verification_code');
+  });
+});
+
 describe('buildSystemPrompt — voice style injection', () => {
   it('HAPPY: ttsFormal=true injects # Voice style section with formal instruction', () => {
     // WHO: tenant with the Formal voice style checkbox checked

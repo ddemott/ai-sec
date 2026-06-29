@@ -453,12 +453,23 @@ export default defineAgent({
         roomName: sessionCtx.roomName ?? undefined,
         participantIdentity: sessionCtx.participantIdentity ?? undefined,
       });
+      // Realtime is token-constrained — expose only the lean message+meeting
+      // capability subset. The SAME array drives BOTH the tool set (buildTools
+      // below) AND the system prompt (buildSystemPrompt) so the prompt never
+      // advertises a tool that isn't in the ToolContext — a mismatch makes the
+      // model call a non-existent tool → error/hallucination → dead air on a
+      // voice call (GH issue #113). undefined = all capabilities (pipeline mode).
+      const activeCapabilities = config.ENABLE_REALTIME
+        ? (['identity', 'scheduling', 'messaging'] as const)
+        : undefined;
+
       // 4. Build prompt with runtime context
       const instructions = buildSystemPrompt({
         tenantName: tenantConfig.name,
         callerPhone: sessionCtx.callerPhone,
         currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
         timezone: tenantConfig.timezone,
+        capabilities: activeCapabilities,
         // 2026-05-18: feed the tenant's customized persona (from
         // tenants.system_prompt, displayed/edited in the dashboard's AI
         // Persona page) into the prompt's identity section. NULL falls
@@ -580,10 +591,9 @@ export default defineAgent({
           // expose ONLY the tools that flow needs — identity (who's calling),
           // scheduling (book a meeting), messaging (take a message) — dropping
           // knowledge/RAG, transfer, and OTP to shrink the per-turn schema tokens.
-          // Pipeline mode = all tools. Widen this back out once on a higher tier.
-          config.ENABLE_REALTIME
-            ? { capabilities: ['identity', 'scheduling', 'messaging'] }
-            : undefined
+          // `activeCapabilities` (computed once above) drives this AND the system
+          // prompt, so the two can never drift (GH issue #113). Pipeline = all tools.
+          activeCapabilities ? { capabilities: activeCapabilities } : undefined
         );
 
         const agent = new voice.Agent({
