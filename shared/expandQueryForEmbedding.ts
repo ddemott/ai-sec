@@ -49,6 +49,7 @@ Rules:
 - Output ONLY a single line of space-separated terms — no punctuation, no numbering, no explanation
 - Preserve the original key words from the question
 - Add only synonyms / closely related terms — do NOT invent specific facts, names, prices, or hours
+- Include MORPHOLOGICAL variants and the exact word-forms a document is likely to use, not just abstract nouns — e.g. for "address" emit "located locate location where situated directions", for "cost" emit "price priced pricing how much fee", for "hours" emit "open opening close closing when". Matching the document's actual wording (often a verb/participle like "located") matters more than a clever synonym.
 - Keep it to a short phrase, not a sentence`;
 
 const FETCH_TIMEOUT_MS = 15_000;
