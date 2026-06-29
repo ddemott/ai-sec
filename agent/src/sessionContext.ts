@@ -68,6 +68,45 @@ export function extractCallerInfo(attributes: Record<string, string> | null | un
   return { callerPhone, callId };
 }
 
+/**
+ * Reduce a phone string to its 10 US digits for equality comparison: strip all
+ * non-digit characters, then drop a leading country-code 1 if that leaves 10.
+ * Returns null when the result isn't a clean 10-digit number, so partial or
+ * garbage input never compares equal.
+ *
+ * Intentionally STRICTER than shared/phone.ts normalizePhone (which prepends +1,
+ * accepts 11+ digit strings, and preserves international numbers for E.164
+ * storage): this is a US-line equality reducer, not a normalizer — it accepts
+ * ONLY a US 10-digit number (optionally 1-prefixed) and rejects everything else,
+ * because the forward-number match is a same-line check. Kept local rather than
+ * importing shared/ because the agent build (rootDir: src) doesn't include it.
+ */
+function tenDigits(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  let digits = phone.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+  return digits.length === 10 ? digits : null;
+}
+
+/**
+ * True when the SIP caller-ID is the tenant's OWN forward number — i.e. the
+ * call was forwarded from the owner's line, so the caller-ID is the forwarding
+ * line, NOT the actual customer. The entry point nulls callerPhone in this case
+ * so the agent collects the customer's real number verbally (and saves it to
+ * the CRM) instead of mis-keying the call/contact on the owner's forwarding
+ * number. A different (good) caller-ID returns false and is kept — the agent
+ * then only needs the caller's name. Either side null/blank/non-10-digit →
+ * false (nothing to match). Origin: Dale's forwarded business line (2026-06-29).
+ */
+export function callerIdIsForwardNumber(
+  callerPhone: string | null | undefined,
+  forwardPhone: string | null | undefined
+): boolean {
+  const caller = tenDigits(callerPhone);
+  const forward = tenDigits(forwardPhone);
+  return caller !== null && caller === forward;
+}
+
 /** Known markers carriers send for blocked/withheld caller-ID. */
 function isAnonymousMarker(phone: string): boolean {
   const lower = phone.trim().toLowerCase();
