@@ -17,11 +17,10 @@ Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 > **Still blocked on:** (a) Telnyx's escalation findings, AND (b) the different-carrier
 > dial test below.
 
-> ## 🔄 2026-06-26 UPDATE — new current number
-> Live number `+1 630-822-9086`. Test verification number `+1 630-822-9086` (the one to dial for PSTN test).
-> Landing page, CLAUDE, RUNBOOK, TODO, tests, TELNYX ex now use 9086 as main. Fixtures for inbound_phone use 9086.
-> Previous 1960 dead. Update trunk/Telnyx for 822-9086 if needed for verification.
-> Open PSTN verification steps now target the 9086 number. Last worked date bumped.
+> ## 🔄 2026-06-30 UPDATE — live number corrected to 822-9086
+> Live number `+1 630-822-9086` — the real owned + routed Telnyx DID. **Dial this for the PSTN test.**
+> The long-documented `+1 630-866-9086` was a transcription error: that DID was **never owned** (it routes to another business that answers). `+1 630-866-1960` is a dead recycled DID.
+> Landing pages, CLAUDE, RUNBOOK, TODO, tests, and `inbound_phone` fixtures now all use **822-9086**. Open PSTN verification steps target **822-9086**.
 
 > ## ⚠️ 2026-06-04 UPDATE — supersedes the "NOT LiveKit / Telnyx-domain / do NOT
 > ## mutate the trunk" conclusion below.
