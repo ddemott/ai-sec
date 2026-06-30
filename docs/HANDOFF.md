@@ -105,7 +105,7 @@ Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
 ## Key Facts
 
 - Prod: `https://ai-sec-production.up.railway.app/`
-- Phone: `+1 630-866-9086` (Telnyx, tenant Thinking Hammer LLC `d5e3c6a1-…`; current)
+- Phone: `+1 630-822-9086` (Telnyx, tenant Thinking Hammer LLC `d5e3c6a1-…`; current)
 - Logins: `admin@secretaryhq.com` / `daledemott@gmail.com` / `bella@bellashair.com` — password `/ password`
 - Local DB: port 5433
 - Prod DB URL: encrypted at `~/.claude/projects/-home-dale-projects-secretary-hq/memory/db_url.enc`

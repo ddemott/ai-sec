@@ -91,7 +91,7 @@ Below is a full list of its features:
 | **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                                                             |
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                          |
 | **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). See `docs/AIASSISTANT_GO_LIVE_TODO.md` for remaining PSTN verification steps. |
-| **Phone**     | `+1 630-866-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                     |
+| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                     |
 | **Tests**     | ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent) + 0 skips, zero TypeScript errors                                                                                                  |
 | **E2e**       | 29 Playwright spec files (~212 tests)                                                                                                                                                            |
 

@@ -94,16 +94,16 @@ describe('phonesWouldLoop', () => {
   });
 
   it('flags transfer == inbound DID', () => {
-    expect(phonesWouldLoop('+16308669086', null, '6308669086')).toBe(true);
+    expect(phonesWouldLoop('+16308229086', null, '6308229086')).toBe(true);
   });
 
   it('allows distinct numbers', () => {
-    expect(phonesWouldLoop('+16308669086', '+16082175303', '+16305551234')).toBe(false);
+    expect(phonesWouldLoop('+16308229086', '+16082175303', '+16305551234')).toBe(false);
   });
 
   it('no transfer number set → never loops', () => {
-    expect(phonesWouldLoop(null, '+16082175303', '+16308669086')).toBe(false);
-    expect(phonesWouldLoop('', '+16082175303', '+16308669086')).toBe(false);
+    expect(phonesWouldLoop(null, '+16082175303', '+16308229086')).toBe(false);
+    expect(phonesWouldLoop('', '+16082175303', '+16308229086')).toBe(false);
   });
 
   it('ignores un-normalizable garbage (treated as no-match, not a false loop)', () => {
@@ -325,7 +325,7 @@ describe('POST /tenants/:id/update-config loop guard', () => {
       tts_voice: null, tts_speed: null, tts_soft: null, tts_cheerful: null,
       tts_formal: null, tts_warm: null, tts_concise: null,
       forward_phone: null, owner_phone: null,
-      forwarded_from_phone: '+16082175303', inbound_phone: '+16308669086',
+      forwarded_from_phone: '+16082175303', inbound_phone: '+16308229086',
     });
     const route = routes.find((r) => r.path === '/tenants/:id/update-config')!;
     const req: any = {
@@ -345,12 +345,12 @@ describe('POST /tenants/:id/update-config loop guard', () => {
       tts_voice: null, tts_speed: null, tts_soft: null, tts_cheerful: null,
       tts_formal: null, tts_warm: null, tts_concise: null,
       forward_phone: null, owner_phone: null,
-      forwarded_from_phone: null, inbound_phone: '+16308669086',
+      forwarded_from_phone: null, inbound_phone: '+16308229086',
     });
     const route = routes.find((r) => r.path === '/tenants/:id/update-config')!;
     const req: any = {
       params: { id: TID }, auth: { tenant_id: TID, role: 'owner' },
-      body: { forward_phone: '+1 630 866 9086' }, log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      body: { forward_phone: '+1 630 822 9086' }, log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     };
     const rep = reply();
     await route.handler(req, rep);

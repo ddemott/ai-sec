@@ -5,7 +5,7 @@
 
 Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 
-**Goal:** __PERSONA_NAME__ answers real calls on `+1 630-866-9086` (live) for Thinking Hammer LLC
+**Goal:** __PERSONA_NAME__ answers real calls on `+1 630-822-9086` (live) for Thinking Hammer LLC
 (tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`). Test verification number `+1 630-822-9086`. (Previous `+1 630-866-1960` dead.)
 
 > ## 📩 2026-06-05 — Telnyx support escalated; account healthy
@@ -18,7 +18,7 @@ Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 > dial test below.
 
 > ## 🔄 2026-06-26 UPDATE — new current number
-> Live number `+1 630-866-9086`. Test verification number `+1 630-822-9086` (the one to dial for PSTN test).
+> Live number `+1 630-822-9086`. Test verification number `+1 630-822-9086` (the one to dial for PSTN test).
 > Landing page, CLAUDE, RUNBOOK, TODO, tests, TELNYX ex now use 9086 as main. Fixtures for inbound_phone use 9086.
 > Previous 1960 dead. Update trunk/Telnyx for 822-9086 if needed for verification.
 > Open PSTN verification steps now target the 9086 number. Last worked date bumped.

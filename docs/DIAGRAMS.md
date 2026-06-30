@@ -27,7 +27,7 @@ Physical layout post-LiveKit migration (`661d21d`, 2026-04-27).
 ```mermaid
 flowchart TB
   Caller([Caller phone])
-  Telnyx["Telnyx SIP Trunk<br/>+1 630 866 9086 (live)"]
+  Telnyx["Telnyx SIP Trunk<br/>+1 630 822 9086 (live)"]
   Caller -->|PSTN| Telnyx
 
   LiveKit["LiveKit Cloud<br/>SIP bridge + rooms<br/>dispatch rule SDR_if97ky4Zf7e6"]
@@ -233,7 +233,7 @@ sequenceDiagram
   participant API as Fastify<br/>/agent-tools/*
   participant DB as Postgres
 
-  Caller->>Telnyx: Dial +1 (630) 937-9478 (historical; current live +1 630-866-9086)
+  Caller->>Telnyx: Dial +1 (630) 937-9478 (historical; current live +1 630-822-9086)
   Telnyx->>LK: SIP INVITE → inbound trunk
   LK->>LK: dispatch rule SDR_if97ky4Zf7e6<br/>→ create room, metadata = { tenant_id }
   LK->>Agent: room.created event (WebSocket)

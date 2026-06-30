@@ -32,10 +32,10 @@ Focus next sessions on the AIASSISTANT checklist + all `[prod]` silent items + S
 
 From `docs/TODO.md` + `AIASSISTANT_GO_LIVE_TODO.md` + source:
 
-- **PSTN inbound path unverified** for the live number (`+1 630-866-9086`). Different-carrier dial to test number `+1 630-822-9086` + `listRooms()` monitoring still required. Previous `+1 630-866-1960` dead. Carrier propagation / recycled-DID issues diagnosed; Telnyx ticket escalated. Agent + LiveKit + Telnyx SIP config proven in isolation, but real voice is the blocker for `__PERSONA_NAME__` (tenant `d5e3c6a1...`) and any paying customer.
+- **PSTN inbound path unverified** for the live number (`+1 630-822-9086`). Different-carrier dial to test number `+1 630-822-9086` + `listRooms()` monitoring still required. Previous `+1 630-866-1960` dead. Carrier propagation / recycled-DID issues diagnosed; Telnyx ticket escalated. Agent + LiveKit + Telnyx SIP config proven in isolation, but real voice is the blocker for `__PERSONA_NAME__` (tenant `d5e3c6a1...`) and any paying customer.
 - **Telnyx REFER / call transfer not enabled** on the SIP Connection. `transfer_call` tool (shipped) degrades to "take a message" when `forward_phone` is set.
 - **`[prod]` silent-degrade risks — code fixes shipped 2026-06-16/17** (boot warnings now fire for all of these; prod env vars still need to be set):
-  - ~~Reminders/comms SMS → MockAdapter~~ — FIXED: `ProviderRegistry` defaults to Telnyx. Set `TELNYX_PHONE_NUMBER=+16308669086` on Railway.
+  - ~~Reminders/comms SMS → MockAdapter~~ — FIXED: `ProviderRegistry` defaults to Telnyx. Set `TELNYX_PHONE_NUMBER=+16308229086` on Railway.
   - Email → mock transporter without `EMAIL_USER`/`EMAIL_PASS` — boot warning fires; set Gmail app-password on Railway.
   - ~~Agent `BACKEND_URL` defaults to localhost~~ — FIXED: config validation now fails at startup if unset. Set `BACKEND_URL` on `ai-sec-agent`.
   - ~~`STRIPE_WEBHOOK_SECRET` empty → webhooks 400~~ — boot warning fires; set on Railway.

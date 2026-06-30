@@ -128,7 +128,7 @@ describe('/agent-tools/take-message', () => {
       queryResponses: [
         { rows: [] }, // customer not found (new caller, no customer row yet)
         { rows: [{ message_id: MESSAGE_ID }] },
-        { rows: [{ forward_phone: '+16082175303', inbound_phone: '+16308669086' }] },
+        { rows: [{ forward_phone: '+16082175303', inbound_phone: '+16308229086' }] },
       ],
     });
 
@@ -149,7 +149,7 @@ describe('/agent-tools/take-message', () => {
     expect(vi.mocked(telnyxSms.sendSms)).toHaveBeenCalledOnce();
     const smsCall = vi.mocked(telnyxSms.sendSms).mock.calls[0][0];
     expect(smsCall.to).toBe('+16082175303');
-    expect(smsCall.from).toBe('+16308669086');
+    expect(smsCall.from).toBe('+16308229086');
     expect(smsCall.body).toContain('Bob Jones');
     expect(smsCall.body).toContain('Please call me back');
   });
@@ -169,7 +169,7 @@ describe('/agent-tools/take-message', () => {
         { rows: [{ message_id: MESSAGE_ID }] },
         {
           rows: [
-            { owner_phone: '+16082175303', forward_phone: null, inbound_phone: '+16308669086' },
+            { owner_phone: '+16082175303', forward_phone: null, inbound_phone: '+16308229086' },
           ],
         },
       ],
@@ -224,7 +224,7 @@ describe('/agent-tools/take-message', () => {
       queryResponses: [
         { rows: [] }, // customer not found
         { rows: [{ message_id: MESSAGE_ID }] },
-        { rows: [{ forward_phone: '+16082175303', inbound_phone: '+16308669086' }] },
+        { rows: [{ forward_phone: '+16082175303', inbound_phone: '+16308229086' }] },
       ],
     });
 

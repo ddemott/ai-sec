@@ -1,6 +1,6 @@
 # Telnyx Support — Active Ticket
 
-**Number**: `+1 630-866-9086` (live, Thinking Hammer LLC). Previous `+1 630-866-1960` dead. Test verification `+1 630-822-9086`. (Ticket history below covers the prior numbers.)
+**Number**: `+1 630-822-9086` (live, Thinking Hammer LLC). Previous `+1 630-866-1960` dead. Test verification `+1 630-822-9086`. (Ticket history below covers the prior numbers.)
 
 > ## 📩 UPDATE 2026-06-05 — Telnyx escalated to their internal team
 > Support agent **Mark Morse** replied (2026-06-05 13:55 UTC, via Pylon →

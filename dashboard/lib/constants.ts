@@ -222,7 +222,10 @@ export function detectTimezone(city: string, state: string): string | null {
   return null;
 }
 
-// Demo / marketing phone number (Thinking Hammer / platform demo line)
-export const DEMO_PHONE_NUMBER = '630-866-9086';
-export const DEMO_PHONE_E164 = '+16308669086';
-export const DEMO_PHONE_DISPLAY = '(630) 866-9086';
+// Demo / marketing phone number (Thinking Hammer / platform demo line).
+// This is the real owned + routed Telnyx DID that reaches the agent.
+// NOTE: 630-866-9086 was a long-standing documentation error (never owned —
+// it belongs to another business). The live line is 630-822-9086.
+export const DEMO_PHONE_NUMBER = '630-822-9086';
+export const DEMO_PHONE_E164 = '+16308229086';
+export const DEMO_PHONE_DISPLAY = '(630) 822-9086';

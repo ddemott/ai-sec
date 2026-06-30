@@ -12,16 +12,16 @@ describe('phonesWouldLoop', () => {
   });
 
   it('flags transfer == inbound DID', () => {
-    expect(phonesWouldLoop('+16308669086', null, '6308669086')).toBe(true);
+    expect(phonesWouldLoop('+16308229086', null, '6308229086')).toBe(true);
   });
 
   it('allows distinct numbers', () => {
-    expect(phonesWouldLoop('+16308669086', '+16082175303', '+16305551234')).toBe(false);
+    expect(phonesWouldLoop('+16308229086', '+16082175303', '+16305551234')).toBe(false);
   });
 
   it('no transfer number set → never loops', () => {
-    expect(phonesWouldLoop(null, '+16082175303', '+16308669086')).toBe(false);
-    expect(phonesWouldLoop('', '+16082175303', '+16308669086')).toBe(false);
+    expect(phonesWouldLoop(null, '+16082175303', '+16308229086')).toBe(false);
+    expect(phonesWouldLoop('', '+16082175303', '+16308229086')).toBe(false);
   });
 
   it('ignores un-normalizable garbage (treated as no-match, not a false loop)', () => {
