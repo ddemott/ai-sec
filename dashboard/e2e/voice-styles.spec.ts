@@ -10,11 +10,12 @@
  * Api.tenants.updateConfig, or the route handler shows up as a failed reload
  * assertion — not a cosmetic toggle that silently stops persisting.
  *
- * NOTE (2026-06-25+): Soft + Cheerful were removed from the picker when primary
- * TTS switched Grok → OpenAI (final removal of all Grok/xAI remnants). They were
- * Grok-only prosody tags with no OpenAI equivalent. Only the prompt-level styles
- * (Formal/Warm/Concise) remain; their tts_* columns (and the voice/speed ones)
- * persist for the OpenAI configuration.
+ * NOTE (2026-06-30): Soft + Cheerful were dropped during the Grok → OpenAI TTS
+ * switch (Grok-only prosody) but RE-ACTIVATED 2026-06-30 as prompt-level tone
+ * modifiers — the agent injects them into the "# Voice style" section like
+ * Formal/Warm/Concise. All five prompt-level styles now render and persist via
+ * their tts_* columns; none drive raw TTS params (OpenAI has no fixed modifier
+ * enum — tone is steered through the prompt).
  *
  * Auth: the shared auth.setup logs in as admin@secretaryhq.com (super-admin,
  * platform tenant). We edit that tenant's AI config and reset it afterward.
