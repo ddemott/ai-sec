@@ -13,7 +13,7 @@
 - **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Live **`+1 630-866-9086`**. Previous `+1 630-866-1960` (2026-06-02) dead. Test verification number **`+1 630-822-9086`**. Old provisioning details in history below. **Remaining**: PSTN inbound verification on the test number; live call-transfer REFER enablement on Telnyx SIP. Full checklist: `docs/AIASSISTANT_GO_LIVE_TODO.md`. See also recent number update in CLAUDE.md etc.
 - **Env vars (user action)**: `SENTRY_DSN` + `BETTER_STACK_TOKEN` not yet set on Railway. (`METRICS_TOKEN` **confirmed SET** 2026-06-29 — `/metrics` returns 401 not 404; `DASHBOARD_URL` confirmed set per the 2026-06-18 reconcile.) **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See the Production Wiring Checklist above.
 - **Browser validation**: Role gating + invite flow — DONE 2026-06-03, proven by green e2e (`auth-flows` route-gate 403, `workflows:630` front-desk nav-hide/snap-back, `workflows:676` owner invite).
-- **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (now archived/reduced). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
+- **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (removed 2026-06-30; items triaged here). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
 
 Everything else complete or tracked below.
 
@@ -401,7 +401,7 @@ Open:
 
 ## UX audit pass 2 (2026-05-19)
 
-Source: Raw UX audit performed 2026-05-19 (previously captured in `ux-review-notes.md`, now archived). High/medium findings triaged below. No separate source-of-truth file is maintained for the raw notes.
+Source: Raw UX audit performed 2026-05-19 (previously in `ux-review-notes.md`, removed 2026-06-30). High/medium findings triaged below. No separate source-of-truth file is maintained for the raw notes.
 
 ### P0 — verified rule violations + real defects (small, concrete)
 
