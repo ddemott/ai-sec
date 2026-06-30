@@ -54,6 +54,8 @@ export interface Tenant {
   system_prompt: string | null;
   /** Owner-editable assistant name (e.g. "Chris"). NULL = no explicit name. */
   persona_name?: string | null;
+  /** Service a call books when the caller doesn't name a matchable one. */
+  default_service_id?: string | null;
   voice_id: string | null;
   first_message: string | null;
   team_size?: number;
