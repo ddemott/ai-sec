@@ -1,0 +1,268 @@
+# Alerting — SecretaryHQ
+
+Ready-to-apply alert rules for the production backend + agent. Closes the
+**P0 "Alert rules" item** in `docs/TODO.md`. The metric names, label keys, and
+label *values* below match the live registry in `src/services/metrics.ts`
+exactly — paste them as written.
+
+**Incident response for each alert lives in `docs/RUNBOOK.md`.** An alert tells
+you *something broke*; the runbook tells you *what to do*. Each rule links its
+runbook section.
+
+---
+
+## 0. Status of prerequisites (as of 2026-06-29)
+
+| Prereq | State | Note |
+| --- | --- | --- |
+| `METRICS_TOKEN` on Railway backend | **SET** ✅ | Verified live: `GET /metrics` returns `401` (not `404`), i.e. the token gate is active. Scrapes work once a collector sends the Bearer. |
+| Prometheus / metrics collector scraping `/metrics` | **NOT wired** | No scraper is hitting prod yet. Stand one up (§2) — this is the remaining blocker for metric-based alerts. |
+| `BETTER_STACK_TOKEN` on backend + agent | **NOT set** | Until set, logs are stdout-only (Railway live-tail). Better Stack also offers **log-pattern alerts** (§4) as a no-scraper fallback. |
+| `SENTRY_DSN` on backend + agent | **NOT set** | Sentry covers *exceptions/error grouping*, complementary to the metric alerts here. |
+
+So today: the metric **data exists and is exposed**; you need either (a) a
+Prometheus scrape + alertmanager/Grafana, or (b) Better Stack log alerts, to
+turn it into pages. §2 and §4 cover both. §3 is the rule catalog (collector-agnostic PromQL).
+
+---
+
+## 1. What emits metrics
+
+- **Endpoint:** `GET /metrics` on the backend (`https://ai-sec-production.up.railway.app/metrics`).
+- **Auth:** `Authorization: Bearer $METRICS_TOKEN`. Returns `404` when the env var is unset (strict opt-in), `401` on missing/wrong Bearer, `200` + Prometheus text format when correct.
+- **Format:** Prometheus exposition. Counters are monotonic since process boot (Railway restart resets them — alert on `rate()`, never absolute values).
+- **Skip list:** `/health`, `/ready`, `/metrics` are excluded from HTTP metrics (no recursive-scrape contamination).
+- **Cardinality guard:** hard cap 1000 series/metric; `status` is collapsed to a family (`2xx`/`4xx`/`5xx`), never raw codes.
+
+### Live series (exact names + labels)
+
+| Metric | Type | Labels | Label values |
+| --- | --- | --- | --- |
+| `http_requests_total` | counter | `route`, `method`, `status` | `status` ∈ `2xx`/`4xx`/`5xx` |
+| `http_request_duration_ms` | histogram | `route`, `method`, `status` | buckets: 10,25,50,100,250,500,1000,2500,5000,10000 ms |
+| `booking_attempts_total` | counter | `outcome`, `source` | `outcome` ∈ success, timeslot_occupied, employee_not_scheduled, no_skilled_employee, no_availability, validation_error, other_error · `source` ∈ api, agent |
+| `tool_calls_total` | counter | `tool`, `outcome` | `outcome` ∈ success, error, validation_error |
+| `sync_dispatches_total` | counter | `provider`, `entity`, `action` | — |
+| `errors_total` | counter | `event` | the `event` arg passed to `logError()` (e.g. `voice_session_reaped`, `provisioning_failed`, `unhandled_route_error`) |
+| `reminders_sent_total` | counter | `channel`, `outcome` | `channel` ∈ email, sms · `outcome` ∈ success, failure |
+| `reminders_skipped_total` | counter | `reason` | appointment_not_found, appointment_cancelled, no_consent, processing_error |
+
+> Histograms expose `_bucket{le=…}`, `_count`, and `_sum` suffixes — the
+> `histogram_quantile()` rules below depend on `_bucket`.
+
+---
+
+## 2. Stand up a scrape (Prometheus path)
+
+Minimal `prometheus.yml` scrape job:
+
+```yaml
+scrape_configs:
+  - job_name: secretaryhq-backend
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: ${METRICS_TOKEN}   # same value set on Railway
+    static_configs:
+      - targets: ['ai-sec-production.up.railway.app']
+    scrape_interval: 30s
+```
+
+Point Alertmanager (or Grafana Cloud / Better Stack metrics) at this Prometheus
+and load the rules in §3. Grafana Cloud's free tier is enough for beta volume
+and accepts the same `alert` rule YAML.
+
+---
+
+## 3. Alert rule catalog (PromQL)
+
+Drop into a Prometheus rule file (`groups: [{ name: secretaryhq, rules: [...] }]`).
+Thresholds are tuned for **beta volume** (low absolute traffic) — revisit once
+real call volume lands. Severity: **page** = wake someone; **warn** = review next business day.
+
+### 3.1 Error rate climbing — `page`
+
+```yaml
+- alert: ErrorRateHigh
+  expr: sum(rate(errors_total[5m])) > 0.2
+  for: 10m
+  labels: { severity: page }
+  annotations:
+    summary: "errors_total climbing ({{ $value | printf \"%.2f\" }}/s over 5m)"
+    runbook: "docs/RUNBOOK.md — Backend down / DB pool saturation"
+```
+
+Per-event breakout (high signal — tells you *which* failure):
+
+```yaml
+- alert: ProvisioningErrors
+  expr: rate(errors_total{event="provisioning_failed"}[15m]) > 0
+  for: 5m
+  labels: { severity: warn }
+  annotations: { runbook: "docs/RUNBOOK.md — Telephony / provisioning" }
+
+- alert: VoiceSessionsReapedSpike
+  expr: rate(errors_total{event="voice_session_reaped"}[15m]) > 0.02
+  for: 15m
+  labels: { severity: warn }
+  annotations:
+    summary: "Voice sessions being force-finalized by the reaper — agent may not be sending voice-session-end"
+    runbook: "docs/RUNBOOK.md — Agent silent"
+```
+
+### 3.2 HTTP 5xx rate — `page`
+
+```yaml
+- alert: Http5xxRate
+  expr: |
+    sum(rate(http_requests_total{status="5xx"}[5m]))
+      / clamp_min(sum(rate(http_requests_total[5m])), 0.001) > 0.05
+  for: 10m
+  labels: { severity: page }
+  annotations:
+    summary: ">5% of requests are 5xx over 5m"
+    runbook: "docs/RUNBOOK.md — Backend down"
+```
+
+### 3.3 p95 latency — `warn`
+
+```yaml
+- alert: LatencyP95High
+  expr: |
+    histogram_quantile(0.95,
+      sum(rate(http_request_duration_ms_bucket[5m])) by (le)) > 2500
+  for: 15m
+  labels: { severity: warn }
+  annotations:
+    summary: "p95 request latency >2.5s over 15m"
+    runbook: "docs/RUNBOOK.md — DB pool saturation"
+```
+
+### 3.4 Booking failure rate — `page`
+
+Booking is the revenue path. `success` vs everything-else:
+
+```yaml
+- alert: BookingFailureRate
+  expr: |
+    sum(rate(booking_attempts_total{outcome!="success"}[15m]))
+      / clamp_min(sum(rate(booking_attempts_total[15m])), 0.001) > 0.5
+  for: 15m
+  labels: { severity: page }
+  annotations:
+    summary: ">50% of booking attempts failing over 15m"
+    runbook: "docs/RUNBOOK.md — Booking failures"
+```
+
+> Note: a high `no_availability` / `employee_not_scheduled` share can be
+> *legitimate* (genuinely full calendar). If this fires noisily, exclude the
+> "expected" outcomes: `outcome=~"timeslot_occupied|other_error|validation_error"`.
+
+### 3.5 Pool saturation — `warn` (synthetic, from `/ready`)
+
+`pool.waiting` is NOT a Prometheus metric — it's in the `/ready` JSON. Two options:
+- **Blackbox/JSON probe** on `/ready`, alert when `pool.waiting > 0` sustained.
+- **Better Stack heartbeat** monitor on `/ready` expecting `200` + `"db":"ok"`.
+
+```yaml
+# If you expose /ready via a json_exporter mapping pool.waiting -> ready_pool_waiting:
+- alert: DbPoolWaiting
+  expr: ready_pool_waiting > 0
+  for: 5m
+  labels: { severity: warn }
+  annotations:
+    summary: "DB pool has waiting checkouts — approaching max=10 saturation"
+    runbook: "docs/RUNBOOK.md — DB pool saturation"
+```
+
+### 3.6 Reminder delivery regression — `warn`
+
+```yaml
+- alert: ReminderDeliveryFailing
+  expr: |
+    sum(rate(reminders_sent_total{outcome="failure"}[30m]))
+      / clamp_min(sum(rate(reminders_sent_total[30m])), 0.001) > 0.2
+  for: 30m
+  labels: { severity: warn }
+  annotations:
+    summary: ">20% of reminder sends failing — check SMS/email provider creds"
+    runbook: "docs/RUNBOOK.md — Reminders not sending"
+
+- alert: RemindersSkippedNoConsent
+  expr: rate(reminders_skipped_total{reason="no_consent"}[1h]) > 0.05
+  for: 1h
+  labels: { severity: warn }
+  annotations:
+    summary: "Reminders skipping for no_consent — callers may not be getting the opt-in prompt"
+```
+
+### 3.7 Agent tool error rate — `warn`
+
+```yaml
+- alert: ToolCallErrorRate
+  expr: |
+    sum(rate(tool_calls_total{outcome="error"}[15m])) by (tool)
+      / clamp_min(sum(rate(tool_calls_total[15m])) by (tool), 0.001) > 0.3
+  for: 15m
+  labels: { severity: warn }
+  annotations:
+    summary: "Agent tool {{ $labels.tool }} erroring >30% over 15m"
+    runbook: "docs/RUNBOOK.md — Agent silent"
+```
+
+### 3.8 No traffic at all — `page` (deploy/outage canary)
+
+Backend up but serving nothing for 15m during the day usually means a broken
+deploy or DNS/routing issue:
+
+```yaml
+- alert: NoHttpTraffic
+  expr: sum(rate(http_requests_total[10m])) == 0
+  for: 15m
+  labels: { severity: page }
+  annotations: { summary: "Zero HTTP requests for 15m — routing/deploy outage?" }
+```
+
+---
+
+## 4. No-scraper fallback — Better Stack log alerts
+
+If you don't want to run Prometheus yet, set `BETTER_STACK_TOKEN` on the backend
++ agent and alert on **log patterns** instead. Every `logError()` emits a JSON
+line with an `event` field, so Better Stack queries map 1:1 to the counters:
+
+| Better Stack log query | Equivalent to |
+| --- | --- |
+| `event:"unhandled_route_error"` count > N / 5m | §3.1 ErrorRateHigh |
+| `event:"provisioning_failed"` any | §3.1 ProvisioningErrors |
+| `event:"voice_session_reaped"` rising | §3.1 VoiceSessionsReapedSpike |
+| `level:50` (Pino error) rate | broad error-rate page |
+| `event:"stripe_webhook_signature_failed"` any | Stripe webhook misconfig |
+
+Plus a **Better Stack heartbeat monitor** hitting `GET /ready` every 60s,
+expecting `200` + body `"status":"ready"` — covers backend-down + DB-down +
+(via JSON match) pool saturation, with no Prometheus at all. This is the fastest
+path to *some* paging today.
+
+---
+
+## 5. Routing
+
+Route **page** severity to a channel Dale actually watches (phone push /
+SMS / PagerDuty-free option: Better Stack → phone call). Route **warn** to email
+or a Slack/Discord channel reviewed daily. Don't send everything to one firehose
+— alert fatigue silences the pages that matter.
+
+---
+
+## 6. Apply checklist
+
+- [ ] `METRICS_TOKEN` set on Railway backend — **DONE** (verified 2026-06-29).
+- [ ] Stand up a scraper (Prometheus / Grafana Cloud) per §2, **or** set `BETTER_STACK_TOKEN` + use §4 log alerts.
+- [ ] Load the §3 rules (or §4 log queries).
+- [ ] Configure §5 routing to a watched channel.
+- [ ] Fire a test alert (e.g. temporarily lower a threshold) → confirm it reaches your phone → restore.
+- [ ] Set `BETTER_STACK_TOKEN` + `SENTRY_DSN` on backend **and** agent for full log + exception coverage.
+
+When this checklist is green, mark the **"Alert rules"** P0 item done in `docs/TODO.md`.
