@@ -828,9 +828,19 @@ export default defineAgent({
         // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)
         // is spoken verbatim when set; otherwise a short hardcoded fallback —
         // the LLM warms up from there either way.
+        // Default greeting, in priority order:
+        //  1. the owner's custom "First Message" (spoken verbatim when set);
+        //  2. a persona-aware default that introduces the assistant by name, so
+        //     a tenant who hasn't written a greeting still gets a proper named
+        //     opener AND it stays consistent when the name changes (no stale
+        //     name baked into a saved greeting);
+        //  3. a plain fallback when neither is set.
+        const personaName = tenantConfig.personaName?.trim();
         const greeting =
           tenantConfig.firstMessage?.trim() ||
-          `Thanks for calling ${tenantConfig.name}. How can I help you today?`;
+          (personaName
+            ? `Hi, this is ${personaName} at ${tenantConfig.name}. How can I help you today?`
+            : `Thanks for calling ${tenantConfig.name}. How can I help you today?`);
         // Greeting. Pipeline mode plays it via say() uninterrupted (a caller's
         // "hi?"/line noise at pickup shouldn't truncate the opening line); Realtime
         // mode speaks it via generateReply with server-side turn-taking (it rejects
