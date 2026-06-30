@@ -2,6 +2,13 @@
 
 **See also**: root `GAPS.md` (created 2026-06-15, last refreshed 2026-06-23) for the full deep-dive inventory of missing pieces across every angle (product, integrations, billing, ops, security, scaling, etc.). This file remains the active execution queue.
 
+**Related lists (kept separate by role — this file is the single scheduled action queue):**
+- `docs/AIASSISTANT_GO_LIVE_TODO.md` — focused voice/Telnyx go-live operational checklist.
+- `docs/IMPROVEMENT_IDEAS.md` — curated *idea* backlog (categorized, not scheduled).
+- `docs/IMPROVEMENTS_TODO.md` — `/continuously-improve` loop proposal inbox (needs review before acting).
+
+(The standalone `UIUX_TODO.md` was folded into the UX backlog section below on 2026-06-30 — 70 audit items were already done; its remaining un-audited-surface reviews live here now. The raw `ux-review-notes.md` + dated ux-audit TODO snapshots were removed the same day.)
+
 **Status at a Glance** (as of 2026-06-23)
 
 - **Recent (2026-06-22/23)**: merged PRs #56/#57/#58/#59 + #64/#65/#66/#67 (and #70/#71 fixes) — toolsClient retries, export/audit/RAG debugger/dashboard surfaces, website scan E2E, analytics (abandonment-by-service + date filters + cohorts compat), unbound-method lint to error. Tests green per CLAUDE: backend ~1,940 + ~790 dashboard + ~360 agent. 29 route modules. Doc hygiene pass (route counts, Vercel refs, phone quals, REFACTORING comments) done mechanically. **Additional mechanical doc hygiene (2026-06-23, on chore branch)**: 10 independent solo items (stale 134→142 migrations + 26→29 labels + test nums in README; ARCH header (27)→(29) + dedup; CLAUDE 12→17 tools; lingering NEEDS-REFACTORING.md live-ref removal; last-updated bumps; sweep). All per AGENTS mechanical scope. `verify:claude-md` + `npm run checks` + tsc clean. Recorded in RESOLVED.
@@ -126,6 +133,29 @@ These branches survived the 2026-06-23 cleanup because each holds real unmerged 
 - [ ] **Cluster A — neutral-language / no-grading** (8 surfaces, blocked on the Dale review): `StepReview`, `SkillRelationshipMap`/`SkillMapNode`, `ResourceColumnsView`, `AppointmentListView`, `EmployeeDayFocusPanel`, `AnalyticsView`, `AppointmentDetailPanel`.
 - [ ] **Wizard Phase B** — full draft-commit model (hold wizard state local, commit on Step-7 Done; ~5K-line infra; coordinate with overlay work).
 - [ ] **P3 dense-view decomposition** — track-don't-piecemeal (`SettingsView`, `TenantEditPanel`, `CRMView`, `AppointmentView`, `DashboardHome`, `CustomerDetailPanel`, scheduler orchestration, …).
+
+#### Pending UX reviews — un-audited surfaces (merged from `UIUX_TODO.md`, 2026-06-30)
+
+Each screen below has had NO dedicated UX review; review before beta. (Full P0/P1/P2 UX-audit action list from the 2026-05-28 `/ux-audit` was completed — 70 items closed — and its remaining cross-referenced items are Cluster A / Wizard Phase B / dense-view above. Audit report: `scripts/ux-audit/reports/2026-05-28T0853/ux-audit.html`.)
+
+- [ ] **[REVIEW]** `AIConfigView` — "Voice Settings" (raw system-prompt editing exposed to non-technical owners; "System Instructions (The 'Brain')" is dev language; dirty-save uses `warning` variant).
+- [ ] **[REVIEW]** `AnalyticsView` — full layout, empty states, date-range controls, metric usefulness to an owner.
+- [ ] **[REVIEW]** `VoiceCallsView` — list layout, outcome-badge legibility, transcript/summary display, filter UX, meaning of "abandoned".
+- [ ] **[REVIEW]** `AppointmentView` + `AppointmentDetailPanel` + `AppointmentListSidebar` — 3-panel flow, mobile behavior, status-change communication (high-density).
+- [ ] **[REVIEW]** `CRMView` + `CustomerDetailPanel` — search, customer/appointment history, edit + delete/restore, how AI call summaries surface.
+- [ ] **[REVIEW]** `ProfileView` — password-change discoverability, "My Profile" vs "Business Settings" boundary, role visibility.
+- [ ] **[REVIEW]** `BusinessSettingsView` — what stays here post-IA-merge vs moved to Setup.
+- [ ] **[REVIEW]** `SettingsView` — owner vs super-admin split, overlap with BusinessSettingsView.
+- [ ] **[REVIEW]** `EmployeeManagementView` — add-employee form, per-card skill assignment, deactivated-employee surfacing.
+- [ ] **[REVIEW]** `ShiftManagementView` — team-size-conditional paths, copy-week discoverability.
+- [ ] **[REVIEW]** `ResourceManagerView` — zero-resource state, service-mapping checkboxes, "capabilities" meaning.
+- [ ] **[REVIEW]** `ServiceAssignmentView` — is 3 steps correct, no-assignment case, cancel/exit flow.
+- [ ] **[REVIEW]** `SkillMatrixView` + `SkillAssignmentsView` + `SkillRelationshipMap` — grid legibility at scale, map value vs confusion, both-views-necessary.
+- [ ] **[REVIEW]** `DeletedRecordsPanel` + `RecordHistoryModal` — discoverability, restore flow, version-history comprehensibility.
+- [ ] **[REVIEW]** `/register` — form flow, field order, error handling, post-signup first experience.
+- [ ] **[REVIEW]** `LoginView` + `/forgot-password` + `/reset-password` — forgot-password end-to-end, error quality, mobile.
+- [ ] **[REVIEW]** `SuperAdminDashboard` + `TenantCard`/`TenantCreateForm`/`TenantEditPanel` — admin interface usability (Dale-facing; slows onboarding if painful).
+- [ ] **[REVIEW]** `FirstRunTour` — post-wizard overlay tour; content/flow review (behavior already correct).
 
 ### Tooling cleanup (dossier: _Tooling cleanup_)
 
