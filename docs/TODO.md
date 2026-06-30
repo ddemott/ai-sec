@@ -3,8 +3,9 @@
 **See also**: root `GAPS.md` (created 2026-06-15, last refreshed 2026-06-23) for the full deep-dive inventory of missing pieces across every angle (product, integrations, billing, ops, security, scaling, etc.). This file remains the active execution queue.
 
 **Related lists (kept separate by role — this file is the single scheduled action queue):**
+
 - `docs/AIASSISTANT_GO_LIVE_TODO.md` — focused voice/Telnyx go-live operational checklist.
-- `docs/IMPROVEMENT_IDEAS.md` — curated *idea* backlog (categorized, not scheduled).
+- `docs/IMPROVEMENT_IDEAS.md` — curated _idea_ backlog (categorized, not scheduled).
 - `docs/IMPROVEMENTS_TODO.md` — `/continuously-improve` loop proposal inbox (needs review before acting).
 
 (The standalone `UIUX_TODO.md` was folded into the UX backlog section below on 2026-06-30 — 70 audit items were already done; its remaining un-audited-surface reviews live here now. The raw `ux-review-notes.md` + dated ux-audit TODO snapshots were removed the same day. Any lingering mentions of `ux-review-notes.md` in other docs or generated audit reports are historical context only — not live pointers.)
@@ -17,7 +18,7 @@
 
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
 - **CI**: green. Agent package gated in CI. Tests (as of 2026-06-22 per CLAUDE): backend ~1,940 · dashboard ~790 · agent ~360 · E2E (numbers from recent merges; CI includes simulate tools gate). Full 4-job gate on main.
-- **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Live **`+1 630-822-9086`**. Previous `+1 630-866-1960` (2026-06-02) dead. Test verification number **`+1 630-822-9086`**. Old provisioning details in history below. **Remaining**: PSTN inbound verification on the test number; live call-transfer REFER enablement on Telnyx SIP. Full checklist: `docs/AIASSISTANT_GO_LIVE_TODO.md`. See also recent number update in CLAUDE.md etc.
+- **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Live **`+1 630-822-9086`**. Previous `+1 630-866-1960` (2026-06-02) dead. Test verification number **`+1 630-822-9086`**. Old provisioning details in history below. **PSTN inbound CONFIRMED 2026-06-30** (real call to `822-9086` reached the agent + logged a session/transcript). **Remaining**: live call-transfer REFER enablement on Telnyx SIP; one live booking call to confirm the employee-skills fix end-to-end. Full checklist: `docs/AIASSISTANT_GO_LIVE_TODO.md`.
 - **Env vars (user action)**: `SENTRY_DSN` + `BETTER_STACK_TOKEN` not yet set on Railway. (`METRICS_TOKEN` **confirmed SET** 2026-06-29 — `/metrics` returns 401 not 404; `DASHBOARD_URL` confirmed set per the 2026-06-18 reconcile.) **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See the Production Wiring Checklist above.
 - **Browser validation**: Role gating + invite flow — DONE 2026-06-03, proven by green e2e (`auth-flows` route-gate 403, `workflows:630` front-desk nav-hide/snap-back, `workflows:676` owner invite).
 - **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (removed 2026-06-30; items triaged here). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
@@ -58,7 +59,7 @@ These branches survived the 2026-06-23 cleanup because each holds real unmerged 
 
 **Voice path — live inbound + transfer** (dossier: _Voice Validation_, _Phase 13_)
 
-- [ ] **PSTN inbound** — different-carrier call to test number `+1 630-822-9086` while watching LiveKit `listRooms()`; confirm path end-to-end (blocked on a 2nd phone). Live is 9086. Also validates the `ai-sec-agent` deploy.
+- [x] **PSTN inbound — CONFIRMED 2026-06-30.** A real call to `+1 630-822-9086` reached the agent (Beth) and held a full ~3-min conversation (`voice_sessions` row + transcript landed). Inbound path Telnyx → LiveKit → `ai-sec-agent` works; the `ai-sec-agent` deploy is validated. (The earlier "wrong number" symptom was a documentation transcription error — `866-9086` was never ours; `822-9086` is the real owned+routed DID.) Booking on that call failed for a separate reason — the employee-skills gap, root-caused + prod-patched same day; needs one more live call to confirm end-to-end (see below).
 - [ ] **Telnyx REFER** — enable call-transfer / REFER on the SIP Connection (`livekit-outbound`); else `transfer_call` fails at runtime.
 - [ ] **Forward number** — set on dashboard AI Persona → "Forward Calls to a Person" (Dale's cell `+1 608 217 5303`).
 - [ ] **Telnyx prod creds** — verify `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` set on Railway (local `.env` only today); else OTP + provisioning 503.

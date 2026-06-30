@@ -164,3 +164,33 @@ ON CONFLICT (business_type) DO UPDATE SET
   voice_id                 = COALESCE(business_templates.voice_id, EXCLUDED.voice_id),
   default_resource_name    = EXCLUDED.default_resource_name,
   default_resource_description = EXCLUDED.default_resource_description;
+
+-- ── Booking-readiness backfill (mirrors migration 20260630000000) ──────────
+-- Runs last so any seeded tenant can actually book: (1) every employee mapped
+-- to a service holds that service's required_skills (else the booking RPC
+-- returns NO_SKILLED_EMPLOYEE), and (2) each tenant has a default_service_id
+-- the agent falls through to when a caller doesn't name a matchable service.
+-- Idempotent — safe to re-run.
+UPDATE employees e
+SET skills = ARRAY(SELECT DISTINCT unnest(COALESCE(e.skills, '{}') || agg.req)),
+    updated_at = NOW()
+FROM (
+  SELECT se.employee_id, array_agg(DISTINCT rs) AS req
+  FROM service_employee se
+  JOIN services s ON s.service_id = se.service_id
+  CROSS JOIN LATERAL unnest(COALESCE(s.required_skills, '{}')) AS rs
+  GROUP BY se.employee_id
+) agg
+WHERE e.employee_id = agg.employee_id
+  AND NOT (COALESCE(e.skills, '{}') @> agg.req);
+
+UPDATE tenants t
+SET default_service_id = (
+  SELECT s.service_id FROM services s
+  WHERE s.tenant_id = t.tenant_id
+    AND COALESCE(s.is_deleted, false) = false
+    AND EXISTS (SELECT 1 FROM service_employee se WHERE se.service_id = s.service_id)
+  ORDER BY ABS(COALESCE(s.duration_minutes, 30) - 30) ASC, s.name ASC
+  LIMIT 1
+)
+WHERE t.default_service_id IS NULL;

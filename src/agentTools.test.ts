@@ -1550,6 +1550,18 @@ describe('agentTools /book-with-scheduling', () => {
         // the stored name was blank/placeholder.
         { rows: [{ customer_id: 'cust-1' }] }, // SELECT
         { rows: [] }, // UPDATE name
+        // resolver: service name match (runs inside the booking txn, before RPC)
+        {
+          rows: [
+            {
+              service_id: 'svc-oil-0001',
+              name: 'Oil Change',
+              duration_minutes: 30,
+              price: 45,
+              required_skills: ['oil_change'],
+            },
+          ],
+        },
         {
           rows: [
             {
@@ -1585,9 +1597,9 @@ describe('agentTools /book-with-scheduling', () => {
     });
     // WHY: Normalized phone must reach the RPC so the customer upsert path
     //       inside it matches previously-stored records. Helper SELECT is
-    //       queries[0]; name UPDATE is queries[1]; RPC is queries[2].
-    //       Param shape for the RPC: $1=tenant_id, $2=phone.
-    expect(queries[2].params?.[1]).toBe('+15551234567');
+    //       queries[0]; name UPDATE is queries[1]; resolver match is
+    //       queries[2]; RPC is queries[3]. Param shape: $1=tenant_id, $2=phone.
+    expect(queries[3].params?.[1]).toBe('+15551234567');
   });
 
   it('SAD: RPC error_code is surfaced so the agent can be specific', async () => {
@@ -1599,6 +1611,18 @@ describe('agentTools /book-with-scheduling', () => {
       queryResponses: [
         // customerLookup helper finds an existing row before the RPC fires.
         { rows: [{ customer_id: 'cust-occupied' }] },
+        // resolver: service name match (before the RPC)
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Oil Change',
+              duration_minutes: 30,
+              price: null,
+              required_skills: [],
+            },
+          ],
+        },
         {
           rows: [
             {
@@ -1646,6 +1670,18 @@ describe('agentTools /book-with-scheduling', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ customer_id: 'cust-fallback' }] }, // customer SELECT succeeds first
+        // resolver: service name match (before the RPC)
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Oil Change',
+              duration_minutes: 30,
+              price: null,
+              required_skills: [],
+            },
+          ],
+        },
         { rows: [] }, // RPC returns no row
         // findNextAvailableSlots: tz + slots
         { rows: [{ timezone: 'America/Chicago' }] },
@@ -1692,6 +1728,18 @@ describe('agentTools /book-with-scheduling', () => {
       queryResponses: [
         { rows: [{ customer_id: 'cust-1' }] }, // customer SELECT
         { rows: [] }, // name UPDATE
+        // resolver: service name match (before the RPC)
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Oil Change',
+              duration_minutes: 30,
+              price: null,
+              required_skills: [],
+            },
+          ],
+        },
         // RPC fails (slot taken) → the call abandons, but the capture must still run.
         { rows: [{ success: false, error_code: 'TIMESLOT_OCCUPIED', error_message: 'taken' }] },
       ],
@@ -1721,32 +1769,24 @@ describe('agentTools /available-slots', () => {
     //        rows; route merges shifts, subtracts bookings, speaks result
     const { app, queries } = buildApp({
       queryResponses: [
+        // resolver: service name match
         {
           rows: [
-            // service row
             {
-              source: 'service',
+              service_id: 'svc-oil-0001',
               name: 'Oil Change',
               duration_minutes: 30,
               price: 45,
-              start_time: null,
-              end_time: null,
+              required_skills: [],
             },
-            // one shift 08:00-17:00
-            {
-              source: 'shift',
-              name: null,
-              duration_minutes: null,
-              price: null,
-              start_time: '08:00:00',
-              end_time: '17:00:00',
-            },
-            // one appointment 12:00-13:00 blocks lunch slot
+          ],
+        },
+        // shifts + appointments for the day
+        {
+          rows: [
+            { source: 'shift', start_time: '08:00:00', end_time: '17:00:00' },
             {
               source: 'appointment',
-              name: null,
-              duration_minutes: null,
-              price: null,
               start_time: '2030-01-01T12:00:00',
               end_time: '2030-01-01T13:00:00',
             },
@@ -1767,18 +1807,50 @@ describe('agentTools /available-slots', () => {
     // WHY: The 12-13 appointment splits the day into 8-12 and 13-17
     expect(text).toMatch(/8 AM to 12 PM/);
     expect(text).toMatch(/1 PM to 5 PM/);
-    expect(queries[0].params).toEqual([TENANT_ID, 'Oil Change', '2030-01-01']);
+    // The resolver name-match query runs FIRST (keyed by tenant + spoken
+    // type) and must filter soft-deleted services so a removed service is
+    // never priced/quoted back to the caller.
+    expect(queries[0].params).toEqual([TENANT_ID, 'Oil Change']);
+    expect(queries[0].text).toMatch(/FROM services[\s\S]*is_deleted/);
+    // The shifts + appointments query is second, keyed by tenant + date.
+    expect(queries[1].params).toEqual([TENANT_ID, '2030-01-01']);
+  });
 
-    // WHO: Voice agent quoting an open slot for a service that may have
-    //      been soft-deleted in the dashboard mid-call.
-    // WHAT: The svc CTE inside the union-all query must filter is_deleted —
-    //      otherwise the agent would price + schedule a removed service.
-    // WHERE: src/routes/agentTools.ts:602 (svc CTE in available-time-slots).
-    // WHEN: Every /agent-tools/available-slots tool call.
-    // WHY: A deleted service has no current price/duration — quoting it
-    //      back to the caller would mis-set expectations and might fail
-    //      the booking RPC's service validation.
-    expect(queries[0].text).toMatch(/svc AS[\s\S]*is_deleted IS NULL OR is_deleted = false/);
+  it('HAPPY: unmatched service_type falls through to the tenant default', async () => {
+    // WHO: Caller says "I just want a meeting" — no exact service name.
+    // WHAT: the resolver name-match misses, falls through to the tenant
+    //        default service, and the flow proceeds normally.
+    // WHEN: Any call where the spoken service doesn't substring-match a real
+    //        service name (the common case — callers don't say exact names).
+    // WHERE: resolveServiceForBooking → available-slots.
+    // WHY: THE fix. Pre-fix this dead-ended on "couldn't find a service" and
+    //        the agent bailed → bookings never happened.
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [] }, // resolver: name match misses
+        {
+          rows: [
+            {
+              service_id: 'svc-pc-0001',
+              name: 'Programming Consultation',
+              duration_minutes: 30,
+              price: null,
+              required_skills: ['consultation'],
+            },
+          ],
+        }, // resolver: tenant default
+        { rows: [{ source: 'shift', start_time: '13:00:00', end_time: '17:00:00' }] }, // shifts
+      ],
+    });
+    const res = await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'a meeting',
+      date: '2030-01-01',
+    });
+    expect(res.statusCode).toBe(200);
+    const text = res.json().result as string;
+    expect(text).toContain('Programming Consultation takes about 30 minutes');
+    expect(text).toMatch(/1 PM to 5 PM/);
   });
 
   it('HAPPY: no shifts for the day returns "no one scheduled" message', async () => {
@@ -1789,15 +1861,15 @@ describe('agentTools /available-slots', () => {
         {
           rows: [
             {
-              source: 'service',
+              service_id: 'svc-oil-0001',
               name: 'Oil Change',
               duration_minutes: 30,
               price: null,
-              start_time: null,
-              end_time: null,
+              required_skills: [],
             },
           ],
-        },
+        }, // resolver match
+        { rows: [] }, // no shifts / appointments
       ],
     });
     const res = await post(app, '/agent-tools/available-slots', {
@@ -1809,16 +1881,22 @@ describe('agentTools /available-slots', () => {
     expect(text).toContain("don't have anyone scheduled");
   });
 
-  it('SAD: unknown service returns catalog-suggestion message', async () => {
-    // WHO: Agent asked about a service that doesn't exist in the tenant
-    //       catalog (LLM hallucination or typo from the caller)
-    const { app } = buildApp({ queryResponses: [{ rows: [] }] });
+  it('SAD: tenant has no bookable service at all → graceful message', async () => {
+    // WHO: A tenant with zero services (or none mapped to an employee).
+    // WHAT: the resolver returns null after match + default + safety all come
+    //        back empty → the route offers to take a message, never crashes.
+    // WHEN: Edge case — an unconfigured / empty tenant.
+    // WHERE: resolveServiceForBooking returns null → available-slots guard.
+    // WHY: An unmatched service must NOT dead-end normally (that's the default
+    //        fallthrough above); only a tenant with truly nothing bookable
+    //        lands here, and even then we stay graceful.
+    const { app } = buildApp({ queryResponses: [{ rows: [] }, { rows: [] }, { rows: [] }] });
     const res = await post(app, '/agent-tools/available-slots', {
       tenant_id: TENANT_ID,
       service_type: 'Unicorn Polishing',
       date: '2030-01-01',
     });
-    expect(res.json().result).toContain("couldn't find a service");
+    expect(res.json().result as string).toMatch(/leave a message|not able to pull up/i);
   });
 
   it('SAD: malformed date fails Zod regex before DB call', async () => {
@@ -1855,23 +1933,17 @@ describe('agentTools /available-slots', () => {
           {
             rows: [
               {
-                source: 'service',
+                service_id: 'svc-oil-0001',
                 name: 'Oil Change',
                 duration_minutes: 30,
                 price: null,
-                start_time: null,
-                end_time: null,
-              },
-              {
-                source: 'shift',
-                name: null,
-                duration_minutes: null,
-                price: null,
-                start_time: '08:00:00',
-                end_time: '17:00:00',
+                required_skills: [],
               },
             ],
-          },
+          }, // resolver match
+          {
+            rows: [{ source: 'shift', start_time: '08:00:00', end_time: '17:00:00' }],
+          }, // shifts + appointments
         ],
       });
       const res = await post(app, '/agent-tools/available-slots', {
@@ -1913,23 +1985,17 @@ describe('agentTools /available-slots', () => {
           {
             rows: [
               {
-                source: 'service',
+                service_id: 'svc-oil-0001',
                 name: 'Oil Change',
                 duration_minutes: 30,
                 price: null,
-                start_time: null,
-                end_time: null,
-              },
-              {
-                source: 'shift',
-                name: null,
-                duration_minutes: null,
-                price: null,
-                start_time: '08:00:00',
-                end_time: '17:00:00',
+                required_skills: [],
               },
             ],
-          },
+          }, // resolver match
+          {
+            rows: [{ source: 'shift', start_time: '08:00:00', end_time: '17:00:00' }],
+          }, // shifts + appointments
         ],
       });
       const res = await post(app, '/agent-tools/available-slots', {
@@ -2391,6 +2457,18 @@ describe('agentTools customer persistence on booking failure', () => {
       queryResponses: [
         { rows: [] }, // SELECT — no existing row
         { rows: [{ customer_id: 'sched-customer' }] }, // INSERT — customer persists
+        // resolver: service name match (runs inside the booking txn, before RPC)
+        {
+          rows: [
+            {
+              service_id: 'svc-rot',
+              name: 'Tire Rotation',
+              duration_minutes: 30,
+              price: null,
+              required_skills: ['tire'],
+            },
+          ],
+        },
         {
           rows: [
             {
@@ -2431,20 +2509,34 @@ describe('agentTools customer persistence on booking failure', () => {
     // Five queries total: customer SELECT + customer INSERT + RPC + tz
     // lookup + slots SQL. The first three are the persistence contract;
     // the trailing two are the next-available alternatives lookup.
-    expect(queries.length).toBeGreaterThanOrEqual(3);
+    expect(queries.length).toBeGreaterThanOrEqual(4);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Diane']);
-    expect(queries[2].text).toContain('book_with_scheduling_atomic');
+    expect(queries[2].text).toMatch(/FROM services/); // resolver service match
+    expect(queries[3].text).toContain('book_with_scheduling_atomic');
   });
 
-  it('book-with-scheduling: existing customer is reused — only SELECT + RPC fire', async () => {
-    // WHAT: Repeat caller — SELECT finds the row, INSERT is skipped, RPC fires
+  it('book-with-scheduling: existing customer is reused — SELECT + resolver + RPC fire', async () => {
+    // WHAT: Repeat caller — SELECT finds the row, INSERT is skipped, the service
+    //        resolver runs, then the RPC fires
     // WHY: Verifies the helper short-circuits correctly in the scheduling path
     //       (mirroring the equivalent test for book-appointment above)
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [{ customer_id: 'cust-known' }] },
+        // resolver: service name match (before the RPC)
+        {
+          rows: [
+            {
+              service_id: 'svc-rot',
+              name: 'Tire Rotation',
+              duration_minutes: 30,
+              price: null,
+              required_skills: ['tire'],
+            },
+          ],
+        },
         {
           rows: [
             {
@@ -2477,11 +2569,12 @@ describe('agentTools customer persistence on booking failure', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    // At least 2 core queries (SELECT customer + RPC); reminder scheduling
-    // fires additional queries fire-and-forget after the response.
-    expect(queries.length).toBeGreaterThanOrEqual(2);
+    // 3 core queries (SELECT customer + resolver service match + RPC); reminder
+    // scheduling fires additional queries fire-and-forget after the response.
+    expect(queries.length).toBeGreaterThanOrEqual(3);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
-    expect(queries[1].text).toContain('book_with_scheduling_atomic');
+    expect(queries[1].text).toMatch(/FROM services/); // resolver service match
+    expect(queries[2].text).toContain('book_with_scheduling_atomic');
   });
 });
 
