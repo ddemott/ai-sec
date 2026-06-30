@@ -1,6 +1,8 @@
 # Test Coverage
 
-**Last refreshed:** 2026-05-22 — Walk-in customer create modal work. Replaced the single "Full name" field in CustomerCombobox with a proper `CustomerCreateModal` (split name, phone, email, address, timezone, internal notes). `name` is now derived from first+last on submit. Rewrote describe blocks in the relevant tests and added a guard for `Input`'s deferred `scrollIntoView` in jsdom. Dashboard test count: 705 → 716.
+**Headline counts last reconciled:** 2026-06-30 to the canonical living numbers in `CLAUDE.md` → Project Status (~1,940 backend + ~790 dashboard + ~360 agent, verified 2026-06-22 against real `test_db`/vitest). The **per-file V8 coverage %** + the e2e workflow tables below are from the **2026-05-22** run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
+
+**Prior refresh:** 2026-05-22 — Walk-in customer create modal work. Replaced the single "Full name" field in CustomerCombobox with a proper `CustomerCreateModal` (split name, phone, email, address, timezone, internal notes). `name` is now derived from first+last on submit. Dashboard test count: 705 → 716.
 
 **Previous major refresh (2026-05-13):** PK-rename pilot 28 closed the real-DB coverage gap. See `RESOLVED.md` for the full 28-pilot summary (including the 121 follow-up renames, 5 latent bugs surfaced, and the UUID type fixes). Detailed migration and test counts are in RESOLVED.md.
 
@@ -17,12 +19,12 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,910 / 1,910 | ✅ | ~108s |
-| Dashboard (`cd dashboard && npm test`) | 716 / 716 | ✅ | ~7s |
-| Agent (`cd agent && npm test`) | 91 / 91 | ✅ | ~1s |
+| Backend (`npm test`) | ~1,940 | ✅ | ~108s |
+| Dashboard (`cd dashboard && npm test`) | ~790 | ✅ | ~7s |
+| Agent (`cd agent && npm test`) | ~360 | ✅ | ~1s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 99 passed, 7 skipped | ✅ | ~175s |
 
-Total unit tests: 2,626 passing (backend + dashboard) + 91 agent.
+Total unit tests: ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent). Counts are the 2026-06-22 CLAUDE.md figures; re-run for exact numbers.
 
 > **Note on the 7 skips**: 6 are `calendar-sync.spec.ts` tests that
 > require the backend to start with `SYNC_TEST_RECORDER=1`. Without the

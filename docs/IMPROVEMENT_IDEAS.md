@@ -31,12 +31,8 @@
 
 ## Large (dedicated session each)
 
-### Finish CRM sync structure extraction
-**Files:** `src/services/jobberSync.ts`, `src/services/hubspotSync.ts`, `src/services/squareSync.ts`, `src/services/servicetitanSync.ts`
-**Do:** Move these four files into `src/services/crm/` with a shared sync interface. Each file keeps its provider-specific logic; a thin `crm/index.ts` registers providers.
-**Done when:** `src/services/` root no longer has flat sync files; `syncOrchestrator.ts` imports from `crm/`.
-**Why:** NEEDS-REFACTORING #10 — flat layout makes adding a provider and fixing parity bugs harder than it should be.
-`large` | impact: `medium`
+### ~~Finish CRM sync structure extraction~~ — CLOSED 2026-06-30 (invalid)
+**No longer actionable.** Two reasons: (1) Jobber/HubSpot/ServiceTitan were **removed** 2026-06-12 as competitors (`docs/STRATEGY.md`) — only Square remains; the `jobberSync.ts`/`hubspotSync.ts`/`servicetitanSync.ts` files no longer exist. (2) The extraction itself was **DONE** (verified 2026-06-03, see `docs/TODO.md` "Non-blocking / Polish") — Square's client/sync live under `src/services/crm/` over a shared layer (`tokenManagement`, `syncMapHelpers`, `crmSyncStatus`, `syncOrchestrator`). Nothing left to do.
 
 ### Schedule C1+C2: consolidate 4 sub-views → 2 + unified header
 **File:** `dashboard/components/SchedulerView.tsx` (currently 4 sub-views: calendar, staff, resources, list)

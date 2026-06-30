@@ -74,9 +74,11 @@ Each theme defines:
 
 ---
 
-## Navigation Structure — Keep Existing, Apply New Visual Style
+## Navigation Structure — Single Primary Bar (superseded the two-tab layout)
 
-**Decision:** Do NOT restructure navigation. Keep the existing Front Desk / Back Office two-tab layout with all current sub-views intact. Apply the new dark sidebar visual style on top.
+> **SUPERSEDED 2026-05-06.** The Front Desk / Back Office two-tab layout below was retired for a **single primary tab bar**: Primary tabs (Home, Schedule, Customers, Calls) always visible; Advanced tabs (My Business, My Team, Phone Assistant) shown to owners/admins only; front-desk logins see Primary only and snap back to Home on a restricted tab. The dark-sidebar visual spec still applies. See `docs/ARCHITECTURE.md` §16.2 + `docs/DESIGN_HANDOFF.md` §3. The original two-tab text is kept below as the design-session record.
+
+**Original decision (superseded):** Keep the existing Front Desk / Back Office two-tab layout with all current sub-views intact. Apply the new dark sidebar visual style on top.
 
 **Sidebar visual spec:**
 - Background: `var(--bg-surface)`
@@ -279,7 +281,7 @@ Which days have the most no-shows? Color coded. Patterns here often have meaning
 - Staff request tracking — lives in unstructured notes, can't be reliably parsed. Phase 2 when AI captures it as structured data during the call.
 - Upsell attachment rate — Phase 2, requires upsell feature first
 - Revenue per customer lifetime — requires payment data
-- Real-time AI call data (calls answered today, etc.) — Phase 2, requires Vapi call log integration
+- Real-time AI call data (calls answered today, etc.) — now sourced from `voice_sessions` (the LiveKit agent's call records, post-Vapi); shipped via the 2026-06-12 analytics work
 
 ### Staff Request Tracking (Future Note)
 
@@ -292,6 +294,8 @@ This is valuable especially for salons (80% of calls asking for one stylist = bu
 ---
 
 ## Current Views (12 components)
+
+> **Stale snapshot (March 2026).** Tab ids + the view list below predate the single-primary-bar nav and later view splits/renames. For the live component map see `docs/ARCHITECTURE.md` §16.4. Kept as the original design-session inventory.
 
 | Tab ID | Component | What it does |
 |--------|-----------|-------------|
@@ -350,7 +354,7 @@ UI labels adapt per business type via 3-tier fallback:
 | **20** | **Staff quick profile card** | **UI/UX** | **Done** | Read-only, anchored, outside-click dismiss, skills list |
 | **21** | **Skills toggle in scheduler** | **Both** | **Done** | Hours (shift bar + appts) / Skills (stacked skill bars) |
 | **22** | **Drag to reorder staff rows** | **Both** | **Done** | Grip handles, save/discard, persists to localStorage |
-| **23** | **Rebuild analytics — 6 real metrics** | **Both** | **Done** | 3 active (booking data), 3 Phase 2 (Vapi) |
+| **23** | **Rebuild analytics — 6 real metrics** | **Both** | **Done** | now driven by `voice_sessions` (LiveKit agent records); call-based panels shipped 2026-06-12 |
 | **24** | **Remove Coverage Map from navigation** | **Both** | **Done** | ServiceCoverageView.tsx deleted, zero references |
 | **25** | **Theme switcher → dropdown** | **UI/UX** | **Done** | `<select>` dropdown in OutlookLayout topbar |
 
