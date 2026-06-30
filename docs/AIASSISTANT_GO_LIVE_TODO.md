@@ -27,7 +27,7 @@ Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
 > ## mutate the trunk" conclusion below.
 > Full live-API audit found **all config correct**; the inbound failure is **PSTN
 > number-reachability**, not LiveKit or Telnyx config. Details in
-> `docs/TICKET_SUPPORT.md` (top) and `docs/PROVISIONING_AUDIT.md` (2026-06-04 update).
+> `docs/TICKET_SUPPORT.md` (top) — the 2026-06-04 provisioning-audit detail was folded in there; the standalone `PROVISIONING_AUDIT.md` was removed.
 > - The earlier "INVITE never reaches LiveKit → don't touch the trunk" was based on a
 >   broken test (Dale dialing from his cursed/unsynced carrier — that call never even
 >   reaches Telnyx). We **did** touch the trunk (correctly): normalized its number to
