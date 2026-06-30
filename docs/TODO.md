@@ -7,7 +7,7 @@
 - `docs/IMPROVEMENT_IDEAS.md` — curated *idea* backlog (categorized, not scheduled).
 - `docs/IMPROVEMENTS_TODO.md` — `/continuously-improve` loop proposal inbox (needs review before acting).
 
-(The standalone `UIUX_TODO.md` was folded into the UX backlog section below on 2026-06-30 — 70 audit items were already done; its remaining un-audited-surface reviews live here now. The raw `ux-review-notes.md` + dated ux-audit TODO snapshots were removed the same day.)
+(The standalone `UIUX_TODO.md` was folded into the UX backlog section below on 2026-06-30 — 70 audit items were already done; its remaining un-audited-surface reviews live here now. The raw `ux-review-notes.md` + dated ux-audit TODO snapshots were removed the same day. Any lingering mentions of `ux-review-notes.md` in other docs or generated audit reports are historical context only — not live pointers.)
 
 **Status at a Glance** (as of 2026-06-23)
 
