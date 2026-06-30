@@ -3,7 +3,10 @@ import { normalizePhone } from '../../shared/phone';
 /**
  * True when forwardPhone (the live-transfer target) would loop a call back
  * into the assistant — i.e. it equals the forwarded-from line OR the AI's own
- * inbound DID. Comparison is on strict E.164 so format variants collapse.
+ * inbound DID. Numbers are compared after `normalizePhone()`, which yields
+ * strict +1XXXXXXXXXX for US inputs (the product's scope) so format variants
+ * collapse; an already-`+`-prefixed international number is passed through as
+ * entered, so the match is exact for US numbers and best-effort for the rest.
  * A null/blank/un-normalizable forwardPhone can never loop.
  */
 export function phonesWouldLoop(
