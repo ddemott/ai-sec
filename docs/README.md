@@ -6,7 +6,7 @@ This folder contains the project's technical and operational documentation.
 
 - **Single sources of truth**:
   - Active work, bugs, UX tasks, and near-term priorities → `docs/TODO.md` (the main living list).
-  - Raw UX audit findings → `ux-review-notes.md` (archived / reduced; actionable findings live in `docs/TODO.md`).
+  - Historical UX audit findings were consolidated into `docs/TODO.md` (the raw `ux-review-notes.md` + dated `scripts/ux-audit/reports/*/TODO-*.md` snapshots were removed 2026-06-30 once their actionable items had been absorbed).
 
   (The mechanical/type/convention refactor backlog `REFACTORING_TODO.md` was completed and removed 2026-06-19; its history lives in `RESOLVED.md`.)
 - **Curated vs generator noise**: The root `improvement-ideas.md` is retired generator output (see its own header). Curated ideas live in `docs/IMPROVEMENT_IDEAS.md`.
