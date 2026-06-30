@@ -121,7 +121,7 @@ describe('POST /tenants/:id/update-config loop guard', () => {
     //      the AI — an infinite loop the caller can never escape.
     queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
     queryResponses.push({
-      rows: [priorRow({ forwarded_from_phone: '+16082175303', inbound_phone: '+16308669086' })],
+      rows: [priorRow({ forwarded_from_phone: '+16082175303', inbound_phone: '+16308229086' })],
       rowCount: 1,
     }); // SELECT FOR UPDATE
     queryResponses.push({ rows: [], rowCount: 0 }); // ROLLBACK
@@ -145,7 +145,7 @@ describe('POST /tenants/:id/update-config loop guard', () => {
     // WHY: transferring to the AI's own number is a degenerate self-loop.
     queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
     queryResponses.push({
-      rows: [priorRow({ forwarded_from_phone: null, inbound_phone: '+16308669086' })],
+      rows: [priorRow({ forwarded_from_phone: null, inbound_phone: '+16308229086' })],
       rowCount: 1,
     }); // SELECT FOR UPDATE
     queryResponses.push({ rows: [], rowCount: 0 }); // ROLLBACK
@@ -153,7 +153,7 @@ describe('POST /tenants/:id/update-config loop guard', () => {
     const res = await app.inject({
       method: 'POST',
       url: `/tenants/${TENANT_ID}/update-config`,
-      payload: { forward_phone: '+1 630 866 9086' },
+      payload: { forward_phone: '+1 630 822 9086' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -170,7 +170,7 @@ describe('POST /tenants/:id/update-config loop guard', () => {
     //      make the whole feature unusable.
     queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
     queryResponses.push({
-      rows: [priorRow({ forwarded_from_phone: '+16082175303', inbound_phone: '+16308669086' })],
+      rows: [priorRow({ forwarded_from_phone: '+16082175303', inbound_phone: '+16308229086' })],
       rowCount: 1,
     }); // SELECT FOR UPDATE
     queryResponses.push({ rows: [{ tenant_id: TENANT_ID }], rowCount: 1 }); // UPDATE

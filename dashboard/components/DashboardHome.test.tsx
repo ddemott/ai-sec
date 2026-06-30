@@ -335,7 +335,7 @@ describe('DashboardHome — AI Receptionist status card', () => {
     // WHY: owners had no signal whether AI was live after finishing wizard
     mockApi.tenants.getConfig.mockResolvedValue({
       timezone: 'America/Chicago',
-      inbound_phone: '+16308669086',
+      inbound_phone: '+16308229086',
     });
     render(<DashboardHome />);
     await waitFor(() => {

@@ -21,7 +21,7 @@ function baseCtx(
     env: {
       GOOGLE_CLIENT_ID: 'google-client-id',
       AGENT_SECRET: 'a'.repeat(40),
-      TELNYX_PHONE_NUMBER: '+16308669086',
+      TELNYX_PHONE_NUMBER: '+16308229086',
       EMAIL_USER: 'test@example.com',
       EMAIL_PASS: 'app-password',
       CORS_ORIGIN: 'https://app.secretaryhq.com',
