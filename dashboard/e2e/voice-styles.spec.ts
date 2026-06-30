@@ -61,25 +61,24 @@ async function openAiPersona(page: Page) {
   });
 }
 
-test('HAPPY: all 3 voice style checkboxes render on the AI Persona page', async ({ page }) => {
+test('HAPPY: all 5 voice style checkboxes render on the AI Persona page', async ({ page }) => {
   // WHO: any owner visiting Phone Assistant → AI Persona
-  // WHAT: all three checkbox labels and their descriptions are visible so the
-  //        owner can discover and toggle each style independently
+  // WHAT: all five style checkbox labels are visible so the owner can discover
+  //        and toggle each style independently
   // WHEN: the first visit to the AI Persona tab after the feature ships
   // WHERE: AIConfigView voice-style section
   // WHY: if a checkbox is missing from the DOM, it will never be toggled —
   //       the feature exists in the backend but is invisible to the owner
   await openAiPersona(page);
 
-  // The three prompt-level style checkboxes must be present and labelled.
+  // The five prompt-level style checkboxes must be present and labelled.
   await expect(page.getByRole('checkbox', { name: /Formal/i })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /Warm/i })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /Concise/i })).toBeVisible();
-
-  // Soft + Cheerful were Grok-only and are intentionally gone after the OpenAI
-  // TTS switch + full Grok removal — guard against them creeping back in.
-  await expect(page.getByRole('checkbox', { name: /Soft/i })).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: /Cheerful/i })).toHaveCount(0);
+  // Soft + Cheerful re-activated 2026-06-30 (dormant columns re-wired into the
+  // prompt's # Voice style section).
+  await expect(page.getByRole('checkbox', { name: /Soft/i })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /Cheerful/i })).toBeVisible();
 
   // Descriptive text must be visible so the owner knows what each does.
   await expect(page.getByText(/Professional, no contractions/i)).toBeVisible();
