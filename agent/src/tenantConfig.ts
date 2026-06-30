@@ -54,9 +54,12 @@ export interface TenantDisplayConfig {
   ttsVoice: string | null;
   ttsSpeed: number | null;
   // Persona-tone toggles below feed the SYSTEM PROMPT (prompt.ts), not TTS.
+  // (soft/cheerful re-activated 2026-06-30 as prompt-tone style modifiers.)
   ttsFormal: boolean | null;
   ttsWarm: boolean | null;
   ttsConcise: boolean | null;
+  ttsSoft: boolean | null;
+  ttsCheerful: boolean | null;
   /**
    * E.164 PSTN number the agent cold-transfers a live call to (owner cell),
    * via SIP REFER through the inbound trunk. NULL means no forwarding is
@@ -86,6 +89,8 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   ttsFormal: null,
   ttsWarm: null,
   ttsConcise: null,
+  ttsSoft: null,
+  ttsCheerful: null,
   forwardPhone: null,
   forwardedFromPhone: null,
 };
@@ -109,6 +114,8 @@ export async function fetchTenantConfig(
     tts_formal?: boolean | null;
     tts_warm?: boolean | null;
     tts_concise?: boolean | null;
+    tts_soft?: boolean | null;
+    tts_cheerful?: boolean | null;
     forward_phone?: string | null;
     forwarded_from_phone?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
@@ -126,6 +133,8 @@ export async function fetchTenantConfig(
       ttsFormal: res.result.tts_formal ?? null,
       ttsWarm: res.result.tts_warm ?? null,
       ttsConcise: res.result.tts_concise ?? null,
+      ttsSoft: res.result.tts_soft ?? null,
+      ttsCheerful: res.result.tts_cheerful ?? null,
       forwardPhone: res.result.forward_phone ?? null,
       forwardedFromPhone: res.result.forwarded_from_phone ?? null,
     };

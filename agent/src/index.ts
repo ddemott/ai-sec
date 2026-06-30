@@ -511,6 +511,8 @@ export default defineAgent({
         ttsFormal: tenantConfig.ttsFormal,
         ttsWarm: tenantConfig.ttsWarm,
         ttsConcise: tenantConfig.ttsConcise,
+        ttsSoft: tenantConfig.ttsSoft,
+        ttsCheerful: tenantConfig.ttsCheerful,
       });
 
       // 5. Start the voice session. Wrapped in try/catch → runFallback: a

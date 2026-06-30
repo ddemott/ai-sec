@@ -171,7 +171,7 @@ export function useSuperAdminTenants(
     };
 
     try {
-      const res = await Api.tenants.update(form.tenant_id, normalizedForm as unknown as TenantFull);
+      const res = await Api.tenants.update(form.tenant_id, normalizedForm);
 
       if (res.success) {
         setSuccess(true);
@@ -179,7 +179,7 @@ export function useSuperAdminTenants(
         setTenants((prev) =>
           prev.map((t) => (t.tenant_id === form.tenant_id ? { ...normalizedForm } : t))
         );
-        setSelectedTenant({ ...normalizedForm } as Tenant);
+        setSelectedTenant({ ...normalizedForm });
         if (onSelectTenant) onSelectTenant(form.tenant_id, form.name);
       } else {
         setError(res.error || 'Failed to update business attributes');

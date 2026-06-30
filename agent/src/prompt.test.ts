@@ -662,6 +662,25 @@ describe('buildSystemPrompt — voice style injection', () => {
     expect(prompt).toContain('one sentence is better than two');
   });
 
+  it('HAPPY: ttsSoft=true injects a gentle/soothing delivery instruction', () => {
+    // WHO: tenant with the Soft voice style checkbox checked (re-activated 2026-06-30).
+    // WHAT: the # Voice style section includes the soft/gentle delivery note.
+    // WHERE: buildSystemPrompt styleSection branch — ttsSoft guard.
+    // WHY: the column existed but was inert post-Grok; this re-wires it.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsSoft: true });
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toMatch(/softly and gently/i);
+  });
+
+  it('HAPPY: ttsCheerful=true injects an upbeat instruction', () => {
+    // WHO: tenant with the Cheerful voice style checkbox checked.
+    // WHAT: the # Voice style section includes the cheerful/upbeat note.
+    // WHERE: buildSystemPrompt styleSection branch — ttsCheerful guard.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, ttsCheerful: true });
+    expect(prompt).toContain('# Voice style');
+    expect(prompt).toMatch(/cheerful and upbeat/i);
+  });
+
   it('HAPPY: all three flags true — all three instructions present, header appears once', () => {
     // WHO: tenant with Formal + Warm + Concise all checked
     // WHAT: the # Voice style section contains all three instruction bullets

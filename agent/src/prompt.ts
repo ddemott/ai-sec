@@ -71,6 +71,10 @@ export interface PromptContext {
   ttsWarm?: boolean | null;
   /** When true, inject concise style instructions (shorter replies). */
   ttsConcise?: boolean | null;
+  /** When true, inject soft/gentle delivery style instructions. */
+  ttsSoft?: boolean | null;
+  /** When true, inject cheerful/upbeat style instructions. */
+  ttsCheerful?: boolean | null;
   /**
    * The tool capability subset active for this session. MUST match the array
    * passed to buildTools(..., { capabilities }) — index.ts threads the SAME
@@ -219,6 +223,14 @@ For questions about hours, pricing beyond what's in the catalog, return policies
   if (ctx.ttsConcise)
     styleLines.push(
       'Be concise — one sentence is better than two. Cut filler, get directly to the answer.'
+    );
+  if (ctx.ttsSoft)
+    styleLines.push(
+      'Speak softly and gently — a calm, soothing, unhurried delivery. Lower energy; never loud or clipped.'
+    );
+  if (ctx.ttsCheerful)
+    styleLines.push(
+      'Sound cheerful and upbeat — bright, friendly, positive energy, without being over-the-top or sing-songy.'
     );
   const styleSection =
     styleLines.length > 0 ? `\n\n# Voice style\n${styleLines.map((l) => `- ${l}`).join('\n')}` : '';

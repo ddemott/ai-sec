@@ -10,11 +10,12 @@
  * Api.tenants.updateConfig, or the route handler shows up as a failed reload
  * assertion — not a cosmetic toggle that silently stops persisting.
  *
- * NOTE (2026-06-25+): Soft + Cheerful were removed from the picker when primary
- * TTS switched Grok → OpenAI (final removal of all Grok/xAI remnants). They were
- * Grok-only prosody tags with no OpenAI equivalent. Only the prompt-level styles
- * (Formal/Warm/Concise) remain; their tts_* columns (and the voice/speed ones)
- * persist for the OpenAI configuration.
+ * NOTE (2026-06-30): Soft + Cheerful were dropped during the Grok → OpenAI TTS
+ * switch (Grok-only prosody) but RE-ACTIVATED 2026-06-30 as prompt-level tone
+ * modifiers — the agent injects them into the "# Voice style" section like
+ * Formal/Warm/Concise. All five prompt-level styles now render and persist via
+ * their tts_* columns; none drive raw TTS params (OpenAI has no fixed modifier
+ * enum — tone is steered through the prompt).
  *
  * Auth: the shared auth.setup logs in as admin@secretaryhq.com (super-admin,
  * platform tenant). We edit that tenant's AI config and reset it afterward.
@@ -61,25 +62,24 @@ async function openAiPersona(page: Page) {
   });
 }
 
-test('HAPPY: all 3 voice style checkboxes render on the AI Persona page', async ({ page }) => {
+test('HAPPY: all 5 voice style checkboxes render on the AI Persona page', async ({ page }) => {
   // WHO: any owner visiting Phone Assistant → AI Persona
-  // WHAT: all three checkbox labels and their descriptions are visible so the
-  //        owner can discover and toggle each style independently
+  // WHAT: all five style checkbox labels are visible so the owner can discover
+  //        and toggle each style independently
   // WHEN: the first visit to the AI Persona tab after the feature ships
   // WHERE: AIConfigView voice-style section
   // WHY: if a checkbox is missing from the DOM, it will never be toggled —
   //       the feature exists in the backend but is invisible to the owner
   await openAiPersona(page);
 
-  // The three prompt-level style checkboxes must be present and labelled.
+  // The five prompt-level style checkboxes must be present and labelled.
   await expect(page.getByRole('checkbox', { name: /Formal/i })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /Warm/i })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: /Concise/i })).toBeVisible();
-
-  // Soft + Cheerful were Grok-only and are intentionally gone after the OpenAI
-  // TTS switch + full Grok removal — guard against them creeping back in.
-  await expect(page.getByRole('checkbox', { name: /Soft/i })).toHaveCount(0);
-  await expect(page.getByRole('checkbox', { name: /Cheerful/i })).toHaveCount(0);
+  // Soft + Cheerful re-activated 2026-06-30 (dormant columns re-wired into the
+  // prompt's # Voice style section).
+  await expect(page.getByRole('checkbox', { name: /Soft/i })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /Cheerful/i })).toBeVisible();
 
   // Descriptive text must be visible so the owner knows what each does.
   await expect(page.getByText(/Professional, no contractions/i)).toBeVisible();
