@@ -500,6 +500,10 @@ export default defineAgent({
         // Persona page) into the prompt's identity section. NULL falls
         // back to the hardcoded "You are Clara, ..." line.
         customPrompt: tenantConfig.systemPrompt,
+        // 2026-06-30: owner-editable assistant name (dashboard "Assistant
+        // Name"). Prepends an authoritative "Your name is X" line that
+        // overrides any name in the custom prompt. NULL = no change.
+        personaName: tenantConfig.personaName,
         // 2026-06-06: per-tenant customer-preference capture. When enabled, the
         // prompt gains a "Customer preferences" section + save tool guidance.
         savePreferencesEnabled: tenantConfig.savePreferencesEnabled,

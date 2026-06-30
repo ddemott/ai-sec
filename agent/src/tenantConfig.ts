@@ -22,6 +22,12 @@ export interface TenantDisplayConfig {
    */
   systemPrompt: string | null;
   /**
+   * Owner-editable assistant name (dashboard "Assistant Name"). The prompt
+   * injects "Your name is X" so it overrides any name baked into systemPrompt.
+   * NULL = no explicit name; keep whatever the prompt/default identity says.
+   */
+  personaName: string | null;
+  /**
    * Owner-editable greeting (dashboard "First Message"). The agent speaks this
    * as the literal opening line; NULL falls back to the hardcoded
    * "Thanks for calling <name>…" so a tenant that never set one is unaffected.
@@ -71,6 +77,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   name: 'this business',
   timezone: 'America/Chicago',
   systemPrompt: null,
+  personaName: null,
   firstMessage: null,
   savePreferencesEnabled: true,
   preferencesInstructions: null,
@@ -93,6 +100,7 @@ export async function fetchTenantConfig(
     name: string;
     timezone: string;
     system_prompt: string | null;
+    persona_name?: string | null;
     first_message?: string | null;
     save_preferences_enabled?: boolean;
     preferences_instructions?: string | null;
@@ -109,6 +117,7 @@ export async function fetchTenantConfig(
       name: res.result.name,
       timezone: res.result.timezone,
       systemPrompt: res.result.system_prompt ?? null,
+      personaName: res.result.persona_name ?? null,
       firstMessage: res.result.first_message ?? null,
       savePreferencesEnabled: res.result.save_preferences_enabled ?? true,
       preferencesInstructions: res.result.preferences_instructions ?? null,

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict L2ebMZWKtEG8Zn57hz7LecEGux5dMbTTjucYtygtsfiWQLdLz01o2YOpZ7PNubL
+\restrict KpMap4LRCf0Fs8EqzHK9RGTizc2gZtW5Vfbgh21Cv9E5Z5o5cLxq0XkJ9OkcbdQ
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3233,7 +3233,8 @@ CREATE TABLE public.tenants (
     tts_concise boolean,
     job_inquiry_email text,
     forwarded_from_phone text,
-    default_service_id uuid
+    default_service_id uuid,
+    persona_name text
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -5451,5 +5452,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict L2ebMZWKtEG8Zn57hz7LecEGux5dMbTTjucYtygtsfiWQLdLz01o2YOpZ7PNubL
+\unrestrict KpMap4LRCf0Fs8EqzHK9RGTizc2gZtW5Vfbgh21Cv9E5Z5o5cLxq0XkJ9OkcbdQ
 

@@ -19,6 +19,7 @@ import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
+import { Input } from './ui/Input';
 import type { EffectiveShift } from '../lib/types';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { useConfirm } from '../lib/useConfirm';
@@ -32,6 +33,30 @@ export default function BusinessSettingsView() {
 
   const [teamSize, setTeamSize] = useState<number | null>(null);
   const { state: confirmState, close: closeConfirm } = useConfirm();
+
+  // Assistant name — owner-editable; the agent introduces itself with this.
+  const [personaName, setPersonaName] = useState('');
+  const [savedPersonaName, setSavedPersonaName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  async function saveAssistantName() {
+    if (!tenantId) return;
+    setSavingName(true);
+    try {
+      const trimmed = personaName.trim();
+      await Api.tenants.updateConfig(tenantId, { persona_name: trimmed || null });
+      setSavedPersonaName(trimmed);
+      setPersonaName(trimmed);
+      showToast(
+        trimmed ? `Assistant name set to "${trimmed}".` : 'Assistant name cleared.',
+        'success'
+      );
+    } catch {
+      showToast('Could not save the assistant name. Please try again.', 'error');
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   // Data export ("Download my data" — GDPR/CCPA portability)
   const [exporting, setExporting] = useState(false);
@@ -94,6 +119,8 @@ export default function BusinessSettingsView() {
     try {
       const config = await Api.tenants.getConfig(tenantId);
       setTeamSize(config.team_size ?? null);
+      setPersonaName(config.persona_name ?? '');
+      setSavedPersonaName(config.persona_name ?? '');
     } catch {
       // Default to team mode if we can't determine
       setTeamSize(null);
@@ -217,6 +244,35 @@ export default function BusinessSettingsView() {
       </header>
 
       <div className="max-w-3xl space-y-8">
+        {/* ─── ASSISTANT NAME ─── Owner-editable; the voice agent introduces
+            itself with this name on every call. Stored on tenants.persona_name
+            and injected as an authoritative "Your name is X" line. */}
+        <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
+          <h2 className="text-lg font-bold mb-1">Assistant Name</h2>
+          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
+            What your AI receptionist calls itself on calls (for example,
+            &ldquo;Chris&rdquo;). Leave blank to use the default.
+          </p>
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <Input
+                label="Assistant name"
+                value={personaName}
+                maxLength={120}
+                onChange={(e) => setPersonaName(e.target.value)}
+                placeholder="Ex: Chris"
+              />
+            </div>
+            <Button
+              onClick={saveAssistantName}
+              isLoading={savingName}
+              disabled={personaName.trim() === savedPersonaName.trim()}
+            >
+              Save
+            </Button>
+          </div>
+        </Card>
+
         {/* ─── BUSINESS TYPE ─── Set once during the wizard; rarely revisited.
             Lives here (not on AI Persona) so prompt-tuning doesn't have to
             scroll past 24 industry cards on every visit, and an accidental
