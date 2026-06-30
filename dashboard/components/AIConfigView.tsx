@@ -97,6 +97,9 @@ export default function AIConfigView() {
         // Normalize to clean E.164 for storage so the agent builds a valid
         // tel: URI. Blank/invalid → null (forwarding off → AI takes a message).
         forward_phone: normalizePhone(config.forward_phone),
+        // The line the tenant forwards INTO the assistant. Normalize the same
+        // way so the agent's caller-ID match compares clean E.164.
+        forwarded_from_phone: normalizePhone(config.forwarded_from_phone),
         // Normalize owner notification phone the same way.
         owner_phone: normalizePhone(config.owner_phone),
       });
@@ -112,6 +115,15 @@ export default function AIConfigView() {
     }
     setSaving(false);
   }
+
+  // Client-side mirror of the backend loop guard (src/services/phoneLoopGuard.ts):
+  // a transfer target equal to the forwarded-from line or the AI's own DID would
+  // forward the live call straight back into the assistant. Shown inline + blocks
+  // Save for instant feedback; the backend remains the source of truth.
+  const forwardLoops =
+    !!normalizePhone(config?.forward_phone) &&
+    (normalizePhone(config?.forward_phone) === normalizePhone(config?.forwarded_from_phone) ||
+      normalizePhone(config?.forward_phone) === normalizePhone(config?.inbound_phone));
 
   if (loading) return <LoadingState message="Loading AI configuration…" />;
 
@@ -147,7 +159,7 @@ export default function AIConfigView() {
           isLoading={saving}
           variant={success ? 'success' : 'primary'}
           className="px-6 py-2.5"
-          disabled={!dirty || saving}
+          disabled={!dirty || saving || forwardLoops}
         >
           {success ? 'Saved!' : 'Save Changes'}
         </Button>
@@ -220,6 +232,34 @@ export default function AIConfigView() {
           />
         </section>
 
+        {/* Forwarded-from number — the line that forwards calls INTO the AI. */}
+        <section className="space-y-4">
+          <h2
+            className="text-lg font-bold flex items-center"
+            style={{ color: 'var(--text-primary)' }}
+          >
+            <PhoneForwarded className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
+            Forwarded-From Number
+          </h2>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            If you forward your business line into the assistant, put that line here. The assistant
+            then knows the caller ID is your forwarding line — not the customer — and will ask the
+            caller for their name and number instead.
+          </p>
+          <Input
+            type="tel"
+            label="Forwarded-from number"
+            value={config?.forwarded_from_phone || ''}
+            onChange={(e) => {
+              setConfig((prev) =>
+                prev ? { ...prev, forwarded_from_phone: e.target.value } : null
+              );
+              setDirty(true);
+            }}
+            placeholder="Ex: +1 608 217 5303"
+          />
+        </section>
+
         {/* Forward Calls Section — live transfer to a human (owner cell). */}
         <section className="space-y-4">
           <h2
@@ -243,6 +283,12 @@ export default function AIConfigView() {
             }}
             placeholder="Ex: +1 312 555 0100"
           />
+          {forwardLoops && (
+            <p className="text-sm" style={{ color: 'var(--danger, #dc2626)' }}>
+              This can&apos;t be the same as your forwarded-from number or the assistant&apos;s own
+              number — the call would loop back to the assistant.
+            </p>
+          )}
         </section>
 
         {/* Owner Notification Phone — SMS alert when caller leaves a message */}

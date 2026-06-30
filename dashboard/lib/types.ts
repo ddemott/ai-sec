@@ -77,6 +77,10 @@ export interface Tenant {
   // caller to when they need a human. null = no forwarding; the AI takes a
   // message instead.
   forward_phone?: string | null;
+  // The line the tenant forwards INTO the assistant (carrier-forwarded). When
+  // the inbound caller-ID matches this, the agent collects the caller's real
+  // number by voice. Must differ from forward_phone (the transfer target).
+  forwarded_from_phone?: string | null;
   // SMS alert destination for the owner when a caller leaves a message.
   owner_phone?: string | null;
   // Telnyx DID assigned to this tenant — the number callers dial to reach the AI.

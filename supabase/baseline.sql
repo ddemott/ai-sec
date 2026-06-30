@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict sg93rhWyUEj2MahAMIcOBjk4BoEL2lWQ3OvQMmy8tkN9Yn1fWO1CufJ2hwL8DXa
+\restrict 6SLoo8wnb3GW0JBOBhB23Y2jMQ6fMPL67VHMzYnhnvFSw5cRKLHFF26geNLUCzJ
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3231,7 +3231,8 @@ CREATE TABLE public.tenants (
     tts_formal boolean,
     tts_warm boolean,
     tts_concise boolean,
-    job_inquiry_email text
+    job_inquiry_email text,
+    forwarded_from_phone text
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3305,6 +3306,13 @@ COMMENT ON COLUMN public.tenants.tts_soft IS 'Wrap TTS text in xAI <soft> prosod
 --
 
 COMMENT ON COLUMN public.tenants.forward_phone IS 'E.164 PSTN number the agent cold-transfers live calls to (owner cell). NULL = transfer disabled, agent takes a message.';
+
+
+--
+-- Name: COLUMN tenants.forwarded_from_phone; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.forwarded_from_phone IS 'E.164 line that forwards calls into the assistant. When the SIP caller-ID matches this, the agent nulls callerPhone and collects the caller''s real number verbally. Distinct from forward_phone (transfer target).';
 
 
 --
@@ -5434,5 +5442,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict sg93rhWyUEj2MahAMIcOBjk4BoEL2lWQ3OvQMmy8tkN9Yn1fWO1CufJ2hwL8DXa
+\unrestrict 6SLoo8wnb3GW0JBOBhB23Y2jMQ6fMPL67VHMzYnhnvFSw5cRKLHFF26geNLUCzJ
 

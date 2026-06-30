@@ -61,7 +61,35 @@ describe('fetchTenantConfig', () => {
       ttsWarm: null,
       ttsConcise: null,
       forwardPhone: null,
+      forwardedFromPhone: null,
     });
+  });
+
+  it('maps forwarded_from_phone → forwardedFromPhone (snake → camel)', async () => {
+    // WHO: a forwarded-line tenant (e.g. Dale's Thinking Hammer) whose published
+    //       number forwards INTO the AI, with a separate human-transfer line.
+    // WHAT: fetchTenantConfig surfaces forwarded_from_phone as camelCase
+    //       forwardedFromPhone, independent of forwardPhone (the transfer target).
+    // WHEN: per-call config fetch.
+    // WHERE: agent/src/tenantConfig.ts mapping → consumed by index.ts caller-ID match.
+    // WHY: index.ts keys the forwarded-line caller-ID match off this field; if it
+    //       didn't surface, forwarded calls would be mis-treated as direct customers.
+    const client = clientWith({
+      status: 200,
+      body: {
+        success: true,
+        result: {
+          name: 'Thinking Hammer',
+          timezone: 'America/Chicago',
+          system_prompt: null,
+          forward_phone: '+16305551234',
+          forwarded_from_phone: '+16082175303',
+        },
+      },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg.forwardedFromPhone).toBe('+16082175303');
+    expect(cfg.forwardPhone).toBe('+16305551234');
   });
 
   it('HAPPY: surfaces the owner greeting (first_message, snake → camel)', async () => {
