@@ -197,6 +197,59 @@ describe('AIConfigView — Customer Preferences', () => {
     );
   });
 
+  test('SAD: a transfer number equal to the forwarded-from number shows a loop error + disables Save', async () => {
+    // WHO: an owner who forwards their published line INTO the AI and then types
+    //      that same line as the "talk to a person" transfer target.
+    // WHAT: the client mirror of the backend loop guard renders an inline error
+    //      and disables Save so the colliding config can never be submitted.
+    // WHEN: the forward_phone field normalizes equal to the loaded
+    //      forwarded_from_phone (entered after load so the form is dirty —
+    //      otherwise Save would already be disabled by the !dirty rule and the
+    //      test would pass for the wrong reason).
+    // WHERE: AIConfigView forwardLoops derived value + the Save button disabled prop.
+    // WHY: instant feedback prevents a save round-trip that the backend would 400;
+    //      a transfer to the forwarding line loops the call back into the AI.
+    mockGetConfig.mockResolvedValue({
+      ...BASE_CONFIG,
+      forwarded_from_phone: '+16082175303',
+      forward_phone: null,
+    });
+    render(<AIConfigView />);
+
+    // Type the same number (different human format) into the transfer field —
+    // this also dirties the form, so a still-disabled Save proves forwardLoops.
+    const forwardInput = await screen.findByPlaceholderText(/\+1 312 555 0100/i);
+    fireEvent.change(forwardInput, { target: { value: '(608) 217-5303' } });
+
+    expect(screen.getByText(/loop back to the assistant/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+  });
+
+  test('HAPPY: distinct forwarded-from + transfer numbers save without a loop error', async () => {
+    // WHO: an owner whose forwarded line and human-transfer line are different
+    //      numbers (the supported configuration).
+    // WHAT: no loop error renders and the new forwarded_from_phone reaches the
+    //      updateConfig payload, normalized to E.164.
+    // WHEN: the two numbers differ and the owner saves.
+    // WHERE: AIConfigView handleSave payload + forwardLoops (false here).
+    // WHY: the guard must not block or drop a legitimate distinct pairing.
+    mockGetConfig.mockResolvedValue({
+      ...BASE_CONFIG,
+      forward_phone: '+16305551234',
+    });
+    render(<AIConfigView />);
+
+    const fwdFromInput = await screen.findByLabelText(/forwarded-from number/i);
+    fireEvent.change(fwdFromInput, { target: { value: '+1 (608) 217-5303' } });
+
+    expect(screen.queryByText(/loop back to the assistant/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.forwarded_from_phone).toBe('+16082175303');
+  });
+
   test('HAPPY: the textarea placeholder example matches the tenant industry', async () => {
     // WHO: a brand-new owner who hasn't written guidance yet.
     // WHAT: the empty-box example is industry-specific (salon talks stylists,
