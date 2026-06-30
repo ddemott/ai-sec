@@ -26,6 +26,31 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('America/Chicago');
   });
 
+  it('HAPPY: an owner-set personaName injects an authoritative "Your name is X" line', () => {
+    // WHO: an owner who set the Assistant Name to "Chris" on Business Settings.
+    // WHAT: the prompt must prepend a "Your name is Chris" directive that
+    //        overrides any name baked into the custom prompt text.
+    // WHEN: every session for a tenant with persona_name set.
+    // WHERE: buildSystemPrompt identity section.
+    // WHY: the name lived only inside system_prompt free text before — a client
+    //        couldn't change it without editing the raw prompt.
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      personaName: 'Chris',
+      customPrompt: 'You are Beth, the assistant.',
+    });
+    expect(prompt).toMatch(/Your name is Chris/);
+    expect(prompt).toMatch(/introduce yourself as Chris/i);
+  });
+
+  it('SAD: no personaName → no name directive (prior behavior preserved)', () => {
+    // WHO: a tenant that never set an assistant name.
+    // WHAT: the prompt must NOT contain a "Your name is" directive — identity
+    //        stays exactly the base/custom prompt.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, personaName: null });
+    expect(prompt).not.toMatch(/Your name is/);
+  });
+
   it('HAPPY: instructs the agent to offer the service menu, not ask blind', () => {
     // WHO: Caller wants to book but __PERSONA_NAME__ previously asked "what service?"
     //       without listing the options, so the caller couldn't answer.

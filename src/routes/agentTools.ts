@@ -470,6 +470,7 @@ export function registerAgentToolRoutes(
           name: string;
           timezone: string | null;
           system_prompt: string | null;
+          persona_name: string | null;
           first_message: string | null;
           save_preferences_enabled: boolean | null;
           preferences_instructions: string | null;
@@ -483,7 +484,7 @@ export function registerAgentToolRoutes(
           forward_phone: string | null;
           forwarded_from_phone: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         return res.rows[0] ?? null;
@@ -499,6 +500,10 @@ export function registerAgentToolRoutes(
         // section. NULL means "use the agent's hardcoded fallback" — preserves
         // backwards compatibility with tenants that haven't customized.
         system_prompt: row.system_prompt,
+        // 2026-06-30: owner-editable assistant name (dashboard "Assistant Name").
+        // The agent injects "Your name is X" so it overrides any name baked into
+        // the system_prompt text. NULL = keep whatever the prompt already says.
+        persona_name: row.persona_name ?? null,
         // 2026-06-11: the owner-editable greeting (dashboard "First Message").
         // NULL means the agent speaks its hardcoded "Thanks for calling…"
         // fallback, so a tenant that never set one is unaffected.

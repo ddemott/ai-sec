@@ -52,6 +52,7 @@ describe('fetchTenantConfig', () => {
       name: 'DynaTire',
       timezone: 'America/Chicago',
       systemPrompt: null,
+      personaName: null,
       firstMessage: null,
       savePreferencesEnabled: true,
       preferencesInstructions: null,

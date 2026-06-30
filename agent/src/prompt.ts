@@ -48,6 +48,13 @@ export interface PromptContext {
    */
   customPrompt?: string | null;
   /**
+   * Owner-editable assistant name (dashboard "Assistant Name"). When set, an
+   * authoritative "Your name is X" line is prepended so it overrides any name
+   * baked into customPrompt's text. Null/empty = keep whatever the prompt or
+   * default identity already says (prior behavior).
+   */
+  personaName?: string | null;
+  /**
    * When false, the "Customer preferences" section and save_customer_preference
    * tool are omitted from the prompt. Defaults to on (undefined/true both
    * enable). Owners can opt out via the dashboard AI Persona page.
@@ -121,9 +128,16 @@ export function buildSystemPrompt(ctx: PromptContext): string {
       : `The caller's number is NOT available (blocked or withheld caller ID). Ask for a good callback number, read it back to confirm (see the phone-capture rules below), and use that for any booking. If the caller can't give a number, offer to take a message.`;
 
   const trimmedCustom = ctx.customPrompt?.trim();
-  const identitySection = trimmedCustom
+  const baseIdentity = trimmedCustom
     ? substitutePlaceholders(trimmedCustom, ctx)
     : `You are Clara, the AI receptionist for ${ctx.tenantName}.`;
+  // Owner-set assistant name wins over any name in the prompt text: a single
+  // explicit directive the model follows even if the custom prompt still says
+  // an old name. When unset, identity is exactly the base prompt (no change).
+  const trimmedName = ctx.personaName?.trim();
+  const identitySection = trimmedName
+    ? `Your name is ${trimmedName}. Always introduce yourself as ${trimmedName} and never use any other name for yourself.\n${baseIdentity}`
+    : baseIdentity;
 
   // Customer-preference capture. On by default — owners can opt out via the
   // dashboard AI Persona page (savePreferencesEnabled: false). Owner-authored

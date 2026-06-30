@@ -52,6 +52,8 @@ export interface Tenant {
   // Nullable in the DB schema and routinely null for newly-created tenants
   // before the AI persona is configured. Consumers must guard.
   system_prompt: string | null;
+  /** Owner-editable assistant name (e.g. "Chris"). NULL = no explicit name. */
+  persona_name?: string | null;
   voice_id: string | null;
   first_message: string | null;
   team_size?: number;
