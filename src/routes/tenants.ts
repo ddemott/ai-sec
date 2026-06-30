@@ -34,6 +34,8 @@ const UpdateAttributesSchema = z.object({
   business_type: z.string().max(50).optional(),
   timezone: z.string().max(50).optional(),
   voice_id: z.string().max(100).optional().nullable(),
+  // OpenAI TTS voice the agent actually uses (shimmer/nova/alloy/echo/onyx/fable).
+  tts_voice: z.string().max(100).optional().nullable(),
   system_prompt: z.string().optional().nullable(),
   first_message: z.string().optional().nullable(),
   owner_phone: z.string().max(30).optional().nullable(),
@@ -130,8 +132,9 @@ export function registerTenantRoutes(
         client.query(
           `UPDATE tenants SET
             name = $1, business_type = $2, timezone = $3, voice_id = $4,
-            system_prompt = $5, first_message = $6, owner_phone = $7, inbound_phone = $8
-         WHERE tenant_id = $9 RETURNING tenant_id`,
+            system_prompt = $5, first_message = $6, owner_phone = $7, inbound_phone = $8,
+            tts_voice = COALESCE($9, tts_voice)
+         WHERE tenant_id = $10 RETURNING tenant_id`,
           [
             body.name,
             body.business_type,
@@ -141,6 +144,7 @@ export function registerTenantRoutes(
             body.first_message,
             body.owner_phone,
             body.inbound_phone,
+            body.tts_voice ?? null,
             id,
           ]
         )

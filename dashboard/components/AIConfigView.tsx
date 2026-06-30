@@ -417,6 +417,8 @@ export default function AIConfigView() {
                   { key: 'tts_formal', label: 'Formal', description: 'Professional, no contractions' },
                   { key: 'tts_warm', label: 'Warm', description: 'Empathetic, caring' },
                   { key: 'tts_concise', label: 'Concise', description: 'Fewer words, faster to the point' },
+                  { key: 'tts_soft', label: 'Soft', description: 'Gentle, calm, soothing delivery' },
+                  { key: 'tts_cheerful', label: 'Cheerful', description: 'Bright, friendly, upbeat' },
                 ] as { key: keyof typeof config; label: string; description: string }[]
               ).map(({ key, label, description }) => (
                 <label
