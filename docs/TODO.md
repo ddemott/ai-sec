@@ -11,7 +11,7 @@
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
 - **CI**: green. Agent package gated in CI. Tests (as of 2026-06-22 per CLAUDE): backend ~1,940 · dashboard ~790 · agent ~360 · E2E (numbers from recent merges; CI includes simulate tools gate). Full 4-job gate on main.
 - **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Live **`+1 630-866-9086`**. Previous `+1 630-866-1960` (2026-06-02) dead. Test verification number **`+1 630-822-9086`**. Old provisioning details in history below. **Remaining**: PSTN inbound verification on the test number; live call-transfer REFER enablement on Telnyx SIP. Full checklist: `docs/AIASSISTANT_GO_LIVE_TODO.md`. See also recent number update in CLAUDE.md etc.
-- **Env vars (user action)**: `DASHBOARD_URL` + `SENTRY_DSN` + `METRICS_TOKEN` + `BETTER_STACK_TOKEN` not yet set on Railway. **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See the Production Wiring Checklist above.
+- **Env vars (user action)**: `SENTRY_DSN` + `BETTER_STACK_TOKEN` not yet set on Railway. (`METRICS_TOKEN` **confirmed SET** 2026-06-29 — `/metrics` returns 401 not 404; `DASHBOARD_URL` confirmed set per the 2026-06-18 reconcile.) **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See the Production Wiring Checklist above.
 - **Browser validation**: Role gating + invite flow — DONE 2026-06-03, proven by green e2e (`auth-flows` route-gate 403, `workflows:630` front-desk nav-hide/snap-back, `workflows:676` owner invite).
 - **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (now archived/reduced). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
 
@@ -61,7 +61,7 @@ These branches survived the 2026-06-23 cleanup because each holds real unmerged 
 
 - [ ] **`SENTRY_DSN`** on Railway backend + agent (dashboard already wired; needs DSN).
 - [ ] **`BETTER_STACK_TOKEN`** on Railway backend + agent (no log aggregation until set).
-- [ ] **Alert rules** — once `METRICS_TOKEN`/`BETTER_STACK_TOKEN` live, wire `rate(errors_total[5m])`, booking-failure, http-5xx, p95 latency, sustained `/ready waiting>0`. Route to a channel Dale watches.
+- [ ] **Alert rules** — **rules written + ready to apply in `docs/ALERTS.md`** (2026-06-29): exact PromQL for error-rate, http-5xx, p95 latency, booking-failure, pool-waiting, reminder-delivery, tool-error, no-traffic — each linked to its `RUNBOOK.md` section, plus a Better-Stack log-alert fallback needing no scraper. **`METRICS_TOKEN` confirmed SET on prod** (verified: `/metrics` returns 401 not 404). Remaining (user): stand up a scraper OR set `BETTER_STACK_TOKEN`, load the rules, route page-severity to a watched channel, fire a test alert. See `docs/ALERTS.md` §6 checklist.
 
 **Billing** (dossier: _Active build queue_, _Phase 13_)
 
