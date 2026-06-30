@@ -1,5 +1,7 @@
 # Voice dead-air / latency — research findings (2026-06-25)
 
+> **Reference doc, mostly shipped (status 2026-06-30).** This is a research record, not an open-work list. Of its recommendations, adaptive interruption, false-interruption resume, the non-interruptible greeting (#103/#104/#108/#109), and the TTS-model switch all **landed** in the pipeline path. **Cached/pre-rendered filler audio (§2) is also built** — `agent/src/session/fillerCache.ts` (`warmFillers` → synth-once → `say(text,{audio})`), consumed by the **output watchdog** (`watchdog.ts`); plus a thinking-sound bed (`thinkingSound.ts`). Both are **flag-gated OFF** (`ENABLE_OUTPUT_WATCHDOG` / `ENABLE_THINKING_SOUND`) pending real-call tuning (watchdog deadline must exceed reply latency — PLAYBOOK §8.1). The genuine remaining gaps are narrow: (a) re-enable the watchdog after tuning, and (b) the **tool-boundary** `speakFiller` is still a **no-op** (was disabled after the #97 in-`execute()` freeze; the cached-filler plumbing exists but isn't wired to the tool boundary). Operational voice rules now live in `docs/VOICE_AGENT_PLAYBOOK.md` (authoritative §8). "How this maps to our config" below predates `fillerCache.ts` — read it with this banner.
+
 Cited research into how voice-AI practitioners handle dead air during LLM + tool-call + TTS,
 mapped to our stack: **LiveKit Agents (Node) `@livekit/agents` 1.4.5 + Deepgram STT +
 OpenAI GPT-4o-mini + OpenAI `gpt-4o-mini-tts` + Telnyx/SIP**. Produced by the deep-research
@@ -109,10 +111,15 @@ session.say(greeting, { allowInterruptions: false })  // ✅ greeting plays thro
 speakFiller = () => {}      // NO-OP since #97 — awaiting a supported re-enable
 ```
 
-**Remaining gap vs. the research:** the one item NOT yet done is **cached filler audio**
-(`speakFiller` is still a no-op — pre-rendered phrase audio at the tool boundary, section 2).
-Adaptive interruption, false-interruption resume, and the non-interruptible greeting all landed
-(shipped via #103/#104/#108/#109). Cached-filler plan:
+**Remaining gap vs. the research (updated 2026-06-30):** cached filler audio IS now built —
+`agent/src/session/fillerCache.ts` (`warmFillers` synthesizes each fixed line once → replays via
+`say(text,{audio})`, exactly section 2) — and consumed by the **output watchdog** (`watchdog.ts`),
+flag-gated behind `ENABLE_OUTPUT_WATCHDOG` (default OFF, pending deadline tuning, PLAYBOOK §8.1).
+What's still NOT done: (a) re-enabling the watchdog on a real call after tuning, and (b) wiring
+the cached frames to the **tool-boundary** `speakFiller`, which remains a **no-op** (disabled after
+the #97 in-`execute()` freeze — the `speakFiller?.(…)` call sites in `agent/src/tools.ts` invoke a
+callback that `index.ts` deliberately passes as a no-op). Adaptive interruption, false-interruption
+resume, and the non-interruptible greeting all landed (#103/#104/#108/#109). Plan:
 `docs/superpowers/specs/2026-06-25-filler-interruption-tuning-design.md` and the
 `tts-phrase-cache-design` work.
 

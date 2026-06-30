@@ -1,112 +1,147 @@
-# Adopting the Portable Development Workflow
+# Adopting This Development Workflow
 
-**This is the single document you need.**
+**Point other projects here.**
 
-If someone sent you here (especially from a sibling/parallel project like `../ai-sec`), follow the instructions in this file exactly. You should not need any additional files or explanations from the person who pointed you at it.
+If you want another team or project to adopt the same development, branching, testing, documentation, and commit processes, send them this document + the `portable-workflow-kit/` folder.
 
-The goal is to give your project the same battle-tested system for:
-- Consistent feature branching
-- Automated quality gates before committing
+Everything they need is contained in this file and the kit.
+
+The goal is to give you a battle-tested, lightweight-but-rigorous system for:
+
+- Consistent branching
+- Automated quality gates
 - Documentation hygiene
 - Reliable commit and PR processes
 
-Everything is driven from one configuration file (`workflow.config.json`). The automation scripts adapt based on your declared `projectType`.
+## Quick Start (5–10 minutes)
 
----
+### Easiest Way (Recommended)
 
-## Quick Start (When ai-sec is a Sibling Directory)
-
-This is the most common case when working alongside the source repo.
-
-From the root of **your** project, the easiest way is to grab the pre-built kit that has already been dropped at the parent level:
+In the source project, run:
 
 ```bash
-# Recommended for SaaS / TypeScript projects (pre-specialized for node-fullstack)
-cp ../portable-workflow-kit-node-fullstack-2026-05-27.zip .
-unzip portable-workflow-kit-node-fullstack-2026-05-27.zip
-
-# Or grab the latest generic version
-cp ../portable-workflow-kit-2026-05-27.zip .
-unzip portable-workflow-kit-2026-05-27.zip
+npm run generate-kit -- --zip
 ```
 
-You can also use the always-up-to-date folders:
+This will create a clean, ready-to-distribute copy in `dist/portable-workflow-kit/` plus a zip file.
 
-- `../portable-workflow-kit-node-fullstack-latest/` (best for SaaS projects)
-- `../portable-workflow-kit-latest/`
-
-After unzipping or copying a folder, you will have a `portable-workflow-kit/` directory ready to use.
-
-**Also copy this document** if you want it locally:
-```bash
-cp ../ai-sec/docs/ADOPTING_THE_WORKFLOW.md .
-```
-
-### Alternative: Ask maintainer to generate a fresh one
-
-If you want the absolute latest version, ask them to run this helper (it keeps the sibling kits fresh):
+**Advanced options for releases:**
 
 ```bash
-cd ../ai-sec
-bash scripts/refresh-workflow-kits.sh
+# Bump version + create git tag + zip
+npm run generate-kit -- --zip --tag --bump patch
+
+# Use a custom tag prefix
+npm run generate-kit -- --zip --tag --bump minor --tag-prefix "my-workflow/v"
 ```
 
-This updates both the generic and node-fullstack versions in the parent directory.
+Supported bump types: `patch`, `minor`, `major`.
 
-Manual generation (if needed):
+Then give the recipient the zip (or the folder) + point them to this document.
 
-```bash
-cd ../ai-sec
-npm run generate-kit -- --zip --project-type node-fullstack   # SaaS recommended
-# or
-npm run generate-kit -- --zip --project-type python
-```
+### Manual Way
 
----
+1. Copy the entire `portable-workflow-kit/` folder into your repository.
+2. Read and customize `workflow.config.json` (inside the kit).
+3. Follow the step-by-step instructions in this document.
 
-## Step-by-Step (Do These in Order)
+## What You Get
 
-### 1. Choose Your Project Type (Most Important Step)
+- Automated branch creation with quality gates
+- Local Git hooks (pre-commit + pre-push) managed via Husky
+- Powerful `prepare-commit` automation
+- Clear checklists and PR templates
+- Strong emphasis on testing + documentation
+- A repeatable process that works for solo developers and small teams
 
-Open `portable-workflow-kit/workflow.config.json` and set the `projectType` field near the top:
+## Step-by-Step Adoption Guide
+
+### 1. Copy the Adoption Kit
+
+Copy the entire `portable-workflow-kit/` directory into your project.
+
+Recommended location: project root.
+
+### 2. Understand Project Types (Critical for Easy Transfer)
+
+**This is the single most important field for making the rules travel cleanly.**
+
+In `workflow.config.json` (the one inside the kit you just copied), set:
 
 ```json
 "projectType": "python"     // or "node-fullstack", "generic"
 ```
 
-**Available types** (see `projectTypeProfiles` in the same file):
+The automation scripts (`prepare-commit`, the Husky pre-commit/pre-push hooks, etc.) **read this value** plus the `commands` block and the `projectTypeProfiles` library.
 
-- `node-fullstack` — TypeScript SaaS projects (Next.js + backend)
-- `python` — Python projects (FastAPI, Django, CLIs, etc.) — uses ruff, black, pytest
-- `generic` — Everything else (Go, Rust, mixed, etc.)
+**What this buys you**:
 
-The scripts will automatically use only the commands appropriate for your type. A Python project will never be told to run `eslint` or `tsc`.
+- A Python recipient running `npm run prepare-commit` (or the direct script) will **only** execute `ruff`, `black`, `pytest`, etc. — never `eslint`, `tsc`, or `vitest`.
+- The pre-commit hook will not try to run TypeScript tooling on `.py` files.
+- The focused-test scan (`commands.focusedTestScan`) uses language-appropriate patterns.
+- You hand them one folder + this document and the governance "just works" for their stack.
 
-### 2. Customize the Commands for Your Project
+**Supported starter profiles** (see `projectTypeProfiles` in the config):
 
-Still in `workflow.config.json`, look at the `commands` section.
+- `node-fullstack` — TypeScript SaaS (Next.js + backend). The original full-fat profile.
+- `python` — ruff + black + pytest (FastAPI, Django, CLIs, data projects, etc.).
+- `generic` — Empty placeholders. You fill in the `commands` block yourself.
 
-Copy the matching block from `projectTypeProfiles` into the active `commands` object, then edit the strings to match your actual tools.
+**How to adopt for a Python project (concrete example)**:
 
-Example for a Python project:
+1. Generate (or copy) the kit with `--project-type python` (recommended):
+
+   ```bash
+   npm run generate-kit -- --project-type python --zip
+   ```
+
+   The emitted `workflow.config.json` will already have `projectType: "python"` and the `commands` block pre-filled with sensible ruff/pytest strings.
+
+2. Or manually: open the kit's `workflow.config.json`, set `"projectType": "python"`, then copy the entire `python` object from `projectTypeProfiles` into the top-level `commands` key and tweak the exact flags/paths for your repo.
+
+3. The scripts now do the right thing automatically. No further editing of `prepare-commit.sh` or hooks is required.
+
+The same pattern works for Go, Rust, or a mixed monorepo. The config is the contract; the scripts are now interpreters of that contract.
+
+### 3. Customize `workflow.config.json` (The Only File Most People Touch)
+
+This is the **single source of truth**. Everything else (scripts, hooks, docs) reads it.
+
+Typical flow for any project:
+
+1. Set `projectType` (see previous section).
+2. Copy the matching block out of `projectTypeProfiles` into the top-level `commands` object.
+3. Edit the 6–8 command strings to match your exact binaries, monorepo layout, or CI nuances.
+4. Update `documentation.filesThatMustBeUpdated` to the real list of files that must stay current in your repo.
+5. (Optional) tweak `branching`, `testing`, `hooks` policy, etc.
+
+Example diff for a Python team that uses ruff + pytest + mypy:
 
 ```json
 "commands": {
-  "checks": "ruff check . && black --check .",
+  "checks": "ruff check . && black --check . && mypy .",
   "unitTests": "pytest -q --tb=line",
   "build": "python -m py_compile $(git ls-files '*.py') 2>/dev/null || true",
   "lint": "ruff check .",
   "formatCheck": "black --check .",
-  "docDriftCheck": "echo 'Add your doc drift command here or leave empty'",
+  "docDriftCheck": "python scripts/check_doc_drift.py || true",
   ...
 }
 ```
 
-This is the **only file** most projects need to edit significantly.
+The `prepare-commit` script, pre-commit hook, and pre-push hook will now execute **exactly** those strings (or skip them gracefully if you left an `echo "..."` placeholder).
 
-### 3. Install the Scripts
+You almost never need to edit the `.sh` files themselves after the first adoption.
 
-Copy the contents of `portable-workflow-kit/scripts/` into a `scripts/` folder in your project root (create the folder if needed).
+### 3. Install Supporting Scripts
+
+Copy the scripts from the kit into your `scripts/` folder (create it if needed):
+
+- `create-feature-branch.sh`
+- `prepare-commit.sh`
+- `setup-hooks.sh`
+- `remove-hooks.sh`
+- The example hook scripts
 
 Make them executable:
 
@@ -114,76 +149,116 @@ Make them executable:
 chmod +x scripts/*.sh
 ```
 
-### 4. Add Convenience Scripts (Optional but Recommended)
+### 4. Add npm / Task Runner Scripts (Optional but Recommended)
 
-Add these to your `package.json` (if you use npm) or equivalent task runner:
+If your project uses npm (or pnpm, yarn, etc.), wire the workflow into `package.json`:
 
 ```json
 "scripts": {
   "create-branch": "bash scripts/create-feature-branch.sh",
   "prepare-commit": "bash scripts/prepare-commit.sh",
   "setup-hooks": "bash scripts/setup-hooks.sh",
-  "remove-hooks": "bash scripts/remove-hooks.sh"
+  "remove-hooks": "bash scripts/remove-hooks.sh",
+  "checks": "bash -c 'source scripts/config-reader.sh && eval \"$(get_command checks)\"'",
+  "pre-pr": "npm run checks && npm run prepare-commit"
 }
 ```
 
-For non-Node projects, you can run the scripts directly:
+**For pure Python / Go / Rust projects** (no package.json or you prefer direct calls):
 
-```bash
-bash scripts/create-feature-branch.sh feat/my-feature
-bash scripts/prepare-commit.sh
-```
+- You can invoke the scripts directly:
+  ```bash
+  bash scripts/create-feature-branch.sh feat/my-change
+  bash scripts/prepare-commit.sh
+  ```
+- **One active PR at a time**: Before starting a new feature branch, the previous one must be pushed → merged to main → deleted (local + remote). This is enforced in both `prepare-commit` and the `BRANCH_CHECKLIST.md`.
+- The scripts are completely self-contained once `workflow.config.json` is correct.
+- Many teams still add a `pyproject.toml` `[tool.poe.tasks]` or a `Makefile` with the same names for muscle-memory consistency across the company.
 
-### 5. Set Up Git Hooks (Strongly Recommended)
+The important contract is: `prepare-commit` and the hooks must ultimately call the values from the config. The portable scripts already do this.
 
-The system works best with Husky for automatic hook installation.
+### 5. Set Up Git Hooks (Automatic)
 
-1. Install Husky: `npm install --save-dev husky` (or equivalent)
-2. Add `"prepare": "husky"` to your package.json scripts.
-3. Copy the `.husky/` examples from the kit (or run the setup scripts).
+The kit uses **Husky** for automatic hook management.
 
-After `npm install`, the pre-commit and pre-push hooks will be active.
+1. Install Husky:
+
+   ```bash
+   npm install --save-dev husky
+   ```
+
+2. Add this to your `package.json` scripts:
+
+   ```json
+   "prepare": "husky"
+   ```
+
+3. Copy the `.husky/` folder from the kit into your project (or create the hooks manually using the examples).
+
+After running `npm install`, the hooks will be installed automatically.
 
 ### 6. Copy Supporting Files
 
-From the kit, copy these into your project:
+Copy these into your project (recommended locations):
 
-- `BRANCH_CHECKLIST.md` → put a copy at your project root when starting new work
+- `docs/BRANCH_CHECKLIST.md` → `docs/BRANCH_CHECKLIST.md`
 - `.github/pull_request_template.md`
 - `.github/BRANCH_PROTECTION.md`
-- `.github/ISSUE_TEMPLATE/` (optional but useful)
+- `.github/ISSUE_TEMPLATE/` (feature.md and bug.md)
 
-### 7. Start Using It
+### 7. Set Up Branch Protection (Recommended)
 
-- Always create branches with: `npm run create-branch feat/your-name` (or the script directly)
-- Before committing significant work, run: `npm run prepare-commit`
-- Update the files listed in your `workflow.config.json` under `documentation.filesThatMustBeUpdated`
+Follow the recommendations in `.github/BRANCH_PROTECTION.md`.
 
----
+This is one of the highest-leverage things you can do to enforce the workflow.
 
-## Staying Up to Date
+### 8. Update Your Main Documentation
 
-When the source project improves the workflow:
+Add a section to your `README.md` or `CONTRIBUTING.md`:
 
-1. Ask the maintainer to run `npm run generate-kit -- --zip --project-type <your-type>` (or whatever the latest recommended command is).
-2. Replace your local `portable-workflow-kit/` with the new generated version.
-3. Re-apply any customizations you made to `workflow.config.json`.
+```markdown
+## Development Workflow
 
----
+We use a structured development workflow. See `ADOPTING_THE_WORKFLOW.md` (or the portable guide in this repo) for details.
+```
 
-## Common Questions
+Point people to `PORTABLE_DEVELOPMENT_WORKFLOW.md` + `workflow.config.json` if you want them to understand the full system.
 
-**Q: Do I have to use npm?**  
-No. The scripts are plain bash and work on any project. Use them directly or wire them into Make, Poe, Task, etc.
+## Customizing Further
 
-**Q: What if my tooling is different?**  
-Edit the `commands` section in `workflow.config.json`. The automation will run whatever strings you put there (or skip them gracefully if left as `echo` placeholders).
+The `workflow.config.json` file is designed to be the single place you change when adapting the system.
 
-**Q: Where is the full philosophy and history?**  
-See the root `ADOPTING_THE_WORKFLOW.md` and `PORTABLE_DEVELOPMENT_WORKFLOW.md` in the ai-sec repo for deeper background. This document is intentionally the practical "just get it working" version.
+Common customizations:
+
+- Change test commands
+- Add or remove required documentation files
+- Adjust hook behavior (e.g., make pre-commit stricter or more lenient)
+- Change branch naming rules
+
+## Philosophy
+
+This system is deliberately:
+
+- **Lightweight enough for solo developers**
+- **Strong enough to protect future-you**
+- **Opinionated but adaptable**
+
+It automates what can reasonably be automated and leaves human judgment where it belongs (commit messages, scope decisions, final review).
+
+## Questions?
+
+The best reference implementations are in the original project that developed this system.
+
+Look at:
+
+- `PORTABLE_DEVELOPMENT_WORKFLOW.md`
+- `workflow.config.json`
+- The scripts in the kit
+
+You can point any project at this document and say:
+
+> “Read `ADOPTING_THE_WORKFLOW.md`. Copy the `portable-workflow-kit/` folder. Customize `workflow.config.json`. You now have the same process we use.”
 
 ---
 
 **Welcome to a more disciplined way of building software.**
-
-Once you have followed the steps above, you have the same system. The only ongoing work is keeping your `workflow.config.json` accurate for your project.
