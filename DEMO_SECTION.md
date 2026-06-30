@@ -12,21 +12,24 @@ broken product.
 
 ## ⛔ PREREQUISITE (must fix FIRST — separate from the demo)
 
-- [ ] **Real inbound calls are not booking meetings.** Open issue from earlier
-      work, never resolved. A real call comes in but the meeting booking does not
-      complete. This is the next thing we investigate (WHY are calls not creating
-      bookings). The demo cannot go forward until a real call reliably books a
-      meeting end-to-end.
-  - Symptom (as known): real call connects but no appointment row lands for the
-    tenant. (Confirm/refine when we dig in.)
-  - Likely suspects to check when we start: the booking tool path
-    (`book_appointment` / `book_with_scheduling` → `/agent-tools/*` →
-    `book_with_scheduling_atomic`), error codes returned to the agent
-    (`EMPLOYEE_NOT_SCHEDULED` / `NO_AVAILABILITY` / etc.), whether the agent is
-    even calling the booking tool, and whether the prompt drives it to confirm +
-    book. Pull a real `voice_sessions` row + transcript + `tool_calls_total` /
-    `booking_attempts_total` metrics before theorizing (measure first — see
-    `docs/LESSONS_LEARNED.md`).
+- [~] **Real inbound calls are not booking meetings — ROOT-CAUSED + PATCHED 2026-06-30; needs one live-call confirm.**
+  - **Diagnosis (done):** the booking RPC matches `employees.skills @> service.required_skills`.
+    All 3 Thinking Hammer services require skill `consultation`, but the bookable
+    employee (Dale, who _is_ the solo owner) had `skills = {}` → every
+    skill-enforced booking returned `NO_SKILLED_EMPLOYEE` → the agent bailed to
+    "having trouble" / take-a-message. **Zero appointments had ever been created.**
+    (Telephony was a red herring: `822-9086` reaches the agent fine — confirmed by
+    a real call; the "wrong number" was the `866-9086` doc transcription error.)
+  - **Patched (prod data):** set Dale's `employees.skills = {consultation}` +
+    added the `tenant_skills` row. Verified via the real RPC (rolled back): booking
+    now succeeds and assigns Dale.
+  - [ ] **Remaining — make it structural (not a hand patch):** backfill migration
+        (`employee.skills ⊇ service.required_skills` per `service_employee` mapping) +
+        seed/Solo-wizard fix (solo owner = employee holding all service skills) +
+        app-level guard on service↔employee mapping. Without these, a `db:rebuild`,
+        any new tenant, and the demo seed all reproduce the bug.
+  - [ ] **Remaining — confirm live:** one real call to `822-9086`, book a time in
+        Dale's Mon–Fri 1–5pm window, verify the appointment row lands.
 
 ---
 

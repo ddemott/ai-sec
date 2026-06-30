@@ -29,6 +29,7 @@ import { validateAppointmentTimeRange } from '../services/appointmentValidation'
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../services/customerLookup';
 import { findNextAvailableSlots } from '../services/availabilitySearch';
+import { resolveServiceForBooking } from '../services/serviceResolver';
 import { recordAiCostEvent } from '../services/aiCost';
 import {
   findOverlappingAppointment,
@@ -1396,6 +1397,15 @@ export function registerAgentToolRoutes(
       );
 
       const result = await withTenantClient(args.tenant_id, async (client) => {
+        // Resolve the service (falls through to the tenant default when the
+        // spoken type doesn't match — so the booking uses a REAL service that
+        // carries required_skills, and the RPC can assign a qualified employee
+        // instead of failing NO_SKILLED_EMPLOYEE / booking an employee-less slot).
+        const resolved = await resolveServiceForBooking(
+          client,
+          args.tenant_id,
+          args.requirements.serviceType
+        );
         const rpc = await client.query<{
           success: boolean;
           appointment_id: string | null;
@@ -1423,12 +1433,16 @@ export function registerAgentToolRoutes(
             null, // p_end_time
             new Date(args.window.from).toISOString(),
             new Date(args.window.to).toISOString(),
-            args.requirements.requiredEmployeeSkills || [],
+            // Prefer the resolved service's required_skills (so the RPC assigns
+            // a skilled employee); fall back to any the agent explicitly supplied.
+            (resolved?.required_skills?.length
+              ? resolved.required_skills
+              : args.requirements.requiredEmployeeSkills) || [],
             args.requirements.requiredResourceCapabilities || [],
             args.requirements.preferredResourceId || null,
             null, // p_preferred_employee_id
-            args.requirements.serviceType,
-            30, // p_duration_minutes — RPC derives actual duration from service
+            resolved?.name ?? args.requirements.serviceType ?? null,
+            resolved?.duration_minutes ?? 30,
           ]
         );
         return rpc.rows[0];
@@ -1527,73 +1541,13 @@ export function registerAgentToolRoutes(
     '/agent-tools/available-slots',
     GetAvailableSlotsSchema,
     async (args, reply) => {
-      const data = await withTenantClient(args.tenant_id, async (client) => {
-        const res = await client.query<{
-          source: 'service' | 'shift' | 'appointment';
-          name: string | null;
-          duration_minutes: number | null;
-          price: string | number | null;
-          start_time: string | null;
-          end_time: string | null;
-        }>(
-          `WITH svc AS (
-           SELECT name, duration_minutes, price
-             FROM services
-            WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
-              AND (is_deleted IS NULL OR is_deleted = false)
-            LIMIT 1
-         ),
-         active_employees AS (
-           SELECT employee_id FROM employees
-            WHERE tenant_id = $1 AND is_active = true
-              AND (is_deleted IS NULL OR is_deleted = false)
-         ),
-         effective_shifts AS (
-           SELECT DISTINCT
-                  es.start_time::text AS start_time,
-                  es.end_time::text AS end_time
-             FROM active_employees ae
-             JOIN employee_schedule es
-               ON es.employee_id = ae.employee_id
-              AND es.tenant_id = $1
-              AND es.shift_date = $3::date
-              AND es.is_off = false
-              AND es.start_time IS NOT NULL
-         ),
-         day_appointments AS (
-           SELECT start_time::text, end_time::text
-             FROM appointments
-            WHERE tenant_id = $1 AND status = 'scheduled'
-              AND (is_deleted IS NULL OR is_deleted = false)
-              AND start_time::date = $3::date
-         )
-         SELECT 'service'::text AS source, name, duration_minutes::int, price, NULL::text AS start_time, NULL::text AS end_time FROM svc
-         UNION ALL
-         SELECT 'shift'::text, NULL, NULL, NULL, start_time, end_time FROM effective_shifts
-         UNION ALL
-         SELECT 'appointment'::text, NULL, NULL, NULL, start_time, end_time FROM day_appointments
-         ORDER BY source, start_time`,
-          [args.tenant_id, args.service_type, args.date]
-        );
-
-        let service: { name: string; duration_minutes: number; price: number | null } | null = null;
-        const shifts: Array<{ start_time: string; end_time: string }> = [];
-        const appointments: Array<{ start_time: string; end_time: string }> = [];
-        for (const row of res.rows) {
-          if (row.source === 'service' && row.name) {
-            service = {
-              name: row.name,
-              duration_minutes: row.duration_minutes as number,
-              price: row.price !== null ? Number(row.price) : null,
-            };
-          } else if (row.source === 'shift' && row.start_time && row.end_time) {
-            shifts.push({ start_time: row.start_time, end_time: row.end_time });
-          } else if (row.source === 'appointment' && row.start_time && row.end_time) {
-            appointments.push({ start_time: row.start_time, end_time: row.end_time });
-          }
-        }
-        return { service, shifts, appointments };
-      });
+      // Resolve the service FIRST — falls through to the tenant default when
+      // the caller's spoken type doesn't match a real service, so "a meeting" /
+      // "consulting" / anything never dead-ends with "couldn't find a service".
+      // Null only when the tenant has no bookable service at all.
+      const service = await withTenantClient(args.tenant_id, (client) =>
+        resolveServiceForBooking(client, args.tenant_id, args.service_type)
+      );
 
       // Format date for speech ("Wednesday, April 2")
       const dateObj = new Date(args.date + 'T12:00:00');
@@ -1603,14 +1557,60 @@ export function registerAgentToolRoutes(
         day: 'numeric',
       });
 
-      if (!data.service) {
+      if (!service) {
         return ok(
           reply,
-          `I couldn't find a service matching "${args.service_type}" in our catalog. Would you like to hear our list of services?`
+          `I'm not able to pull up our booking options right now. Would you like to leave a message and I'll have Dale get back to you?`
         );
       }
 
-      const { name: serviceName, duration_minutes, price } = data.service;
+      const data = await withTenantClient(args.tenant_id, async (client) => {
+        const res = await client.query<{
+          source: 'shift' | 'appointment';
+          start_time: string | null;
+          end_time: string | null;
+        }>(
+          `WITH active_employees AS (
+             SELECT employee_id FROM employees
+              WHERE tenant_id = $1 AND is_active = true
+                AND (is_deleted IS NULL OR is_deleted = false)
+           ),
+           effective_shifts AS (
+             SELECT DISTINCT es.start_time::text AS start_time, es.end_time::text AS end_time
+               FROM active_employees ae
+               JOIN employee_schedule es
+                 ON es.employee_id = ae.employee_id
+                AND es.tenant_id = $1
+                AND es.shift_date = $2::date
+                AND es.is_off = false
+                AND es.start_time IS NOT NULL
+           ),
+           day_appointments AS (
+             SELECT start_time::text, end_time::text
+               FROM appointments
+              WHERE tenant_id = $1 AND status = 'scheduled'
+                AND (is_deleted IS NULL OR is_deleted = false)
+                AND start_time::date = $2::date
+           )
+           SELECT 'shift'::text AS source, start_time, end_time FROM effective_shifts
+           UNION ALL
+           SELECT 'appointment'::text, start_time, end_time FROM day_appointments
+           ORDER BY source, start_time`,
+          [args.tenant_id, args.date]
+        );
+        const shifts: Array<{ start_time: string; end_time: string }> = [];
+        const appointments: Array<{ start_time: string; end_time: string }> = [];
+        for (const row of res.rows) {
+          if (row.source === 'shift' && row.start_time && row.end_time) {
+            shifts.push({ start_time: row.start_time, end_time: row.end_time });
+          } else if (row.source === 'appointment' && row.start_time && row.end_time) {
+            appointments.push({ start_time: row.start_time, end_time: row.end_time });
+          }
+        }
+        return { shifts, appointments };
+      });
+
+      const { name: serviceName, duration_minutes, price } = service;
       const serviceInfo =
         price && price > 0
           ? `${serviceName} takes about ${duration_minutes} minutes and costs $${price.toFixed(0)}.`

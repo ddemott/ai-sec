@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 6SLoo8wnb3GW0JBOBhB23Y2jMQ6fMPL67VHMzYnhnvFSw5cRKLHFF26geNLUCzJ
+\restrict L2ebMZWKtEG8Zn57hz7LecEGux5dMbTTjucYtygtsfiWQLdLz01o2YOpZ7PNubL
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3232,7 +3232,8 @@ CREATE TABLE public.tenants (
     tts_warm boolean,
     tts_concise boolean,
     job_inquiry_email text,
-    forwarded_from_phone text
+    forwarded_from_phone text,
+    default_service_id uuid
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -4820,6 +4821,14 @@ ALTER TABLE ONLY public.tenant_skills
 
 
 --
+-- Name: tenants tenants_default_service_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenants
+    ADD CONSTRAINT tenants_default_service_id_fkey FOREIGN KEY (default_service_id) REFERENCES public.services(service_id) ON DELETE SET NULL;
+
+
+--
 -- Name: unanswered_questions unanswered_questions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5442,5 +5451,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 6SLoo8wnb3GW0JBOBhB23Y2jMQ6fMPL67VHMzYnhnvFSw5cRKLHFF26geNLUCzJ
+\unrestrict L2ebMZWKtEG8Zn57hz7LecEGux5dMbTTjucYtygtsfiWQLdLz01o2YOpZ7PNubL
 
