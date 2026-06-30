@@ -58,6 +58,13 @@ export interface TenantDisplayConfig {
    * agent takes a message instead. 2026-06-11.
    */
   forwardPhone: string | null;
+  /**
+   * E.164 line the tenant forwards INTO the assistant. When the SIP caller-ID
+   * matches this, the agent treats the caller-ID as the forwarding line (not the
+   * customer) and collects the caller's real number verbally. NULL = no
+   * forwarded-line handling via this field (env list still applies). 2026-06-29.
+   */
+  forwardedFromPhone: string | null;
 }
 
 export const TENANT_FALLBACK: TenantDisplayConfig = {
@@ -73,6 +80,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   ttsWarm: null,
   ttsConcise: null,
   forwardPhone: null,
+  forwardedFromPhone: null,
 };
 
 export async function fetchTenantConfig(
@@ -94,6 +102,7 @@ export async function fetchTenantConfig(
     tts_warm?: boolean | null;
     tts_concise?: boolean | null;
     forward_phone?: string | null;
+    forwarded_from_phone?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {
@@ -109,6 +118,7 @@ export async function fetchTenantConfig(
       ttsWarm: res.result.tts_warm ?? null,
       ttsConcise: res.result.tts_concise ?? null,
       forwardPhone: res.result.forward_phone ?? null,
+      forwardedFromPhone: res.result.forwarded_from_phone ?? null,
     };
   }
   return TENANT_FALLBACK;
