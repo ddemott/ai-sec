@@ -345,6 +345,8 @@ describe('agentTools /tenant-config', () => {
       tts_concise: null,
       // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
       forward_phone: null,
+      // 2026-06-29 forwarded_from_phone defaults null → no forwarded-line match.
+      forwarded_from_phone: null,
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -401,6 +403,8 @@ describe('agentTools /tenant-config', () => {
       tts_concise: null,
       // 2026-06-11 forward_phone defaults null → transfer_call takes a message.
       forward_phone: null,
+      // 2026-06-29 forwarded_from_phone defaults null → no forwarded-line match.
+      forwarded_from_phone: null,
     });
   });
 
