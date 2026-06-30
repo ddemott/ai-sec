@@ -351,7 +351,7 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     // Pin tx boundaries + correct cleanup order.
     expect(queries[0].text).toBe('BEGIN');
     expect(queries[1].text).toContain(
-      'SELECT business_type, system_prompt, persona_name, voice_id, first_message'
+      'SELECT business_type, system_prompt, persona_name, default_service_id, voice_id, first_message'
     );
     expect(queries[1].text).toContain('FROM tenants');
     expect(queries[1].text).toContain('FOR UPDATE');

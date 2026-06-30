@@ -46,6 +46,9 @@ const UpdateConfigSchema = z.object({
   system_prompt: z.string().optional().nullable(),
   // Editable assistant name (e.g. "Chris"). NULL = no explicit name.
   persona_name: z.string().max(120).optional().nullable(),
+  // The service a call books when the caller doesn't name a matchable one
+  // (the "Default (when nothing matches)" radio in the services list).
+  default_service_id: z.string().uuid().optional().nullable(),
   voice_id: z.string().max(100).optional().nullable(),
   business_type: z.string().max(50).optional(),
   first_message: z.string().optional().nullable(),
@@ -170,7 +173,7 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, persona_name, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone FROM tenants WHERE tenant_id = $1',
+          'SELECT tenant_id, name, business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );
@@ -216,6 +219,7 @@ export function registerTenantRoutes(
             business_type: string | null;
             system_prompt: string | null;
             persona_name: string | null;
+            default_service_id: string | null;
             voice_id: string | null;
             first_message: string | null;
             save_preferences_enabled: boolean | null;
@@ -232,7 +236,7 @@ export function registerTenantRoutes(
             forwarded_from_phone: string | null;
             inbound_phone: string | null;
           }>(
-            'SELECT business_type, system_prompt, persona_name, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, forwarded_from_phone, inbound_phone FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            'SELECT business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, forwarded_from_phone, inbound_phone FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
           const prior = priorRes.rows[0];
@@ -244,6 +248,10 @@ export function registerTenantRoutes(
             body.system_prompt !== undefined ? body.system_prompt : (prior?.system_prompt ?? null);
           const finalPersonaName =
             body.persona_name !== undefined ? body.persona_name : (prior?.persona_name ?? null);
+          const finalDefaultServiceId =
+            body.default_service_id !== undefined
+              ? body.default_service_id
+              : (prior?.default_service_id ?? null);
           const finalVoiceId =
             body.voice_id !== undefined ? body.voice_id : (prior?.voice_id ?? null);
           const finalBusinessType =
@@ -289,7 +297,7 @@ export function registerTenantRoutes(
           }
 
           const updRes = await client.query(
-            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9, tts_cheerful = $10, tts_formal = $11, tts_warm = $12, tts_concise = $13, forward_phone = $14, owner_phone = $15, forwarded_from_phone = $16, persona_name = $17 WHERE tenant_id = $18 RETURNING tenant_id',
+            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9, tts_cheerful = $10, tts_formal = $11, tts_warm = $12, tts_concise = $13, forward_phone = $14, owner_phone = $15, forwarded_from_phone = $16, persona_name = $17, default_service_id = $18 WHERE tenant_id = $19 RETURNING tenant_id',
             [
               finalSystemPrompt,
               finalVoiceId,
@@ -308,6 +316,7 @@ export function registerTenantRoutes(
               finalOwnerPhone,
               finalForwardedFromPhone,
               finalPersonaName,
+              finalDefaultServiceId,
               id,
             ]
           );

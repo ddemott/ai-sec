@@ -73,6 +73,25 @@ export default function ServiceAssignmentView() {
   const [editForm, setEditForm] = useState<Partial<Service>>({});
   const [saving, setSaving] = useState(false);
 
+  // Default service — the one a call books when the caller doesn't name a
+  // matchable service. One default per business (radio behavior).
+  const [defaultServiceId, setDefaultServiceId] = useState<string | null>(null);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
+
+  async function setAsDefault(serviceId: string) {
+    if (!tenantId) return;
+    setSettingDefaultId(serviceId);
+    try {
+      await Api.tenants.updateConfig(tenantId, { default_service_id: serviceId });
+      setDefaultServiceId(serviceId);
+      showToast('Set as the default when a caller doesn’t name a service.', 'success');
+    } catch {
+      showToast('Could not set the default service. Please try again.', 'error');
+    } finally {
+      setSettingDefaultId(null);
+    }
+  }
+
   const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
 
   useEffect(() => {
@@ -82,12 +101,14 @@ export default function ServiceAssignmentView() {
 
   async function fetchMappings() {
     try {
-      const [rMap, eMap] = await Promise.all([
+      const [rMap, eMap, config] = await Promise.all([
         Api.mappings.listServiceResource(tenantId),
         Api.mappings.listServiceEmployee(tenantId),
+        Api.tenants.getConfig(tenantId),
       ]);
       setResMappings(rMap);
       setEmpMappings(eMap);
+      setDefaultServiceId(config.default_service_id ?? null);
     } catch {
       console.error('Failed to fetch mappings');
     }
@@ -343,6 +364,51 @@ export default function ServiceAssignmentView() {
               <Badge variant="secondary">{service.duration_minutes} MIN</Badge>
               {(service.price ?? 0) > 0 && <Badge variant="primary">${service.price}</Badge>}
             </div>
+
+            {/* Default-when-nothing-matches selector. Radio behavior: one
+                default per business. Clicking sets tenants.default_service_id;
+                stopPropagation so it doesn't open the edit modal. */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (service.service_id !== defaultServiceId) void setAsDefault(service.service_id);
+              }}
+              disabled={settingDefaultId === service.service_id}
+              aria-pressed={service.service_id === defaultServiceId}
+              title="The service a call books when the caller doesn't name a matchable one"
+              className="flex items-center gap-2 mb-4 text-left disabled:opacity-60"
+            >
+              <span
+                className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
+                style={{
+                  borderColor:
+                    service.service_id === defaultServiceId
+                      ? 'var(--accent)'
+                      : 'var(--border-soft)',
+                }}
+              >
+                {service.service_id === defaultServiceId && (
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: 'var(--accent)' }}
+                  />
+                )}
+              </span>
+              <span
+                className="text-xs"
+                style={{
+                  color:
+                    service.service_id === defaultServiceId
+                      ? 'var(--accent)'
+                      : 'var(--text-secondary)',
+                }}
+              >
+                {service.service_id === defaultServiceId
+                  ? 'Default when nothing matches'
+                  : 'Set as default'}
+              </span>
+            </button>
 
             <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--border-soft)' }}>
               <div className="flex items-center text-xs font-bold uppercase tracking-tighter">
