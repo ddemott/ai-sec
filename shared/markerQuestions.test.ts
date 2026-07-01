@@ -36,6 +36,13 @@ describe('parseMarkerQuestions', () => {
     expect(r.custom).toEqual([{ question: 'Real?', answer: 'yes' }]);
   });
 
+  it('ends an orphan question at a blank line; trailing text is prose, not part of it', () => {
+    const r = parseMarkerQuestions('**Q: Orphan?\n\nsome prose');
+    expect(r.malformed).toEqual(['Orphan?']);
+    expect(r.custom).toEqual([]);
+    expect(r.prose).toContain('some prose');
+  });
+
   it('ignores a **A: with no preceding **Q:', () => {
     const r = parseMarkerQuestions('**A: stray answer\nsome prose');
     expect(r.custom).toEqual([]);

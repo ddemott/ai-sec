@@ -73,8 +73,15 @@ export function parseMarkerQuestions(text: string): MarkerParseResult {
     }
 
     if (state === 'q') {
-      // Multi-line question body continues until the **A: line.
-      qBuf.push(line.trim());
+      // Multi-line question body continues until the **A: line. A blank line
+      // before any **A: means the question never got an answer → malformed;
+      // the gap ends it and following text is plain prose.
+      if (line.trim() === '') {
+        commitOrphanQuestion();
+        state = 'prose';
+      } else {
+        qBuf.push(line.trim());
+      }
       continue;
     }
 

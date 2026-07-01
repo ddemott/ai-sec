@@ -18,6 +18,7 @@ import {
   ALLOWED_EXTENSIONS,
 } from '../services/knowledgeIngestion';
 import { resolveQuestions } from '../../shared/questionBank';
+import { parseMarkerQuestions } from '../../shared/markerQuestions';
 import { recordAiCostEvent } from '../services/aiCost';
 import { scanRateLimiter } from '../services/scanRateLimit';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
@@ -651,6 +652,161 @@ export function registerKnowledgeRoutes(
         suggestions,
       });
     }, 'Failed to import from website')
+  );
+
+  // POST /knowledge/import-document — upload a PDF/txt/md info sheet. Deterministic
+  // **Q:/**A: markers become custom questions; the leftover prose is AI-answered
+  // against the standard question bank. Everything stages to knowledge_suggestion
+  // for owner review — same gate as the website scan. (Spec: docs/superpowers/
+  // specs/2026-06-30-document-upload-knowledge-prefill-design.md)
+  app.post(
+    '/knowledge/import-document',
+    withHandler(async (req: AppRequest, reply) => {
+      const data = await req.file();
+      if (!data) return reply.status(400).send({ success: false, error: 'No file uploaded' });
+
+      const tenantId = (data.fields.tenant_id as { value?: string } | undefined)?.value;
+      if (!tenantId)
+        return reply.status(400).send({ success: false, error: 'tenant_id is required' });
+
+      const filename = data.filename;
+      const ext = getFileExtension(filename);
+      if (!isAllowedExtension(ext)) {
+        return reply.status(400).send({
+          success: false,
+          error: `Unsupported file type "${ext}". Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
+        });
+      }
+
+      // Per-tenant guardrail on the expensive AI pass (skipped in the deterministic
+      // E2E stub). Same limiter the website scan uses.
+      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1' && !scanRateLimiter.tryAcquire(tenantId)) {
+        logEvent(req, 'document_import_rate_limited', { tenantId });
+        return reply.status(429).send({
+          success: false,
+          error: 'Import limit reached. Please wait a bit before uploading again.',
+        });
+      }
+
+      const buffer = await data.toBuffer();
+      const extracted = await extractFileContent(buffer, filename);
+      if (!extracted.success) {
+        return reply.status(400).send({ success: false, error: extracted.error });
+      }
+
+      // Deterministic custom Q&A + leftover prose.
+      const { custom, malformed, prose } = parseMarkerQuestions(extracted.text);
+
+      // Standard questions = shared bank + this tenant's custom-question titles.
+      const customRows = await withTenantClient(tenantId, async (client) =>
+        client.query(
+          `SELECT title FROM tenant_docs
+           WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL
+           ORDER BY created_at DESC
+           LIMIT 50`,
+          [tenantId]
+        )
+      );
+      const customs = customRows.rows.map((r: any) => r.title as string);
+      const questions = resolveQuestions({ customs });
+
+      const sourceTag = `document:${filename}`;
+
+      // Standard answers from the prose. Stub → deterministic; else real OpenAI.
+      // The custom (marker) questions NEVER depend on the model — they come through
+      // even if the AI pass fails/degrades (spec §5 resilience win).
+      let standardAnswers: Array<{
+        questionId: string | null;
+        question: string;
+        answer: string | null;
+      }> = [];
+      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB === '1') {
+        const picks = [
+          ...questions.filter((q) => q.id === null),
+          ...questions.filter((q) => q.id !== null).slice(0, 2),
+        ];
+        standardAnswers = picks.map((q) => ({
+          questionId: q.id,
+          question: q.question,
+          answer: `Stubbed answer for: ${q.question}`,
+        }));
+      } else if (prose.trim().length > 0) {
+        const llm = await extractAnswersWithLLM(
+          prose,
+          questions,
+          sourceTag,
+          process.env.OPENAI_API_KEY || ''
+        );
+        if (llm.success) {
+          standardAnswers = llm.answers.map((a) => ({
+            questionId: a.questionId,
+            question: a.question,
+            answer: a.answer,
+          }));
+          if (llm.usage) {
+            const input = llm.usage.prompt_tokens || 0;
+            const output = llm.usage.completion_tokens || 0;
+            const cost = input * 0.15e-6 + output * 0.6e-6;
+            withTenantClient(tenantId, (client) =>
+              recordAiCostEvent(client, {
+                tenantId,
+                source: 'kb_ingestion',
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                inputTokens: input,
+                outputTokens: output,
+                estimatedCostUsd: cost,
+              })
+            ).catch(() => undefined);
+          }
+        }
+        // AI failure degrades gracefully: standardAnswers stays [] but custom still flows.
+      }
+
+      // Stage: standard (with a non-empty answer) + every custom pair, all 'suggested'.
+      const standardItems = standardAnswers
+        .filter((a) => a.answer != null && (a.answer as string).trim().length > 0)
+        .map((a) => ({
+          question_id: a.questionId || null,
+          question: a.question || '',
+          answer: a.answer as string,
+        }));
+      const customItems = custom.map((c) => ({
+        question_id: null as string | null,
+        question: c.question,
+        answer: c.answer,
+      }));
+      const allItems = [...standardItems, ...customItems];
+
+      if (allItems.length > 0) {
+        await withTenantClient(tenantId, async (client) => {
+          for (const item of allItems) {
+            await client.query(
+              `INSERT INTO knowledge_suggestion
+                 (tenant_id, question_id, question, answer, source_url, confidence, status)
+               VALUES ($1, $2, $3, $4, $5, $6, 'suggested')`,
+              [tenantId, item.question_id, item.question, item.answer, sourceTag, null]
+            );
+          }
+        });
+      }
+
+      logEvent(req, 'document_knowledge_import', {
+        tenantId,
+        filename,
+        standard: standardItems.length,
+        custom: customItems.length,
+        malformed: malformed.length,
+      });
+
+      return reply.send({
+        success: true,
+        standard_answers: standardAnswers,
+        custom_questions: custom,
+        malformed,
+        confirmed: allItems.length,
+      });
+    }, 'Failed to import from document')
   );
 
   // ── Knowledge Suggestions (website-scan staging) ──────────────────────
