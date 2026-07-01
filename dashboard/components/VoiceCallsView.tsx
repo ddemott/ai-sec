@@ -503,13 +503,17 @@ export default function VoiceCallsView() {
       const data = await Api.voice.getHistory(tenantId, { limit: 20, offset });
       if (offset === 0) {
         const fresh = data.calls || [];
+        // A silent background poll that comes back empty is treated as transient:
+        // skip the whole tick rather than wipe the list, churn the detail pane, or
+        // reset total/hasMore from empty data (which would leave the UI showing
+        // rows under a "Call History (0)" count).
+        if (opts.silent && fresh.length === 0) return;
         if (opts.silent) {
           // Background poll: MERGE the fresh first page into the existing list so
           // we don't collapse pagination (a user who clicked "Load more" keeps
           // their older rows). Update matched rows in place; prepend brand-new
           // calls (newest-first). Dedupe by voice_session_id.
           setCallHistory((prev) => {
-            if (fresh.length === 0) return prev; // empty poll → don't wipe (transient)
             if (prev.length <= fresh.length) return fresh; // not paginated → just take fresh
             // `fresh` is the authoritative newest page — the backend already
             // excludes soft-deleted rows. Take it verbatim (newest-first, with
@@ -519,11 +523,12 @@ export default function VoiceCallsView() {
             // it must not survive. The previous merge did `prev.map(... ?? c)`,
             // which kept every prev row — a call deleted from the first page
             // reappeared on the next 10s poll, reading as "delete not working"
-            // (reported 2026-06-30).
+            // (reported 2026-06-30). Compare on parsed timestamps, not raw
+            // strings, so a formatting/precision difference can't misplace a row.
             const freshIds = new Set(fresh.map((c) => c.voice_session_id));
-            const oldestFresh = fresh[fresh.length - 1].started_at;
+            const oldestFreshMs = Date.parse(fresh[fresh.length - 1].started_at);
             const olderRows = prev.filter(
-              (c) => !freshIds.has(c.voice_session_id) && c.started_at < oldestFresh
+              (c) => !freshIds.has(c.voice_session_id) && Date.parse(c.started_at) < oldestFreshMs
             );
             return [...fresh, ...olderRows];
           });
