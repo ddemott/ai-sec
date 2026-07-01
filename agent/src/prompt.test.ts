@@ -67,10 +67,12 @@ describe('buildSystemPrompt', () => {
   it('HAPPY: forbids re-checking/re-announcing a slot the caller already picked', () => {
     // WHO: Caller picked 1PM from the offered slots and confirmed it, but the
     //       agent said "let me check availability", re-listed the same slots, and
-    //       re-asked for confirmation before booking (real call 2026-07-01).
+    //       re-asked for confirmation before booking.
     // WHAT: The prompt must tell the agent that a picked slot is already
     //        available — no re-check, no re-announce, no second confirmation —
     //        go straight to book_with_scheduling with one confirmation.
+    // WHEN: real call 2026-07-01; asserted at prompt-build time.
+    // WHERE: buildSystemPrompt booking-flow section (step 4).
     // WHY: repeating what the caller just chose sounds like it wasn't listening.
     const prompt = buildSystemPrompt(BASE_CTX);
     expect(prompt).toMatch(/already have availability/i);
