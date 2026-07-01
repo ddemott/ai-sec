@@ -110,6 +110,44 @@ describe('Customer Management', () => {
     expect(checkRes.rows[0].city).toBe('Los Angeles');
   });
 
+  it('soft-deletes a customer that has messages (hard DELETE would FK-violate)', async () => {
+    // WHO: an owner deleting a customer from the CRM who has received/left a
+    //      message. WHAT: the delete route now soft-deletes (is_deleted=true)
+    //      instead of a hard DELETE. WHEN: 2026-07-01 — owners reported "deleting
+    //      customers isn't working". WHERE: DELETE /customers/:id. WHY: customer_
+    //      messages (and job_inquiries) FK customers with ON DELETE NO ACTION, so
+    //      a hard DELETE raised 23503 for any customer with a message and the row
+    //      never went away. Soft-delete never trips the FK and preserves history.
+    if (!dbAvailable) return;
+    const customerId = await createCustomerFull(client, tenantId, '+15557778888', 'Has Messages');
+    await client.query(
+      `INSERT INTO customer_messages (tenant_id, customer_id, caller_name, message)
+         VALUES ($1, $2, 'Test Caller', 'Please call me back')`,
+      [tenantId, customerId]
+    );
+
+    // A hard DELETE fails the NO ACTION FK (savepoint so the aborted statement
+    // doesn't poison the outer test transaction).
+    await client.query('SAVEPOINT sp_harddelete');
+    await expect(
+      client.query('DELETE FROM customers WHERE customer_id = $1', [customerId])
+    ).rejects.toMatchObject({ code: '23503' });
+    await client.query('ROLLBACK TO SAVEPOINT sp_harddelete');
+
+    // The route's soft-delete succeeds and hides the row from is_deleted=false lists.
+    const res = await client.query(
+      `UPDATE customers SET is_deleted = true, deleted_at = now(), deleted_by = 'test'
+         WHERE customer_id = $1 AND is_deleted = false
+         RETURNING customer_id`,
+      [customerId]
+    );
+    expect(res.rowCount).toBe(1);
+    const check = await client.query('SELECT is_deleted FROM customers WHERE customer_id = $1', [
+      customerId,
+    ]);
+    expect(check.rows[0].is_deleted).toBe(true);
+  });
+
   it('should default timezone to America/New_York if not specified', async () => {
     // WHO: any insert path that doesn't pass timezone explicitly —
     //      e.g., an older API version, a migration that didn't backfill,

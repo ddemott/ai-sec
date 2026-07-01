@@ -258,13 +258,25 @@ export function registerCustomerRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
-      // Fire-and-forget CRM sync BEFORE DB delete (so sync can still read customer data if needed)
+      // Fire-and-forget CRM sync BEFORE the DB write (so sync can still read
+      // customer data if needed).
       syncCustomerToAll(pool, tenantId, id, 'delete', req.log);
 
+      // Soft-delete (set is_deleted) rather than a hard DELETE. A hard delete
+      // (a) failed with a 23503 FK violation whenever the customer had
+      // customer_messages / job_inquiries rows (those FKs are NO ACTION), which
+      // surfaced to the owner as "deleting customers isn't working", and (b) even
+      // when it succeeded it CASCADE-removed the customer's appointments +
+      // call_summaries, destroying history. Soft-delete hides the customer from
+      // every list (they all filter is_deleted = false) while preserving records.
+      const deletedBy = req.auth?.email ?? 'user';
       const res = await withTenantClient(tenantId, async (client) => {
         return client.query(
-          'DELETE FROM customers WHERE customer_id = $1 AND tenant_id = $2 RETURNING customer_id',
-          [id, tenantId]
+          `UPDATE customers
+              SET is_deleted = true, deleted_at = now(), deleted_by = $3
+            WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false
+            RETURNING customer_id`,
+          [id, tenantId, deletedBy]
         );
       });
       if (!assertRowAffected(res, reply, 'Customer')) return;
