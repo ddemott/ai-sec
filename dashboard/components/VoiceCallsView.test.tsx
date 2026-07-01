@@ -378,6 +378,65 @@ describe('VoiceCallsView', () => {
       });
     });
 
+    test('a call deleted after paginating does not reappear on the 10s poll', async () => {
+      // WHO: an owner who clicked "Load more" then deleted a first-page call.
+      // WHAT: the background 10s poll re-merges the fresh first page into the
+      //       paginated list. WHEN/WHERE: fetchCallHistory silent merge in
+      //       VoiceCallsView. WHY: regression — the old merge kept every prev
+      //       row (`?? c`), so a deleted call reappeared on the next poll and
+      //       read as "delete not working" (reported 2026-06-30).
+      const now = Date.now();
+      const callA = {
+        ...mockCall,
+        voice_session_id: 'vs-a',
+        id: 'vs-a',
+        customer_name: 'Alice Newest',
+        started_at: new Date(now).toISOString(),
+      };
+      const callB = {
+        ...mockCall,
+        voice_session_id: 'vs-b',
+        id: 'vs-b',
+        customer_name: 'Bob Middle',
+        started_at: new Date(now - 60_000).toISOString(),
+      };
+      const callC = {
+        ...mockCall,
+        voice_session_id: 'vs-c',
+        id: 'vs-c',
+        customer_name: 'Carol Oldest',
+        started_at: new Date(now - 120_000).toISOString(),
+      };
+
+      mockCallHistory
+        // initial first page (A, B) with a second page available
+        .mockResolvedValueOnce({ calls: [callA, callB], total: 3, has_more: true })
+        // "Load more" → page 2 (C); list is now [A, B, C]
+        .mockResolvedValueOnce({ calls: [callC], total: 3, has_more: false })
+        // every later fetch (incl. the silent poll) reflects B being deleted
+        .mockResolvedValue({ calls: [callA, callC], total: 2, has_more: false });
+
+      render(<VoiceCallsView />);
+      await waitFor(() => {
+        expect(screen.getAllByText('Bob Middle').length).toBeGreaterThanOrEqual(1);
+      });
+
+      fireEvent.click(screen.getByText(/Load more/));
+      await waitFor(() => {
+        expect(screen.getAllByText('Carol Oldest').length).toBeGreaterThanOrEqual(1);
+      });
+
+      // The 10s background poll fires with B gone from the fresh first page.
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Bob Middle')).not.toBeInTheDocument();
+      });
+      // The other calls survive: A (first page) + C (older paginated row).
+      expect(screen.getAllByText('Alice Newest').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Carol Oldest').length).toBeGreaterThanOrEqual(1);
+    });
+
     test('handles all outcome types correctly', async () => {
       const outcomes = [
         'appointment_booked',

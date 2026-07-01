@@ -345,6 +345,16 @@ export default function NewSchedulerView({
     }
 
     gridEl.scrollLeft = scrollToHour * colW;
+    // Sync the header (and staff panel) horizontally RIGHT NOW rather than
+    // relying on the programmatic scroll to dispatch a 'scroll' event. A
+    // programmatic scrollLeft assignment does not reliably fire the listener
+    // before the header's next re-render resets its own scrollLeft to 0 — when
+    // that happens the grid is scrolled to ~7am but the header still shows 12am
+    // at its left edge, so every shift bar renders `scrollToHour` hours too far
+    // left of its (correct) time label. Setting headerRef directly here keeps
+    // the axis and the bars on the same origin. (Bug: a "1:00 PM – 5:00 PM" bar
+    // drawn at ~7am, reported 2026-06-30.)
+    if (headerRef.current) headerRef.current.scrollLeft = gridEl.scrollLeft;
     hasAutoScrolled.current = true;
   }, [appointments, loading, colW]);
 

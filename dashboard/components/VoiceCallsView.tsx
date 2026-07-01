@@ -503,6 +503,11 @@ export default function VoiceCallsView() {
       const data = await Api.voice.getHistory(tenantId, { limit: 20, offset });
       if (offset === 0) {
         const fresh = data.calls || [];
+        // A silent background poll that comes back empty is treated as transient:
+        // skip the whole tick rather than wipe the list, churn the detail pane, or
+        // reset total/hasMore from empty data (which would leave the UI showing
+        // rows under a "Call History (0)" count).
+        if (opts.silent && fresh.length === 0) return;
         if (opts.silent) {
           // Background poll: MERGE the fresh first page into the existing list so
           // we don't collapse pagination (a user who clicked "Load more" keeps
@@ -510,11 +515,22 @@ export default function VoiceCallsView() {
           // calls (newest-first). Dedupe by voice_session_id.
           setCallHistory((prev) => {
             if (prev.length <= fresh.length) return fresh; // not paginated → just take fresh
-            const freshById = new Map(fresh.map((c) => [c.voice_session_id, c]));
-            const prevIds = new Set(prev.map((c) => c.voice_session_id));
-            const updated = prev.map((c) => freshById.get(c.voice_session_id) ?? c);
-            const brandNew = fresh.filter((c) => !prevIds.has(c.voice_session_id));
-            return [...brandNew, ...updated];
+            // `fresh` is the authoritative newest page — the backend already
+            // excludes soft-deleted rows. Take it verbatim (newest-first, with
+            // in-place status/duration/transcript updates), then append only the
+            // older "Load more" rows that fall BELOW the fresh window. A row that
+            // sits inside the window but is missing from `fresh` was DELETED, so
+            // it must not survive. The previous merge did `prev.map(... ?? c)`,
+            // which kept every prev row — a call deleted from the first page
+            // reappeared on the next 10s poll, reading as "delete not working"
+            // (reported 2026-06-30). Compare on parsed timestamps, not raw
+            // strings, so a formatting/precision difference can't misplace a row.
+            const freshIds = new Set(fresh.map((c) => c.voice_session_id));
+            const oldestFreshMs = Date.parse(fresh[fresh.length - 1].started_at);
+            const olderRows = prev.filter(
+              (c) => !freshIds.has(c.voice_session_id) && Date.parse(c.started_at) < oldestFreshMs
+            );
+            return [...fresh, ...olderRows];
           });
         } else {
           setCallHistory(fresh);
