@@ -509,12 +509,23 @@ export default function VoiceCallsView() {
           // their older rows). Update matched rows in place; prepend brand-new
           // calls (newest-first). Dedupe by voice_session_id.
           setCallHistory((prev) => {
+            if (fresh.length === 0) return prev; // empty poll → don't wipe (transient)
             if (prev.length <= fresh.length) return fresh; // not paginated → just take fresh
-            const freshById = new Map(fresh.map((c) => [c.voice_session_id, c]));
-            const prevIds = new Set(prev.map((c) => c.voice_session_id));
-            const updated = prev.map((c) => freshById.get(c.voice_session_id) ?? c);
-            const brandNew = fresh.filter((c) => !prevIds.has(c.voice_session_id));
-            return [...brandNew, ...updated];
+            // `fresh` is the authoritative newest page — the backend already
+            // excludes soft-deleted rows. Take it verbatim (newest-first, with
+            // in-place status/duration/transcript updates), then append only the
+            // older "Load more" rows that fall BELOW the fresh window. A row that
+            // sits inside the window but is missing from `fresh` was DELETED, so
+            // it must not survive. The previous merge did `prev.map(... ?? c)`,
+            // which kept every prev row — a call deleted from the first page
+            // reappeared on the next 10s poll, reading as "delete not working"
+            // (reported 2026-06-30).
+            const freshIds = new Set(fresh.map((c) => c.voice_session_id));
+            const oldestFresh = fresh[fresh.length - 1].started_at;
+            const olderRows = prev.filter(
+              (c) => !freshIds.has(c.voice_session_id) && c.started_at < oldestFresh
+            );
+            return [...fresh, ...olderRows];
           });
         } else {
           setCallHistory(fresh);
