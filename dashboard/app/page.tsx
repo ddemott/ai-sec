@@ -330,6 +330,29 @@ nav {
 .feat-card:hover { border-color: rgba(59,130,246,0.25); transform: translateY(-2px); }
 .feat-card:hover::before { opacity: 1; }
 .feat-card.wide { grid-column: 1 / -1; }
+/* Capability grid — expandable "everything it does" tiles (2026-07) */
+.cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 36px; align-items: start; }
+.cap-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; width: 100%; padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg4); color: var(--text); cursor: pointer; font: inherit; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.cap-tile:hover { border-color: rgba(37,99,235,0.4); transform: translateY(-2px); }
+.cap-tile:focus-visible { outline: 2px solid var(--blue-lt); outline-offset: 2px; }
+.cap-tile[aria-expanded="true"] { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 8px 24px var(--blue-glow); }
+.cap-ic { font-size: 26px; line-height: 1; }
+.cap-title { font-size: 17px; font-weight: 700; color: var(--text); }
+.cap-hook { font-size: 14px; font-weight: 300; color: var(--text-muted); line-height: 1.55; }
+.cap-more { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--blue-lt); display: inline-flex; align-items: center; gap: 6px; }
+.cap-caret { display: inline-block; transition: transform .2s ease; }
+.cap-tile[aria-expanded="true"] .cap-caret { transform: rotate(180deg); }
+.cap-badge { align-self: flex-start; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--blue-dim); color: var(--blue-lt); }
+.cap-panel { grid-column: 1 / -1; border: 1px solid var(--blue); border-radius: 16px; padding: 22px 24px; background: linear-gradient(180deg, var(--bg3), var(--bg4)); }
+.cap-panel[hidden] { display: none; }
+.cap-panel.open { animation: capIn .22s ease; }
+.cap-panel-h { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.cap-panel .val-layers { margin-top: 0; }
+.cap-panel .val-layer { font-size: 13px; color: var(--text-muted); }
+@keyframes capIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (max-width: 900px) { .cap-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .cap-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .cap-tile, .cap-caret { transition: none; } .cap-panel.open { animation: none; } }
 .feat-icon {
   width: 40px; height: 40px; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
@@ -828,6 +851,163 @@ const LANDING_HTML = `
   </div>
 </section>
 
+<!-- CAPABILITIES — expandable "everything it does" grid -->
+<section class="section" id="capabilities">
+  <div class="section-inner">
+    <div class="section-eyebrow reveal">Everything it does</div>
+    <h2 class="section-h2 reveal reveal-delay-1">MORE THAN<br>ANSWERING</h2>
+    <p class="section-sub reveal reveal-delay-2">It runs your whole front desk. Tap any card to see everything inside.</p>
+    <div class="cap-grid reveal reveal-delay-2" id="cap-grid">
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-1">
+        <span class="cap-ic">📞</span>
+        <span class="cap-title">Answers &amp; Books Calls</span>
+        <span class="cap-hook">Answers 24/7 and books right on the call — sounds like a real person.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-1" role="region" aria-label="Answers and books calls" hidden>
+        <div class="cap-panel-h">📞 Answers &amp; books calls</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Answers every call, 24/7 — nights, weekends, when you're on another line</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Talks like a real person — natural back-and-forth, not a robot menu</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Knows your business — hours, prices, services, and policies</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Books appointments right on the call — no callback</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Recognizes returning callers and recalls their history</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Saves preferences mid-call ("prefers Maria", "last: oil change")</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Sends the call to you or takes a message</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Sounds how you want — pick the voice, speed, greeting, and name</div>
+        </div>
+      </div>
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-2">
+        <span class="cap-ic">📅</span>
+        <span class="cap-title">Books Without Conflicts</span>
+        <span class="cap-hook">Books the right person in the right spot — never double-books.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-2" role="region" aria-label="Books without conflicts" hidden>
+        <div class="cap-panel-h">📅 Scheduling that won't double-book</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>A real calendar of your staff, shifts, services, and rooms/equipment</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>No conflicts — won't double-book, book the past, or book someone off-shift</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Books the right person — only staff with the right skill and room</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Handles time zones and late/overnight shifts</div>
+        </div>
+      </div>
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-3">
+        <span class="cap-ic">👤</span>
+        <span class="cap-title">Customer Records</span>
+        <span class="cap-hook">Remembers every caller and what they like.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-3" role="region" aria-label="Customer records" hidden>
+        <div class="cap-panel-h">👤 Customer records</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>One address book — contact info, full appointment history, and notes</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Recognizes returning callers by their phone number</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Recalls their preferences on the next call</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Search, view, and edit any customer in the dashboard</div>
+        </div>
+      </div>
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-4">
+        <span class="cap-ic">📝</span>
+        <span class="cap-title">Call Logs &amp; Recaps</span>
+        <span class="cap-hook">Every call recorded, transcribed, and summarized.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-4" role="region" aria-label="Call logs and recaps" hidden>
+        <div class="cap-panel-h">📝 Call logs &amp; recaps</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Every call logged — who called, how long, what happened</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Full transcript plus a one-line summary of each call</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>See exactly what a call booked — and delete old calls anytime</div>
+        </div>
+      </div>
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-5">
+        <span class="cap-ic">📊</span>
+        <span class="cap-title">Knows the WHY</span>
+        <span class="cap-badge">Only us</span>
+        <span class="cap-hook">Tells you <em>why</em> callers didn't book — not just how many.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-5" role="region" aria-label="Knows the why" hidden>
+        <div class="cap-panel-h">📊 Understand your business</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Simple stats — calls, bookings, customers, today and this week</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Why people didn't book — no time that worked, wrong service, price</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Busy times and staffing gaps — where your schedule has holes</div>
+        </div>
+      </div>
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-6">
+        <span class="cap-ic">🔔</span>
+        <span class="cap-title">Reminders</span>
+        <span class="cap-hook">Cuts no-shows with automatic text/email reminders.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-6" role="region" aria-label="Reminders" hidden>
+        <div class="cap-panel-h">🔔 Reminders</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Automatic reminders and confirmations by text or email</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Only to customers who agreed to be contacted — no spam risk</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Fewer no-shows and last-minute gaps</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Retries automatically if a text doesn't go through</div>
+        </div>
+      </div>
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-7">
+        <span class="cap-ic">🔗</span>
+        <span class="cap-title">Works With Your Tools</span>
+        <span class="cap-hook">Syncs with Google Calendar, Outlook, and Square.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-7" role="region" aria-label="Works with your tools" hidden>
+        <div class="cap-panel-h">🔗 Works with what you already use</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Google Calendar and Outlook — bookings land on your calendar automatically</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Square — keeps your customer list in sync</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Works even if you use a spreadsheet or nothing — no lock-in</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Get a business number or route your existing one</div>
+        </div>
+      </div>
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-8">
+        <span class="cap-ic">⚡</span>
+        <span class="cap-title">10-Minute Setup</span>
+        <span class="cap-hook">Scan your site or upload a sheet — it teaches itself.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-8" role="region" aria-label="Ten minute setup" hidden>
+        <div class="cap-panel-h">⚡ Easy to set up and teach</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Guided setup wizard, with a simple solo-business mode</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Teach it fast — scan your website or upload a document/FAQ</div>
+          <div class="val-layer"><div class="val-layer-dot blue"></div>You review everything before it goes live</div>
+        </div>
+      </div>
+
+      <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-9">
+        <span class="cap-ic">🔒</span>
+        <span class="cap-title">Yours &amp; Secure</span>
+        <span class="cap-hook">Private, with roles for your team — try it free.</span>
+        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+      </button>
+      <div class="cap-panel" id="cap-panel-9" role="region" aria-label="Yours and secure" hidden>
+        <div class="cap-panel-h">🔒 Yours &amp; secure</div>
+        <div class="val-layers">
+          <div class="val-layer"><div class="val-layer-dot blue"></div>Private and secure — each business is walled off</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Logins with owner, manager, and front-desk roles</div>
+          <div class="val-layer"><div class="val-layer-dot green"></div>Try it free — instant demo with sample data, no commitment</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
 <!-- PRICING -->
 <section class="section" id="pricing">
   <div class="section-inner">
@@ -1041,6 +1221,40 @@ function setBilling(mode) {
   const note = document.getElementById('price-annual-note');
   if (note) note.style.display = isAnnual ? 'block' : 'none';
 }
+
+// Capability grid — expand one tile at a time to reveal its full feature list.
+(function () {
+  const grid = document.getElementById('cap-grid');
+  if (!grid) return;
+  const tiles = Array.prototype.slice.call(grid.querySelectorAll('.cap-tile'));
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function panelFor(tile) { return document.getElementById(tile.getAttribute('aria-controls')); }
+  function close(tile) {
+    tile.setAttribute('aria-expanded', 'false');
+    const p = panelFor(tile);
+    if (p) { p.hidden = true; p.classList.remove('open'); }
+  }
+  function closeAll(except) {
+    tiles.forEach(function (t) { if (t !== except) close(t); });
+  }
+  tiles.forEach(function (tile) {
+    tile.addEventListener('click', function () {
+      const isOpen = tile.getAttribute('aria-expanded') === 'true';
+      closeAll(tile);
+      if (isOpen) { close(tile); return; }
+      tile.setAttribute('aria-expanded', 'true');
+      const p = panelFor(tile);
+      if (p) {
+        p.hidden = false;
+        p.classList.add('open');
+        window.setTimeout(function () {
+          p.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
+        }, 60);
+      }
+    });
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(null); });
+})();
 </script>
 `;
 
