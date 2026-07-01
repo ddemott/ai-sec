@@ -860,10 +860,10 @@ const LANDING_HTML = `
     <div class="cap-grid reveal reveal-delay-2" id="cap-grid">
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-1">
-        <span class="cap-ic">📞</span>
+        <span class="cap-ic" aria-hidden="true">📞</span>
         <span class="cap-title">Answers &amp; Books Calls</span>
         <span class="cap-hook">Answers 24/7 and books right on the call — sounds like a real person.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-1" role="region" aria-label="Answers and books calls" hidden>
         <div class="cap-panel-h">📞 Answers &amp; books calls</div>
@@ -880,10 +880,10 @@ const LANDING_HTML = `
       </div>
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-2">
-        <span class="cap-ic">📅</span>
+        <span class="cap-ic" aria-hidden="true">📅</span>
         <span class="cap-title">Books Without Conflicts</span>
         <span class="cap-hook">Books the right person in the right spot — never double-books.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-2" role="region" aria-label="Books without conflicts" hidden>
         <div class="cap-panel-h">📅 Scheduling that won't double-book</div>
@@ -896,10 +896,10 @@ const LANDING_HTML = `
       </div>
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-3">
-        <span class="cap-ic">👤</span>
+        <span class="cap-ic" aria-hidden="true">👤</span>
         <span class="cap-title">Customer Records</span>
         <span class="cap-hook">Remembers every caller and what they like.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-3" role="region" aria-label="Customer records" hidden>
         <div class="cap-panel-h">👤 Customer records</div>
@@ -912,10 +912,10 @@ const LANDING_HTML = `
       </div>
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-4">
-        <span class="cap-ic">📝</span>
+        <span class="cap-ic" aria-hidden="true">📝</span>
         <span class="cap-title">Call Logs &amp; Recaps</span>
         <span class="cap-hook">Every call recorded, transcribed, and summarized.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-4" role="region" aria-label="Call logs and recaps" hidden>
         <div class="cap-panel-h">📝 Call logs &amp; recaps</div>
@@ -927,11 +927,11 @@ const LANDING_HTML = `
       </div>
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-5">
-        <span class="cap-ic">📊</span>
+        <span class="cap-ic" aria-hidden="true">📊</span>
         <span class="cap-title">Knows the WHY</span>
         <span class="cap-badge">Only us</span>
         <span class="cap-hook">Tells you <em>why</em> callers didn't book — not just how many.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-5" role="region" aria-label="Knows the why" hidden>
         <div class="cap-panel-h">📊 Understand your business</div>
@@ -943,10 +943,10 @@ const LANDING_HTML = `
       </div>
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-6">
-        <span class="cap-ic">🔔</span>
+        <span class="cap-ic" aria-hidden="true">🔔</span>
         <span class="cap-title">Reminders</span>
         <span class="cap-hook">Cuts no-shows with automatic text/email reminders.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-6" role="region" aria-label="Reminders" hidden>
         <div class="cap-panel-h">🔔 Reminders</div>
@@ -959,10 +959,10 @@ const LANDING_HTML = `
       </div>
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-7">
-        <span class="cap-ic">🔗</span>
+        <span class="cap-ic" aria-hidden="true">🔗</span>
         <span class="cap-title">Works With Your Tools</span>
         <span class="cap-hook">Syncs with Google Calendar, Outlook, and Square.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-7" role="region" aria-label="Works with your tools" hidden>
         <div class="cap-panel-h">🔗 Works with what you already use</div>
@@ -975,10 +975,10 @@ const LANDING_HTML = `
       </div>
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-8">
-        <span class="cap-ic">⚡</span>
+        <span class="cap-ic" aria-hidden="true">⚡</span>
         <span class="cap-title">10-Minute Setup</span>
         <span class="cap-hook">Scan your site or upload a sheet — it teaches itself.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-8" role="region" aria-label="Ten minute setup" hidden>
         <div class="cap-panel-h">⚡ Easy to set up and teach</div>
@@ -990,10 +990,10 @@ const LANDING_HTML = `
       </div>
 
       <button class="cap-tile" type="button" aria-expanded="false" aria-controls="cap-panel-9">
-        <span class="cap-ic">🔒</span>
+        <span class="cap-ic" aria-hidden="true">🔒</span>
         <span class="cap-title">Yours &amp; Secure</span>
         <span class="cap-hook">Private, with roles for your team — try it free.</span>
-        <span class="cap-more">See all <span class="cap-caret">▾</span></span>
+        <span class="cap-more">See all <span class="cap-caret" aria-hidden="true">▾</span></span>
       </button>
       <div class="cap-panel" id="cap-panel-9" role="region" aria-label="Yours and secure" hidden>
         <div class="cap-panel-h">🔒 Yours &amp; secure</div>
@@ -1260,7 +1260,10 @@ export default function LandingPage() {
     if (!grid) return;
     const tiles = Array.from(grid.querySelectorAll<HTMLButtonElement>('.cap-tile'));
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-    const panelFor = (t: Element) => document.getElementById(t.getAttribute('aria-controls') || '');
+    const panelFor = (t: Element) => {
+      const id = t.getAttribute('aria-controls');
+      return id ? document.getElementById(id) : null;
+    };
     const close = (t: Element) => {
       t.setAttribute('aria-expanded', 'false');
       const p = panelFor(t);
@@ -1285,10 +1288,11 @@ export default function LandingPage() {
       if (p) {
         p.hidden = false;
         p.classList.add('open');
-        window.setTimeout(
-          () => p.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }),
-          60
-        );
+        window.setTimeout(() => {
+          // Guard against a rapid open→close: only scroll if still open.
+          if (!p.hidden)
+            p.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
+        }, 60);
       }
     };
     const handlers = tiles.map((t) => {
