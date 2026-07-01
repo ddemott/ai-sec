@@ -1308,12 +1308,13 @@ function ShiftBar({ shifts, colW }: ShiftBarProps) {
               width: Math.max(width, 8),
               top: 6,
               bottom: 6,
-              // Lighter blue fill (blue-300) with a slightly darker border so the
-              // scheduled window reads clearly and its time label pops against
-              // the dark timeline — the solid mid-blue accent was too dark to
-              // read the hours over (Dale, 2026-07-01).
-              background: '#93c5fd',
-              border: '1px solid #60a5fa',
+              // Lighter accent fill (--accent-soft) with the full accent as the
+              // border so the scheduled window reads clearly and its time label
+              // pops against the dark timeline — the solid mid-blue accent was
+              // too dark to read the hours over (Dale, 2026-07-01). Theme vars
+              // keep it correct across every theme.
+              background: 'var(--accent-soft)',
+              border: '1px solid var(--accent)',
               zIndex: 2,
             }}
             title={`${formatTime24to12(shift.start_time.substring(0, 5))} - ${formatTime24to12(shift.end_time.substring(0, 5))}`}
@@ -1322,9 +1323,9 @@ function ShiftBar({ shifts, colW }: ShiftBarProps) {
             {width > 90 && (
               <span
                 className="absolute inset-0 flex items-center px-2 text-[11px] font-bold truncate"
-                // Dark text on the light-blue fill (the old white --primary-text
-                // was invisible once the fill was lightened).
-                style={{ color: '#1e3a8a' }}
+                // Dark text (theme's darkest bg) on the light --accent-soft fill
+                // — the old white --primary-text was invisible once lightened.
+                style={{ color: 'var(--bg-base)' }}
               >
                 {formatTime24to12(shift.start_time.substring(0, 5))} –{' '}
                 {formatTime24to12(shift.end_time.substring(0, 5))}
