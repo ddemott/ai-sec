@@ -45,6 +45,39 @@ describe('Step7WebsiteScan — document upload', () => {
     await waitFor(() => expect(screen.getByText(/1 custom question/i)).toBeInTheDocument());
   });
 
+  it('downloads an example sheet when the link is clicked', async () => {
+    // WHO: an owner who wants a template to fill in. WHAT: the "Download an
+    // example sheet" link builds a .md blob and triggers a download. WHEN:
+    // 2026-07-01 doc-upload example. WHERE: Step7WebsiteScan downloadExampleSheet.
+    // WHY: gives owners the exact **Q:/**A: format without guessing.
+    const createUrl = vi.fn((_blob: Blob) => 'blob:mock');
+    const revokeUrl = vi.fn();
+    // jsdom lacks these — stub them, and restore afterwards so nothing leaks
+    // into later tests.
+    const origCreate = (URL as unknown as { createObjectURL?: unknown }).createObjectURL;
+    const origRevoke = (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL;
+    (URL as unknown as { createObjectURL: unknown }).createObjectURL = createUrl;
+    (URL as unknown as { revokeObjectURL: unknown }).revokeObjectURL = revokeUrl;
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+
+    try {
+      render(<Step7WebsiteScan tenantId="t1" />);
+      screen.getByTestId('kb-download-example').click();
+
+      expect(createUrl).toHaveBeenCalledTimes(1);
+      // The blob passed to createObjectURL is the example markdown.
+      const blob = createUrl.mock.calls[0][0];
+      expect(blob.type).toContain('markdown');
+      expect(clickSpy).toHaveBeenCalled();
+    } finally {
+      clickSpy.mockRestore();
+      (URL as unknown as { createObjectURL: unknown }).createObjectURL = origCreate;
+      (URL as unknown as { revokeObjectURL: unknown }).revokeObjectURL = origRevoke;
+    }
+  });
+
   it('surfaces an error when the import fails', async () => {
     mockImportDocument.mockResolvedValue({ success: false, error: 'Unsupported file type ".exe"' });
 
