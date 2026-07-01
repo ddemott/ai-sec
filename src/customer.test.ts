@@ -136,10 +136,12 @@ describe('Customer Management', () => {
 
     // The route's soft-delete succeeds and hides the row from is_deleted=false lists.
     const res = await client.query(
+      // tenant-scoped WHERE mirrors the production route so this test would fail
+      // if the route dropped its tenant_id predicate.
       `UPDATE customers SET is_deleted = true, deleted_at = now(), deleted_by = 'test'
-         WHERE customer_id = $1 AND is_deleted = false
+         WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false
          RETURNING customer_id`,
-      [customerId]
+      [customerId, tenantId]
     );
     expect(res.rowCount).toBe(1);
     const check = await client.query('SELECT is_deleted FROM customers WHERE customer_id = $1', [

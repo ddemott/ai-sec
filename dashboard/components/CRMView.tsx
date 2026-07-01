@@ -334,7 +334,9 @@ export default function CRMView() {
           }
         } catch (e) {
           console.error(e);
-          showToast(e instanceof Error ? e.message : 'Failed to delete customer.', 'error');
+          // Stable user-facing message (matches the other toasts here; avoids
+          // leaking raw fetch/error details).
+          showToast('Failed to delete customer.', 'error');
         }
       },
     });

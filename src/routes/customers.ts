@@ -258,10 +258,6 @@ export function registerCustomerRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
-      // Fire-and-forget CRM sync BEFORE the DB write (so sync can still read
-      // customer data if needed).
-      syncCustomerToAll(pool, tenantId, id, 'delete', req.log);
-
       // Soft-delete (set is_deleted) rather than a hard DELETE. A hard delete
       // (a) failed with a 23503 FK violation whenever the customer had
       // customer_messages / job_inquiries rows (those FKs are NO ACTION), which
@@ -280,6 +276,13 @@ export function registerCustomerRoutes(
         );
       });
       if (!assertRowAffected(res, reply, 'Customer')) return;
+
+      // Fire-and-forget CRM sync AFTER confirming a row was actually soft-deleted
+      // — otherwise a 404 (missing / already-deleted customer) would still
+      // dispatch a spurious delete to the CRM. Safe to run after the write
+      // because soft-delete leaves the row readable (unlike the old hard DELETE,
+      // which forced the sync to run first).
+      syncCustomerToAll(pool, tenantId, id, 'delete', req.log);
 
       logEvent(req, 'customer_deleted', { customerId: id });
       return reply.send({ success: true });
