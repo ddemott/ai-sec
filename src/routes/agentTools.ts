@@ -24,7 +24,7 @@ import type { Pool, PoolClient } from 'pg';
 import { timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { withHandler, type AppRequest } from '../middleware';
-import { applyTimezone } from '../services/timezoneUtils';
+import { applyTimezone, toLocalWallClock } from '../services/timezoneUtils';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../services/customerLookup';
@@ -1179,6 +1179,18 @@ export function registerAgentToolRoutes(
         // Buffer enforced on the agent path only (owner manual booking via
         // /appointments/create passes no buffer → 0 → unrestricted).
         const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
+        // The agent supplies the caller's LOCAL wall-clock time (tenant tz), not
+        // UTC. Without this, a naive "T15:30:00" is parsed as 15:30 UTC and the
+        // appointment lands hours off (10:30 CDT for a 3:30 PM request). Convert
+        // via applyTimezone (DST-correct; a no-op if the value already carries a
+        // Z/offset) using the tenant's zone — matching check-availability.
+        const tzRes = await client.query<{ timezone: string }>(
+          `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE tenant_id = $1`,
+          [args.tenant_id]
+        );
+        const ianaTimezone = tzRes.rows[0]?.timezone || 'America/Chicago';
+        const startUtc = applyTimezone(args.start_time, ianaTimezone);
+        const endUtc = applyTimezone(args.end_time, ianaTimezone);
         // p_assignment_id is TEXT in the current RPC (holds UUID post-Phase 9).
         // Trailing NULLs are p_service_id / p_customer_phone / p_customer_name
         // (unused on this path); the final arg is p_buffer_minutes.
@@ -1194,8 +1206,8 @@ export function registerAgentToolRoutes(
             args.tenant_id,
             args.resource_id,
             customerId,
-            args.start_time,
-            args.end_time,
+            startUtc,
+            endUtc,
             args.description,
             args.call_id,
             args.location || null,
@@ -1431,6 +1443,16 @@ export function registerAgentToolRoutes(
         // skips any resource/employee that would land within the buffer of an
         // existing appointment, so the slot it picks is one booking will accept.
         const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
+        // The agent's window is the caller's LOCAL wall-clock (tenant tz), not
+        // UTC. `new Date(naive).toISOString()` would read it in the SERVER zone
+        // (Railway = UTC) and search the wrong absolute window. Convert via
+        // applyTimezone (DST-correct; no-op if already offset-carrying) — same
+        // as check-availability + book-appointment.
+        const tzRes = await client.query<{ timezone: string }>(
+          `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE tenant_id = $1`,
+          [args.tenant_id]
+        );
+        const ianaTimezone = tzRes.rows[0]?.timezone || 'America/Chicago';
         const rpc = await client.query<{
           success: boolean;
           appointment_id: string | null;
@@ -1456,8 +1478,8 @@ export function registerAgentToolRoutes(
             args.location || null,
             null, // p_start_time — unused when window provided
             null, // p_end_time
-            new Date(args.window.from).toISOString(),
-            new Date(args.window.to).toISOString(),
+            applyTimezone(args.window.from, ianaTimezone),
+            applyTimezone(args.window.to, ianaTimezone),
             // Prefer the resolved service's required_skills (so the RPC assigns
             // a skilled employee); fall back to any the agent explicitly supplied.
             (resolved?.required_skills?.length
@@ -1471,7 +1493,17 @@ export function registerAgentToolRoutes(
             bufferMinutes, // p_buffer_minutes
           ]
         );
-        return rpc.rows[0];
+        const row = rpc.rows[0];
+        // Response symmetry: the RPC returns booked_start/end as UTC. The agent
+        // speaks these back to confirm ("booked for 3:30 PM"), so convert them
+        // to the tenant-local wall-clock — otherwise it would confirm the UTC
+        // instant (8:30 PM for a 3:30 PM Chicago booking), reintroducing the
+        // same tz mismatch on the read-back that we just fixed on the write.
+        if (row) {
+          if (row.booked_start) row.booked_start = toLocalWallClock(row.booked_start, ianaTimezone);
+          if (row.booked_end) row.booked_end = toLocalWallClock(row.booked_end, ianaTimezone);
+        }
+        return row;
       });
 
       // Best-effort: record the service the caller was trying to book on this

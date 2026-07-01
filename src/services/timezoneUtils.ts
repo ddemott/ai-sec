@@ -106,3 +106,33 @@ export function applyTimezone(dt: string, ianaTimezone: string): string {
   const refined = offsetMinutesAt(realInstant, ianaTimezone);
   return dt + formatOffset(refined ?? guess);
 }
+
+/**
+ * Render an absolute (UTC/offset-carrying) timestamp as the tenant-local
+ * wall-clock, `YYYY-MM-DDTHH:mm:ss` with NO offset. This is the display
+ * inverse of applyTimezone: the booking RPCs return UTC (`booked_start`),
+ * but the agent must speak the caller's LOCAL time back ("3:30 PM"), not the
+ * UTC instant. Returns the input unchanged if it can't be parsed.
+ */
+export function toLocalWallClock(utcIso: string, ianaTimezone: string): string {
+  const d = new Date(utcIso);
+  if (isNaN(d.getTime())) return utcIso;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ianaTimezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(d)
+    .reduce<Record<string, string>>((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {});
+  // Intl can emit "24" for midnight in some engines; normalize to "00".
+  const hour = parts.hour === '24' ? '00' : parts.hour;
+  return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}:${parts.second}`;
+}

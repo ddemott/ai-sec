@@ -4,9 +4,34 @@
  * diagnostics.
  */
 import { describe, it, expect } from 'vitest';
-import { hasTimezone, applyTimezone } from './timezoneUtils';
+import { hasTimezone, applyTimezone, toLocalWallClock } from './timezoneUtils';
 
 describe('timezoneUtils', () => {
+  describe('toLocalWallClock (UTC → tenant-local, for agent read-back)', () => {
+    it('HAPPY: renders a UTC instant as the tenant-local wall-clock', () => {
+      // WHO: the agent confirming a booking ("booked for 3:30 PM").
+      // WHAT: the RPC returns booked_start as UTC (20:30Z = 3:30 PM CDT); the
+      //       agent must speak LOCAL, so we convert back to 15:30 wall-clock.
+      // WHY: without this the agent confirms the UTC instant (8:30 PM) — the
+      //       same tz mismatch on read-back that applyTimezone fixes on write.
+      expect(toLocalWallClock('2026-07-02T20:30:00Z', 'America/Chicago')).toBe(
+        '2026-07-02T15:30:00'
+      );
+    });
+
+    it('HAPPY: round-trips applyTimezone — local → UTC → local is identity', () => {
+      // WHERE: the write path (applyTimezone) and the read path (toLocalWallClock)
+      //        must be inverses so a 3:30 PM booking reads back as 3:30 PM.
+      const local = '2026-07-02T15:30:00';
+      const utc = applyTimezone(local, 'America/Chicago'); // -> ...-05:00
+      expect(toLocalWallClock(utc, 'America/Chicago')).toBe(local);
+    });
+
+    it('SAD: an unparseable value is returned unchanged (never throws mid-call)', () => {
+      expect(toLocalWallClock('not-a-date', 'America/Chicago')).toBe('not-a-date');
+    });
+  });
+
   describe('hasTimezone', () => {
     it('HAPPY: detects trailing Z', () => {
       // WHAT: UTC "Zulu" suffix should count as tz info
