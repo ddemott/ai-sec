@@ -62,15 +62,17 @@ continuous block and may span several lines until a blank line ends it.
 - A line whose first non-whitespace characters are `**A:` starts the **answer**. The answer is
   that line's text after `**A:` plus all following lines (a continuous block) **until a blank
   line (gap)** — the gap terminates the answer.
-- A `**Q:` with no following `**A:` before the next `**Q:` / EOF is **malformed** → skipped and
-  reported (not silently dropped).
+- A `**Q:` with no following `**A:` before the next `**Q:` / EOF — **or** interrupted by a blank
+  line before any `**A:` — is **malformed** → skipped and reported (not silently dropped). The
+  blank line ends the orphan question; any text after it is plain prose.
 - Case-insensitive marker match; tolerate `** Q:` / `**q:` / surrounding whitespace; CRLF and
   LF both handled.
 - Everything **not** inside a `**Q:/**A:` block is **prose** → passed to the AI pass for the
   standard questions.
 
 The parser is a **pure function** — input `string`, output
-`{ custom: {question, answer}[]; malformed: string[] }` — no I/O, fully unit-testable.
+`{ custom: {question, answer}[]; malformed: string[]; prose: string }` — no I/O, fully
+unit-testable. (`prose` = everything outside a marker block, fed to the standard-question AI pass.)
 
 ---
 
@@ -80,7 +82,7 @@ Small surface; most is reuse.
 
 | Unit | New? | Responsibility |
 | --- | --- | --- |
-| `shared/markerQuestions.ts` — `parseMarkerQuestions(text)` | **new** | Pure `**Q:/**A:` parser → `{ custom, malformed }`. Cross-runtime (shared) so backend + tests use it directly. |
+| `shared/markerQuestions.ts` — `parseMarkerQuestions(text)` | **new** | Pure `**Q:/**A:` parser → `{ custom, malformed, prose }`. Cross-runtime (shared) so backend + tests use it directly. |
 | `POST /knowledge/import-document` (in `src/routes/knowledge.ts`) | **new** (mirrors `import-website`) | Multipart file → `extractFileContent` → `parseMarkerQuestions` (custom) + LLM extract over the prose (standard answers) → returns both; stages to `knowledge_suggestion` for review, same as the scan. |
 | `extractFileContent` (`knowledgeIngestion.ts`) | reuse | PDF/txt/md/csv parsing (already used by `import-website` region + `knowledge/ingest`). |
 | LLM extract prompt | reuse | The exact prompt/shape `import-website` uses to answer the standard questions (`resolveQuestions` + `max_tokens: 3000`, timeout-bounded). Extracted to a shared helper if `import-website` currently inlines it, so both endpoints call one function (targeted refactor, not new behavior). |

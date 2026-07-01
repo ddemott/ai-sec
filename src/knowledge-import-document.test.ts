@@ -1,13 +1,15 @@
 /**
  * POST /knowledge/import-document — upload a PDF/txt/md info sheet.
  *
- * Real Fastify app (multipart + JWT + RLS pool) against test_db, driven with
- * KNOWLEDGE_IMPORT_E2E_STUB=1 so the standard-answer pass is deterministic and
- * never touches OpenAI. Pins:
- *   1. deterministic **Q:/**A: custom questions parse + stage to knowledge_suggestion,
- *   2. a **Q: with no **A: is reported as malformed (not dropped),
- *   3. an unsupported file type is rejected 400.
- * (Same env-gated stub discipline as the website-scan flow.)
+ * WHO: an owner in Solo setup uploading their FAQ / info sheet.
+ * WHAT: the endpoint parses deterministic **Q:/**A: custom questions, stages them
+ *       (+ standard answers) to knowledge_suggestion, reports malformed markers,
+ *       rejects unsupported files, and refuses a cross-tenant multipart tenant_id.
+ * WHEN: 2026-07-01 document-upload feature (mirrors the website-scan flow).
+ * WHERE: /knowledge/import-document (src/routes/knowledge.ts), real Fastify app
+ *        (multipart + JWT + RLS pool) against test_db.
+ * WHY: gives owners a file path to prefill knowledge; the marker path must be
+ *      deterministic (no OpenAI), so the suite runs with KNOWLEDGE_IMPORT_E2E_STUB=1.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -82,12 +84,16 @@ beforeEach(async () => {
 
 // Build a multipart/form-data body by hand — no `form-data` package dependency
 // (it's only a transitive dep and doesn't resolve under a clean CI install).
-function buildMultipart(fileBody: string, filename: string): { body: Buffer; contentType: string } {
+function buildMultipart(
+  fileBody: string,
+  filename: string,
+  fieldTenant: string
+): { body: Buffer; contentType: string } {
   const boundary = '----vitestFormBoundaryDocImport';
   const parts =
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="tenant_id"\r\n\r\n` +
-    `${tenantId}\r\n` +
+    `${fieldTenant}\r\n` +
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
     `Content-Type: text/markdown\r\n\r\n` +
@@ -99,8 +105,8 @@ function buildMultipart(fileBody: string, filename: string): { body: Buffer; con
   };
 }
 
-async function upload(fileBody: string, filename = 'faq.md') {
-  const { body, contentType } = buildMultipart(fileBody, filename);
+async function upload(fileBody: string, filename = 'faq.md', fieldTenant = tenantId) {
+  const { body, contentType } = buildMultipart(fileBody, filename, fieldTenant);
   return app.inject({
     method: 'POST',
     url: '/knowledge/import-document',
@@ -140,6 +146,15 @@ describe('POST /knowledge/import-document (real DB, stubbed AI)', () => {
     if (!dbAvailable) return;
     const res = await upload('irrelevant', 'malware.exe');
     expect(res.statusCode).toBe(400);
+    expect(res.json().success).toBe(false);
+  });
+
+  it('SECURITY: rejects a multipart tenant_id that differs from the JWT tenant', async () => {
+    // A caller with tenant A's JWT sets tenant_id=B in the (middleware-uninspected)
+    // multipart body — must be blocked, not staged into B.
+    if (!dbAvailable) return;
+    const res = await upload('**Q: x?\n**A: y', 'faq.md', '00000000-0000-0000-0000-0000000000ff');
+    expect(res.statusCode).toBe(403);
     expect(res.json().success).toBe(false);
   });
 });

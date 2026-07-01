@@ -665,9 +665,22 @@ export function registerKnowledgeRoutes(
       const data = await req.file();
       if (!data) return reply.status(400).send({ success: false, error: 'No file uploaded' });
 
-      const tenantId = (data.fields.tenant_id as { value?: string } | undefined)?.value;
-      if (!tenantId)
-        return reply.status(400).send({ success: false, error: 'tenant_id is required' });
+      // SECURITY: tenantMiddleware validates query/body tenant_id against the JWT,
+      // but it does NOT inspect multipart fields. So the tenant here MUST come from
+      // the authenticated session, not the uploaded form field — otherwise a caller
+      // with a valid JWT for tenant A could set tenant_id=B in the body and stage
+      // suggestions into tenant B (RLS would honor the passed context). A non-super
+      // caller may only import into their own tenant; a mismatched field is rejected.
+      const fieldTenant = (data.fields.tenant_id as { value?: string } | undefined)?.value;
+      const authTenant = req.auth?.tenant_id;
+      if (!authTenant) return reply.status(401).send({ success: false, error: 'Unauthorized' });
+      const isSuperAdmin = authTenant === SUPER_ADMIN_TENANT_ID;
+      if (!isSuperAdmin && fieldTenant && fieldTenant !== authTenant) {
+        return reply
+          .status(403)
+          .send({ success: false, error: 'Cross-tenant import is not allowed' });
+      }
+      const tenantId = isSuperAdmin ? fieldTenant || authTenant : authTenant;
 
       const filename = data.filename;
       const ext = getFileExtension(filename);

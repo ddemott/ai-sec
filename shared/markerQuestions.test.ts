@@ -1,3 +1,13 @@
+/**
+ * WHO: the document-upload flow (backend route + future consumers) that turns an
+ *      owner's uploaded sheet into custom Q&A.
+ * WHAT: parseMarkerQuestions splits text into well-formed **Q:/**A: pairs,
+ *       malformed markers, and leftover prose — deterministically, no I/O.
+ * WHEN: 2026-07-01 document-upload feature.
+ * WHERE: shared/markerQuestions.ts (pure, cross-runtime).
+ * WHY: custom questions must parse without any model call, so this is the
+ *      load-bearing correctness gate for the marker convention.
+ */
 import { describe, it, expect } from 'vitest';
 import { parseMarkerQuestions } from './markerQuestions';
 
