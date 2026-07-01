@@ -61,6 +61,56 @@ export function Step7WebsiteScan({ tenantId }: Props) {
     }
   }, [url, tenantId]);
 
+  const handleUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !tenantId) return;
+      setLoading(true);
+      setMessage(null);
+      setError(null);
+      try {
+        const res = await Api.knowledge.importDocument(tenantId, file);
+        if (res?.success) {
+          // Prefill the standard starter questions exactly like the website scan.
+          let filled = 0;
+          for (const item of res.standard_answers || []) {
+            if (item.questionId && STARTER_IDS.includes(item.questionId) && item.answer) {
+              const q = STARTER_QUESTIONS.find((sq) => sq.id === item.questionId);
+              if (q) {
+                await Api.knowledge.add(tenantId, {
+                  question: item.question || q.question,
+                  answer: item.answer,
+                  category: q.category,
+                  source: 'document-upload',
+                });
+                filled++;
+              }
+            }
+          }
+          const customCount = res.custom_questions?.length || 0;
+          const malformedCount = res.malformed?.length || 0;
+          setMessage(
+            `Imported ${filled} standard answer${filled === 1 ? '' : 's'} and ` +
+              `${customCount} custom question${customCount === 1 ? '' : 's'} from your document. ` +
+              `Review them in the next step.` +
+              (malformedCount
+                ? ` ${malformedCount} entr${malformedCount === 1 ? 'y' : 'ies'} looked like a question but had no **A: answer — fix and re-upload.`
+                : '')
+          );
+        } else {
+          setError(res?.error || 'Could not read that file — try a PDF or a .txt.');
+        }
+      } catch (err) {
+        setError('Could not read that file — try a PDF or a .txt.');
+        console.error('Document import error', err);
+      } finally {
+        setLoading(false);
+        e.target.value = ''; // allow re-uploading the same filename
+      }
+    },
+    [tenantId]
+  );
+
   return (
     <div className="space-y-5">
       <div>
@@ -98,6 +148,29 @@ export function Step7WebsiteScan({ tenantId }: Props) {
         >
           Scan website &amp; pre-fill answers
         </Button>
+
+        <div className="pt-1">
+          <label
+            className="text-sm font-medium"
+            style={{ color: 'var(--text-secondary)' }}
+            htmlFor="kb-document-upload"
+          >
+            …or upload a document (PDF, .txt, .md)
+          </label>
+          <input
+            id="kb-document-upload"
+            data-testid="kb-document-upload"
+            type="file"
+            accept=".pdf,.txt,.md"
+            disabled={loading}
+            onChange={handleUpload}
+            className="block mt-1 text-sm"
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            We&apos;ll pull answers from the text, and any lines you mark with{' '}
+            <code>**Q:</code> / <code>**A:</code> become your own custom questions.
+          </p>
+        </div>
 
         {message && (
           <p className="text-sm" style={{ color: 'var(--accent-soft)' }}>

@@ -835,6 +835,37 @@ export const Api = {
       }>;
     },
 
+    // Upload a PDF/txt/md info sheet: prefills the standard questions from its
+    // prose and adds any **Q:/**A: custom questions, all staged for review.
+    importDocument: async (tenantId: string | null, file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (tenantId) formData.append('tenant_id', tenantId);
+
+      const token = getLocalStorageItem('authToken');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE_URL}/knowledge/import-document`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      return response.json() as Promise<{
+        success: boolean;
+        standard_answers?: Array<{
+          questionId: string | null;
+          question: string;
+          answer: string | null;
+        }>;
+        custom_questions?: Array<{ question: string; answer: string }>;
+        malformed?: string[];
+        confirmed?: number;
+        error?: string;
+      }>;
+    },
+
     importWebsite: (tenantId: string | null, url: string) =>
       apiMutate<{
         success: boolean;
