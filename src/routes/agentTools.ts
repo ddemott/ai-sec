@@ -2166,6 +2166,7 @@ export function registerAgentToolRoutes(
            LEFT JOIN employees e ON a.employee_id = e.employee_id AND e.tenant_id = a.tenant_id
            WHERE c.tenant_id = $1 AND c.phone = $2
              AND a.status = 'scheduled' AND a.start_time > NOW()
+             AND (a.is_deleted IS NULL OR a.is_deleted = false)
              AND (c.is_deleted IS NULL OR c.is_deleted = false)
            ORDER BY a.start_time
            LIMIT 5`,
@@ -2199,6 +2200,7 @@ export function registerAgentToolRoutes(
              AND c.phone = $3
              AND a.status = 'scheduled'
              AND a.start_time > NOW()
+             AND (a.is_deleted IS NULL OR a.is_deleted = false)
            RETURNING a.appointment_id`,
           [args.appointment_id, args.tenant_id, normalized]
         );
@@ -2249,6 +2251,7 @@ export function registerAgentToolRoutes(
                AND c.phone = $3
                AND a.status = 'scheduled'
                AND a.start_time > NOW()
+               AND (a.is_deleted IS NULL OR a.is_deleted = false)
              RETURNING a.appointment_id`,
             [
               args.appointment_id,

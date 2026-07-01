@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict dVMoBdYwfcAv587UgqgDdlNfFhCh6LWfsFABvi4FqxNr5zPjRwMdtQtgdZPQQi1
+\restrict oxT4uaqqlbIcL3wd6I8IYjtVajGehPv7WQMxAce5jdgrgFcO5UHV3gYUGnNjxgM
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -358,6 +358,7 @@ BEGIN
     SELECT EXISTS (
         SELECT 1 FROM appointments
         WHERE resource_id = p_resource_id AND status = 'scheduled'
+          AND (is_deleted IS NULL OR is_deleted = false)
           AND start_time < v_effective_end + v_buffer AND end_time > p_start_time - v_buffer
     ) INTO v_overlap_exists;
     IF v_overlap_exists THEN
@@ -370,6 +371,7 @@ BEGIN
         SELECT EXISTS (
             SELECT 1 FROM appointments
             WHERE employee_id = v_employee_id AND status = 'scheduled'
+              AND (is_deleted IS NULL OR is_deleted = false)
               AND start_time < v_effective_end + v_buffer AND end_time > p_start_time - v_buffer
         ) INTO v_overlap_exists;
         IF v_overlap_exists THEN
@@ -404,6 +406,7 @@ BEGIN
         SELECT EXISTS (
             SELECT 1 FROM appointments
             WHERE assigned_to_user_id = v_user_id AND status = 'scheduled'
+              AND (is_deleted IS NULL OR is_deleted = false)
               AND start_time < v_effective_end + v_buffer AND end_time > p_start_time - v_buffer
         ) INTO v_overlap_exists;
         IF v_overlap_exists THEN
@@ -533,12 +536,14 @@ BEGIN
                     SELECT 1 FROM appointments a
                     WHERE a.resource_id = res.resource_id
                     AND a.status = 'scheduled'
+                    AND (a.is_deleted IS NULL OR a.is_deleted = false)
                     AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
                 )
                 AND NOT EXISTS (
                     SELECT 1 FROM appointments a
                     WHERE a.employee_id = emp.employee_id
                     AND a.status = 'scheduled'
+                    AND (a.is_deleted IS NULL OR a.is_deleted = false)
                     AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
                 )
                 AND (p_preferred_resource_id IS NULL OR res.resource_id = p_preferred_resource_id)
@@ -567,6 +572,7 @@ BEGIN
                     SELECT 1 FROM appointments a
                     WHERE a.resource_id = res.resource_id
                     AND a.status = 'scheduled'
+                    AND (a.is_deleted IS NULL OR a.is_deleted = false)
                     AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
                 )
                 AND (p_preferred_resource_id IS NULL OR res.resource_id = p_preferred_resource_id)
@@ -628,6 +634,7 @@ BEGIN
                 WHERE res.tenant_id = p_tenant_id
                 AND res.is_active = true
                 AND a.status = 'scheduled'
+                AND (a.is_deleted IS NULL OR a.is_deleted = false)
                 AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
             ) INTO v_resource_occupied;
 
@@ -639,6 +646,7 @@ BEGIN
                 AND (emp.is_deleted IS NULL OR emp.is_deleted = false)
                 AND emp.skills @> p_required_skills
                 AND a.status = 'scheduled'
+                AND (a.is_deleted IS NULL OR a.is_deleted = false)
                 AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
             ) INTO v_employee_occupied;
 
@@ -5459,5 +5467,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dVMoBdYwfcAv587UgqgDdlNfFhCh6LWfsFABvi4FqxNr5zPjRwMdtQtgdZPQQi1
+\unrestrict oxT4uaqqlbIcL3wd6I8IYjtVajGehPv7WQMxAce5jdgrgFcO5UHV3gYUGnNjxgM
 
