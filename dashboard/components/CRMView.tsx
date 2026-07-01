@@ -323,11 +323,20 @@ export default function CRMView() {
         try {
           const res = await Api.customers.delete(selectedCustomer.customer_id);
           if (res.success) {
+            showToast('Customer deleted.', 'success');
             setSelectedCustomer(null);
             void fetchCustomers();
+          } else {
+            // Surface the failure instead of swallowing it — the old handler
+            // logged to console only, so a failed delete looked like nothing
+            // happened (reported 2026-07-01).
+            showToast(res.error || 'Failed to delete customer.', 'error');
           }
         } catch (e) {
           console.error(e);
+          // Stable user-facing message (matches the other toasts here; avoids
+          // leaking raw fetch/error details).
+          showToast('Failed to delete customer.', 'error');
         }
       },
     });
