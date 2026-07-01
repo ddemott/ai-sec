@@ -1090,6 +1090,7 @@ describe('agentTools /book-appointment', () => {
         { rows: [] }, // existing-customer SELECT
         { rows: [{ customer_id: 'new-customer-id' }] }, // INSERT new customer
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [{ success: true, appointment_id: 'appt-1', error_message: null }],
         },
@@ -1112,9 +1113,10 @@ describe('agentTools /book-appointment', () => {
     //       customers — inconsistency would cause duplicate-customer bugs
     expect(queries[0].params).toEqual([TENANT_ID, '+15551234567']);
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Bob']);
-    // WHY: RPC gets the newly-created customer_id (queries[2] is the buffer lookup)
-    expect(queries[3].text).toContain('book_appointment_atomic');
-    expect(queries[3].params?.[2]).toBe('new-customer-id');
+    // WHY: RPC gets the newly-created customer_id (queries[2] is the buffer
+    //       lookup, queries[3] is the getTenantTimezone lookup)
+    expect(queries[4].text).toContain('book_appointment_atomic');
+    expect(queries[4].params?.[2]).toBe('new-customer-id');
   });
 
   it('HAPPY: existing customer reuses id — no INSERT', async () => {
@@ -1123,6 +1125,7 @@ describe('agentTools /book-appointment', () => {
       queryResponses: [
         { rows: [{ customer_id: 'existing-cust' }] },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [{ success: true, appointment_id: 'appt-2', error_message: null }],
         },
@@ -1136,12 +1139,42 @@ describe('agentTools /book-appointment', () => {
       end_time: '2026-05-01T15:00:00',
     });
     expect(res.json().result.appointment_id).toBe('appt-2');
-    // WHY: SELECT + buffer lookup + RPC, no INSERT (existing customer reused).
-    //      book_appointment_atomic has no service resolver. At least 3 queries —
-    //      a fire-and-forget reminder-scheduling query may fire after the RPC on
-    //      success and is not counted. RPC is queries[2] ($3 = customer_id).
-    expect(queries.length).toBeGreaterThanOrEqual(3);
-    expect(queries[2].params?.[2]).toBe('existing-cust');
+    // WHY: SELECT + buffer lookup + tz lookup + RPC, no INSERT (existing customer
+    //      reused). book_appointment_atomic has no service resolver. At least 4
+    //      queries — a fire-and-forget reminder-scheduling query may fire after the
+    //      RPC on success and is not counted. RPC is queries[3] ($3 = customer_id).
+    expect(queries.length).toBeGreaterThanOrEqual(4);
+    expect(queries[3].params?.[2]).toBe('existing-cust');
+  });
+
+  it('TZ: a naive local start/end is converted to the tenant zone before the RPC', async () => {
+    // WHO: the voice agent, which sends the caller's LOCAL wall-clock time.
+    // WHAT: with the tenant in America/Chicago, a naive "2026-05-01T14:00:00"
+    //       must reach book_appointment_atomic as "2026-05-01T14:00:00-05:00"
+    //       (CDT), NOT bare/UTC — otherwise the booking lands 5 hours off
+    //       (the 10:30-vs-3:30 prod bug, 2026-07-01).
+    // WHERE: /agent-tools/book-appointment → applyTimezone(start, tenant_tz).
+    // WHY: the RPC converts UTC→local for its shift check; feeding it the wrong
+    //       absolute instant books the wrong time / an unassigned slot.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-tz' }] }, // SELECT customer
+        { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone
+        { rows: [{ success: true, appointment_id: 'appt-tz', error_message: null }] }, // RPC
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-appointment', {
+      tenant_id: TENANT_ID,
+      resource_id: RESOURCE_ID,
+      phone: '5551234567',
+      start_time: '2026-05-01T14:00:00', // naive local (2 PM Chicago)
+      end_time: '2026-05-01T15:00:00',
+    });
+    expect(res.json().result.appointment_id).toBe('appt-tz');
+    // RPC is queries[3]; params [tenant, resource, customer, start, end, ...].
+    expect(queries[3].params?.[3]).toBe('2026-05-01T14:00:00-05:00'); // start → CDT
+    expect(queries[3].params?.[4]).toBe('2026-05-01T15:00:00-05:00'); // end → CDT
   });
 
   it('SAD: RPC failure is surfaced verbatim so the agent can relay it', async () => {
@@ -1152,6 +1185,7 @@ describe('agentTools /book-appointment', () => {
       queryResponses: [
         { rows: [{ customer_id: 'c1' }] },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [
             {
@@ -1274,6 +1308,8 @@ describe('agentTools /book-appointment', () => {
         { rows: [{ customer_id: 'existing-cust' }] },
         // Step 1b: getTenantBufferMinutes
         { rows: [{ default_buffer_minutes: 0 }] },
+        // Step 1c: getTenantTimezone (local → UTC conversion)
+        { rows: [{ timezone: 'America/Chicago' }] },
         // Step 2: book_appointment_atomic returns overlap error
         {
           rows: [
@@ -1324,10 +1360,11 @@ describe('agentTools /book-appointment', () => {
       description: 'Tire rotation',
     });
     // Pin: the conflict lookup runs last (after SELECT customer, buffer lookup,
-    // and the RPC), scoped to the same tenant and resource with the time bounds.
-    expect(queries).toHaveLength(4);
-    expect(queries[3].text).toMatch(/FROM appointments a/);
-    expect(queries[3].text).toMatch(/a\.start_time < \$4/);
+    // tz lookup, and the RPC), scoped to the same tenant and resource with the
+    // time bounds.
+    expect(queries).toHaveLength(5);
+    expect(queries[4].text).toMatch(/FROM appointments a/);
+    expect(queries[4].text).toMatch(/a\.start_time < \$4/);
   });
 
   it('SAD: non-overlap RPC error keeps plain { success:false, error } shape — no conflict lookup', async () => {
@@ -1341,6 +1378,7 @@ describe('agentTools /book-appointment', () => {
       queryResponses: [
         { rows: [{ customer_id: 'existing-cust' }] },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [
             {
@@ -1366,8 +1404,9 @@ describe('agentTools /book-appointment', () => {
       success: false,
       error: 'Cannot book in the past',
     });
-    // Critical: no conflict lookup ran — only SELECT, buffer lookup, and RPC.
-    expect(queries).toHaveLength(3);
+    // Critical: no conflict lookup ran — only SELECT, buffer lookup, tz lookup,
+    // and RPC.
+    expect(queries).toHaveLength(4);
   });
 });
 
@@ -1574,6 +1613,7 @@ describe('agentTools /book-with-scheduling', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes (after resolver, before RPC)
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [
             {
@@ -1610,9 +1650,9 @@ describe('agentTools /book-with-scheduling', () => {
     // WHY: Normalized phone must reach the RPC so the customer upsert path
     //       inside it matches previously-stored records. Helper SELECT is
     //       queries[0]; name UPDATE is queries[1]; resolver match is
-    //       queries[2]; buffer lookup is queries[3]; RPC is queries[4].
-    //       Param shape: $1=tenant_id, $2=phone.
-    expect(queries[4].params?.[1]).toBe('+15551234567');
+    //       queries[2]; buffer lookup is queries[3]; tz lookup is queries[4];
+    //       RPC is queries[5]. Param shape: $1=tenant_id, $2=phone.
+    expect(queries[5].params?.[1]).toBe('+15551234567');
   });
 
   it('SAD: RPC error_code is surfaced so the agent can be specific', async () => {
@@ -1637,6 +1677,7 @@ describe('agentTools /book-with-scheduling', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes (pre-RPC)
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [
             {
@@ -2430,6 +2471,7 @@ describe('agentTools customer persistence on booking failure', () => {
         { rows: [] }, // SELECT — no existing row
         { rows: [{ customer_id: 'newly-created' }] }, // INSERT — customer persists
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes (pre-RPC)
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [
             {
@@ -2453,12 +2495,13 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(res.json().success).toBe(false);
     // Critical assertions: the customer SELECT and INSERT happened BEFORE
     // the RPC. If a future refactor put RPC first, queries would be in a
-    // different order and these would fail. (queries[2] is the buffer lookup.)
-    expect(queries).toHaveLength(4);
+    // different order and these would fail. (queries[2] is the buffer lookup,
+    // queries[3] is the getTenantTimezone lookup.)
+    expect(queries).toHaveLength(5);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Carol']);
-    expect(queries[3].text).toContain('book_appointment_atomic');
+    expect(queries[4].text).toContain('book_appointment_atomic');
   });
 
   it('book-with-scheduling: customer get-or-create runs before the RPC, even when RPC fails', async () => {
@@ -2488,6 +2531,7 @@ describe('agentTools customer persistence on booking failure', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes (pre-RPC)
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [
             {
@@ -2526,16 +2570,16 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(false);
     // Customer write happened BEFORE the RPC, regardless of failure.
-    // Order: customer SELECT + customer INSERT + resolver + buffer lookup + RPC,
-    // then the failure-branch next-available lookup. The first two are the
-    // persistence contract; resolver is queries[2], buffer is queries[3], and
-    // the RPC is queries[4].
-    expect(queries.length).toBeGreaterThanOrEqual(5);
+    // Order: customer SELECT + customer INSERT + resolver + buffer lookup +
+    // tz lookup + RPC, then the failure-branch next-available lookup. The first
+    // two are the persistence contract; resolver is queries[2], buffer is
+    // queries[3], tz is queries[4], and the RPC is queries[5].
+    expect(queries.length).toBeGreaterThanOrEqual(6);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Diane']);
     expect(queries[2].text).toMatch(/FROM services/); // resolver service match
-    expect(queries[4].text).toContain('book_with_scheduling_atomic');
+    expect(queries[5].text).toContain('book_with_scheduling_atomic');
   });
 
   it('book-with-scheduling: existing customer is reused — SELECT + resolver + RPC fire', async () => {
@@ -2559,6 +2603,7 @@ describe('agentTools customer persistence on booking failure', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes
+        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
         {
           rows: [
             {
@@ -2591,12 +2636,12 @@ describe('agentTools customer persistence on booking failure', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    // 4 core queries (SELECT customer + resolver service match + buffer lookup +
-    // RPC); reminder scheduling fires additional queries fire-and-forget after.
-    expect(queries.length).toBeGreaterThanOrEqual(4);
+    // 5 core queries (SELECT customer + resolver service match + buffer lookup +
+    // tz lookup + RPC); reminder scheduling fires additional queries fire-and-forget after.
+    expect(queries.length).toBeGreaterThanOrEqual(5);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toMatch(/FROM services/); // resolver service match
-    expect(queries[3].text).toContain('book_with_scheduling_atomic'); // after buffer lookup
+    expect(queries[4].text).toContain('book_with_scheduling_atomic'); // after buffer + tz lookup
   });
 });
 
