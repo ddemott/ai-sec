@@ -70,6 +70,10 @@ const UpdateConfigSchema = z.object({
   // The line the tenant forwards INTO the assistant. Caller-ID match → collect
   // the caller's real number by voice. Must differ from forward_phone.
   forwarded_from_phone: z.string().max(30).optional().nullable(),
+  // Minutes of gap the AI leaves between back-to-back bookings. 0 = no buffer
+  // (default). Capped at 120 (2h) — beyond that is almost certainly a typo, not
+  // an intent, and a runaway value would starve a day's availability.
+  default_buffer_minutes: z.number().int().min(0).max(120).optional(),
 });
 
 const CreateTemplateSchema = z.object({
@@ -173,7 +177,7 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone FROM tenants WHERE tenant_id = $1',
+          'SELECT tenant_id, name, business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone, default_buffer_minutes FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );
@@ -235,8 +239,9 @@ export function registerTenantRoutes(
             owner_phone: string | null;
             forwarded_from_phone: string | null;
             inbound_phone: string | null;
+            default_buffer_minutes: number | null;
           }>(
-            'SELECT business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, forwarded_from_phone, inbound_phone FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            'SELECT business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, forwarded_from_phone, inbound_phone, default_buffer_minutes FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
           const prior = priorRes.rows[0];
@@ -288,6 +293,10 @@ export function registerTenantRoutes(
             body.forwarded_from_phone !== undefined
               ? body.forwarded_from_phone
               : (prior?.forwarded_from_phone ?? null);
+          const finalDefaultBufferMinutes =
+            body.default_buffer_minutes !== undefined
+              ? body.default_buffer_minutes
+              : (prior?.default_buffer_minutes ?? 0);
 
           // Loop guard: a transfer target equal to the forwarded-from line or
           // the AI's own DID would forward the call straight back into the AI.
@@ -297,7 +306,7 @@ export function registerTenantRoutes(
           }
 
           const updRes = await client.query(
-            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9, tts_cheerful = $10, tts_formal = $11, tts_warm = $12, tts_concise = $13, forward_phone = $14, owner_phone = $15, forwarded_from_phone = $16, persona_name = $17, default_service_id = $18 WHERE tenant_id = $19 RETURNING tenant_id',
+            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9, tts_cheerful = $10, tts_formal = $11, tts_warm = $12, tts_concise = $13, forward_phone = $14, owner_phone = $15, forwarded_from_phone = $16, persona_name = $17, default_service_id = $18, default_buffer_minutes = $19 WHERE tenant_id = $20 RETURNING tenant_id',
             [
               finalSystemPrompt,
               finalVoiceId,
@@ -317,6 +326,7 @@ export function registerTenantRoutes(
               finalForwardedFromPhone,
               finalPersonaName,
               finalDefaultServiceId,
+              finalDefaultBufferMinutes,
               id,
             ]
           );

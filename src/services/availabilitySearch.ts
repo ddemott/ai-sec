@@ -58,6 +58,11 @@ export interface FindNextAvailableSlotsParams {
   /** How far forward to search, in hours. Default 24h.
    *  Capped at 168 (7 days) to keep query bounded. */
   searchHorizonHours?: number;
+  /** Minimum gap to leave on both sides of an existing appointment, in
+   *  minutes (the tenant's default buffer). A slot within this many minutes
+   *  of a booking is treated as unavailable, so suggestions match what the
+   *  booking RPC will accept under the same buffer. Default 0 (no buffer). */
+  bufferMinutes?: number;
 }
 
 export async function findNextAvailableSlots(
@@ -73,6 +78,7 @@ export async function findNextAvailableSlots(
     count = 5,
   } = params;
   const searchHorizonHours = Math.min(params.searchHorizonHours ?? 24, 168);
+  const bufferMinutes = params.bufferMinutes && params.bufferMinutes > 0 ? params.bufferMinutes : 0;
 
   const tzRow = await client.query<{ timezone: string | null }>(
     `SELECT timezone FROM tenants WHERE tenant_id = $1`,
@@ -133,16 +139,16 @@ export async function findNextAvailableSlots(
            WHERE a.resource_id = res.resource_id
              AND a.status = 'scheduled'
              AND (a.is_deleted IS NULL OR a.is_deleted = false)
-             AND a.start_time < ss.s + ($3 || ' minutes')::interval
-             AND a.end_time > ss.s
+             AND a.start_time < ss.s + ($3 || ' minutes')::interval + ($9 || ' minutes')::interval
+             AND a.end_time > ss.s - ($9 || ' minutes')::interval
         )
         AND NOT EXISTS (
           SELECT 1 FROM appointments a
            WHERE a.employee_id = emp.employee_id
              AND a.status = 'scheduled'
              AND (a.is_deleted IS NULL OR a.is_deleted = false)
-             AND a.start_time < ss.s + ($3 || ' minutes')::interval
-             AND a.end_time > ss.s
+             AND a.start_time < ss.s + ($3 || ' minutes')::interval + ($9 || ' minutes')::interval
+             AND a.end_time > ss.s - ($9 || ' minutes')::interval
         )
     )
     SELECT slot_start, slot_end,
@@ -164,6 +170,7 @@ export async function findNextAvailableSlots(
     requiredCapabilities.length === 0 ? [] : requiredCapabilities,
     requiredSkills.length === 0 ? [] : requiredSkills,
     String(count),
+    String(bufferMinutes),
   ]);
 
   return res.rows.map(

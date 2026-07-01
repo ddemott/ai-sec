@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict KpMap4LRCf0Fs8EqzHK9RGTizc2gZtW5Vfbgh21Cv9E5Z5o5cLxq0XkJ9OkcbdQ
+\restrict dVMoBdYwfcAv587UgqgDdlNfFhCh6LWfsFABvi4FqxNr5zPjRwMdtQtgdZPQQi1
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -215,10 +215,10 @@ $$;
 
 
 --
--- Name: book_appointment_atomic(uuid, uuid, uuid, timestamp with time zone, timestamp with time zone, text, text, text, text, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: book_appointment_atomic(uuid, uuid, uuid, timestamp with time zone, timestamp with time zone, text, text, text, text, uuid, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.book_appointment_atomic(p_tenant_id uuid, p_resource_id uuid, p_customer_id uuid DEFAULT NULL::uuid, p_start_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_description text DEFAULT NULL::text, p_call_id text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_assignment_id text DEFAULT NULL::text, p_service_id uuid DEFAULT NULL::uuid, p_customer_phone text DEFAULT NULL::text, p_customer_name text DEFAULT NULL::text) RETURNS TABLE(success boolean, appointment_id uuid, error_message text)
+CREATE FUNCTION public.book_appointment_atomic(p_tenant_id uuid, p_resource_id uuid, p_customer_id uuid DEFAULT NULL::uuid, p_start_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_description text DEFAULT NULL::text, p_call_id text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_assignment_id text DEFAULT NULL::text, p_service_id uuid DEFAULT NULL::uuid, p_customer_phone text DEFAULT NULL::text, p_customer_name text DEFAULT NULL::text, p_buffer_minutes integer DEFAULT 0) RETURNS TABLE(success boolean, appointment_id uuid, error_message text)
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -238,7 +238,10 @@ DECLARE
     v_service_duration INTEGER;
     v_on_shift BOOLEAN;
     v_mapping_has_rows BOOLEAN;
+    v_buffer INTERVAL;
 BEGIN
+    v_buffer := (GREATEST(COALESCE(p_buffer_minutes, 0), 0) || ' minutes')::INTERVAL;
+
     SELECT COALESCE(t.timezone, 'UTC') INTO v_tenant_tz
     FROM tenants t WHERE t.tenant_id = p_tenant_id;
     IF v_tenant_tz IS NULL THEN v_tenant_tz := 'UTC'; END IF;
@@ -351,10 +354,11 @@ BEGIN
         END IF;
     END IF;
 
+    -- Resource overlap — padded by the buffer on both sides of the request.
     SELECT EXISTS (
         SELECT 1 FROM appointments
         WHERE resource_id = p_resource_id AND status = 'scheduled'
-          AND start_time < v_effective_end AND end_time > p_start_time
+          AND start_time < v_effective_end + v_buffer AND end_time > p_start_time - v_buffer
     ) INTO v_overlap_exists;
     IF v_overlap_exists THEN
         RETURN QUERY SELECT FALSE, NULL::UUID, 'Resource already booked during this timeslot'::TEXT;
@@ -362,10 +366,11 @@ BEGIN
     END IF;
 
     IF v_employee_id IS NOT NULL THEN
+        -- Employee overlap — padded by the buffer on both sides of the request.
         SELECT EXISTS (
             SELECT 1 FROM appointments
             WHERE employee_id = v_employee_id AND status = 'scheduled'
-              AND start_time < v_effective_end AND end_time > p_start_time
+              AND start_time < v_effective_end + v_buffer AND end_time > p_start_time - v_buffer
         ) INTO v_overlap_exists;
         IF v_overlap_exists THEN
             RETURN QUERY SELECT FALSE, NULL::UUID, 'Employee already booked'::TEXT;
@@ -395,10 +400,11 @@ BEGIN
         END IF;
 
     ELSIF v_user_id IS NOT NULL THEN
+        -- User overlap — padded by the buffer on both sides of the request.
         SELECT EXISTS (
             SELECT 1 FROM appointments
             WHERE assigned_to_user_id = v_user_id AND status = 'scheduled'
-              AND start_time < v_effective_end AND end_time > p_start_time
+              AND start_time < v_effective_end + v_buffer AND end_time > p_start_time - v_buffer
         ) INTO v_overlap_exists;
         IF v_overlap_exists THEN
             RETURN QUERY SELECT FALSE, NULL::UUID, 'User already booked'::TEXT;
@@ -428,25 +434,10 @@ $$;
 
 
 --
--- Name: FUNCTION book_appointment_atomic(p_tenant_id uuid, p_resource_id uuid, p_customer_id uuid, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_description text, p_call_id text, p_location text, p_assignment_id text, p_service_id uuid, p_customer_phone text, p_customer_name text); Type: COMMENT; Schema: public; Owner: -
+-- Name: book_with_scheduling_atomic(uuid, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, timestamp with time zone, text[], text[], uuid, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.book_appointment_atomic(p_tenant_id uuid, p_resource_id uuid, p_customer_id uuid, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_description text, p_call_id text, p_location text, p_assignment_id text, p_service_id uuid, p_customer_phone text, p_customer_name text) IS 'Atomic appointment booking with full alignment enforcement.
-When p_service_id is provided, prefers the service_employee /
-service_resource mapping tables as the source of truth for who/what
-can perform the service; falls back to services.required_skills /
-required_resources arrays only when the mapping table has no rows
-for that service (open-service semantic).
-Concurrency-safe via appointments_no_resource_overlap +
-appointments_no_employee_overlap exclusion constraints — race losers
-are translated back to "already booked" by the EXCEPTION handler.';
-
-
---
--- Name: book_with_scheduling_atomic(uuid, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, timestamp with time zone, text[], text[], uuid, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text DEFAULT NULL::text, p_description text DEFAULT 'Booking via SecretaryHQ'::text, p_call_id text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_start_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_window_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_window_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_required_skills text[] DEFAULT '{}'::text[], p_required_capabilities text[] DEFAULT '{}'::text[], p_preferred_resource_id uuid DEFAULT NULL::uuid, p_preferred_employee_id text DEFAULT NULL::text, p_service_type text DEFAULT NULL::text, p_duration_minutes integer DEFAULT 30) RETURNS TABLE(success boolean, appointment_id uuid, resource_id uuid, resource_name text, employee_id uuid, employee_name text, booked_start timestamp with time zone, booked_end timestamp with time zone, customer_id uuid, error_message text, error_code text)
+CREATE FUNCTION public.book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text DEFAULT NULL::text, p_description text DEFAULT 'Booking via SecretaryHQ'::text, p_call_id text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_start_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_window_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_window_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_required_skills text[] DEFAULT '{}'::text[], p_required_capabilities text[] DEFAULT '{}'::text[], p_preferred_resource_id uuid DEFAULT NULL::uuid, p_preferred_employee_id text DEFAULT NULL::text, p_service_type text DEFAULT NULL::text, p_duration_minutes integer DEFAULT 30, p_buffer_minutes integer DEFAULT 0) RETURNS TABLE(success boolean, appointment_id uuid, resource_id uuid, resource_name text, employee_id uuid, employee_name text, booked_start timestamp with time zone, booked_end timestamp with time zone, customer_id uuid, error_message text, error_code text)
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -469,7 +460,10 @@ DECLARE
     v_employee_scheduled BOOLEAN;
     v_employee_occupied BOOLEAN;
     v_resource_occupied BOOLEAN;
+    v_buffer INTERVAL;
 BEGIN
+    v_buffer := (GREATEST(COALESCE(p_buffer_minutes, 0), 0) || ' minutes')::INTERVAL;
+
     SELECT COALESCE(t.timezone, 'UTC') INTO v_tenant_tz
     FROM tenants t WHERE t.tenant_id = p_tenant_id;
     IF v_tenant_tz IS NULL THEN v_tenant_tz := 'UTC'; END IF;
@@ -539,13 +533,13 @@ BEGIN
                     SELECT 1 FROM appointments a
                     WHERE a.resource_id = res.resource_id
                     AND a.status = 'scheduled'
-                    AND a.start_time < v_end AND a.end_time > v_start
+                    AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
                 )
                 AND NOT EXISTS (
                     SELECT 1 FROM appointments a
                     WHERE a.employee_id = emp.employee_id
                     AND a.status = 'scheduled'
-                    AND a.start_time < v_end AND a.end_time > v_start
+                    AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
                 )
                 AND (p_preferred_resource_id IS NULL OR res.resource_id = p_preferred_resource_id)
                 AND (p_preferred_employee_id IS NULL OR emp.employee_id = p_preferred_employee_id::UUID)
@@ -573,7 +567,7 @@ BEGIN
                     SELECT 1 FROM appointments a
                     WHERE a.resource_id = res.resource_id
                     AND a.status = 'scheduled'
-                    AND a.start_time < v_end AND a.end_time > v_start
+                    AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
                 )
                 AND (p_preferred_resource_id IS NULL OR res.resource_id = p_preferred_resource_id)
             ORDER BY
@@ -634,7 +628,7 @@ BEGIN
                 WHERE res.tenant_id = p_tenant_id
                 AND res.is_active = true
                 AND a.status = 'scheduled'
-                AND a.start_time < v_end AND a.end_time > v_start
+                AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
             ) INTO v_resource_occupied;
 
             SELECT EXISTS(
@@ -645,7 +639,7 @@ BEGIN
                 AND (emp.is_deleted IS NULL OR emp.is_deleted = false)
                 AND emp.skills @> p_required_skills
                 AND a.status = 'scheduled'
-                AND a.start_time < v_end AND a.end_time > v_start
+                AND a.start_time < v_end + v_buffer AND a.end_time > v_start - v_buffer
             ) INTO v_employee_occupied;
 
             IF v_employee_occupied OR v_resource_occupied THEN
@@ -687,20 +681,22 @@ $$;
 
 
 --
--- Name: FUNCTION book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text, p_description text, p_call_id text, p_location text, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_window_from timestamp with time zone, p_window_to timestamp with time zone, p_required_skills text[], p_required_capabilities text[], p_preferred_resource_id uuid, p_preferred_employee_id text, p_service_type text, p_duration_minutes integer); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text, p_description text, p_call_id text, p_location text, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_window_from timestamp with time zone, p_window_to timestamp with time zone, p_required_skills text[], p_required_capabilities text[], p_preferred_resource_id uuid, p_preferred_employee_id text, p_service_type text, p_duration_minutes integer, p_buffer_minutes integer); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text, p_description text, p_call_id text, p_location text, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_window_from timestamp with time zone, p_window_to timestamp with time zone, p_required_skills text[], p_required_capabilities text[], p_preferred_resource_id uuid, p_preferred_employee_id text, p_service_type text, p_duration_minutes integer) IS 'Atomic booking with scheduling. Uses employee_schedule (date-based) for shift validation.
+COMMENT ON FUNCTION public.book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text, p_description text, p_call_id text, p_location text, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_window_from timestamp with time zone, p_window_to timestamp with time zone, p_required_skills text[], p_required_capabilities text[], p_preferred_resource_id uuid, p_preferred_employee_id text, p_service_type text, p_duration_minutes integer, p_buffer_minutes integer) IS 'Atomic booking with scheduling. Uses employee_schedule (date-based) for shift validation.
 Concurrency-safe via appointments_no_resource_overlap / appointments_no_employee_overlap
 exclusion constraints — race losers receive TIMESLOT_OCCUPIED.
+p_buffer_minutes (default 0) pads appointment-overlap checks to enforce a minimum gap
+between back-to-back bookings; 0 reproduces the original behavior exactly.
 Error codes: TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY, INVALID_PARAMS';
 
 
 --
--- Name: check_availability_with_tz(uuid, uuid, timestamp with time zone, timestamp with time zone, text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: check_availability_with_tz(uuid, uuid, timestamp with time zone, timestamp with time zone, text, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.check_availability_with_tz(p_tenant_id uuid, p_resource_id uuid, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_customer_tz text DEFAULT NULL::text) RETURNS TABLE(available boolean, tenant_timezone text, local_start text, local_end text)
+CREATE FUNCTION public.check_availability_with_tz(p_tenant_id uuid, p_resource_id uuid, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_customer_tz text DEFAULT NULL::text, p_buffer_minutes integer DEFAULT 0) RETURNS TABLE(available boolean, tenant_timezone text, local_start text, local_end text)
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -712,7 +708,10 @@ DECLARE
     v_day_of_week INTEGER;
     v_start_tod TIME;
     v_end_tod TIME;
+    v_buffer INTERVAL;
 BEGIN
+    v_buffer := (GREATEST(COALESCE(p_buffer_minutes, 0), 0) || ' minutes')::INTERVAL;
+
     SELECT COALESCE(t.timezone, 'UTC') INTO v_tenant_tz
     FROM tenants t WHERE t.tenant_id = p_tenant_id;
     IF v_tenant_tz IS NULL THEN v_tenant_tz := 'UTC'; END IF;
@@ -729,8 +728,8 @@ BEGIN
         AND tenant_id = p_tenant_id
         AND status = 'scheduled'
         AND (is_deleted IS NULL OR is_deleted = false)
-        AND start_time < p_end_time
-        AND end_time > p_start_time
+        AND start_time < p_end_time + v_buffer
+        AND end_time > p_start_time - v_buffer
     ) INTO v_resource_free;
 
     SELECT EXISTS (
@@ -3223,6 +3222,7 @@ CREATE TABLE public.tenants (
     demo_expires_at timestamp with time zone,
     save_preferences_enabled boolean DEFAULT true NOT NULL,
     preferences_instructions text,
+    default_buffer_minutes integer DEFAULT 0 NOT NULL,
     tts_voice text,
     tts_speed real,
     tts_soft boolean,
@@ -3280,6 +3280,13 @@ COMMENT ON COLUMN public.tenants.save_preferences_enabled IS 'Preference capture
 --
 
 COMMENT ON COLUMN public.tenants.preferences_instructions IS 'Owner-authored guidance injected into the AI system prompt: what customer preferences to save, why, when, and how to use them. NULL = use the agent built-in default guidance.';
+
+
+--
+-- Name: COLUMN tenants.default_buffer_minutes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.default_buffer_minutes IS 'Minutes of gap the AI must leave between back-to-back bookings (applied symmetrically around each existing appointment at every availability + booking surface). Default 0 = no buffer (current behavior). AI/customer-facing bookings only; owner manual dashboard bookings are unrestricted.';
 
 
 --
@@ -5452,5 +5459,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict KpMap4LRCf0Fs8EqzHK9RGTizc2gZtW5Vfbgh21Cv9E5Z5o5cLxq0XkJ9OkcbdQ
+\unrestrict dVMoBdYwfcAv587UgqgDdlNfFhCh6LWfsFABvi4FqxNr5zPjRwMdtQtgdZPQQi1
 

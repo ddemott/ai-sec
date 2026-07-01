@@ -89,6 +89,10 @@ export interface Tenant {
   owner_phone?: string | null;
   // Telnyx DID assigned to this tenant — the number callers dial to reach the AI.
   inbound_phone?: string | null;
+  // Minutes of gap the AI leaves between back-to-back bookings (Phone Assistant
+  // config). 0 = no buffer (default). Applies to AI/customer-facing bookings
+  // only; owner manual dashboard bookings are unrestricted.
+  default_buffer_minutes?: number;
 }
 
 export interface BusinessTemplate {
