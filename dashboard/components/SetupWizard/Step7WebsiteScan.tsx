@@ -9,15 +9,12 @@ import { STARTER_IDS, STARTER_QUESTIONS } from './Step7CallerQuestions';
 // A ready-to-edit template the owner can download, fill in, and re-upload. The
 // top is free prose (the AI answers the standard questions from it); the **Q:/**A:
 // blocks become their own custom questions verbatim.
-const EXAMPLE_SHEET = `# Knowledge sheet for your AI assistant
-#
-# HOW THIS WORKS:
-#   1. Write anything about your business in plain text below. The assistant
-#      uses it to answer the standard questions (hours, services, pricing...).
-#   2. To add YOUR OWN question + answer, mark them like the examples further
-#      down: a line starting with **Q: then a line starting with **A:.
-#   3. An answer can span several lines. A BLANK LINE ends the answer.
-#   4. Delete these comment lines (the ones starting with #) if you like.
+const EXAMPLE_SHEET = `HOW THIS WORKS (replace this whole intro with your own text):
+- Write anything about your business as plain text. The assistant uses it to
+  answer the standard questions (hours, services, pricing, and so on).
+- To add your OWN question and answer, mark them like the examples below: a line
+  starting with **Q: then a line starting with **A:.
+- An answer can span several lines. A BLANK LINE ends the answer.
 
 We are open Monday through Friday, 9am to 5pm, and closed on weekends and major
 holidays. We offer consulting, contract work, and full-time engagements. You can
