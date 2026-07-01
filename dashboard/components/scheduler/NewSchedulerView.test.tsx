@@ -374,11 +374,13 @@ describe('NewSchedulerView', () => {
       expect(row1.querySelector('[data-testid="shift-bar-0"]')).toBeInTheDocument();
     });
 
-    test('shift bars use solid accent background', () => {
+    test('shift bars use a light-blue fill so the time label stays readable', () => {
+      // Lightened from the solid mid-blue accent (Dale, 2026-07-01) so the
+      // scheduled hours read clearly over the dark timeline.
       render(<NewSchedulerView />);
       const row1 = screen.getByTestId('scheduler-row-emp-1');
       const bar = row1.querySelector('[data-testid="shift-bar-0"]') as HTMLElement;
-      expect(bar.style.background).toContain('var(--accent');
+      expect(bar.style.background).toBe('rgb(147, 197, 253)'); // #93c5fd (blue-300)
     });
 
     test('shift bars are hidden in Skills mode', () => {

@@ -1308,8 +1308,12 @@ function ShiftBar({ shifts, colW }: ShiftBarProps) {
               width: Math.max(width, 8),
               top: 6,
               bottom: 6,
-              background: 'var(--accent, #3b82f6)',
-              opacity: 0.85,
+              // Lighter blue fill (blue-300) with a slightly darker border so the
+              // scheduled window reads clearly and its time label pops against
+              // the dark timeline — the solid mid-blue accent was too dark to
+              // read the hours over (Dale, 2026-07-01).
+              background: '#93c5fd',
+              border: '1px solid #60a5fa',
               zIndex: 2,
             }}
             title={`${formatTime24to12(shift.start_time.substring(0, 5))} - ${formatTime24to12(shift.end_time.substring(0, 5))}`}
@@ -1318,7 +1322,9 @@ function ShiftBar({ shifts, colW }: ShiftBarProps) {
             {width > 90 && (
               <span
                 className="absolute inset-0 flex items-center px-2 text-[11px] font-bold truncate"
-                style={{ color: 'var(--primary-text)', textShadow: '0 1px 2px rgba(0,0,0,0.15)' }}
+                // Dark text on the light-blue fill (the old white --primary-text
+                // was invisible once the fill was lightened).
+                style={{ color: '#1e3a8a' }}
               >
                 {formatTime24to12(shift.start_time.substring(0, 5))} –{' '}
                 {formatTime24to12(shift.end_time.substring(0, 5))}
