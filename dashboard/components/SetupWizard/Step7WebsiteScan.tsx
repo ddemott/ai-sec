@@ -167,8 +167,8 @@ export function Step7WebsiteScan({ tenantId }: Props) {
             className="block mt-1 text-sm"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            We&apos;ll pull answers from the text, and any lines you mark with{' '}
-            <code>**Q:</code> / <code>**A:</code> become your own custom questions.
+            We&apos;ll pull answers from the text, and any lines you mark with <code>**Q:</code> /{' '}
+            <code>**A:</code> become your own custom questions.
           </p>
         </div>
 

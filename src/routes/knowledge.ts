@@ -765,7 +765,7 @@ export function registerKnowledgeRoutes(
 
       // Stage: standard (with a non-empty answer) + every custom pair, all 'suggested'.
       const standardItems = standardAnswers
-        .filter((a) => a.answer != null && (a.answer as string).trim().length > 0)
+        .filter((a) => a.answer != null && a.answer.trim().length > 0)
         .map((a) => ({
           question_id: a.questionId || null,
           question: a.question || '',
