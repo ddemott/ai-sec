@@ -181,6 +181,8 @@ The `agent_session_error` log's `error_body` carries the provider's exact error 
 
 ## Appendix — gotchas log (dated, append new ones)
 
+- 2026-07-01 — booking tool-selection dead-end: `get_available_slots` returns SPOKEN times with NO resource_id, but `book_appointment`/`check_availability` REQUIRE a `resource_id` (`z.string().uuid()`). The LLM paired available_slots → book_appointment → Zod 400 (`validation_error`), so every booking silently failed ("having trouble pulling that up") even after the SQL-crash + tz fixes. Fix (prompt): steer to **book_with_scheduling** (self-contained window-based booking that finds the resource AND assigns staff — no resource_id) as the default after get_available_slots; only use book_appointment/check_availability with a real resource_id from get_scheduling_options. book_with_scheduling also fixes the "Unassigned" symptom (it assigns an employee; book_appointment to a bare resource leaves it staffless).
+
 - 2026-06-25 — OpenAI TTS non-streaming = 2–3s dead air/reply; switched gpt-4o-mini-tts→Realtime to kill it.
 - 2026-06-26 — `gpt-4o-mini-realtime-preview` invalid id → dead call; real id `gpt-realtime-mini`.
 - 2026-06-26 — Realtime greeting: `say(text)` throws (no TTS) → use `generateReply`; `allowInterruptions:false` on generateReply leaves it not-listening → silence after greeting.
