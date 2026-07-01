@@ -64,6 +64,20 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/take a message/i);
   });
 
+  it('HAPPY: forbids re-checking/re-announcing a slot the caller already picked', () => {
+    // WHO: Caller picked 1PM from the offered slots and confirmed it, but the
+    //       agent said "let me check availability", re-listed the same slots, and
+    //       re-asked for confirmation before booking (real call 2026-07-01).
+    // WHAT: The prompt must tell the agent that a picked slot is already
+    //        available — no re-check, no re-announce, no second confirmation —
+    //        go straight to book_with_scheduling with one confirmation.
+    // WHY: repeating what the caller just chose sounds like it wasn't listening.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toMatch(/already have availability/i);
+    expect(prompt).toMatch(/do NOT re-check/i);
+    expect(prompt).toMatch(/book_with_scheduling/);
+  });
+
   it('HAPPY: instructs the agent to read back a phone number + never go silent on partial input', () => {
     // WHO: a caller whose spoken number came through partial (STT split/dropped
     //       digits), e.g. only 6 of 10 captured.
