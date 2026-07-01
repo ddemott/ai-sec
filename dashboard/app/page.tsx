@@ -1221,40 +1221,6 @@ function setBilling(mode) {
   const note = document.getElementById('price-annual-note');
   if (note) note.style.display = isAnnual ? 'block' : 'none';
 }
-
-// Capability grid — expand one tile at a time to reveal its full feature list.
-(function () {
-  const grid = document.getElementById('cap-grid');
-  if (!grid) return;
-  const tiles = Array.prototype.slice.call(grid.querySelectorAll('.cap-tile'));
-  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function panelFor(tile) { return document.getElementById(tile.getAttribute('aria-controls')); }
-  function close(tile) {
-    tile.setAttribute('aria-expanded', 'false');
-    const p = panelFor(tile);
-    if (p) { p.hidden = true; p.classList.remove('open'); }
-  }
-  function closeAll(except) {
-    tiles.forEach(function (t) { if (t !== except) close(t); });
-  }
-  tiles.forEach(function (tile) {
-    tile.addEventListener('click', function () {
-      const isOpen = tile.getAttribute('aria-expanded') === 'true';
-      closeAll(tile);
-      if (isOpen) { close(tile); return; }
-      tile.setAttribute('aria-expanded', 'true');
-      const p = panelFor(tile);
-      if (p) {
-        p.hidden = false;
-        p.classList.add('open');
-        window.setTimeout(function () {
-          p.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
-        }, 60);
-      }
-    });
-  });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(null); });
-})();
 </script>
 `;
 
@@ -1283,6 +1249,61 @@ export default function LandingPage() {
     );
     document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
+  }, [checked]);
+
+  // Capability grid — expand one tile at a time to reveal its full feature list.
+  // Wired here (not in the injected LANDING_HTML <script>, which never executes —
+  // scripts set via dangerouslySetInnerHTML don't run).
+  useEffect(() => {
+    if (!checked) return;
+    const grid = document.getElementById('cap-grid');
+    if (!grid) return;
+    const tiles = Array.from(grid.querySelectorAll<HTMLButtonElement>('.cap-tile'));
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const panelFor = (t: Element) => document.getElementById(t.getAttribute('aria-controls') || '');
+    const close = (t: Element) => {
+      t.setAttribute('aria-expanded', 'false');
+      const p = panelFor(t);
+      if (p) {
+        p.hidden = true;
+        p.classList.remove('open');
+      }
+    };
+    const closeAll = (except: Element | null) =>
+      tiles.forEach((t) => {
+        if (t !== except) close(t);
+      });
+    const makeHandler = (tile: HTMLButtonElement) => () => {
+      const isOpen = tile.getAttribute('aria-expanded') === 'true';
+      closeAll(tile);
+      if (isOpen) {
+        close(tile);
+        return;
+      }
+      tile.setAttribute('aria-expanded', 'true');
+      const p = panelFor(tile);
+      if (p) {
+        p.hidden = false;
+        p.classList.add('open');
+        window.setTimeout(
+          () => p.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }),
+          60
+        );
+      }
+    };
+    const handlers = tiles.map((t) => {
+      const h = makeHandler(t);
+      t.addEventListener('click', h);
+      return h;
+    });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeAll(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      tiles.forEach((t, i) => t.removeEventListener('click', handlers[i]));
+      document.removeEventListener('keydown', onKey);
+    };
   }, [checked]);
 
   if (!checked) return null;
