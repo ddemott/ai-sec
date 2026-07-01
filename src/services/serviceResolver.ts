@@ -29,11 +29,16 @@ export interface ResolvedService {
 }
 
 // Shared projection so every branch returns the identical shape/types.
-const COLS = `service_id,
-              name,
-              duration_minutes::int AS duration_minutes,
-              CASE WHEN price IS NULL THEN NULL ELSE price::float8 END AS price,
-              COALESCE(required_skills, '{}') AS required_skills`;
+// Every column is qualified with the `s` (services) alias — branch 2 JOINs
+// `tenants t`, which ALSO has a `name` column, so a bare `name` there is
+// "column reference \"name\" is ambiguous" (a prod 500 in availability/booking
+// once default_service_id was backfilled and the fallthrough started running).
+// Every branch below aliases services as `s` so this projection is valid.
+const COLS = `s.service_id,
+              s.name,
+              s.duration_minutes::int AS duration_minutes,
+              CASE WHEN s.price IS NULL THEN NULL ELSE s.price::float8 END AS price,
+              COALESCE(s.required_skills, '{}') AS required_skills`;
 
 export async function resolveServiceForBooking(
   client: PoolClient,
@@ -46,11 +51,11 @@ export async function resolveServiceForBooking(
   const trimmed = spokenType?.trim();
   if (trimmed) {
     const matched = await client.query<ResolvedService>(
-      `SELECT ${COLS} FROM services
-        WHERE tenant_id = $1
-          AND COALESCE(is_deleted, false) = false
-          AND name ILIKE '%' || $2 || '%'
-        ORDER BY length(name) ASC
+      `SELECT ${COLS} FROM services s
+        WHERE s.tenant_id = $1
+          AND COALESCE(s.is_deleted, false) = false
+          AND s.name ILIKE '%' || $2 || '%'
+        ORDER BY length(s.name) ASC
         LIMIT 1`,
       [tenantId, trimmed]
     );
