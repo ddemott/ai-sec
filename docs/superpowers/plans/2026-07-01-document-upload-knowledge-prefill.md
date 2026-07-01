@@ -24,20 +24,26 @@
 Pure, cross-runtime, no I/O. Splits document text into deterministic custom Q&A, malformed markers, and leftover prose.
 
 **Files:**
+
 - Create: `shared/markerQuestions.ts`
 - Test: `shared/markerQuestions.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing (pure string in).
 - Produces:
+
   ```ts
-  export interface MarkerQuestion { question: string; answer: string }
-  export interface MarkerParseResult {
-    custom: MarkerQuestion[];   // well-formed **Q:/**A: pairs
-    malformed: string[];        // question text of a **Q: with no **A:
-    prose: string;              // everything outside any marker block
+  export interface MarkerQuestion {
+    question: string;
+    answer: string;
   }
-  export function parseMarkerQuestions(text: string): MarkerParseResult
+  export interface MarkerParseResult {
+    custom: MarkerQuestion[]; // well-formed **Q:/**A: pairs
+    malformed: string[]; // question text of a **Q: with no **A:
+    prose: string; // everything outside any marker block
+  }
+  export function parseMarkerQuestions(text: string): MarkerParseResult;
   ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -56,13 +62,17 @@ describe('parseMarkerQuestions', () => {
   });
 
   it('joins a multi-line question up to the **A: line', () => {
-    const r = parseMarkerQuestions('**Q: What is your\ncancellation policy?\n**A: 24 hours notice.');
+    const r = parseMarkerQuestions(
+      '**Q: What is your\ncancellation policy?\n**A: 24 hours notice.'
+    );
     expect(r.custom[0].question).toBe('What is your cancellation policy?');
     expect(r.custom[0].answer).toBe('24 hours notice.');
   });
 
   it('treats the answer as a continuous block ended by a blank line', () => {
-    const r = parseMarkerQuestions('**Q: Hours?\n**A: Mon-Fri 9-5.\nWeekends closed.\n\nignored prose');
+    const r = parseMarkerQuestions(
+      '**Q: Hours?\n**A: Mon-Fri 9-5.\nWeekends closed.\n\nignored prose'
+    );
     expect(r.custom[0].answer).toBe('Mon-Fri 9-5.\nWeekends closed.');
     expect(r.prose).toContain('ignored prose');
   });
@@ -233,12 +243,15 @@ git commit -m "feat(knowledge): pure **Q:/**A: marker parser for document upload
 Multipart upload → text → deterministic custom Q&A + AI-answered standard questions → stage to `knowledge_suggestion`. Mirrors `/knowledge/ingest` (multipart) + `/knowledge/import-website` (resolve → extract → stage).
 
 **Files:**
+
 - Modify: `src/routes/knowledge.ts` (add the route; register it alongside `/knowledge/import-website`, which ends near line 654 with `}, 'Failed to import from website'));`)
 - Test: `src/knowledge-import-document.test.ts` (create)
 
 **Interfaces:**
+
 - Consumes: `extractFileContent(buffer, filename)` → `{ success: true, text } | { success: false, error }`; `parseMarkerQuestions(text)` (Task 1); `resolveQuestions({ customs })` → `Array<{ id: string | null; question: string }>`; `extractAnswersWithLLM(text, questions, source, apiKey)` → `{ success: true, answers, discovered, usage } | { success: false, error }`; `scanRateLimiter.tryAcquire(tenantId)`; `getFileExtension` / `isAllowedExtension` / `ALLOWED_EXTENSIONS`.
 - Produces: `POST /knowledge/import-document` returning
+
   ```ts
   {
     success: true;
@@ -343,160 +356,160 @@ import { parseMarkerQuestions } from '../../shared/markerQuestions';
 Then register the route immediately after the `/knowledge/import-website` route closes (`}, 'Failed to import from website'));`):
 
 ```ts
-  // POST /knowledge/import-document — upload a PDF/txt/md info sheet. Deterministic
-  // **Q:/**A: markers become custom questions; the leftover prose is AI-answered
-  // against the standard question bank. Everything stages to knowledge_suggestion
-  // for owner review — same gate as the website scan. (Spec: docs/superpowers/
-  // specs/2026-06-30-document-upload-knowledge-prefill-design.md)
-  app.post(
-    '/knowledge/import-document',
-    withHandler(async (req: AppRequest, reply) => {
-      const data = await req.file();
-      if (!data) return reply.status(400).send({ success: false, error: 'No file uploaded' });
+// POST /knowledge/import-document — upload a PDF/txt/md info sheet. Deterministic
+// **Q:/**A: markers become custom questions; the leftover prose is AI-answered
+// against the standard question bank. Everything stages to knowledge_suggestion
+// for owner review — same gate as the website scan. (Spec: docs/superpowers/
+// specs/2026-06-30-document-upload-knowledge-prefill-design.md)
+app.post(
+  '/knowledge/import-document',
+  withHandler(async (req: AppRequest, reply) => {
+    const data = await req.file();
+    if (!data) return reply.status(400).send({ success: false, error: 'No file uploaded' });
 
-      const tenantId = (data.fields.tenant_id as { value?: string } | undefined)?.value;
-      if (!tenantId)
-        return reply.status(400).send({ success: false, error: 'tenant_id is required' });
+    const tenantId = (data.fields.tenant_id as { value?: string } | undefined)?.value;
+    if (!tenantId)
+      return reply.status(400).send({ success: false, error: 'tenant_id is required' });
 
-      const filename = data.filename;
-      const ext = getFileExtension(filename);
-      if (!isAllowedExtension(ext)) {
-        return reply.status(400).send({
-          success: false,
-          error: `Unsupported file type "${ext}". Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
-        });
-      }
+    const filename = data.filename;
+    const ext = getFileExtension(filename);
+    if (!isAllowedExtension(ext)) {
+      return reply.status(400).send({
+        success: false,
+        error: `Unsupported file type "${ext}". Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
+      });
+    }
 
-      // Per-tenant guardrail on the expensive AI pass (skipped in the deterministic
-      // E2E stub). Same limiter the website scan uses.
-      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1' && !scanRateLimiter.tryAcquire(tenantId)) {
-        logEvent(req, 'document_import_rate_limited', { tenantId });
-        return reply.status(429).send({
-          success: false,
-          error: 'Import limit reached. Please wait a bit before uploading again.',
-        });
-      }
+    // Per-tenant guardrail on the expensive AI pass (skipped in the deterministic
+    // E2E stub). Same limiter the website scan uses.
+    if (process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1' && !scanRateLimiter.tryAcquire(tenantId)) {
+      logEvent(req, 'document_import_rate_limited', { tenantId });
+      return reply.status(429).send({
+        success: false,
+        error: 'Import limit reached. Please wait a bit before uploading again.',
+      });
+    }
 
-      const buffer = await data.toBuffer();
-      const extracted = await extractFileContent(buffer, filename);
-      if (!extracted.success) {
-        return reply.status(400).send({ success: false, error: extracted.error });
-      }
+    const buffer = await data.toBuffer();
+    const extracted = await extractFileContent(buffer, filename);
+    if (!extracted.success) {
+      return reply.status(400).send({ success: false, error: extracted.error });
+    }
 
-      // Deterministic custom Q&A + leftover prose.
-      const { custom, malformed, prose } = parseMarkerQuestions(extracted.text);
+    // Deterministic custom Q&A + leftover prose.
+    const { custom, malformed, prose } = parseMarkerQuestions(extracted.text);
 
-      // Standard questions = shared bank + this tenant's custom-question titles.
-      const customRows = await withTenantClient(tenantId, async (client) =>
-        client.query(
-          `SELECT title FROM tenant_docs
+    // Standard questions = shared bank + this tenant's custom-question titles.
+    const customRows = await withTenantClient(tenantId, async (client) =>
+      client.query(
+        `SELECT title FROM tenant_docs
            WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL
            ORDER BY created_at DESC
            LIMIT 50`,
-          [tenantId]
-        )
-      );
-      const customs = customRows.rows.map((r: any) => r.title as string);
-      const questions = resolveQuestions({ customs });
+        [tenantId]
+      )
+    );
+    const customs = customRows.rows.map((r: any) => r.title as string);
+    const questions = resolveQuestions({ customs });
 
-      const sourceTag = `document:${filename}`;
+    const sourceTag = `document:${filename}`;
 
-      // Standard answers from the prose. Stub → deterministic; else real OpenAI.
-      // The custom (marker) questions NEVER depend on the model — they come through
-      // even if the AI pass fails/degrades (spec §5 resilience win).
-      let standardAnswers: Array<{
-        questionId: string | null;
-        question: string;
-        answer: string | null;
-      }> = [];
-      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB === '1') {
-        const picks = [
-          ...questions.filter((q) => q.id === null),
-          ...questions.filter((q) => q.id !== null).slice(0, 2),
-        ];
-        standardAnswers = picks.map((q) => ({
-          questionId: q.id,
-          question: q.question,
-          answer: `Stubbed answer for: ${q.question}`,
-        }));
-      } else if (prose.trim().length > 0) {
-        const llm = await extractAnswersWithLLM(
-          prose,
-          questions,
-          sourceTag,
-          process.env.OPENAI_API_KEY || ''
-        );
-        if (llm.success) {
-          standardAnswers = llm.answers.map((a) => ({
-            questionId: a.questionId,
-            question: a.question,
-            answer: a.answer,
-          }));
-          if (llm.usage) {
-            const input = llm.usage.prompt_tokens || 0;
-            const output = llm.usage.completion_tokens || 0;
-            const cost = input * 0.15e-6 + output * 0.6e-6;
-            withTenantClient(tenantId, (client) =>
-              recordAiCostEvent(client, {
-                tenantId,
-                source: 'kb_ingestion',
-                provider: 'openai',
-                model: 'gpt-4o-mini',
-                inputTokens: input,
-                outputTokens: output,
-                estimatedCostUsd: cost,
-              })
-            ).catch(() => undefined);
-          }
-        }
-        // AI failure degrades gracefully: standardAnswers stays [] but custom still flows.
-      }
-
-      // Stage: standard (with a non-empty answer) + every custom pair, all 'suggested'.
-      const standardItems = standardAnswers
-        .filter((a) => a.answer != null && (a.answer as string).trim().length > 0)
-        .map((a) => ({
-          question_id: a.questionId || null,
-          question: a.question || '',
-          answer: a.answer as string,
-        }));
-      const customItems = custom.map((c) => ({
-        question_id: null as string | null,
-        question: c.question,
-        answer: c.answer,
+    // Standard answers from the prose. Stub → deterministic; else real OpenAI.
+    // The custom (marker) questions NEVER depend on the model — they come through
+    // even if the AI pass fails/degrades (spec §5 resilience win).
+    let standardAnswers: Array<{
+      questionId: string | null;
+      question: string;
+      answer: string | null;
+    }> = [];
+    if (process.env.KNOWLEDGE_IMPORT_E2E_STUB === '1') {
+      const picks = [
+        ...questions.filter((q) => q.id === null),
+        ...questions.filter((q) => q.id !== null).slice(0, 2),
+      ];
+      standardAnswers = picks.map((q) => ({
+        questionId: q.id,
+        question: q.question,
+        answer: `Stubbed answer for: ${q.question}`,
       }));
-      const allItems = [...standardItems, ...customItems];
+    } else if (prose.trim().length > 0) {
+      const llm = await extractAnswersWithLLM(
+        prose,
+        questions,
+        sourceTag,
+        process.env.OPENAI_API_KEY || ''
+      );
+      if (llm.success) {
+        standardAnswers = llm.answers.map((a) => ({
+          questionId: a.questionId,
+          question: a.question,
+          answer: a.answer,
+        }));
+        if (llm.usage) {
+          const input = llm.usage.prompt_tokens || 0;
+          const output = llm.usage.completion_tokens || 0;
+          const cost = input * 0.15e-6 + output * 0.6e-6;
+          withTenantClient(tenantId, (client) =>
+            recordAiCostEvent(client, {
+              tenantId,
+              source: 'kb_ingestion',
+              provider: 'openai',
+              model: 'gpt-4o-mini',
+              inputTokens: input,
+              outputTokens: output,
+              estimatedCostUsd: cost,
+            })
+          ).catch(() => undefined);
+        }
+      }
+      // AI failure degrades gracefully: standardAnswers stays [] but custom still flows.
+    }
 
-      if (allItems.length > 0) {
-        await withTenantClient(tenantId, async (client) => {
-          for (const item of allItems) {
-            await client.query(
-              `INSERT INTO knowledge_suggestion
+    // Stage: standard (with a non-empty answer) + every custom pair, all 'suggested'.
+    const standardItems = standardAnswers
+      .filter((a) => a.answer != null && (a.answer as string).trim().length > 0)
+      .map((a) => ({
+        question_id: a.questionId || null,
+        question: a.question || '',
+        answer: a.answer as string,
+      }));
+    const customItems = custom.map((c) => ({
+      question_id: null as string | null,
+      question: c.question,
+      answer: c.answer,
+    }));
+    const allItems = [...standardItems, ...customItems];
+
+    if (allItems.length > 0) {
+      await withTenantClient(tenantId, async (client) => {
+        for (const item of allItems) {
+          await client.query(
+            `INSERT INTO knowledge_suggestion
                  (tenant_id, question_id, question, answer, source_url, confidence, status)
                VALUES ($1, $2, $3, $4, $5, $6, 'suggested')`,
-              [tenantId, item.question_id, item.question, item.answer, sourceTag, null]
-            );
-          }
-        });
-      }
-
-      logEvent(req, 'document_knowledge_import', {
-        tenantId,
-        filename,
-        standard: standardItems.length,
-        custom: customItems.length,
-        malformed: malformed.length,
+            [tenantId, item.question_id, item.question, item.answer, sourceTag, null]
+          );
+        }
       });
+    }
 
-      return reply.send({
-        success: true,
-        standard_answers: standardAnswers,
-        custom_questions: custom,
-        malformed,
-        confirmed: allItems.length,
-      });
-    }, 'Failed to import from document')
-  );
+    logEvent(req, 'document_knowledge_import', {
+      tenantId,
+      filename,
+      standard: standardItems.length,
+      custom: customItems.length,
+      malformed: malformed.length,
+    });
+
+    return reply.send({
+      success: true,
+      standard_answers: standardAnswers,
+      custom_questions: custom,
+      malformed,
+      confirmed: allItems.length,
+    });
+  }, 'Failed to import from document')
+);
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -517,11 +530,14 @@ git commit -m "feat(knowledge): POST /knowledge/import-document (marker Q&A + pr
 ### Task 3: Dashboard API wrapper `Api.knowledge.importDocument`
 
 **Files:**
+
 - Modify: `dashboard/lib/api.ts` (inside the `knowledge:` namespace, right after the `ingest:` wrapper near line 816-836)
 
 **Interfaces:**
+
 - Consumes: `API_BASE_URL`, `getLocalStorageItem('authToken')` (both already used by `ingest`).
 - Produces:
+
   ```ts
   Api.knowledge.importDocument(tenantId: string | null, file: File): Promise<{
     success: boolean;
@@ -582,10 +598,12 @@ git commit -m "feat(knowledge): Api.knowledge.importDocument multipart wrapper"
 Add a file input beside the existing "Scan & Prefill" that calls `importDocument`, prefills the standard starter answers exactly like the scan, and reports custom questions added + malformed markers.
 
 **Files:**
+
 - Modify: `dashboard/components/SetupWizard/Step7WebsiteScan.tsx`
 - Test: `dashboard/components/SetupWizard/Step7WebsiteScan.test.tsx` (create if absent; else add a test case)
 
 **Interfaces:**
+
 - Consumes: `Api.knowledge.importDocument` (Task 3); `Api.knowledge.add` (already imported/used in this file); `STARTER_IDS`, `STARTER_QUESTIONS` (already imported).
 - Produces: no exports (internal handler `handleUpload`).
 
@@ -633,9 +651,7 @@ describe('Step7WebsiteScan — document upload', () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(mockImportDocument).toHaveBeenCalledWith('t1', file));
-    await waitFor(() =>
-      expect(screen.getByText(/1 custom question/i)).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText(/1 custom question/i)).toBeInTheDocument());
   });
 });
 ```
@@ -650,73 +666,73 @@ Expected: FAIL — `Unable to find an element by: [data-testid="kb-document-uplo
 In `dashboard/components/SetupWizard/Step7WebsiteScan.tsx`, add a handler alongside `handleScan` and render a file input. Insert the handler after `handleScan`:
 
 ```tsx
-  const handleUpload = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file || !tenantId) return;
-      setLoading(true);
-      setMessage(null);
-      setError(null);
-      try {
-        const res = await Api.knowledge.importDocument(tenantId, file);
-        if (res?.success) {
-          // Prefill the standard starter questions exactly like the website scan.
-          let filled = 0;
-          for (const item of res.standard_answers || []) {
-            if (item.questionId && STARTER_IDS.includes(item.questionId) && item.answer) {
-              const q = STARTER_QUESTIONS.find((sq) => sq.id === item.questionId);
-              if (q) {
-                await Api.knowledge.add(tenantId, {
-                  question: item.question || q.question,
-                  answer: item.answer,
-                  category: q.category,
-                  source: 'document-upload',
-                });
-                filled++;
-              }
+const handleUpload = useCallback(
+  async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !tenantId) return;
+    setLoading(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const res = await Api.knowledge.importDocument(tenantId, file);
+      if (res?.success) {
+        // Prefill the standard starter questions exactly like the website scan.
+        let filled = 0;
+        for (const item of res.standard_answers || []) {
+          if (item.questionId && STARTER_IDS.includes(item.questionId) && item.answer) {
+            const q = STARTER_QUESTIONS.find((sq) => sq.id === item.questionId);
+            if (q) {
+              await Api.knowledge.add(tenantId, {
+                question: item.question || q.question,
+                answer: item.answer,
+                category: q.category,
+                source: 'document-upload',
+              });
+              filled++;
             }
           }
-          const customCount = res.custom_questions?.length || 0;
-          const malformedCount = res.malformed?.length || 0;
-          setMessage(
-            `Imported ${filled} standard answer${filled === 1 ? '' : 's'} and ` +
-              `${customCount} custom question${customCount === 1 ? '' : 's'} from your document. ` +
-              `Review them in the next step.` +
-              (malformedCount
-                ? ` ${malformedCount} entr${malformedCount === 1 ? 'y' : 'ies'} looked like a question but had no **A: answer — fix and re-upload.`
-                : '')
-          );
-        } else {
-          setError(res?.error || 'Could not read that file — try a PDF or a .txt.');
         }
-      } catch (err) {
-        setError('Could not read that file — try a PDF or a .txt.');
-        console.error('Document import error', err);
-      } finally {
-        setLoading(false);
-        e.target.value = ''; // allow re-uploading the same filename
+        const customCount = res.custom_questions?.length || 0;
+        const malformedCount = res.malformed?.length || 0;
+        setMessage(
+          `Imported ${filled} standard answer${filled === 1 ? '' : 's'} and ` +
+            `${customCount} custom question${customCount === 1 ? '' : 's'} from your document. ` +
+            `Review them in the next step.` +
+            (malformedCount
+              ? ` ${malformedCount} entr${malformedCount === 1 ? 'y' : 'ies'} looked like a question but had no **A: answer — fix and re-upload.`
+              : '')
+        );
+      } else {
+        setError(res?.error || 'Could not read that file — try a PDF or a .txt.');
       }
-    },
-    [tenantId]
-  );
+    } catch (err) {
+      setError('Could not read that file — try a PDF or a .txt.');
+      console.error('Document import error', err);
+    } finally {
+      setLoading(false);
+      e.target.value = ''; // allow re-uploading the same filename
+    }
+  },
+  [tenantId]
+);
 ```
 
 Then render the control next to the existing Scan button (inside the component's returned JSX, near the URL input / Scan button — keep the existing markup, add this block after it):
 
 ```tsx
-      <div className="mt-3">
-        <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-          …or upload a document (PDF, .txt, .md)
-        </label>
-        <input
-          data-testid="kb-document-upload"
-          type="file"
-          accept=".pdf,.txt,.md"
-          disabled={loading}
-          onChange={handleUpload}
-          className="block mt-1 text-sm"
-        />
-      </div>
+<div className="mt-3">
+  <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+    …or upload a document (PDF, .txt, .md)
+  </label>
+  <input
+    data-testid="kb-document-upload"
+    type="file"
+    accept=".pdf,.txt,.md"
+    disabled={loading}
+    onChange={handleUpload}
+    className="block mt-1 text-sm"
+  />
+</div>
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -737,6 +753,7 @@ git commit -m "feat(knowledge): document-upload control in Step7 (prefill standa
 ### Task 5: Bring the spec onto main + full-suite gate
 
 **Files:**
+
 - Create: `docs/superpowers/specs/2026-06-30-document-upload-knowledge-prefill-design.md` (copy from the parked `feat/document-upload-knowledge` branch so the design lands on main with the feature)
 
 - [ ] **Step 1: Copy the spec**
@@ -753,6 +770,7 @@ npx vitest run shared/markerQuestions.test.ts src/knowledge-import-document.test
 cd dashboard && npx vitest run components/SetupWizard/Step7WebsiteScan.test.tsx && npx tsc --noEmit && cd ..
 npx tsc --noEmit
 ```
+
 Expected: all PASS, both typechecks exit 0.
 
 - [ ] **Step 3: Commit**
@@ -767,6 +785,7 @@ git commit -m "docs(knowledge): land document-upload spec on main with the featu
 ## Self-Review
 
 **Spec coverage:**
+
 - §2 marker format → Task 1 (parser) + tests. ✓
 - §3 components: `shared/markerQuestions.ts` (T1), `POST /knowledge/import-document` (T2), reuse `extractFileContent`/`extractAnswersWithLLM`/`resolveQuestions`/`scanRateLimiter` (T2), `Api.knowledge.importDocument` (T3), upload control in `Step7WebsiteScan.tsx` (T4). ✓
 - §4 data flow: rate-limit → extract → parse → AI-over-prose → stage to `knowledge_suggestion` → return counts. ✓ (T2)

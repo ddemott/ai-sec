@@ -9,7 +9,9 @@ describe('parseMarkerQuestions', () => {
   });
 
   it('joins a multi-line question up to the **A: line', () => {
-    const r = parseMarkerQuestions('**Q: What is your\ncancellation policy?\n**A: 24 hours notice.');
+    const r = parseMarkerQuestions(
+      '**Q: What is your\ncancellation policy?\n**A: 24 hours notice.'
+    );
     expect(r.custom[0].question).toBe('What is your cancellation policy?');
     expect(r.custom[0].answer).toBe('24 hours notice.');
   });
