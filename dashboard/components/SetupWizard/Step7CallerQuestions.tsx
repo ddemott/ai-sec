@@ -109,7 +109,10 @@ export function Step7CallerQuestions({ tenantId, showWebsiteImport = true }: Pro
   const handleDocumentUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file || !tenantId) return;
+      if (!file || !tenantId) {
+        e.target.value = ''; // clear so re-selecting the same file fires change again
+        return;
+      }
       setImporting(true);
       setImportMessage(null);
       try {
@@ -133,14 +136,14 @@ export function Step7CallerQuestions({ tenantId, showWebsiteImport = true }: Pro
                 ? ' The custom ones are saved for review in the Phone Assistant tab.'
                 : '') +
               (malformedCount
-                ? ` ${malformedCount} looked like a question but had no **A: answer — fix and re-upload.`
+                ? ` ${malformedCount} ${malformedCount === 1 ? 'entry' : 'entries'} looked like a question but had no **A: answer — fix and re-upload.`
                 : '')
           );
         } else {
-          setImportMessage(res?.error || 'Could not read that file — try a PDF or a .txt.');
+          setImportMessage(res?.error || 'Could not read that file — try a PDF, .txt, or .md.');
         }
       } catch {
-        setImportMessage('Could not read that file — try a PDF or a .txt.');
+        setImportMessage('Could not read that file — try a PDF, .txt, or .md.');
       } finally {
         setImporting(false);
         e.target.value = ''; // allow re-uploading the same filename
@@ -196,12 +199,15 @@ export function Step7CallerQuestions({ tenantId, showWebsiteImport = true }: Pro
           </div>
 
           <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--border-soft)' }}>
-            <div className="text-sm font-medium mb-1">…or upload a document (PDF, .txt, .md)</div>
+            <label htmlFor="kb-solo-doc-upload" className="text-sm font-medium mb-1 block">
+              …or upload a document (PDF, .txt, .md)
+            </label>
             <input
+              id="kb-solo-doc-upload"
               data-testid="kb-document-upload"
               type="file"
               accept=".pdf,.txt,.md"
-              disabled={importing}
+              disabled={importing || !tenantId}
               onChange={handleDocumentUpload}
               className="block text-sm"
             />
