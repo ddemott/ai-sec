@@ -12,7 +12,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
-import FormData from 'form-data';
 import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from './test-utils';
 import { registerJwtAuthHook, tenantMiddleware, generateToken } from './middleware';
@@ -81,15 +80,32 @@ beforeEach(async () => {
   await setup.query('DELETE FROM knowledge_suggestion WHERE tenant_id = $1', [tenantId]);
 });
 
-async function upload(body: string, filename = 'faq.md') {
-  const form = new FormData();
-  form.append('tenant_id', tenantId);
-  form.append('file', Buffer.from(body), { filename, contentType: 'text/markdown' });
+// Build a multipart/form-data body by hand — no `form-data` package dependency
+// (it's only a transitive dep and doesn't resolve under a clean CI install).
+function buildMultipart(fileBody: string, filename: string): { body: Buffer; contentType: string } {
+  const boundary = '----vitestFormBoundaryDocImport';
+  const parts =
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="tenant_id"\r\n\r\n` +
+    `${tenantId}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n` +
+    `Content-Type: text/markdown\r\n\r\n` +
+    `${fileBody}\r\n` +
+    `--${boundary}--\r\n`;
+  return {
+    body: Buffer.from(parts, 'utf8'),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  };
+}
+
+async function upload(fileBody: string, filename = 'faq.md') {
+  const { body, contentType } = buildMultipart(fileBody, filename);
   return app.inject({
     method: 'POST',
     url: '/knowledge/import-document',
-    headers: { ...form.getHeaders(), authorization: `Bearer ${ownerToken}` },
-    payload: form,
+    headers: { 'content-type': contentType, authorization: `Bearer ${ownerToken}` },
+    payload: body,
   });
 }
 
