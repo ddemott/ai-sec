@@ -613,6 +613,32 @@ describe('VoiceCallsView', () => {
       await waitFor(() =>
         expect(mockToast).toHaveBeenCalledWith(expect.stringContaining('3'), 'success')
       );
+      // The confirm dialog must dismiss after confirming (regression 2026-07-01:
+      // it lingered because the handler never closed it).
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Delete old calls' })).not.toBeInTheDocument()
+      );
+    });
+
+    test('HAPPY: confirming a single-call delete dismisses the confirm dialog', async () => {
+      // WHO: an owner deleting one call. WHAT: confirming calls deleteCall and
+      // closes the dialog. WHERE: handleDeleteCall + ConfirmModal. WHY: the
+      // dialog lingered after clicking Delete (reported 2026-07-01).
+      const callWithId = { ...mockCall, voice_session_id: 'vs-del', id: 'vs-del' };
+      mockCallHistory.mockResolvedValue({ calls: [callWithId], total: 1, has_more: false });
+
+      render(<VoiceCallsView />);
+      await waitFor(() => expect(screen.getAllByText('John Smith').length).toBeGreaterThan(0));
+
+      // Open the detail pane's delete → confirm dialog.
+      fireEvent.click(screen.getByRole('button', { name: 'Delete this call' }));
+      const confirmBtn = await screen.findByRole('button', { name: 'Delete call' });
+      fireEvent.click(confirmBtn);
+
+      await waitFor(() => expect(mockDeleteCall).toHaveBeenCalledWith('test-tenant-123', 'vs-del'));
+      await waitFor(() =>
+        expect(screen.queryByText('Delete this call?')).not.toBeInTheDocument()
+      );
     });
   });
 });

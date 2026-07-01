@@ -580,6 +580,11 @@ export default function VoiceCallsView() {
       confirmLabel: 'Delete call',
       confirmVariant: 'danger',
       onConfirm: () => {
+        // Dismiss the confirm dialog immediately — the delete is fire-and-forget
+        // (its result surfaces via toast). Without this the dialog lingered after
+        // clicking Delete (reported 2026-07-01). ConfirmModal has no auto-close;
+        // each consumer owns dismissal (matches the setup-wizard delete flows).
+        closeConfirm();
         void (async () => {
           try {
             await Api.voice.deleteCall(tenantId, call.voice_session_id);
@@ -606,6 +611,7 @@ export default function VoiceCallsView() {
       confirmLabel: 'Delete old calls',
       confirmVariant: 'danger',
       onConfirm: () => {
+        closeConfirm(); // dismiss immediately; result surfaces via toast (see handleDeleteCall)
         void (async () => {
           try {
             const res = await Api.voice.deleteOldCalls(tenantId, deleteWindowDays);
