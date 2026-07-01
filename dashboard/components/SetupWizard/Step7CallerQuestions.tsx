@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { Api } from '../../lib/api';
 import { POLICY_QUESTIONS } from '../../lib/policyQuestions';
 import { Button } from '../ui/Button';
+import { downloadExampleSheet } from './exampleSheet';
 
 export const STARTER_IDS = [
   'hours-of-operation',
@@ -105,6 +106,52 @@ export function Step7CallerQuestions({ tenantId, showWebsiteImport = true }: Pro
     }
   }, [importUrl, tenantId]);
 
+  const handleDocumentUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !tenantId) {
+        e.target.value = ''; // clear so re-selecting the same file fires change again
+        return;
+      }
+      setImporting(true);
+      setImportMessage(null);
+      try {
+        const res = await Api.knowledge.importDocument(tenantId, file);
+        if (res?.success) {
+          const newAnswers: Record<string, string> = {};
+          let filled = 0;
+          for (const item of res.standard_answers || []) {
+            if (item.questionId && item.answer) {
+              newAnswers[item.questionId] = item.answer;
+              filled++;
+            }
+          }
+          setAnswers((prev) => ({ ...prev, ...newAnswers }));
+          const customCount = res.custom_questions?.length || 0;
+          const malformedCount = res.malformed?.length || 0;
+          setImportMessage(
+            `Imported ${filled} answer${filled === 1 ? '' : 's'} and ${customCount} custom ` +
+              `question${customCount === 1 ? '' : 's'} from your document.` +
+              (customCount
+                ? ' The custom ones are saved for review in the Phone Assistant tab.'
+                : '') +
+              (malformedCount
+                ? ` ${malformedCount} ${malformedCount === 1 ? 'entry' : 'entries'} looked like a question but had no **A: answer — fix and re-upload.`
+                : '')
+          );
+        } else {
+          setImportMessage(res?.error || 'Could not read that file — try a PDF, .txt, or .md.');
+        }
+      } catch {
+        setImportMessage('Could not read that file — try a PDF, .txt, or .md.');
+      } finally {
+        setImporting(false);
+        e.target.value = ''; // allow re-uploading the same filename
+      }
+    },
+    [tenantId]
+  );
+
   const answeredCount = Object.values(answers).filter((v) => v.trim()).length;
 
   return (
@@ -150,6 +197,36 @@ export function Step7CallerQuestions({ tenantId, showWebsiteImport = true }: Pro
               Scan & prefill
             </Button>
           </div>
+
+          <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--border-soft)' }}>
+            <label htmlFor="kb-solo-doc-upload" className="text-sm font-medium mb-1 block">
+              …or upload a document (PDF, .txt, .md)
+            </label>
+            <input
+              id="kb-solo-doc-upload"
+              data-testid="kb-document-upload"
+              type="file"
+              accept=".pdf,.txt,.md"
+              disabled={importing || !tenantId}
+              onChange={handleDocumentUpload}
+              className="block text-sm"
+            />
+            <p className="text-[10px] text-muted mt-1">
+              We&apos;ll pull answers from the text; lines you mark <code>**Q:</code> /{' '}
+              <code>**A:</code> become your own custom questions.{' '}
+              <button
+                type="button"
+                data-testid="kb-download-example"
+                onClick={downloadExampleSheet}
+                className="underline hover:no-underline"
+                style={{ color: 'var(--accent-soft)' }}
+              >
+                Download an example sheet
+              </button>
+              .
+            </p>
+          </div>
+
           {importMessage && (
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
               {importMessage}
