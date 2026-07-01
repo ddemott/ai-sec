@@ -250,6 +250,41 @@ describe('AIConfigView — Customer Preferences', () => {
     expect(payload.forwarded_from_phone).toBe('+16082175303');
   });
 
+  test('HAPPY: editing the buffer field sends default_buffer_minutes to updateConfig', async () => {
+    // WHO: an owner who wants the AI to leave a 15-minute gap between bookings.
+    // WHAT: the number entered in the Buffer Between Appointments field reaches
+    //        Api.tenants.updateConfig as default_buffer_minutes.
+    // WHEN: clicking Save Changes after setting the buffer.
+    // WHERE: AIConfigView buffer section + handleSave.
+    // WHY: if it isn't in the payload the field is cosmetic — the AI would keep
+    //      booking back-to-back no matter what the owner set.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG, default_buffer_minutes: 0 });
+    render(<AIConfigView />);
+
+    const buffer = await screen.findByTestId('default-buffer-minutes');
+    fireEvent.change(buffer, { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.default_buffer_minutes).toBe(15);
+  });
+
+  test('SAD: an out-of-range buffer is clamped to the 0–120 max before saving', async () => {
+    // WHO: an owner who fat-fingers 999 into the buffer box.
+    // WHAT: the field clamps to 120 (the same ceiling the backend Zod schema
+    //        enforces) so a typo can't be submitted and rejected.
+    // WHERE: AIConfigView buffer onChange clamp.
+    // WHY: clamping in the UI gives immediate, visible feedback instead of a
+    //      400 on save; it also keeps the value the backend will accept.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG, default_buffer_minutes: 0 });
+    render(<AIConfigView />);
+
+    const buffer = await screen.findByTestId<HTMLInputElement>('default-buffer-minutes');
+    fireEvent.change(buffer, { target: { value: '999' } });
+    expect(buffer.value).toBe('120');
+  });
+
   test('HAPPY: the textarea placeholder example matches the tenant industry', async () => {
     // WHO: a brand-new owner who hasn't written guidance yet.
     // WHAT: the empty-box example is industry-specific (salon talks stylists,
