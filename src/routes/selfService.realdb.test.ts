@@ -10,9 +10,14 @@
  * scopes the write to exactly one appointment/tenant. This suite drives the
  * real routes → real Postgres with REAL signed tokens.
  *
- * Strategy: real pg.Pool on API_DB_URL + `generateSelfServiceToken` (same
- * JWT_SECRET the verifier reads). No preHandler — the routes are registered
- * without tenantMiddleware in prod. Fixtures per-suite, cleaned in afterAll.
+ * Strategy: real pg.Pool on API_DB_URL + `generateSelfServiceToken` to mint
+ * REAL tokens. Note: `selfServiceToken.ts` snapshots JWT_SECRET at module
+ * load, so we DON'T try to override it at runtime — the signer and verifier
+ * both use that same module-load secret (whatever the process env was at
+ * import, falling back to the dev secret when unset), which is all this test
+ * needs since generate + verify run in the same process. No preHandler — the
+ * routes are registered without tenantMiddleware in prod. Fixtures per-suite,
+ * cleaned in afterAll.
  *
  * 5W for sad-path failures:
  *   WHO  — a customer tapping a cancel/reschedule link from an SMS
@@ -39,8 +44,6 @@ import { createWithTenantClient } from '../database';
 import { registerSelfServiceRoutes } from './selfService';
 import { generateSelfServiceToken } from '../services/selfServiceToken';
 
-const JWT_SECRET = 'realdb-selfservice-secret-32-chars-min';
-
 let setup: Client;
 let pool: Pool;
 let app: FastifyInstance;
@@ -48,7 +51,6 @@ let dbAvailable = false;
 let tenantId: string;
 let resourceId: string;
 let customerId: string;
-let prevJwtSecret: string | undefined;
 const tenantsToClean: string[] = [];
 
 function hoursFromNow(h: number): string {
@@ -71,10 +73,6 @@ beforeAll(async () => {
     setup = await getRootClient();
     await setup.query('SELECT 1');
     pool = new Pool({ connectionString: API_DB_URL, max: 5 });
-    // The token signer + verifier both read process.env.JWT_SECRET at call
-    // time; set a known one and restore it after (don't clobber a sibling's).
-    prevJwtSecret = process.env.JWT_SECRET;
-    process.env.JWT_SECRET = JWT_SECRET;
 
     app = Fastify({ logger: false });
     const withTenantClient = createWithTenantClient(pool);
@@ -105,8 +103,6 @@ afterAll(async () => {
     }
     await setup.end();
   }
-  if (prevJwtSecret === undefined) delete process.env.JWT_SECRET;
-  else process.env.JWT_SECRET = prevJwtSecret;
 });
 
 beforeEach((ctx) => {

@@ -64,7 +64,8 @@ guards hold); the value is regression protection on a cross-caller-tampering
 surface. Writing it caught only a test-fixture error (customers must be seeded
 in E.164 — the handler matches on `normalizePhone(input)`).
 
-**Batch of 5 MED companions — added 2026-07-02:**
+**Batch of 5 MED surfaces (4 companion files) — added 2026-07-02** (take-message
+and capture-job-inquiry share `agentToolsMessages.realdb.test.ts`):
 
 - `src/routes/exportData.realdb.test.ts` — the strongest of the batch:
   `GET /export/tenant-data` runs `SELECT * FROM ${table}` over a **24-table
