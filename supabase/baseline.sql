@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict xtqmIJr6e8PbvvJEf2jpjrHcfg9CjuPNqc455S7rz0D311JvC0kVBW0aktJar3v
+\restrict 7UKhDlUl6tl3yYzxWVa2420R4iDoOGDeTlfQ6aNLwNJ2SWIN4MkAu3NMLS0cgmK
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -940,7 +940,9 @@ BEGIN
   LIMIT 1;
 
   IF v_pk_col IS NULL THEN
-    RAISE EXCEPTION 'Source record not found';
+    -- See restore_fields_from_version: PK lookup failure = schema drift,
+    -- not a missing source record.
+    RAISE EXCEPTION 'No primary key found for table % — schema/whitelist drift', p_table_name;
   END IF;
 
   SELECT EXISTS (
@@ -1675,7 +1677,10 @@ BEGIN
   LIMIT 1;
 
   IF v_pk_col IS NULL THEN
-    RAISE EXCEPTION 'Record not found';
+    -- Distinct from the record-not-found case below: NULL here means the PK
+    -- LOOKUP failed (table missing from public, or no PK) — schema/whitelist
+    -- drift, not a bad record id. Name it precisely for alert triage.
+    RAISE EXCEPTION 'No primary key found for table % — schema/whitelist drift', p_table_name;
   END IF;
 
   -- Not every versioned table has updated_at (resources doesn't).
@@ -5536,5 +5541,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict xtqmIJr6e8PbvvJEf2jpjrHcfg9CjuPNqc455S7rz0D311JvC0kVBW0aktJar3v
+\unrestrict 7UKhDlUl6tl3yYzxWVa2420R4iDoOGDeTlfQ6aNLwNJ2SWIN4MkAu3NMLS0cgmK
 

@@ -90,7 +90,10 @@ BEGIN
   LIMIT 1;
 
   IF v_pk_col IS NULL THEN
-    RAISE EXCEPTION 'Record not found';
+    -- Distinct from the record-not-found case below: NULL here means the PK
+    -- LOOKUP failed (table missing from public, or no PK) — schema/whitelist
+    -- drift, not a bad record id. Name it precisely for alert triage.
+    RAISE EXCEPTION 'No primary key found for table % — schema/whitelist drift', p_table_name;
   END IF;
 
   -- Not every versioned table has updated_at (resources doesn't).
@@ -227,7 +230,9 @@ BEGIN
   LIMIT 1;
 
   IF v_pk_col IS NULL THEN
-    RAISE EXCEPTION 'Source record not found';
+    -- See restore_fields_from_version: PK lookup failure = schema drift,
+    -- not a missing source record.
+    RAISE EXCEPTION 'No primary key found for table % — schema/whitelist drift', p_table_name;
   END IF;
 
   SELECT EXISTS (

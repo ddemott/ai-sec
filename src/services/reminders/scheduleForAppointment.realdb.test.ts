@@ -238,6 +238,29 @@ describe('scheduleRemindersForAppointment → real multi-row INSERT into reminde
     expect(rows.every((r) => r.status === 'scheduled')).toBe(true);
   });
 
+  it('IDEMPOTENT under CONCURRENCY: parallel seeds still produce exactly one bundle (advisory lock)', async () => {
+    // WHO: two overlapping fire-and-forget seeds for the same booking (retry
+    //      wrapper racing the original, or a double tool-call).
+    // WHAT: 4 scheduleRemindersForAppointment calls launched in PARALLEL on
+    //       separate pool connections.
+    // WHY: the probe alone is check-then-insert (TOCTOU) — both racers could
+    //      see zero rows and both insert (Copilot review, PR #156). The
+    //      per-appointment pg_advisory_xact_lock serializes them; the loser
+    //      probes AFTER the winner's COMMIT and skips. 8 rows here = the
+    //      lock regressed or the guard moved outside the transaction.
+    const appointmentId = await makeAppointment(fullCustomerId, futureStart(11));
+
+    await Promise.all(
+      Array.from({ length: 4 }, () =>
+        scheduleRemindersForAppointment(withTenantClient, tenantId, appointmentId)
+      )
+    );
+
+    const rows = await reminderRows(appointmentId);
+    expect(rows).toHaveLength(4);
+    expect(rows.every((r) => r.status === 'scheduled')).toBe(true);
+  });
+
   it('SAD: nonexistent appointment id → zero rows, resolves without throwing', async () => {
     // WHO: the booking route racing an immediate cancellation (appointment
     //      row vanished between RPC and reminder seed).
