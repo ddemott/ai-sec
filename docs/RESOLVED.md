@@ -16,7 +16,7 @@ Writing the companions surfaced 5 real bugs, all fixed same-day on the branch:
 
 1. `/agent-tools/find-customer-by-name` ILIKE wildcard over-disclosure (`%` in a transcribed name dumped up to 5 address-book entries) → LIKE metacharacters escaped.
 2. `GET /voice/history` unvalidated `limit`/`offset`/`customer_id` → pg NaN/22P02 500s → digits-only + `requireValidUUID` validation, clean 400s.
-3. `scheduleForAppointment` double-seed (retry ⇒ duplicate reminder bundle ⇒ double-reminded customers) → idempotency probe; reschedule (cancel-then-seed) unaffected.
+3. `scheduleForAppointment` double-seed (retry ⇒ duplicate reminder bundle ⇒ double-reminded customers) → DB-level idempotency: partial unique index (migration `20260701020000`, one `scheduled` row per appointment+type) + `ON CONFLICT DO NOTHING`; race-safe under concurrency, no cross-statement locks (an advisory-lock transaction attempt deadlocked the appointments cascade in E2E); reschedule (cancel-then-seed) unaffected.
 4. Version-history rot from the 2026-05 PK renames: `restore_fields_from_version()` + `copy_fields_between_records()` queried bare `id` → 42703 on EVERY table (field-restore/copy dead in prod); deleted-records list hardcoded `t.name, t.phone` → 500 on 4/6 tables. → migration `20260701010000_fix_version_rpc_pk_names.sql` (PK-aware via information_schema, same pattern as `soft_delete_record`) + per-table display columns in the route.
 5. Restore stringified jsonb into text columns (only reachable once #4 was fixed — restored name came back literally `"Versioned Vera"` with quotes) → `jsonb_populate_record` decode in the same migration.
 

@@ -56,77 +56,54 @@ export async function scheduleRemindersForAppointment(
         return;
       }
 
-      // Idempotency guard: skip if a scheduled bundle already exists for this
-      // appointment. Prod calls this fire-and-forget once per booking, but any
-      // retry wrapper (or a double tool-call from the agent) would otherwise
-      // seed a duplicate bundle and double-remind the customer (found
-      // 2026-07-01 by the real-DB companion test). Reschedules still work:
-      // rescheduleRemindersForAppointment cancels the old bundle first, so
-      // this probe sees no 'scheduled' rows and the fresh seed proceeds.
+      // Build one multi-row INSERT for the 4 reminder rows. Sequential
+      // single-row INSERTs each acquire `audit_log` row locks one at
+      // a time, creating a window where the test's cleanup cascade
+      // (DELETE FROM tenants → cascade to reminder_schedules → audit
+      // trigger) deadlocks against this in-flight bundle. Single
+      // INSERT acquires the locks once and releases them once.
+      // Origin: 2026-05-18 — same shape as the expand-weekly fix in
+      // src/services/expandWeeklyToSchedule.ts.
       //
-      // The probe alone is check-then-insert and race-prone under CONCURRENT
-      // calls (both see zero rows, both insert — Copilot review on PR #156).
-      // Serialize per appointment with an explicit transaction + advisory
-      // xact lock (withTenantClient does NOT open one; its tenant GUC is
-      // session-level, so BEGIN/COMMIT here doesn't disturb RLS context).
-      // The lock holds until COMMIT: a concurrent second caller blocks on it,
-      // then its probe sees the first caller's committed rows and skips.
-      await client.query('BEGIN');
-      try {
-        await client.query(
-          `SELECT pg_advisory_xact_lock(hashtextextended('reminder-seed:' || $1, 0))`,
-          [appointmentId]
+      // Idempotency lives in the DATABASE, not app logic: the partial unique
+      // index reminder_schedules_one_scheduled_per_type (migration
+      // 20260701020000) allows at most one 'scheduled' row per
+      // (appointment_id, reminder_type); ON CONFLICT DO NOTHING makes a
+      // duplicate seed (retry wrapper, double tool-call — even concurrent)
+      // a silent no-op instead of a double-remind. Kept as a single
+      // statement on purpose: an app-level probe was check-then-insert
+      // (race-prone), and a transaction + advisory lock deadlocked against
+      // the appointments cascade in E2E — same hazard as above.
+      // Reschedules still reseed: rescheduleRemindersForAppointment cancels
+      // the old bundle first, which vacates the partial index.
+      const valuesSql: string[] = [];
+      const params: (string | null)[] = [];
+      REMINDER_BUNDLE.forEach((r, i) => {
+        const scheduledFor =
+          r.type === 'confirmation'
+            ? now
+            : new Date(appointmentDateTime.getTime() - r.hoursBefore * 60 * 60 * 1000);
+        const base = i * 6;
+        valuesSql.push(
+          `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, 'scheduled')`
         );
-        const existing = await client.query(
-          `SELECT 1 FROM reminder_schedules
-            WHERE appointment_id = $1 AND tenant_id = $2 AND status = 'scheduled'
-            LIMIT 1`,
-          [appointmentId, tenantId]
+        params.push(
+          appointmentId,
+          tenantId,
+          row.customer_email,
+          row.customer_phone,
+          r.type,
+          scheduledFor.toISOString()
         );
-        if (existing.rows.length > 0) {
-          await client.query('COMMIT');
-          return;
-        }
-
-        // Build one multi-row INSERT for the 4 reminder rows. Sequential
-        // single-row INSERTs each acquire `audit_log` row locks one at
-        // a time, creating a window where the test's cleanup cascade
-        // (DELETE FROM tenants → cascade to reminder_schedules → audit
-        // trigger) deadlocks against this in-flight bundle. Single
-        // INSERT acquires the locks once and releases them once.
-        // Origin: 2026-05-18 — same shape as the expand-weekly fix in
-        // src/services/expandWeeklyToSchedule.ts.
-        const valuesSql: string[] = [];
-        const params: (string | null)[] = [];
-        REMINDER_BUNDLE.forEach((r, i) => {
-          const scheduledFor =
-            r.type === 'confirmation'
-              ? now
-              : new Date(appointmentDateTime.getTime() - r.hoursBefore * 60 * 60 * 1000);
-          const base = i * 6;
-          valuesSql.push(
-            `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, 'scheduled')`
-          );
-          params.push(
-            appointmentId,
-            tenantId,
-            row.customer_email,
-            row.customer_phone,
-            r.type,
-            scheduledFor.toISOString()
-          );
-        });
-        await client.query(
-          `INSERT INTO reminder_schedules
-             (appointment_id, tenant_id, customer_email, customer_phone, reminder_type, scheduled_for, status)
-           VALUES ${valuesSql.join(', ')}`,
-          params
-        );
-        await client.query('COMMIT');
-      } catch (txErr) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw txErr;
-      }
+      });
+      await client.query(
+        `INSERT INTO reminder_schedules
+           (appointment_id, tenant_id, customer_email, customer_phone, reminder_type, scheduled_for, status)
+         VALUES ${valuesSql.join(', ')}
+         ON CONFLICT (appointment_id, reminder_type) WHERE status = 'scheduled'
+         DO NOTHING`,
+        params
+      );
     });
   } catch (err) {
     logger?.error(

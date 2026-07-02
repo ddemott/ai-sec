@@ -64,8 +64,11 @@ the HIGH class. Promote any of them to HIGH the moment dynamic SQL is introduced
    clean 400s; regression tests added.
 3. **`scheduleForAppointment` had no idempotency guard** — calling it twice seeded a
    duplicate 4-row reminder bundle (retry wrapper ⇒ double-reminded customers).
-   **Fixed**: seed now skips when a `scheduled` bundle exists; reschedule (cancel-then-
-   seed) unaffected.
+   **Fixed at the DB layer**: partial unique index (migration `20260701020000`; one
+   `scheduled` row per appointment+type) + `ON CONFLICT DO NOTHING` — race-safe under
+   concurrency with no cross-statement locks (an app-level probe was TOCTOU-racy, and
+   an advisory-lock transaction deadlocked the appointments cascade in E2E). Reschedule
+   (cancel-then-seed) unaffected.
 4. **Version-history rot after the 2026-05 PK renames** (the audit's biggest catch) —
    `restore_fields_from_version()` and `copy_fields_between_records()` still queried
    bare `id` (`column "id" does not exist`) so field-restore/copy-fields 500'd in prod

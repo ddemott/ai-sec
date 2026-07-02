@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 7UKhDlUl6tl3yYzxWVa2420R4iDoOGDeTlfQ6aNLwNJ2SWIN4MkAu3NMLS0cgmK
+\restrict 3rj4fJbSc5uUNDY8TwV84iEVafcDLxhQadQigT2ttrEa1F7b5khxA7WutB2Pyle
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -4372,6 +4372,13 @@ CREATE INDEX knowledge_suggestion_tenant_idx ON public.knowledge_suggestion USIN
 
 
 --
+-- Name: reminder_schedules_one_scheduled_per_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX reminder_schedules_one_scheduled_per_type ON public.reminder_schedules USING btree (appointment_id, reminder_type) WHERE ((status)::text = 'scheduled'::text);
+
+
+--
 -- Name: tenant_docs_embedding_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5541,5 +5548,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 7UKhDlUl6tl3yYzxWVa2420R4iDoOGDeTlfQ6aNLwNJ2SWIN4MkAu3NMLS0cgmK
+\unrestrict 3rj4fJbSc5uUNDY8TwV84iEVafcDLxhQadQigT2ttrEa1F7b5khxA7WutB2Pyle
 

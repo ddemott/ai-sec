@@ -223,11 +223,12 @@ describe('scheduleRemindersForAppointment → real multi-row INSERT into reminde
     // WHO: any caller that invokes the fire-and-forget seed twice (e.g. a
     //      retried booking handler, or a double tool-call from the agent).
     // WHAT: two sequential scheduleRemindersForAppointment calls.
-    // WHY: fixed 2026-07-01 — the write path now probes for an existing
-    //      'scheduled' bundle and skips, so a retry can never double-remind
-    //      the customer. (Before the fix this seeded 8 rows.) Reschedule
-    //      still reseeds because rescheduleRemindersForAppointment cancels
-    //      the old bundle first — covered by the reschedule test below.
+    // WHY: fixed 2026-07-01 — idempotency is enforced by the partial unique
+    //      index reminder_schedules_one_scheduled_per_type (migration
+    //      20260701020000) + ON CONFLICT DO NOTHING, so a retry can never
+    //      double-remind the customer. (Before the fix this seeded 8 rows.)
+    //      Reschedule still reseeds because rescheduleRemindersForAppointment
+    //      cancels the old bundle first — covered by the reschedule test.
     const appointmentId = await makeAppointment(fullCustomerId, futureStart(8));
 
     await scheduleRemindersForAppointment(withTenantClient, tenantId, appointmentId);
@@ -238,16 +239,19 @@ describe('scheduleRemindersForAppointment → real multi-row INSERT into reminde
     expect(rows.every((r) => r.status === 'scheduled')).toBe(true);
   });
 
-  it('IDEMPOTENT under CONCURRENCY: parallel seeds still produce exactly one bundle (advisory lock)', async () => {
+  it('IDEMPOTENT under CONCURRENCY: parallel seeds still produce exactly one bundle (unique index arbiter)', async () => {
     // WHO: two overlapping fire-and-forget seeds for the same booking (retry
     //      wrapper racing the original, or a double tool-call).
     // WHAT: 4 scheduleRemindersForAppointment calls launched in PARALLEL on
     //       separate pool connections.
-    // WHY: the probe alone is check-then-insert (TOCTOU) — both racers could
-    //      see zero rows and both insert (Copilot review, PR #156). The
-    //      per-appointment pg_advisory_xact_lock serializes them; the loser
-    //      probes AFTER the winner's COMMIT and skips. 8 rows here = the
-    //      lock regressed or the guard moved outside the transaction.
+    // WHY: an app-level probe is check-then-insert (TOCTOU) — racers could
+    //      both see zero rows and both insert (Copilot review, PR #156).
+    //      Idempotency therefore lives in the DB: the partial unique index
+    //      (one 'scheduled' row per appointment+type) + ON CONFLICT DO
+    //      NOTHING resolves the race in the arbiter, with no cross-statement
+    //      locks (an advisory-lock transaction deadlocked the appointments
+    //      cascade in E2E). 8 rows here = the index or conflict clause
+    //      regressed.
     const appointmentId = await makeAppointment(fullCustomerId, futureStart(11));
 
     await Promise.all(
