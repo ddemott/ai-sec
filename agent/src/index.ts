@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { config, untrustedCallerIdTenants } from './config.js';
 import { runFallback } from './fallback.js';
 import { getLogger } from './logger.js';
+import { summarizeToolCalls } from './redactToolArgs.js';
 import { buildSessionContext, callerIdIsForwardNumber } from './sessionContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
@@ -736,8 +737,15 @@ export default defineAgent({
         });
         session.on(voice.AgentSessionEventTypes.FunctionToolsExecuted, (ev) => {
           const tools = (ev.functionCalls ?? []).map((c) => c?.name ?? '(unknown)');
+          // Log ARGS too (PII-redacted), not just names — a 2026-07-01 live
+          // incident was undiagnosable because nothing showed what time
+          // string the LLM sent. is_error pairs each call with its output.
+          const toolCalls = summarizeToolCalls(
+            ev.functionCalls ?? [],
+            ev.functionCallOutputs ?? []
+          );
           callLog.info(
-            { event: 'function_tools_executed', tools },
+            { event: 'function_tools_executed', tools, tool_calls: toolCalls },
             `tools executed: ${tools.join(', ')}`
           );
         });
