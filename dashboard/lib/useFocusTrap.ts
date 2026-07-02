@@ -12,8 +12,8 @@ const FOCUSABLE =
  * - Traps Tab / Shift+Tab within the container.
  * - Calls onEscape when Escape is pressed.
  * - Optionally locks body scroll (for centered overlay dialogs).
- * - Optionally dismisses on an outside pointer press (`onOutsideDismiss`) —
- *   for popover/card overlays that close when you click away. The listener is
+ * - Optionally dismisses on an outside `mousedown` (`onOutsideDismiss`) — for
+ *   popover/card overlays that close when you click away. The listener is
  *   attached on the NEXT tick so the same click that opened the overlay can't
  *   immediately close it. Modal/panel callers that omit it are unaffected.
  */
@@ -89,7 +89,7 @@ export function useFocusTrap(
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      if (outsideTimer) clearTimeout(outsideTimer);
+      if (outsideTimer !== undefined) clearTimeout(outsideTimer);
       document.removeEventListener('mousedown', handleOutside);
       if (lock) document.body.style.overflow = 'unset';
       const prev = prevFocusRef.current;
