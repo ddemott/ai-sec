@@ -331,15 +331,15 @@ nav {
 .feat-card:hover::before { opacity: 1; }
 .feat-card.wide { grid-column: 1 / -1; }
 /* Capability grid — expandable "everything it does" tiles (2026-07) */
-.cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 36px; align-items: start; }
-.cap-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; width: 100%; padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg4); color: var(--text); cursor: pointer; font: inherit; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 36px; align-items: stretch; }
+.cap-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; width: 100%; min-height: 224px; padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg4); color: var(--text); cursor: pointer; font: inherit; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
 .cap-tile:hover { border-color: rgba(37,99,235,0.4); transform: translateY(-2px); }
 .cap-tile:focus-visible { outline: 2px solid var(--blue-lt); outline-offset: 2px; }
 .cap-tile[aria-expanded="true"] { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 8px 24px var(--blue-glow); }
 .cap-ic { font-size: 26px; line-height: 1; }
 .cap-title { font-size: 17px; font-weight: 700; color: var(--text); }
 .cap-hook { font-size: 14px; font-weight: 300; color: var(--text-muted); line-height: 1.55; }
-.cap-more { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--blue-lt); display: inline-flex; align-items: center; gap: 6px; }
+.cap-more { margin-top: auto; padding-top: 6px; font-size: 13px; font-weight: 600; color: var(--blue-lt); display: inline-flex; align-items: center; gap: 6px; }
 .cap-caret { display: inline-block; transition: transform .2s ease; }
 .cap-tile[aria-expanded="true"] .cap-caret { transform: rotate(180deg); }
 .cap-badge { align-self: flex-start; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: var(--blue-dim); color: var(--blue-lt); }
@@ -1286,6 +1286,17 @@ export default function LandingPage() {
       tile.setAttribute('aria-expanded', 'true');
       const p = panelFor(tile);
       if (p) {
+        // Open the panel full-width under the WHOLE row: move it right after the
+        // last tile of the clicked tile's visual row. Otherwise a panel opened
+        // from a non-last tile forces its own row mid-way and leaves a hole —
+        // trailing tiles appeared to "disappear to the right". Row is computed
+        // while all panels are hidden (out of flow), so offsetTop is accurate.
+        const rowTop = tile.offsetTop;
+        const rowTiles = tiles.filter((t) => t.offsetTop === rowTop);
+        const lastInRow = rowTiles[rowTiles.length - 1];
+        if (lastInRow && lastInRow.nextSibling !== p) {
+          grid.insertBefore(p, lastInRow.nextSibling);
+        }
         p.hidden = false;
         p.classList.add('open');
         window.setTimeout(() => {
@@ -1303,10 +1314,25 @@ export default function LandingPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeAll(null);
     };
+    // Click anywhere outside the open tile/panel closes it (no need to re-click the tile).
+    const onDocClick = (e: MouseEvent) => {
+      const openTile = tiles.find((t) => t.getAttribute('aria-expanded') === 'true');
+      if (!openTile) return;
+      const p = panelFor(openTile);
+      const target = e.target as Node;
+      if (openTile.contains(target) || (p && p.contains(target))) return;
+      closeAll(null);
+    };
+    // Row membership changes at breakpoints — close on resize to avoid stale placement.
+    const onResize = () => closeAll(null);
     document.addEventListener('keydown', onKey);
+    document.addEventListener('click', onDocClick);
+    window.addEventListener('resize', onResize);
     return () => {
       tiles.forEach((t, i) => t.removeEventListener('click', handlers[i]));
       document.removeEventListener('keydown', onKey);
+      document.removeEventListener('click', onDocClick);
+      window.removeEventListener('resize', onResize);
     };
   }, [checked]);
 
