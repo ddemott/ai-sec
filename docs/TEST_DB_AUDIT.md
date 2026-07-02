@@ -47,9 +47,22 @@ No real-DB companion yet: `reminders.deliveryStats`, `crmSyncStatus`, `crmDiscon
 `exportData`, `selfService`, `users-routes`, `square-routes`/`square-sync`,
 `calendar-sync`, `workers/voiceSessionReaper`. Partial (adjacent real suite exists but
 not the exact statements): `conflictLookup`, `customerLookup`, `tenants/bootstrap`,
-`mappings`, `communications`, `skills`, `agentToolsAiCost/Cancel/TakeMessage`.
+`mappings`, `communications`, `skills`, `agentToolsAiCost/TakeMessage`.
 These are static statements — a wrong column 500s loudly in dev — so they ride behind
 the HIGH class. Promote any of them to HIGH the moment dynamic SQL is introduced.
+
+**Cancel/reschedule agent tools — now covered (2026-07-02):**
+`src/agentToolsCancelReschedule.realdb.test.ts` drives the real
+`cancel-appointment` / `reschedule-appointment` routes → real Postgres. Though
+the statements are static, they hinge on a customers-JOIN phone-ownership
+clause + `status='scheduled'` + `start_time > NOW()` + `is_deleted` filter + the
+GiST `23P01` path — enough conditional surface to warrant a real suite. Asserts
+the security guard (a different caller cannot cancel/move another's appointment),
+past-time rejection, soft-delete invisibility, and the double-book → friendly
+"already booked" error with the original row unchanged. No bug surfaced (the
+guards hold); the value is regression protection on a cross-caller-tampering
+surface. Writing it caught only a test-fixture error (customers must be seeded
+in E.164 — the handler matches on `normalizePhone(input)`).
 
 ## Real bugs surfaced by writing the companions (2026-07-01) — all FIXED same day
 
