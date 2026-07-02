@@ -1023,8 +1023,8 @@ const LANDING_HTML = `
     <h2 class="section-h2 reveal reveal-delay-1">PAY FOR WHAT<br>YOU NEED</h2>
     <p class="section-sub reveal reveal-delay-2">Phone number included on every plan. 14-day free trial. No credit card required. No setup fee. No per-call charges. Ever.</p>
     <div class="price-toggle-wrap reveal">
-      <button class="billing-opt active" id="billing-monthly" onclick="setBilling('monthly')">Monthly</button>
-      <button class="billing-opt" id="billing-annual" onclick="setBilling('annual')">Annual <span class="billing-save">Save 20%</span></button>
+      <button class="billing-opt active" id="billing-monthly">Monthly</button>
+      <button class="billing-opt" id="billing-annual">Annual <span class="billing-save">Save 20%</span></button>
     </div>
     <div class="pricing-grid">
       <div class="price-card reveal">
@@ -1160,77 +1160,11 @@ const LANDING_HTML = `
   <div class="footer-copy">© 2026 Secretary HQ. All rights reserved.</div>
 </footer>
 
-<script>
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
-}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-// Hamburger menu toggle — iPad-ready:
-//   • 44px touch targets on button + links
-//   • Backdrop lets users dismiss by tapping outside (iPad pattern)
-//   • body overflow:hidden prevents scroll-through on iOS Safari
-//   • touch-action:manipulation on button prevents 300ms tap delay
-const hamburgerBtn = document.getElementById('hamburger-btn');
-const mobileMenu = document.getElementById('mobile-menu');
-const mobileBackdrop = document.getElementById('mobile-backdrop');
-
-function openMobileMenu() {
-  if (!hamburgerBtn || !mobileMenu || !mobileBackdrop) return;
-  mobileMenu.classList.add('open');
-  mobileBackdrop.classList.add('open');
-  hamburgerBtn.setAttribute('aria-expanded', 'true');
-  document.body.style.overflow = 'hidden';
-  const spans = hamburgerBtn.querySelectorAll('span');
-  spans[0].style.transform = 'translateY(7px) rotate(45deg)';
-  spans[1].style.opacity = '0';
-  spans[2].style.transform = 'translateY(-7px) rotate(-45deg)';
-}
-function closeMobileMenu() {
-  if (!hamburgerBtn || !mobileMenu || !mobileBackdrop) return;
-  mobileMenu.classList.remove('open');
-  mobileBackdrop.classList.remove('open');
-  hamburgerBtn.setAttribute('aria-expanded', 'false');
-  document.body.style.overflow = '';
-  const spans = hamburgerBtn.querySelectorAll('span');
-  spans[0].style.transform = ''; spans[1].style.opacity = ''; spans[2].style.transform = '';
-}
-
-if (hamburgerBtn) {
-  hamburgerBtn.addEventListener('click', () => {
-    const isOpen = mobileMenu && mobileMenu.classList.contains('open');
-    isOpen ? closeMobileMenu() : openMobileMenu();
-  });
-}
-// Backdrop tap closes menu (iPad: tap-outside-to-dismiss)
-if (mobileBackdrop) {
-  mobileBackdrop.addEventListener('click', closeMobileMenu);
-  mobileBackdrop.addEventListener('touchend', closeMobileMenu, { passive: true });
-}
-// Close on any anchor click so scroll starts then menu disappears cleanly
-document.querySelectorAll('.nav-mobile-menu a').forEach(a => {
-  a.addEventListener('click', closeMobileMenu);
-});
-// Escape key closes menu (keyboard + iPad hardware keyboard)
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeMobileMenu();
-});
-
-// Annual/monthly pricing toggle
-function setBilling(mode) {
-  const isAnnual = mode === 'annual';
-  const monthlyBtn = document.getElementById('billing-monthly');
-  const annualBtn = document.getElementById('billing-annual');
-  if (monthlyBtn) monthlyBtn.classList.toggle('active', !isAnnual);
-  if (annualBtn) annualBtn.classList.toggle('active', isAnnual);
-  document.querySelectorAll('.price-num[data-monthly]').forEach(function(el) {
-    el.textContent = isAnnual ? el.dataset.annual : el.dataset.monthly;
-  });
-  const note = document.getElementById('price-annual-note');
-  if (note) note.style.display = isAnnual ? 'block' : 'none';
-}
-</script>
 `;
+// NOTE: no <script> in LANDING_HTML — markup injected via
+// dangerouslySetInnerHTML never executes scripts. ALL landing interactivity
+// (reveal observer, pricing toggle, hamburger menu, capability grid) is
+// wired from useEffect hooks in LandingPage below.
 
 export default function LandingPage() {
   const router = useRouter();
@@ -1257,6 +1191,85 @@ export default function LandingPage() {
     );
     document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
+  }, [checked]);
+
+  // Annual/monthly pricing toggle. Wired here (not in an injected <script>,
+  // which never executes under dangerouslySetInnerHTML — the toggle was DEAD
+  // in production until moved into this effect).
+  useEffect(() => {
+    if (!checked) return;
+    const monthlyBtn = document.getElementById('billing-monthly');
+    const annualBtn = document.getElementById('billing-annual');
+    if (!monthlyBtn || !annualBtn) return;
+    const setBilling = (mode: 'monthly' | 'annual') => () => {
+      const isAnnual = mode === 'annual';
+      monthlyBtn.classList.toggle('active', !isAnnual);
+      annualBtn.classList.toggle('active', isAnnual);
+      document.querySelectorAll<HTMLElement>('.price-num[data-monthly]').forEach((el) => {
+        el.textContent = (isAnnual ? el.dataset.annual : el.dataset.monthly) ?? el.textContent;
+      });
+      const note = document.getElementById('price-annual-note');
+      if (note) note.style.display = isAnnual ? 'block' : 'none';
+    };
+    const onMonthly = setBilling('monthly');
+    const onAnnual = setBilling('annual');
+    monthlyBtn.addEventListener('click', onMonthly);
+    annualBtn.addEventListener('click', onAnnual);
+    return () => {
+      monthlyBtn.removeEventListener('click', onMonthly);
+      annualBtn.removeEventListener('click', onAnnual);
+    };
+  }, [checked]);
+
+  // Hamburger menu — iPad-ready (44px targets, backdrop tap-to-dismiss,
+  // body scroll lock, Escape). Same never-executes reason as above: the
+  // menu could not open at all while this lived in the inline <script>.
+  useEffect(() => {
+    if (!checked) return;
+    const btn = document.getElementById('hamburger-btn');
+    const menu = document.getElementById('mobile-menu');
+    const backdrop = document.getElementById('mobile-backdrop');
+    if (!btn || !menu || !backdrop) return;
+    const spans = Array.from(btn.querySelectorAll<HTMLElement>('span'));
+    const open = () => {
+      menu.classList.add('open');
+      backdrop.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+      if (spans.length >= 3) {
+        spans[0].style.transform = 'translateY(7px) rotate(45deg)';
+        spans[1].style.opacity = '0';
+        spans[2].style.transform = 'translateY(-7px) rotate(-45deg)';
+      }
+    };
+    const close = () => {
+      menu.classList.remove('open');
+      backdrop.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+      spans.forEach((s) => {
+        s.style.transform = '';
+        s.style.opacity = '';
+      });
+    };
+    const onToggle = () => (menu.classList.contains('open') ? close() : open());
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    const links = Array.from(document.querySelectorAll('.nav-mobile-menu a'));
+    btn.addEventListener('click', onToggle);
+    backdrop.addEventListener('click', close);
+    backdrop.addEventListener('touchend', close, { passive: true });
+    links.forEach((a) => a.addEventListener('click', close));
+    document.addEventListener('keydown', onKey);
+    return () => {
+      btn.removeEventListener('click', onToggle);
+      backdrop.removeEventListener('click', close);
+      backdrop.removeEventListener('touchend', close);
+      links.forEach((a) => a.removeEventListener('click', close));
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
   }, [checked]);
 
   // Capability grid — expand one tile at a time to reveal its full feature list.
