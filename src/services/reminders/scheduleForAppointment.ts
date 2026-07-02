@@ -64,6 +64,18 @@ export async function scheduleRemindersForAppointment(
       // INSERT acquires the locks once and releases them once.
       // Origin: 2026-05-18 — same shape as the expand-weekly fix in
       // src/services/expandWeeklyToSchedule.ts.
+      //
+      // Idempotency lives in the DATABASE, not app logic: the partial unique
+      // index reminder_schedules_one_scheduled_per_type (migration
+      // 20260701020000) allows at most one 'scheduled' row per
+      // (appointment_id, reminder_type); ON CONFLICT DO NOTHING makes a
+      // duplicate seed (retry wrapper, double tool-call — even concurrent)
+      // a silent no-op instead of a double-remind. Kept as a single
+      // statement on purpose: an app-level probe was check-then-insert
+      // (race-prone), and a transaction + advisory lock deadlocked against
+      // the appointments cascade in E2E — same hazard as above.
+      // Reschedules still reseed: rescheduleRemindersForAppointment cancels
+      // the old bundle first, which vacates the partial index.
       const valuesSql: string[] = [];
       const params: (string | null)[] = [];
       REMINDER_BUNDLE.forEach((r, i) => {
@@ -87,7 +99,9 @@ export async function scheduleRemindersForAppointment(
       await client.query(
         `INSERT INTO reminder_schedules
            (appointment_id, tenant_id, customer_email, customer_phone, reminder_type, scheduled_for, status)
-         VALUES ${valuesSql.join(', ')}`,
+         VALUES ${valuesSql.join(', ')}
+         ON CONFLICT (appointment_id, reminder_type) WHERE status = 'scheduled'
+         DO NOTHING`,
         params
       );
     });

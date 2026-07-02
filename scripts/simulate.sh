@@ -29,6 +29,15 @@
 #                                        questions via /agent-tools/policy-answer,
 #                                        grade retrieval, report a hit-rate (exit
 #                                        non-zero below 80%). Real embeddings.
+#   toolselect                            Agent tool-SELECTION eval: replays the
+#                                        real system prompt + real 19 tool
+#                                        schemas through gpt-4o-mini and grades
+#                                        the tool sequence the model picks
+#                                        (e.g. available_slots must lead to
+#                                        book_with_scheduling, NEVER
+#                                        book_appointment). Real OpenAI calls;
+#                                        exit non-zero below 80%. Needs
+#                                        OPENAI_API_KEY (.env).
 #   call   [--env local|prod] --tenant <id>
 #                                        Dispatch the agent into a LiveKit room
 #                                        and print a browser join URL so you can
@@ -325,6 +334,19 @@ cmd_rag() {
     node "$ROOT_DIR/scripts/sim-rag.mjs"
 }
 
+# ── toolselect ──────────────────────────────────────────────────────────────
+cmd_toolselect() {
+  # LLM tool-selection eval (docs/TODO_BLINDSPOT.md P0). Pure OpenAI replay of
+  # the agent's prompt + tool schemas — no backend, no LiveKit, no DB. Needs
+  # OPENAI_API_KEY; read from the environment first, then the repo .env.
+  local key="${OPENAI_API_KEY:-$(env_get OPENAI_API_KEY)}"
+  if [ -z "$key" ]; then
+    echo "  ${RED}OPENAI_API_KEY not found (.env) and not set in the environment${RESET}" >&2
+    exit 2
+  fi
+  (cd "$ROOT_DIR/agent" && OPENAI_API_KEY="$key" npx tsx scripts/sim-toolselect.ts)
+}
+
 # ── stripe ──────────────────────────────────────────────────────────────────
 cmd_stripe() {
   local tls=""
@@ -346,9 +368,10 @@ case "$SUBCMD" in
   ci)     cmd_ci ;;
   tools)  cmd_tools ;;
   rag)    cmd_rag ;;
+  toolselect) cmd_toolselect ;;
   stripe) cmd_stripe ;;
   call)   cmd_call ;;
   all)    cmd_status && echo "" && cmd_tools && echo "" && cmd_rag ;;
-  ""|-h|--help) sed -n '3,50p' "$0" ;;
+  ""|-h|--help) sed -n '3,60p' "$0" ;;
   *) echo "Unknown subcommand: $SUBCMD" >&2; exit 2 ;;
 esac

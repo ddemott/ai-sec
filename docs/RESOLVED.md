@@ -4,6 +4,26 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-07-01 — Blind-spot P0 verification trio + 5 real bugs found-and-fixed (branch test/blindspot-p0-verification)
+
+The three `docs/TODO_BLINDSPOT.md` P0 testing items, all shipped in one branch (full audit doc: `docs/TEST_DB_AUDIT.md`):
+
+- **Real-DB end-to-end booking integration test in CI** — `src/agentToolsBookingIntegration.test.ts`: real `/agent-tools/book-with-scheduling` route → `book_with_scheduling_atomic` RPC → real Postgres; asserts the stored row (UTC instant computed independently via Intl, assigned employee, status), tenant-local read-back, EMPLOYEE_NOT_SCHEDULED + TIMESLOT_OCCUPIED sad paths, and the serviceResolver ambiguous-`name` regression via `available-slots`. Mutation-verified (reverting the tz fix → 2 tests red). Runs in the existing CI backend job (real Postgres + `REQUIRE_DB_TESTS=1`).
+- **Agent tool-selection eval** — `agent/scripts/sim-toolselect.ts` via `./scripts/simulate.sh toolselect`: replays the real `buildSystemPrompt` + real 19 tool schemas through `gpt-4o-mini`, feeds synthetic tool results, grades the chosen tool sequence (required-subsequence + forbidden set). 6 scripted-caller cases incl. the bug-#3 regression (`get_available_slots` → `book_with_scheduling`, never `book_appointment`). Baseline 6/6; on-demand (real OpenAI), not CI.
+- **Mocked-DB test audit + real-DB companions** — every backend test mocking pg classified HIGH/MED/LOW in `docs/TEST_DB_AUDIT.md`; all 6 HIGH-risk gaps got companions: `analytics.realdb` (9), `routes/auditLog.realdb` (13), `versionHistory.realdb` (33), `voice.realdb` (11), `services/reminders/scheduleForAppointment.realdb` (7), `agentToolsCustomerSearch.realdb` (17).
+
+Writing the companions surfaced 5 real bugs, all fixed same-day on the branch:
+
+1. `/agent-tools/find-customer-by-name` ILIKE wildcard over-disclosure (`%` in a transcribed name dumped up to 5 address-book entries) → LIKE metacharacters escaped.
+2. `GET /voice/history` unvalidated `limit`/`offset`/`customer_id` → pg NaN/22P02 500s → digits-only + `requireValidUUID` validation, clean 400s.
+3. `scheduleForAppointment` double-seed (retry ⇒ duplicate reminder bundle ⇒ double-reminded customers) → DB-level idempotency: partial unique index (migration `20260701020000`, one `scheduled` row per appointment+type) + `ON CONFLICT DO NOTHING`; race-safe under concurrency, no cross-statement locks (an advisory-lock transaction attempt deadlocked the appointments cascade in E2E); reschedule (cancel-then-seed) unaffected.
+4. Version-history rot from the 2026-05 PK renames: `restore_fields_from_version()` + `copy_fields_between_records()` queried bare `id` → 42703 on EVERY table (field-restore/copy dead in prod); deleted-records list hardcoded `t.name, t.phone` → 500 on 4/6 tables. → migration `20260701010000_fix_version_rpc_pk_names.sql` (PK-aware via information_schema, same pattern as `soft_delete_record`) + per-table display columns in the route.
+5. Restore stringified jsonb into text columns (only reachable once #4 was fixed — restored name came back literally `"Versioned Vera"` with quotes) → `jsonb_populate_record` decode in the same migration.
+
+Verification: all new suites green against real local Postgres (migration `APPLIED=1`, baseline regenerated via `npm run db:baseline`), mutation test proved the tz guard bites, mocked suites unchanged-green, `tsc`/eslint/prettier clean.
+
+---
+
 ## 2026-06-23 — Mechanical doc consistency hygiene pass (route counts + migrations + partial hosting refs)
 
 - Synchronized all stale "26/27 route modules" and "140 migrations" references in secondary docs (root README.md, dashboard/README.md, docs/ARCHITECTURE.md, docs/DIAGRAMS.md, docs/diagrams/01-deployment-topology.mmd) to the canonical current values maintained in CLAUDE.md (29 route modules, 142 migrations) and enforced by `scripts/verify-claude-md.ts`.

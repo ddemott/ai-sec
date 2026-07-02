@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict oxT4uaqqlbIcL3wd6I8IYjtVajGehPv7WQMxAce5jdgrgFcO5UHV3gYUGnNjxgM
+\restrict 3rj4fJbSc5uUNDY8TwV84iEVafcDLxhQadQigT2ttrEa1F7b5khxA7WutB2Pyle
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -925,11 +925,37 @@ DECLARE
   v_previous_values JSONB := '{}';
   v_update_set TEXT := '';
   v_change_summary TEXT;
+  v_pk_col TEXT;
+  v_has_updated_at BOOLEAN;
 BEGIN
+  -- Same PK lookup as restore_fields_from_version above.
+  SELECT kcu.column_name INTO v_pk_col
+  FROM information_schema.table_constraints tc
+  JOIN information_schema.key_column_usage kcu
+    USING (constraint_name, table_schema, table_name)
+  WHERE tc.constraint_type = 'PRIMARY KEY'
+    AND tc.table_schema = 'public'
+    AND tc.table_name = p_table_name
+  ORDER BY kcu.ordinal_position
+  LIMIT 1;
+
+  IF v_pk_col IS NULL THEN
+    -- See restore_fields_from_version: PK lookup failure = schema drift,
+    -- not a missing source record.
+    RAISE EXCEPTION 'No primary key found for table % — schema/whitelist drift', p_table_name;
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = p_table_name
+      AND column_name = 'updated_at'
+  ) INTO v_has_updated_at;
+
   -- Get source record (including deleted)
   EXECUTE format(
-    'SELECT to_jsonb(t.*) FROM %I t WHERE id = $1 AND tenant_id = $2',
-    p_table_name
+    'SELECT to_jsonb(t.*) FROM %I t WHERE %I = $1 AND tenant_id = $2',
+    p_table_name, v_pk_col
   ) INTO v_source_record USING p_source_record_id, p_tenant_id;
 
   IF v_source_record IS NULL THEN
@@ -938,8 +964,8 @@ BEGIN
 
   -- Get target record (must not be deleted)
   EXECUTE format(
-    'SELECT to_jsonb(t.*) FROM %I t WHERE id = $1 AND tenant_id = $2 AND (is_deleted = false OR is_deleted IS NULL)',
-    p_table_name
+    'SELECT to_jsonb(t.*) FROM %I t WHERE %I = $1 AND tenant_id = $2 AND (is_deleted = false OR is_deleted IS NULL)',
+    p_table_name, v_pk_col
   ) INTO v_target_record USING p_target_record_id, p_tenant_id;
 
   IF v_target_record IS NULL THEN
@@ -950,7 +976,7 @@ BEGIN
   v_new_target := v_target_record;
 
   FOREACH v_field IN ARRAY p_fields LOOP
-    IF v_field IN ('id', 'tenant_id', 'created_at') THEN
+    IF v_field IN ('id', 'tenant_id', 'created_at') OR v_field = v_pk_col THEN
       CONTINUE;
     END IF;
 
@@ -958,24 +984,32 @@ BEGIN
     v_new_target := jsonb_set(v_new_target, ARRAY[v_field], COALESCE(v_source_record->v_field, 'null'::jsonb));
   END LOOP;
 
-  -- Build UPDATE
-  SELECT string_agg(format('%I = $1->%L', f, f), ', ')
+  -- Build UPDATE (jsonb_populate_record: type-correct decode, see the
+  -- restore_fields_from_version note above).
+  SELECT string_agg(
+    format('%I = (jsonb_populate_record(NULL::%I, $1)).%I', f, p_table_name, f),
+    ', '
+  )
   INTO v_update_set
   FROM unnest(p_fields) AS f
-  WHERE f NOT IN ('id', 'tenant_id', 'created_at');
+  WHERE f NOT IN ('id', 'tenant_id', 'created_at')
+    AND f <> v_pk_col;
 
   -- Execute update
   IF v_update_set IS NOT NULL AND v_update_set != '' THEN
     EXECUTE format(
-      'UPDATE %I SET %s, updated_at = now() WHERE id = $2 AND tenant_id = $3',
-      p_table_name, v_update_set
+      'UPDATE %I SET %s%s WHERE %I = $2 AND tenant_id = $3',
+      p_table_name,
+      v_update_set,
+      CASE WHEN v_has_updated_at THEN ', updated_at = now()' ELSE '' END,
+      v_pk_col
     ) USING v_new_target, p_target_record_id, p_tenant_id;
   END IF;
 
   -- Get final state
   EXECUTE format(
-    'SELECT to_jsonb(t.*) FROM %I t WHERE id = $1 AND tenant_id = $2',
-    p_table_name
+    'SELECT to_jsonb(t.*) FROM %I t WHERE %I = $1 AND tenant_id = $2',
+    p_table_name, v_pk_col
   ) INTO v_new_target USING p_target_record_id, p_tenant_id;
 
   -- Change summary
@@ -1625,11 +1659,42 @@ DECLARE
   v_previous_values JSONB := '{}';
   v_update_set TEXT := '';
   v_change_summary TEXT := '';
+  v_pk_col TEXT;
+  v_has_updated_at BOOLEAN;
 BEGIN
+  -- Find the PK column for the target table (same lookup as
+  -- soft_delete_record — see 20260513000004 for the full rationale).
+  -- Whitelisted tables have exactly one PK column; LIMIT 1 guards
+  -- against a future composite-PK entry sneaking onto the whitelist.
+  SELECT kcu.column_name INTO v_pk_col
+  FROM information_schema.table_constraints tc
+  JOIN information_schema.key_column_usage kcu
+    USING (constraint_name, table_schema, table_name)
+  WHERE tc.constraint_type = 'PRIMARY KEY'
+    AND tc.table_schema = 'public'
+    AND tc.table_name = p_table_name
+  ORDER BY kcu.ordinal_position
+  LIMIT 1;
+
+  IF v_pk_col IS NULL THEN
+    -- Distinct from the record-not-found case below: NULL here means the PK
+    -- LOOKUP failed (table missing from public, or no PK) — schema/whitelist
+    -- drift, not a bad record id. Name it precisely for alert triage.
+    RAISE EXCEPTION 'No primary key found for table % — schema/whitelist drift', p_table_name;
+  END IF;
+
+  -- Not every versioned table has updated_at (resources doesn't).
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = p_table_name
+      AND column_name = 'updated_at'
+  ) INTO v_has_updated_at;
+
   -- Get current record
   EXECUTE format(
-    'SELECT to_jsonb(t.*) FROM %I t WHERE id = $1 AND tenant_id = $2',
-    p_table_name
+    'SELECT to_jsonb(t.*) FROM %I t WHERE %I = $1 AND tenant_id = $2',
+    p_table_name, v_pk_col
   ) INTO v_current_record USING p_record_id, p_tenant_id;
 
   IF v_current_record IS NULL THEN
@@ -1652,8 +1717,8 @@ BEGIN
   v_new_record := v_current_record;
 
   FOREACH v_field IN ARRAY p_fields LOOP
-    -- Skip system fields
-    IF v_field IN ('id', 'tenant_id', 'created_at') THEN
+    -- Skip system fields (incl. the table's actual PK column)
+    IF v_field IN ('id', 'tenant_id', 'created_at') OR v_field = v_pk_col THEN
       CONTINUE;
     END IF;
 
@@ -1670,24 +1735,33 @@ BEGIN
     v_change_summary := v_change_summary || v_field || ' restored from v' || p_source_version;
   END LOOP;
 
-  -- Build dynamic UPDATE statement
-  SELECT string_agg(format('%I = $1->%L', f, f), ', ')
+  -- Build dynamic UPDATE statement. jsonb_populate_record decodes each
+  -- restored value into the column's REAL type — assigning `$1->field`
+  -- (raw jsonb) instead would leave text columns with JSON-quoted values.
+  SELECT string_agg(
+    format('%I = (jsonb_populate_record(NULL::%I, $1)).%I', f, p_table_name, f),
+    ', '
+  )
   INTO v_update_set
   FROM unnest(p_fields) AS f
-  WHERE f NOT IN ('id', 'tenant_id', 'created_at');
+  WHERE f NOT IN ('id', 'tenant_id', 'created_at')
+    AND f <> v_pk_col;
 
   -- Execute update
   IF v_update_set IS NOT NULL AND v_update_set != '' THEN
     EXECUTE format(
-      'UPDATE %I SET %s, updated_at = now() WHERE id = $2 AND tenant_id = $3',
-      p_table_name, v_update_set
+      'UPDATE %I SET %s%s WHERE %I = $2 AND tenant_id = $3',
+      p_table_name,
+      v_update_set,
+      CASE WHEN v_has_updated_at THEN ', updated_at = now()' ELSE '' END,
+      v_pk_col
     ) USING v_new_record, p_record_id, p_tenant_id;
   END IF;
 
   -- Get final record state
   EXECUTE format(
-    'SELECT to_jsonb(t.*) FROM %I t WHERE id = $1 AND tenant_id = $2',
-    p_table_name
+    'SELECT to_jsonb(t.*) FROM %I t WHERE %I = $1 AND tenant_id = $2',
+    p_table_name, v_pk_col
   ) INTO v_new_record USING p_record_id, p_tenant_id;
 
   -- Create version snapshot
@@ -4298,6 +4372,13 @@ CREATE INDEX knowledge_suggestion_tenant_idx ON public.knowledge_suggestion USIN
 
 
 --
+-- Name: reminder_schedules_one_scheduled_per_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX reminder_schedules_one_scheduled_per_type ON public.reminder_schedules USING btree (appointment_id, reminder_type) WHERE ((status)::text = 'scheduled'::text);
+
+
+--
 -- Name: tenant_docs_embedding_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5467,5 +5548,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict oxT4uaqqlbIcL3wd6I8IYjtVajGehPv7WQMxAce5jdgrgFcO5UHV3gYUGnNjxgM
+\unrestrict 3rj4fJbSc5uUNDY8TwV84iEVafcDLxhQadQigT2ttrEa1F7b5khxA7WutB2Pyle
 
