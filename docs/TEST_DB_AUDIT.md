@@ -43,11 +43,11 @@ lives elsewhere or doesn't exist.
 
 ## MED backlog (static SQL, params only — add opportunistically)
 
-No real-DB companion yet: `crmSyncStatus`, `crmDisconnect`, `users-routes`,
-`square-routes`/`square-sync`, `calendar-sync`, `workers/voiceSessionReaper`.
+No real-DB companion yet: `square-routes`/`square-sync`, `calendar-sync`
+(these mock the EXTERNAL provider — the value is the integration, not the SQL;
+covered by recorder-only e2e, not worth a real-DB companion without creds).
 Partial (adjacent real suite exists but not the exact statements):
-`conflictLookup`, `customerLookup`, `tenants/bootstrap`, `mappings`,
-`communications`, `skills`, `agentToolsAiCost`.
+`conflictLookup`, `customerLookup`, `tenants/bootstrap`, `mappings`.
 These are static statements — a wrong column 500s loudly in dev — so they ride behind
 the HIGH class. Promote any of them to HIGH the moment dynamic SQL is introduced.
 
@@ -133,3 +133,36 @@ worker, not the write path.)
 When a change introduces **dynamic SQL of any kind**, the PR must include (or extend) a
 real-DB test that executes that statement shape. The mocked suite still owns
 marshalling/validation/error-branch coverage — the two are companions, not substitutes.
+
+**Batch of 6 more surfaces (6 companion files) — added 2026-07-02:**
+
+- `src/workers/voiceSessionReaper.realdb.test.ts` — the `reap_stale_voice_sessions()`
+  SECURITY-DEFINER backstop RPC, never before run against real Postgres. Proves
+  it finalizes a stale `active` session (status='completed', duration from
+  started_at, summary marker), SPARES a recent one, is idempotent, and COALESCEs
+  an existing duration.
+- `src/routes/users.realdb.test.ts` — auth-adjacent CRUD: GET /users (no
+  password_hash leak, is_self, owner-only 403), the invite 409-dup guard (fires
+  at the users INSERT), PATCH role (promote, can't-change-own 400, unknown 404).
+  **Surfaced a real finding** — the invite→password_resets write is RLS-blocked
+  under a non-BYPASSRLS role (logged in TODO_BLINDSPOT P2); the HAPPY invite path
+  can't be exercised under `api_user` until that's resolved.
+- `src/services/crmSync.realdb.test.ts` — getCrmSyncStatus (entity_sync_map
+  GROUP BY fold → pending/error/total_mapped) + disconnectCrmIntegration (both
+  DELETEs remove settings AND every sync-map row; post-disconnect status is the
+  clean zero shape).
+- `src/routes/skills.realdb.test.ts` — create slugifies ("Hair Coloring" →
+  "hair-coloring"), list returns it, delete-by-slug removes it (the round-trip a
+  name mismatch would strand), unknown delete → 404.
+- `src/agentToolsAiCost.realdb.test.ts` — the **dynamic multi-row** INSERT
+  (`VALUES ${placeholders.join()}`, the reminder-double-seed assembly class): a
+  2-item model_usage payload lands as 2 rows with computed cost;
+  interruption_usage items are filtered out.
+- `src/routes/communications.realdb.test.ts` — GET /communications/history: the
+  conditional channel filter partitions rows, `COUNT(*) OVER()` returns the
+  unpaged total under LIMIT/OFFSET (the window-vs-limit trap), tenant scoping.
+
+20 new tests, all green. One real finding (password_resets RLS vs invite);
+otherwise every query/guard holds. agentToolsAiCost was effectively HIGH (dynamic
+multi-row VALUES), not MED. square/calendar remain deliberately uncovered
+(external-provider mocks, no SQL worth a real-DB run without creds).
