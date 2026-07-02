@@ -43,11 +43,11 @@ lives elsewhere or doesn't exist.
 
 ## MED backlog (static SQL, params only — add opportunistically)
 
-No real-DB companion yet: `reminders.deliveryStats`, `crmSyncStatus`, `crmDisconnect`,
-`exportData`, `selfService`, `users-routes`, `square-routes`/`square-sync`,
-`calendar-sync`, `workers/voiceSessionReaper`. Partial (adjacent real suite exists but
-not the exact statements): `conflictLookup`, `customerLookup`, `tenants/bootstrap`,
-`mappings`, `communications`, `skills`, `agentToolsAiCost/TakeMessage`.
+No real-DB companion yet: `crmSyncStatus`, `crmDisconnect`, `users-routes`,
+`square-routes`/`square-sync`, `calendar-sync`, `workers/voiceSessionReaper`.
+Partial (adjacent real suite exists but not the exact statements):
+`conflictLookup`, `customerLookup`, `tenants/bootstrap`, `mappings`,
+`communications`, `skills`, `agentToolsAiCost`.
 These are static statements — a wrong column 500s loudly in dev — so they ride behind
 the HIGH class. Promote any of them to HIGH the moment dynamic SQL is introduced.
 
@@ -63,6 +63,34 @@ past-time rejection, soft-delete invisibility, and the double-book → friendly
 guards hold); the value is regression protection on a cross-caller-tampering
 surface. Writing it caught only a test-fixture error (customers must be seeded
 in E.164 — the handler matches on `normalizePhone(input)`).
+
+**Batch of 5 MED surfaces (4 companion files) — added 2026-07-02** (take-message
+and capture-job-inquiry share `agentToolsMessages.realdb.test.ts`):
+
+- `src/routes/exportData.realdb.test.ts` — the strongest of the batch:
+  `GET /export/tenant-data` runs `SELECT * FROM ${table}` over a **24-table
+  interpolated list** (the versionHistory identifier-interpolation bug class).
+  Exercises every table name against the real schema (a renamed/dropped table
+  500s the whole export), plus the two contracts a mock can't: `users` rows
+  come back with NO `password_hash`, and a front-desk caller is refused 403.
+- `src/routes/selfService.realdb.test.ts` — token-gated `/self/cancel` +
+  `/self/reschedule`. These write to `appointments` under **FORCE ROW LEVEL
+  SECURITY**; a bare `pool.query` would be RLS-blocked, so this proves the
+  `withTenantClient` path lands the write, plus token-action scoping (a
+  reschedule token can't cancel, and vice-versa), idempotent re-cancel, and
+  404 on unknown/canceled appointments.
+- `src/agentToolsMessages.realdb.test.ts` — `take-message` (customer_messages
+  INSERT + phone→customer_id resolution with is_deleted filter; known caller
+  links, unknown caller stores NULL customer_id) and `capture-job-inquiry`
+  (job_inquiries INSERT, full + name-only).
+- `src/routes/reminders.deliveryStats.realdb.test.ts` — seeds a known set of
+  reminder_schedules rows across every status + recency bucket and asserts the
+  `COUNT(*) FILTER (…)` aggregate partitions them exactly (sent 7d/30d/total,
+  failed 7d/total, scheduled, cancelled), plus the all-zero empty-tenant path.
+
+17 new tests, all green. No product bug surfaced — every query/guard holds; the
+value is real-SQL execution + regression protection on export/RLS/message
+surfaces. All four move their entries out of the MED backlog above.
 
 ## Real bugs surfaced by writing the companions (2026-07-01) — all FIXED same day
 
