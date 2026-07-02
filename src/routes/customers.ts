@@ -15,7 +15,7 @@ import {
   withPoolClient,
   type AppRequest,
 } from '../middleware';
-import { syncCustomerToAll } from '../services/syncOrchestrator';
+import { syncAppointmentToAll, syncCustomerToAll } from '../services/syncOrchestrator';
 import { assertRowAffected } from './routeHelpers';
 
 const CustomerCreateSchema = z.object({
@@ -266,14 +266,42 @@ export function registerCustomerRoutes(
       // call_summaries, destroying history. Soft-delete hides the customer from
       // every list (they all filter is_deleted = false) while preserving records.
       const deletedBy = req.auth?.email ?? 'user';
-      const res = await withTenantClient(tenantId, async (client) => {
-        return client.query(
-          `UPDATE customers
-              SET is_deleted = true, deleted_at = now(), deleted_by = $3
-            WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false
-            RETURNING customer_id`,
-          [id, tenantId, deletedBy]
-        );
+      // Soft-delete + upcoming-cancel in ONE transaction. The list/schedule
+      // queries join customers WHERE is_deleted = false, so a deleted
+      // customer's future 'scheduled' rows would become INVISIBLE while still
+      // holding their slot (they feed the GiST exclusion constraints) — an
+      // unbookable, uncancelable ghost. Cancel the upcoming ones (frees the
+      // slot); keep past/completed for history/analytics.
+      const { res, canceledAppointments } = await withTenantClient(tenantId, async (client) => {
+        await client.query('BEGIN');
+        try {
+          const del = await client.query(
+            `UPDATE customers
+                SET is_deleted = true, deleted_at = now(), deleted_by = $3
+              WHERE customer_id = $1 AND tenant_id = $2 AND is_deleted = false
+              RETURNING customer_id`,
+            [id, tenantId, deletedBy]
+          );
+          let canceled: string[] = [];
+          if (del.rows.length > 0) {
+            const c = await client.query<{ appointment_id: string }>(
+              `UPDATE appointments
+                  SET status = 'canceled'
+                WHERE customer_id = $1 AND tenant_id = $2
+                  AND status = 'scheduled'
+                  AND start_time > now()
+                  AND (is_deleted IS NULL OR is_deleted = false)
+                RETURNING appointment_id`,
+              [id, tenantId]
+            );
+            canceled = c.rows.map((r) => r.appointment_id);
+          }
+          await client.query('COMMIT');
+          return { res: del, canceledAppointments: canceled };
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
       });
       if (!assertRowAffected(res, reply, 'Customer')) return;
 
@@ -283,8 +311,16 @@ export function registerCustomerRoutes(
       // because soft-delete leaves the row readable (unlike the old hard DELETE,
       // which forced the sync to run first).
       syncCustomerToAll(pool, tenantId, id, 'delete', req.log);
+      // Mirror POST /appointments/:id/cancel: a canceled appointment must also
+      // leave external calendars/CRMs so the slot frees everywhere.
+      for (const apptId of canceledAppointments) {
+        syncAppointmentToAll(pool, tenantId, apptId, 'delete', req.log);
+      }
 
-      logEvent(req, 'customer_deleted', { customerId: id });
+      logEvent(req, 'customer_deleted', {
+        customerId: id,
+        canceledAppointmentCount: canceledAppointments.length,
+      });
       return reply.send({ success: true });
     }, 'Failed to delete customer')
   );
