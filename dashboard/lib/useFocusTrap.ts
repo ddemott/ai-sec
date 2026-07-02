@@ -12,16 +12,23 @@ const FOCUSABLE =
  * - Traps Tab / Shift+Tab within the container.
  * - Calls onEscape when Escape is pressed.
  * - Optionally locks body scroll (for centered overlay dialogs).
+ * - Optionally dismisses on an outside pointer press (`onOutsideDismiss`) —
+ *   for popover/card overlays that close when you click away. The listener is
+ *   attached on the NEXT tick so the same click that opened the overlay can't
+ *   immediately close it. Modal/panel callers that omit it are unaffected.
  */
 export function useFocusTrap(
   containerRef: React.RefObject<HTMLElement | null>,
   isOpen: boolean,
   onEscape?: () => void,
-  lockScroll?: boolean
+  lockScroll?: boolean,
+  onOutsideDismiss?: () => void
 ): void {
   const prevFocusRef = useRef<HTMLElement | null>(null);
   const onEscapeRef = useRef(onEscape);
   onEscapeRef.current = onEscape;
+  const onOutsideDismissRef = useRef(onOutsideDismiss);
+  onOutsideDismissRef.current = onOutsideDismiss;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -67,13 +74,28 @@ export function useFocusTrap(
 
     document.addEventListener('keydown', handleKeyDown);
 
+    // Outside-dismiss (opt-in). Deferred one tick so the opening click doesn't
+    // bubble up and immediately re-close the overlay.
+    function handleOutside(e: MouseEvent) {
+      const el = containerRef.current;
+      if (el && !el.contains(e.target as Node)) onOutsideDismissRef.current?.();
+    }
+    let outsideTimer: ReturnType<typeof setTimeout> | undefined;
+    if (onOutsideDismissRef.current) {
+      outsideTimer = setTimeout(() => {
+        document.addEventListener('mousedown', handleOutside);
+      }, 0);
+    }
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
+      if (outsideTimer) clearTimeout(outsideTimer);
+      document.removeEventListener('mousedown', handleOutside);
       if (lock) document.body.style.overflow = 'unset';
       const prev = prevFocusRef.current;
       if (prev && document.body.contains(prev)) prev.focus();
     };
-    // containerRef is stable; lockScroll and onEscape are captured via ref/closure
+    // containerRef is stable; lockScroll/onEscape/onOutsideDismiss are captured via ref/closure
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 }

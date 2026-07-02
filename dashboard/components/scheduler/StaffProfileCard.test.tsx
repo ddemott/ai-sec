@@ -83,6 +83,31 @@ describe('StaffProfileCard — accessibility + keyboard (Cluster C)', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  test('HAPPY: an outside pointer press fires onClose (through the shared useFocusTrap)', async () => {
+    // WHO: operator who opens a staff card then clicks elsewhere on the schedule.
+    // WHAT: a mousedown outside the card calls onClose exactly once.
+    // WHERE: useFocusTrap's opt-in onOutsideDismiss listener (StaffProfileCard
+    //        was migrated off its own hand-rolled outside-click effect).
+    // WHY: the outside-dismiss listener is attached on the NEXT tick so the
+    //      opening click can't self-close — the test flushes that tick, then
+    //      presses outside.
+    const onClose = vi.fn();
+    renderCard({ onClose });
+    // Flush the deferred (setTimeout 0) listener attach.
+    await new Promise((r) => setTimeout(r, 0));
+    fireEvent.mouseDown(document.body);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('HAPPY: a pointer press INSIDE the card does NOT close it', async () => {
+    // WHY: only outside presses dismiss — clicking the card body/controls must not.
+    const onClose = vi.fn();
+    renderCard({ onClose });
+    await new Promise((r) => setTimeout(r, 0));
+    fireEvent.mouseDown(screen.getByRole('dialog'));
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 describe('StaffProfileCard — Mark off action (front-desk audit P0 #2)', () => {
