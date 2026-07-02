@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React from 'react';
 import { LayoutGrid, GitBranch } from 'lucide-react';
 import SkillMatrixView from './SkillMatrixView';
 import SkillRelationshipMap from './skill-map/SkillRelationshipMap';
+import { useUrlQueryState } from '../lib/useUrlQueryState';
 
 /**
  * SkillAssignmentsView — single sub-tab that consolidates the former
@@ -29,26 +29,15 @@ import SkillRelationshipMap from './skill-map/SkillRelationshipMap';
 type ViewMode = 'grid' | 'map';
 
 export default function SkillAssignmentsView() {
-  const searchParams = useSearchParams();
-  const initialView: ViewMode = searchParams.get('view') === 'map' ? 'map' : 'grid';
-  const [view, setView] = useState<ViewMode>(initialView);
-
-  const handleViewChange = useCallback((next: ViewMode) => {
-    setView(next);
-    const params = new URLSearchParams(window.location.search);
-    if (next === 'map') {
-      params.set('view', 'map');
-    } else {
-      // Default is grid — strip the param to keep URLs short.
-      params.delete('view');
-    }
-    const qs = params.toString();
-    window.history.replaceState(
-      {},
-      '',
-      qs ? `${window.location.pathname}?${qs}` : window.location.pathname
-    );
-  }, []);
+  // `view` is shallow URL state — the shared hook owns read/validate/write and
+  // (unlike the old one-time initialView snapshot) keeps the rendered view in
+  // sync with browser back/forward via popstate. Grid is the default and is
+  // stripped from the URL to keep it short.
+  const [view, handleViewChange] = useUrlQueryState<ViewMode>('view', {
+    defaultValue: 'grid',
+    valid: ['grid', 'map'],
+    omitDefault: true,
+  });
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

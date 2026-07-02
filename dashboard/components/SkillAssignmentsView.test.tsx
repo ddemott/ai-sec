@@ -17,7 +17,7 @@
  * Each test carries 5W context.
  */
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
@@ -117,5 +117,35 @@ describe('SkillAssignmentsView — toggle behavior', () => {
     fireEvent.click(map);
     expect(grid).toHaveAttribute('aria-pressed', 'false');
     expect(map).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('SkillAssignmentsView — popstate navigation safety', () => {
+  test('HAPPY: a browser back/forward that rewrites the URL flips the rendered view', () => {
+    // WHO: operator who deep-linked to ?view=map, then hit the browser Back
+    //      button (or a parent-shell URL rewrite) back to the grid default.
+    // WHAT: starting on ?view=map, rewriting the URL to no ?view and firing
+    //       popstate flips the rendered marker back to Grid — and forward
+    //       again flips it to Map.
+    // WHY: the OLD implementation snapshotted the view once from
+    //      useSearchParams(), so back/forward changed the URL but NOT the
+    //      rendered view — a subtle, annoying-to-debug shell bug. Driving
+    //      `view` from the shared URL-state hook closes it.
+    window.history.replaceState({}, '', '/dashboard?tab=my-team&subtab=skills&view=map');
+    render(<SkillAssignmentsView />);
+    expect(screen.getByTestId('map-view-marker')).toBeInTheDocument();
+
+    act(() => {
+      window.history.replaceState({}, '', '/dashboard?tab=my-team&subtab=skills');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(screen.getByTestId('grid-view-marker')).toBeInTheDocument();
+    expect(screen.queryByTestId('map-view-marker')).not.toBeInTheDocument();
+
+    act(() => {
+      window.history.replaceState({}, '', '/dashboard?tab=my-team&subtab=skills&view=map');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(screen.getByTestId('map-view-marker')).toBeInTheDocument();
   });
 });
