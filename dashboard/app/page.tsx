@@ -689,6 +689,14 @@ const LANDING_HTML = `
         <p class="feat-tile-p">"Tires and an alignment — how soon can you do both?" It figures out the fastest back-to-back booking, right staff, right equipment. Done.</p>
       </div>
 
+      <div class="feat-tile">
+        <div class="feat-tile-icon green">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        </div>
+        <div class="feat-tile-h">Shows You Why You're Losing Jobs</div>
+        <p class="feat-tile-p">It logs why every caller didn't book — no Saturday slot, wrong service, sticker shock. You finally see the pattern, not just a missed-call count. No other receptionist tells you this.</p>
+      </div>
+
     </div>
   </div>
 </section>
