@@ -43,6 +43,10 @@ import { createWithTenantClient } from './database';
 import { registerAgentToolRoutes } from './routes/agentTools';
 
 const AGENT_SECRET = 'test-cancel-reschedule-secret';
+// Capture any pre-existing value so afterAll restores it instead of blindly
+// deleting — avoids clobbering an AGENT_SECRET set by the environment or a
+// sibling suite that runs later in the same process.
+let prevAgentSecret: string | undefined;
 const stubEmbedding = (): Promise<number[]> => Promise.resolve(new Array(1536).fill(0));
 const stubNormalizer = async (text: string): Promise<string> => text;
 
@@ -109,6 +113,7 @@ beforeAll(async () => {
     setup = await getRootClient();
     await setup.query('SELECT 1');
     pool = new Pool({ connectionString: API_DB_URL, max: 5 });
+    prevAgentSecret = process.env.AGENT_SECRET;
     process.env.AGENT_SECRET = AGENT_SECRET;
 
     app = Fastify({ logger: false });
@@ -140,7 +145,8 @@ afterAll(async () => {
     }
     await setup.end();
   }
-  delete process.env.AGENT_SECRET;
+  if (prevAgentSecret === undefined) delete process.env.AGENT_SECRET;
+  else process.env.AGENT_SECRET = prevAgentSecret;
 });
 
 beforeEach((ctx) => {
