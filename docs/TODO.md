@@ -80,7 +80,7 @@ These branches survived the 2026-06-23 cleanup because each holds real unmerged 
 
 **Prod config / observability** — 🅿️ **PARKED by decision 2026-07-02 (Dale).** (dossier: _Production hardening_, _Phase 13_)
 
-> **Decision:** external observability vendors (Sentry, Better Stack, a Prometheus scraper) are NOT worth a paid signup at this stage. Prod already emits everything needed with zero extra cost — `GET /metrics` (Prometheus, `METRICS_TOKEN` set + live), structured JSON logs to Railway live-tail, and `/ready` (DB + pool health). The only missing piece is *automated paging*, which is a convenience, not an outage risk — the data can be read manually. Revisit (Grafana Cloud free tier scraping the existing `/metrics`, or Railway-native alerts, or a vendor) when there are paying customers and manual checking stops scaling. The code hooks for Sentry/Better Stack stay in place and no-op until their env vars are ever set — nothing to remove.
+> **Decision:** external observability vendors (Sentry, Better Stack, a Prometheus scraper) are NOT worth a paid signup at this stage. Prod already emits everything needed with zero extra cost — `GET /metrics` (Prometheus, `METRICS_TOKEN` set + live), structured JSON logs to Railway live-tail, and `/ready` (DB + pool health). The only missing piece is *automated paging*, which is a convenience, not an outage risk — the data can be read manually. Revisit (Grafana Cloud free tier scraping the existing `/metrics`, or Railway-native alerts, or a vendor) when there are paying customers and manual checking stops scaling. The code hooks for Sentry/Better Stack stay in place and no-op until their env vars are set — nothing to remove.
 
 - [~] **`SENTRY_DSN`** — PARKED. Code wired (no-op until set); optional exception-grouping only, not required.
 - [~] **`BETTER_STACK_TOKEN`** — PARKED. Code wired (no-op until set); logs already reach Railway live-tail.
@@ -321,7 +321,7 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 **Open — needs Dale / Railway (config, can't be done from here):**
 
-- [ ] **IN FLIGHT (user)** Set `METRICS_TOKEN` on Railway backend (Prometheus `/metrics` returns 404 until set — currently no metrics scrape in prod).
+- [x] **`METRICS_TOKEN` on Railway backend — DONE** (confirmed set 2026-06-29: prod `/metrics` returns 401 not 404, i.e. the token gate is active). The metric data is exposed; standing up a scraper over it is part of the PARKED observability decision above.
 - [~] **🅿️ PARKED 2026-07-02** Set `BETTER_STACK_TOKEN` on Railway backend + agent — deferred by decision (logs already reach Railway live-tail; no paid signup at this stage). See the "Prod config / observability" PARKED note.
 - [ ] **IN FLIGHT (user)** (Optional) Repoint Railway healthcheck → `/ready` if you want deploy promotion gated on DB reachability (note: Railway healthcheck gates promotion, not per-request traffic).
 - [~] **🅿️ PARKED 2026-07-02 — Alert rules** — deferred with the observability decision. Rules stay ready in `docs/ALERTS.md`; wire them (on `rate(errors_total[5m])`, `booking_attempts_total{outcome="failure"}`, http 5xx rate, p95 `http_request_duration_ms`, sustained `/ready` `waiting>0`) if/when a paging path is stood up (Grafana Cloud free tier over the existing `/metrics`, or Railway-native).
