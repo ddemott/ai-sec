@@ -13,7 +13,9 @@ const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'knowledge', label: 'Knowledge Base' },
 ];
 
-const VALID_SUB_TABS: SubTab[] = ['persona', 'knowledge'];
+// Derived from SUB_TABS so the rendered tabs and the URL-validation allow-list
+// can't drift when a tab is added/removed.
+const VALID_SUB_TABS: SubTab[] = SUB_TABS.map((t) => t.id);
 
 export default function AIInsightsView() {
   // Mirror the active sub-tab to ?aiTab so reloads / deep-links / browser

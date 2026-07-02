@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * A tiny client hook that backs a single piece of shallow UI state with a URL
@@ -52,13 +52,19 @@ export function useUrlQueryState<T extends string>(
   key: string,
   opts: UrlQueryStateOptions<T>
 ): [T, (next: T) => void] {
-  const { defaultValue, omitDefault } = opts;
+  // Keep the latest opts in a ref so the popstate handler always validates
+  // against the current defaultValue/valid/omitDefault even if the caller
+  // passes a new options object on a later render.
+  const optsRef = useRef(opts);
+  optsRef.current = opts;
+
   const [value, setValueState] = useState<T>(() => readParam(key, opts));
 
   const setValue = useCallback(
     (next: T) => {
       setValueState(next);
       if (typeof window === 'undefined') return;
+      const { defaultValue, omitDefault } = optsRef.current;
       const params = new URLSearchParams(window.location.search);
       if (omitDefault && next === defaultValue) {
         params.delete(key);
@@ -68,20 +74,19 @@ export function useUrlQueryState<T extends string>(
       const qs = params.toString();
       window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
     },
-    [key, defaultValue, omitDefault]
+    [key]
   );
 
-  // Keep the value in sync with browser back/forward and any external URL
-  // rewrite. Re-reads through readParam so validation applies to popstate too.
+  // Keep the value in sync with browser back/forward (popstate fires on
+  // navigation, not on our own replaceState writes). Re-reads through
+  // readParam so validation applies to popstate too.
   useEffect(() => {
     function onPopState() {
-      const next = readParam(key, opts);
+      const next = readParam(key, optsRef.current);
       setValueState((prev) => (prev === next ? prev : next));
     }
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-    // opts is intentionally read fresh each fire; key is the stable identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   return [value, setValue];
