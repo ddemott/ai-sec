@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { FolderTab, FolderTabBar } from './ui/FolderTabs';
 import AIConfigView from './AIConfigView';
 import KnowledgeBaseView from './KnowledgeBaseView';
+import { useUrlQueryState } from '../lib/useUrlQueryState';
 
 type SubTab = 'persona' | 'knowledge';
 
@@ -12,8 +13,18 @@ const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'knowledge', label: 'Knowledge Base' },
 ];
 
+const VALID_SUB_TABS: SubTab[] = ['persona', 'knowledge'];
+
 export default function AIInsightsView() {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('persona');
+  // Mirror the active sub-tab to ?aiTab so reloads / deep-links / browser
+  // back-forward preserve it. Scoped param name (aiTab) avoids colliding with
+  // the tab/q/view/subtab params other dashboard shells own. persona is the
+  // default and is stripped from the URL.
+  const [activeSubTab, setActiveSubTab] = useUrlQueryState<SubTab>('aiTab', {
+    defaultValue: 'persona',
+    valid: VALID_SUB_TABS,
+    omitDefault: true,
+  });
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

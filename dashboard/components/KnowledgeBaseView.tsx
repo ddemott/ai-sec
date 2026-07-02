@@ -17,9 +17,9 @@ import {
   X,
   Globe,
 } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
 import { Api } from '../lib/api';
 import { useActiveTenantId } from '../lib/SessionContext';
+import { useUrlQueryState } from '../lib/useUrlQueryState';
 import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import { Badge } from './ui/Badge';
@@ -137,7 +137,10 @@ function PolicyQuestionField({
             </span>
           )}
           {status === 'idle' && savedAt && (
-            <span className="flex items-center gap-1 text-xs opacity-50" style={{ color: 'var(--text-muted)' }}>
+            <span
+              className="flex items-center gap-1 text-xs opacity-50"
+              style={{ color: 'var(--text-muted)' }}
+            >
               <CheckCircle2 className="w-3 h-3" />
               Saved {savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
@@ -415,47 +418,18 @@ function CustomQuestionsSection({
 
 export default function KnowledgeBaseView() {
   const tenantId = useActiveTenantId();
-  const searchParams = useSearchParams();
 
-  const initialTab = ((): Tab => {
-    const raw = searchParams.get('tab') as Tab | null;
-    return raw && VALID_TABS.includes(raw) ? raw : 'questionnaire';
-  })();
-  const initialSearch = searchParams.get('q') ?? '';
-
-  const [tab, setTabState] = useState<Tab>(initialTab);
-  const [searchTerm, setSearchTermState] = useState(initialSearch);
+  // tab + q are shallow URL state; the shared hook owns read/validate/write/
+  // popstate (replaces this view's hand-rolled URLSearchParams plumbing).
+  const [tab, setTab] = useUrlQueryState<Tab>('tab', {
+    defaultValue: 'questionnaire',
+    valid: VALID_TABS,
+  });
+  const [searchTerm, setSearchTerm] = useUrlQueryState<string>('q', {
+    defaultValue: '',
+    omitDefault: true,
+  });
   const [suggestionCount, setSuggestionCount] = useState(0);
-
-  const setTab = useCallback((next: Tab) => {
-    setTabState(next);
-    const params = new URLSearchParams(window.location.search);
-    params.set('tab', next);
-    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-  }, []);
-
-  const setSearchTerm = useCallback((next: string) => {
-    setSearchTermState(next);
-    const params = new URLSearchParams(window.location.search);
-    if (next) {
-      params.set('q', next);
-    } else {
-      params.delete('q');
-    }
-    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-  }, []);
-
-  useEffect(() => {
-    function onPopState() {
-      const rawTab = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-      const nextTab = rawTab && VALID_TABS.includes(rawTab) ? rawTab : 'questionnaire';
-      setTabState((prev) => (prev === nextTab ? prev : nextTab));
-      const nextSearch = new URLSearchParams(window.location.search).get('q') ?? '';
-      setSearchTermState((prev) => (prev === nextSearch ? prev : nextSearch));
-    }
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
 
   const [docs, setDocs] = useState<KnowledgeEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -464,9 +438,7 @@ export default function KnowledgeBaseView() {
   const [showUnansweredOnly, setShowUnansweredOnly] = useState(false);
   const [savedAnswers, setSavedAnswers] = useState<
     Map<string, { id: string; answer: string; source?: string }>
-  >(
-    new Map()
-  );
+  >(new Map());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { state: confirmState, confirm, close: closeConfirm } = useConfirm();
@@ -783,13 +755,17 @@ export default function KnowledgeBaseView() {
                       borderColor: 'var(--accent)',
                     }}
                   >
-                    <MessageSquare className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--accent-soft)' }} />
+                    <MessageSquare
+                      className="w-5 h-5 mt-0.5 shrink-0"
+                      style={{ color: 'var(--accent-soft)' }}
+                    />
                     <div>
                       <p className="text-sm font-semibold" style={{ color: 'var(--accent-soft)' }}>
                         Start here — answer a few questions about your business
                       </p>
                       <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                        Your AI uses these answers to respond to callers. Each answer auto-saves as you type. Start with Business Hours below.
+                        Your AI uses these answers to respond to callers. Each answer auto-saves as
+                        you type. Start with Business Hours below.
                       </p>
                     </div>
                   </div>
@@ -798,7 +774,10 @@ export default function KnowledgeBaseView() {
                 {totalQuestions > 0 && (
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      <span
+                        className="text-xs font-medium"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
                         {totalAnswered} of {totalQuestions} answered
                         {totalAnswered === totalQuestions && ' — fully trained!'}
                       </span>
@@ -806,7 +785,10 @@ export default function KnowledgeBaseView() {
                         {Math.round((totalAnswered / totalQuestions) * 100)}%
                       </span>
                     </div>
-                    <div className="w-full rounded-full h-1.5" style={{ backgroundColor: 'var(--bg-raised)' }}>
+                    <div
+                      className="w-full rounded-full h-1.5"
+                      style={{ backgroundColor: 'var(--bg-raised)' }}
+                    >
                       <div
                         className="h-1.5 rounded-full transition-all duration-500"
                         style={{
@@ -830,7 +812,10 @@ export default function KnowledgeBaseView() {
                       borderColor: 'var(--accent)',
                     }}
                   >
-                    <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" style={{ color: 'var(--accent-soft)' }} />
+                    <CheckCircle2
+                      className="w-5 h-5 mt-0.5 shrink-0"
+                      style={{ color: 'var(--accent-soft)' }}
+                    />
                     <div>
                       <p className="text-sm font-semibold" style={{ color: 'var(--accent-soft)' }}>
                         Your AI is fully trained on your business
@@ -885,17 +870,18 @@ export default function KnowledgeBaseView() {
                 </div>
                 {POLICY_CATEGORIES.filter((cat) => {
                   if (!showUnansweredOnly) return true;
-                  return POLICY_QUESTIONS.filter(
-                    (q) => q.category === cat && !savedAnswers.has(q.question)
-                  ).length > 0;
+                  return (
+                    POLICY_QUESTIONS.filter(
+                      (q) => q.category === cat && !savedAnswers.has(q.question)
+                    ).length > 0
+                  );
                 }).map((cat, idx) => (
                   <PolicyCategory
                     key={cat}
                     category={cat}
                     questions={POLICY_QUESTIONS.filter(
                       (q) =>
-                        q.category === cat &&
-                        (!showUnansweredOnly || !savedAnswers.has(q.question))
+                        q.category === cat && (!showUnansweredOnly || !savedAnswers.has(q.question))
                     )}
                     savedAnswers={savedAnswers}
                     onSave={handleSaveAnswer}
@@ -916,11 +902,21 @@ export default function KnowledgeBaseView() {
                  The dedicated scan step is now in the SetupWizard (step 7, right before the questions step 8).
                  This box in the full view can be used post-onboarding to re-scan.
                  See the wizard implementation and docs/TODO.md for details. */}
-            <div className="mt-4 p-3 border rounded" style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)' }}>
-              <div className="text-sm font-medium mb-1">Import policies from your website (beta / optional step)</div>
-              <div className="text-xs text-muted mb-2">Paste URL → AI extracts answers to your questionnaire. Review & approve to populate KB (reduces manual entry).</div>
+            <div
+              className="mt-4 p-3 border rounded"
+              style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)' }}
+            >
+              <div className="text-sm font-medium mb-1">
+                Import policies from your website (beta / optional step)
+              </div>
+              <div className="text-xs text-muted mb-2">
+                Paste URL → AI extracts answers to your questionnaire. Review & approve to populate
+                KB (reduces manual entry).
+              </div>
               {/* TODO: add <Input> for URL + Button calling Api.knowledge.importWebsite + display results / refresh list */}
-              <div className="text-[10px] text-muted">(UI wiring pending — backend endpoint + helpers + staging table ready)</div>
+              <div className="text-[10px] text-muted">
+                (UI wiring pending — backend endpoint + helpers + staging table ready)
+              </div>
             </div>
 
             {/* ── Documents Tab ── */}
@@ -961,9 +957,9 @@ export default function KnowledgeBaseView() {
                   )}
                 </div>
                 <p className="text-xs mt-4" style={{ color: 'var(--text-muted)' }}>
-                  Upload your price sheet, service menu, warranty policy, or any document about
-                  your business. When a caller asks a question, the AI searches your documents
-                  for the answer and reads it back to them.
+                  Upload your price sheet, service menu, warranty policy, or any document about your
+                  business. When a caller asks a question, the AI searches your documents for the
+                  answer and reads it back to them.
                 </p>
                 {(() => {
                   const uploadedDocs = docs.filter(
@@ -986,24 +982,40 @@ export default function KnowledgeBaseView() {
                   if (files.length === 0) return null;
                   return (
                     <div className="mt-6 space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                      <p
+                        className="text-xs font-semibold uppercase tracking-wider mb-2"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
                         Uploaded files
                       </p>
                       {files.map(([filename, { chunks, oldest }]) => (
                         <div
                           key={filename}
                           className="flex items-center justify-between p-3 rounded-lg border"
-                          style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
+                          style={{
+                            backgroundColor: 'var(--bg-raised)',
+                            borderColor: 'var(--border-soft)',
+                          }}
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--warning)' }} />
+                            <FileText
+                              className="w-4 h-4 shrink-0"
+                              style={{ color: 'var(--warning)' }}
+                            />
                             <div className="min-w-0">
-                              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                              <p
+                                className="text-sm font-medium truncate"
+                                style={{ color: 'var(--text-primary)' }}
+                              >
                                 {filename}
                               </p>
                               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                                 {chunks.length} chunk{chunks.length === 1 ? '' : 's'} ·{' '}
-                                {new Date(oldest).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {new Date(oldest).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
                               </p>
                             </div>
                           </div>
@@ -1120,10 +1132,7 @@ export default function KnowledgeBaseView() {
 
             {/* ── Suggestions Tab ── */}
             {tab === 'suggestions' && (
-              <KnowledgeSuggestions
-                tenantId={tenantId}
-                onCountChange={setSuggestionCount}
-              />
+              <KnowledgeSuggestions tenantId={tenantId} onCountChange={setSuggestionCount} />
             )}
           </>
         )}
