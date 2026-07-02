@@ -24,8 +24,9 @@
  *              (capabilities [nail_station] — the only one manicures accept)
  *
  * Slot map (every test uses its own window so failures are independent):
- *   09:00 spillover pair · 09:00 third-haircut reject · 11:00 manicures ·
- *   13:30–14:30 Color skill-match · 15:00 Bob-off-shift pair · 16:00 GiST race
+ *   09:00 spillover pair · 09:45 third-haircut reject (books its own pair) ·
+ *   11:00 manicures · 13:30–14:30 Color skill-match · 15:00 Bob-off-shift
+ *   pair · 16:00 GiST race
  *
  * 5W for sad-path failures:
  *   WHO  — the voice agent booking for concurrent live callers
@@ -285,19 +286,36 @@ describe('employee assignment under contention', () => {
   });
 
   it('SAD: a third same-slot Haircut → clean TIMESLOT_OCCUPIED, still exactly two rows', async () => {
-    // WHERE: both skilled employees now occupied at 09:00 (test above).
+    // WHERE: both skilled employees occupied at 09:45 — booked INSIDE this
+    // test (own slot, self-contained; Copilot review on PR #157 flagged the
+    // earlier version's dependence on the spillover test's 09:00 bookings).
     // WHY: the third caller must get a refusal the agent can relay + offer
     // alternatives for — not a 500, not a ghost third booking.
+    const occupyAlice = await book({
+      service: 'Haircut',
+      from: `${shiftDate}T09:45:00`,
+      to: `${shiftDate}T10:15:00`,
+      phone: '5553330014',
+    });
+    const occupyBob = await book({
+      service: 'Haircut',
+      from: `${shiftDate}T09:45:00`,
+      to: `${shiftDate}T10:15:00`,
+      phone: '5553330015',
+    });
+    expect(occupyAlice.json().success).toBe(true);
+    expect(occupyBob.json().success).toBe(true);
+
     const third = await book({
       service: 'Haircut',
-      from: `${shiftDate}T09:00:00`,
-      to: `${shiftDate}T09:30:00`,
+      from: `${shiftDate}T09:45:00`,
+      to: `${shiftDate}T10:15:00`,
       phone: '5553330005',
     });
     const body = third.json();
     expect(body.success).toBe(false);
     expect(body.error_code).toBe('TIMESLOT_OCCUPIED');
-    expect(await rowsAtInstant(expectedUtc(shiftDate, '09:00:00'))).toHaveLength(2);
+    expect(await rowsAtInstant(expectedUtc(shiftDate, '09:45:00'))).toHaveLength(2);
   });
 
   it('SAD: skilled employee whose shift ENDED is never assigned — 15:00 Haircut pair leaves Bob (09–13) out', async () => {

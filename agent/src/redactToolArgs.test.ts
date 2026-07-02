@@ -109,6 +109,17 @@ describe('redactToolArgs', () => {
     expect(String(out._unparsed)).not.toContain('6082175303');
   });
 
+  it('masks BEFORE truncating — a phone straddling the truncation boundary cannot leak a fragment', () => {
+    // WHY: truncate-then-mask would slice "…6082175303" at the 300-char
+    // boundary leaving a 5-digit tail that matches neither LONG_DIGIT_RUN
+    // nor the 3-3-4 shape — partial PII in centralized logs (Copilot
+    // review finding on PR #157).
+    const straddling = 'x'.repeat(295) + '6082175303 rest';
+    const out = redactToolArgs(JSON.stringify({ question: straddling })) as Record<string, unknown>;
+    expect(String(out.question)).not.toMatch(/\d/);
+    expect(String(out.question).length).toBeLessThanOrEqual(300);
+  });
+
   it('truncates very long string values to bound log size', () => {
     const out = redactToolArgs(JSON.stringify({ question: 'x'.repeat(5000) })) as Record<
       string,

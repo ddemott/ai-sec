@@ -30,10 +30,13 @@ function maskDigits(s: string): string {
 }
 
 function redactFreeText(s: string): string {
+  // Mask BEFORE truncating: slicing first can cut a phone number at the
+  // boundary, leaving a digit fragment too short for either pattern to
+  // match — partial PII in the logged preview.
   return s
-    .slice(0, MAX_STRING_LEN)
     .replace(LONG_DIGIT_RUN, (m) => maskDigits(m))
-    .replace(PHONE_IN_TEXT, (m) => maskDigits(m));
+    .replace(PHONE_IN_TEXT, (m) => maskDigits(m))
+    .slice(0, MAX_STRING_LEN);
 }
 
 function redactValue(key: string | null, value: JsonValue): JsonValue {
