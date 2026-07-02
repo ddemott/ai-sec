@@ -912,6 +912,13 @@ export function registerAgentToolRoutes(
       if (!trimmed) {
         return ok(reply, { matches: [] });
       }
+      // Escape LIKE metacharacters so a spoken/transcribed name containing
+      // `%` or `_` matches literally instead of acting as a wildcard — an
+      // unescaped `%` would ILIKE-match the tenant's entire address book and
+      // over-disclose names+phones (found 2026-07-01 by the real-DB companion
+      // test; see docs/TEST_DB_AUDIT.md). Backslash is Postgres's default
+      // LIKE escape character.
+      const likeTerm = trimmed.replace(/([\\%_])/g, '\\$1');
 
       const matches = await withTenantClient(args.tenant_id, async (client) => {
         const res = await client.query<{ name: string | null; phone: string | null }>(
@@ -932,7 +939,7 @@ export function registerAgentToolRoutes(
               )
             ORDER BY updated_at DESC NULLS LAST
             LIMIT 5`,
-          [args.tenant_id, trimmed]
+          [args.tenant_id, likeTerm]
         );
         return res.rows;
       });

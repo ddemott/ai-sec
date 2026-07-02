@@ -544,27 +544,43 @@ export function registerVersionHistoryRoutes(
         const total = parseInt(countResult.rows[0]?.count || '0');
 
         // Each versioned table has its own renamed PK column post-pilot-sprint
-        // (customers→customer_id, appointments→appointment_id, etc); voice_sessions
-        // uses voice_session_id. Map at SQL build time so the SELECT uses the
-        // right column and aliases it back to `id` for the consumer.
-        const pkColumn = (
+        // (module-level PK_COLUMN_BY_TABLE) AND its own display columns: only
+        // customers/employees have both name+phone; appointments and
+        // voice_sessions have neither, services/resources have no phone.
+        // Pre-2026-07-01 this SELECT hardcoded t.name/t.phone for every table,
+        // which threw 42703 (undefined_column) → 500 on 4 of the 6 supported
+        // tables; the mocked unit tests never parse the SQL, so it shipped
+        // green (caught by src/versionHistory.realdb.test.ts). Response shape
+        // stays {name, phone, email} — values are null for tables without a
+        // natural counterpart.
+        const pkColumn = PK_COLUMN_BY_TABLE[table];
+        const display = (
           {
-            customers: 'customer_id',
-            appointments: 'appointment_id',
-            voice_sessions: 'voice_session_id',
-            employees: 'employee_id',
-            services: 'service_id',
-            resources: 'resource_id',
-          } as Record<string, string>
+            customers: { name: 't.name', phone: 't.phone', email: 't.email' },
+            appointments: {
+              // Appointments have no name column — describe the booking.
+              name: `COALESCE(t.description, 'Appointment at ' || t.start_time::text)`,
+              phone: 'NULL',
+              email: 'NULL',
+            },
+            voice_sessions: {
+              name: 't.call_id',
+              phone: 't.caller_phone',
+              email: 'NULL',
+            },
+            employees: { name: 't.name', phone: 't.phone', email: 't.email' },
+            services: { name: 't.name', phone: 'NULL', email: 'NULL' },
+            resources: { name: 't.name', phone: 'NULL', email: 'NULL' },
+          } as Record<string, { name: string; phone: string; email: string }>
         )[table];
         const result = await client.query<DeletedRecord>(
           `SELECT
           t.${pkColumn} AS record_id,
           t.tenant_id,
           '${table}' as table_name,
-          t.name,
-          t.phone,
-          ${table === 'customers' ? 't.email' : 'NULL as email'},
+          ${display.name} AS name,
+          ${display.phone} AS phone,
+          ${display.email} AS email,
           t.deleted_at,
           t.deleted_by,
           (SELECT COUNT(*) FROM record_versions rv WHERE rv.record_id = t.${pkColumn} AND rv.table_name = '${table}') as version_count,

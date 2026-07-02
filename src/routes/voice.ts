@@ -284,8 +284,23 @@ export function registerVoiceRoutes(
         offset?: string;
       };
 
-      const limit = Math.min(parseInt(query.limit || '50'), 200);
-      const offset = parseInt(query.offset || '0');
+      // Validate filters before they reach SQL. Unvalidated, `limit=abc`
+      // parseInt's to NaN which pg serializes as the string "NaN" → Postgres
+      // `invalid input syntax for type bigint` → 500; a non-UUID customer_id
+      // → 22P02 → 500. Both must be clean 400s (found 2026-07-01 by the
+      // real-DB companion test; the mocked suite couldn't see either).
+      const limitRaw = query.limit ?? '50';
+      const offsetRaw = query.offset ?? '0';
+      if (!/^\d+$/.test(limitRaw) || !/^\d+$/.test(offsetRaw)) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'limit and offset must be non-negative integers' });
+      }
+      if (query.customer_id && !requireValidUUID(query.customer_id, reply, 'customer_id')) {
+        return;
+      }
+      const limit = Math.min(parseInt(limitRaw), 200);
+      const offset = parseInt(offsetRaw);
 
       const { calls, total } = await withTenantClient(tenantId, async (client) => {
         let whereClause = 'WHERE vs.tenant_id = $1 AND vs.is_deleted = false';

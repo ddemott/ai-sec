@@ -56,6 +56,21 @@ export async function scheduleRemindersForAppointment(
         return;
       }
 
+      // Idempotency guard: skip if a scheduled bundle already exists for this
+      // appointment. Prod calls this fire-and-forget once per booking, but any
+      // retry wrapper (or a double tool-call from the agent) would otherwise
+      // seed a duplicate bundle and double-remind the customer (found
+      // 2026-07-01 by the real-DB companion test). Reschedules still work:
+      // rescheduleRemindersForAppointment cancels the old bundle first, so
+      // this probe sees no 'scheduled' rows and the fresh seed proceeds.
+      const existing = await client.query(
+        `SELECT 1 FROM reminder_schedules
+          WHERE appointment_id = $1 AND tenant_id = $2 AND status = 'scheduled'
+          LIMIT 1`,
+        [appointmentId, tenantId]
+      );
+      if (existing.rows.length > 0) return;
+
       // Build one multi-row INSERT for the 4 reminder rows. Sequential
       // single-row INSERTs each acquire `audit_log` row locks one at
       // a time, creating a window where the test's cleanup cascade

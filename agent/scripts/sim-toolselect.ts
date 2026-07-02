@@ -1,0 +1,309 @@
+// sim-toolselect.ts — agent TOOL-SELECTION eval (docs/TODO_BLINDSPOT.md P0).
+// Driven by scripts/simulate.sh `toolselect`. Run: cd agent && npx tsx scripts/sim-toolselect.ts
+//
+// WHY THIS EXISTS: on 2026-07-01 a live caller hit a dead-end because the LLM
+// chose `book_appointment` after `get_available_slots` — book_appointment
+// requires a resource_id that get_available_slots never returns, so the call
+// failed validation and the booking silently broke. NOTHING tested which tool
+// the model picks; unit tests only prove each tool works once called.
+//
+// WHAT IT DOES: replays the REAL system prompt (buildSystemPrompt) + the REAL
+// 19 tool schemas (buildTools — already OpenAI function-calling JSON Schema;
+// LiveKit passes them through verbatim) against the SAME model the agent runs
+// (gpt-4o-mini) via plain chat.completions. Tools are never executed — each
+// call is answered with a scripted synthetic result, and we grade the SEQUENCE
+// of tool names the model chose: required tools must appear in order
+// (subsequence), forbidden tools fail the case instantly.
+//
+// On-demand, NOT CI (real OpenAI calls, ~cents). Env: OPENAI_API_KEY (exit 2
+// if missing). Exit 0 when pass-rate >= THRESHOLD, else 1 — same contract as
+// sim-rag.mjs.
+
+import { buildTools } from '../src/tools.js';
+import { buildSystemPrompt, formatDateForPrompt } from '../src/prompt.js';
+import type { SessionContext } from '../src/sessionContext.js';
+import type { ToolsClient } from '../src/toolsClient.js';
+
+const API_KEY = process.env.OPENAI_API_KEY;
+const MODEL = process.env.SIM_TOOLSELECT_MODEL || 'gpt-4o-mini'; // agent/src/index.ts pipeline model
+const THRESHOLD = 0.8;
+const MAX_ROUNDS = 12;
+
+const C = process.stdout.isTTY
+  ? { g: '\x1b[32m', r: '\x1b[31m', y: '\x1b[33m', d: '\x1b[2m', b: '\x1b[1m', x: '\x1b[0m' }
+  : { g: '', r: '', y: '', d: '', b: '', x: '' };
+
+if (!API_KEY) {
+  console.error('sim-toolselect: OPENAI_API_KEY not set');
+  process.exit(2);
+}
+
+// ── Real prompt + real tool schemas ──────────────────────────────────────────
+
+const TZ = 'America/Chicago';
+const ctx: SessionContext = {
+  tenantId: 'f234e471-0e60-4163-86c9-93cfd9338e3a',
+  callerPhone: '+15552220001',
+  callId: 'sim-toolselect-call',
+  roomName: 'sim-toolselect-room',
+  participantIdentity: 'sim_participant',
+};
+// The stub is never invoked — we intercept at the chat.completions layer and
+// feed synthetic results, so no HTTP/tool code runs.
+const stubClient = {
+  call: async () => ({ success: false, error: 'sim-toolselect stub — must never execute' }),
+} as unknown as ToolsClient;
+
+const systemPrompt = buildSystemPrompt({
+  tenantName: "Bella's Hair Studio",
+  callerPhone: ctx.callerPhone,
+  currentDate: formatDateForPrompt(new Date(), TZ),
+  timezone: TZ,
+});
+
+interface ToolShape {
+  description: string;
+  parameters: Record<string, unknown>;
+}
+const toolCtx = buildTools(ctx, stubClient);
+const openaiTools = Object.entries(toolCtx).map(([name, t]) => {
+  const shape = t as unknown as ToolShape;
+  return {
+    type: 'function' as const,
+    function: { name, description: shape.description, parameters: shape.parameters },
+  };
+});
+
+// ── Synthetic tool results (what the "backend" answers per tool) ─────────────
+
+const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
+  get_customer_context: {
+    success: true,
+    result: { found: true, name: 'Jane Doe', preferences: {} },
+  },
+  identify_caller: { success: true, result: { saved: true } },
+  get_service_catalog: {
+    success: true,
+    result: { services: [{ name: 'Haircut', price: 40, duration_minutes: 30 }] },
+  },
+  get_available_slots: {
+    success: true,
+    result: { spoken: 'Tomorrow we have 3:00 PM and 3:30 PM open for a haircut.' },
+  },
+  book_with_scheduling: {
+    success: true,
+    result: {
+      success: true,
+      appointment_id: '22222222-2222-4222-8222-222222222222',
+      employee_name: 'Maria',
+      booked_start: 'tomorrow 3:30 PM',
+      booked_end: 'tomorrow 4:00 PM',
+    },
+  },
+  get_my_appointments: {
+    success: true,
+    result: {
+      appointments: [
+        {
+          appointment_id: '11111111-1111-4111-8111-111111111111',
+          service: 'Haircut',
+          start_time: 'tomorrow 3:00 PM',
+        },
+      ],
+    },
+  },
+  cancel_appointment: { success: true, result: { canceled: true } },
+  take_message: { success: true, result: { recorded: true } },
+  get_company_policy_answer: {
+    success: true,
+    result: { answer: 'Yes, we offer beard trims for 15 dollars.' },
+  },
+};
+
+// ── Eval cases ────────────────────────────────────────────────────────────────
+// `required`: ordered subsequence of tool-name SETS — at least one member of
+// each set must be called, in order. `forbidden`: instant fail if ever called.
+// `userTurns`: fed in order each time the model answers with plain text.
+
+interface EvalCase {
+  name: string;
+  userTurns: string[];
+  required: string[][];
+  forbidden: string[];
+}
+
+const CASES: EvalCase[] = [
+  {
+    // The exact prod dead-end (bug #3): after get_available_slots the ONLY
+    // valid booking tool is book_with_scheduling — book_appointment and
+    // check_availability need a resource_id that available-slots never yields.
+    name: 'slots-then-book uses book_with_scheduling (bug #3 regression)',
+    userTurns: [
+      "Hi, this is Jane Doe, my number is 555-222-0001. What times are open tomorrow for a haircut?",
+      '3:30 works — please book it.',
+    ],
+    required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
+    forbidden: ['book_appointment', 'check_availability'],
+  },
+  {
+    name: 'availability question does not book anything',
+    userTurns: ["What's open on Friday for a haircut? This is Jane, 555-222-0001."],
+    required: [['get_available_slots', 'get_scheduling_options']],
+    forbidden: ['book_appointment', 'book_with_scheduling', 'check_availability'],
+  },
+  {
+    name: 'specific-time booking goes straight to a valid booking path',
+    userTurns: [
+      'Hi, this is Sam Park, 555-333-0002. Can you book me a haircut tomorrow at 4:30 PM?',
+      'Yes, 4:30 tomorrow is right — go ahead and book it.',
+    ],
+    required: [['book_with_scheduling', 'get_available_slots', 'get_scheduling_options']],
+    forbidden: ['book_appointment', 'check_availability'],
+  },
+  {
+    name: 'cancel flow looks up appointments before canceling',
+    userTurns: [
+      "Hi, it's Jane Doe, 555-222-0001 — I need to cancel my haircut tomorrow.",
+      'Yes, that one — cancel it please.',
+    ],
+    required: [['get_my_appointments'], ['cancel_appointment']],
+    forbidden: ['book_appointment', 'book_with_scheduling'],
+  },
+  {
+    name: 'service/price question uses catalog or policy, not booking',
+    userTurns: ['Do you guys do beard trims, and how much is one?'],
+    required: [['get_service_catalog', 'get_company_policy_answer']],
+    forbidden: ['book_appointment', 'book_with_scheduling', 'check_availability'],
+  },
+  {
+    name: 'message for the owner is recorded with take_message',
+    userTurns: [
+      'No booking needed — just tell the owner that Mike from Apex Supply called about the overdue invoice. My number is 555-444-0003.',
+      "That's everything, thanks.",
+    ],
+    required: [['take_message']],
+    forbidden: ['book_appointment', 'book_with_scheduling'],
+  },
+];
+
+// ── OpenAI chat.completions plumbing (raw fetch — no new deps) ───────────────
+
+interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+}
+
+async function chat(messages: ChatMessage[]): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
+    body: JSON.stringify({
+      model: MODEL,
+      temperature: 0,
+      messages,
+      tools: openaiTools,
+      tool_choice: 'auto',
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`OpenAI ${res.status}: ${body.slice(0, 300)}`);
+  }
+  const json = (await res.json()) as {
+    choices: Array<{ message: { content: string | null; tool_calls?: ToolCall[] } }>;
+  };
+  const msg = json.choices[0]?.message;
+  return { content: msg?.content ?? null, toolCalls: msg?.tool_calls ?? [] };
+}
+
+// ── Runner ────────────────────────────────────────────────────────────────────
+
+interface CaseResult {
+  pass: boolean;
+  called: string[];
+  reason: string;
+}
+
+async function runCase(c: EvalCase): Promise<CaseResult> {
+  const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
+  const userQueue = [...c.userTurns];
+  const called: string[] = [];
+  messages.push({ role: 'user', content: userQueue.shift()! });
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const { content, toolCalls } = await chat(messages);
+
+    if (toolCalls.length > 0) {
+      messages.push({ role: 'assistant', content: content ?? null, tool_calls: toolCalls });
+      for (const tc of toolCalls) {
+        called.push(tc.function.name);
+        if (c.forbidden.includes(tc.function.name)) {
+          return {
+            pass: false,
+            called,
+            reason: `called FORBIDDEN tool ${tc.function.name} (args: ${tc.function.arguments.slice(0, 120)})`,
+          };
+        }
+        const result = DEFAULT_TOOL_RESULTS[tc.function.name] ?? { success: true, result: {} };
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
+      }
+      continue;
+    }
+
+    // Plain text reply — feed the next scripted caller turn, or end the call.
+    messages.push({ role: 'assistant', content: content ?? '' });
+    const next = userQueue.shift();
+    if (!next) break;
+    messages.push({ role: 'user', content: next });
+  }
+
+  // Grade: required sets must appear as an ordered subsequence of `called`.
+  let idx = 0;
+  for (const name of called) {
+    if (idx < c.required.length && c.required[idx].includes(name)) idx++;
+  }
+  if (idx < c.required.length) {
+    return {
+      pass: false,
+      called,
+      reason: `missing required tool (wanted one of [${c.required[idx].join(', ')}] at step ${idx + 1}; called: ${called.join(' → ') || 'none'})`,
+    };
+  }
+  return { pass: true, called, reason: 'ok' };
+}
+
+async function main(): Promise<void> {
+  console.log(`${C.b}SecretaryHQ — agent tool-selection eval${C.x} ${C.d}(model: ${MODEL}, ${CASES.length} cases)${C.x}`);
+  let passed = 0;
+  for (const c of CASES) {
+    let r: CaseResult;
+    try {
+      r = await runCase(c);
+    } catch (err) {
+      r = { pass: false, called: [], reason: `harness error: ${(err as Error).message}` };
+    }
+    const mark = r.pass ? `${C.g}PASS${C.x}` : `${C.r}FAIL${C.x}`;
+    console.log(`  ${mark}  ${c.name}`);
+    console.log(`        ${C.d}sequence: ${r.called.join(' → ') || '(no tools called)'}${C.x}`);
+    if (!r.pass) console.log(`        ${C.y}${r.reason}${C.x}`);
+    if (r.pass) passed++;
+  }
+  const rate = passed / CASES.length;
+  const ok = rate >= THRESHOLD;
+  console.log(
+    `\n  ${ok ? C.g : C.r}${passed}/${CASES.length} cases passed (${Math.round(rate * 100)}%, threshold ${Math.round(THRESHOLD * 100)}%)${C.x}`
+  );
+  process.exit(ok ? 0 : 1);
+}
+
+main().catch((err) => {
+  console.error(`sim-toolselect: ${(err as Error).stack || err}`);
+  process.exit(1);
+});
