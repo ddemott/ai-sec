@@ -319,7 +319,7 @@ export function registerCustomerRoutes(
 
       logEvent(req, 'customer_deleted', {
         customerId: id,
-        canceledAppointments: canceledAppointments.length,
+        canceledAppointmentCount: canceledAppointments.length,
       });
       return reply.send({ success: true });
     }, 'Failed to delete customer')
