@@ -6,7 +6,7 @@ Multi-tenant AI receptionist for service businesses (tire shops, salons, auto sh
 
 **HIPAA verticals are permanently excluded** (medical, dental, chiropractic, optometry, veterinary).
 
-Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Full cross-angle gap inventory (what's missing from every direction) lives in `docs/GAPS.md` (created 2026-06-15). Framework-migration history (Vapi → LiveKit, Edge Functions → Fastify, OpenAI TTS → xAI Grok (2026-05) then full reversal to OpenAI TTS 2026-06-25) in `docs/FRAMEWORK_MIGRATIONS.md`. Hard-won debugging lessons (incl. the voice-agent go-live) in `docs/LESSONS_LEARNED.md`. (All project docs now live under `docs/`; the root holds only `CLAUDE.md`, `README.md`, and `workflow.config.json`.)
+Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Full cross-angle gap inventory (what's missing from every direction) lives in `docs/GAPS.md` (created 2026-06-15). Verification blind spots — the "green CI but broken in prod" seams (missing integration tests, tool-selection evals, observability) — in `docs/TODO_BLINDSPOT.md` (created 2026-07-01). Framework-migration history (Vapi → LiveKit, Edge Functions → Fastify, OpenAI TTS → xAI Grok (2026-05) then full reversal to OpenAI TTS 2026-06-25) in `docs/FRAMEWORK_MIGRATIONS.md`. Hard-won debugging lessons (incl. the voice-agent go-live) in `docs/LESSONS_LEARNED.md`. (All project docs now live under `docs/`; the root holds only `CLAUDE.md`, `README.md`, and `workflow.config.json`.)
 
 ## Architecture
 
