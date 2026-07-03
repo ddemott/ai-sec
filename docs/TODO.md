@@ -175,6 +175,7 @@ Each screen below has had NO dedicated UX review; review before beta. (Full P0/P
 - [ ] **[REVIEW]** `EmployeeManagementView` — add-employee form, per-card skill assignment, deactivated-employee surfacing.
 - [ ] **[REVIEW]** `ShiftManagementView` — team-size-conditional paths, copy-week discoverability.
 - [ ] **[REVIEW]** `ResourceManagerView` — zero-resource state, service-mapping checkboxes, "capabilities" meaning.
+  - _Partial (2026-07-03, branch `fix/ux-review-resource-manager`):_ fixed a hidden-error defect + a11y gaps (twin of `EmployeeManagementView`). An update failure called `setError`, but the error banner renders behind the open edit modal — invisible; update failures now `showToast` instead. A11y: add-form name/description inputs got `aria-label`s (placeholder-only before); the service-mapping toggles expose `aria-pressed`; the Active switch got an accessible name. 2 component tests (`ResourceManagerView.test.tsx`), dashboard tsc clean. **Still open (owner judgment):** zero-resource empty state, the mapping-checkbox model, and what "capabilities" means to an owner.
 - [ ] **[REVIEW]** `ServiceAssignmentView` — is 3 steps correct, no-assignment case, cancel/exit flow.
 - [ ] **[REVIEW]** `SkillMatrixView` + `SkillAssignmentsView` + `SkillRelationshipMap` — grid legibility at scale, map value vs confusion, both-views-necessary.
 - [ ] **[REVIEW]** `DeletedRecordsPanel` + `RecordHistoryModal` — discoverability, restore flow, version-history comprehensibility.

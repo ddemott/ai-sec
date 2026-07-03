@@ -106,10 +106,12 @@ export default function ResourceManagerView() {
         void refresh();
         setIsEditModalOpen(false);
       } else {
-        setError(res.error || 'Failed to update resource');
+        // Toast, not the page-level error banner: that banner renders behind the
+        // open edit modal, so a setError here would be invisible to the owner.
+        showToast(res.error || 'Failed to update resource', 'error');
       }
     } catch {
-      setError('Failed to update resource');
+      showToast('Failed to update resource', 'error');
     } finally {
       setSaving(false);
     }
@@ -205,12 +207,14 @@ export default function ResourceManagerView() {
           <div className="flex-1 space-y-2">
             <Input
               placeholder={`${vocab.resource_label} Name (e.g. Bay 1)`}
+              aria-label={`New ${vocab.resource_label.toLowerCase()} name`}
               value={newResource.name}
               onChange={(e) => setNewResource({ ...newResource, name: e.target.value })}
               required
             />
             <Input
               placeholder="Description"
+              aria-label={`New ${vocab.resource_label.toLowerCase()} description`}
               value={newResource.description}
               onChange={(e) => setNewResource({ ...newResource, description: e.target.value })}
               className="text-sm"
@@ -335,6 +339,7 @@ export default function ResourceManagerView() {
                   type="button"
                   role="switch"
                   aria-checked={editForm.is_active}
+                  aria-label="Active"
                   onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
                   className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
                   style={
@@ -373,6 +378,8 @@ export default function ResourceManagerView() {
                       selectedResource &&
                       toggleServiceMapping(service.service_id, selectedResource.resource_id)
                     }
+                    aria-pressed={isMapped}
+                    aria-label={`${isMapped ? 'Remove' : 'Add'} ${service.name}`}
                     className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-md' : ''}`}
                     style={
                       isMapped
