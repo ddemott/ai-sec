@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Api } from '../lib/api';
 import type { DeletedRecord, DeletedRecordsResponse, VersionedTable, Customer } from '../lib/types';
+import { excludedSystemFields } from '../../shared/versionHistoryFields';
 
 interface DeletedRecordsPanelProps {
   table: VersionedTable;
@@ -56,6 +57,7 @@ export function DeletedRecordsPanel({
   const [copyModal, setCopyModal] = useState<{
     sourceId: string;
     sourceData: Record<string, unknown>;
+    table: VersionedTable;
   } | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<string>('');
@@ -117,7 +119,11 @@ export function DeletedRecordsPanel({
   }
 
   function openCopyModal(record: DeletedRecord) {
-    setCopyModal({ sourceId: record.record_id, sourceData: record.last_data || {} });
+    setCopyModal({
+      sourceId: record.record_id,
+      sourceData: record.last_data || {},
+      table: record.table_name,
+    });
     setSelectedFields(new Set());
     setSelectedTarget('');
   }
@@ -162,16 +168,6 @@ export function DeletedRecordsPanel({
         r.email?.toLowerCase().includes(term)
       );
     }) || [];
-
-  const excludeFields = [
-    'id',
-    'tenant_id',
-    'created_at',
-    'updated_at',
-    'is_deleted',
-    'deleted_at',
-    'deleted_by',
-  ];
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -310,7 +306,7 @@ export function DeletedRecordsPanel({
                     </h4>
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       {Object.entries(record.last_data)
-                        .filter(([key]) => !excludeFields.includes(key))
+                        .filter(([key]) => !excludedSystemFields(record.table_name).has(key))
                         .map(([key, value]) => (
                           <div key={key} className="flex">
                             <span className="w-32 text-gray-500 flex-shrink-0">{key}:</span>
@@ -372,7 +368,7 @@ export function DeletedRecordsPanel({
                 </label>
                 <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                   {Object.entries(copyModal.sourceData)
-                    .filter(([key]) => !excludeFields.includes(key))
+                    .filter(([key]) => !excludedSystemFields(copyModal.table).has(key))
                     .map(([key, value]) => (
                       <label
                         key={key}

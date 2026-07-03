@@ -322,6 +322,16 @@ describe('restore-preview endpoint — ${table}/${pkColumn} interpolation per ta
       expect(field).toBeDefined();
       expect(field.current_value).toBe(c.updatedValue);
       expect(field.versions.length).toBeGreaterThanOrEqual(2);
+      // Correctness gap this closed: the table's REAL primary key
+      // (customer_id, appointment_id, …) must NOT appear as a restorable
+      // field. The old exclusion list only dropped a bare `id`, so the
+      // renamed PK leaked into the options. excludedSystemFields(table) now
+      // excludes it.
+      const pkField = body.fields.find((f: { field: string }) => f.field === c.pkColumn);
+      expect(
+        pkField,
+        `restore-preview must not expose ${c.pkColumn} as restorable`
+      ).toBeUndefined();
     });
   }
 });

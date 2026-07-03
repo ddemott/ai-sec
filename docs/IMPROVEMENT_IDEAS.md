@@ -225,7 +225,7 @@ Items completed 2026-05-29 (this session):
 **Effort vs Gain:** A couple hours of careful extraction should pay back quickly because this is a dense route cluster with a lot of behavior packed into one file.
 
 ### Task: Centralize version-history system-field exclusion by table-aware primary key
-**Status:** proposed
+**Status:** ✅ DONE 2026-07-02 — `shared/versionHistoryFields.ts` (`excludedSystemFields(table)` — common audit cols + the table's real PK) now backs the backend restore-preview builder + DeletedRecordsPanel + RecordHistoryModal (killed 3 duplicate `id`-only lists). Also folded the canonical `VERSIONED_TABLES`/`PK_COLUMN_BY_TABLE` here (versionHistoryHelpers re-exports). Realdb test asserts restore-preview no longer emits the table PK; 5 shared-helper unit tests.
 **Files to change:** `src/routes/versionHistory.ts:L66-L76`, `src/routes/versionHistory.ts:L795-L816`, `dashboard/components/DeletedRecordsPanel.tsx:L166-L174`, `dashboard/components/RecordHistoryModal.tsx:L428-L440`, `shared/versionHistoryFields.ts` (new), `src/versionHistory.test.ts:L330-L356`
 **What to do:** Create one shared helper that returns the non-restorable, non-display system fields for each versioned table, including the real table-specific primary key (`customer_id`, `appointment_id`, `employee_id`, etc.), tenant metadata, and soft-delete audit fields. Use that helper in the backend restore-preview builder and in both dashboard recovery surfaces instead of maintaining three separate exclusion lists that only know about a bare `id` column. Add or update a route test proving restore-preview does not emit the table PK as a selectable field.
 **Done when:**
