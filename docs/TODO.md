@@ -182,6 +182,7 @@ Each screen below has had NO dedicated UX review; review before beta. (Full P0/P
 - [ ] **[REVIEW]** `LoginView` + `/forgot-password` + `/reset-password` — forgot-password end-to-end, error quality, mobile.
 - [ ] **[REVIEW]** `SuperAdminDashboard` + `TenantCard`/`TenantCreateForm`/`TenantEditPanel` — admin interface usability (Dale-facing; slows onboarding if painful).
 - [ ] **[REVIEW]** `FirstRunTour` — post-wizard overlay tour; content/flow review (behavior already correct).
+  - _Partial (2026-07-03, branch `fix/ux-review-firstrun-tour`):_ reviewed — the tour is already strong (`useFocusTrap` + `role="dialog"` + `aria-modal` + `aria-labelledby`, close button `aria-label`, decorative icons `aria-hidden`, nav cards are real `<button>`s named by their title/description). One real gap: the nav cards highlighted on hover via JS `onMouseEnter/Leave` but had no keyboard-focus affordance — added a `focus-visible` ring (Cluster-D pattern). Existing `FirstRunTour.test.tsx` (11) still green, dashboard tsc clean. **Still open (owner judgment):** tour content/flow/copy.
 
 ### Tooling cleanup (dossier: _Tooling cleanup_)
 
