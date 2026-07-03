@@ -313,6 +313,8 @@ A 200 with a JSON body confirms the route is up and the agent secret is correctl
 
 ---
 
+> **Decision 2026-07-02:** the paid vendors below (Better Stack, Sentry) were **decided against** — NOT set on Railway, not a go-live step. Free prod observability stands: `GET /metrics` (Prometheus, `METRICS_TOKEN`-gated), Pino JSON logs on Railway live-tail, `GET /ready`. The setup steps below are retained as **optional/future** reference (the code integrations no-op until env vars are set); revisit only via a free path (e.g. Grafana Cloud over `/metrics`).
+
 ## Observability — Better Stack log aggregation
 
 Backend and agent both ship Pino JSON logs to stdout (Railway captures them) and, when `BETTER_STACK_TOKEN` is set, also forward to Better Stack (Logtail's successor). Both services use the same source token; a `service` filter splits them in the UI.

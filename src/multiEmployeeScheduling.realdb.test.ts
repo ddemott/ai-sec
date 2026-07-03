@@ -1,7 +1,7 @@
 /**
  * Multi-employee / multi-service scheduling coverage — real DB.
  *
- * Motivation (docs/TODO_BLINDSPOT.md P0): ALL live testing has been one
+ * Motivation (docs/TODO.md "Verification blind spots" P0): ALL live testing has been one
  * tenant, one employee (Dale), one service. Skill matching, employee
  * assignment, resource conflicts, and the concurrent double-book (GiST)
  * guarantee were unproven against realistic data — a salon with several

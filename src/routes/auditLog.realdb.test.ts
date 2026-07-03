@@ -1,5 +1,5 @@
 /**
- * Real-Postgres companion suite for GET /audit-log (per docs/TODO_BLINDSPOT.md).
+ * Real-Postgres companion suite for GET /audit-log (per docs/TODO.md "Verification blind spots").
  *
  * The existing src/routes/auditLog.test.ts mocks pg, so it can only assert the
  * SQL *text* the route builds — a wrong dynamic parameter index ($n off by one

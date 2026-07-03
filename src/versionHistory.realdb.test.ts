@@ -1,6 +1,6 @@
 /**
  * Real-DB companion tests for the version-history routes' IDENTIFIER-
- * INTERPOLATED SQL (per docs/TODO_BLINDSPOT.md).
+ * INTERPOLATED SQL (per docs/TODO.md "Verification blind spots").
  *
  * src/routes/versionHistory.ts builds SQL by template-interpolating
  * IDENTIFIERS — `${table}` / `${pkColumn}` — into the statement text

@@ -336,7 +336,7 @@ cmd_rag() {
 
 # ── toolselect ──────────────────────────────────────────────────────────────
 cmd_toolselect() {
-  # LLM tool-selection eval (docs/TODO_BLINDSPOT.md P0). Pure OpenAI replay of
+  # LLM tool-selection eval (docs/TODO.md "Verification blind spots" P0). Pure OpenAI replay of
   # the agent's prompt + tool schemas — no backend, no LiveKit, no DB. Needs
   # OPENAI_API_KEY; read from the environment first, then the repo .env.
   local key="${OPENAI_API_KEY:-$(env_get OPENAI_API_KEY)}"

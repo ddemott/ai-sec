@@ -1,7 +1,7 @@
 /**
  * Real-DB end-to-end booking integration test — the "green but broken" guard.
  *
- * Motivation (docs/TODO_BLINDSPOT.md, 2026-07-01): four booking bugs shipped
+ * Motivation (docs/TODO.md "Verification blind spots", 2026-07-01): four booking bugs shipped
  * to prod through a green CI suite because agentTools.test.ts mocks the pg
  * client — SQL errors, timezone conversion, and the actually-stored row were
  * all invisible. This suite drives the REAL route → REAL RPC → REAL Postgres

@@ -1,4 +1,4 @@
-// sim-toolselect.ts — agent TOOL-SELECTION eval (docs/TODO_BLINDSPOT.md P0).
+// sim-toolselect.ts — agent TOOL-SELECTION eval (docs/TODO.md "Verification blind spots" P0).
 // Driven by scripts/simulate.sh `toolselect`. Run: cd agent && npx tsx scripts/sim-toolselect.ts
 //
 // WHY THIS EXISTS: on 2026-07-01 a live caller hit a dead-end because the LLM

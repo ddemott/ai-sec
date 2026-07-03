@@ -1,6 +1,6 @@
 /**
  * Real-Postgres companion test for scheduleRemindersForAppointment — per
- * docs/TODO_BLINDSPOT.md (2026-07-01).
+ * docs/TODO.md "Verification blind spots" (2026-07-01).
  *
  * The sibling scheduleForAppointment.test.ts mocks the pg client, so the
  * dynamically-built multi-row INSERT (valuesSql/params placeholder math into
