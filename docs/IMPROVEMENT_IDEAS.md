@@ -104,7 +104,7 @@ Items completed 2026-05-29 (this session):
 ## Ideas — 2026-05-30 (code patterns)
 
 ### Task: Extract reusable URL query state hook for dashboard shallow state
-**Status:** proposed
+**Status:** ✅ DONE 2026-07-02 (PR #167) — `dashboard/lib/useUrlQueryState.ts` (TDD, 8 cases); KnowledgeBaseView (tab+q) and SkillAssignmentsView (view) migrated off their own useSearchParams/replaceState/popstate wiring.
 **Files to change:** `dashboard/components/KnowledgeBaseView.tsx:L396-L437`, `dashboard/components/SkillAssignmentsView.tsx:L31-L51`, `dashboard/lib/useUrlQueryState.ts` (new), `dashboard/components/SkillAssignmentsView.test.tsx:L1-L106`
 **What to do:** Add a small client-side hook that owns four things currently being hand-written in view components: reading an initial query-param value, validating it against an allowed set, writing updates with `window.history.replaceState`, and reacting to browser `popstate`. Move the `tab` and `q` handling in `KnowledgeBaseView` and the `view` handling in `SkillAssignmentsView` onto that hook instead of each component building its own `URLSearchParams` logic. Keep the hook shallow, string-based, and intentionally limited to URL state, not API state.
 **Done when:**
@@ -119,7 +119,7 @@ Items completed 2026-05-29 (this session):
 **Effort vs Gain:** About 1-2 hours of straightforward extraction buys back repeated, easy-to-get-wrong URL state code across multiple dashboard shells, so the return is solid.
 
 ### Task: Add popstate-safe view persistence to SkillAssignmentsView
-**Status:** proposed
+**Status:** ✅ DONE 2026-07-02 (PR #167) — `view` now driven by the shared hook (not a one-time initialView snapshot); browser back/forward re-syncs the Grid/Map view. New popstate test proves the flip.
 **Files to change:** `dashboard/components/SkillAssignmentsView.tsx:L31-L83`, `dashboard/components/SkillAssignmentsView.test.tsx:L1-L106`
 **What to do:** Keep the existing `?view=map` deep-link behavior, but make the rendered view stay in sync when navigation changes happen outside the click handler, especially browser back/forward and parent-shell URL rewrites. The simplest path is to drive `view` from the extracted query-state helper instead of a one-time `initialView` snapshot from `useSearchParams()`. Extend the component test file with a case that starts on `?view=map`, rewrites the URL back to grid, dispatches `popstate`, and verifies the rendered marker flips back to Grid.
 **Done when:**
@@ -134,7 +134,7 @@ Items completed 2026-05-29 (this session):
 **Effort vs Gain:** Under an hour of focused cleanup closes a real navigation edge case in a high-traffic admin view, which is a good trade.
 
 ### Task: Persist AIInsights sub-tab selection with the shared URL-state helper
-**Status:** proposed
+**Status:** ✅ DONE 2026-07-02 (PR #167) — sub-tab mirrored to a scoped `?aiTab=persona|knowledge` via the shared hook; new `AIInsightsView.test.tsx` covers default/deep-link/click/popstate. (The spec's `analytics` sub-tab no longer exists; mirrored the real 2 tabs.)
 **Files to change:** `dashboard/components/AIInsightsView.tsx:L1-L53`, `dashboard/lib/useUrlQueryState.ts` (new), `dashboard/components/AIInsightsView.test.tsx` (new)
 **What to do:** Mirror the active `AIInsightsView` sub-tab to a query param such as `?aiTab=persona|knowledge|analytics`, using the same shared hook instead of local `useState` only. Initialize from the URL, preserve the existing default of `persona`, and add a focused component test file that verifies default render, deep-link render, click-to-update URL behavior, and back/forward synchronization. Keep the param scoped so it does not collide with existing `tab`, `subtab`, or `view` usage elsewhere in the dashboard.
 **Done when:**
@@ -157,7 +157,7 @@ Items completed 2026-05-29 (this session):
 ## Ideas — 2026-05-31 (developer experience)
 
 ### Task: Extend useFocusTrap to handle outside-dismiss overlays and migrate StaffProfileCard onto it
-**Status:** proposed
+**Status:** ✅ DONE 2026-07-02 (PR #168) — added opt-in `onOutsideDismiss` (5th positional param, existing callers unaffected); StaffProfileCard dropped its ~55-line hand-rolled effect. Existing keyboard tests pass + 2 new outside-mousedown tests.
 **Files to change:** `dashboard/lib/useFocusTrap.ts:L1-L79`, `dashboard/components/scheduler/StaffProfileCard.tsx:L1-L106`, `dashboard/components/scheduler/StaffProfileCard.test.tsx:L49-L86`, `dashboard/components/scheduler/scheduler.test.tsx:L694-L729`
 **What to do:** Expand `useFocusTrap` so callers can opt into outside-click dismissal in addition to Escape, Tab trapping, focus restore, and optional scroll locking. Then delete the custom `mousedown`/`keydown`/focus-restore effect from `StaffProfileCard` and replace it with the shared hook. Keep the hook small: accept an optional `onInteractOutside` callback or boolean flag, register the outside listener only while open, and preserve the current “do not steal focus if autofocus already landed inside” behavior.
 **Done when:**
@@ -210,7 +210,7 @@ Items completed 2026-05-29 (this session):
 ## Ideas — 2026-06-01 (architecture)
 
 ### Task: Split version history routes into focused registrars and shared helpers
-**Status:** proposed
+**Status:** ✅ DONE 2026-07-02 (PR #169) — shared helpers/config/schemas extracted to `src/routes/versionHistoryHelpers.ts` (versionHistory.ts 858→721 lines); 89/89 unit+realdb tests unchanged. Deliberately kept routes in one registrar (the helper duplication was the real payload; a multi-registrar split adds churn with no behavior gain).
 **Files to change:** `src/routes/versionHistory.ts:L18-L187`, `src/routes/versionHistory.ts:L198-L520`, `src/routes/versionHistory.ts:L527-L850`, `src/routes/versionHistory/validators.ts` (new), `src/routes/versionHistory/historyRoutes.ts` (new), `src/routes/versionHistory/recoveryRoutes.ts` (new), `src/versionHistory.test.ts:L1-L1188`
 **What to do:** Keep `registerVersionHistoryRoutes()` as the public entrypoint, but move the current inline helpers and route blocks into smaller modules grouped by concern. Put shared table validation, body validation, error-response creation, and table metadata in `validators.ts`. Move history, compare, and restore-preview reads into `historyRoutes.ts`. Move restore-fields, restore deleted, copy-fields, and deleted-record listing into `recoveryRoutes.ts`. Have the top-level file compose those registrars so route URLs and behavior stay unchanged. Update `src/versionHistory.test.ts` only as needed to keep imports and route registration pointed at the same public function.
 **Done when:**
