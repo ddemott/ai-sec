@@ -738,7 +738,10 @@ describe('restore-fields batch payload — multi-version groups in one transacti
       ],
       restored_by: 'realdb-test',
     });
-    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+    expect(res.statusCode).toBe(500);
+    // The DB function RAISEs P0001 for a missing version; the route must turn
+    // that into the STRUCTURED RESTORE_FAILED 5W body (not a generic 500).
+    expect(res.json().code).toBe('RESTORE_FAILED');
 
     const row = await setup.query(`SELECT name, phone FROM customers WHERE customer_id = $1`, [id]);
     // Still the current (v3) values — the valid group's change was rolled back.

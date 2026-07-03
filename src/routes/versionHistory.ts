@@ -245,6 +245,11 @@ export function registerVersionHistoryRoutes(
 
           let lastData: Record<string, unknown> | null = null;
           for (const group of groups) {
+            // Mark this group as the suspect BEFORE the RPC — the DB function
+            // RAISEs a P0001 exception for a missing record/version (it does
+            // NOT return null), so we can't rely on inspecting the result to
+            // know which group failed. Cleared only after the group succeeds.
+            failedVersion = group.source_version;
             const restoreResult = await client.query<{ data: Record<string, unknown> }>(
               `SELECT restore_fields_from_version($1, $2, $3, $4, $5, $6, $7) as data`,
               [
@@ -258,20 +263,21 @@ export function registerVersionHistoryRoutes(
               ]
             );
             const data = restoreResult.rows[0]?.data ?? null;
-            if (!data) {
-              failedVersion = group.source_version;
-              throw new Error(`RESTORE_FAILED:${group.source_version}`);
-            }
+            if (!data) throw new Error(`RESTORE_FAILED:${group.source_version}`);
             lastData = data;
+            failedVersion = null; // this group committed cleanly
           }
 
           await client.query('COMMIT');
           return lastData;
         } catch (err) {
           await client.query('ROLLBACK').catch(() => {});
-          // A missing-version failure is an expected 500 with a 5W body below;
-          // anything else propagates to withHandler's error branch.
-          if (failedVersion !== null) return null;
+          // Expected restore failure — the RPC RAISEd (P0001) or returned no
+          // data for the group named in failedVersion. Return null so the
+          // route emits the structured RESTORE_FAILED 5W body below. An error
+          // with no failedVersion set is unexpected → propagate to withHandler.
+          const code = (err as { code?: string } | null)?.code;
+          if (failedVersion !== null || code === 'P0001') return null;
           throw err;
         }
       });
