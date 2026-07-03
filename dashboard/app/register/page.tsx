@@ -1,7 +1,19 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Bot, Lock, Mail, User, Building2, Briefcase, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import {
+  Bot,
+  Lock,
+  Mail,
+  User,
+  Building2,
+  Briefcase,
+  Loader2,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  ChevronDown,
+} from 'lucide-react';
 import { API_BASE_URL, Api } from '@/lib/api';
 import type { BusinessTemplate } from '@/lib/types';
 
@@ -70,7 +82,14 @@ export default function RegisterPage() {
           password,
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean; tenant_id?: string; user_name?: string; role?: string; token?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        tenant_id?: string;
+        user_name?: string;
+        role?: string;
+        token?: string;
+        error?: string;
+      };
 
       if (res.ok && data.success) {
         // Same keys LoginView writes — the dashboard authenticates off these
@@ -146,7 +165,10 @@ export default function RegisterPage() {
                 Business name
               </label>
               <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+                <Building2
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  aria-hidden="true"
+                />
                 <input
                   id="reg-business"
                   type="text"
@@ -169,14 +191,17 @@ export default function RegisterPage() {
                 Business type
               </label>
               <div className="relative">
-                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 z-10" aria-hidden="true" />
+                <Briefcase
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 z-10"
+                  aria-hidden="true"
+                />
                 {templates.length > 0 ? (
                   <select
                     id="reg-type"
                     required
                     value={businessType}
                     onChange={(e) => setBusinessType(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm appearance-none"
+                    className="w-full pl-11 pr-10 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm appearance-none"
                     style={inputStyle}
                   >
                     <option value="" disabled>
@@ -190,7 +215,16 @@ export default function RegisterPage() {
                         </option>
                       ))}
                   </select>
-                ) : (
+                ) : null}
+                {templates.length > 0 && (
+                  // appearance-none strips the native dropdown arrow — add a
+                  // visible chevron so the field reads as a select, not a box.
+                  <ChevronDown
+                    aria-hidden="true"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+                  />
+                )}
+                {templates.length === 0 && (
                   <input
                     id="reg-type"
                     type="text"
@@ -214,7 +248,10 @@ export default function RegisterPage() {
                 Your name
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+                <User
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  aria-hidden="true"
+                />
                 <input
                   id="reg-name"
                   type="text"
@@ -238,7 +275,10 @@ export default function RegisterPage() {
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+                <Mail
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  aria-hidden="true"
+                />
                 <input
                   id="reg-email"
                   type="email"
@@ -262,7 +302,10 @@ export default function RegisterPage() {
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
+                <Lock
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  aria-hidden="true"
+                />
                 <input
                   id="reg-password"
                   type={showPassword ? 'text' : 'password'}
@@ -271,6 +314,7 @@ export default function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
+                  aria-describedby="reg-password-hint"
                   className="w-full pl-11 pr-12 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
                   style={inputStyle}
                   placeholder="At least 6 characters"
@@ -286,6 +330,13 @@ export default function RegisterPage() {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              <p
+                id="reg-password-hint"
+                className="mt-1.5 ml-1 text-xs"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Use at least 6 characters.
+              </p>
             </div>
 
             <button

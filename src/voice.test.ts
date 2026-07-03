@@ -605,6 +605,33 @@ describe('Voice Routes — Sad Paths', () => {
     expect(body.error).toBe('Validation failed');
   });
 
+  // WHO/WHAT: the dashboard/manual /voice/session/end endpoint. WHEN: any caller
+  // sends the outcome string the AGENT actually writes (callOutcome/callClassify
+  // vocabulary — `booked`, `no_availability`, etc.). WHERE: EndSessionSchema enum
+  // in src/routes/voice.ts. WHY: the enum used to accept ONLY the legacy
+  // `appointment_booked`/`info_provided`/`voicemail`/`abandoned`/`other` vocabulary
+  // — disjoint from the live agent strings — so a real `booked` outcome 400'd. This
+  // pins the additive alignment so the live vocab is accepted (legacy still valid).
+  it('16b. POST /voice/session/end accepts the live agent outcome vocabulary', async () => {
+    for (const outcome of [
+      'booked',
+      'no_availability',
+      'wrong_service',
+      'price',
+      'message',
+      'info',
+    ]) {
+      queryResponses.push({ rows: [{ ended: true }] });
+      const res = await app.inject({
+        method: 'POST',
+        url: `/voice/session/end?tenant_id=${TENANT_ID}`,
+        payload: { call_id: CALL_ID, outcome },
+      });
+      expect(res.statusCode, `outcome "${outcome}" should be accepted`).toBe(200);
+      expect(res.json().success).toBe(true);
+    }
+  });
+
   it('17. POST /voice/session/end returns 404 on non-existent session', async () => {
     // end_voice_session returns false
     queryResponses.push({ rows: [{ ended: false }] });

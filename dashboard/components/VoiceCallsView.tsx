@@ -144,13 +144,28 @@ interface ActiveCallRowProps {
 }
 
 function ActiveCallRow({ call, tenantId, onSelect }: ActiveCallRowProps) {
+  const open = () => {
+    void Api.voice
+      .getSession(tenantId, call.call_id)
+      .then((session) => {
+        onSelect(session);
+      })
+      .catch(() => {
+        showToast('Could not open that call. Please try again.', 'error');
+      });
+  };
   return (
     <div
-      className="p-3 hover:brightness-110 cursor-pointer transition-colors"
-      onClick={() => {
-        void Api.voice.getSession(tenantId, call.call_id).then((session) => {
-          onSelect(session);
-        });
+      role="button"
+      tabIndex={0}
+      aria-label={`View live call from ${call.customer_name || formatPhone(call.caller_phone)}`}
+      className="p-3 hover:brightness-110 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
       }}
     >
       <div className="flex items-center justify-between">
@@ -185,7 +200,11 @@ interface HistoryCallRowProps {
 function HistoryCallRow({ call, isSelected, onSelect }: HistoryCallRowProps) {
   return (
     <div
-      className={`p-3 hover:brightness-110 cursor-pointer transition-colors ${
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      aria-label={`View call from ${call.customer_name || call.customer_context?.customer?.name || formatPhone(call.caller_phone)}`}
+      className={`p-3 hover:brightness-110 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${
         isSelected ? 'border-l-2' : ''
       }`}
       style={
@@ -194,6 +213,12 @@ function HistoryCallRow({ call, isSelected, onSelect }: HistoryCallRowProps) {
           : undefined
       }
       onClick={() => onSelect(call)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(call);
+        }
+      }}
     >
       <div className="flex items-center justify-between mb-1">
         <span className="font-medium text-[var(--text-primary)] text-sm">
@@ -332,7 +357,10 @@ function MessagesInbox({ tenantId }: { tenantId: string | null }) {
           {messages.map((msg) => (
             <div
               key={msg.message_id}
-              className="p-3 cursor-pointer hover:brightness-110 transition-colors"
+              role="button"
+              tabIndex={0}
+              aria-pressed={selected?.message_id === msg.message_id}
+              className="p-3 cursor-pointer hover:brightness-110 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
               style={
                 selected?.message_id === msg.message_id
                   ? {
@@ -342,6 +370,12 @@ function MessagesInbox({ tenantId }: { tenantId: string | null }) {
                   : undefined
               }
               onClick={() => void handleSelect(msg)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  void handleSelect(msg);
+                }
+              }}
             >
               <div className="flex items-center justify-between mb-1">
                 <span

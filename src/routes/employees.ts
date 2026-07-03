@@ -73,6 +73,40 @@ export function registerEmployeeRoutes(
       const lastName = body.last_name || '';
       const displayName = [firstName, lastName].filter(Boolean).join(' ');
 
+      // Guard against accidentally creating a second ACTIVE employee with the
+      // same name in one tenant (the "duplicate Dale DeMott" prod case). We
+      // match on the normalized name among non-deleted rows only, so re-adding
+      // someone you previously soft-deleted is still allowed, and a soft-deleted
+      // twin never blocks a legit create. Blank names skip the check (a nameless
+      // employee is a form quirk, not a duplicate). NOTE: the check and the
+      // INSERT below run on two SEPARATE pooled connections (two withTenantClient
+      // calls), so there is a small TOCTOU window — two simultaneous creates of
+      // the same name could both pass. That's acceptable for a soft guardrail
+      // against accidental duplicates: a genuine two-people-same-name case is
+      // rare and the owner can disambiguate the display name (e.g. "Dale D."), so
+      // a soft 409 is preferred over a hard UNIQUE index (which would race-safely
+      // block the duplicate but also reject legit namesakes and couldn't be
+      // applied while prod still holds the existing duplicate).
+      const conflict = await withTenantClient(body.tenant_id, async (client) => {
+        if (displayName.trim()) {
+          const dup = await client.query(
+            `SELECT 1 FROM employees
+             WHERE tenant_id = $1 AND is_deleted = false
+               AND LOWER(TRIM(name)) = LOWER(TRIM($2))
+             LIMIT 1`,
+            [body.tenant_id, displayName]
+          );
+          if (dup.rows.length > 0) return true;
+        }
+        return false;
+      });
+      if (conflict) {
+        return reply.status(409).send({
+          success: false,
+          error: `An active employee named "${displayName}" already exists for this business. Use a more specific name to tell them apart, or restore the existing record.`,
+        });
+      }
+
       const res = await withTenantClient(body.tenant_id, async (client) => {
         return client.query(
           'INSERT INTO employees (tenant_id, name, first_name, last_name, email, phone, skills) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',

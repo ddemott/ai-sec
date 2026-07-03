@@ -187,7 +187,7 @@ export function buildTools(
 
     get_available_slots: llm.tool({
       description:
-        "Return a spoken description of open time slots for a specific service on a specific date. Use when the caller asks 'when can I come in for X' and has a day in mind.",
+        "Return a spoken description of open time slots for a specific service on a specific date. Use when the caller asks 'when can I come in for X' and has a day in mind. This returns spoken times ONLY — it does NOT return a bookable resource_id. To book one of these times, call book_with_scheduling with a tight window around the time the caller chose; do NOT call book_appointment or check_availability afterward (they need a resource_id this tool never yields).",
       parameters: {
         type: 'object',
         properties: {
@@ -284,11 +284,15 @@ export function buildTools(
 
     check_availability: llm.tool({
       description:
-        'Check whether a specific resource is available at a specific time. Use when you have both a resource_id and a concrete start/end. (SLOW lookup — 2-4s; a short filler like "one sec while I check that" is spoken automatically before the result.)',
+        'Check whether a specific resource is available at a specific time. Use ONLY when you already have a resource_id from get_scheduling_options. get_available_slots does NOT return a resource_id — if you only have a time the caller picked, use book_with_scheduling instead of this tool. (SLOW lookup — 2-4s; a short filler like "one sec while I check that" is spoken automatically before the result.)',
       parameters: {
         type: 'object',
         properties: {
-          resource_id: { type: 'string' },
+          resource_id: {
+            type: 'string',
+            description:
+              'A resource_id from get_scheduling_options output (not from get_available_slots).',
+          },
           start_time: { type: 'string', description: 'ISO datetime.' },
           end_time: { type: 'string', description: 'ISO datetime.' },
         },
@@ -296,6 +300,18 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { resource_id: string; start_time: string; end_time: string }) => {
+        // Guardrail (prod bug #3): check_availability needs a resource_id that
+        // ONLY get_scheduling_options returns. get_available_slots yields spoken
+        // times with no resource_id, so the LLM sometimes reaches here empty-
+        // handed. Fail loudly with a redirect instead of 400ing the backend or
+        // letting the LLM invent an id.
+        if (!args.resource_id || !args.resource_id.trim()) {
+          return JSON.stringify({
+            error:
+              'check_availability needs a resource_id from get_scheduling_options. If you only have a time the caller chose, call book_with_scheduling with a tight window around that time instead.',
+            error_code: 'RESOURCE_ID_REQUIRED',
+          });
+        }
         const res = await client.call(
           '/agent-tools/check-availability',
           {
@@ -312,11 +328,15 @@ export function buildTools(
 
     book_appointment: llm.tool({
       description:
-        "Book an appointment at a specific slot. Requires a good phone number (caller-ID or one the caller gives you). If the response contains 'I'll need a good phone number', collect and confirm a number from the caller per the phone-handling guidance in the instructions, then retry.",
+        "Book an appointment at a specific slot when you ALREADY have a resource_id from get_scheduling_options. The resource_id MUST come from get_scheduling_options — get_available_slots does NOT return one, so if you only have a date/time the caller chose, call book_with_scheduling instead of this tool. Requires a good phone number (caller-ID or one the caller gives you). If the response contains 'I'll need a good phone number', collect and confirm a number from the caller per the phone-handling guidance in the instructions, then retry.",
       parameters: {
         type: 'object',
         properties: {
-          resource_id: { type: 'string' },
+          resource_id: {
+            type: 'string',
+            description:
+              'A resource_id from get_scheduling_options output (not from get_available_slots).',
+          },
           start_time: { type: 'string' },
           end_time: { type: 'string' },
           phone: {
@@ -343,6 +363,18 @@ export function buildTools(
         employee_id?: string;
         description?: string;
       }) => {
+        // Guardrail (prod bug #3): book_appointment needs a resource_id that
+        // ONLY get_scheduling_options returns. get_available_slots yields spoken
+        // times with no resource_id, so the LLM sometimes reaches here empty-
+        // handed and dead-ends. Fail loudly with a redirect to the one-call
+        // path instead of 400ing the backend or letting the LLM invent an id.
+        if (!args.resource_id || !args.resource_id.trim()) {
+          return JSON.stringify({
+            error:
+              'book_appointment needs a resource_id from get_scheduling_options. If you only have a date and time the caller chose, call book_with_scheduling with a tight window around that time instead.',
+            error_code: 'RESOURCE_ID_REQUIRED',
+          });
+        }
         speakFiller?.('One moment while I get that booked...');
         const bookRes = await client.call('/agent-tools/book-appointment', {
           tenant_id: ctx.tenantId,

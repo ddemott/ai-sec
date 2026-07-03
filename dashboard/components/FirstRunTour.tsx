@@ -165,7 +165,7 @@ function TourCard({ icon: Icon, title, description, onClick }: TourCardProps) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors group"
+      className="w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-soft)] focus-visible:ring-offset-1"
       style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = 'var(--accent-soft)';

@@ -97,7 +97,13 @@ export function TenantEditPanel({
           )}
           {!isEditing ? (
             <>
-              <Button variant="danger" size="sm" onClick={onDelete} title="Delete Business">
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={onDelete}
+                title="Delete Business"
+                aria-label="Delete business"
+              >
                 <Trash2 className="w-5 h-5" />
               </Button>
               <Button variant="secondary" onClick={onEdit}>

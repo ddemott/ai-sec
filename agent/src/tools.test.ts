@@ -270,6 +270,30 @@ describe('book_appointment', () => {
     expect(calls[0].body.description).toBe('Booking via SecretaryHQ');
   });
 
+  it('GUARD: empty resource_id → redirects to book_with_scheduling, no backend call (prod bug #3)', async () => {
+    // WHO: LLM ran get_available_slots (spoken times, NO resource_id), the
+    //       caller picked one, and the LLM tries to book it here.
+    // WHAT: book_appointment requires a resource_id that only
+    //       get_scheduling_options returns. With an empty resource_id the tool
+    //       must NOT hit the backend (would 400 / risk an invented id) — it
+    //       returns a RESOURCE_ID_REQUIRED redirect so the LLM re-routes to
+    //       book_with_scheduling. This is the exact prod dead-end (bug #3).
+    const { client, calls } = makeClient([]); // no responses queued — asserting no call
+    const tools = buildTools(makeCtx(), client);
+
+    const result = await exec(tools.book_appointment, {
+      resource_id: '   ',
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+      phone: '+15559998888',
+    });
+
+    expect(calls).toHaveLength(0);
+    const parsed = JSON.parse(result);
+    expect(parsed.error_code).toBe('RESOURCE_ID_REQUIRED');
+    expect(parsed.error).toContain('book_with_scheduling');
+  });
+
   it('SAD: backend error with error_code → tool returns JSON including the code', async () => {
     // WHY: The prompt has a translation table for error codes
     //        (TIMESLOT_OCCUPIED → "that time just got taken"). If the
@@ -294,6 +318,42 @@ describe('book_appointment', () => {
     const parsed = JSON.parse(result);
     expect(parsed.error).toBe('That time slot is already booked.');
     expect(parsed.error_code).toBe('TIMESLOT_OCCUPIED');
+  });
+});
+
+describe('check_availability', () => {
+  it('HAPPY: forwards tenant_id + args when a real resource_id is present', async () => {
+    const { client, calls } = makeClient([{ ok: true, result: 'That resource is free.' }]);
+    const tools = buildTools(makeCtx(), client);
+    await exec(tools.check_availability, {
+      resource_id: RESOURCE_ID,
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+    });
+    expect(calls[0].path).toBe('/agent-tools/check-availability');
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      resource_id: RESOURCE_ID,
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+    });
+  });
+
+  it('GUARD: empty resource_id → redirects to book_with_scheduling, no backend call (prod bug #3)', async () => {
+    // Same dead-end as book_appointment: check_availability needs a resource_id
+    // that only get_scheduling_options returns. An empty one must short-circuit
+    // to a RESOURCE_ID_REQUIRED redirect, never touching the backend.
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx(), client);
+    const result = await exec(tools.check_availability, {
+      resource_id: '',
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+    });
+    expect(calls).toHaveLength(0);
+    const parsed = JSON.parse(result);
+    expect(parsed.error_code).toBe('RESOURCE_ID_REQUIRED');
+    expect(parsed.error).toContain('book_with_scheduling');
   });
 });
 

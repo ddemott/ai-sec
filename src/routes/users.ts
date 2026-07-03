@@ -10,6 +10,7 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   withHandler,
+  withPoolClient,
   logEvent,
   requireTenantId,
   type AppRequest,
@@ -144,13 +145,7 @@ export function registerUserRoutes(
            RETURNING user_id`,
             [tenant_id, normalizedEmail, placeholderHash, full_name, role]
           );
-          const newUserId = userRes.rows[0].user_id as string;
-          await client.query(
-            `INSERT INTO password_resets (user_id, token_hash, channel, expires_at)
-           VALUES ($1, $2, 'email', NOW() + ($3 || ' minutes')::interval)`,
-            [newUserId, tokenHash, INVITE_TTL_MINUTES]
-          );
-          return newUserId;
+          return userRes.rows[0].user_id as string;
         });
       } catch (err: unknown) {
         // Postgres unique violation on (tenant_id, email) → 409
@@ -161,6 +156,46 @@ export function registerUserRoutes(
           });
         }
         throw err;
+      }
+
+      // The invite's reset token goes into password_resets, whose RLS policy
+      // (password_resets_unauthenticated_only) permits writes ONLY when no
+      // tenant context is set. The table isn't tenant-scoped (it's keyed by
+      // user_id), and the forgot/reset-password flow writes it the same way —
+      // via withPoolClient with no app.current_tenant_id (see auth.ts). Writing
+      // it from the tenant-context connection above tripped the WITH CHECK and
+      // 42501'd under any non-BYPASSRLS DB role (latent: prod's role bypasses
+      // RLS, so it worked there but the app's own policy would have rejected the
+      // app's own write under a locked-down role). Doing it here, off the tenant
+      // connection, honors the policy's intent (only the unauthenticated flow
+      // writes this table) and works under any role.
+      //
+      // The users INSERT already committed (autocommit) before this write. If the
+      // token INSERT fails, roll the user row back so a re-invite doesn't hit the
+      // (tenant_id, email) UNIQUE and 409 forever with no token to reset against.
+      // Best-effort: if the rollback itself fails we still surface the original
+      // error so the owner knows the invite didn't complete.
+      try {
+        await withPoolClient(pool, async (client) => {
+          await client.query(
+            `INSERT INTO password_resets (user_id, token_hash, channel, expires_at)
+             VALUES ($1, $2, 'email', NOW() + ($3 || ' minutes')::interval)`,
+            [userId, tokenHash, INVITE_TTL_MINUTES]
+          );
+        });
+      } catch (tokenErr) {
+        await withTenantClient(tenant_id, async (client) => {
+          await client.query('DELETE FROM users WHERE user_id = $1 AND tenant_id = $2', [
+            userId,
+            tenant_id,
+          ]);
+        }).catch((rollbackErr: unknown) => {
+          req.log.error(
+            { rollbackErr, userId, email: normalizedEmail },
+            'Invite token INSERT failed AND user rollback failed — orphaned user row'
+          );
+        });
+        throw tokenErr;
       }
 
       const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
