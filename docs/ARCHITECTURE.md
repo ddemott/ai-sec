@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-06-30 (29 route modules, 147 migrations, 19 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
+**Last verified:** 2026-07-02 (29 route modules, 154 migrations, 19 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
@@ -42,7 +42,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via OpenAI (fully since 2026-06-25 Grok removal; no XAI key; runFallback also OpenAI))
 - **Tools**: 19 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
 - **API**: Fastify (29 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 147 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
+- **DB**: Postgres + pgvector on Supabase, 154 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — deployed on Railway (production dashboard service)
 
 ---
@@ -67,7 +67,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   └── 22 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/
 │   ├── functions/                Empty post-661d21d (former vapi-tools deleted with the Vapi rip-out)
-│   ├── migrations/               147 SQL migrations
+│   ├── migrations/               154 SQL migrations
 │   └── seed.sql                  Platform admin + Bella's Hair Studio demo tenant
 ├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `ai-sec-agent`
 │   └── src/                      index.ts (entry), prompt.ts, toolsClient.ts, sessionContext.ts, tools.ts
