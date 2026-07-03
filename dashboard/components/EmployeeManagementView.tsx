@@ -79,9 +79,15 @@ export default function EmployeeManagementView() {
       if (res.success) {
         setNewEmployee({ first_name: '', last_name: '' });
         void refresh();
+      } else {
+        // Surface the backend reason (e.g. the duplicate-name 409) — apiMutate
+        // returns { success:false, error } rather than throwing, so without this
+        // the add silently did nothing and kept the form values.
+        showToast(res.error || `Failed to add ${vocab.employee_label.toLowerCase()}`, 'error');
       }
     } catch (err) {
       console.error('Failed to create employee', err);
+      showToast(`Failed to add ${vocab.employee_label.toLowerCase()}`, 'error');
     } finally {
       setSaving(false);
     }
@@ -102,9 +108,12 @@ export default function EmployeeManagementView() {
       if (res.success) {
         void refresh();
         setIsEditModalOpen(false);
+      } else {
+        showToast(res.error || 'Failed to save changes', 'error');
       }
     } catch {
       console.error('Update failed');
+      showToast('Failed to save changes', 'error');
     } finally {
       setSaving(false);
     }
@@ -182,12 +191,14 @@ export default function EmployeeManagementView() {
         <form onSubmit={handleAddEmployee} className="max-w-lg flex gap-3">
           <Input
             placeholder="First name"
+            aria-label={`New ${vocab.employee_label.toLowerCase()} first name`}
             value={newEmployee.first_name}
             onChange={(e) => setNewEmployee({ ...newEmployee, first_name: e.target.value })}
             className="flex-1"
           />
           <Input
             placeholder="Last name"
+            aria-label={`New ${vocab.employee_label.toLowerCase()} last name`}
             value={newEmployee.last_name}
             onChange={(e) => setNewEmployee({ ...newEmployee, last_name: e.target.value })}
             className="flex-1"
@@ -353,6 +364,7 @@ export default function EmployeeManagementView() {
                   type="button"
                   role="switch"
                   aria-checked={editForm.is_active}
+                  aria-label="Active"
                   onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
                   className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
                   style={
@@ -389,6 +401,8 @@ export default function EmployeeManagementView() {
                       onClick={() =>
                         toggleService(service.service_id, selectedEmployee.employee_id)
                       }
+                      aria-pressed={isMapped}
+                      aria-label={`${isMapped ? 'Remove' : 'Add'} ${service.name}`}
                       className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-lg' : ''}`}
                       style={
                         isMapped
