@@ -17,7 +17,6 @@
 
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
-import { z } from 'zod';
 import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
 import type {
   RecordVersion,
@@ -30,152 +29,16 @@ import type {
   VersionedTable,
   ChangeSource,
 } from '../types/versionHistory';
-
-/** Row shape returned by get_record_history() RPC */
-interface RecordHistoryRow {
-  record_version_id: string;
-  version_number: number;
-  data: Record<string, unknown>;
-  changed_fields: string[] | null;
-  previous_values: Record<string, unknown> | null;
-  change_type: string;
-  change_source: string;
-  changed_by: string | null;
-  change_summary: string | null;
-  changed_at: string;
-}
-
-const VERSIONED_TABLES: VersionedTable[] = [
-  'customers',
-  'appointments',
-  'voice_sessions',
-  'employees',
-  'services',
-  'resources',
-];
-
-const TableNameSchema = z.enum([
-  'customers',
-  'appointments',
-  'voice_sessions',
-  'employees',
-  'services',
-  'resources',
-]);
-
-// PK column for each versioned table (post-2026-05-12 PK rename sprint —
-// CODING_STANDARDS.md ID convention). Used to build dynamic SQL where the
-// table name is parameterized but the WHERE/JOIN needs the right PK column.
-const PK_COLUMN_BY_TABLE: Record<string, string> = {
-  customers: 'customer_id',
-  appointments: 'appointment_id',
-  voice_sessions: 'voice_session_id',
-  employees: 'employee_id',
-  services: 'service_id',
-  resources: 'resource_id',
-};
-const ChangeSourceSchema = z.enum(['local', 'square', 'voice_call', 'system', 'api']);
-
-/**
- * Create a standardized error response with the 5 Ws:
- * - Who: tenant_id, user context
- * - What: operation that failed
- * - When: timestamp of the error
- * - Where: endpoint/resource affected
- * - Why: reason for the failure
- */
-function createErrorResponse(params: {
-  who?: string;
-  what: string;
-  where: string;
-  why: string;
-  code: string;
-  details?: unknown;
-}) {
-  return {
-    success: false,
-    error: params.why,
-    code: params.code,
-    context: {
-      who: params.who || 'unknown',
-      what: params.what,
-      when: new Date().toISOString(),
-      where: params.where,
-      why: params.why,
-    },
-    details: params.details,
-  };
-}
-
-const RestoreFieldsSchema = z.object({
-  source_version: z.number().int().min(1),
-  fields: z.array(z.string().min(1)).min(1),
-  restored_by: z.string().optional(),
-  change_source: ChangeSourceSchema.optional(),
-});
-
-const CopyFieldsSchema = z.object({
-  source_record_id: z.string().uuid(),
-  target_record_id: z.string().uuid(),
-  fields: z.array(z.string().min(1)).min(1),
-  copied_by: z.string().optional(),
-  change_source: ChangeSourceSchema.optional(),
-});
-
-const SoftDeleteSchema = z.object({
-  deleted_by: z.string().optional(),
-  change_source: ChangeSourceSchema.optional(),
-});
-
-/**
- * Validate table name and return error response if invalid.
- * Returns null if valid, error response object if invalid.
- */
-function validateTable(
-  table: string,
-  tenantId: string,
-  operation: string,
-  endpoint: string
-): ReturnType<typeof createErrorResponse> | null {
-  const result = TableNameSchema.safeParse(table);
-  if (!result.success) {
-    return createErrorResponse({
-      who: tenantId,
-      what: operation,
-      where: endpoint,
-      why: `Invalid table name '${table}'. Must be one of: ${VERSIONED_TABLES.join(', ')}`,
-      code: 'INVALID_TABLE',
-    });
-  }
-  return null;
-}
-
-/**
- * Validate request body against a Zod schema and return error response if invalid.
- */
-function validateBody<T>(
-  schema: z.ZodSchema<T>,
-  body: unknown,
-  tenantId: string,
-  operation: string,
-  endpoint: string,
-  hint: string
-): { error: ReturnType<typeof createErrorResponse> } | { data: T } {
-  const result = schema.safeParse(body);
-  if (!result.success) {
-    return {
-      error: createErrorResponse({
-        who: tenantId,
-        what: operation,
-        where: endpoint,
-        why: `Request validation failed: ${hint}`,
-        code: 'VALIDATION_FAILED',
-        details: result.error.issues,
-      }),
-    };
-  }
-  return { data: result.data };
-}
+import {
+  type RecordHistoryRow,
+  PK_COLUMN_BY_TABLE,
+  RestoreFieldsSchema,
+  CopyFieldsSchema,
+  SoftDeleteSchema,
+  createErrorResponse,
+  validateTable,
+  validateBody,
+} from './versionHistoryHelpers';
 
 export function registerVersionHistoryRoutes(
   app: AppFastifyInstance,

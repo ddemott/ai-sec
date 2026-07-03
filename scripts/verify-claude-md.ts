@@ -195,8 +195,10 @@ function gitIsCommitReachable(sha: string, branch: string = 'main'): boolean {
 function countRoutes(repoRoot: string): number {
   const dir = join(repoRoot, 'src/routes');
   if (!existsSync(dir)) return 0;
+  // Exclude tests and any *Helpers.ts module (routeHelpers.ts,
+  // versionHistoryHelpers.ts, …) — those are shared helpers, not route modules.
   return readdirSync(dir).filter(
-    (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && f !== 'routeHelpers.ts'
+    (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && !f.endsWith('Helpers.ts')
   ).length;
 }
 
