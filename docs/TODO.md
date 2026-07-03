@@ -176,6 +176,7 @@ Each screen below has had NO dedicated UX review; review before beta. (Full P0/P
 - [ ] **[REVIEW]** `ShiftManagementView` — team-size-conditional paths, copy-week discoverability.
 - [ ] **[REVIEW]** `ResourceManagerView` — zero-resource state, service-mapping checkboxes, "capabilities" meaning.
 - [ ] **[REVIEW]** `ServiceAssignmentView` — is 3 steps correct, no-assignment case, cancel/exit flow.
+  - _Partial (2026-07-03, branch `fix/ux-review-service-assignment`):_ fixed a hidden-error defect + a11y gaps. Create (wizard) and update (edit modal) failures called `setActionError`, but that banner renders on the page behind the open modal — invisible; both now `showToast`. A11y: the wizard Description `<textarea>` was label-unassociated (added `htmlFor`/`id`); the detail-panel resource/employee mapping toggles and the wizard-step resource/employee selection Cards expose `aria-pressed` + accessible names. 2 component tests (`ServiceAssignmentView.test.tsx`), dashboard tsc clean. **Still open (owner judgment):** whether the 3-step wizard is the right shape, the no-assignment case, and cancel/exit flow.
 - [ ] **[REVIEW]** `SkillMatrixView` + `SkillAssignmentsView` + `SkillRelationshipMap` — grid legibility at scale, map value vs confusion, both-views-necessary.
 - [ ] **[REVIEW]** `DeletedRecordsPanel` + `RecordHistoryModal` — discoverability, restore flow, version-history comprehensibility.
 - [ ] **[REVIEW]** `/register` — form flow, field order, error handling, post-signup first experience.

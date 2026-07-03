@@ -148,7 +148,9 @@ export default function ServiceAssignmentView() {
       void refresh();
       void fetchMappings();
     } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      // Toast, not setActionError: the create wizard is an open modal over the
+      // page-level error banner, so a setActionError here would be invisible.
+      showToast(err instanceof Error ? err.message : String(err), 'error');
     }
   }
 
@@ -176,10 +178,12 @@ export default function ServiceAssignmentView() {
         const extra = Array.isArray(details)
           ? ` (${(details as Array<{ message: string }>).map((d) => d.message).join(', ')})`
           : '';
-        setActionError((res.error || 'Update failed') + extra);
+        // Toast, not setActionError: that banner renders on the page behind the
+        // open edit modal, so the owner would see no feedback on a failed save.
+        showToast((res.error || 'Update failed') + extra, 'error');
       }
     } catch (err: unknown) {
-      setActionError(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error ? err.message : String(err), 'error');
     } finally {
       setSaving(false);
     }
@@ -485,7 +489,10 @@ export default function ServiceAssignmentView() {
                   value={editForm.duration_minutes}
                   onChange={(e) => {
                     const v = parseInt(e.target.value);
-                    setEditForm({ ...editForm, duration_minutes: Number.isFinite(v) ? v : undefined });
+                    setEditForm({
+                      ...editForm,
+                      duration_minutes: Number.isFinite(v) ? v : undefined,
+                    });
                   }}
                 />
                 <Input
@@ -534,6 +541,8 @@ export default function ServiceAssignmentView() {
                           selectedService &&
                           toggleResourceMapping(selectedService.service_id, res.resource_id)
                         }
+                        aria-pressed={isMapped}
+                        aria-label={`${isMapped ? 'Remove' : 'Add'} ${res.name}`}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all`}
                         style={
                           isMapped
@@ -578,6 +587,8 @@ export default function ServiceAssignmentView() {
                             selectedService &&
                             toggleEmployeeMapping(selectedService.service_id, emp.employee_id)
                           }
+                          aria-pressed={isMapped}
+                          aria-label={`${isMapped ? 'Remove' : 'Add'} ${emp.name}`}
                           className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all"
                           style={
                             isMapped
@@ -660,12 +671,14 @@ export default function ServiceAssignmentView() {
                 />
                 <div>
                   <label
+                    htmlFor="wizard-service-description"
                     className="block text-xs font-bold uppercase mb-1 ml-1"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     Description
                   </label>
                   <textarea
+                    id="wizard-service-description"
                     className="w-full p-3 border rounded-xl focus:ring-2 outline-none h-24 text-sm"
                     style={{
                       backgroundColor: 'var(--bg-raised)',
@@ -712,6 +725,8 @@ export default function ServiceAssignmentView() {
                           : [...prev, res.resource_id]
                       )
                     }
+                    aria-pressed={selectedResourceIds.includes(res.resource_id)}
+                    aria-label={res.name}
                     className={`p-4 cursor-pointer border-2 transition-all ${selectedResourceIds.includes(res.resource_id) ? '' : 'border-transparent hover:brightness-110'}`}
                     style={
                       selectedResourceIds.includes(res.resource_id)
@@ -763,6 +778,8 @@ export default function ServiceAssignmentView() {
                             : [...prev, emp.employee_id.toString()]
                         )
                       }
+                      aria-pressed={selectedEmployeeIds.includes(emp.employee_id.toString())}
+                      aria-label={emp.name}
                       className={`p-4 cursor-pointer border-2 transition-all ${selectedEmployeeIds.includes(emp.employee_id.toString()) ? '' : 'border-transparent hover:brightness-110'}`}
                       style={
                         selectedEmployeeIds.includes(emp.employee_id.toString())
