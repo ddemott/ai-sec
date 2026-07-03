@@ -3,6 +3,7 @@ import { CalendarX, X } from 'lucide-react';
 import type { Employee } from '../../lib/types';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { useFocusTrap } from '../../lib/useFocusTrap';
+import { Button } from '../ui/Button';
 
 export interface StaffProfileCardProps {
   employee: Employee;
@@ -125,14 +126,15 @@ export function StaffProfileCard({
             </div>
           </div>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onClose}
           aria-label="Close staff profile"
-          className="shrink-0 p-0.5 rounded transition-opacity hover:opacity-70"
-          style={{ color: 'var(--text-muted, #888)' }}
+          className="shrink-0"
         >
           <X className="w-3.5 h-3.5" aria-hidden="true" />
-        </button>
+        </Button>
       </div>
 
       {/* Divider */}
@@ -188,22 +190,17 @@ export function StaffProfileCard({
         <>
           <div style={{ height: 1, background: 'var(--border-soft, #333)', margin: '0 16px' }} />
           <div className="px-4 py-3">
-            <button
+            <Button
               type="button"
+              variant="warning"
               onClick={onMarkOff}
               disabled={isMarkingOff}
               data-testid="staff-card-mark-off"
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{
-                background: 'var(--warning-muted, rgba(234,179,8,0.12))',
-                color: 'var(--warning, #eab308)',
-                border: '1px solid var(--warning-muted, rgba(234,179,8,0.3))',
-                fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
-              }}
+              className="w-full"
             >
-              <CalendarX className="w-4 h-4" />
+              <CalendarX className="w-4 h-4 mr-2" />
               {isMarkingOff ? 'Marking off…' : markOffLabel}
-            </button>
+            </Button>
           </div>
         </>
       )}
