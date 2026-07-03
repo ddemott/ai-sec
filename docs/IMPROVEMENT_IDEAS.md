@@ -187,7 +187,7 @@ Items completed 2026-05-29 (this session):
 **Effort vs Gain:** About 1-2 hours of extraction should pay back quickly because scheduler overlay polish currently has to be duplicated by hand.
 
 ### Task: Move StaffProfileCard action controls onto shared button primitives and tokens
-**Status:** proposed
+**Status:** ✅ DONE 2026-07-02 — the close control (→ `<Button variant="ghost" size="sm">`) and the Mark-off action (→ `<Button variant="warning">`) now render through the shared Button primitive instead of raw `<button>` + hand-rolled classes/inline styles. Mark-off keeps its exact disabled + "Marking off…" progress behavior (uses `disabled`, not `isLoading`, so no new spinner). Existing keyboard/aria/disabled tests still pass (11/11); dashboard 816/816.
 **Files to change:** `dashboard/components/scheduler/StaffProfileCard.tsx:L131-L257`, `dashboard/components/ui/Button.tsx`, `dashboard/components/scheduler/StaffProfileCard.test.tsx:L88-L141`
 **What to do:** Replace the card’s custom close button and custom “Mark off” action button with the shared `Button` primitive, adding a small variant or size only if the current primitive truly cannot express the compact icon-close and warning-tinted full-width action. Keep the card’s current copy and behavior, but stop hand-authoring hover, disabled, and font styles inline. If the primitive needs one scheduler-safe warning style, add it centrally instead of leaving this card as a one-off.
 **Done when:**

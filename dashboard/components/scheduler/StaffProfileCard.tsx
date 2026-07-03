@@ -3,6 +3,7 @@ import { CalendarX, X } from 'lucide-react';
 import type { Employee } from '../../lib/types';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { useFocusTrap } from '../../lib/useFocusTrap';
+import { Button } from '../ui/Button';
 
 export interface StaffProfileCardProps {
   employee: Employee;
@@ -125,14 +126,16 @@ export function StaffProfileCard({
             </div>
           </div>
         </div>
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
           onClick={onClose}
           aria-label="Close staff profile"
-          className="shrink-0 p-0.5 rounded transition-opacity hover:opacity-70"
-          style={{ color: 'var(--text-muted, #888)' }}
+          className="shrink-0"
         >
           <X className="w-3.5 h-3.5" aria-hidden="true" />
-        </button>
+        </Button>
       </div>
 
       {/* Divider */}
@@ -188,22 +191,26 @@ export function StaffProfileCard({
         <>
           <div style={{ height: 1, background: 'var(--border-soft, #333)', margin: '0 16px' }} />
           <div className="px-4 py-3">
-            <button
+            <Button
               type="button"
+              variant="warning"
               onClick={onMarkOff}
               disabled={isMarkingOff}
               data-testid="staff-card-mark-off"
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full"
+              // Override the primitive's Tailwind-yellow palette with the
+              // theme-warning CSS vars so the control stays token-based across
+              // themes (matches the pre-refactor styling). props.style wins
+              // over the variant's own style/classes.
               style={{
-                background: 'var(--warning-muted, rgba(234,179,8,0.12))',
-                color: 'var(--warning, #eab308)',
-                border: '1px solid var(--warning-muted, rgba(234,179,8,0.3))',
-                fontFamily: 'var(--font-body, "DM Sans", sans-serif)',
+                backgroundColor: 'var(--warning-muted)',
+                color: 'var(--warning)',
+                borderColor: 'var(--warning-muted)',
               }}
             >
-              <CalendarX className="w-4 h-4" />
+              <CalendarX className="w-4 h-4 mr-2" />
               {isMarkingOff ? 'Marking off…' : markOffLabel}
-            </button>
+            </Button>
           </div>
         </>
       )}
