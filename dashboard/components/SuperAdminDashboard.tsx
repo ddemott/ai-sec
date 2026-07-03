@@ -108,6 +108,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
                 size="sm"
                 className="p-1.5"
                 title="Launch New Business"
+                aria-label="Launch new business"
               >
                 <Building2 className="w-4 h-4" />
               </Button>
@@ -116,6 +117,8 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
                 size="sm"
                 onClick={fetchData}
                 className="p-1.5"
+                title="Refresh businesses"
+                aria-label="Refresh businesses"
                 style={{ color: 'var(--text-secondary)' }}
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -276,6 +279,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder={selectedTenant?.name || ''}
+              aria-label={`Type ${selectedTenant?.name || 'the business name'} to confirm deletion`}
             />
           </div>
         </div>

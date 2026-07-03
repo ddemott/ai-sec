@@ -181,6 +181,7 @@ Each screen below has had NO dedicated UX review; review before beta. (Full P0/P
 - [ ] **[REVIEW]** `/register` — form flow, field order, error handling, post-signup first experience.
 - [ ] **[REVIEW]** `LoginView` + `/forgot-password` + `/reset-password` — forgot-password end-to-end, error quality, mobile.
 - [ ] **[REVIEW]** `SuperAdminDashboard` + `TenantCard`/`TenantCreateForm`/`TenantEditPanel` — admin interface usability (Dale-facing; slows onboarding if painful).
+  - _Partial (2026-07-03, branch `fix/ux-review-superadmin`):_ a11y pass across all four. `TenantCard` was a click-only `<div>` → now keyboard-operable `role="button"` + `aria-pressed` + accessible name + focus ring (drag-reorder preserved). `TenantCreateForm`'s four owner-credential inputs were placeholder-only → `aria-label`s (+ autoComplete on email/password). `SuperAdminDashboard`: the refresh button had no accessible name at all (icon-only, no title) and the create button was title-only → both got `aria-label`s; the delete-confirm typed-name input got an `aria-label`. `TenantEditPanel`: the icon-only delete button got an `aria-label` (its area-code input was already label-associated). 2 new tests (`TenantAdminForms.test.tsx`); existing `superadmin.test.tsx` (9) still green, dashboard tsc clean. **Still open (owner judgment):** overall admin-interface usability / onboarding friction.
 - [ ] **[REVIEW]** `FirstRunTour` — post-wizard overlay tour; content/flow review (behavior already correct).
 
 ### Tooling cleanup (dossier: _Tooling cleanup_)

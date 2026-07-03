@@ -49,12 +49,15 @@ export function TenantCreateForm({ newBusiness, templates, onChange }: TenantCre
         <div className="grid grid-cols-2 gap-3">
           <Input
             placeholder="First Name"
+            aria-label="Owner first name"
             value={newBusiness.owner_first_name}
             onChange={(e) => onChange({ ...newBusiness, owner_first_name: e.target.value })}
           />
           <Input
             type="email"
             placeholder="Email"
+            aria-label="Owner email"
+            autoComplete="off"
             value={newBusiness.owner_email}
             onChange={(e) => onChange({ ...newBusiness, owner_email: e.target.value })}
           />
@@ -62,12 +65,15 @@ export function TenantCreateForm({ newBusiness, templates, onChange }: TenantCre
         <div className="grid grid-cols-2 gap-3">
           <Input
             placeholder="Last Name"
+            aria-label="Owner last name"
             value={newBusiness.owner_last_name}
             onChange={(e) => onChange({ ...newBusiness, owner_last_name: e.target.value })}
           />
           <Input
             type="password"
             placeholder="Owner Password"
+            aria-label="Owner password"
+            autoComplete="new-password"
             value={newBusiness.owner_pass}
             onChange={(e) => onChange({ ...newBusiness, owner_pass: e.target.value })}
           />

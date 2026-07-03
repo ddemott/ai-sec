@@ -38,8 +38,18 @@ export function TenantCard({
       onDragOver={draggable ? (e) => onDragOver(e, index) : undefined}
       onDragEnd={draggable ? onDragEnd : undefined}
       onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      aria-label={`Select ${tenant.name}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       data-testid={`tenant-card-${tenant.tenant_id}`}
-      className={`p-4 border-b cursor-pointer transition flex justify-between items-center
+      className={`p-4 border-b cursor-pointer transition flex justify-between items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-inset
         ${isSelected ? 'border-l-4 shadow-sm' : ''}
         ${isDragging ? 'opacity-50' : ''}`}
       style={{
