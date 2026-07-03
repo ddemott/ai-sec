@@ -516,6 +516,7 @@ Closed: `consistent-type-imports`, `no-unused-vars`, `no-floating-promises`, `re
 ## Documentation
 
 - [ ] Continue mechanical doc hygiene passes (count drift, old REFACTORING_TODO/NEEDS references in comments, Gap inventory table sync when filenames change, footer "Last updated" alignment).
+  - _Sweep 2026-07-03 (branch `chore/doc-hygiene-counts-filenames`):_ fixed the last live stale migration counts — `README.md` tech-stack table + file-tree said "145 migrations", now 154; TODO's own count-guard line below bumped 145→154. Confirmed canonical values via `verify-claude-md` (29 route modules = `.ts` under `src/routes/` minus tests + `*Helpers.ts`; 154 migrations). Every other primary doc (ARCHITECTURE/DEPLOYMENT/GAPS/DIAGRAMS/dashboard-README) was already at 29/154; remaining `27`/`142`/`145` mentions live only in dated RESOLVED/HANDOFF history (left as-is — bumping them would falsify the record). No stray live `routes/export.ts` refs (all remaining mentions are historical descriptions of the earlier `export.ts→exportData.ts` fix).
 - [ ] Review and trim any remaining historical narrative in active docs that can be archived to RESOLVED.md.
 - [ ] Ensure all secondary docs (GAPS.md, IMPROVEMENT_IDEAS.md, DEPLOYMENT.md, etc.) reflect current 29 route modules / 154 migrations after any new route or migration.
 - [ ] Keep the Gap inventory "Key files per gap" table in sync with actual filenames (e.g. exportData.ts not export.ts).
