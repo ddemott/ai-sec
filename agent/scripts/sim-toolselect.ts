@@ -8,7 +8,7 @@
 // the model picks; unit tests only prove each tool works once called.
 //
 // WHAT IT DOES: replays the REAL system prompt (buildSystemPrompt) + the REAL
-// 19 tool schemas (buildTools — already OpenAI function-calling JSON Schema;
+// 20 tool schemas (buildTools — already OpenAI function-calling JSON Schema;
 // LiveKit passes them through verbatim) against the SAME model the agent runs
 // (gpt-4o-mini) via plain chat.completions. Tools are never executed — each
 // call is answered with a scripted synthetic result, and we grade the SEQUENCE
@@ -139,7 +139,7 @@ const CASES: EvalCase[] = [
     // check_availability need a resource_id that available-slots never yields.
     name: 'slots-then-book uses book_with_scheduling (bug #3 regression)',
     userTurns: [
-      "Hi, this is Jane Doe, my number is 555-222-0001. What times are open tomorrow for a haircut?",
+      'Hi, this is Jane Doe, my number is 555-222-0001. What times are open tomorrow for a haircut?',
       '3:30 works — please book it.',
     ],
     required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
@@ -200,7 +200,9 @@ interface ChatMessage {
   tool_call_id?: string;
 }
 
-async function chat(messages: ChatMessage[]): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
+async function chat(
+  messages: ChatMessage[]
+): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
@@ -280,7 +282,9 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
 }
 
 async function main(): Promise<void> {
-  console.log(`${C.b}SecretaryHQ — agent tool-selection eval${C.x} ${C.d}(model: ${MODEL}, ${CASES.length} cases)${C.x}`);
+  console.log(
+    `${C.b}SecretaryHQ — agent tool-selection eval${C.x} ${C.d}(model: ${MODEL}, ${CASES.length} cases)${C.x}`
+  );
   let passed = 0;
   for (const c of CASES) {
     let r: CaseResult;
