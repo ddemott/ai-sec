@@ -473,6 +473,22 @@ describe('VoiceCallsView', () => {
       }
     });
 
+    test('renders legacy-vocabulary outcomes with the right label (backward-compat)', async () => {
+      // WHO: a tenant whose stored/historical rows carry the LEGACY outcome
+      //        vocabulary (shared VoiceSessionOutcome / the /voice/session/end
+      //        Zod enum) rather than the agent's live strings.
+      // WHAT: a legacy 'appointment_booked' must still render "Booked", not a
+      //        grey humanized "appointment booked" — the map carries aliases.
+      // WHERE: OUTCOME_LABELS + getOutcomeStyle backward-compat entries.
+      // WHY: Copilot flagged that dropping the legacy keys would regress those
+      //        rows to a neutral badge; this pins the alias so it can't.
+      const legacyCall = { ...mockCall, outcome: 'appointment_booked' };
+      mockCallHistory.mockResolvedValue({ calls: [legacyCall], total: 1, has_more: false });
+      render(<VoiceCallsView />);
+      await waitFor(() => expect(screen.getAllByText('Booked').length).toBeGreaterThanOrEqual(1));
+      expect(screen.queryByText('appointment booked')).not.toBeInTheDocument();
+    });
+
     test('handles unknown outcome gracefully', async () => {
       const unknownOutcomeCall = { ...mockCall, outcome: 'unknown_type' };
       mockCallHistory.mockResolvedValue({ calls: [unknownOutcomeCall], total: 1, has_more: false });

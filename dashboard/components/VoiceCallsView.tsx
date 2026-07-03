@@ -66,6 +66,19 @@ const OUTCOME_LABELS: Record<string, string> = {
   price: 'Price concern',
   info: 'Question only',
   no_outcome: 'No clear outcome',
+  // Backward-compat: the shared `VoiceSessionOutcome` type (shared/voiceCrm.ts)
+  // and the /voice/session/end Zod enum (src/routes/voice.ts) still accept a
+  // legacy vocabulary, so historical rows or a non-agent writer may carry these.
+  // Map them intentionally instead of letting them fall through to a grey badge.
+  // (Aligning that shared type + backend schema to the agent's live vocabulary
+  // is a separate follow-up — see docs/TODO.md.)
+  appointment_booked: 'Booked',
+  appointment_rescheduled: 'Rescheduled',
+  appointment_cancelled: 'Cancelled',
+  info_provided: 'Question only',
+  voicemail: 'Voicemail',
+  abandoned: 'No clear outcome',
+  other: 'Other',
 };
 
 function getOutcomeLabel(outcome: string | null): string {
@@ -90,14 +103,22 @@ type OutcomeStyle = { backgroundColor: string; color: string };
  */
 function getOutcomeStyle(outcome: string | null): OutcomeStyle {
   switch (outcome) {
+    // Won the booking. `appointment_booked`/`appointment_rescheduled` are the
+    // legacy-vocabulary equivalents (see OUTCOME_LABELS backward-compat note).
     case 'booked':
+    case 'appointment_booked':
+    case 'appointment_rescheduled':
       return { backgroundColor: 'var(--success-bg)', color: 'var(--success)' };
+    // Lost booking (the WHY) + legacy `appointment_cancelled`.
     case 'no_availability':
     case 'wrong_service':
     case 'price':
+    case 'appointment_cancelled':
       return { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' };
+    // Procedural, needs follow-up + legacy `voicemail`.
     case 'transferred':
     case 'message':
+    case 'voicemail':
       return { backgroundColor: 'var(--warning-bg)', color: 'var(--warning)' };
     default:
       return { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' };
