@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Trash2,
   RotateCcw,
@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { Api } from '../lib/api';
+import { useFocusTrap } from '../lib/useFocusTrap';
 import type { DeletedRecord, DeletedRecordsResponse, VersionedTable, Customer } from '../lib/types';
 import { excludedSystemFields } from '../../shared/versionHistoryFields';
 
@@ -63,6 +64,11 @@ export function DeletedRecordsPanel({
   const [selectedTarget, setSelectedTarget] = useState<string>('');
   const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
+  const copyModalRef = useRef<HTMLDivElement>(null);
+
+  // Escape-to-close + Tab focus trap + body-scroll lock for the copy dialog
+  // (Cluster C); the backdrop already closes on click.
+  useFocusTrap(copyModalRef, copyModal !== null, () => setCopyModal(null), true);
 
   useEffect(() => {
     void loadDeletedRecords();
@@ -189,6 +195,7 @@ export function DeletedRecordsPanel({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search deleted records..."
+            aria-label="Search deleted records"
             className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           />
         </div>
@@ -236,6 +243,8 @@ export function DeletedRecordsPanel({
                 <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800">
                   <button
                     onClick={() => toggleRecord(record.record_id)}
+                    aria-expanded={expandedRecords.has(record.record_id)}
+                    aria-label={`${expandedRecords.has(record.record_id) ? 'Hide' : 'Show'} last known data for ${record.name || 'this record'}`}
                     className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                   >
                     {expandedRecords.has(record.record_id) ? (
@@ -265,6 +274,7 @@ export function DeletedRecordsPanel({
                       onClick={() => onViewHistory?.(record.record_id, record.name || 'Record')}
                       className="p-2 text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
                       title="View history"
+                      aria-label={`View history for ${record.name || 'this record'}`}
                     >
                       <History className="w-4 h-4" />
                     </button>
@@ -279,6 +289,7 @@ export function DeletedRecordsPanel({
                         e.currentTarget.style.backgroundColor = '';
                       }}
                       title="Copy fields to another record"
+                      aria-label={`Copy fields from ${record.name || 'this record'} to another record`}
                     >
                       <Copy className="w-4 h-4" />
                     </button>
@@ -333,13 +344,20 @@ export function DeletedRecordsPanel({
       {copyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setCopyModal(null)} />
-          <div className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+          <div
+            ref={copyModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="copy-fields-title"
+            className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col"
+          >
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 dark:text-white">
+              <h3 id="copy-fields-title" className="font-semibold text-gray-900 dark:text-white">
                 Copy Fields to Another Record
               </h3>
               <button
                 onClick={() => setCopyModal(null)}
+                aria-label="Close copy fields dialog"
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
               >
                 <X className="w-5 h-5" />
