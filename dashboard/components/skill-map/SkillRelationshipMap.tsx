@@ -116,6 +116,7 @@ export default function SkillRelationshipMap() {
           </span>
           <button
             onClick={cancelLinking}
+            aria-label="Cancel connecting"
             className="ml-auto text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 transition-colors"
           >
             <X className="w-4 h-4" />

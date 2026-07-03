@@ -147,6 +147,7 @@ export default function SkillMatrixView() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               placeholder={`Search ${vocab.employee_plural.toLowerCase()} or ${vocab.resource_plural.toLowerCase()}...`}
+              aria-label={`Search ${vocab.employee_plural.toLowerCase()} or ${vocab.resource_plural.toLowerCase()}`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -158,6 +159,7 @@ export default function SkillMatrixView() {
           >
             <button
               onClick={() => setFilterType('all')}
+              aria-pressed={filterType === 'all'}
               className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'all' ? 'shadow-sm' : ''}`}
               style={
                 filterType === 'all'
@@ -169,6 +171,7 @@ export default function SkillMatrixView() {
             </button>
             <button
               onClick={() => setFilterType('employee')}
+              aria-pressed={filterType === 'employee'}
               className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'employee' ? 'shadow-sm' : ''}`}
               style={
                 filterType === 'employee'
@@ -180,6 +183,7 @@ export default function SkillMatrixView() {
             </button>
             <button
               onClick={() => setFilterType('resource')}
+              aria-pressed={filterType === 'resource'}
               className={`px-4 py-2 text-xs rounded-lg transition-all ${filterType === 'resource' ? 'shadow-sm' : ''}`}
               style={
                 filterType === 'resource'
@@ -279,6 +283,8 @@ export default function SkillMatrixView() {
                         onClick={() =>
                           toggleMapping(entity.type, entity.entity_id, service.service_id)
                         }
+                        aria-pressed={isMapped}
+                        aria-label={`${isMapped ? 'Remove' : 'Add'} ${service.name} for ${entity.name}`}
                         className={`w-full h-full p-4 flex items-center justify-center transition-all ${isMapped ? '' : 'text-gray-300 dark:text-gray-800 hover:text-gray-400 dark:hover:text-gray-700'}`}
                         style={
                           isMapped
