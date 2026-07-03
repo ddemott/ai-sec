@@ -62,9 +62,22 @@ const phone = `+1630555${String(Date.now()).slice(-4)}`;
 const callId = `sim-call-${Date.now()}`;
 // Booking window must land on a 15-min-aligned start inside the demo tenant's
 // 08:00–17:00 America/Chicago shifts. Start tomorrow at 14:00:00Z (= 09:00 CDT,
-// mid-shift, grid-aligned) and span a week so the scheduler can skip weekends.
+// mid-shift, grid-aligned).
+//
+// CRITICAL: book_with_scheduling books at the window START — it does NOT scan
+// forward for the first open day — and the demo seed only creates Mon–Fri
+// shifts (demoSeed.ts expandShifts skips weekends). So winFrom MUST be a
+// weekday, or the booking fails EMPLOYEE_NOT_SCHEDULED whenever "tomorrow"
+// lands on a Sat/Sun. (This was a real CI flake: the journey passed on
+// weekdays and failed every weekend UTC-day.) Bump off the weekend here.
+// 14:00Z shares its calendar day with America/Chicago (09:00 CDT / 08:00 CST),
+// so getUTCDay() matches the day the seed used to place the shift.
 const winFrom = new Date(Date.now() + 86400_000);
 winFrom.setUTCHours(14, 0, 0, 0);
+const dow = winFrom.getUTCDay(); // 0=Sun … 6=Sat
+if (dow === 6)
+  winFrom.setUTCDate(winFrom.getUTCDate() + 2); // Sat → Mon
+else if (dow === 0) winFrom.setUTCDate(winFrom.getUTCDate() + 1); // Sun → Mon
 const winTo = new Date(winFrom.getTime() + 7 * 86400_000);
 
 async function main() {
@@ -171,7 +184,10 @@ async function main() {
   } else if (pref.json?.success && pref.json?.result?.saved === false) {
     // Endpoint returns success:true even when saved:false (customer not found).
     // Treat as a FAIL so we can catch the mismatch between booking + preference lookup.
-    fail('save-customer-preference', `customer not found for preference — booking created it but preference lookup missed: ${JSON.stringify(pref.json?.result)}`);
+    fail(
+      'save-customer-preference',
+      `customer not found for preference — booking created it but preference lookup missed: ${JSON.stringify(pref.json?.result)}`
+    );
   } else {
     fail('save-customer-preference', `status ${pref.status} ${JSON.stringify(pref.json)}`);
   }
