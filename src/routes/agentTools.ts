@@ -117,6 +117,9 @@ const GetSchedulingOptionsSchema = z.object({
     requiredEmployeeSkills: z.array(z.string()).optional(),
   }),
   window: z.object({ from: z.string(), to: z.string() }),
+  // Optional — lets a pure availability inquiry (no booking attempt) still be
+  // attributed to its voice_session for abandonment-by-service analytics.
+  call_id: z.string().min(1).optional(),
 });
 
 const BookWithSchedulingSchema = z.object({
@@ -172,6 +175,8 @@ const GetAvailableSlotsSchema = z.object({
   tenant_id: z.string().uuid(),
   service_type: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  // Optional — see GetSchedulingOptionsSchema.call_id (pure-inquiry attribution).
+  call_id: z.string().min(1).optional(),
 });
 
 const SendVerificationCodeSchema = z.object({
@@ -400,6 +405,48 @@ function toolRoute<T>(
       return result;
     }, errorMessage)
   );
+}
+
+/**
+ * Best-effort, fire-and-forget: stamp the service the caller asked about onto
+ * this call's `voice_session` (`requested_service_id`). Used by the booking
+ * path AND the pure-availability tools, so a call that only inquired about
+ * availability — never attempting a booking — still shows which service they
+ * came for (powers abandonment-by-service analytics; the reaper/close finalizes
+ * the session as abandoned when no appointment was booked).
+ *
+ * The agent passes a fuzzy service name; map it to a service_id (shortest ILIKE
+ * match). COALESCE keeps any already-captured service so a later, differently-
+ * worded mention can't erase the signal with NULL. Never blocks or fails the
+ * call — a missing voice_session row (call_id not yet started) is a silent no-op.
+ */
+function captureRequestedService(
+  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
+  tenantId: string,
+  callId: string | undefined,
+  serviceType: string | undefined
+): void {
+  // Trim first (like resolveServiceForBooking) — a whitespace-only serviceType
+  // would otherwise issue a useless ILIKE '%   %' write.
+  const service = serviceType?.trim();
+  if (!callId || !service) return;
+  void withTenantClient(tenantId, (client) =>
+    client.query(
+      `UPDATE voice_sessions
+          SET requested_service_id = COALESCE(
+            (
+              SELECT service_id FROM services
+               WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
+                 AND (is_deleted IS NULL OR is_deleted = false)
+               ORDER BY length(name) ASC
+               LIMIT 1
+            ),
+            requested_service_id
+          )
+        WHERE tenant_id = $1 AND call_id = $3`,
+      [tenantId, service, callId]
+    )
+  ).catch(() => undefined);
 }
 
 // ── Route registration ────────────────────────────────────────────────
@@ -1297,6 +1344,16 @@ export function registerAgentToolRoutes(
       }
       const dateStr = windowFrom.toISOString().substring(0, 10);
 
+      // Pure availability inquiry → attribute the requested service to this
+      // call's voice_session so a caller who never attempts a booking still
+      // counts toward abandonment-by-service. Fire-and-forget.
+      captureRequestedService(
+        withTenantClient,
+        args.tenant_id,
+        args.call_id,
+        args.requirements.serviceType
+      );
+
       const data = await withTenantClient(args.tenant_id, async (client) => {
         // Resources with union of explicit caps + derived from services.
         const resRes = await client.query<{ resource_id: string; capabilities: string[] }>(
@@ -1513,34 +1570,15 @@ export function registerAgentToolRoutes(
         return row;
       });
 
-      // Best-effort: record the service the caller was trying to book on this
-      // call's voice_session — runs whether the booking SUCCEEDED or FAILED, so
-      // an abandoned call (slot taken / no availability → no appointment) still
-      // shows which service they came for (powers abandonment-by-service). The
-      // agent passes a fuzzy service name; map it to a service_id (shortest
-      // ILIKE match). Fire-and-forget — never block or fail the booking on this.
-      if (args.call_id && args.requirements.serviceType) {
-        withTenantClient(args.tenant_id, (client) =>
-          client.query(
-            // COALESCE keeps any already-captured service when this attempt's
-            // serviceType doesn't fuzzy-match (a later, differently-worded
-            // attempt must not erase the signal with NULL).
-            `UPDATE voice_sessions
-                SET requested_service_id = COALESCE(
-                  (
-                    SELECT service_id FROM services
-                     WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
-                       AND (is_deleted IS NULL OR is_deleted = false)
-                     ORDER BY length(name) ASC
-                     LIMIT 1
-                  ),
-                  requested_service_id
-                )
-              WHERE tenant_id = $1 AND call_id = $3`,
-            [args.tenant_id, args.requirements.serviceType, args.call_id]
-          )
-        ).catch(() => undefined);
-      }
+      // Best-effort: record the service the caller was trying to book — runs
+      // whether the booking SUCCEEDED or FAILED, so an abandoned booking
+      // attempt still shows which service they came for.
+      captureRequestedService(
+        withTenantClient,
+        args.tenant_id,
+        args.call_id,
+        args.requirements.serviceType
+      );
 
       if (!result || !result.success) {
         // Fetch next-available alternatives so the agent can propose them
@@ -1610,6 +1648,11 @@ export function registerAgentToolRoutes(
     '/agent-tools/available-slots',
     GetAvailableSlotsSchema,
     async (args, reply) => {
+      // Pure availability inquiry → attribute the requested service to this
+      // call's voice_session so a caller who never attempts a booking still
+      // counts toward abandonment-by-service. Fire-and-forget.
+      captureRequestedService(withTenantClient, args.tenant_id, args.call_id, args.service_type);
+
       // Resolve the service FIRST — falls through to the tenant default when
       // the caller's spoken type doesn't match a real service, so "a meeting" /
       // "consulting" / anything never dead-ends with "couldn't find a service".
