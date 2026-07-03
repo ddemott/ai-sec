@@ -245,6 +245,14 @@ export default function AnalyticsView() {
   const maxDayVolume = Math.max(...byDay.map((d) => d.total), 1);
   const byOutcome = calls?.by_outcome ?? [];
 
+  // The Call Volume headline number is all-time when no From/To window is set
+  // (the /analytics/calls totals are unbounded without a filter) — so a fixed
+  // "last 30 days" subtitle mislabeled an all-time count. The sparkline below
+  // still shows the last-30-day trend, described by its own inner note.
+  const callVolumeSubtitle = hasDateFilter
+    ? 'Calls in your selected date range'
+    : 'All calls answered';
+
   return (
     <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: 'var(--bg-base)' }}>
       <div className="max-w-5xl mx-auto">
@@ -260,7 +268,8 @@ export default function AnalyticsView() {
         </p>
         {stats && (
           <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
-            Reliability snapshot: {stats.calls.total} calls / {stats.appointments.total} appts tracked (server aggregates via /analytics/stats)
+            Reliability snapshot: {stats.calls.total} calls / {stats.appointments.total}{' '}
+            appointments tracked
           </p>
         )}
 
@@ -307,11 +316,7 @@ export default function AnalyticsView() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* 1. Call Volume Over Time — real, from voice_sessions */}
-          <MetricCard
-            icon={PhoneIncoming}
-            title="Call Volume"
-            subtitle="Calls over the last 30 days"
-          >
+          <MetricCard icon={PhoneIncoming} title="Call Volume" subtitle={callVolumeSubtitle}>
             {hasCalls ? (
               <div>
                 <div className="font-display text-3xl" style={{ color: 'var(--text-primary)' }}>
@@ -846,8 +851,8 @@ export default function AnalyticsView() {
                 </table>
               </div>
               <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-                Rates: GPT-4o-mini $0.15/$0.60 per 1M tokens · Deepgram $0.0043/min · xAI TTS cost
-                TBD (chars tracked)
+                Rates: GPT-4o-mini $0.15/$0.60 per 1M tokens · Deepgram $0.0043/min · OpenAI TTS
+                (chars tracked)
               </p>
             </div>
           ) : (
