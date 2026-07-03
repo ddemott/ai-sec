@@ -56,7 +56,7 @@ export const COMMON_SYSTEM_FIELDS: readonly string[] = [
  * versioned table: the common audit/system columns PLUS that table's real
  * primary key. Unknown table names fall back to just the common set.
  */
-export function excludedSystemFields(table: string): Set<string> {
+export function excludedSystemFields(table: string): ReadonlySet<string> {
   const pk = (PK_COLUMN_BY_TABLE as Record<string, string | undefined>)[table];
   return new Set(pk ? [...COMMON_SYSTEM_FIELDS, pk] : COMMON_SYSTEM_FIELDS);
 }
