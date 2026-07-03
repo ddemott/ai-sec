@@ -676,3 +676,73 @@ describe('sad paths — invalid identifiers and params against real Postgres', (
     expect(res.json().code).toBe('VERSION_NOT_FOUND');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Batch restore — POST restore-fields { restores: [{source_version, fields}] }
+// runs every group in ONE transaction (added 2026-07-02). A record whose
+// fields changed across DIFFERENT versions can be restored from several
+// versions in one request; a bad group rolls the whole batch back.
+// ─────────────────────────────────────────────────────────────────────────
+describe('restore-fields batch payload — multi-version groups in one transaction', () => {
+  // Build a customer with 3 versions: v1 create, v2 renames, v3 re-phones.
+  // So name@v1 and phone@v2 are both non-current, restorable from two versions.
+  async function seedThreeVersionCustomer(name: string, phone: string): Promise<string> {
+    const id = await createCustomer(setup, tenantId, name, phone); // v1
+    await setup.query(`UPDATE customers SET name = $2 WHERE customer_id = $1`, [id, `${name} V2`]); // v2
+    await setup.query(`UPDATE customers SET phone = $2 WHERE customer_id = $1`, [
+      id,
+      '+15559990999',
+    ]); // v3
+    return id;
+  }
+
+  it('HAPPY: one request restores fields spanning two versions', async () => {
+    // WHO: an owner who cherry-picks name from v1 and phone from v2 in the
+    //      restore modal, then clicks Restore once.
+    // WHAT: POST restore-fields { restores: [{v1, [name]}, {v2, [phone]}] }.
+    // WHEN: live row currently holds the v3 name+phone.
+    // WHERE: versionHistory.ts restore-fields → BEGIN → 2× RPC → COMMIT.
+    // WHY: the modal used to fire one request PER version group; this proves
+    //      the batch applies BOTH groups and returns the final row state.
+    const id = await seedThreeVersionCustomer('Batch Betty', '+15559990001');
+    const res = await post(`/records/customers/${id}/restore-fields`, {
+      restores: [
+        { source_version: 1, fields: ['name'] }, // name → 'Batch Betty'
+        { source_version: 2, fields: ['phone'] }, // phone → '+15559990001' (v2 kept v1 phone)
+      ],
+      restored_by: 'realdb-test',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.message).toContain('Restored 2 field(s) from 2 version(s)');
+
+    const row = await setup.query(`SELECT name, phone FROM customers WHERE customer_id = $1`, [id]);
+    expect(row.rows[0].name).toBe('Batch Betty'); // from v1
+    expect(row.rows[0].phone).toBe('+15559990001'); // from v2
+  });
+
+  it('SAD: a bad group rolls the WHOLE batch back — no partial restore', async () => {
+    // WHO: same flow, but one group references a version that doesn't exist.
+    // WHAT: POST { restores: [{v1, [name]}, {v999, [phone]}] } → the first
+    //       group would succeed alone, but the second fails.
+    // WHERE: the route's BEGIN/…/ROLLBACK wrapper.
+    // WHY: without one transaction, name would be restored while phone failed,
+    //      leaving a half-applied restore. The row must be UNCHANGED (still
+    //      the v3 values) and the response a non-2xx error.
+    const id = await seedThreeVersionCustomer('Rollback Rita', '+15559991001');
+    const res = await post(`/records/customers/${id}/restore-fields`, {
+      restores: [
+        { source_version: 1, fields: ['name'] },
+        { source_version: 999, fields: ['phone'] },
+      ],
+      restored_by: 'realdb-test',
+    });
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+
+    const row = await setup.query(`SELECT name, phone FROM customers WHERE customer_id = $1`, [id]);
+    // Still the current (v3) values — the valid group's change was rolled back.
+    expect(row.rows[0].name).toBe('Rollback Rita V2');
+    expect(row.rows[0].phone).toBe('+15559990999');
+  });
+});

@@ -178,6 +178,7 @@ describe('Version History Routes — Happy Paths', () => {
   });
 
   it('4. POST /records/:table/:recordId/restore-fields restores selected fields', async () => {
+    queryResponses.push({ rows: [] }); // BEGIN
     // Set config calls
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [] });
@@ -680,6 +681,7 @@ describe('Version History Routes — Edge Cases', () => {
   });
 
   it('28. POST /records/:table/:recordId/restore-fields accepts optional change_source', async () => {
+    queryResponses.push({ rows: [] }); // BEGIN
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [{ data: { name: 'Test' } }] });
@@ -823,6 +825,7 @@ describe('Version History Routes — Additional Happy Paths', () => {
   });
 
   it('35. POST restore-fields with multiple fields', async () => {
+    queryResponses.push({ rows: [] }); // BEGIN
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [] });
     queryResponses.push({
@@ -1171,6 +1174,7 @@ describe('Version History Routes — Boundary Conditions', () => {
   });
 
   it('55. POST restore-fields with single field works', async () => {
+    queryResponses.push({ rows: [] }); // BEGIN
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [] });
     queryResponses.push({ rows: [{ data: { phone: '555-0000' } }] });

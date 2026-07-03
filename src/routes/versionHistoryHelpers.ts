@@ -33,12 +33,30 @@ export const TableNameSchema = z.enum(VERSIONED_TABLES);
 
 export const ChangeSourceSchema = z.enum(['local', 'square', 'voice_call', 'system', 'api']);
 
-export const RestoreFieldsSchema = z.object({
+/** One "restore this set of fields from this version" group. */
+export const RestoreGroupSchema = z.object({
   source_version: z.number().int().min(1),
   fields: z.array(z.string().min(1)).min(1),
-  restored_by: z.string().optional(),
-  change_source: ChangeSourceSchema.optional(),
 });
+
+/**
+ * Restore-fields payload. Accepts EITHER the legacy single-group shape
+ * (`{ source_version, fields }`) OR a batch `{ restores: [...] }` carrying
+ * multiple groups, so the modal can restore fields spanning several versions
+ * in ONE request/transaction instead of N sequential calls. Audit metadata
+ * (`restored_by`, `change_source`) applies to every group.
+ */
+export const RestoreFieldsSchema = z.union([
+  RestoreGroupSchema.extend({
+    restored_by: z.string().optional(),
+    change_source: ChangeSourceSchema.optional(),
+  }),
+  z.object({
+    restores: z.array(RestoreGroupSchema).min(1),
+    restored_by: z.string().optional(),
+    change_source: ChangeSourceSchema.optional(),
+  }),
+]);
 
 export const CopyFieldsSchema = z.object({
   source_record_id: z.string().uuid(),

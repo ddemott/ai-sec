@@ -216,35 +216,64 @@ export function registerVersionHistoryRoutes(
         tenantId,
         operation,
         endpoint,
-        'source_version (number) and fields (non-empty array) are required'
+        'provide { source_version, fields[] } or { restores: [{ source_version, fields[] }] }'
       );
       if ('error' in bodyResult) return reply.status(400).send(bodyResult.error);
 
-      const { source_version, fields, restored_by, change_source } = bodyResult.data;
+      const { restored_by, change_source } = bodyResult.data;
+      // Normalize both accepted shapes to a list of restore groups.
+      const groups =
+        'restores' in bodyResult.data
+          ? bodyResult.data.restores
+          : [{ source_version: bodyResult.data.source_version, fields: bodyResult.data.fields }];
+      const totalFields = groups.reduce((n, g) => n + g.fields.length, 0);
+      let failedVersion: number | null = null;
 
       const result = await withTenantClient(tenantId, async (client) => {
-        // Set change source for audit trail
-        await client.query(`SELECT set_config('app.change_source', $1, true)`, [
-          change_source || 'local',
-        ]);
-        await client.query(`SELECT set_config('app.changed_by', $1, true)`, [
-          restored_by || 'user',
-        ]);
-
-        const restoreResult = await client.query<{ data: Record<string, unknown> }>(
-          `SELECT restore_fields_from_version($1, $2, $3, $4, $5, $6, $7) as data`,
-          [
-            tenantId,
-            table,
-            recordId,
-            source_version,
-            fields,
-            restored_by || 'user',
+        // ONE transaction wraps every group so a partial failure rolls the
+        // whole batch back — the modal never lands the record in a half-
+        // restored state. (BEGIN also lets the two set_config(local) calls
+        // apply to the grouped restore RPCs.)
+        try {
+          await client.query('BEGIN');
+          await client.query(`SELECT set_config('app.change_source', $1, true)`, [
             change_source || 'local',
-          ]
-        );
+          ]);
+          await client.query(`SELECT set_config('app.changed_by', $1, true)`, [
+            restored_by || 'user',
+          ]);
 
-        return restoreResult.rows[0]?.data || null;
+          let lastData: Record<string, unknown> | null = null;
+          for (const group of groups) {
+            const restoreResult = await client.query<{ data: Record<string, unknown> }>(
+              `SELECT restore_fields_from_version($1, $2, $3, $4, $5, $6, $7) as data`,
+              [
+                tenantId,
+                table,
+                recordId,
+                group.source_version,
+                group.fields,
+                restored_by || 'user',
+                change_source || 'local',
+              ]
+            );
+            const data = restoreResult.rows[0]?.data ?? null;
+            if (!data) {
+              failedVersion = group.source_version;
+              throw new Error(`RESTORE_FAILED:${group.source_version}`);
+            }
+            lastData = data;
+          }
+
+          await client.query('COMMIT');
+          return lastData;
+        } catch (err) {
+          await client.query('ROLLBACK').catch(() => {});
+          // A missing-version failure is an expected 500 with a 5W body below;
+          // anything else propagates to withHandler's error branch.
+          if (failedVersion !== null) return null;
+          throw err;
+        }
       });
 
       if (!result) {
@@ -253,7 +282,7 @@ export function registerVersionHistoryRoutes(
             who: tenantId,
             what: 'Restore fields from version',
             where: `/records/${table}/${recordId}/restore-fields`,
-            why: `Failed to restore fields from version ${source_version}. The version or record may not exist.`,
+            why: `Failed to restore fields from version ${failedVersion ?? 'unknown'}. The version or record may not exist; no fields were changed.`,
             code: 'RESTORE_FAILED',
           })
         );
@@ -262,14 +291,14 @@ export function registerVersionHistoryRoutes(
       logEvent(req, 'fields_restored', {
         table_name: table,
         record_id: recordId,
-        source_version,
-        fields,
+        groups: groups.length,
+        total_fields: totalFields,
       });
 
       return reply.send({
         success: true,
         data: result,
-        message: `Restored ${fields.length} field(s) from version ${source_version}`,
+        message: `Restored ${totalFields} field(s) from ${groups.length} version(s)`,
       });
     }, 'Failed to restore fields')
   );
