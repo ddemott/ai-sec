@@ -123,16 +123,47 @@ describe('GET /users → real DB', () => {
 });
 
 describe('POST /users/invite → real DB', () => {
-  // NOTE: the invite HAPPY path can't be exercised through this harness. The
-  // handler INSERTs into password_resets INSIDE withTenantClient (tenant
-  // context set), but the password_resets RLS policy is `unauthenticated_only`
-  // (permits writes ONLY when app.current_tenant_id IS NULL). Under the
-  // non-BYPASSRLS `api_user` the test uses, that INSERT is RLS-blocked (42501).
-  // In prod it works only because the managed DB role bypasses RLS. This
-  // latent conflict (app policy would reject the app's own write under a
-  // locked-down role) is flagged in docs/TODO.md "Verification blind spots" — a security-model
-  // decision, not fixed here. So we test the 409 path (which fires at the
-  // users INSERT, BEFORE password_resets) by pre-seeding the duplicate.
+  // The invite writes its reset token into password_resets. That table's RLS
+  // policy (password_resets_unauthenticated_only) permits writes ONLY when no
+  // tenant context is set. Historically the handler INSERTed it INSIDE
+  // withTenantClient (tenant context set) → 42501 under the non-BYPASSRLS
+  // `api_user` this suite runs as; prod only escaped it because the managed
+  // role bypasses RLS. Fixed by writing password_resets via withPoolClient (no
+  // tenant context — same as the forgot/reset-password flow). The HAPPY test
+  // below now exercises that end-to-end under the locked-down role and would
+  // fail (500 / no rows) if the write ever moves back onto a tenant connection.
+
+  it('HAPPY: invites a new user → 201, creates the users row AND the password_resets token under a non-BYPASSRLS role', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/invite',
+      headers: { 'x-tenant-id': tenantId },
+      payload: {
+        tenant_id: tenantId,
+        email: 'invitee@users-realdb.test',
+        full_name: 'Invited Ivy',
+        role: 'front_desk',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const newUserId = res.json().user_id as string;
+    expect(newUserId).toBeTruthy();
+
+    // The user row landed with the invited role.
+    const userRow = await setup.query(
+      `SELECT role FROM users WHERE user_id = $1 AND tenant_id = $2`,
+      [newUserId, tenantId]
+    );
+    expect(userRow.rows).toHaveLength(1);
+    expect(userRow.rows[0].role).toBe('front_desk');
+
+    // The reset token landed too — the RLS-gated write that used to 42501.
+    const tokenRow = await setup.query(`SELECT channel FROM password_resets WHERE user_id = $1`, [
+      newUserId,
+    ]);
+    expect(tokenRow.rows).toHaveLength(1);
+    expect(tokenRow.rows[0].channel).toBe('email');
+  });
 
   it('SAD: inviting a duplicate email for the same tenant → 409 (the UNIQUE guard, fires before password_resets)', async () => {
     // Pre-seed the colliding user directly (root client bypasses RLS) so the
