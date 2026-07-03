@@ -57,7 +57,6 @@ export function TenantCreateForm({ newBusiness, templates, onChange }: TenantCre
             type="email"
             placeholder="Email"
             aria-label="Owner email"
-            autoComplete="off"
             value={newBusiness.owner_email}
             onChange={(e) => onChange({ ...newBusiness, owner_email: e.target.value })}
           />

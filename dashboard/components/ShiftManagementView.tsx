@@ -761,7 +761,7 @@ export default function ShiftManagementView() {
                             role="button"
                             tabIndex={0}
                             aria-label={`Edit shift for ${day.label}, ${formatTime24to12(shift.start_time!.substring(0, 5))} to ${formatTime24to12(shift.end_time!.substring(0, 5))}`}
-                            className="absolute group cursor-pointer rounded-md transition-all hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                            className="absolute group cursor-pointer rounded-md transition-all hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1"
                             style={{
                               left: shiftTimeToHour(shift.start_time!) * colW,
                               width: Math.max(

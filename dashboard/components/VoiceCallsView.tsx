@@ -145,9 +145,14 @@ interface ActiveCallRowProps {
 
 function ActiveCallRow({ call, tenantId, onSelect }: ActiveCallRowProps) {
   const open = () => {
-    void Api.voice.getSession(tenantId, call.call_id).then((session) => {
-      onSelect(session);
-    });
+    void Api.voice
+      .getSession(tenantId, call.call_id)
+      .then((session) => {
+        onSelect(session);
+      })
+      .catch(() => {
+        showToast('Could not open that call. Please try again.', 'error');
+      });
   };
   return (
     <div

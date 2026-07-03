@@ -168,16 +168,35 @@ export function registerUserRoutes(
       // RLS, so it worked there but the app's own policy would have rejected the
       // app's own write under a locked-down role). Doing it here, off the tenant
       // connection, honors the policy's intent (only the unauthenticated flow
-      // writes this table) and works under any role. The users INSERT already
-      // committed (autocommit), so on the rare INSERT failure the owner can
-      // resend — same non-atomic behavior as before this split.
-      await withPoolClient(pool, async (client) => {
-        await client.query(
-          `INSERT INTO password_resets (user_id, token_hash, channel, expires_at)
-           VALUES ($1, $2, 'email', NOW() + ($3 || ' minutes')::interval)`,
-          [userId, tokenHash, INVITE_TTL_MINUTES]
-        );
-      });
+      // writes this table) and works under any role.
+      //
+      // The users INSERT already committed (autocommit) before this write. If the
+      // token INSERT fails, roll the user row back so a re-invite doesn't hit the
+      // (tenant_id, email) UNIQUE and 409 forever with no token to reset against.
+      // Best-effort: if the rollback itself fails we still surface the original
+      // error so the owner knows the invite didn't complete.
+      try {
+        await withPoolClient(pool, async (client) => {
+          await client.query(
+            `INSERT INTO password_resets (user_id, token_hash, channel, expires_at)
+             VALUES ($1, $2, 'email', NOW() + ($3 || ' minutes')::interval)`,
+            [userId, tokenHash, INVITE_TTL_MINUTES]
+          );
+        });
+      } catch (tokenErr) {
+        await withTenantClient(tenant_id, async (client) => {
+          await client.query('DELETE FROM users WHERE user_id = $1 AND tenant_id = $2', [
+            userId,
+            tenant_id,
+          ]);
+        }).catch((rollbackErr: unknown) => {
+          req.log.error(
+            { rollbackErr, userId, email: normalizedEmail },
+            'Invite token INSERT failed AND user rollback failed — orphaned user row'
+          );
+        });
+        throw tokenErr;
+      }
 
       const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
       const resetLink = `${dashboardUrl}/reset-password?token=${rawToken}`;
