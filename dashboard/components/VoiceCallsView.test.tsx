@@ -62,7 +62,7 @@ const mockCall = {
   ended_at: new Date().toISOString(),
   status: 'completed',
   duration_seconds: 120,
-  outcome: 'appointment_booked',
+  outcome: 'booked',
   transcript: 'Hello, I would like to book an appointment.',
   summary: 'Customer booked a 30-minute service appointment.',
   customer_context: {
@@ -438,25 +438,27 @@ describe('VoiceCallsView', () => {
     });
 
     test('handles all outcome types correctly', async () => {
+      // These are the ONLY outcome strings the agent writes (callOutcome.ts +
+      // callClassify.ts CATEGORIES). The dashboard's label map must match them
+      // exactly — the prior phantom set ('appointment_booked'/'voicemail'/…) was
+      // never emitted, so booked calls rendered a grey raw "booked" badge.
       const outcomes = [
-        'appointment_booked',
-        'appointment_rescheduled',
-        'appointment_cancelled',
-        'info_provided',
+        'booked',
         'transferred',
-        'voicemail',
-        'abandoned',
-        'other',
+        'message',
+        'no_availability',
+        'wrong_service',
+        'price',
+        'info',
       ];
       const labels = [
         'Booked',
-        'Rescheduled',
-        'Cancelled',
-        'Info Provided',
         'Transferred',
-        'Voicemail',
-        'Abandoned',
-        'Other',
+        'Left a message',
+        'No availability',
+        'Wrong service',
+        'Price concern',
+        'Question only',
       ];
 
       for (let i = 0; i < outcomes.length; i++) {
@@ -471,13 +473,30 @@ describe('VoiceCallsView', () => {
       }
     });
 
+    test('renders legacy-vocabulary outcomes with the right label (backward-compat)', async () => {
+      // WHO: a tenant whose stored/historical rows carry the LEGACY outcome
+      //        vocabulary (shared VoiceSessionOutcome / the /voice/session/end
+      //        Zod enum) rather than the agent's live strings.
+      // WHAT: a legacy 'appointment_booked' must still render "Booked", not a
+      //        grey humanized "appointment booked" — the map carries aliases.
+      // WHERE: OUTCOME_LABELS + getOutcomeStyle backward-compat entries.
+      // WHY: Copilot flagged that dropping the legacy keys would regress those
+      //        rows to a neutral badge; this pins the alias so it can't.
+      const legacyCall = { ...mockCall, outcome: 'appointment_booked' };
+      mockCallHistory.mockResolvedValue({ calls: [legacyCall], total: 1, has_more: false });
+      render(<VoiceCallsView />);
+      await waitFor(() => expect(screen.getAllByText('Booked').length).toBeGreaterThanOrEqual(1));
+      expect(screen.queryByText('appointment booked')).not.toBeInTheDocument();
+    });
+
     test('handles unknown outcome gracefully', async () => {
       const unknownOutcomeCall = { ...mockCall, outcome: 'unknown_type' };
       mockCallHistory.mockResolvedValue({ calls: [unknownOutcomeCall], total: 1, has_more: false });
       render(<VoiceCallsView />);
       await waitFor(() => {
-        // Unknown outcome appears in list and detail panel
-        expect(screen.getAllByText('unknown_type').length).toBeGreaterThanOrEqual(1);
+        // An unmapped outcome is humanized (underscores → spaces) rather than
+        // shown raw, so it stays readable in list + detail panel.
+        expect(screen.getAllByText('unknown type').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -636,9 +655,88 @@ describe('VoiceCallsView', () => {
       fireEvent.click(confirmBtn);
 
       await waitFor(() => expect(mockDeleteCall).toHaveBeenCalledWith('test-tenant-123', 'vs-del'));
-      await waitFor(() =>
-        expect(screen.queryByText('Delete this call?')).not.toBeInTheDocument()
-      );
+      await waitFor(() => expect(screen.queryByText('Delete this call?')).not.toBeInTheDocument());
+    });
+  });
+
+  describe('Outcome filter (UX review — real vocabulary)', () => {
+    // The agent only ever writes: booked, transferred, message, no_availability,
+    // wrong_service, price, info, or null. The filter must match those — the old
+    // options ('appointment_booked'/'voicemail'/'abandoned') matched nothing.
+    // customer_context is nulled so each call's name shows ONLY in its list row
+    // (the detail pane falls back to the phone) — otherwise the auto-selected
+    // call's context name would leak into the detail <h2> and collide with the
+    // list-membership assertions.
+    const booked = {
+      ...mockCall,
+      voice_session_id: 'vs-b',
+      id: 'vs-b',
+      caller_phone: '+15550000001',
+      customer_name: 'Bea Booked',
+      customer_context: null,
+      outcome: 'booked',
+    };
+    const priced = {
+      ...mockCall,
+      voice_session_id: 'vs-p',
+      id: 'vs-p',
+      caller_phone: '+15550000002',
+      customer_name: 'Pat Price',
+      customer_context: null,
+      outcome: 'price',
+    };
+    const noOutcome = {
+      ...mockCall,
+      voice_session_id: 'vs-n',
+      id: 'vs-n',
+      caller_phone: '+15550000003',
+      customer_name: 'Nil Caller',
+      customer_context: null,
+      outcome: null,
+    };
+
+    test('HAPPY: filtering to a real outcome keeps matching calls and drops the rest', async () => {
+      // WHO: an owner triaging by outcome. WHAT: selecting "Price concern" shows
+      // only price-outcome calls. WHEN: after history loads. WHERE: outcome
+      // <select> + client-side predicate. WHY: the old filter values never
+      // matched stored outcomes, so every non-transfer filter was dead.
+      mockCallHistory.mockResolvedValue({
+        calls: [booked, priced],
+        total: 2,
+        has_more: false,
+      });
+      render(<VoiceCallsView />);
+      await waitFor(() => expect(screen.getByText('Pat Price')).toBeInTheDocument());
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Filter calls by outcome' }), {
+        target: { value: 'price' },
+      });
+
+      await waitFor(() => expect(screen.getByText('Pat Price')).toBeInTheDocument());
+      // The booked call (John Smith) is filtered out of the list.
+      expect(screen.queryByText('Bea Booked')).not.toBeInTheDocument();
+    });
+
+    test('HAPPY: the "No clear outcome" filter matches null-outcome (abandoned) calls', async () => {
+      // WHO: an owner reviewing abandoned calls. WHAT: null outcome = the
+      // no-clear-outcome bucket; that filter must surface it, not sit dead.
+      // WHERE: outcomeFilter === 'no_outcome' → !c.outcome predicate.
+      // WHY: "abandoned" is a derived null-outcome, not a stored literal — the
+      //      old 'abandoned' option matched zero rows.
+      mockCallHistory.mockResolvedValue({
+        calls: [booked, noOutcome],
+        total: 2,
+        has_more: false,
+      });
+      render(<VoiceCallsView />);
+      await waitFor(() => expect(screen.getByText('Nil Caller')).toBeInTheDocument());
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Filter calls by outcome' }), {
+        target: { value: 'no_outcome' },
+      });
+
+      await waitFor(() => expect(screen.getByText('Nil Caller')).toBeInTheDocument());
+      expect(screen.queryByText('Bea Booked')).not.toBeInTheDocument();
     });
   });
 });

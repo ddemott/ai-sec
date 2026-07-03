@@ -223,3 +223,92 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
     });
   });
 });
+
+describe('AnalyticsView — copy defects (UX review)', () => {
+  test('HAPPY: AI usage footer names OpenAI TTS, never the removed xAI vendor', async () => {
+    // WHO: an owner reading the AI Usage cost note.
+    // WHAT: the rate footer must reflect the current stack — OpenAI TTS. xAI/Grok
+    //        TTS was fully removed 2026-06-25; "xAI TTS cost TBD" is dead copy.
+    // WHEN: any Analytics visit with AI-cost rows present.
+    // WHERE: AnalyticsView AI Usage rate footer.
+    // WHY: a dead vendor name + a stale "cost TBD" misrepresent what the tenant
+    //       is billed for; regression guard so it can't creep back.
+    mockApi.analytics.getCalls.mockResolvedValue({
+      totals: { total: 3, booked: 1, abandoned: 1 },
+      by_outcome: [],
+      by_day: [],
+    });
+    mockApi.analytics.getAiCost.mockResolvedValue({
+      total_estimated_cost_usd: 0.12,
+      breakdown: [
+        {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          source: 'voice_session',
+          input_tokens: 1000,
+          output_tokens: 500,
+          audio_duration_ms: 0,
+          characters_count: 0,
+          estimated_cost_usd: 0.12,
+        },
+      ],
+    });
+
+    render(<AnalyticsView />);
+
+    expect(await screen.findByText(/OpenAI TTS/i)).toBeInTheDocument();
+    expect(screen.queryByText(/xAI TTS/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cost\s*TBD/i)).not.toBeInTheDocument();
+  });
+
+  test('HAPPY: the reliability snapshot does not leak the internal endpoint path', async () => {
+    // WHO: a non-technical owner reading the small snapshot line under the title.
+    // WHAT: the line reports call/appt counts in plain language — it must NOT
+    //        expose the "/analytics/stats" endpoint (dev language, item-1 concern).
+    // WHEN: getStats returns aggregate counts.
+    // WHERE: AnalyticsView reliability-snapshot line.
+    // WHY: internal route names mean nothing to an owner and read as leaked
+    //       plumbing; regression guard.
+    mockApi.analytics.getCalls.mockResolvedValue({
+      totals: { total: 3, booked: 1, abandoned: 1 },
+      by_outcome: [],
+      by_day: [],
+    });
+    mockApi.analytics.getStats.mockResolvedValue({
+      calls: { total: 42 },
+      appointments: { total: 17 },
+    });
+
+    render(<AnalyticsView />);
+
+    expect(await screen.findByText(/42 calls \/ 17 appointments tracked/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\/analytics\/stats/i)).not.toBeInTheDocument();
+  });
+
+  test('HAPPY: Call Volume subtitle reflects all-time vs filtered, not a fixed "30 days"', async () => {
+    // WHO: an owner reading the Call Volume card.
+    // WHAT: the headline number is all-time when unfiltered, so the subtitle must
+    //        say "All calls answered" — not "last 30 days" (which mislabeled an
+    //        all-time count). With a From/To filter it becomes range-specific.
+    // WHEN: initial all-time load, then after picking a From date.
+    // WHERE: AnalyticsView callVolumeSubtitle.
+    // WHY: number-vs-label disagreement is a silent lie an owner acts on.
+    const { fireEvent } = await import('@testing-library/react');
+    mockApi.analytics.getCalls.mockResolvedValue({
+      totals: { total: 8, booked: 3, abandoned: 2 },
+      by_outcome: [],
+      by_day: [],
+    });
+
+    render(<AnalyticsView />);
+
+    expect(await screen.findByText('All calls answered')).toBeInTheDocument();
+    expect(screen.queryByText(/last 30 days/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('From date'), { target: { value: '2026-05-01' } });
+
+    await vi.waitFor(() =>
+      expect(screen.getByText('Calls in your selected date range')).toBeInTheDocument()
+    );
+  });
+});
