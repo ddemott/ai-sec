@@ -30,6 +30,7 @@ vi.mock('../lib/api', () => ({
 vi.mock('./ui/Toast', () => ({ showToast: vi.fn() }));
 
 import AIConfigView from './AIConfigView';
+import { showToast } from './ui/Toast';
 
 const BASE_CONFIG: Tenant = {
   tenant_id: mockTenantId,
@@ -306,5 +307,68 @@ describe('AIConfigView — Customer Preferences', () => {
       expect(textarea).toHaveAttribute('placeholder', expect.stringMatching(c.expect));
       unmount();
     }
+  });
+
+  test('SAD: a failed save (success:false, no throw) shows the backend error toast', async () => {
+    // WHO: an owner whose save is rejected by the backend — validation 400,
+    //        cross-tenant 403, or the forward-loop 400 guard.
+    // WHAT: apiMutate resolves { success:false, error } (it does NOT throw on
+    //        non-2xx), so handleSave must surface that error to the owner.
+    // WHEN: clicking Save Changes when the server rejects the payload.
+    // WHERE: AIConfigView handleSave — the else branch on !res.success.
+    // WHY: without it the owner clicks Save and gets ZERO feedback while the
+    //      form stays dirty — a silent failure that looks like a hang. Regression
+    //      guard for that exact gap.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
+    mockUpdateConfig.mockResolvedValue({
+      success: false,
+      error: "The transfer number can't be the same as the forwarded-from number.",
+    });
+    render(<AIConfigView />);
+
+    // Dirty the form so Save is enabled, then click.
+    const greeting = await screen.findByPlaceholderText(/thanks for calling/i);
+    fireEvent.change(greeting, { target: { value: 'Hello there!' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(showToast)).toHaveBeenCalledWith(
+        "The transfer number can't be the same as the forwarded-from number.",
+        'error'
+      )
+    );
+  });
+
+  test('SAD: a failed save with no error message falls back to a generic toast', async () => {
+    // WHO: an owner whose save fails without a machine-readable reason.
+    // WHAT: when res.error is absent, handleSave still tells the owner it failed.
+    // WHEN: a 5xx or bare rejection returns { success:false } with no error.
+    // WHERE: AIConfigView handleSave — the `res.error || 'Failed to save'` fallback.
+    // WHY: "something went wrong" beats silence; the owner must know to retry.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG });
+    mockUpdateConfig.mockResolvedValue({ success: false });
+    render(<AIConfigView />);
+
+    const greeting = await screen.findByPlaceholderText(/thanks for calling/i);
+    fireEvent.change(greeting, { target: { value: 'Hello there!' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(showToast)).toHaveBeenCalledWith('Failed to save', 'error')
+    );
+  });
+
+  test('HAPPY: the system-prompt placeholder no longer names the removed DynaTire brand', async () => {
+    // WHO: any owner viewing the Personality & Instructions box before typing.
+    // WHAT: the example prompt is business-agnostic — DynaTire was a PoC tenant
+    //        removed 2026-06-03 and must not appear in owner-facing copy.
+    // WHEN: every visit to Voice Settings.
+    // WHERE: AIConfigView system_prompt textarea placeholder.
+    // WHY: a dead customer's name in the default example is confusing and stale;
+    //      regression guard so it doesn't creep back.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG, system_prompt: '' });
+    render(<AIConfigView />);
+    const prompt = await screen.findByPlaceholderText(/warm, professional assistant/i);
+    expect(prompt.getAttribute('placeholder')).not.toMatch(/dynatire/i);
   });
 });

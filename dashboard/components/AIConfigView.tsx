@@ -118,6 +118,13 @@ export default function AIConfigView() {
         setDirty(false);
         showToast('AI persona saved');
         setTimeout(() => setSuccess(false), 3000);
+      } else {
+        // A non-2xx save (validation 400, cross-tenant 403, loop-guard 400)
+        // resolves — apiMutate returns { success:false, error } rather than
+        // throwing — so without this branch the owner clicks Save and gets
+        // ZERO feedback while `dirty` stays true. Surface the backend reason
+        // (e.g. the forward-loop message) or a generic fallback.
+        showToast(res.error || 'Failed to save', 'error');
       }
     } catch (e) {
       console.error('Failed to save config', e);
@@ -219,7 +226,7 @@ export default function AIConfigView() {
               backgroundColor: 'var(--bg-raised)',
               color: 'var(--text-primary)',
             }}
-            placeholder="Ex: You are a helpful assistant for DynaTire. Be professional and concise..."
+            placeholder="Ex: You are a warm, professional assistant for our business. Greet callers, answer their questions, and help them book. Be concise..."
           />
         </section>
 
