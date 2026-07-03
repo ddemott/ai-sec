@@ -23,6 +23,7 @@ import type {
   ChangeSource,
   RecordRestorePreview,
 } from '../lib/types';
+import { excludedSystemFields } from '../../shared/versionHistoryFields';
 
 interface RecordHistoryModalProps {
   isOpen: boolean;
@@ -256,6 +257,10 @@ export function RecordHistoryModal({
 
   if (!isOpen) return null;
 
+  // Precompute once — `table` is stable for the modal, so we avoid rebuilding
+  // this Set for every version × field rendered below.
+  const excludedFields = excludedSystemFields(table);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
@@ -423,18 +428,7 @@ export function RecordHistoryModal({
                             </h4>
                             <div className="space-y-1 text-sm">
                               {Object.entries(version.data)
-                                .filter(
-                                  ([key]) =>
-                                    ![
-                                      'id',
-                                      'tenant_id',
-                                      'created_at',
-                                      'updated_at',
-                                      'is_deleted',
-                                      'deleted_at',
-                                      'deleted_by',
-                                    ].includes(key)
-                                )
+                                .filter(([key]) => !excludedFields.has(key))
                                 .map(([key, value]) => (
                                   <div key={key} className="flex">
                                     <span className="w-32 text-gray-500 flex-shrink-0">{key}:</span>

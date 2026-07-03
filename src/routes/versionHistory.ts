@@ -29,9 +29,9 @@ import type {
   VersionedTable,
   ChangeSource,
 } from '../types/versionHistory';
+import { PK_COLUMN_BY_TABLE, excludedSystemFields } from '../../shared/versionHistoryFields';
 import {
   type RecordHistoryRow,
-  PK_COLUMN_BY_TABLE,
   RestoreFieldsSchema,
   CopyFieldsSchema,
   SoftDeleteSchema,
@@ -662,17 +662,11 @@ export function registerVersionHistoryRoutes(
           [tenantId, table, recordId]
         );
 
-        // Build field options
+        // Build field options. Exclude the common audit/system columns AND the
+        // table's real PK (customer_id, …) via the shared helper — a bare 'id'
+        // list would leak the renamed PK into the restorable-field options.
         const fields: Record<string, unknown> = {};
-        const excludeFields = [
-          'id',
-          'tenant_id',
-          'created_at',
-          'updated_at',
-          'is_deleted',
-          'deleted_at',
-          'deleted_by',
-        ];
+        const excludeFields = excludedSystemFields(table);
 
         // Get all unique fields from current and historical data
         const allFields = new Set<string>();
@@ -682,7 +676,7 @@ export function registerVersionHistoryRoutes(
         });
 
         for (const field of allFields) {
-          if (excludeFields.includes(field)) continue;
+          if (excludeFields.has(field)) continue;
 
           fields[field] = {
             field,

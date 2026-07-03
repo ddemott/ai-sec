@@ -6,7 +6,12 @@
  * lives in one place instead of being repeated inside route closures.
  */
 import { z } from 'zod';
-import type { VersionedTable } from '../types/versionHistory';
+import { VERSIONED_TABLES, PK_COLUMN_BY_TABLE } from '../../shared/versionHistoryFields';
+
+// Re-exported from the shared canonical source so backend callers that already
+// import these from here keep working (single source of truth lives in
+// shared/versionHistoryFields.ts).
+export { VERSIONED_TABLES, PK_COLUMN_BY_TABLE };
 
 /** Row shape returned by the get_record_history() RPC. */
 export interface RecordHistoryRow {
@@ -22,32 +27,9 @@ export interface RecordHistoryRow {
   changed_at: string;
 }
 
-export const VERSIONED_TABLES = [
-  'customers',
-  'appointments',
-  'voice_sessions',
-  'employees',
-  'services',
-  'resources',
-] as const satisfies readonly VersionedTable[];
-
-// Single source of truth: the Zod allow-list is DERIVED from VERSIONED_TABLES so
-// the two can't drift (add/remove a table in one place only).
+// Single source of truth: the Zod allow-list is DERIVED from VERSIONED_TABLES
+// (from shared) so the two can't drift.
 export const TableNameSchema = z.enum(VERSIONED_TABLES);
-
-// PK column for each versioned table (post-2026-05-12 PK rename sprint —
-// CODING_STANDARDS.md ID convention). Used to build dynamic SQL where the
-// table name is parameterized but the WHERE/JOIN needs the right PK column.
-// Keyed by VersionedTable (not bare string) so an unsupported table can't be
-// indexed into an undefined PK column when building SQL.
-export const PK_COLUMN_BY_TABLE: Record<VersionedTable, string> = {
-  customers: 'customer_id',
-  appointments: 'appointment_id',
-  voice_sessions: 'voice_session_id',
-  employees: 'employee_id',
-  services: 'service_id',
-  resources: 'resource_id',
-};
 
 export const ChangeSourceSchema = z.enum(['local', 'square', 'voice_call', 'system', 'api']);
 

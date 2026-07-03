@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Api } from '../lib/api';
 import type { DeletedRecord, DeletedRecordsResponse, VersionedTable, Customer } from '../lib/types';
+import { excludedSystemFields } from '../../shared/versionHistoryFields';
 
 interface DeletedRecordsPanelProps {
   table: VersionedTable;
@@ -56,6 +57,7 @@ export function DeletedRecordsPanel({
   const [copyModal, setCopyModal] = useState<{
     sourceId: string;
     sourceData: Record<string, unknown>;
+    table: VersionedTable;
   } | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<string>('');
@@ -117,7 +119,11 @@ export function DeletedRecordsPanel({
   }
 
   function openCopyModal(record: DeletedRecord) {
-    setCopyModal({ sourceId: record.record_id, sourceData: record.last_data || {} });
+    setCopyModal({
+      sourceId: record.record_id,
+      sourceData: record.last_data || {},
+      table: record.table_name,
+    });
     setSelectedFields(new Set());
     setSelectedTarget('');
   }
@@ -162,16 +168,6 @@ export function DeletedRecordsPanel({
         r.email?.toLowerCase().includes(term)
       );
     }) || [];
-
-  const excludeFields = [
-    'id',
-    'tenant_id',
-    'created_at',
-    'updated_at',
-    'is_deleted',
-    'deleted_at',
-    'deleted_by',
-  ];
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -309,16 +305,21 @@ export function DeletedRecordsPanel({
                       Last Known Data
                     </h4>
                     <div className="grid grid-cols-2 gap-2 text-sm">
-                      {Object.entries(record.last_data)
-                        .filter(([key]) => !excludeFields.includes(key))
-                        .map(([key, value]) => (
-                          <div key={key} className="flex">
-                            <span className="w-32 text-gray-500 flex-shrink-0">{key}:</span>
-                            <span className="text-gray-900 dark:text-gray-100">
-                              {formatFieldValue(value)}
-                            </span>
-                          </div>
-                        ))}
+                      {(() => {
+                        // Compute the excluded set once for this record instead
+                        // of rebuilding it inside the per-field filter.
+                        const excluded = excludedSystemFields(record.table_name);
+                        return Object.entries(record.last_data ?? {})
+                          .filter(([key]) => !excluded.has(key))
+                          .map(([key, value]) => (
+                            <div key={key} className="flex">
+                              <span className="w-32 text-gray-500 flex-shrink-0">{key}:</span>
+                              <span className="text-gray-900 dark:text-gray-100">
+                                {formatFieldValue(value)}
+                              </span>
+                            </div>
+                          ));
+                      })()}
                     </div>
                   </div>
                 )}
@@ -371,27 +372,32 @@ export function DeletedRecordsPanel({
                   Select fields to copy:
                 </label>
                 <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-                  {Object.entries(copyModal.sourceData)
-                    .filter(([key]) => !excludeFields.includes(key))
-                    .map(([key, value]) => (
-                      <label
-                        key={key}
-                        className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedFields.has(key)}
-                          onChange={() => toggleField(key)}
-                          style={{ accentColor: 'var(--accent)' }}
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium text-sm text-gray-900 dark:text-white">
-                            {key}
+                  {(() => {
+                    // Compute the excluded set once for the copy source's table
+                    // instead of rebuilding it inside the per-field filter.
+                    const excluded = excludedSystemFields(copyModal.table);
+                    return Object.entries(copyModal.sourceData)
+                      .filter(([key]) => !excluded.has(key))
+                      .map(([key, value]) => (
+                        <label
+                          key={key}
+                          className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedFields.has(key)}
+                            onChange={() => toggleField(key)}
+                            style={{ accentColor: 'var(--accent)' }}
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-sm text-gray-900 dark:text-white">
+                              {key}
+                            </div>
+                            <div className="text-xs text-gray-500">{formatFieldValue(value)}</div>
                           </div>
-                          <div className="text-xs text-gray-500">{formatFieldValue(value)}</div>
-                        </div>
-                      </label>
-                    ))}
+                        </label>
+                      ));
+                  })()}
                 </div>
               </div>
             </div>
