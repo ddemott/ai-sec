@@ -48,18 +48,29 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString();
 }
 
+// The ONLY outcome strings the agent ever writes to voice_sessions.outcome:
+//   'booked' / 'transferred'                              (callOutcome.ts)
+//   'no_availability' / 'wrong_service' / 'price'
+//     / 'message' / 'info'                                (callClassify.ts CATEGORIES)
+//   null/'' → treated as no-outcome (abandoned) server-side.
+// The previous map keyed on 'appointment_booked'/'info_provided'/'voicemail'/
+// 'abandoned' — a phantom vocabulary the agent never emits — so a booked call
+// fell through to a grey "booked" badge and every classify outcome showed a
+// raw underscore label. These keys mirror callClassify.ts exactly.
+const OUTCOME_LABELS: Record<string, string> = {
+  booked: 'Booked',
+  transferred: 'Transferred',
+  message: 'Left a message',
+  no_availability: 'No availability',
+  wrong_service: 'Wrong service',
+  price: 'Price concern',
+  info: 'Question only',
+  no_outcome: 'No clear outcome',
+};
+
 function getOutcomeLabel(outcome: string | null): string {
-  const labels: Record<string, string> = {
-    appointment_booked: 'Booked',
-    appointment_rescheduled: 'Rescheduled',
-    appointment_cancelled: 'Cancelled',
-    info_provided: 'Info Provided',
-    transferred: 'Transferred',
-    voicemail: 'Voicemail',
-    abandoned: 'Abandoned',
-    other: 'Other',
-  };
-  return outcome ? labels[outcome] || outcome : 'Unknown';
+  if (!outcome) return 'No clear outcome';
+  return OUTCOME_LABELS[outcome] || outcome.replace(/_/g, ' ');
 }
 
 type OutcomeStyle = { backgroundColor: string; color: string };
@@ -71,26 +82,22 @@ type OutcomeStyle = { backgroundColor: string; color: string };
  * which only rendered correctly on light themes — every dark theme
  * (midnight/nord/forest/sunset/...) had unreadable badges before this.
  *
- * Mapping rationale:
- * - booked / rescheduled    → success  (positive outcome)
- * - cancelled / abandoned   → danger   (negative outcome)
- * - transferred / voicemail → warning  (procedural, needs follow-up)
- * - info_provided / other   → neutral  (uses --bg-raised + --text-secondary)
- *
- * Voicemail folds into warning instead of getting its own --info token
- * since the project doesn't define --info yet and adding it would
- * require an 8-theme override pass for a single outcome variant.
+ * Mapping rationale (keys match the agent's real outcome vocabulary):
+ * - booked                            → success  (won the booking)
+ * - no_availability/wrong_service/price → danger  (a lost booking — the WHY)
+ * - transferred / message             → warning  (procedural, needs follow-up)
+ * - info / no_outcome / null          → neutral  (uses --bg-raised + --text-secondary)
  */
 function getOutcomeStyle(outcome: string | null): OutcomeStyle {
   switch (outcome) {
-    case 'appointment_booked':
-    case 'appointment_rescheduled':
+    case 'booked':
       return { backgroundColor: 'var(--success-bg)', color: 'var(--success)' };
-    case 'appointment_cancelled':
-    case 'abandoned':
+    case 'no_availability':
+    case 'wrong_service':
+    case 'price':
       return { backgroundColor: 'var(--danger-bg)', color: 'var(--danger)' };
     case 'transferred':
-    case 'voicemail':
+    case 'message':
       return { backgroundColor: 'var(--warning-bg)', color: 'var(--warning)' };
     default:
       return { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' };
@@ -739,6 +746,7 @@ export default function VoiceCallsView() {
                 <select
                   value={outcomeFilter}
                   onChange={(e) => setOutcomeFilter(e.target.value)}
+                  aria-label="Filter calls by outcome"
                   className="text-xs border rounded px-1.5 py-1"
                   style={{
                     backgroundColor: 'var(--bg-surface)',
@@ -747,11 +755,14 @@ export default function VoiceCallsView() {
                   }}
                 >
                   <option value="all">All outcomes</option>
-                  <option value="appointment_booked">Booked</option>
-                  <option value="info_provided">Info provided</option>
+                  <option value="booked">Booked</option>
                   <option value="transferred">Transferred</option>
-                  <option value="voicemail">Voicemail</option>
-                  <option value="abandoned">Abandoned</option>
+                  <option value="message">Left a message</option>
+                  <option value="no_availability">No availability</option>
+                  <option value="wrong_service">Wrong service</option>
+                  <option value="price">Price concern</option>
+                  <option value="info">Question only</option>
+                  <option value="no_outcome">No clear outcome</option>
                 </select>
                 {isOwner && (
                   <div className="flex items-center gap-1">
@@ -802,9 +813,14 @@ export default function VoiceCallsView() {
               ) : (
                 <div className="divide-y">
                   {(() => {
-                    const filtered = callHistory.filter(
-                      (c) => outcomeFilter === 'all' || c.outcome === outcomeFilter
-                    );
+                    const filtered = callHistory.filter((c) => {
+                      if (outcomeFilter === 'all') return true;
+                      // A call with no recorded outcome (null/'') is the
+                      // "abandoned / no clear outcome" bucket — match it here so
+                      // that filter isn't dead. Everything else is an exact match.
+                      if (outcomeFilter === 'no_outcome') return !c.outcome;
+                      return c.outcome === outcomeFilter;
+                    });
                     if (filtered.length === 0) {
                       return (
                         <div className="flex flex-col items-center justify-center py-8 text-gray-500">
