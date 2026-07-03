@@ -179,6 +179,14 @@ const GetAvailableSlotsSchema = z.object({
   call_id: z.string().min(1).optional(),
 });
 
+// Verbal SMS-consent capture — the caller said yes to appointment reminders on
+// the call. Informational/transactional only (never marketing).
+const RecordSmsConsentSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  call_id: z.string().min(1).optional(),
+});
+
 const SendVerificationCodeSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
@@ -759,6 +767,36 @@ export function registerAgentToolRoutes(
   // the write half of the preference round-trip. No-ops gracefully (success
   // shape with saved=false) when the phone isn't a known customer yet, so the
   // LLM relays "noted" without a scary error mid-call.
+  // record-consent — the caller verbally agreed on the call to receive SMS
+  // appointment confirmations/reminders. Writes a dated `consent_records` row
+  // (method='verbal', source='voice_call:<call_id>') so reminderProcessor's
+  // checkConsent lets this number through. Phone is normalized to match how
+  // consent is looked up at send time. Informational only — the agent never
+  // records marketing consent here. Best-effort success shape (never a 500)
+  // so a hiccup can't derail the live call.
+  toolRoute(
+    app,
+    '/agent-tools/record-consent',
+    RecordSmsConsentSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!isValidPhone(normalized)) {
+        return fail(reply, "That number isn't complete enough to record consent against.");
+      }
+      await withTenantClient(args.tenant_id, (client) =>
+        client.query(
+          `INSERT INTO consent_records
+             (tenant_id, customer_phone, consent_type, consent_given, consent_date,
+              consent_method, consent_source)
+           VALUES ($1, $2, 'sms', true, now(), 'verbal', $3)`,
+          [args.tenant_id, normalized, args.call_id ? `voice_call:${args.call_id}` : 'voice_call']
+        )
+      );
+      return ok(reply, { recorded: true, channel: 'sms', phone: normalized });
+    },
+    'Failed to record consent'
+  );
+
   toolRoute(
     app,
     '/agent-tools/save-customer-preference',

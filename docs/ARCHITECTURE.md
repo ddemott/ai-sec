@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-07-02 (29 route modules, 154 migrations, 19 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
+**Last verified:** 2026-07-02 (29 route modules, 154 migrations, 20 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 

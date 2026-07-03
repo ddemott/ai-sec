@@ -1,7 +1,7 @@
 /**
  * Tool definitions for the LiveKit agent.
  *
- * Each of the 11 backend /agent-tools/* routes is exposed to the LLM as a
+ * Each of the 20 backend /agent-tools/* routes is exposed to the LLM as a
  * function-tool. The `tenant_id` and (where relevant) `call_id` are
  * injected from the session context — the LLM never sees or supplies them.
  * This prevents an entire class of bugs where the LLM hallucinates or
@@ -47,6 +47,7 @@ const CAPABILITY_OF: Record<string, Capability> = {
   find_caller_by_name: 'identity',
   identify_caller: 'identity',
   save_customer_preference: 'identity',
+  record_sms_consent: 'scheduling',
   get_service_catalog: 'scheduling',
   get_available_slots: 'scheduling',
   get_scheduling_options: 'scheduling',
@@ -560,6 +561,31 @@ export function buildTools(
           phone: args.phone,
           key: args.key,
           value: args.value,
+        });
+        return formatResponse(res);
+      },
+    }),
+
+    record_sms_consent: llm.tool({
+      description:
+        'Record that the caller VERBALLY agreed to receive SMS appointment confirmations and reminders. Call this ONLY after you have (1) asked permission, naming the business, (2) said it is for appointment messages only, (3) said "message and data rates may apply", (4) said they can reply STOP anytime — AND the caller clearly said yes. NEVER use this for marketing or promotions; appointment confirmations/reminders only. Pass the mobile number the caller confirmed for texts.',
+      parameters: {
+        type: 'object',
+        properties: {
+          phone: {
+            type: 'string',
+            description:
+              'The mobile number the caller confirmed for appointment text reminders (the number they will actually be texted).',
+          },
+        },
+        required: ['phone'],
+        additionalProperties: false,
+      },
+      execute: async (args: { phone: string }) => {
+        const res = await client.call('/agent-tools/record-consent', {
+          tenant_id: ctx.tenantId,
+          phone: args.phone,
+          call_id: ctx.callId || undefined,
         });
         return formatResponse(res);
       },

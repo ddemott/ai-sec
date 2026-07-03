@@ -64,7 +64,7 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - **No rich media during calls** (e.g., photo of tire damage for auto shops).
 - **Outcome classification is good** (`callClassify.ts`: booked / no_availability / wrong_service / price / message / info + abandoned) but not yet driving automations (e.g., price-sensitive follow-up SMS).
 
-**Agent tools** (`agent/src/tools.ts` — 19 tools as of 2026-06-26):
+**Agent tools** (`agent/src/tools.ts` — 20 tools as of 2026-07-03):
 
 - `get_customer_context`: CRM lookup + history + preferences (called early when caller ID present).
 - `find_caller_by_name`: name-first CRM lookup for forwarded lines (caller ID is not the caller's own number); returns matching contacts + phone on file to confirm. Empty list = new caller.
