@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
-import { X, Clock, User } from 'lucide-react';
+import { Clock, User } from 'lucide-react';
 import { useFocusTrap } from '../../lib/useFocusTrap';
-import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
+import { SchedulerSidePanel } from './SchedulerSidePanel';
 import { shiftTimeToHour } from '../../lib/utils';
 import type { SchedulerAppointment } from './useSchedulerData';
 import { formatTime24to12, formatTimeFromISO } from '../../lib/utils';
@@ -53,25 +53,16 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
     totalShiftHours > 0 ? Math.round((totalBookedHours / totalShiftHours) * 100) : 0;
 
   return (
-    <div
-      ref={containerRef}
-      role="dialog"
-      aria-labelledby="focus-panel-title"
-      className="fixed inset-y-0 right-0 w-full sm:w-96 shadow-2xl border-l z-30 flex flex-col animate-in slide-in-from-right duration-200"
-      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}
-      data-testid="employee-day-focus-panel"
+    <SchedulerSidePanel
+      containerRef={containerRef}
+      titleId="focus-panel-title"
+      icon={<User className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />}
+      title={employee.name}
+      onClose={onClose}
+      closeLabel="Close focus panel"
+      dataTestId="employee-day-focus-panel"
     >
-      <header className="px-4 py-3 border-b flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <User className="w-4 h-4" style={{ color: 'var(--accent-soft)' }} aria-hidden="true" />
-          <h3 id="focus-panel-title" className="font-bold text-gray-900 dark:text-gray-100">{employee.name}</h3>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close focus panel">
-          <X className="w-4 h-4" />
-        </Button>
-      </header>
-
-      <div className="flex-1 overflow-y-auto">
+      <>
         {/* Stats */}
         <div className="p-4 border-b border-gray-100 dark:border-gray-800">
           <div className="grid grid-cols-3 gap-3">
@@ -147,9 +138,7 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
                     <div className="text-xs font-bold text-gray-900 dark:text-gray-100">
                       {formatTimeFromISO(appt.start_time)}
                     </div>
-                    <div className="text-xs text-gray-400">
-                      {formatTimeFromISO(appt.end_time)}
-                    </div>
+                    <div className="text-xs text-gray-400">{formatTimeFromISO(appt.end_time)}</div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
@@ -163,7 +152,7 @@ export const EmployeeDayFocusPanel: React.FC<EmployeeDayFocusPanelProps> = ({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </>
+    </SchedulerSidePanel>
   );
 };
