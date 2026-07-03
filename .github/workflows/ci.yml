@@ -50,6 +50,30 @@ jobs:
           # reachable" failures on every push.
           fetch-depth: 0
 
+      # Docs-only PRs skip the heavy steps below (migrations/seed/tsc/tests).
+      # The job still RUNS and reports success so the "Backend" required status
+      # check is always satisfied — never skip the whole job, or branch
+      # protection blocks the merge waiting for a check that never reports.
+      # NB: the CLAUDE.md drift detector below is NOT gated — it validates docs,
+      # so it must run on doc-only changes. Mirrors the e2e job's pattern.
+      - name: Detect relevant changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'dashboard/**'
+              - 'agent/**'
+              - 'scripts/**'
+              - 'supabase/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/**'
+              - '!**/*.md'
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -60,11 +84,13 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Apply migrations
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: bash scripts/setup-db.sh
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
       - name: Seed database
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         # `src/index.test.ts` asserts `/tenants` and `/templates` return
         # the seeded rows. Without this step CI's fresh test_db has only
         # the schema (from migrations) but zero rows — both tests then
@@ -75,12 +101,16 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
       - name: TypeScript check
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npx tsc --noEmit
 
+      # NOT gated — the drift detector validates CLAUDE.md against the tree, so
+      # it must run on docs-only PRs (that's exactly when a doc drifts).
       - name: Verify CLAUDE.md (drift detector — NEEDS-REFACTORING #13)
         run: npm run verify:claude-md
 
       - name: Run backend tests
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npm test
         env:
           # Refuses to silent-skip DB-dependent tests. If the postgres
@@ -101,6 +131,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Docs-only PRs skip install/tsc/tests; the job still reports success so
+      # the "Dashboard" required check is satisfied (see the backend job note).
+      - name: Detect relevant changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'dashboard/**'
+              - 'agent/**'
+              - 'scripts/**'
+              - 'supabase/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/**'
+              - '!**/*.md'
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -109,12 +159,15 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
 
       - name: Install dependencies
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npm ci --no-audit --no-fund
 
       - name: TypeScript check
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npx tsc --noEmit
 
       - name: Run dashboard tests
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npm test
 
   agent:
@@ -128,6 +181,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Docs-only PRs skip install/tsc/tests; the job still reports success so
+      # the "Agent" required check is satisfied (see the backend job note).
+      - name: Detect relevant changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'dashboard/**'
+              - 'agent/**'
+              - 'scripts/**'
+              - 'supabase/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/**'
+              - '!**/*.md'
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -136,6 +209,7 @@ jobs:
           cache-dependency-path: agent/package-lock.json
 
       - name: Install dependencies
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npm ci --no-audit --no-fund
 
       # The agent worker (prompt, toolsClient, tools, sessionContext, tenant
@@ -143,9 +217,11 @@ jobs:
       # vitest suite ran only locally. A prompt or tool-contract regression
       # (e.g. dropping the infrastructure-error guidance) could ship unseen.
       - name: TypeScript check
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npx tsc --noEmit
 
       - name: Run agent tests
+        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
         run: npm test
 
   e2e:
