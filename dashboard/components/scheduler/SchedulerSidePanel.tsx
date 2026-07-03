@@ -58,10 +58,13 @@ export function SchedulerSidePanel({
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}
       data-testid={dataTestId}
     >
-      <header className="px-4 py-3 border-b flex items-center justify-between">
+      <header
+        className="px-4 py-3 border-b flex items-center justify-between"
+        style={{ borderColor: 'var(--border-soft)' }}
+      >
         <div className="flex items-center gap-2">
           {icon}
-          <h3 id={titleId} className="font-bold text-gray-900 dark:text-gray-100">
+          <h3 id={titleId} className="font-bold" style={{ color: 'var(--text-primary)' }}>
             {title}
           </h3>
         </div>

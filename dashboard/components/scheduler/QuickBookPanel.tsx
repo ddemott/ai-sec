@@ -253,7 +253,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
     <footer
       className="border-t shrink-0 sticky bottom-0"
       style={{
-        backgroundColor: 'var(--bg-surface, #1a1a1a)',
+        backgroundColor: 'var(--bg-surface)',
         borderColor: 'var(--border-soft)',
         padding: '1rem',
         paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
