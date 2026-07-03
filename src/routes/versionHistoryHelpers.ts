@@ -22,28 +22,25 @@ export interface RecordHistoryRow {
   changed_at: string;
 }
 
-export const VERSIONED_TABLES: VersionedTable[] = [
+export const VERSIONED_TABLES = [
   'customers',
   'appointments',
   'voice_sessions',
   'employees',
   'services',
   'resources',
-];
+] as const satisfies readonly VersionedTable[];
 
-export const TableNameSchema = z.enum([
-  'customers',
-  'appointments',
-  'voice_sessions',
-  'employees',
-  'services',
-  'resources',
-]);
+// Single source of truth: the Zod allow-list is DERIVED from VERSIONED_TABLES so
+// the two can't drift (add/remove a table in one place only).
+export const TableNameSchema = z.enum(VERSIONED_TABLES);
 
 // PK column for each versioned table (post-2026-05-12 PK rename sprint —
 // CODING_STANDARDS.md ID convention). Used to build dynamic SQL where the
 // table name is parameterized but the WHERE/JOIN needs the right PK column.
-export const PK_COLUMN_BY_TABLE: Record<string, string> = {
+// Keyed by VersionedTable (not bare string) so an unsupported table can't be
+// indexed into an undefined PK column when building SQL.
+export const PK_COLUMN_BY_TABLE: Record<VersionedTable, string> = {
   customers: 'customer_id',
   appointments: 'appointment_id',
   voice_sessions: 'voice_session_id',
