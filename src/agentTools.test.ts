@@ -1867,6 +1867,32 @@ describe('agentTools pure-inquiry abandonment attribution', () => {
     await new Promise((r) => setImmediate(r));
     expect(queries.find((q) => q.text.includes('requested_service_id'))).toBeUndefined();
   });
+
+  it('scheduling-options WITHOUT call_id does NOT fire the capture', async () => {
+    // Same gate on the other shared caller (captureRequestedService).
+    const { app, queries } = buildApp({ queryResponses: [] });
+    await post(app, '/agent-tools/scheduling-options', {
+      tenant_id: TENANT_ID,
+      requirements: { serviceType: 'Haircut' },
+      window: { from: '2030-01-01T14:00:00Z', to: '2030-01-01T16:00:00Z' },
+    });
+    await new Promise((r) => setImmediate(r));
+    expect(queries.find((q) => q.text.includes('requested_service_id'))).toBeUndefined();
+  });
+
+  it('a whitespace-only service_type does NOT fire the capture (trimmed to empty)', async () => {
+    // Guards captureRequestedService's trim — a '   ' serviceType must not
+    // issue a useless ILIKE '%   %' write.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: '   ',
+      date: '2030-01-01',
+      call_id: 'inquiry-call-3',
+    });
+    await new Promise((r) => setImmediate(r));
+    expect(queries.find((q) => q.text.includes('requested_service_id'))).toBeUndefined();
+  });
 });
 
 describe('agentTools /available-slots', () => {

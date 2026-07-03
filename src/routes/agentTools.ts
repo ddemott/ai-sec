@@ -426,7 +426,10 @@ function captureRequestedService(
   callId: string | undefined,
   serviceType: string | undefined
 ): void {
-  if (!callId || !serviceType) return;
+  // Trim first (like resolveServiceForBooking) — a whitespace-only serviceType
+  // would otherwise issue a useless ILIKE '%   %' write.
+  const service = serviceType?.trim();
+  if (!callId || !service) return;
   void withTenantClient(tenantId, (client) =>
     client.query(
       `UPDATE voice_sessions
@@ -441,7 +444,7 @@ function captureRequestedService(
             requested_service_id
           )
         WHERE tenant_id = $1 AND call_id = $3`,
-      [tenantId, serviceType, callId]
+      [tenantId, service, callId]
     )
   ).catch(() => undefined);
 }

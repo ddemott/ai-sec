@@ -215,6 +215,9 @@ export function buildTools(
             // who never books still counts toward abandonment-by-service.
             call_id: ctx.callId || undefined,
           },
+          // Still retry-safe: the backend's requested_service_id capture is a
+          // best-effort, COALESCE-guarded, deterministic UPDATE — replaying it
+          // sets the same service_id, so an auto-retry can't corrupt state.
           { isReadOnly: true }
         );
         return formatResponse(res);
@@ -271,6 +274,7 @@ export function buildTools(
             // Attribute a pure availability inquiry to this call (see above).
             call_id: ctx.callId || undefined,
           },
+          // Retry-safe — the capture UPDATE is idempotent (see available-slots).
           { isReadOnly: true }
         );
         return formatResponse(res);
