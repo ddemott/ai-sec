@@ -60,12 +60,27 @@ export interface CustomerContext {
 
 export type VoiceSessionStatus = 'active' | 'completed' | 'failed' | 'transferred';
 
+// The live vocabulary is whatever the agent actually writes on
+// /agent-tools/voice-session-end: `booked`/`transferred` (callOutcome.ts) and
+// the "why" classes `no_availability`/`wrong_service`/`price`/`message`/`info`
+// (callClassify.ts), or null when unclassified. The `appointment_*`/`info_provided`/
+// `voicemail`/`abandoned`/`other` members below are the LEGACY vocabulary — the
+// agent never emits them, but they're kept for backward-compat (older rows, the
+// VoiceCallsView alias maps, and the /voice/session/end enum). Do not drop them.
 export type VoiceSessionOutcome =
+  // Live vocabulary (agent-emitted)
+  | 'booked'
+  | 'transferred'
+  | 'no_availability'
+  | 'wrong_service'
+  | 'price'
+  | 'message'
+  | 'info'
+  // Legacy vocabulary (backward-compat only — never written by the current agent)
   | 'appointment_booked'
   | 'appointment_rescheduled'
   | 'appointment_cancelled'
   | 'info_provided'
-  | 'transferred'
   | 'voicemail'
   | 'abandoned'
   | 'other';

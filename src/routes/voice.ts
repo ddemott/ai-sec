@@ -25,13 +25,26 @@ const StartSessionSchema = z.object({
 const EndSessionSchema = z.object({
   call_id: z.string().min(1),
   duration_seconds: z.number().int().min(0).optional(),
+  // Accept the LIVE agent vocabulary (booked/transferred + the callClassify "why"
+  // classes) AND the legacy vocabulary (backward-compat). Kept in sync with the
+  // shared `VoiceSessionOutcome` type. The live agent path is /agent-tools/
+  // voice-session-end (outcome: z.string()); this dashboard/manual endpoint used
+  // to reject the real strings (e.g. 'booked') with a 400 — now aligned.
   outcome: z
     .enum([
+      // Live vocabulary (agent-emitted)
+      'booked',
+      'transferred',
+      'no_availability',
+      'wrong_service',
+      'price',
+      'message',
+      'info',
+      // Legacy vocabulary (backward-compat only)
       'appointment_booked',
       'appointment_rescheduled',
       'appointment_cancelled',
       'info_provided',
-      'transferred',
       'voicemail',
       'abandoned',
       'other',
