@@ -1820,6 +1820,55 @@ describe('agentTools /book-with-scheduling', () => {
   });
 });
 
+describe('agentTools pure-inquiry abandonment attribution', () => {
+  // WHO: a caller who only asks "what's open?" and never attempts a booking.
+  // WHAT: get_available_slots / get_scheduling_options carry the call_id, so
+  //       the handler stamps requested_service_id on the voice_session — the
+  //       same signal book-with-scheduling already writes.
+  // WHY: without it, a pure availability inquiry left NO signal on the
+  //       voice_session, so abandonment-by-service under-counted these calls.
+  it('available-slots WITH call_id fires the requested_service_id capture', async () => {
+    const { app, queries } = buildApp({ queryResponses: [] });
+    await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'Oil Change',
+      date: '2030-01-01',
+      call_id: 'inquiry-call-1',
+    });
+    await new Promise((r) => setImmediate(r)); // flush the fire-and-forget capture
+    const capture = queries.find((q) => q.text.includes('requested_service_id'));
+    expect(capture, 'availability inquiry must attribute the service').toBeTruthy();
+    expect(capture!.text).toContain('UPDATE voice_sessions');
+    expect(capture!.params).toEqual([TENANT_ID, 'Oil Change', 'inquiry-call-1']);
+  });
+
+  it('scheduling-options WITH call_id fires the requested_service_id capture', async () => {
+    const { app, queries } = buildApp({ queryResponses: [] });
+    await post(app, '/agent-tools/scheduling-options', {
+      tenant_id: TENANT_ID,
+      requirements: { serviceType: 'Haircut' },
+      window: { from: '2030-01-01T14:00:00Z', to: '2030-01-01T16:00:00Z' },
+      call_id: 'inquiry-call-2',
+    });
+    await new Promise((r) => setImmediate(r));
+    const capture = queries.find((q) => q.text.includes('requested_service_id'));
+    expect(capture, 'scheduling-options inquiry must attribute the service').toBeTruthy();
+    expect(capture!.params).toEqual([TENANT_ID, 'Haircut', 'inquiry-call-2']);
+  });
+
+  it('available-slots WITHOUT call_id does NOT fire the capture', async () => {
+    // No call_id → nothing to attribute → the best-effort write is skipped.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'Oil Change',
+      date: '2030-01-01',
+    });
+    await new Promise((r) => setImmediate(r));
+    expect(queries.find((q) => q.text.includes('requested_service_id'))).toBeUndefined();
+  });
+});
+
 describe('agentTools /available-slots', () => {
   it('HAPPY: produces spoken slot string with service + open windows', async () => {
     // WHO: Caller asking "when can you fit me in for an oil change Friday?"

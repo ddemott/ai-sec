@@ -211,6 +211,9 @@ export function buildTools(
             tenant_id: ctx.tenantId,
             service_type: args.service_type,
             date: args.date,
+            // Attribute a pure availability inquiry to this call so a caller
+            // who never books still counts toward abandonment-by-service.
+            call_id: ctx.callId || undefined,
           },
           { isReadOnly: true }
         );
@@ -265,6 +268,8 @@ export function buildTools(
               requiredEmployeeSkills: args.required_employee_skills,
             },
             window: { from: args.window_from, to: args.window_to },
+            // Attribute a pure availability inquiry to this call (see above).
+            call_id: ctx.callId || undefined,
           },
           { isReadOnly: true }
         );
@@ -611,7 +616,8 @@ export function buildTools(
           },
           represents_company: {
             type: 'boolean',
-            description: 'True if the caller works for the hiring company (vs. a recruiter/agency).',
+            description:
+              'True if the caller works for the hiring company (vs. a recruiter/agency).',
           },
           employment_type: {
             type: 'string',
@@ -637,7 +643,8 @@ export function buildTools(
           },
           timezone: {
             type: 'string',
-            description: 'Timezone of the position. Collect for remote roles (so the owner knows office hours).',
+            description:
+              'Timezone of the position. Collect for remote roles (so the owner knows office hours).',
           },
         },
         required: ['caller_name'],
