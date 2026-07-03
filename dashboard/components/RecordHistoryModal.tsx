@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   History,
@@ -16,6 +16,7 @@ import {
   Merge,
 } from 'lucide-react';
 import { Api } from '../lib/api';
+import { useFocusTrap } from '../lib/useFocusTrap';
 import type {
   RecordHistoryResponse,
   VersionedTable,
@@ -149,6 +150,11 @@ export function RecordHistoryModal({
   const [mode, setMode] = useState<'history' | 'restore'>('history');
   const [selectedFields, setSelectedFields] = useState<Record<string, number>>({}); // field -> version_number
   const [restoring, setRestoring] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Escape-to-close + Tab focus trap + body-scroll lock, matching the other
+  // centered dialogs (Cluster C). The backdrop already closes on click.
+  useFocusTrap(containerRef, isOpen, onClose, true);
 
   useEffect(() => {
     if (isOpen && recordId) {
@@ -267,13 +273,22 @@ export function RecordHistoryModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="record-history-title"
+        className="relative bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col"
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <History className="w-5 h-5" style={{ color: 'var(--accent-soft)' }} />
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2
+                id="record-history-title"
+                className="text-lg font-semibold text-gray-900 dark:text-white"
+              >
                 {mode === 'history' ? 'Version History' : 'Restore Fields'}
               </h2>
               <p className="text-sm text-gray-500">{recordName || recordId}</p>
@@ -281,6 +296,7 @@ export function RecordHistoryModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close version history"
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
           >
             <X className="w-5 h-5" />
@@ -410,6 +426,8 @@ export function RecordHistoryModal({
 
                           <button
                             onClick={() => toggleVersion(version.version_number)}
+                            aria-expanded={expandedVersions.has(version.version_number)}
+                            aria-label={`${expandedVersions.has(version.version_number) ? 'Hide' : 'Show'} details for version ${version.version_number}`}
                             className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                           >
                             {expandedVersions.has(version.version_number) ? (
