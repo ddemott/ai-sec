@@ -90,14 +90,19 @@ function ResetPasswordInner() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label
+                    htmlFor="reset-new-password"
                     className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1"
                     style={{ color: 'var(--text-secondary)' }}
                   >
                     New password
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Lock
+                      aria-hidden="true"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                    />
                     <input
+                      id="reset-new-password"
                       type="password"
                       required
                       value={password}
@@ -119,14 +124,19 @@ function ResetPasswordInner() {
                 </div>
                 <div>
                   <label
+                    htmlFor="reset-confirm-password"
                     className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1"
                     style={{ color: 'var(--text-secondary)' }}
                   >
                     Confirm password
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Lock
+                      aria-hidden="true"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                    />
                     <input
+                      id="reset-confirm-password"
                       type="password"
                       required
                       value={confirm}
@@ -154,7 +164,7 @@ function ResetPasswordInner() {
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      <Loader2 aria-hidden="true" className="w-5 h-5 mr-2 animate-spin" />
                       Resetting...
                     </>
                   ) : (

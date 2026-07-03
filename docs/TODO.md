@@ -180,6 +180,7 @@ Each screen below has had NO dedicated UX review; review before beta. (Full P0/P
 - [ ] **[REVIEW]** `DeletedRecordsPanel` + `RecordHistoryModal` — discoverability, restore flow, version-history comprehensibility.
 - [ ] **[REVIEW]** `/register` — form flow, field order, error handling, post-signup first experience.
 - [ ] **[REVIEW]** `LoginView` + `/forgot-password` + `/reset-password` — forgot-password end-to-end, error quality, mobile.
+  - _Partial (2026-07-03, branch `fix/ux-review-auth-forms`):_ `LoginView` was reviewed and is already solid (associated labels, `role="alert"` errors, show/hide-password `aria-label`+`aria-pressed`, decorative icons `aria-hidden`, autoComplete) — left as-is. Fixed the two reset pages: `/forgot-password` email input and `/reset-password` New/Confirm password inputs were NOT programmatically associated with their labels (adjacent `<label>` with no `htmlFor`/`id`) → unusable with a screen reader; added `htmlFor`/`id` pairs, `autoComplete="email"` on forgot, and `aria-hidden` on the decorative Mail/Lock/spinner icons. 2 page tests (`forgot-password/page.test.tsx`, `reset-password/page.test.tsx`), dashboard tsc clean. **Still open (owner judgment):** forgot→email→reset end-to-end live proof, error-copy quality, mobile layout.
 - [ ] **[REVIEW]** `SuperAdminDashboard` + `TenantCard`/`TenantCreateForm`/`TenantEditPanel` — admin interface usability (Dale-facing; slows onboarding if painful).
 - [ ] **[REVIEW]** `FirstRunTour` — post-wizard overlay tour; content/flow review (behavior already correct).
 
