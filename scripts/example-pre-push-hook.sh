@@ -18,6 +18,21 @@ PTYPE="$(get_project_type)"
 
 echo "==> Running pre-push checks (projectType: $PTYPE)..."
 
+# ── Docs-only fast path ──────────────────────────────────────────────────────
+# A push whose diff (vs the default branch) touches ONLY documentation never
+# needs the unit suite — prose can't break a test. Detect it and skip the
+# expensive unitTests below. The fast `checks` step still runs as a safety net,
+# so even if this detection is ever wrong (a code file sneaks in), tsc/lint
+# still catch it. Falls back to running everything when the diff can't be
+# computed (e.g. default branch not fetched).
+DOCS_ONLY=0
+DEFAULT_REMOTE_BRANCH="origin/$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || echo main)"
+CHANGED_FILES="$(git diff --name-only "$DEFAULT_REMOTE_BRANCH"...HEAD 2>/dev/null || true)"
+if [ -n "$CHANGED_FILES" ] && ! printf '%s\n' "$CHANGED_FILES" | grep -qvE '(\.md$|\.mdx$|\.txt$|^docs/)'; then
+    DOCS_ONLY=1
+    echo "  📝 Docs-only push (vs $DEFAULT_REMOTE_BRANCH) — will skip the unit test suite."
+fi
+
 # Each command runs in its own subshell `( ... )` so a `cd` inside one step
 # (e.g. `checks` ends with `cd dashboard && tsc`) can't leak its cwd into the
 # next step. Without this, `unitTests` ("npm test") was silently running from
@@ -36,7 +51,9 @@ else
 fi
 
 UNIT_CMD="$(get_command unitTests)"
-if is_real_command "$UNIT_CMD"; then
+if [ "$DOCS_ONLY" = "1" ]; then
+    echo "  - Unit tests (skipped — docs-only push)"
+elif is_real_command "$UNIT_CMD"; then
     echo "  - Running unit tests..."
     if ( eval "$UNIT_CMD" ); then
         echo "    ✅ Unit tests passed"
