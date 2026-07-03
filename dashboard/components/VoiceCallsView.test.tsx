@@ -144,6 +144,17 @@ describe('VoiceCallsView', () => {
       // WHY: users need to see past calls and counts
     });
 
+    test('a11y: call history rows are keyboard-operable buttons with an accessible name', async () => {
+      // WHO: a keyboard/screen-reader user | WHAT: each call row is a role="button"
+      //   with an accessible name and aria-pressed, not a click-only <div> | WHERE:
+      //   HistoryCallRow | WHY: the list was previously mouse-only — unreachable by
+      //   keyboard and announced as plain text.
+      render(<VoiceCallsView />);
+      const row = await screen.findByRole('button', { name: /View call from John Smith/i });
+      // The single history call auto-selects on load.
+      expect(row).toHaveAttribute('aria-pressed', 'true');
+    });
+
     test('displays call duration formatted correctly', async () => {
       render(<VoiceCallsView />);
       await waitFor(() => {
