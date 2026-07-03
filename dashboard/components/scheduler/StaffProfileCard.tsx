@@ -127,6 +127,7 @@ export function StaffProfileCard({
           </div>
         </div>
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           onClick={onClose}
@@ -197,6 +198,15 @@ export function StaffProfileCard({
               disabled={isMarkingOff}
               data-testid="staff-card-mark-off"
               className="w-full"
+              // Override the primitive's Tailwind-yellow palette with the
+              // theme-warning CSS vars so the control stays token-based across
+              // themes (matches the pre-refactor styling). props.style wins
+              // over the variant's own style/classes.
+              style={{
+                backgroundColor: 'var(--warning-muted)',
+                color: 'var(--warning)',
+                borderColor: 'var(--warning-muted)',
+              }}
             >
               <CalendarX className="w-4 h-4 mr-2" />
               {isMarkingOff ? 'Marking off…' : markOffLabel}
