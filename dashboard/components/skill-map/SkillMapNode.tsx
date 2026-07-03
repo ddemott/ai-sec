@@ -114,6 +114,7 @@ export default function SkillMapNode({
             onLinkStart();
           }}
           title="Connect to another node"
+          aria-label="Connect to another node"
           className="text-gray-400 hover:text-emerald-500 transition-colors shrink-0 p-0.5"
         >
           <Link className="w-3.5 h-3.5" />
