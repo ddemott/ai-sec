@@ -85,6 +85,7 @@ export default function ForgotPasswordPage() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label
+                    htmlFor="forgot-email"
                     className="block text-xs font-bold uppercase tracking-wider mb-2 ml-1"
                     style={{ color: 'var(--text-secondary)' }}
                   >
@@ -92,14 +93,17 @@ export default function ForgotPasswordPage() {
                   </label>
                   <div className="relative">
                     <Mail
+                      aria-hidden="true"
                       className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5"
                       style={{ color: 'var(--text-muted)' }}
                     />
                     <input
+                      id="forgot-email"
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
                       className="w-full pl-11 pr-4 py-3 border rounded-xl focus:ring-2 outline-none transition-all text-sm"
                       style={
                         {
@@ -121,7 +125,7 @@ export default function ForgotPasswordPage() {
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      <Loader2 aria-hidden="true" className="w-5 h-5 mr-2 animate-spin" />
                       Sending...
                     </>
                   ) : (
