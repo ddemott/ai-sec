@@ -554,7 +554,18 @@ export function AppointmentDetailPanel({
                 </div>
                 <Card title="Summary" variant="dark">
                   <p className="text-lg leading-relaxed font-medium italic">
-                    {`This appointment for ${selectedAppointment?.customers?.name} is scheduled for ${selectedAppointment?.description.toLowerCase()} on ${resources.find((r) => r.resource_id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find((e) => e.employee_id.toString() === selectedAppointment?.employee_id?.toString()) ? `, assigned to ${employees.find((e) => e.employee_id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
+                    {(() => {
+                      // Compute each lookup once (Copilot review — the literal
+                      // previously ran employees.find twice per render).
+                      const resourceName =
+                        resources.find((r) => r.resource_id === selectedAppointment?.resource_id)
+                          ?.name || 'Unknown';
+                      const employee = employees.find(
+                        (e) =>
+                          e.employee_id.toString() === selectedAppointment?.employee_id?.toString()
+                      );
+                      return `This appointment for ${selectedAppointment?.customers?.name} is scheduled for ${selectedAppointment?.description.toLowerCase()} on ${resourceName}${employee ? `, assigned to ${employee.name}` : ''}.`;
+                    })()}
                   </p>
                 </Card>
               </div>

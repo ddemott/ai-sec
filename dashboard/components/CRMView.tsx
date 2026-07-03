@@ -143,6 +143,9 @@ export default function CRMView() {
         if (!selectedCustomer) setSelectedCustomer(MOCK_CUSTOMERS[0]);
       } else {
         setCustomers([]);
+        // Clear the selection too — leaving a stale customer in the detail pane
+        // over an emptied list is an inconsistent state (Copilot review).
+        setSelectedCustomer(null);
         showToast('Could not load customers. Please try again.', 'error');
       }
     }
