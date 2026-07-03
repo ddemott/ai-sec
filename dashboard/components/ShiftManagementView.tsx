@@ -114,16 +114,12 @@ function SoloScheduleView({
   const [saved, setSaved] = useState(false);
 
   function toggle(dow: number) {
-    setRows((prev) =>
-      prev.map((r) => (r.day_of_week === dow ? { ...r, active: !r.active } : r))
-    );
+    setRows((prev) => prev.map((r) => (r.day_of_week === dow ? { ...r, active: !r.active } : r)));
     setSaved(false);
   }
 
   function updateTime(dow: number, field: 'start_time' | 'end_time', val: string) {
-    setRows((prev) =>
-      prev.map((r) => (r.day_of_week === dow ? { ...r, [field]: val } : r))
-    );
+    setRows((prev) => prev.map((r) => (r.day_of_week === dow ? { ...r, [field]: val } : r)));
     setSaved(false);
   }
 
@@ -198,7 +194,9 @@ function SoloScheduleView({
                     onChange={(v) => updateTime(id, 'start_time', v)}
                     aria-label={`${label} start time`}
                   />
-                  <span className="text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>to</span>
+                  <span className="text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>
+                    to
+                  </span>
                   <TimeInput
                     value={row.end_time}
                     onChange={(v) => updateTime(id, 'end_time', v)}
@@ -206,7 +204,9 @@ function SoloScheduleView({
                   />
                 </>
               ) : (
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Off</span>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  Off
+                </span>
               )}
 
               {/* Quick toggle button */}
@@ -758,7 +758,10 @@ export default function ShiftManagementView() {
 
                         {hasShift && (
                           <div
-                            className="absolute group cursor-pointer rounded-md transition-all hover:brightness-110"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Edit shift for ${day.label}, ${formatTime24to12(shift.start_time!.substring(0, 5))} to ${formatTime24to12(shift.end_time!.substring(0, 5))}`}
+                            className="absolute group cursor-pointer rounded-md transition-all hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
                             style={{
                               left: shiftTimeToHour(shift.start_time!) * colW,
                               width: Math.max(
@@ -774,6 +777,12 @@ export default function ShiftManagementView() {
                               zIndex: 2,
                             }}
                             onClick={() => openEditor(day.dateStr)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                openEditor(day.dateStr);
+                              }
+                            }}
                             title={`${formatTime24to12(shift.start_time!.substring(0, 5))} - ${formatTime24to12(shift.end_time!.substring(0, 5))}`}
                           >
                             {(shiftTimeToHour(shift.end_time!) -
@@ -808,6 +817,7 @@ export default function ShiftManagementView() {
                                 }}
                                 className="p-1 rounded-md hover:bg-white/20 transition-colors"
                                 title="Delete shift"
+                                aria-label={`Delete shift for ${day.label}`}
                               >
                                 <Trash2 className="w-3.5 h-3.5 text-white" />
                               </button>
@@ -835,10 +845,7 @@ export default function ShiftManagementView() {
                             style={{ zIndex: 2 }}
                             onClick={() => openEditor(day.dateStr)}
                           >
-                            <span
-                              className="text-xs italic"
-                              style={{ color: 'var(--text-muted)' }}
-                            >
+                            <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
                               Click to schedule
                             </span>
                           </div>
