@@ -111,9 +111,7 @@ describe('RegisterPage — self-serve signup', () => {
     fillForm();
     fireEvent.click(screen.getByRole('button', { name: /start free trial/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('already exists')
-    );
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('already exists'));
     expect(localStorage.getItem('authToken')).toBeNull();
     expect(window.location.href).toBe('');
   });
@@ -129,5 +127,16 @@ describe('RegisterPage — self-serve signup', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/connect/i));
     expect(window.location.href).toBe('');
+  });
+
+  test('a11y: the password field announces its length requirement (aria-describedby)', async () => {
+    // WHO: a screen-reader user creating an account | WHAT: the "at least 6
+    // characters" rule is exposed as the field's accessible description, not just
+    // a placeholder (which AT does not reliably announce) | WHERE: RegisterPage
+    // password input + #reg-password-hint | WHY: an unannounced rule means a
+    // confusing rejection on submit.
+    render(<RegisterPage />);
+    const pw = await screen.findByLabelText('Password');
+    expect(pw).toHaveAccessibleDescription(/at least 6 characters/i);
   });
 });
