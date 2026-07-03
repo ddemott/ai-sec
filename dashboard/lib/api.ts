@@ -1164,9 +1164,11 @@ export const Api = {
       tenantId: string | null,
       table: VersionedTable,
       recordId: string,
-      data: {
-        source_version: number;
-        fields: string[];
+      // Either a single group or a batch of groups restored in one transaction.
+      data: (
+        | { source_version: number; fields: string[] }
+        | { restores: { source_version: number; fields: string[] }[] }
+      ) & {
         restored_by?: string;
         change_source?: ChangeSource;
       }

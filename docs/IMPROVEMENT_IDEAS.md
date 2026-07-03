@@ -240,7 +240,7 @@ Items completed 2026-05-29 (this session):
 **Effort vs Gain:** Under an hour of focused cleanup closes a real correctness gap in a recovery flow, so the return is strong.
 
 ### Task: Add a batch restore payload so mixed-version field restores use one request
-**Status:** proposed
+**Status:** ✅ DONE 2026-07-02 — `RestoreFieldsSchema` now accepts either the legacy `{ source_version, fields }` OR a batch `{ restores: [{ source_version, fields }] }`. The restore-fields route runs every group inside ONE `BEGIN…COMMIT` transaction (ROLLBACK on any failed group — no partial restore); audit metadata applies to all groups. RecordHistoryModal sends one grouped request instead of N sequential ones. Real-DB tests: multi-version batch restore + partial-failure rollback (row unchanged). Mocked route tests updated for the BEGIN/COMMIT sequence. Backend 2178/2178.
 **Files to change:** `dashboard/components/RecordHistoryModal.tsx:L211-L257`, `dashboard/lib/api.ts:L1043-L1059`, `src/routes/versionHistory.ts:L342-L420`, `src/versionHistory.test.ts:L180-L205`
 **What to do:** Replace the modal’s per-version restore loop with a single batch payload that can carry multiple `{ source_version, fields[] }` groups in one submit. Extend the restore-fields route schema to accept either the current single-group shape or a new `restores` array, then execute the grouped restores inside one request-scoped transaction while preserving the existing audit metadata. Update the dashboard API client to send the grouped payload and keep the success response shape stable so the modal can still reload history and close cleanly after one submit.
 **Done when:**

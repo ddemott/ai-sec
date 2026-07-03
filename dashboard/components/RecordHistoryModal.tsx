@@ -224,24 +224,24 @@ export function RecordHistoryModal({
       return;
     }
 
-    // Group by source version
+    // Group by source version, then send ALL groups in one batch request so
+    // the restore is a single transaction (no partial-failure half-restores,
+    // no N sequential round trips).
     const byVersion: Record<number, string[]> = {};
     fieldsToRestore.forEach(({ field, sourceVersion }) => {
       if (!byVersion[sourceVersion]) byVersion[sourceVersion] = [];
       byVersion[sourceVersion].push(field);
     });
+    const restores = Object.entries(byVersion).map(([versionStr, fields]) => ({
+      source_version: parseInt(versionStr),
+      fields,
+    }));
 
     setRestoring(true);
     setError(null);
 
     try {
-      // Restore from each version
-      for (const [versionStr, fields] of Object.entries(byVersion)) {
-        await Api.versionHistory.restoreFields(tenantId, table, recordId, {
-          source_version: parseInt(versionStr),
-          fields,
-        });
-      }
+      await Api.versionHistory.restoreFields(tenantId, table, recordId, { restores });
 
       // Reload history and go back to history view
       await loadHistory();
