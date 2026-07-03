@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Zap } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { SchedulerSidePanel } from './SchedulerSidePanel';
 import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
 import { CustomerCombobox } from '../ui/CustomerCombobox';
@@ -245,23 +246,43 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div
-      className="fixed inset-y-0 right-0 w-full sm:w-96 shadow-2xl border-l z-30 flex flex-col animate-in slide-in-from-right duration-200"
-      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-soft)' }}
-      data-testid="quick-book-panel"
+  // Sticky Book-Now footer (passed to the shared shell). Comment preserved:
+  // UX audit Devices 4.3.3 (2026-05-18) — position:sticky bottom:0 keeps it
+  // above the iOS keyboard; env(safe-area-inset-bottom) clears the home bar.
+  const bookNowFooter = (
+    <footer
+      className="border-t shrink-0 sticky bottom-0"
+      style={{
+        backgroundColor: 'var(--bg-surface)',
+        borderColor: 'var(--border-soft)',
+        padding: '1rem',
+        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+      }}
     >
-      <header className="px-4 py-3 border-b flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4" style={{ color: 'var(--warning)' }} />
-          <h3 className="font-bold text-gray-900 dark:text-gray-100">Quick Book</h3>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close quick book">
-          <X className="w-4 h-4" />
-        </Button>
-      </header>
+      <Button
+        className="w-full py-3"
+        onClick={handleBook}
+        isLoading={saving}
+        disabled={!customerId || !resourceId || !startTime || !endTime || alignmentBlocked}
+        data-testid="quick-book-confirm"
+      >
+        <Zap className="w-4 h-4 mr-2" />
+        Book Now
+      </Button>
+    </footer>
+  );
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+  return (
+    <>
+      <SchedulerSidePanel
+        icon={<Zap className="w-4 h-4" style={{ color: 'var(--warning)' }} />}
+        title="Quick Book"
+        onClose={onClose}
+        closeLabel="Close quick book"
+        dataTestId="quick-book-panel"
+        bodyClassName="p-4 space-y-4"
+        footer={bookNowFooter}
+      >
         <div aria-live="polite">
           {error && (
             <div className="p-3 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-100 dark:border-red-900/40">
@@ -385,7 +406,7 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
             onChange={(e) => setEndTime(e.target.value)}
           />
         </div>
-      </div>
+      </SchedulerSidePanel>
 
       <ConflictModal
         isOpen={conflict !== null}
@@ -412,36 +433,6 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           setNextAvailable([]);
         }}
       />
-
-      {/* Footer Book Now CTA.
-          UX audit Devices 4.3.3 (2026-05-18): at iPhone SE landscape
-          (~375 px tall) the footer used to fall below the fold when
-          the iOS keyboard inflated. `position: sticky; bottom: 0`
-          glues it to the viewport bottom inside the scrolling
-          container. `padding-bottom: env(safe-area-inset-bottom)`
-          adds the home-indicator gap on devices that need it
-          (iPhone X+), and ensures the tap target clears the bottom
-          of the screen rather than sitting flush with the home bar. */}
-      <footer
-        className="border-t shrink-0 sticky bottom-0"
-        style={{
-          backgroundColor: 'var(--bg-surface, #1a1a1a)',
-          borderColor: 'var(--border-soft)',
-          padding: '1rem',
-          paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
-        }}
-      >
-        <Button
-          className="w-full py-3"
-          onClick={handleBook}
-          isLoading={saving}
-          disabled={!customerId || !resourceId || !startTime || !endTime || alignmentBlocked}
-          data-testid="quick-book-confirm"
-        >
-          <Zap className="w-4 h-4 mr-2" />
-          Book Now
-        </Button>
-      </footer>
-    </div>
+    </>
   );
 };
