@@ -25,7 +25,7 @@ import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, createTenant, skipIfDbDown } from './test-utils';
 import { createWithTenantClient } from './database';
 import { registerAgentToolRoutes } from './routes/agentTools';
-import { normalizePhone } from './services/phoneUtils';
+import { normalizePhone } from '../shared/phone';
 
 const AGENT_SECRET = 'test-consent-secret';
 const stubEmbedding = (): Promise<number[]> => Promise.resolve(new Array(1536).fill(0));

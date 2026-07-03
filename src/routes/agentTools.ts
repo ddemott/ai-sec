@@ -183,7 +183,10 @@ const GetAvailableSlotsSchema = z.object({
 // the call. Informational/transactional only (never marketing).
 const RecordSmsConsentSchema = z.object({
   tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
+  // min(1) only — completeness is judged by normalizePhone/isValidPhone in the
+  // handler so an incomplete number gets the friendly soft-failure, not a
+  // generic schema "Validation failed".
+  phone: z.string().min(1),
   call_id: z.string().min(1).optional(),
 });
 
@@ -783,15 +786,23 @@ export function registerAgentToolRoutes(
       if (!isValidPhone(normalized)) {
         return fail(reply, "That number isn't complete enough to record consent against.");
       }
-      await withTenantClient(args.tenant_id, (client) =>
-        client.query(
-          `INSERT INTO consent_records
-             (tenant_id, customer_phone, consent_type, consent_given, consent_date,
-              consent_method, consent_source)
-           VALUES ($1, $2, 'sms', true, now(), 'verbal', $3)`,
-          [args.tenant_id, normalized, args.call_id ? `voice_call:${args.call_id}` : 'voice_call']
-        )
-      );
+      try {
+        await withTenantClient(args.tenant_id, (client) =>
+          client.query(
+            `INSERT INTO consent_records
+               (tenant_id, customer_phone, consent_type, consent_given, consent_date,
+                consent_method, consent_source)
+             VALUES ($1, $2, 'sms', true, now(), 'verbal', $3)`,
+            [args.tenant_id, normalized, args.call_id ? `voice_call:${args.call_id}` : 'voice_call']
+          )
+        );
+      } catch (err) {
+        // Best-effort: a DB hiccup must NOT 500 mid-call. Log the cause (a
+        // systematically-failing consent write should be diagnosable — see
+        // sad-path-instrumentation) and hand back a soft failure.
+        reply.log.error({ err, tenant_id: args.tenant_id }, 'record-consent insert failed');
+        return fail(reply, "I couldn't note that just now — your appointment is still all set.");
+      }
       return ok(reply, { recorded: true, channel: 'sms', phone: normalized });
     },
     'Failed to record consent'
