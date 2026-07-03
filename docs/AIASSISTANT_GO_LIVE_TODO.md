@@ -1,5 +1,7 @@
 # **PERSONA_NAME** Go-Live — Resume Checklist
 
+> **SINGLE SOURCE for go-live / Telnyx ops detail (2026-07-02).** `docs/TODO.md` tracks go-live *blockers* as one-line items and defers here for the operational detail (REFER enablement, DID routing, recording disclaimer, transfer wiring). Don't duplicate step-by-step go-live procedure into TODO.md.
+
 # (file renamed to AIASSISTANT\_ for generic codename, was BETH_GO_LIVE_TODO.md)
 
 # Persona name variable in seed (currently 'Chris')

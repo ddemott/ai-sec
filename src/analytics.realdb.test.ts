@@ -3,7 +3,7 @@
  * (src/routes/analytics.ts — /analytics/calls, /analytics/cohorts,
  * /coverage RPC, /analytics/ai-cost).
  *
- * Mandated by docs/TODO_BLINDSPOT.md: the existing src/analytics.test.ts mocks
+ * Mandated by docs/TODO.md "Verification blind spots": the existing src/analytics.test.ts mocks
  * pg entirely — a queued Error merely "simulates a column missing", so the real
  * statements ($n::date casts, COALESCE(..., now() - interval), FILTER (WHERE),
  * GROUP BY, the abandonment_by_service JOIN on requested_service_id) never

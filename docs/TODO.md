@@ -4,7 +4,7 @@
 
 **Related lists (kept separate by role — this file is the single scheduled action queue):**
 
-- `docs/AIASSISTANT_GO_LIVE_TODO.md` — focused voice/Telnyx go-live operational checklist.
+- `docs/AIASSISTANT_GO_LIVE_TODO.md` — **single source** for voice/Telnyx go-live operational detail (blockers tracked here as one-liners; step-by-step procedure lives there, not duplicated).
 - `docs/IMPROVEMENT_IDEAS.md` — curated _idea_ backlog (categorized, not scheduled).
 - `docs/IMPROVEMENTS_TODO.md` — `/continuously-improve` loop proposal inbox (needs review before acting).
 
@@ -19,7 +19,7 @@
 - **Security**: 2026-05-21 closed a CVE-class anonymous cross-tenant data hole (`04cb661`, live in prod). Production-hardening batch shipped (deep `/ready`, pool fail-fast, `errors_total`, bad-input→400, agent graceful-recovery). See "Production hardening" + `RESOLVED.md`.
 - **CI**: green. Agent package gated in CI. Tests (as of 2026-06-22 per CLAUDE): backend ~1,940 · dashboard ~790 · agent ~360 · E2E (numbers from recent merges; CI includes simulate tools gate). Full 4-job gate on main.
 - **Voice / Telnyx**: New live number **`+1-630-937-9478` is dead** (old order deleted, never kept). Live **`+1 630-822-9086`**. Previous `+1 630-866-1960` (2026-06-02) dead. Test verification number **`+1 630-822-9086`**. Old provisioning details in history below. **PSTN inbound CONFIRMED 2026-06-30** (real call to `822-9086` reached the agent + logged a session/transcript). **Remaining**: live call-transfer REFER enablement on Telnyx SIP; one live booking call to confirm the employee-skills fix end-to-end. Full checklist: `docs/AIASSISTANT_GO_LIVE_TODO.md`.
-- **Env vars (user action)**: `SENTRY_DSN` + `BETTER_STACK_TOKEN` — 🅿️ **PARKED 2026-07-02** (external observability vendors not worth a paid signup at this stage; prod already emits `/metrics` + logs + `/ready` for free — see the PARKED decision in "Prod config / observability" below). (`METRICS_TOKEN` **confirmed SET** 2026-06-29 — `/metrics` returns 401 not 404; `DASHBOARD_URL` confirmed set per the 2026-06-18 reconcile.) **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See the Production Wiring Checklist above.
+- **Env vars (user action)**: `SENTRY_DSN` + `BETTER_STACK_TOKEN` — ❌ **DROPPED 2026-07-02** (paid observability vendors declined; prod already emits `/metrics` + logs + `/ready` for free — see the DROPPED decision in "Prod config / observability" below). (`METRICS_TOKEN` **confirmed SET** 2026-06-29 — `/metrics` returns 401 not 404; `DASHBOARD_URL` confirmed set per the 2026-06-18 reconcile.) **P0 progress**: GitHub branch protection on `main` now gates merges/deploys on CI green (4 jobs, applied 2026-06-15). Enable Railway "Wait for CI" on services for full coverage. See the Production Wiring Checklist above.
 - **Browser validation**: Role gating + invite flow — DONE 2026-06-03, proven by green e2e (`auth-flows` route-gate 403, `workflows:630` front-desk nav-hide/snap-back, `workflows:676` owner invite).
 - **UX audit pass 2 (2026-05-19)**: Raw findings were in `ux-review-notes.md` (removed 2026-06-30; items triaged here). Actionable items triaged into the clusters below. Cluster-B defects closed 2026-05-21.
 
@@ -29,7 +29,7 @@ Everything else complete or tracked below.
 
 ## 🎯 Open Work — Master Backlog (canonical, consolidated 2026-06-23; post doc hygiene)
 
-- [x] **P0 verification gaps — testing trio** — DONE 2026-07-01 (branch: `test/blindspot-p0-verification`; source + per-item detail: `docs/TODO_BLINDSPOT.md`, audit: `docs/TEST_DB_AUDIT.md`)
+- [x] **P0 verification gaps — testing trio** — DONE 2026-07-01 (branch: `test/blindspot-p0-verification`; per-item detail: `docs/TODO.md` "Verification blind spots" section, audit: `docs/TEST_DB_AUDIT.md`)
   - Real-DB booking integration test in CI: `src/agentToolsBookingIntegration.test.ts` (mutation-verified against the tz bug).
   - Tool-selection eval: `agent/scripts/sim-toolselect.ts` via `./scripts/simulate.sh toolselect` (baseline 6/6).
   - Mocked-DB audit + 6 real-DB companion suites (analytics, auditLog, versionHistory, voice, reminders seed, customer search).
@@ -38,7 +38,7 @@ Everything else complete or tracked below.
 - [x] **`scheduleForAppointment` reminder double-seed** — FOUND + FIXED same day (2026-07-01, by `scheduleForAppointment.realdb.test.ts`). Idempotency enforced at the DB layer: partial unique index `reminder_schedules_one_scheduled_per_type` (migration `20260701020000`) + `ON CONFLICT DO NOTHING` on the seed INSERT — race-safe under concurrency (parallel-seed test) with no cross-statement locks. (First attempt used an app-level probe, then a transaction + advisory lock per Copilot review — the lock deadlocked the appointments cascade in CI E2E; the unique index is the durable design.) Reschedule still reseeds (cancel-then-seed vacates the partial index).
 - [x] **🐛 BUG — version-history: deleted-list 500s on 4/6 tables + `restore_fields_from_version()` / `copy_fields_between_records()` dead on ALL tables** — FOUND + FIXED same day (2026-07-01, by `versionHistory.realdb.test.ts`, 33 tests). The two RPCs still queried bare `id` after the 2026-05 PK renames (`column "id" does not exist` — field-restore/copy-fields were 500ing in prod for every table); the deleted-records list hardcoded `t.name, t.phone` which don't exist on appointments/voice_sessions/services/resources. Fix: migration `20260701010000_fix_version_rpc_pk_names.sql` (PK-aware RPCs, same pattern as `soft_delete_record`, PLUS `jsonb_populate_record` decode — the original SET clause stringified jsonb, so a restored text field came back JSON-quoted; only reachable once the PK fix made the functions run) + per-table display columns in `versionHistory.ts`. **Prod migration apply needed before/at merge** (fix-forward: the functions are already dead in prod, so ordering can't make anything worse).
 
-- [x] **Blindspot P0 round 2 — multi-employee scheduling coverage + agent tool-call arg logging** — DONE 2026-07-02 (branch `test/blindspot-p0-round2`; detail: `docs/TODO_BLINDSPOT.md`). (1) `src/multiEmployeeScheduling.realdb.test.ts` — 7 real-DB tests proving skill matching, employee spillover, shift-aware assignment, capability-gated resource exhaustion, and the first true PARALLEL GiST double-book race (exactly 1 winner, 3 clean TIMESLOT_OCCUPIED). (2) `agent/src/redactToolArgs.ts` — the `function_tools_executed` log line now carries each tool call's ARGS (PII-redacted: phone/code keys digit-masked, time strings + names preserved) + per-call `is_error`; 13 unit tests. Remaining P0 observability (SENTRY_DSN / BETTER_STACK_TOKEN / alert rules) is now 🅿️ PARKED by decision (2026-07-02) — see the "Prod config / observability" PARKED note below.
+- [x] **Blindspot P0 round 2 — multi-employee scheduling coverage + agent tool-call arg logging** — DONE 2026-07-02 (branch `test/blindspot-p0-round2`; detail: `docs/TODO.md` "Verification blind spots"). (1) `src/multiEmployeeScheduling.realdb.test.ts` — 7 real-DB tests proving skill matching, employee spillover, shift-aware assignment, capability-gated resource exhaustion, and the first true PARALLEL GiST double-book race (exactly 1 winner, 3 clean TIMESLOT_OCCUPIED). (2) `agent/src/redactToolArgs.ts` — the `function_tools_executed` log line now carries each tool call's ARGS (PII-redacted: phone/code keys digit-masked, time strings + names preserved) + per-call `is_error`; 13 unit tests. Remaining P0 observability: paid vendors (SENTRY_DSN / BETTER_STACK_TOKEN) ❌ DROPPED by decision (2026-07-02); alert rules stay optional/free — see "Prod config / observability" below.
 - [x] **UI — hero feature grid looks incomplete (empty 4th slot)** — DONE 2026-07-01. Added a 4th `feat-tile` to the hero `feat-grid-hero`: **"Shows You Why You're Losing Jobs"** (green bar-chart icon) — the WHY differentiator — so the 2-col grid is a full 2×2. `dashboard/app/page.tsx`.
 - [x] **🐛 BUG — deleting a customer orphans their appointments (can't cancel)** — FIXED 2026-07-02 (branch `fix/customer-delete-cancels-upcoming`). (Reported 2026-07-01, Dale — "Ab Smith".) `DELETE /customers/:id` now runs soft-delete + **auto-cancel of the customer's UPCOMING scheduled appointments in one transaction** (frees the slots; past/completed kept for history; already-canceled untouched), and mirrors `/appointments/:id/cancel` by dispatching `syncAppointmentToAll(…,'delete')` per canceled appointment so external calendars free too. One-time backfill migration `20260702000000_cancel_orphaned_appointments_of_deleted_customers` cancels the pre-fix orphans (data-only, no baseline regen; verified against a seeded orphan on local DB). 3 real-DB route tests (`src/customerDelete.realdb.test.ts`): upcoming-canceled/past-kept/already-canceled-stays, other-customer untouched, 404-path cancels nothing. **Prod migration APPLIED + VERIFIED 2026-07-02** (`schema_migrations` head = `20260702000000`, 154 total; the backfill matched zero rows on prod — no soft-deleted customers exist there, so it was a safety no-op).
 - [x] **🐛 BUG — landing page: pricing toggle + mobile hamburger menu are dead** — FIXED 2026-07-02 (branch `fix/landing-pricing-toggle-hamburger`). (Found 2026-07-01.) Root cause confirmed: `<script>` inside `dangerouslySetInnerHTML` never executes. Moved BOTH the pricing toggle (Monthly/Annual price swap + active state + annual note) and the full hamburger menu (open/close, backdrop tap, link-click close, Escape, body scroll lock, icon animation) into `useEffect`s in `LandingPage` — same pattern as the capability grid (PR #151); deleted the entire dead inline `<script>` (its `.reveal` observer part was already duplicated in a working effect) and the dead `onclick=` attributes. 5 component tests (`dashboard/app/page.test.tsx`): price swap both directions, annual-note visibility, hamburger open/backdrop-close, Escape/link-close, auth-redirect sad path.
@@ -78,13 +78,13 @@ These branches survived the 2026-06-23 cleanup because each holds real unmerged 
 - [ ] **Telnyx prod creds** — verify `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` set on Railway (local `.env` only today); else OTP + provisioning 503.
 - [ ] **Manual conversation testing** — full voice calls (booking + preference capture); confirm natural dialog flow (asks preferred time, widens, never imposes). Blocked on live inbound.
 
-**Prod config / observability** — 🅿️ **PARKED by decision 2026-07-02 (Dale).** (dossier: _Production hardening_, _Phase 13_)
+**Prod config / observability** — ❌ **PAID VENDORS DROPPED by decision 2026-07-02 (Dale).** (dossier: _Production hardening_, _Phase 13_)
 
-> **Decision:** external observability vendors (Sentry, Better Stack, a Prometheus scraper) are NOT worth a paid signup at this stage. Prod already emits everything needed with zero extra cost — `GET /metrics` (Prometheus, `METRICS_TOKEN` set + live), structured JSON logs to Railway live-tail, and `/ready` (DB + pool health). The only missing piece is *automated paging*, which is a convenience, not an outage risk — the data can be read manually. Revisit (Grafana Cloud free tier scraping the existing `/metrics`, or Railway-native alerts, or a vendor) when there are paying customers and manual checking stops scaling. The code hooks for Sentry/Better Stack stay in place and no-op until their env vars are set — nothing to remove.
+> **Decision:** paid observability vendors (Sentry, Better Stack) are declined — not worth a paid signup at this stage, and dropped from the backlog (not merely deferred). Prod already emits everything needed with zero extra cost — `GET /metrics` (Prometheus, `METRICS_TOKEN` set + live), structured JSON logs to Railway live-tail, and `/ready` (DB + pool health). The only missing piece is *automated paging*, a convenience, not an outage risk — the data is readable manually. If it's ever wanted, do it via a **free path** (Grafana Cloud free tier scraping the existing `/metrics`, or Railway-native alerts). The code hooks for Sentry/Better Stack stay in place and no-op until env vars are set — nothing to remove.
 
-- [~] **`SENTRY_DSN`** — PARKED. Code wired (no-op until set); optional exception-grouping only, not required.
-- [~] **`BETTER_STACK_TOKEN`** — PARKED. Code wired (no-op until set); logs already reach Railway live-tail.
-- [~] **Alert rules** — PARKED. Rules are written + ready in `docs/ALERTS.md` (PromQL for error-rate, http-5xx, p95, booking-failure, pool-waiting, etc. + a Better-Stack log-alert fallback). Load them if/when a paging path is stood up. `METRICS_TOKEN` confirmed SET (`/metrics` returns 401 not 404), so the metric data is already exposed for whatever scraper is chosen later.
+- ❌ **`SENTRY_DSN`** — DROPPED. Code keeps the optional integration (no-op until set); not going to pay for it.
+- ❌ **`BETTER_STACK_TOKEN`** — DROPPED. Same call; logs already reach Railway live-tail free.
+- [ ] **Alert rules** (optional, free) — NOT dropped; rules are written + ready in `docs/ALERTS.md` (PromQL for error-rate, http-5xx, p95, booking-failure, pool-waiting) and could be wired off the free `/metrics` + `/ready` signals without a paid vendor. Low priority; do it if/when a paging path is stood up (Grafana Cloud free tier over the existing `/metrics`).
 
 **Billing** (dossier: _Active build queue_, _Phase 13_)
 
@@ -291,7 +291,7 @@ CRM sync status fields · reminder-outcome metrics · SMS rate-limiting · retry
 - [~] **Telnyx provisioning — DONE 2026-06-02.** Account for Thinking Hammer LLC funded ($10) + upgraded (trial 1-order cap lifted). SIP Connection `livekit-outbound` (`2945038451784812111`) → FQDN `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060`. `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` set (local `.env`; verify on Railway `ai-sec`). Number **`+1 630-866-1960`** purchased (id `2973794140900296302`), routed to `livekit-outbound`, connection activated. Old `+1-630-937-9478` is dead (order deleted). **2026-06-04 UPDATE:** LiveKit creds work (not dead); inbound trunk `ST_aUM3GuCuc9wL` already points at the numbers (normalized to +E.164). `+16308661960` is a dead recycled DID — **new test number `+1 630-822-9086` (id `2975078589701031880`) bought + fully wired.** Config verified clean end-to-end; remaining blocker is PSTN carrier propagation, not config. **NEXT:** different-carrier call to `+16308229086` while watching LiveKit `listRooms()`. See `docs/TICKET_SUPPORT.md` (the 2026-06-04 provisioning audit detail was folded in there; the standalone `PROVISIONING_AUDIT.md` was removed).
   **2026-06-30 UPDATE:** Live number `+1 630-822-9086` — the real owned + routed DID (dial for the PSTN test). The long-documented `+1 630-866-9086` was a transcription error: never owned (routes to another business). `+1 630-866-1960` dead. Landing pages, dashboard constants, tests, and docs all corrected to 822-9086.
 - [ ] **IN FLIGHT (user)** Set `DASHBOARD_URL=https://dashboard-production-cee3.up.railway.app` on Railway `ai-sec` service
-- [~] **🅿️ PARKED 2026-07-02** Set `SENTRY_DSN` on Railway backend + agent — deferred by decision (external observability vendors not worth a paid signup yet; prod emits `/metrics`+logs+`/ready` for free). See the "Prod config / observability" PARKED note.
+- ❌ **DROPPED 2026-07-02** `SENTRY_DSN` — paid vendor declined (prod emits `/metrics`+logs+`/ready` free). See "Prod config / observability".
 - [ ] **IN FLIGHT (user)** Stripe setup — set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID` on Railway. Register webhook at `https://ai-sec-production.up.railway.app/billing/webhook` (3 events). See `docs/DEPLOYMENT.md` for full env-var list.
 - [ ] **IN FLIGHT (user)** Stripe Tax — code done (`automatic_tax` gated behind `STRIPE_AUTO_TAX=true`, shipped `8fed5da`). User actions remaining: (1) enable Stripe Tax in Stripe dashboard, (2) register tax nexus for IL + customer states, (3) set `STRIPE_AUTO_TAX=true` on Railway.
 - [x] **Browser-verify role gating + invite flow** — DONE 2026-06-03. Covered by green e2e: `auth-flows.spec.ts` (front_desk → 403 on /users/invite, /users/:id/role, GET /users), `workflows.spec.ts:630` (front-desk sees only Primary tabs; stale `?tab=my-business` URL snaps back to Home), `workflows.spec.ts:676` (owner invite creates user + reset token). Full suite 111 passed / 7 skipped.
@@ -322,10 +322,10 @@ Opened after a perf check accidentally surfaced a CVE-class auth hole — the le
 
 **Open — needs Dale / Railway (config, can't be done from here):**
 
-- [x] **`METRICS_TOKEN` on Railway backend — DONE** (confirmed set 2026-06-29: prod `/metrics` returns 401 not 404, i.e. the token gate is active). The metric data is exposed; standing up a scraper over it is part of the PARKED observability decision above.
-- [~] **🅿️ PARKED 2026-07-02** Set `BETTER_STACK_TOKEN` on Railway backend + agent — deferred by decision (logs already reach Railway live-tail; no paid signup at this stage). See the "Prod config / observability" PARKED note.
+- [x] **`METRICS_TOKEN` on Railway backend — DONE** (confirmed set 2026-06-29: prod `/metrics` returns 401 not 404, i.e. the token gate is active). The metric data is exposed; standing up a scraper over it is optional (free path) per the observability decision above.
+- ❌ **DROPPED 2026-07-02** `BETTER_STACK_TOKEN` — paid vendor declined (logs already reach Railway live-tail free). See "Prod config / observability".
 - [ ] **IN FLIGHT (user)** (Optional) Repoint Railway healthcheck → `/ready` if you want deploy promotion gated on DB reachability (note: Railway healthcheck gates promotion, not per-request traffic).
-- [~] **🅿️ PARKED 2026-07-02 — Alert rules** — deferred with the observability decision. Rules stay ready in `docs/ALERTS.md`; wire them (on `rate(errors_total[5m])`, `booking_attempts_total{outcome="failure"}`, http 5xx rate, p95 `http_request_duration_ms`, sustained `/ready` `waiting>0`) if/when a paging path is stood up (Grafana Cloud free tier over the existing `/metrics`, or Railway-native).
+- [ ] **Alert rules (optional, free)** — not dropped; rules stay ready in `docs/ALERTS.md`; wire them (on `rate(errors_total[5m])`, `booking_attempts_total{outcome="failure"}`, http 5xx rate, p95 `http_request_duration_ms`, sustained `/ready` `waiting>0`) if/when a paging path is stood up (Grafana Cloud free tier over the existing `/metrics`, or Railway-native).
 
 **Open — LOAD TESTING (deferred — not a current concern, Dale 2026-05-21):**
 
@@ -572,3 +572,58 @@ category-completeness inventory. Below is the key-files map kept for reference.
 ---
 
 **Archived detailed history**: previous session notes and long-form status are consolidated in `docs/RESOLVED.md` (the standalone `CURRENT_STATUS_ARCHIVED_2026-05-15.md` was removed).
+
+---
+
+## Verification blind spots — folded from `TODO_BLINDSPOT.md` (2026-07-02)
+
+`TODO_BLINDSPOT.md` (created 2026-07-01) tracked the *verification* holes — the "green CI but broken in prod" seams. It was folded into this file 2026-07-02 to keep one backlog; the standalone file was deleted. `GAPS.md` remains the separate category-completeness inventory.
+
+**Why this exists:** four bugs shipped to prod through a green CI suite, each found only by Dale dialing in: (1) `serviceResolver` ambiguous `name` → `available-slots` 500 (SQL never ran in tests — mock pg client); (2) timezone: a 3:30 PM request booked at 10:30 AM (no agent→route→RPC→DB clock test); (3) tool-selection: `available_slots → book_appointment` dead-ended on a missing `resource_id`; (4) booking landed Unassigned + at the wrong time (no end-to-end assertion of the stored row).
+
+### P0 — Stop the "green but broken" cycle (testing) — ALL DONE
+
+- [x] **End-to-end booking integration test in CI** — DONE 2026-07-01 (`src/agentToolsBookingIntegration.test.ts`): real route → `book_with_scheduling_atomic` → real Postgres; asserts stored UTC instant, assigned employee, `status='scheduled'`, local read-back, EMPLOYEE_NOT_SCHEDULED + TIMESLOT_OCCUPIED sad paths, + the serviceResolver ambiguous-`name` regression. Mutation-verified. Runs in CI.
+- [x] **Agent tool-selection eval** — DONE 2026-07-01 (`agent/scripts/sim-toolselect.ts`, `./scripts/simulate.sh toolselect`): replays the REAL prompt + 19 tool schemas through gpt-4o-mini, grades the chosen tool sequence. 6 cases incl. bug-#3 regression. On-demand (OpenAI-gated), not CI. Baseline 6/6.
+- [x] **Audit every DB-mocking `*.test.ts`** — DONE 2026-07-01: full audit in `docs/TEST_DB_AUDIT.md`. All HIGH-risk gaps got real-DB companions (surfaced 3 real issues). MED round-2 companions added 2026-07-02; advisor verdict: MED vein exhausted.
+- [x] **Multi-employee / multi-service scheduling coverage** — DONE 2026-07-02 (`src/multiEmployeeScheduling.realdb.test.ts`, 7 tests): skill matching, employee spillover, shift-aware assignment, capability-gated resource exhaustion, first true PARALLEL GiST double-book race. Runs in CI.
+
+### P0 — Observability — paid vendors DROPPED (decision 2026-07-02)
+
+- ❌ **`SENTRY_DSN` / `BETTER_STACK_TOKEN` — DROPPED.** Decided against paid observability vendors at this stage. Prod already emits `/metrics` (Prometheus-style, `METRICS_TOKEN`-gated), structured Pino logs (Railway live-tail), and `/ready` (deep DB/pool readiness) — all free. Only revisit via a **free path** (e.g. Grafana Cloud free tier scraping `/metrics`) if the need ever names itself.
+- [ ] **Alerting** (optional, free) — `docs/ALERTS.md` rules aren't wired; could be driven off the free `/metrics` + `/ready` signals without a paid vendor. Low priority.
+- [x] **Agent logs tool-call ARGS** (PII-redacted) — DONE 2026-07-02 (`agent/src/redactToolArgs.ts` + 13 tests). `function_tools_executed` carries `tool_calls:[{name,args,is_error}]`; phone/code keys digit-masked, time strings + names preserved.
+
+### P1 — Booking correctness (agent-behavior; need agent/LLM work + live calls — not clean-autonomous)
+
+- [ ] **Books 30 min early** — a 4:30 request stored 4:00. Fix: agent sends a TIGHT window = exactly the picked slot.
+- [ ] **Agent confirms the REQUESTED time, not the actual `booked_start`** — it said "4:30" while booking 4:00. Confirm back the real booked slot.
+- [ ] **Offers alternatives when the caller named a specific time** — verify + confirm THAT; only offer options if it's taken.
+- [ ] **`book_appointment` / `check_availability` resource_id trap** — they require a `resource_id` only `get_scheduling_options` provides; make them harder to misuse (or fold into `book_with_scheduling`).
+
+### P1 — Voice paths never validated live · go-live blockers → see `docs/AIASSISTANT_GO_LIVE_TODO.md` (single source)
+
+- [ ] **Real PSTN inbound** — CONFIRMED 2026-06-30 for a plain call; a live *booking* call still needed to confirm the employee-skills fix end-to-end.
+- [ ] **Transfer to a human (REFER)** — not enabled on the Telnyx SIP connection, never tested.
+- [ ] **Cancel / reschedule by voice** — untested live.
+- [ ] **Blocked caller-ID / OTP verification** flow — untested live.
+
+### P1 — Features that have NEVER run in prod
+
+- [ ] **Stripe billing** — built, never live-tested. Cannot take money yet.
+- [ ] **Calendar sync (Google / Outlook)** — no proven real round-trip.
+- [ ] **Reminders delivery in prod** — unverified (needs Telnyx creds confirmed on Railway).
+- [ ] **SMS + TCPA consent language** — not validated; legal exposure before any confirmation texts.
+
+### P2 — Data integrity / hygiene
+
+- [ ] **Duplicate `Dale DeMott` employee** in prod (one soft-deleted, one active) — clean up + add a guard.
+- [ ] **No cleanup pass** for soft-deleted employees/services lingering in mapping tables (`service_employee`).
+- [ ] **`password_resets` RLS conflicts with the invite flow (latent, prod-safe today)** — found 2026-07-02 (`src/routes/users.realdb.test.ts`). `POST /users/invite` INSERTs `password_resets` inside `withTenantClient`, but the only policy is `password_resets_unauthenticated_only` (`WITH CHECK` requires `app.current_tenant_id IS NULL`) → `42501` under a non-`BYPASSRLS` role. **VERIFIED prod-safe** — prod `current_user = postgres` with `rolbypassrls = true`, so invites succeed; a defense-in-depth gap, not a live outage. Fix options (Dale's call): (a) a scoped tenant-membership `WITH CHECK` policy, or (b) clear `app.current_tenant_id` for that one INSERT.
+
+### P2 — Process
+
+- [ ] **A real QA loop that isn't "Dale dials in."** Define a pre-deploy voice smoke test (scripted sim-call asserting a booking lands) that runs before merge. (Related: the `simulate tools` agent-tools journey now runs in CI — a functional, non-voice guard.)
+- [ ] **`simulate.sh call` echo caveat** — browser-sim turn-taking is unreliable (echo); require headphones or PSTN for interruption judgments.
+
+**Bottom line:** the plumbing is largely correct; the remaining gap is **verification** — tool-selection evals (built), observability (paid vendors dropped; free `/metrics`+logs+`/ready` stand), and live-proofing of voice/billing/calendar/reminders.

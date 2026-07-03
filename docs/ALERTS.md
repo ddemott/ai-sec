@@ -1,5 +1,7 @@
 # Alerting — SecretaryHQ
 
+> **Status 2026-07-02:** paid observability vendors (Sentry, Better Stack) were **decided against** — these rules are kept as an **optional, free-path** reference (wire them over the existing free `/metrics` + `/ready` via e.g. Grafana Cloud free tier). Not a go-live requirement.
+
 Ready-to-apply alert rules for the production backend + agent. Closes the
 **P0 "Alert rules" item** in `docs/TODO.md`. The metric names, label keys, and
 label *values* below match the live registry in `src/services/metrics.ts`

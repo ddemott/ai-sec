@@ -1,6 +1,6 @@
 /**
  * Real-DB companion tests for the voice routes' dynamically-built SQL
- * (per docs/TODO_BLINDSPOT.md — P0 verification of mock-only blind spots).
+ * (per docs/TODO.md "Verification blind spots" — P0 verification of mock-only blind spots).
  *
  * src/voice.test.ts mocks pg, so the dynamic `whereClause` + `paramIndex`
  * bumping in GET /voice/history (src/routes/voice.ts:291-324) is never

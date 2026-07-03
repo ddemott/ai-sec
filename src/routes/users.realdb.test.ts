@@ -130,7 +130,7 @@ describe('POST /users/invite → real DB', () => {
   // non-BYPASSRLS `api_user` the test uses, that INSERT is RLS-blocked (42501).
   // In prod it works only because the managed DB role bypasses RLS. This
   // latent conflict (app policy would reject the app's own write under a
-  // locked-down role) is flagged in docs/TODO_BLINDSPOT.md — a security-model
+  // locked-down role) is flagged in docs/TODO.md "Verification blind spots" — a security-model
   // decision, not fixed here. So we test the 409 path (which fires at the
   // users INSERT, BEFORE password_resets) by pre-seeding the duplicate.
 

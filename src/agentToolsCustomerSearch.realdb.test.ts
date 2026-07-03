@@ -1,6 +1,6 @@
 /**
  * Real-DB companion tests for /agent-tools/find-customer-by-name
- * (per docs/TODO_BLINDSPOT.md — P0 verification).
+ * (per docs/TODO.md "Verification blind spots" — P0 verification).
  *
  * The dynamic ILIKE search at src/routes/agentTools.ts:921-934 — matching
  * the caller's spoken name against `name` OR the concatenated

@@ -97,7 +97,7 @@ Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
 - Dial `+1 630-822-9086` (test verification) from a different carrier while watching `listRooms()` — PSTN verify (blocked on a 2nd phone)
 - Enable Telnyx REFER on SIP Connection `livekit-outbound`; set forward number (Phone Assistant → AI Persona)
 - Enable "Wait for CI" on the 3 Railway services
-- Set `SENTRY_DSN` + `BETTER_STACK_TOKEN` + `EMAIL_USER`/`EMAIL_PASS` on Railway (silent-degrade until set; boot warnings fire)
+- ❌ `SENTRY_DSN` + `BETTER_STACK_TOKEN` — **DROPPED 2026-07-02** (paid observability vendors declined; free `/metrics`+logs+`/ready` stand). Set `EMAIL_USER`/`EMAIL_PASS` on Railway (silent-degrade until set; boot warnings fire)
 - Rotate the Railway team token created 2026-06-12 (pasted into a session)
 
 ---
