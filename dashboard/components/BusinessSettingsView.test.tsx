@@ -61,6 +61,7 @@ const mockGetConfig = vi.fn();
 const mockGetCalendarSettings = vi.fn();
 const mockGetAuthUrl = vi.fn();
 const mockDisconnect = vi.fn();
+const mockUpdateConfig = vi.fn();
 const mockCreateService = vi.fn();
 const mockUpdateService = vi.fn();
 const mockDeleteService = vi.fn();
@@ -72,7 +73,7 @@ vi.mock('../lib/api', () => ({
   Api: {
     tenants: {
       getConfig: (...args: unknown[]) => mockGetConfig(...args),
-      updateConfig: vi.fn().mockResolvedValue({ success: true }),
+      updateConfig: (...args: unknown[]) => mockUpdateConfig(...args),
     },
     // BusinessTypeSection (mounted at the top of BusinessSettingsView) calls
     // this on mount. Returning [] keeps the Card rendered but with no
@@ -139,6 +140,7 @@ describe('BusinessSettingsView', () => {
     mockGetCalendarSettings.mockResolvedValue(null);
     mockGetAuthUrl.mockResolvedValue({ url: 'https://oauth.example.com' });
     mockDisconnect.mockResolvedValue({ success: true });
+    mockUpdateConfig.mockResolvedValue({ success: true });
     mockCreateService.mockResolvedValue({ success: true });
     mockUpdateService.mockResolvedValue({ success: true });
     mockDeleteService.mockResolvedValue({ success: true });
@@ -242,6 +244,53 @@ describe('BusinessSettingsView', () => {
       // WHO: users | WHAT: calendar disconnect
       // WHEN: clicking disconnect | WHERE: connected state
       // WHY: allow users to unlink calendar
+    });
+
+    test('SAD: a failed assistant-name save shows an error toast, not a false success', async () => {
+      // WHO: an owner renaming the AI assistant. WHAT: apiMutate resolves
+      // {success:false} on non-2xx (never throws), so the handler must inspect
+      // it — else it toasted success while the agent kept the OLD name on calls.
+      // WHERE: saveAssistantName. WHY: a save that lies is a live-call defect.
+      mockUpdateConfig.mockResolvedValue({ success: false, error: 'That name is too long.' });
+      render(<BusinessSettingsView />);
+      const input = await screen.findByLabelText('Assistant name');
+      fireEvent.change(input, { target: { value: 'Beth' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(mockExportToast).toHaveBeenCalledWith('That name is too long.', 'error')
+      );
+      expect(mockExportToast).not.toHaveBeenCalledWith('Assistant name set to "Beth".', 'success');
+    });
+
+    test('SAD: a failed calendar disconnect shows an error toast', async () => {
+      // WHO: an owner unlinking a calendar. WHAT: apiMutate {success:false} was
+      // swallowed — the "Connected" badge stayed with no feedback. WHERE:
+      // handleDisconnectCalendar else branch. WHY: silent failure reads as a hang.
+      mockGetCalendarSettings.mockResolvedValue({
+        provider: 'google',
+        external_calendar_id: 'calendar@gmail.com',
+      });
+      mockDisconnect.mockResolvedValue({ success: false, error: 'Disconnect failed on server.' });
+      render(<BusinessSettingsView />);
+      fireEvent.click(await screen.findByText('Disconnect'));
+      await waitFor(() =>
+        expect(mockExportToast).toHaveBeenCalledWith('Disconnect failed on server.', 'error')
+      );
+    });
+
+    test('SAD: a failed Google connect shows an error toast', async () => {
+      // WHO: an owner starting an OAuth connect. WHAT: getAuthUrl throws on
+      // non-2xx; the spinner cleared with no explanation. WHERE:
+      // handleConnectCalendar catch. WHY: the click looked like it did nothing.
+      mockGetAuthUrl.mockRejectedValue(new Error('boom'));
+      render(<BusinessSettingsView />);
+      fireEvent.click(await screen.findByText('Connect Google Calendar'));
+      await waitFor(() =>
+        expect(mockExportToast).toHaveBeenCalledWith(
+          'Could not start the Google Calendar connection. Please try again.',
+          'error'
+        )
+      );
     });
 
     test('displays CRM integration cards', async () => {

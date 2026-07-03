@@ -44,7 +44,14 @@ export default function BusinessSettingsView() {
     setSavingName(true);
     try {
       const trimmed = personaName.trim();
-      await Api.tenants.updateConfig(tenantId, { persona_name: trimmed || null });
+      const res = await Api.tenants.updateConfig(tenantId, { persona_name: trimmed || null });
+      // apiMutate resolves {success:false} on non-2xx (never throws), so without
+      // this guard a rejected save falsely toasted success — the owner would think
+      // the assistant was renamed while the agent kept the OLD name on live calls.
+      if (!res.success) {
+        showToast(res.error || 'Could not save the assistant name. Please try again.', 'error');
+        return;
+      }
       setSavedPersonaName(trimmed);
       setPersonaName(trimmed);
       showToast(
@@ -179,7 +186,9 @@ export default function BusinessSettingsView() {
       const res = await Api.calendar.getAuthUrl(tenantId, provider);
       window.location.href = res.url;
     } catch {
-      console.error(`Failed to get ${provider} auth URL`);
+      // getAuthUrl throws on non-2xx; the spinner cleared with no explanation.
+      const label = provider === 'google' ? 'Google' : 'Outlook';
+      showToast(`Could not start the ${label} Calendar connection. Please try again.`, 'error');
       setCalLoading(false);
     }
   }
@@ -190,9 +199,14 @@ export default function BusinessSettingsView() {
       const res = await Api.calendar.disconnect(tenantId);
       if (res.success) {
         setCalendarSettings(null);
+        showToast('Calendar disconnected.', 'success');
+      } else {
+        // apiMutate resolves {success:false} — the "Connected" badge stayed with
+        // zero feedback before this branch.
+        showToast(res.error || 'Could not disconnect the calendar. Please try again.', 'error');
       }
     } catch {
-      console.error('Disconnect failed');
+      showToast('Could not disconnect the calendar. Please try again.', 'error');
     } finally {
       setCalLoading(false);
     }
@@ -250,8 +264,8 @@ export default function BusinessSettingsView() {
         <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
           <h2 className="text-lg font-bold mb-1">Assistant Name</h2>
           <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-            What your AI receptionist calls itself on calls (for example,
-            &ldquo;Chris&rdquo;). Leave blank to use the default.
+            What your AI receptionist calls itself on calls (for example, &ldquo;Chris&rdquo;).
+            Leave blank to use the default.
           </p>
           <div className="flex items-end gap-3">
             <div className="flex-1">
@@ -514,7 +528,7 @@ export default function BusinessSettingsView() {
                       <div className="font-bold capitalize">
                         {calendarSettings.provider} Calendar Connected
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                         ID: {calendarSettings.external_calendar_id}
                       </div>
                     </div>
@@ -556,7 +570,7 @@ export default function BusinessSettingsView() {
         {/* ─── DATA EXPORT ─── */}
         <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
           <h3 className="text-base font-semibold mb-1">Your data</h3>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
             Download a complete copy of your business data — customers, appointments, staff,
             schedule, services, call history, knowledge base, and more — as a JSON file.
           </p>

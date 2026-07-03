@@ -86,8 +86,8 @@ export default function SettingsView() {
         <ShieldCheck className="w-10 h-10 mb-4" style={{ color: 'var(--text-muted)' }} />
         <h1 className="text-2xl font-display mb-2">Settings moved</h1>
         <p style={{ color: 'var(--text-secondary)', maxWidth: '28rem' }}>
-          Business configuration — services, team, hours, calendar &amp; CRM connections — now
-          lives under the <strong>Setup</strong> tab in the main navigation.
+          Business configuration — services, team, hours, calendar &amp; CRM connections — now lives
+          under the <strong>Setup</strong> tab in the main navigation.
         </p>
       </div>
     );
@@ -146,37 +146,23 @@ export default function SettingsView() {
               className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6"
               style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
             >
-              <div className="space-y-1">
-                <label
-                  className="text-xs font-bold uppercase ml-1"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Company Name
-                </label>
-                <Input
-                  required
-                  value={form.tenant_name}
-                  onChange={(e) => setForm({ ...form, tenant_name: e.target.value })}
-                  placeholder="e.g. Sunny Day Spa"
-                />
-              </div>
-              <div className="space-y-1">
-                <label
-                  className="text-xs font-bold uppercase ml-1"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Business Template
-                </label>
-                <Select
-                  required
-                  value={form.business_type}
-                  onChange={(e) => setForm({ ...form, business_type: e.target.value })}
-                  options={[
-                    { label: 'Select a template...', value: '' },
-                    ...templates.map((t) => ({ label: t.display_name, value: t.business_type })),
-                  ]}
-                />
-              </div>
+              <Input
+                label="Company Name"
+                required
+                value={form.tenant_name}
+                onChange={(e) => setForm({ ...form, tenant_name: e.target.value })}
+                placeholder="e.g. Sunny Day Spa"
+              />
+              <Select
+                label="Business Template"
+                required
+                value={form.business_type}
+                onChange={(e) => setForm({ ...form, business_type: e.target.value })}
+                options={[
+                  { label: 'Select a template...', value: '' },
+                  ...templates.map((t) => ({ label: t.display_name, value: t.business_type })),
+                ]}
+              />
             </Card>
           </section>
 
@@ -194,65 +180,37 @@ export default function SettingsView() {
               style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
             >
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label
-                    className="text-xs font-bold uppercase ml-1"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    First Name
-                  </label>
-                  <Input
-                    required
-                    value={form.owner_first_name}
-                    onChange={(e) => setForm({ ...form, owner_first_name: e.target.value })}
-                    placeholder="John"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label
-                    className="text-xs font-bold uppercase ml-1"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    Last Name
-                  </label>
-                  <Input
-                    required
-                    value={form.owner_last_name}
-                    onChange={(e) => setForm({ ...form, owner_last_name: e.target.value })}
-                    placeholder="Doe"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label
-                    className="text-xs font-bold uppercase ml-1"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    Email
-                  </label>
-                  <Input
-                    type="email"
-                    required
-                    value={form.owner_email}
-                    onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
-                    placeholder="owner@business.com"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label
-                  className="text-xs font-bold uppercase ml-1"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Password
-                </label>
                 <Input
-                  type="password"
+                  label="First Name"
                   required
-                  value={form.owner_pass}
-                  onChange={(e) => setForm({ ...form, owner_pass: e.target.value })}
-                  placeholder="••••••••"
+                  value={form.owner_first_name}
+                  onChange={(e) => setForm({ ...form, owner_first_name: e.target.value })}
+                  placeholder="John"
+                />
+                <Input
+                  label="Last Name"
+                  required
+                  value={form.owner_last_name}
+                  onChange={(e) => setForm({ ...form, owner_last_name: e.target.value })}
+                  placeholder="Doe"
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  required
+                  value={form.owner_email}
+                  onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
+                  placeholder="owner@business.com"
                 />
               </div>
+              <Input
+                label="Password"
+                type="password"
+                required
+                value={form.owner_pass}
+                onChange={(e) => setForm({ ...form, owner_pass: e.target.value })}
+                placeholder="••••••••"
+              />
             </Card>
           </section>
 

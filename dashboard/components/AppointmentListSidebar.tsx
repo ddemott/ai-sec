@@ -67,7 +67,11 @@ export function AppointmentListSidebar({
           </div>
         )}
         {loading && appointments.length === 0 && (
-          <div className="flex flex-col gap-2 p-4" aria-label="Loading appointments" aria-busy="true">
+          <div
+            className="flex flex-col gap-2 p-4"
+            aria-label="Loading appointments"
+            aria-busy="true"
+          >
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
@@ -94,7 +98,18 @@ export function AppointmentListSidebar({
         {appointments.map((apt) => (
           <div
             key={apt.appointment_id}
+            role="button"
+            tabIndex={0}
+            aria-label={`Open appointment for ${apt.customers?.name || 'Unknown'}`}
             onClick={() => onSelectAppointment(apt)}
+            onKeyDown={(e) => {
+              // Rows are selectable divs (not <button>, to keep the block layout);
+              // wire Enter/Space so keyboard-only users can open an appointment.
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectAppointment(apt);
+              }
+            }}
             className={`p-4 cursor-pointer transition flex justify-between items-start
               ${selectedAppointment?.appointment_id === apt.appointment_id ? 'border-l-4 shadow-sm' : ''}`}
             style={{
@@ -116,7 +131,10 @@ export function AppointmentListSidebar({
               >
                 {apt.customers?.name || 'Unknown'}
               </p>
-              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter mt-1 truncate max-w-[180px]">
+              <p
+                className="text-[11px] font-bold uppercase tracking-tighter mt-1 truncate max-w-[180px]"
+                style={{ color: 'var(--text-muted)' }}
+              >
                 {apt.description}
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>

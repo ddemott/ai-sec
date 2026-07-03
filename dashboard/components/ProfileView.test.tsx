@@ -198,5 +198,22 @@ describe('ProfileView', () => {
       expect(screen.getByText('Account')).toBeInTheDocument();
       expect(screen.getByText('Appearance')).toBeInTheDocument();
     });
+
+    test('the active theme button exposes its selected state via aria-pressed', () => {
+      // WHO: a keyboard/screen-reader user choosing a theme. WHAT: the current
+      // theme (mockTheme='dark') must announce as pressed; others as not — the
+      // selection was previously conveyed by color only. WHERE: ProfileView theme
+      // buttons aria-pressed. WHY: color-only state is invisible to assistive tech.
+      render(<ProfileView />);
+      // The button's accessible name is its name + description ("Dark Dark mode").
+      expect(screen.getByRole('button', { name: /Dark mode/ })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+      expect(screen.getByRole('button', { name: /Light mode/ })).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
+    });
   });
 });

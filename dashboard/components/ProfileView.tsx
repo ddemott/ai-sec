@@ -74,7 +74,10 @@ export default function ProfileView() {
                   {isAdmin && (
                     <div
                       className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-widest"
-                      style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
+                      style={{
+                        backgroundColor: 'var(--accent-muted)',
+                        color: 'var(--accent-soft)',
+                      }}
                     >
                       <Shield className="w-3 h-3" />
                       Admin
@@ -100,6 +103,7 @@ export default function ProfileView() {
                 <button
                   key={t.id}
                   onClick={() => setTheme(t.id)}
+                  aria-pressed={theme === t.id}
                   className="p-3 rounded-xl border text-left transition-all"
                   style={{
                     borderColor: theme === t.id ? 'var(--accent)' : 'var(--border-soft)',
@@ -143,13 +147,21 @@ export default function ProfileView() {
             </legend>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
-                <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
+                <Shield
+                  className="w-3.5 h-3.5 shrink-0"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-hidden="true"
+                />
                 <span style={{ color: 'var(--text-secondary)' }}>
                   Sessions expire after 8 hours and auto-logout on 401.
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
+                <Lock
+                  className="w-3.5 h-3.5 shrink-0"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-hidden="true"
+                />
                 <Link
                   href="/forgot-password"
                   className="text-sm hover:underline"

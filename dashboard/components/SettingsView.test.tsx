@@ -60,4 +60,23 @@ describe('SettingsView — super-admin only after IA merge', () => {
     // The removed owner-mode calendar surface must not appear.
     expect(screen.queryByText(/Calendar Synchronization/i)).not.toBeInTheDocument();
   });
+
+  test('onboarding form fields are programmatically labeled (accessible name)', async () => {
+    // WHO: a screen-reader / keyboard super-admin. WHAT: each field must resolve
+    //      by its label — the hand-rolled <label>s had no htmlFor/id, so the
+    //      inputs were unlabeled. Switching to the Input/Select `label` prop
+    //      restores the htmlFor↔id association. WHERE: SettingsView onboarding
+    //      form. WHY: getByLabelText only resolves when the association exists.
+    mockIsAdmin = true;
+    render(<SettingsView />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /Business Onboarding/i })).toBeInTheDocument()
+    );
+    expect(screen.getByLabelText('Company Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Business Template')).toBeInTheDocument();
+    expect(screen.getByLabelText('First Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Last Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+  });
 });

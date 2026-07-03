@@ -120,6 +120,7 @@ export function CustomerDetailPanel({
             <div className="flex items-center">
               <button
                 onClick={onCloseMobile}
+                aria-label="Back to customer list"
                 className="md:hidden p-2 -ml-2 mr-2"
                 style={{ color: 'var(--accent-soft)' }}
               >
@@ -529,11 +530,7 @@ export function CustomerDetailPanel({
                       })}
                     </div>
                   ) : (
-                    <EmptyState
-                      icon={History}
-                      title="No past appointments"
-                      variant="compact"
-                    />
+                    <EmptyState icon={History} title="No past appointments" variant="compact" />
                   )}
                 </div>
 
@@ -587,11 +584,7 @@ export function CustomerDetailPanel({
                         </div>
                       ))
                     ) : (
-                      <EmptyState
-                        icon={Phone}
-                        title="No call history"
-                        variant="compact"
-                      />
+                      <EmptyState icon={Phone} title="No call history" variant="compact" />
                     )}
                   </div>
                 </div>

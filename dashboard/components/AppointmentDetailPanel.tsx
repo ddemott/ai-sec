@@ -47,9 +47,7 @@ interface AppointmentDetailPanelProps {
   services: { service_id: string; name: string; duration_minutes: number }[];
   vocab: { booking_label: string; resource_label: string; employee_label: string };
   getServiceBaseTimes: (appointment: Appointment) => { start: Date; end: Date };
-  findCustomerById: (
-    id: string
-  ) =>
+  findCustomerById: (id: string) =>
     | {
         customer_id: string;
         name: string;
@@ -114,7 +112,10 @@ export function AppointmentDetailPanel({
     if (!selectedAppointment) return;
     setIsSendingLinks(true);
     try {
-      const res = await Api.appointments.sendSelfServiceLinks(selectedAppointment.appointment_id, tenantId);
+      const res = await Api.appointments.sendSelfServiceLinks(
+        selectedAppointment.appointment_id,
+        tenantId
+      );
       if (res.success) {
         showToast(res.message ?? 'Cancel/reschedule links sent.', 'success');
       } else {
@@ -193,6 +194,7 @@ export function AppointmentDetailPanel({
             <div className="flex items-start">
               <button
                 onClick={onCloseMobile}
+                aria-label="Back to appointment list"
                 className="md:hidden p-2 -ml-2 mr-2"
                 style={{ color: 'var(--accent-soft)' }}
               >
@@ -552,7 +554,18 @@ export function AppointmentDetailPanel({
                 </div>
                 <Card title="Summary" variant="dark">
                   <p className="text-lg leading-relaxed font-medium italic">
-                    {`This appointment for ${selectedAppointment?.customers?.name} was scheduled for ${selectedAppointment?.description.toLowerCase()}. The AI has verified availability for ${resources.find((r) => r.resource_id === selectedAppointment?.resource_id)?.name || 'Unknown'}${employees.find((e) => e.employee_id.toString() === selectedAppointment?.employee_id?.toString()) ? ` and assigned to ${employees.find((e) => e.employee_id.toString() === selectedAppointment?.employee_id?.toString())?.name}` : ''}.`}
+                    {(() => {
+                      // Compute each lookup once (Copilot review — the literal
+                      // previously ran employees.find twice per render).
+                      const resourceName =
+                        resources.find((r) => r.resource_id === selectedAppointment?.resource_id)
+                          ?.name || 'Unknown';
+                      const employee = employees.find(
+                        (e) =>
+                          e.employee_id.toString() === selectedAppointment?.employee_id?.toString()
+                      );
+                      return `This appointment for ${selectedAppointment?.customers?.name} is scheduled for ${selectedAppointment?.description.toLowerCase()} on ${resourceName}${employee ? `, assigned to ${employee.name}` : ''}.`;
+                    })()}
                   </p>
                 </Card>
               </div>
