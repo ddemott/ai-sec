@@ -135,8 +135,16 @@ export default function CRMView() {
         if (!selectedCustomer) setSelectedCustomer((data as unknown as Customer[])[0]);
       }
     } catch {
-      setCustomers(MOCK_CUSTOMERS);
-      if (!selectedCustomer) setSelectedCustomer(MOCK_CUSTOMERS[0]);
+      // Mock data is the DEMO fallback (no tenant). For a REAL tenant a fetch
+      // error must NOT fabricate customers — showing "Bob Smith"/"Alice Johnson"
+      // as if real masks the failure. Surface an error and keep the list empty.
+      if (!tenantId) {
+        setCustomers(MOCK_CUSTOMERS);
+        if (!selectedCustomer) setSelectedCustomer(MOCK_CUSTOMERS[0]);
+      } else {
+        setCustomers([]);
+        showToast('Could not load customers. Please try again.', 'error');
+      }
     }
     setLoading(false);
   }
@@ -145,12 +153,13 @@ export default function CRMView() {
     try {
       const data = await Api.callSummaries.list(tenantId, customerId);
       if (!data || data.length === 0) {
-        setSummaries(MOCK_SUMMARIES.filter((s) => s.customer_id === customerId));
+        setSummaries(tenantId ? [] : MOCK_SUMMARIES.filter((s) => s.customer_id === customerId));
       } else {
         setSummaries(data as typeof summaries);
       }
     } catch {
-      setSummaries(MOCK_SUMMARIES.filter((s) => s.customer_id === customerId));
+      // Same rule as fetchCustomers: no fabricated call summaries for a real tenant.
+      setSummaries(tenantId ? [] : MOCK_SUMMARIES.filter((s) => s.customer_id === customerId));
     }
   }
 
@@ -172,11 +181,15 @@ export default function CRMView() {
         closeConfirm();
         try {
           const res = await Api.appointments.cancel(appointmentId, tenantId);
-          if (res.success && selectedCustomer) {
-            void fetchCustomerAppointments(selectedCustomer.customer_id);
+          if (res.success) {
+            showToast('Appointment canceled.', 'success');
+            if (selectedCustomer) void fetchCustomerAppointments(selectedCustomer.customer_id);
+          } else {
+            showToast(res.error || 'Failed to cancel appointment.', 'error');
           }
         } catch (e) {
           console.error(e);
+          showToast('Failed to cancel appointment.', 'error');
         }
       },
     });
@@ -276,10 +289,13 @@ export default function CRMView() {
         setIsCreating(false);
         await fetchCustomers();
       } else {
-        console.error('Failed to update customer', res.error);
+        // apiMutate resolves {success:false} on non-2xx (never throws), so
+        // without a toast a rejected save (validation/RLS) was fully silent.
+        showToast(res.error || 'Failed to save changes.', 'error');
       }
     } catch (e) {
       console.error(e);
+      showToast('Failed to save changes.', 'error');
     }
     setSaving(false);
   }
@@ -305,9 +321,14 @@ export default function CRMView() {
       if (res.success) {
         setIsCreating(false);
         void fetchCustomers();
+      } else {
+        // Silent-failure guard: a rejected create (duplicate phone, validation,
+        // RLS 403) resolves {success:false} — tell the owner instead of nothing.
+        showToast(res.error || 'Failed to create customer.', 'error');
       }
     } catch (e) {
       console.error(e);
+      showToast('Failed to create customer.', 'error');
     }
     setSaving(false);
   }
@@ -385,7 +406,13 @@ export default function CRMView() {
                 <UserPlus className="w-4 h-4" />
                 Add Customer
               </Button>
-              <Button variant="ghost" onClick={fetchCustomers} size="sm" className="p-1.5">
+              <Button
+                variant="ghost"
+                onClick={fetchCustomers}
+                size="sm"
+                className="p-1.5"
+                aria-label="Refresh customers"
+              >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               </Button>
             </div>

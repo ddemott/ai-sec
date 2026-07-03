@@ -182,4 +182,16 @@ describe('CustomerDetailPanel — appointment history reactivate affordance', ()
     fireEvent.click(screen.getByText('Brake pads'));
     expect(onReactivate).toHaveBeenCalledTimes(1); // unchanged — still the one from above
   });
+
+  it('A11Y: the mobile back button has an accessible name and closes the panel', () => {
+    // WHO: a screen-reader / keyboard user on mobile. WHAT: the icon-only back
+    //       button was announced as just "button"; it now carries an aria-label
+    //       and firing it calls onCloseMobile. WHERE: CustomerDetailPanel mobile
+    //       header. WHY: icon-only controls need an accessible name.
+    const onCloseMobile = vi.fn();
+    renderPanel({ onCloseMobile });
+    const back = screen.getByRole('button', { name: 'Back to customer list' });
+    fireEvent.click(back);
+    expect(onCloseMobile).toHaveBeenCalledTimes(1);
+  });
 });
