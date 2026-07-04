@@ -58,6 +58,7 @@ import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { createQueryExpander } from '../shared/expandQueryForEmbedding';
 import { tenantMiddleware, generateToken, registerJwtAuthHook } from './middleware';
+import { collectFeatureReadiness } from './services/featureReadiness';
 
 // --- Environment Validation ---
 // Fail fast on missing required env vars in production
@@ -287,6 +288,26 @@ if (isProduction || process.env.ENABLE_REMINDER_SCHEDULER === 'true') {
 if (isProduction || process.env.ENABLE_VOICE_SESSION_REAPER === 'true') {
   startVoiceSessionReaper();
 }
+
+// --- Feature-readiness boot report ---
+// One structured line (not 12 warns) naming each optional capability's status
+// (ready/mocked/disabled/missing_config). Same conditions as the prod-only
+// WARNINGs above — shared source of truth in src/services/featureReadiness.ts,
+// also served live at GET /admin/feature-readiness (super-admin). Emitted in
+// every environment so a local boot shows the same shape prod does.
+// Log directly via the app logger (mirrors logEvent's {event, ...data} shape)
+// — no fake AppRequest, so this can't break if logEvent grows beyond req.log.
+app.log.info(
+  {
+    event: 'feature_readiness_report',
+    report: collectFeatureReadiness({
+      env: process.env,
+      TELNYX_API_KEY,
+      TELNYX_SIP_CONNECTION_ID,
+    }),
+  },
+  'feature_readiness_report'
+);
 
 // --- Start Server ---
 

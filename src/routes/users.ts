@@ -17,6 +17,7 @@ import {
   type UserRole,
 } from '../middleware';
 import { sendUserInviteEmail } from '../services/communications/systemEmail';
+import { assertRowAffected } from './routeHelpers';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
 const INVITE_TTL_MINUTES = 60 * 24 * 3; // 3 days
@@ -257,5 +258,68 @@ export function registerUserRoutes(
       logEvent(req, 'user_role_updated', { userId: id, role: parsed.data.role });
       return reply.send({ success: true, role: res.rows[0].role as UserRole });
     }, 'Failed to update user role')
+  );
+
+  // ── POST /users/me/revoke-sessions — "log out everywhere" (self) ─────
+  // Bumps the caller's own password_changed_at to NOW(); the JWT auth hook
+  // (middleware.ts) then rejects every token issued before that instant, so
+  // all outstanding sessions — including the one making THIS request — die.
+  // The dashboard forceLogout()s right after, which is the expected UX.
+  // Any role may call it (front_desk can log themselves out everywhere).
+  //
+  // Written via withPoolClient with NO tenant context — the exact pattern
+  // /reset-password uses for the same UPDATE (the admin_bypass_users RLS
+  // policy permits it when app.current_tenant_id is unset). Same-second
+  // caveat as the reset flow: the hook compares floor(changed_at, 1s) >
+  // token.iat, so a token minted in the SAME second as the bump survives —
+  // we deliberately replicate the existing password-change semantics rather
+  // than invent stricter ones here (consistency beats cleverness).
+  app.post(
+    '/users/me/revoke-sessions',
+    withHandler(async (req: AppRequest, reply) => {
+      if (!req.auth) {
+        return reply.status(401).send({ success: false, error: 'Authentication required' });
+      }
+      const userId = req.auth.user_id;
+      const res = await withPoolClient(pool, async (client) => {
+        return client.query(
+          'UPDATE users SET password_changed_at = NOW() WHERE user_id = $1 RETURNING user_id',
+          [userId]
+        );
+      });
+      if (!assertRowAffected(res, reply, 'User')) return;
+      logEvent(req, 'sessions_revoked_self', { userId });
+      return reply.send({ success: true });
+    }, 'Failed to revoke sessions')
+  );
+
+  // ── POST /users/:id/revoke-sessions — owner revokes a staff login ────
+  // Owner-gated (front_desk gets 403 from requireOwner). The UPDATE is
+  // pinned to the caller's middleware-validated tenant, so a cross-tenant
+  // target — or any unknown user_id — affects zero rows and 404s without
+  // leaking whether the user exists elsewhere. Param is `:id` (not
+  // `:user_id`) because find-my-way requires one param name per position
+  // and /users/:id/role already claimed it.
+  app.post(
+    '/users/:id/revoke-sessions',
+    withHandler(async (req: AppRequest, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const id = (req.params as { id: string }).id;
+
+      const res = await withTenantClient(tenantId, async (client) => {
+        return client.query(
+          'UPDATE users SET password_changed_at = NOW() WHERE user_id = $1 AND tenant_id = $2 RETURNING user_id',
+          [id, tenantId]
+        );
+      });
+      if (!assertRowAffected(res, reply, 'User')) return;
+      logEvent(req, 'sessions_revoked_by_owner', {
+        targetUserId: id,
+        revokedByUserId: req.auth?.user_id,
+      });
+      return reply.send({ success: true });
+    }, 'Failed to revoke sessions')
   );
 }

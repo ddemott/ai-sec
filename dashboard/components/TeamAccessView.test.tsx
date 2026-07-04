@@ -24,6 +24,7 @@ vi.mock('./ui/Toast', () => ({
 }));
 
 import TeamAccessView from './TeamAccessView';
+import { showToast } from './ui/Toast';
 
 const ownerRow = {
   user_id: 'owner-1',
@@ -129,6 +130,50 @@ describe('TeamAccessView — self-edit guard', () => {
     const otherSelect = screen.getByLabelText<HTMLSelectElement>('Role for desk@biz.com');
     expect(ownSelect).toBeDisabled();
     expect(otherSelect).not.toBeDisabled();
+  });
+});
+
+describe('TeamAccessView — revoke sessions', () => {
+  test('SAD: a thrown network error clears the row loading state and toasts', async () => {
+    // WHO: an owner clicking "Log out sessions" on a teammate's row when the
+    //      network drops mid-request.
+    // WHAT: apiMutate rethrows fetch/network failures. The onConfirm handler
+    //       must catch the throw, surface an error toast, and — critically —
+    //       clear pendingRevokeId in a finally so the row's button doesn't stay
+    //       stuck spinning (disabled + aria-busy) forever.
+    // WHEN: fetch on the /revoke-sessions POST rejects.
+    // WHERE: handleRevokeSessions try/catch/finally in TeamAccessView.
+    // WHY: before the fix the throw skipped setPendingRevokeId(null), leaving
+    //      the teammate's button permanently disabled with no feedback.
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+      (url: string, init?: RequestInit) => {
+        if (url.includes('/revoke-sessions') && init?.method === 'POST') {
+          // Plain Error (not a TypeError 'Failed to fetch') so the api layer's
+          // localhost cert-redirect branch stays dormant — we only exercise the
+          // rethrow path the component must guard.
+          return Promise.reject(new Error('network down'));
+        }
+        return Promise.resolve(mockListResponse([ownerRow, deskRow]));
+      }
+    );
+
+    render(<TeamAccessView />);
+    await waitFor(() => screen.getByText('Desk Staff'));
+
+    // Open the confirm modal for the (non-self) desk teammate, then confirm.
+    fireEvent.click(screen.getByRole('button', { name: /log out desk@biz\.com's sessions/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /log out their sessions/i }));
+
+    // The error toast fires…
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/network down/i), 'error');
+    });
+    // …and the row button is no longer stuck in its loading (disabled) state.
+    const rowButton = screen.getByRole('button', {
+      name: /log out desk@biz\.com's sessions/i,
+    });
+    await waitFor(() => expect(rowButton).not.toBeDisabled());
+    expect(rowButton).not.toHaveAttribute('aria-busy', 'true');
   });
 });
 

@@ -2,31 +2,47 @@ import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool } from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
-import { withHandler } from '../middleware';
+import { withHandler, requireSuperAdmin, type AppRequest } from '../middleware';
 import { registry as metricsRegistry } from '../services/metrics';
 import { runReadinessCheck } from '../readinessHandler';
+import { collectFeatureReadinessFromEnv } from '../services/featureReadiness';
 
 // Captured once at module load — the same point the server process first imports
 // this module. Exposed via /health so E2E can detect a stale backend binary.
 const PROCESS_STARTED_AT = new Date().toISOString();
 
-// Static pages read once at module load, not per-request (avoid event-loop
-// blocking on hot paths). {{DASHBOARD_URL}} substituted per-request (cheap).
+// Static pages read once (lazily, on first request) then cached — the hot
+// path never re-reads the file, and {{DASHBOARD_URL}} is substituted
+// per-request (cheap). Lazy rather than at module load because the path is
+// dist-relative (dist/src/routes → repo root); unit tests import this module
+// from src/ where the path doesn't resolve, and they never hit '/' or '/demo'.
 const publicDir = path.resolve(__dirname, '..', '..', '..', 'public');
-const LANDING_HTML = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf-8');
-const DEMO_HTML = fs.readFileSync(path.join(publicDir, 'secretaryhq-demo.html'), 'utf-8');
+let landingHtmlCache: string | null = null;
+let demoHtmlCache: string | null = null;
+function getLandingHtml(): string {
+  if (landingHtmlCache === null) {
+    landingHtmlCache = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf-8');
+  }
+  return landingHtmlCache;
+}
+function getDemoHtml(): string {
+  if (demoHtmlCache === null) {
+    demoHtmlCache = fs.readFileSync(path.join(publicDir, 'secretaryhq-demo.html'), 'utf-8');
+  }
+  return demoHtmlCache;
+}
 
 export function registerHealthRoutes(app: AppFastifyInstance, pool: Pool): void {
   // Public marketing landing page
   app.get('/', async (_req, reply) => {
     const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
-    const html = LANDING_HTML.replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
+    const html = getLandingHtml().replace(/\{\{DASHBOARD_URL\}\}/g, dashboardUrl);
     return reply.type('text/html').send(html);
   });
 
   // Demo page (static, no substitution needed)
   app.get('/demo', async (_req, reply) => {
-    return reply.type('text/html').send(DEMO_HTML);
+    return reply.type('text/html').send(getDemoHtml());
   });
 
   // Liveness: process is up. Intentionally shallow + synchronous — does NOT
@@ -55,6 +71,20 @@ export function registerHealthRoutes(app: AppFastifyInstance, pool: Pool): void 
     }
     return reply.type('text/plain; version=0.0.4; charset=utf-8').send(metricsRegistry.expose());
   });
+
+  // Admin: structured feature-readiness report — which optional capability is
+  // live in THIS process and why not (ready/mocked/disabled/missing_config).
+  // Same conditions as the boot warnings (src/services/featureReadiness.ts),
+  // evaluated at request time so an env-var change on redeploy is visible
+  // immediately. Super-admin only (same gate as /tenants/*); deliberately NOT
+  // in PUBLIC_ROUTES — the report enumerates the prod config surface.
+  app.get(
+    '/admin/feature-readiness',
+    withHandler(async (req: AppRequest, reply) => {
+      if (!requireSuperAdmin(req, reply)) return;
+      return reply.send({ success: true, report: collectFeatureReadinessFromEnv() });
+    }, 'Failed to build feature-readiness report')
+  );
 
   // Admin: manually trigger the soft-reservation cleanup RPC. Not tenant-scoped
   // (runs as superuser against the whole DB). Wrapped in withHandler for

@@ -1,0 +1,292 @@
+/**
+ * Feature-readiness report — the single source of truth for "which optional
+ * capability is actually live in this process, and why not".
+ *
+ * Every capability below is derived from the SAME env-var conditions the
+ * startup warnings (envWarnings.ts) have always tested — the warning strings
+ * now live here, attached to the capability they describe, and
+ * collectStartupWarnings() is a thin flatMap over these evaluations. One
+ * condition, two consumers: the boot WARNING lines and the structured
+ * readiness report (logged once at startup + served at
+ * GET /admin/feature-readiness, super-admin only).
+ *
+ * Statuses:
+ *   ready          — fully configured, real side effects will happen
+ *   mocked         — code path runs but a mock/simulation adapter swallows it
+ *   disabled       — feature is switched off entirely (routes 404/503/no-op)
+ *   missing_config — feature runs but with a broken/unsafe default
+ */
+
+export type FeatureStatus = 'ready' | 'mocked' | 'disabled' | 'missing_config';
+
+export interface FeatureReadinessRow {
+  feature: string;
+  status: FeatureStatus;
+  detail: string;
+}
+
+/**
+ * Context shape shared with envWarnings.ts (its EnvWarningContext is an
+ * alias of this). TELNYX_* are passed pre-resolved because index.ts computes
+ * defaults for them before calling us.
+ */
+export interface FeatureReadinessContext {
+  env: NodeJS.ProcessEnv;
+  /** Resolved values the caller already computed (defaults applied). */
+  TELNYX_API_KEY: string;
+  TELNYX_SIP_CONNECTION_ID: string;
+}
+
+/** A readiness row plus the legacy startup-warning strings it contributes. */
+export interface CapabilityEvaluation extends FeatureReadinessRow {
+  warnings: string[];
+}
+
+/**
+ * Evaluate every capability once. Order matters only for the derived startup
+ * warnings — it preserves the historical envWarnings.ts emission order so
+ * the pinned warning tests stay byte-identical.
+ */
+export function evaluateCapabilities(ctx: FeatureReadinessContext): CapabilityEvaluation[] {
+  const { env, TELNYX_API_KEY, TELNYX_SIP_CONNECTION_ID } = ctx;
+  const evaluations: CapabilityEvaluation[] = [];
+
+  // ── sms_provider (Telnyx) ────────────────────────────────────────────
+  // Condition mirrors ProviderRegistry: no TELNYX_API_KEY → MockAdapter.
+  {
+    const warnings: string[] = [];
+    if (!TELNYX_API_KEY) {
+      warnings.push(
+        'TELNYX_API_KEY not set — phone provisioning and SMS OTP disabled (voice calls with blocked caller-ID cannot complete bookings)'
+      );
+    }
+    if (TELNYX_API_KEY && !TELNYX_SIP_CONNECTION_ID) {
+      warnings.push(
+        'TELNYX_SIP_CONNECTION_ID not set — phone provisioning will return 503 (purchased numbers cannot be routed to LiveKit)'
+      );
+    }
+    if (TELNYX_API_KEY && !env.TELNYX_PHONE_NUMBER) {
+      warnings.push(
+        'TELNYX_PHONE_NUMBER not set — reminder and notification SMS will be sent without a valid from number (messages will fail or be undeliverable)'
+      );
+    }
+    let status: FeatureStatus = 'ready';
+    let detail = 'Telnyx SMS + provisioning configured';
+    if (!TELNYX_API_KEY) {
+      status = 'mocked';
+      detail = 'TELNYX_API_KEY not set — SMS routed to MockAdapter; provisioning + OTP disabled';
+    } else if (!TELNYX_SIP_CONNECTION_ID) {
+      status = 'missing_config';
+      detail = 'TELNYX_SIP_CONNECTION_ID not set — provisioning returns 503';
+    } else if (!env.TELNYX_PHONE_NUMBER) {
+      status = 'missing_config';
+      detail = 'TELNYX_PHONE_NUMBER not set — SMS sends without a valid from number';
+    }
+    evaluations.push({ feature: 'sms_provider', status, detail, warnings });
+  }
+
+  // ── email ────────────────────────────────────────────────────────────
+  // Condition mirrors emailService/systemEmail: no creds → simulation mode.
+  {
+    const missing = !env.EMAIL_USER || !env.EMAIL_PASS;
+    evaluations.push({
+      feature: 'email',
+      status: missing ? 'mocked' : 'ready',
+      detail: missing
+        ? 'EMAIL_USER / EMAIL_PASS not set — email runs in simulation mode, never delivers'
+        : 'SMTP credentials configured',
+      warnings: missing
+        ? [
+            'EMAIL_USER / EMAIL_PASS not set — email notifications are running in mock mode and will never deliver',
+          ]
+        : [],
+    });
+  }
+
+  // ── stripe_billing ───────────────────────────────────────────────────
+  {
+    const missing = !env.STRIPE_SECRET_KEY;
+    evaluations.push({
+      feature: 'stripe_billing',
+      status: missing ? 'disabled' : 'ready',
+      detail: missing
+        ? 'STRIPE_SECRET_KEY not set — all /billing/* routes return 503'
+        : 'Stripe secret key configured',
+      warnings: missing
+        ? [
+            'STRIPE_SECRET_KEY not set — billing and subscription management disabled (all /billing/* routes return 503)',
+          ]
+        : [],
+    });
+  }
+
+  // ── stripe_webhook ───────────────────────────────────────────────────
+  // Only meaningful when billing itself is on (legacy warning fired only then).
+  {
+    let status: FeatureStatus = 'ready';
+    let detail = 'Webhook signature verification configured';
+    const warnings: string[] = [];
+    if (!env.STRIPE_SECRET_KEY) {
+      status = 'disabled';
+      detail = 'Billing disabled (no STRIPE_SECRET_KEY) — webhook moot';
+    } else if (!env.STRIPE_WEBHOOK_SECRET) {
+      status = 'missing_config';
+      detail = 'STRIPE_WEBHOOK_SECRET not set — webhook signature verification fails';
+      warnings.push(
+        'STRIPE_WEBHOOK_SECRET not set — Stripe webhook signature verification will fail; checkout.session.completed events are ignored and subscriptions never activate'
+      );
+    }
+    evaluations.push({ feature: 'stripe_webhook', status, detail, warnings });
+  }
+
+  // ── cors ─────────────────────────────────────────────────────────────
+  {
+    const missing = !env.CORS_ORIGIN;
+    evaluations.push({
+      feature: 'cors',
+      status: missing ? 'missing_config' : 'ready',
+      detail: missing
+        ? 'CORS_ORIGIN not set — server reflects ANY origin (open CORS)'
+        : `CORS locked to ${env.CORS_ORIGIN as string}`,
+      warnings: missing
+        ? [
+            'CORS_ORIGIN not set — server reflects ANY origin (open CORS); set to the dashboard URL in production',
+          ]
+        : [],
+    });
+  }
+
+  // ── self_service_links (DASHBOARD_URL) ───────────────────────────────
+  {
+    const missing = !env.DASHBOARD_URL;
+    evaluations.push({
+      feature: 'self_service_links',
+      status: missing ? 'missing_config' : 'ready',
+      detail: missing
+        ? 'DASHBOARD_URL not set — emails, OAuth redirects, and Stripe URLs default to https://localhost:4000'
+        : `Links resolve to ${env.DASHBOARD_URL as string}`,
+      warnings: missing
+        ? [
+            'DASHBOARD_URL not set — emails, OAuth redirects, and Stripe success/cancel URLs default to https://localhost:4000 (broken in production)',
+          ]
+        : [],
+    });
+  }
+
+  // ── google_calendar ──────────────────────────────────────────────────
+  // Same condition envWarnings always tested (GOOGLE_CLIENT_ID only —
+  // calendar.ts gates the OAuth start on it).
+  {
+    const missing = !env.GOOGLE_CLIENT_ID;
+    evaluations.push({
+      feature: 'google_calendar',
+      status: missing ? 'disabled' : 'ready',
+      detail: missing
+        ? 'GOOGLE_CLIENT_ID not set — Google Calendar sync disabled'
+        : 'Google OAuth client configured',
+      warnings: missing ? ['GOOGLE_CLIENT_ID not set — Google Calendar sync disabled'] : [],
+    });
+  }
+
+  // ── agent_secret ─────────────────────────────────────────────────────
+  {
+    const missing = !env.AGENT_SECRET;
+    evaluations.push({
+      feature: 'agent_secret',
+      status: missing ? 'missing_config' : 'ready',
+      detail: missing
+        ? 'AGENT_SECRET not set — /agent-tools/* rejects all LiveKit worker calls'
+        : 'Agent shared secret configured',
+      warnings: missing
+        ? ['AGENT_SECRET not set — /agent-tools/* routes will reject all LiveKit worker calls']
+        : [],
+    });
+  }
+
+  // ── outlook_calendar (readiness-only; no legacy startup warning) ─────
+  // Condition mirrors calendar.ts's Outlook OAuth start (OUTLOOK_CLIENT_ID).
+  {
+    const missing = !env.OUTLOOK_CLIENT_ID || !env.OUTLOOK_CLIENT_SECRET;
+    evaluations.push({
+      feature: 'outlook_calendar',
+      status: missing ? 'disabled' : 'ready',
+      detail: missing
+        ? 'OUTLOOK_CLIENT_ID / OUTLOOK_CLIENT_SECRET not set — Outlook Calendar sync disabled'
+        : 'Outlook OAuth client configured',
+      warnings: [],
+    });
+  }
+
+  // ── square_crm (readiness-only) ──────────────────────────────────────
+  // Condition mirrors square.ts's OAuth start (SQUARE_CLIENT_ID/SECRET).
+  {
+    const missing = !env.SQUARE_CLIENT_ID || !env.SQUARE_CLIENT_SECRET;
+    evaluations.push({
+      feature: 'square_crm',
+      status: missing ? 'disabled' : 'ready',
+      detail: missing
+        ? 'SQUARE_CLIENT_ID / SQUARE_CLIENT_SECRET not set — Square sync disabled'
+        : 'Square OAuth client configured',
+      warnings: [],
+    });
+  }
+
+  // ── metrics_endpoint (readiness-only) ────────────────────────────────
+  // Condition mirrors health.ts: /metrics returns 404 when METRICS_TOKEN unset.
+  {
+    const missing = !env.METRICS_TOKEN;
+    evaluations.push({
+      feature: 'metrics_endpoint',
+      status: missing ? 'disabled' : 'ready',
+      detail: missing
+        ? 'METRICS_TOKEN not set — GET /metrics returns 404'
+        : 'Prometheus scrape endpoint enabled (Bearer-gated)',
+      warnings: [],
+    });
+  }
+
+  // ── observability (readiness-only) ───────────────────────────────────
+  // Paid vendors were deliberately declined 2026-07-02; "disabled" here is a
+  // recorded decision, not an oversight — the free stack (/metrics + Pino
+  // stdout + /ready) stands. No startup warning by design.
+  {
+    const sinks: string[] = [];
+    if (env.SENTRY_DSN) sinks.push('Sentry');
+    if (env.BETTER_STACK_TOKEN) sinks.push('Better Stack');
+    evaluations.push({
+      feature: 'observability',
+      status: sinks.length > 0 ? 'ready' : 'disabled',
+      detail:
+        sinks.length > 0
+          ? `External sinks active: ${sinks.join(' + ')}`
+          : 'No external sink (deliberate — free stack: /metrics + Pino stdout + /ready)',
+      warnings: [],
+    });
+  }
+
+  return evaluations;
+}
+
+/** The structured report: one row per capability, warnings stripped. */
+export function collectFeatureReadiness(ctx: FeatureReadinessContext): FeatureReadinessRow[] {
+  return evaluateCapabilities(ctx).map(({ feature, status, detail }) => ({
+    feature,
+    status,
+    detail,
+  }));
+}
+
+/**
+ * Convenience for callers that don't already hold resolved Telnyx values
+ * (the /admin/feature-readiness route). Applies the same `|| ''` defaults
+ * index.ts uses at boot.
+ */
+export function collectFeatureReadinessFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): FeatureReadinessRow[] {
+  return collectFeatureReadiness({
+    env,
+    TELNYX_API_KEY: env.TELNYX_API_KEY || '',
+    TELNYX_SIP_CONNECTION_ID: env.TELNYX_SIP_CONNECTION_ID || '',
+  });
+}

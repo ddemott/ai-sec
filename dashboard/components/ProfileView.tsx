@@ -1,11 +1,16 @@
 'use client';
 
-import React from 'react';
-import { User, Mail, Shield, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { User, Mail, Shield, Lock, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { useSessionContext } from '../lib/SessionContext';
 import { useTheme, THEMES } from '@/lib/ThemeContext';
+import { Api, forceLogout } from '../lib/api';
+import { useConfirm } from '../lib/useConfirm';
 import { Card } from './ui/Card';
+import { Button } from './ui/Button';
+import { ConfirmModal } from './ui/ConfirmModal';
+import { showToast } from './ui/Toast';
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Owner',
@@ -15,6 +20,42 @@ const ROLE_LABELS: Record<string, string> = {
 export default function ProfileView() {
   const { userName, userEmail, isAdmin, role } = useSessionContext();
   const { theme, setTheme } = useTheme();
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
+  const [revoking, setRevoking] = useState(false);
+
+  function handleRevokeAllSessions() {
+    confirmAction({
+      title: 'Log out of all sessions?',
+      message:
+        'Every device signed in to your account — including this one — will be logged out immediately. You will need to sign in again.',
+      confirmLabel: 'Log out everywhere',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        setRevoking(true);
+        // apiMutate rethrows network/fetch errors — without try/catch the button
+        // would stay stuck spinning with no feedback. On success we forceLogout()
+        // (hard nav), so the finally reset is effectively a no-op there; the catch
+        // is what rescues the throw path with a toast.
+        try {
+          const res = await Api.users.revokeMySessions();
+          if (res.success) {
+            // The current token is now invalid too — clear it and go to login.
+            forceLogout();
+          } else {
+            showToast(res.error || 'Could not log out of all sessions', 'error');
+          }
+        } catch (err) {
+          showToast(
+            err instanceof Error ? err.message : 'Could not log out of all sessions',
+            'error'
+          );
+        } finally {
+          setRevoking(false);
+        }
+      },
+    });
+  }
 
   return (
     <div
@@ -170,10 +211,26 @@ export default function ProfileView() {
                   Change password
                 </Link>
               </div>
+              <div className="pt-3 mt-3 border-t" style={{ borderColor: 'var(--border-soft)' }}>
+                <Button
+                  variant="danger"
+                  icon={LogOut}
+                  isLoading={revoking}
+                  onClick={handleRevokeAllSessions}
+                >
+                  Log out of all sessions
+                </Button>
+                <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                  Signs you out on every device, including this one. Use this if you left yourself
+                  logged in somewhere or suspect someone else has your password.
+                </p>
+              </div>
             </div>
           </fieldset>
         </Card>
       </div>
+
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }
