@@ -18,6 +18,7 @@ import { useActiveTenantId } from '../lib/SessionContext';
 import { formatHour } from '../lib/utils';
 import { EmptyState } from './ui/EmptyState';
 import ReminderDeliveryStats from './ReminderDeliveryStats';
+import UtilizationHeatmap from './UtilizationHeatmap';
 
 /**
  * Analytics — call + booking patterns.
@@ -817,6 +818,15 @@ export default function AnalyticsView() {
               </p>
             )}
           </MetricCard>
+        </div>
+
+        {/* Utilization heatmap — staffed vs booked time by weekday × hour.
+            Full-width (the hour columns need room) and honors the same
+            From/To window as the call + cohort cuts above. */}
+        <div className="mt-6">
+          <UtilizationHeatmap
+            range={{ start_date: startDate || undefined, end_date: endDate || undefined }}
+          />
         </div>
 
         {/* Reminder delivery monitoring */}

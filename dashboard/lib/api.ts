@@ -18,6 +18,7 @@ import type {
   AnalyticsStats,
   AnalyticsCalls,
   AnalyticsCohorts,
+  AnalyticsUtilization,
   AiCostSummary,
   Vocabulary,
   CoverageItem,
@@ -679,6 +680,9 @@ export const Api = {
 
     getCohorts: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
       apiFetch<AnalyticsCohorts>(`/analytics/cohorts`, analyticsQuery(tenantId, range)),
+
+    getUtilization: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
+      apiFetch<AnalyticsUtilization>(`/analytics/utilization`, analyticsQuery(tenantId, range)),
   },
 
   // --- REMINDERS (delivery monitoring) ---
