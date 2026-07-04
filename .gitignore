@@ -74,3 +74,6 @@ test-results/
 .netlify
 
 .trash/
+
+# Local Obsidian vault config (editor state — not source)
+.obsidian/

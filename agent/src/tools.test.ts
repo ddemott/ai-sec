@@ -511,6 +511,7 @@ describe('book_with_scheduling — confirm the ACTUAL booked time', () => {
     expect(parsed.time_changed).toBe(true);
     expect(parsed.booked_time).toBe('4:00 PM');
     expect(parsed.requested_time).toBe('4:30 PM');
+    expect(parsed.appointment_id).toBe('appt-confirm'); // preserved, not dropped
     const instruction = String(parsed.instruction);
     expect(instruction).toContain('4:00 PM'); // the actual slot
     expect(instruction).toContain('4:30 PM'); // what they asked

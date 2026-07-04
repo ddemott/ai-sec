@@ -106,12 +106,14 @@ function formatResponse(res: ToolResponse): string {
 function spokenClock(localNaive: string): string {
   const m = /T(\d{2}):(\d{2})/.exec(localNaive);
   if (!m) return localNaive;
-  let h = parseInt(m[1], 10);
-  const min = m[2];
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12;
-  if (h === 0) h = 12;
-  return `${h}:${min} ${ampm}`;
+  const h24 = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  // Guard out-of-range values (e.g. a malformed "T99:99") so we don't emit a
+  // bogus "99:99" spoken time — fall back to the raw input as documented.
+  if (h24 > 23 || min > 59) return localNaive;
+  const ampm = h24 >= 12 ? 'PM' : 'AM';
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h}:${m[2]} ${ampm}`;
 }
 
 /**
@@ -169,6 +171,7 @@ function formatBookingResponse(res: ToolResponse, requestedStart?: string): stri
   const withWhom = r.employee_name ? ` with ${r.employee_name}` : '';
   const payload: Record<string, unknown> = {
     success: true,
+    appointment_id: r.appointment_id ?? null,
     booked_time: spoken,
     employee: r.employee_name ?? null,
     instruction: `Booked${withWhom} for ${spoken}. Confirm THIS exact time (${spoken}) to the caller — it is the actual booked slot.`,
