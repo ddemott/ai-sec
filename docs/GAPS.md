@@ -55,7 +55,7 @@ From `docs/TODO.md` + `AIASSISTANT_GO_LIVE_TODO.md` + source:
 
 Voice booking + context + policy RAG + preferences + transfer (recently completed) are solid. Missing receptionist table stakes:
 
-- **No customer self-service at all**. No public booking widget/embed, customer portal or login, reschedule/cancel links in SMS/email, "manage my appointments" flow, or web callback request. Intake is voice-only + staff dashboard. (Confirmed by searches across code and docs.)
+- **SHIPPED (partial)** — **customer self-service reschedule/cancel links**: token-gated public pages (`src/routes/selfService.ts` + `dashboard/app/self/*`) + "Send self-service links" dashboard action + E2E. **Still missing**: public booking widget/embed, full customer portal/login, "manage all my appointments" hub, web callback request. Intake is still voice-only + staff dashboard.
 - **No waitlist, callback queue, or "call me back" tooling** beyond `transfer_call`. NULL `forward_phone` just takes a message.
 - **No-show / follow-up automation is thin**. Reminders exist (60s poll scheduler, retry columns, `GET /reminders/delivery-stats`, some UI). No auto no-show marking from external calendars, predictive scoring, auto-rebook offers, or waitlist promotion. Cancellations supported via API/UI; voice "cancel" flows limited.
 - **Call recordings absent from product**. `voice_sessions` now captures transcripts (`transcript.ts`), summaries (`callSummary.ts`), outcomes (`callOutcome.ts`), and `appointment_id` links (all recently wired). No audio storage, dashboard playback, redaction, or retention policy. (Upstream LiveKit/Telnyx recording possible but unwired.)
@@ -90,45 +90,9 @@ Current vs. desired for a complete receptionist:
 - Have: book, lookup, policy, basic transfer, preference capture, cancel, reschedule, my-appointments, take message.
 - Missing (lower priority): `page_owner_via_sms`, `get_detailed_customer_history` (beyond short context), real-time "is my tech running late?" status, warm transfer.
 
-**Customer Self-Service Action Links (P1 highest-leverage gap — repeatedly surfaces in strategy as support reducer)**
+**SHIPPED — Customer Self-Service Action Links** (was the P1 highest-leverage gap). Token-gated cancel/reschedule links generated + embedded in confirmations, public `/self/*` pages, dashboard "Send self-service links" button, token redemption + negative-case E2E all landed. Files: `src/routes/selfService.ts`, `dashboard/app/self/*`. Full original gap state + delivered design spec archived in `docs/RESOLVED.md` (2026-07-04 entry).
 
-Current state (confirmed 2026-06-15):
-
-- All notifications are one-way. SMS bodies in `src/services/communications/smsService.ts:204-210`:
-  - Confirmation: `✅ Confirmed: ${service} with ${staff} on ${dateTime}. Reply STOP to opt out.`
-  - Reminder: `🔔 Reminder: ... Reply STOP...`
-  - Cancellation: `❌ Cancelled...`
-- No URLs, no "tap to change", no "reply YES to confirm change".
-- `appointmentService.ts:139-213` builds the data but passes only service/staff/datetime; no action links generated.
-- Auth'd routes exist: `POST /appointments/:id/cancel` and `/reactivate` (`src/routes/appointments.ts:341-438`), but they require full tenant JWT + `withTenantClient`.
-- No unauthenticated or token-gated customer paths. Emails have password-reset style links (`systemEmail.ts`) but nothing for appointments.
-- `AppointmentData` interface (in communications/types) lacks any link fields.
-
-Minimal viable design (actionable spec):
-
-- Generate short-lived, single-use or short-expiry signed tokens (JWT with `appointment_id`, `action: 'cancel'|'reschedule'|'view'`, `tenant_id`, `exp`, signed by existing JWT_SECRET or dedicated secret).
-- Or opaque DB-backed tokens in a new small `appointment_action_tokens` table (appointment_id, action, token_hash, expires_at, used_at, one-time).
-- New route file or extension: e.g. unauthenticated-but-validated `POST /self-service/appointments/:appointment_id/cancel?token=...` (or better, a small dedicated router mounted without tenantMiddleware for these).
-  - Validate token matches appointment + tenant.
-  - Call the existing cancel logic (or share the RPC/service).
-  - Return simple success page (or redirect to a "your appointment was cancelled" branded static with rebook CTA).
-- Extend `AppointmentData` + email/SMS templates (both Handlebars in emailTemplates + the applySMSTemplate switch) to accept `actionLinks?: { rescheduleUrl?: string; cancelUrl?: string; manageUrl?: string }`.
-- In `appointmentService.ts` (and callers in reminders + appointment creation paths), after booking, generate the links using `DASHBOARD_URL` + `/self/...` + token and pass them down.
-- For SMS: use a URL shortener (or just full URL; keep total < 160 chars — possible with terse copy + one primary link e.g. "Change: https://.../a/123?tk=abc123").
-- Dashboard: on AppointmentDetailPanel or list, button "Send customer self-service links" (or auto-include on all confirmations going forward). Show which links were sent.
-- Edge cases: token expiry (clear error + "call us"), concurrent staff change (409 + explanation), already-cancelled (idempotent or informative), rate-limit the self-service actions.
-- Persistence: on success, write to `communications_history` + perhaps bump a `customer_action_via_self_service` metric.
-- DB impact: minimal (new optional column on appointments? or pure token table). Existing soft-delete/cascade already handles cleanup.
-- Tests: new integration test for token redemption (no auth header), E2E for "owner books → customer gets SMS with link → link cancels", negative cases (expired, wrong tenant, double use).
-- Comms consent: self-service actions should still respect opt-out (don't send links to opted-out).
-
-Why this is big: Turns the AI from "booker only" into full lifecycle receptionist. Directly attacks competitor weakness "receptionist is rigid / half-baked". Reduces owner phone time dramatically. Easy to A/B (include links or not).
-
-Risk of ignoring: Customers treat the AI as a one-way black box; every change becomes a support ticket or live transfer, eroding the "set it and forget it" promise.
-
----
-
-**Next-level voice tools that pair well with self-service** (after links exist): agent can offer "I can text you a link to reschedule yourself" instead of always doing it live.
+**Still open — next-level voice tools that pair with self-service**: agent proactively offers "I can text you a link to reschedule yourself" instead of always doing it live.
 
 ---
 
@@ -157,44 +121,21 @@ Backend (`src/routes/billing.ts`):
 
 Tiers (Solo/Growth/Pro) + price ID env vars exist.
 
-**Missing** (current state confirmed via grep + file reads 2026-06-15):
+**Everything from the original 2026-06-15 audit is SHIPPED** (billing UI `BillingView.tsx`, typed `billing` API namespace incl. `'professional'`, `automatic_tax` behind `STRIPE_AUTO_TAX=true`, Stripe Customer Portal via `POST /billing/portal`; full delivered spec archived in `docs/RESOLVED.md`, 2026-07-04 entry) **except**:
 
-- Zero in-app management UI inside the authenticated dashboard (no Billing tab/subview, no `BillingView.tsx` or equivalent, nothing in `My Business` / `SettingsView.tsx` / `ProfileView.tsx` beyond the landing page price cards and a `?billing=success` URL stamp in `dashboard/app/dashboard/page.tsx:98`).
-- `dashboard/lib/api.ts:784-791` has a tiny namespaced stub:
-  ```ts
-  billing: {
-    checkout: (tenantId: string, plan: 'solo' | 'growth') => ...  // note: no 'professional'
-    status: () => apiFetch<...>(`/billing/status`)
-  }
-  ```
-  Only used for post-Stripe redirect UX on the shell page; no polling, no plan cards, no upgrade CTAs in the main app.
-- Backend `src/routes/billing.ts` is complete for the happy path (customer upsert, metadata-driven plan, 3 webhook events, subscriptionGate) but `automatic_tax` is never passed to `checkout.sessions.create`.
-- No owner-visible current plan, usage against plan limits, invoices, or "manage billing" button (the Stripe Customer Portal URL is never generated or shown).
-- Never run against real Stripe (test-mode + `stripe listen` + full round-trip) per TODO.md.
-
-**Concrete owner billing experience that is needed**:
-
-- A "Billing" section (or card in My Business / Settings) that shows `subscription_status` + `subscription_plan` (from the status endpoint), current period, price, next bill.
-- Plan comparison or upgrade buttons that call the existing `/billing/checkout` and redirect to the returned `url` (Stripe Checkout).
-- "Manage payment method / invoices" button that creates and redirects to a Stripe Billing Portal session (one extra Stripe API call: `stripe.billingPortal.sessions.create({ customer, return_url })` — very little code).
-- On success/cancel redirects (already partially handled), refresh status and show toast ("Thanks! Your plan is now active").
-- Surface subscription gate errors nicely in UI (currently only 402 on API calls).
-- Metered add-ons later (see Cost section below).
-- Suggested quick win: implement the Stripe Customer Portal integration first (2-3 backend lines + one dashboard button + status polling). It gives invoices, payment methods, plan change, cancel for free without building all the UI yourself. Still need the "current plan" display + upgrade path to paid plans from Solo.
-
-This is P0 for any revenue. Without it, the backend billing code is write-only for the platform owner.
+- **STILL OPEN** — never run against real Stripe (test-mode + `stripe listen` + full round-trip). This is a Dale/env action, not code.
 
 ---
 
-**Usage / Cost Metering tie-in** (see also Reliability section): No way today for an owner to see "you had 87 calls last month, AI spend was ~$X". The `subscriptionGate` only knows static plan; nothing is metered or shown.
+**Usage / Cost Metering tie-in** (see also Reliability section): **SHIPPED** — AI spend is now metered (`ai_cost_events` table) and surfaced via `/analytics/ai-cost` + a breakdown in `AnalyticsView`. **Still open**: tying metered usage to Stripe as billing items, and soft/hard plan caps.
 
 ---
 
 ## 5. Onboarding, Knowledge & Setup
 
 - Wizard (solo + team modes), 30 business templates (now in seed + `business_templates` table), vocabulary system, first-run tour, setup progress pill, and `/demo` ephemeral tenant are strong.
-- **Website scan onboarding**: Core fetch + LLM extract + `knowledge_suggestion` staging + dedicated Step 7 (`Step7WebsiteScan.tsx`) + prefill of later policy questions step shipped 2026-06-12. Advanced per-question review UI with badges, full E2E coverage, simulate harness extension, cost/rate-limit guardrails, and docs updates still pending.
-- Knowledge base: File upload, `knowledgeIngestion.ts` (chunking + embeddings), pgvector RAG via `/agent-tools/policy-answer` + `shared/expandQueryForEmbedding.ts` (recent accuracy win). `simulate rag` harness reports 100% hit-rate on known seeds. Missing: periodic re-scan, source citations shown to caller, admin "explain this answer" debugger.
+- **Website scan onboarding**: Core fetch + LLM extract + `knowledge_suggestion` staging + dedicated Step 7 (`Step7WebsiteScan.tsx`) + prefill of later policy questions step shipped 2026-06-12. **SHIPPED since**: per-question suggestion review UI (`KnowledgeSuggestions`), scan happy-path + wizard click-path E2E, and cost/rate-limit guardrails (`src/services/scanRateLimit.ts`). **Still pending**: periodic re-scan of stale KB (deferred — needs a `last_scanned` column + is a cost/product call).
+- Knowledge base: File upload, `knowledgeIngestion.ts` (chunking + embeddings), pgvector RAG via `/agent-tools/policy-answer` + `shared/expandQueryForEmbedding.ts` (recent accuracy win). `simulate rag` harness reports 100% hit-rate on known seeds. **SHIPPED**: caller-facing source citations (`[From "<title>"]` in `policy-answer`) + admin "explain this answer" debugger (`POST /knowledge/explain` + `ExplainAnswerView`). **Still missing**: periodic re-scan.
 - Policy questions: Static bank + tenant customs.
 - No "import from existing calendar/CRM" step beyond the website scan.
 
@@ -206,8 +147,6 @@ Strong primitives (`EmptyState`, focus-trap Modal, Toast, Badge, etc.), role gat
 
 **Gaps** (many already in UX backlog / TODO.md):
 
-- No billing/plan management surface.
-- Calls tab now shows real transcripts + outcomes + appointment deep-links (recent).
 - Analytics (`AnalyticsView.tsx`): Real data from `/analytics/stats` + calls + conversion + abandonment + "Why Callers Reached Out" + reminder delivery stats (recent work). Still surface-level; lacks a true "ask anything over my transcripts" owner copilot.
 - Scheduler: Mature (single source `employee_schedule`, atomic RPCs with 5 specific error codes, overrides, quick-book). Pending items include full sub-view consolidation and neutral language on any remaining "grading" UI.
 - Wizard: Draft-state Phase B (hold services/employees/shifts/etc. in local state until final "Done"; discard on dismiss) still open (large).
@@ -268,11 +207,6 @@ Prompt system (tenant persona override via `{{ }}` placeholders, customer prefer
 
 **Gaps** (with concrete "what good looks like"):
 
-- No tenant-visible audit log ("who changed what when"). The `audit_log` table + trigger exists (SECURITY DEFINER to bypass RLS) but is platform-only; no owner-facing "Activity" or "History" view for their own data changes (customers, appointments, KB, config).
-- No full-tenant data export (portability / GDPR "right to portability").
-  - Should cover: tenants row (sanitized), all customers + notes + preferences, appointments (with links to calls), voice_sessions (transcripts, summaries, outcomes, caller_phone), tenant_docs (KB), employees/resources/services/shifts (config), communications_history, consent/opt-out records, reminder_schedules.
-  - Format: single downloadable ZIP of JSONL/CSV + manifest, or NDJSON stream. Triggered from dashboard (owner self-serve) or super-admin.
-  - New route sketch: `GET /export/tenant-data` (auth'd, streams or returns signed URL to object storage). Background job recommended for large tenants.
 - No explicit "right to be forgotten" flow beyond soft-delete + cascades (voice transcripts/summaries/notes remain).
   - Current soft-delete (`versionHistory.ts`, `deleted_customers_view`, restore RPC) is good for accidents but not for "erase my data".
   - Need a hard-purge path (GDPR/CCPA style) that: (a) redacts/anonymizes voice_sessions (null phone + transcript), (b) deletes or anonymizes customer notes/preferences, (c) keeps aggregate analytics if desired, (d) writes to audit.
@@ -281,7 +215,7 @@ Prompt system (tenant persona override via `{{ }}` placeholders, customer prefer
   - No worker or cron that purges `voice_sessions` + transcripts/summaries older than N days (configurable per tenant? or global 1-2 years).
   - Same for communication_history, old soft-deleted rows.
 - Call audio (if ever captured upstream) has zero retention/redaction/consent workflow. (LiveKit has Egress recording capability; Telnyx can record on the trunk. Nothing in the product wires storage (S3/Supabase Storage), playback in Calls tab, or per-call consent flag.)
-- TCPA SMS consent language not yet required at booking time (legal TODO). The consent system exists (`consentService.ts`, opt-out records, `communications/consent` routes) but the AI booking path does not surface or require explicit "I consent to SMS reminders" before the first confirmation SMS.
+- **SHIPPED (voice capture)** — the AI now records verbal SMS-reminder consent → `consent_records` via the `record_sms_consent` tool + `/agent-tools/record-consent`, with TCPA disclosures in the prompt (informational reminders only, never marketing; PR #178). **Still open (legal)**: final ToS/consent wording sign-off + confirming the disclosure fires before the first confirmation SMS in production.
 - Account lock is SQL-only (no UI for `password_changed_at` bump).
 - CORS still permissive by default in source.
 - No per-worker agent identity (single global secret).
@@ -295,7 +229,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 
 **Still light**:
 
-- No cohort, CLV, first-time-fix rate, or service-specific deep abandonment analysis.
+- **SHIPPED** — cohort (repeat-caller), CLV (`top_customers` by lifetime revenue), bookings-by-service, and service-specific abandonment (`abandonment_by_service`) via `GET /analytics/cohorts` + panels in `AnalyticsView`; optional From/To date-range filtering. **Still missing**: first-time-fix rate.
 - No owner "ask anything" copilot over their own call transcripts + KB + appointments.
 - Prometheus metrics (`booking_attempts_total`, `tool_calls_total`, `errors_total`, HTTP histograms, etc.) exist in `src/services/metrics.ts` but are token-gated ops-only.
 - No A/B testing surface for prompts/greetings per tenant.
@@ -330,7 +264,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 
 **Major gaps**:
 
-- Railway deploys **not gated** on CI green (P0).
+- **SHIPPED (partial)** — GitHub branch protection on `main` gates merges (and thus Railway deploys from `main`) on the 4 CI jobs green. **Still open**: enable Railway's own "Wait for CI" toggle on the 3 services for defense-in-depth.
 - Env var drift produces silent production failure modes (mocks, localhost URLs).
 - No canary / blue-green / feature flags.
 - Observability tokens not set → no metrics, no log aggregation, no Sentry in prod.
@@ -347,11 +281,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 - `RESOLVED.md`, `HANDOFF.md`, `SECURITY.md`, `TEST_COVERAGE.md`, `DEPLOYMENT.md`, `BETA_ONBOARDING.md`, `STRATEGY.md`, `COMPETITOR_WEAKPOINTS.md`, diagrams, session archives.
 - Drift detectors (`npm run verify:claude-md`, `verify:schema`), AGENTS.md mechanical refactor rules, 5W test comments, prepare-commit.
 
-**Gaps**:
-
-- Limited _public/user-facing_ documentation (owner admin guides, "how to read the analytics", telephony troubleshooting playbook).
-- Some older docs (e.g., DEPLOYMENT) have stale references to removed components (edge functions).
-- No runbook for common prod incidents ("agent silent", "reminders not sending", "Stripe webhook 400").
+**Gaps**: none open — previous items (owner admin guide `docs/OWNER_GUIDE.md`, incident/telephony runbook `docs/RUNBOOK.md`, stale edge-functions section removed from `docs/DEPLOYMENT.md`) all shipped; archived in `docs/RESOLVED.md` (2026-07-04 entry).
 
 ---
 
@@ -443,11 +373,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 
 This file was generated from a full-repo deep dive on 2026-06-15 and expanded same-day with deeper design specs on self-service (full token + template + route sketch), billing (API surface + Stripe Portal quick win), AI cost instrumentation points, data export/retention requirements, and comms actionability. It will decay if not maintained — run the drift detectors (`npm run verify:claude-md`) after touching related code/docs and update this file (add dated "Expanded" or "Closed" notes).
 
-**Inconsistencies spotted during expansion (low-hanging polish)**:
-
-- `dashboard/lib/api.ts` billing.checkout only types `'solo' | 'growth'` while backend + envs support 'professional'.
-- Landing page has full price cards + features; the logged-in app has almost none of that surface for existing tenants to upgrade.
-- No "professional" plan handling in some client paths.
+**Inconsistencies spotted during expansion (low-hanging polish)**: all three (billing.checkout plan typing, in-app billing surface, `'professional'` client paths) SHIPPED — archived in `docs/RESOLVED.md` (2026-07-04 entry).
 
 ---
 

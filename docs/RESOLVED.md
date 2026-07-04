@@ -828,3 +828,73 @@ Items executed (each independent, verifiable by grep + tsc/checks/verify):
 This keeps secondary docs from drifting after the 29/142 state (post PRs #56-67 etc). No prod impact, no migration, no runtime change. Ready for `npm run prepare-commit` style close if committing.
 
 **Test state note:** Units per CLAUDE ~1,940+790+360 (no new tests added in this mechanical pass).
+
+---
+
+## 2026-07-04 — GAPS.md trim: delivered specs moved here from GAPS.md
+
+GAPS.md is the "did we miss a whole category?" inventory — it should scan as *what's still missing*, not carry full design specs for shipped work. Two now-shipped design specs were moved out of GAPS.md verbatim (GAPS keeps a one-line `SHIPPED — <what> (<file/route>)` pointer). History preserved below.
+
+### Customer Self-Service Action Links (SHIPPED — see `src/routes/selfService.ts`, `dashboard/app/self/*`)
+
+Original 2026-06-15 gap state + delivered design spec:
+
+Current state (confirmed 2026-06-15):
+
+- All notifications were one-way. SMS bodies in `src/services/communications/smsService.ts:204-210`:
+  - Confirmation: `✅ Confirmed: ${service} with ${staff} on ${dateTime}. Reply STOP to opt out.`
+  - Reminder: `🔔 Reminder: ... Reply STOP...`
+  - Cancellation: `❌ Cancelled...`
+- No URLs, no "tap to change", no "reply YES to confirm change".
+- `appointmentService.ts:139-213` built the data but passed only service/staff/datetime; no action links generated.
+- Auth'd routes existed: `POST /appointments/:id/cancel` and `/reactivate` (`src/routes/appointments.ts:341-438`), but they required full tenant JWT + `withTenantClient`.
+- No unauthenticated or token-gated customer paths. Emails had password-reset style links (`systemEmail.ts`) but nothing for appointments.
+- `AppointmentData` interface (in communications/types) lacked any link fields.
+
+Minimal viable design (actionable spec — as delivered):
+
+- Generate short-lived, single-use or short-expiry signed tokens (JWT with `appointment_id`, `action: 'cancel'|'reschedule'|'view'`, `tenant_id`, `exp`, signed by existing JWT_SECRET or dedicated secret).
+- Or opaque DB-backed tokens in a new small `appointment_action_tokens` table (appointment_id, action, token_hash, expires_at, used_at, one-time).
+- New route file or extension: e.g. unauthenticated-but-validated `POST /self-service/appointments/:appointment_id/cancel?token=...` (or better, a small dedicated router mounted without tenantMiddleware for these).
+  - Validate token matches appointment + tenant.
+  - Call the existing cancel logic (or share the RPC/service).
+  - Return simple success page (or redirect to a "your appointment was cancelled" branded static with rebook CTA).
+- Extend `AppointmentData` + email/SMS templates (both Handlebars in emailTemplates + the applySMSTemplate switch) to accept `actionLinks?: { rescheduleUrl?: string; cancelUrl?: string; manageUrl?: string }`.
+- In `appointmentService.ts` (and callers in reminders + appointment creation paths), after booking, generate the links using `DASHBOARD_URL` + `/self/...` + token and pass them down.
+- For SMS: use a URL shortener (or just full URL; keep total < 160 chars — possible with terse copy + one primary link e.g. "Change: https://.../a/123?tk=abc123").
+- Dashboard: on AppointmentDetailPanel or list, button "Send customer self-service links" (or auto-include on all confirmations going forward). Show which links were sent.
+- Edge cases: token expiry (clear error + "call us"), concurrent staff change (409 + explanation), already-cancelled (idempotent or informative), rate-limit the self-service actions.
+- Persistence: on success, write to `communications_history` + perhaps bump a `customer_action_via_self_service` metric.
+- DB impact: minimal (new optional column on appointments? or pure token table). Existing soft-delete/cascade already handles cleanup.
+- Tests: new integration test for token redemption (no auth header), E2E for "owner books → customer gets SMS with link → link cancels", negative cases (expired, wrong tenant, double use).
+- Comms consent: self-service actions should still respect opt-out (don't send links to opted-out).
+
+Why this was big: Turns the AI from "booker only" into full lifecycle receptionist. Directly attacks competitor weakness "receptionist is rigid / half-baked". Reduces owner phone time dramatically. Easy to A/B (include links or not).
+
+### Owner Billing Experience (SHIPPED — see `dashboard/components/BillingView.tsx`, `POST /billing/portal`)
+
+Delivered spec (was "Concrete owner billing experience that is needed"):
+
+- A "Billing" section (or card in My Business / Settings) that shows `subscription_status` + `subscription_plan` (from the status endpoint), current period, price, next bill.
+- Plan comparison or upgrade buttons that call the existing `/billing/checkout` and redirect to the returned `url` (Stripe Checkout).
+- "Manage payment method / invoices" button that creates and redirects to a Stripe Billing Portal session (one extra Stripe API call: `stripe.billingPortal.sessions.create({ customer, return_url })`).
+- On success/cancel redirects, refresh status and show toast ("Thanks! Your plan is now active").
+- Surface subscription gate errors nicely in UI (currently only 402 on API calls).
+- Metered add-ons later (see Cost section).
+- Quick win realized: Stripe Customer Portal first (invoices, payment methods, plan change, cancel) + "current plan" display + upgrade path.
+
+**Still open (not code):** live-Stripe verification (test-mode + `stripe listen` + full round-trip) — a Dale/env action.
+
+### Fully-shipped one-liners purged from GAPS.md (2026-07-04 sweep)
+
+These closed items were annotated `SHIPPED` inline in GAPS.md; they had no remaining open tail, so the receipts now live here and the GAPS.md lines were removed:
+
+- Billing/plan management surface — `dashboard/components/BillingView.tsx` + Stripe Customer Portal (`POST /billing/portal`, `src/routes/billing.ts:228`).
+- `dashboard/lib/api.ts` `billing` namespace types `'solo' | 'growth' | 'professional'` + `status(tenantId)` (missing-`professional` stub fixed in checkout + all client billing paths).
+- `automatic_tax` passed to the Stripe checkout session (gated behind `STRIPE_AUTO_TAX=true`).
+- Owner "Delete old calls" soft-delete (single + bulk older-than-N-days) in `VoiceCallsView`.
+- Tenant-visible audit log — `GET /audit-log` (owner-gated, paginated, table + date filters) + `AuditLogView` (Setup → "Audit Log" sub-tab, old→new field diff); audit trail extended to services + employees (migration `20260622000000`).
+- Full-tenant data export — `GET /export/tenant-data` (`src/routes/exportData.ts`, owner-gated JSON dump of 25 tables, `password_hash` excluded) + "Download my data" button in `BusinessSettingsView`. Delivered as JSON, not ZIP-of-CSV, to avoid a new dep.
+- Owner admin guide + "how to read the analytics" — `docs/OWNER_GUIDE.md`.
+- Prod incident + telephony runbook — `docs/RUNBOOK.md` (agent-silent, reminders-not-sending, Stripe-webhook-400, backend-down, DB-pool-saturation, full Telnyx→LiveKit→agent path).
+- Stale edge-functions section removed from `docs/DEPLOYMENT.md` (phases renumbered).
