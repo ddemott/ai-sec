@@ -833,7 +833,7 @@ This keeps secondary docs from drifting after the 29/142 state (post PRs #56-67 
 
 ## 2026-07-04 — GAPS.md trim: delivered specs moved here from GAPS.md
 
-GAPS.md is the "did we miss a whole category?" inventory — it should scan as *what's still missing*, not carry full design specs for shipped work. Two now-shipped design specs were moved out of GAPS.md verbatim (GAPS keeps a one-line `SHIPPED — <what> (<file/route>)` pointer). History preserved below.
+GAPS.md is the "did we miss a whole category?" inventory — it should scan as *what's still missing*, not carry full design specs for shipped work. Two now-shipped design specs were moved out of GAPS.md, lightly edited to past tense (GAPS keeps a one-line `SHIPPED — <what> (<file/route>)` pointer). History preserved below.
 
 ### Customer Self-Service Action Links (SHIPPED — see `src/routes/selfService.ts`, `dashboard/app/self/*`)
 
