@@ -115,3 +115,19 @@ export function splitFullName(fullName: string): { first: string; last: string }
     last: rest.join(' ') || '',
   };
 }
+
+/**
+ * Trigger a client-side file download of in-memory text (CSV export etc.).
+ * Same anchor+ObjectURL mechanism as the "Download my data" JSON export.
+ */
+export function downloadTextFile(filename: string, text: string, mimeType: string): void {
+  const blob = new Blob([text], { type: mimeType });
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(href);
+}

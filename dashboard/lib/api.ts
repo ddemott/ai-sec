@@ -40,6 +40,7 @@ import type {
   AuditLogResponse,
   KnowledgeExplainResponse,
   TenantDataExportResponse,
+  CustomerImportResult,
 } from './types';
 
 export const API_BASE_URL =
@@ -344,6 +345,14 @@ export const Api = {
         `/customers/${customerId}/appointments`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
+
+    // Bulk CSV onboarding — the caller reads the file client-side (FileReader)
+    // and POSTs the raw text; the backend parses/validates/dedupes per row.
+    importCsv: (tenantId: string | null, csv: string) =>
+      apiMutate<CustomerImportResult>(`/customers/import`, 'POST', {
+        tenant_id: tenantId,
+        csv,
+      }),
   },
 
   // --- APPOINTMENTS ---
@@ -945,6 +954,43 @@ export const Api = {
         `/export/tenant-data`,
         tenantId ? { tenant_id: tenantId } : undefined
       ),
+
+    // CSV exports return text/csv, not JSON, so apiFetch (which json()s the
+    // body) can't be used — this is the one plain-text fetch in the client.
+    csv: async (
+      kind: 'customers' | 'appointments' | 'calls',
+      tenantId: string | null
+    ): Promise<string> => {
+      await ensureTokenFresh();
+      const params = tenantId ? `?${new URLSearchParams({ tenant_id: tenantId })}` : '';
+      let response: Response;
+      try {
+        response = await fetch(`${API_BASE_URL}/export/${kind}.csv${params}`, {
+          headers: getHeaders(),
+        });
+      } catch (err) {
+        handleFetchError(err);
+        throw err;
+      }
+      const authError = await checkAuthFailure(response);
+      if (authError) throw new Error(authError);
+      if (!response.ok) {
+        // Failures come back in the standard JSON { success, error } shape.
+        // Surface the human-readable `error` field (mirrors apiMutate) rather
+        // than throwing the raw JSON blob into a toast; fall back to the raw
+        // body when it isn't JSON (e.g. a proxy 502 HTML page).
+        const bodyText = await response.text();
+        let message = bodyText;
+        try {
+          const parsed = JSON.parse(bodyText) as { error?: unknown };
+          if (typeof parsed.error === 'string') message = parsed.error;
+        } catch {
+          // Non-JSON body — keep the raw text.
+        }
+        throw new Error(message || `API Error: ${response.status}`);
+      }
+      return response.text();
+    },
   },
 
   // --- BILLING ---
