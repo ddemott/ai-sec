@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Plus, ShieldCheck, UserCircle2, LogOut } from 'lucide-react';
 import { Api } from '../lib/api';
 import { useActiveTenantId } from '@/lib/SessionContext';
+import { useConfirm } from '../lib/useConfirm';
 import type { TeamUser } from '@/lib/types';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { ConfirmModal } from './ui/ConfirmModal';
 import { showToast } from './ui/Toast';
 import { EmptyState } from './ui/EmptyState';
 
@@ -34,6 +36,8 @@ export default function TeamAccessView() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
   const [pendingRoleId, setPendingRoleId] = useState<string | null>(null);
+  const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
+  const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
 
   const loadUsers = useCallback(async () => {
     if (!tenantId) return;
@@ -88,6 +92,38 @@ export default function TeamAccessView() {
     } else {
       showToast(res.error || 'Could not update role', 'error');
     }
+  };
+
+  const handleRevokeSessions = (user: TeamUser) => {
+    confirmAction({
+      title: `Log out ${user.full_name || user.email}?`,
+      message: `${user.email} will be signed out on every device immediately. They can sign back in with their existing password — use "change role" or a password reset if you need to remove access entirely.`,
+      confirmLabel: 'Log out their sessions',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        if (!tenantId) return;
+        setPendingRevokeId(user.user_id);
+        // apiMutate rethrows network/fetch errors — without try/catch the row
+        // would stay stuck in its loading state with no feedback. finally always
+        // clears the flag; catch surfaces the failure via the toast system.
+        try {
+          const res = await Api.users.revokeUserSessions(user.user_id, tenantId);
+          if (res.success) {
+            showToast(`${user.email} has been logged out everywhere`, 'success');
+          } else {
+            showToast(res.error || 'Could not log out their sessions', 'error');
+          }
+        } catch (err) {
+          showToast(
+            err instanceof Error ? err.message : 'Could not log out their sessions',
+            'error'
+          );
+        } finally {
+          setPendingRevokeId(null);
+        }
+      },
+    });
   };
 
   return (
@@ -194,6 +230,19 @@ export default function TeamAccessView() {
                     <option value="owner">Owner</option>
                     <option value="front_desk">Front Desk</option>
                   </select>
+                  {!u.is_self && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={LogOut}
+                      isLoading={pendingRevokeId === u.user_id}
+                      onClick={() => handleRevokeSessions(u)}
+                      aria-label={`Log out ${u.email}'s sessions`}
+                      title={`Sign ${u.email} out on every device`}
+                    >
+                      Log out sessions
+                    </Button>
+                  )}
                 </div>
               </li>
             ))}
@@ -290,6 +339,8 @@ export default function TeamAccessView() {
           </p>
         </form>
       </Modal>
+
+      <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
   );
 }

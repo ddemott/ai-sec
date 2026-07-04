@@ -498,6 +498,15 @@ export const Api = {
         tenant_id: tenantId,
         role,
       }),
+
+    // "Log out everywhere" — bumps the caller's own password_changed_at so
+    // every outstanding JWT (including the current one) is rejected. The
+    // caller must forceLogout() immediately after a success.
+    revokeMySessions: () => apiMutate(`/users/me/revoke-sessions`, 'POST'),
+
+    // Owner action: kill all of a staff member's sessions (same tenant only).
+    revokeUserSessions: (id: string, tenantId: string | null) =>
+      apiMutate(`/users/${id}/revoke-sessions`, 'POST', { tenant_id: tenantId }),
   },
 
   // --- MAPPINGS ---

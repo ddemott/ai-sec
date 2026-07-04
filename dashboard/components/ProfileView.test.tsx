@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
@@ -15,6 +15,20 @@ let mockTheme = 'dark';
 let mockUserName: string | null = 'Dale Cooper';
 let mockUserEmail: string | null = 'dale@secretaryhq.com';
 let mockIsAdmin = false;
+
+// Session-revoke collaborators — the api call, the hard-logout, and the toast.
+const mockRevokeMySessions = vi.fn();
+const mockForceLogout = vi.fn();
+const mockShowToast = vi.fn();
+
+vi.mock('../lib/api', () => ({
+  Api: { users: { revokeMySessions: () => mockRevokeMySessions() } },
+  forceLogout: () => mockForceLogout(),
+}));
+
+vi.mock('./ui/Toast', () => ({
+  showToast: (...args: unknown[]) => mockShowToast(...args),
+}));
 
 vi.mock('../lib/SessionContext', () => ({
   useSessionContext: () => ({
@@ -165,6 +179,51 @@ describe('ProfileView', () => {
       // WHO: user with empty name | WHAT: empty string handling
       // WHEN: empty string in session | WHERE: Account section
       // WHY: empty string is falsy, should fall back
+    });
+  });
+
+  describe('Revoke all sessions', () => {
+    test('SAD: a thrown api error resets the button and toasts (no forceLogout)', async () => {
+      // WHO: a user clicking "Log out of all sessions" when the request throws
+      //      (network drop / api rethrow) rather than returning {success:false}.
+      // WHAT: the onConfirm handler must catch the throw, show an error toast,
+      //       reset `revoking` in finally so the button stops spinning, and must
+      //       NOT call forceLogout (we only leave the page on a real success).
+      // WHEN: Api.users.revokeMySessions() rejects.
+      // WHERE: handleRevokeAllSessions try/catch/finally in ProfileView.
+      // WHY: before the fix the throw skipped setRevoking(false), leaving the
+      //      danger button permanently disabled with zero feedback.
+      mockRevokeMySessions.mockRejectedValueOnce(new Error('boom'));
+      render(<ProfileView />);
+
+      fireEvent.click(screen.getByRole('button', { name: /log out of all sessions/i }));
+      // Confirm in the modal (danger confirmLabel).
+      fireEvent.click(await screen.findByRole('button', { name: /log out everywhere/i }));
+
+      await waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(expect.stringMatching(/boom/i), 'error');
+      });
+      // Success-only side effect must NOT fire on the throw path.
+      expect(mockForceLogout).not.toHaveBeenCalled();
+      // The button is released from its loading state.
+      const button = screen.getByRole('button', { name: /log out of all sessions/i });
+      await waitFor(() => expect(button).not.toBeDisabled());
+    });
+
+    test('HAPPY: a successful revoke calls forceLogout (page unmounts)', async () => {
+      // WHO: a user confirming the self-revoke successfully.
+      // WHAT: on {success:true} the handler calls forceLogout() to clear the
+      //       now-invalid token and hard-navigate to login.
+      // WHERE: handleRevokeAllSessions success branch in ProfileView.
+      // WHY: pins that the finally-reset refactor kept the success behavior.
+      mockRevokeMySessions.mockResolvedValueOnce({ success: true });
+      render(<ProfileView />);
+
+      fireEvent.click(screen.getByRole('button', { name: /log out of all sessions/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /log out everywhere/i }));
+
+      await waitFor(() => expect(mockForceLogout).toHaveBeenCalledTimes(1));
+      expect(mockShowToast).not.toHaveBeenCalled();
     });
   });
 

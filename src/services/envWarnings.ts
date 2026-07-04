@@ -5,66 +5,16 @@
  * and emits each string via console.warn. Separating the decision from
  * the side-effect means a new contributor who adds a warning can't
  * accidentally forget a test, and the existing ones can't silently rot.
+ *
+ * 2026-07-04: the underlying env-var conditions (and the warning strings)
+ * now live in featureReadiness.ts so the boot warnings and the structured
+ * feature-readiness report (GET /admin/feature-readiness) can never drift
+ * apart — this module is a thin flatMap over the shared evaluations.
  */
-export interface EnvWarningContext {
-  env: NodeJS.ProcessEnv;
-  /** Resolved values the caller already computed (defaults applied). */
-  TELNYX_API_KEY: string;
-  TELNYX_SIP_CONNECTION_ID: string;
-}
+import { evaluateCapabilities, type FeatureReadinessContext } from './featureReadiness';
+
+export type EnvWarningContext = FeatureReadinessContext;
 
 export function collectStartupWarnings(ctx: EnvWarningContext): string[] {
-  const warnings: string[] = [];
-  const { env, TELNYX_API_KEY, TELNYX_SIP_CONNECTION_ID } = ctx;
-
-  if (!TELNYX_API_KEY) {
-    warnings.push(
-      'TELNYX_API_KEY not set — phone provisioning and SMS OTP disabled (voice calls with blocked caller-ID cannot complete bookings)'
-    );
-  }
-  if (TELNYX_API_KEY && !TELNYX_SIP_CONNECTION_ID) {
-    warnings.push(
-      'TELNYX_SIP_CONNECTION_ID not set — phone provisioning will return 503 (purchased numbers cannot be routed to LiveKit)'
-    );
-  }
-  if (TELNYX_API_KEY && !env.TELNYX_PHONE_NUMBER) {
-    warnings.push(
-      'TELNYX_PHONE_NUMBER not set — reminder and notification SMS will be sent without a valid from number (messages will fail or be undeliverable)'
-    );
-  }
-  if (!env.EMAIL_USER || !env.EMAIL_PASS) {
-    warnings.push(
-      'EMAIL_USER / EMAIL_PASS not set — email notifications are running in mock mode and will never deliver'
-    );
-  }
-  if (!env.STRIPE_SECRET_KEY) {
-    warnings.push(
-      'STRIPE_SECRET_KEY not set — billing and subscription management disabled (all /billing/* routes return 503)'
-    );
-  }
-  if (env.STRIPE_SECRET_KEY && !env.STRIPE_WEBHOOK_SECRET) {
-    warnings.push(
-      'STRIPE_WEBHOOK_SECRET not set — Stripe webhook signature verification will fail; checkout.session.completed events are ignored and subscriptions never activate'
-    );
-  }
-  if (!env.CORS_ORIGIN) {
-    warnings.push(
-      'CORS_ORIGIN not set — server reflects ANY origin (open CORS); set to the dashboard URL in production'
-    );
-  }
-  if (!env.DASHBOARD_URL) {
-    warnings.push(
-      'DASHBOARD_URL not set — emails, OAuth redirects, and Stripe success/cancel URLs default to https://localhost:4000 (broken in production)'
-    );
-  }
-  if (!env.GOOGLE_CLIENT_ID) {
-    warnings.push('GOOGLE_CLIENT_ID not set — Google Calendar sync disabled');
-  }
-  if (!env.AGENT_SECRET) {
-    warnings.push(
-      'AGENT_SECRET not set — /agent-tools/* routes will reject all LiveKit worker calls'
-    );
-  }
-
-  return warnings;
+  return evaluateCapabilities(ctx).flatMap((capability) => capability.warnings);
 }
