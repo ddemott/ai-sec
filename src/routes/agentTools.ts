@@ -45,6 +45,14 @@ import {
 } from '../services/syncOrchestrator';
 import { toolCallsTotal, bookingAttemptsTotal, errorsTotal } from '../services/metrics';
 import { sendJobInquiryEmail } from '../services/communications/systemEmail';
+import { SMSService } from '../services/communications/smsService';
+import { ConsentService } from '../services/consentService';
+import { createDatabaseService } from '../database/index';
+import { createTenantConfigService } from '../services/tenants/index';
+import {
+  buildCancelLink,
+  buildRescheduleLink,
+} from '../services/communications/appointmentService';
 import {
   selectAssignments,
   type ResourceCandidate,
@@ -212,6 +220,42 @@ const TakeMessageSchema = z.object({
   caller_phone: z.string().optional(),
   message: z.string().min(1).max(2000),
   call_id: z.string().optional(),
+});
+
+// page-owner — urgent mid-call SMS page to the business owner. Distinct from
+// take-message (no full message intake needed): the agent fires it the moment
+// a caller reports something escalation-worthy. Persists a customer_messages
+// row (message prefixed "[URGENT PAGE]" — no new table/migration needed) ONLY
+// when the owner is actually pageable, so a failed page cleanly falls back to
+// take_message without double-recording.
+const PageOwnerSchema = z.object({
+  tenant_id: z.string().uuid(),
+  caller_name: z.string().min(1).max(200),
+  callback_phone: z.string().max(50).optional(),
+  caller_phone: z.string().optional(),
+  reason: z.string().min(1).max(500),
+  call_id: z.string().min(1).optional(),
+});
+
+// customer-history — deeper caller history than customer-context: last ~10
+// appointments (any status, with service/employee/date/status), saved
+// preferences, and the last ~3 post-call summaries from voice_sessions.
+// Phone is server-injected by the agent from session context (same trust
+// model as my-appointments) — the LLM never supplies it.
+const CustomerHistorySchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+});
+
+// send-self-service-link — text the caller a secure cancel/reschedule link for
+// one of their own upcoming appointments (default: the next one). Reuses the
+// selfServiceToken machinery via appointmentService's exported link builders.
+// Ownership is phone-gated exactly like cancel/reschedule; the SMS goes through
+// the consent-gated SMSService (opt-outs respected).
+const SendSelfServiceLinkSchema = z.object({
+  tenant_id: z.string().uuid(),
+  phone: z.string().min(5),
+  appointment_id: z.string().uuid().optional(),
 });
 
 // capture-job-inquiry — structured intake when a recruiter asks whether the
@@ -398,9 +442,10 @@ function toolRoute<T>(
   handler: (args: T, reply: FastifyReply) => Promise<unknown>,
   errorMessage: string
 ): void {
-  // Strip the "/agent-tools/" prefix so the metric label matches the tool
-  // name the LLM uses in its prompt (e.g. "book-with-scheduling"). Cardinality
-  // is bounded by the number of registered tools (11 today).
+  // Strip the "/agent-tools/" prefix to derive the metric label — the
+  // kebab-case ROUTE name (e.g. "book-with-scheduling"), not the snake_case
+  // LLM tool name. Cardinality is bounded by the number of registered
+  // agent-tools routes.
   const toolName = path.replace(/^\/agent-tools\//, '');
   app.post(
     path,
@@ -483,6 +528,14 @@ export function registerAgentToolRoutes(
   if (!AGENT_SECRET) {
     app.log.warn('AGENT_SECRET not set — /agent-tools/* routes will reject all requests');
   }
+
+  // Consent-gated SMS path for send-self-service-link. Same construction as
+  // registerCommunicationRoutes — the SMSService checks consent (and thus
+  // opt-outs, which revoke consent) before every send, so the agent tool can
+  // never text an opted-out number. Constructors are lazy (no pool I/O until
+  // a query runs), so this is safe to build eagerly at registration time.
+  const consentService = new ConsentService(createDatabaseService(pool));
+  const smsService = new SMSService(createTenantConfigService(pool), consentService);
 
   // Constant-time string comparison. Returns false if lengths differ
   // (length itself leaks but is negligible vs per-character timing) or
@@ -2152,6 +2205,133 @@ export function registerAgentToolRoutes(
     'Failed to save message'
   );
 
+  // page-owner — urgent mid-call SMS page to the business owner. The agent
+  // fires this the moment a caller reports something escalation-worthy; it is
+  // NOT a full take_message intake (no long message body — a one-line reason).
+  // Reuses the take-message owner-notification path (owner_phone ?? forward_phone
+  // as destination, inbound_phone as sender). Order of operations matters:
+  //   1. Check the owner is pageable FIRST — if not, fail gracefully BEFORE
+  //      persisting anything, so the LLM's fallback take_message doesn't
+  //      double-record the same content.
+  //   2. Persist a customer_messages row ("[URGENT PAGE] ..." — schema is
+  //      frozen, so the prefix is the type flag) as the durable trace.
+  //   3. Send the SMS. A send failure keeps the row (owner still sees it on
+  //      the dashboard) but reports failure so the agent pivots to a message.
+  toolRoute(
+    app,
+    '/agent-tools/page-owner',
+    PageOwnerSchema,
+    async (args, reply) => {
+      const callbackPhone = args.callback_phone ? normalizePhone(args.callback_phone) : null;
+      const callerPhone = args.caller_phone ? normalizePhone(args.caller_phone) : null;
+
+      // 1. Pageability check before any write.
+      const tenant = await withTenantClient(args.tenant_id, (client) =>
+        client.query<{
+          owner_phone: string | null;
+          forward_phone: string | null;
+          inbound_phone: string | null;
+        }>(`SELECT owner_phone, forward_phone, inbound_phone FROM tenants WHERE tenant_id = $1`, [
+          args.tenant_id,
+        ])
+      );
+      const notifyPhone = tenant.rows[0]?.owner_phone ?? tenant.rows[0]?.forward_phone ?? null;
+      const inboundPhone = tenant.rows[0]?.inbound_phone ?? null;
+      const normalizedNotify = notifyPhone ? normalizePhone(notifyPhone) : null;
+      const normalizedInbound = inboundPhone ? normalizePhone(inboundPhone) : null;
+      if (
+        !normalizedNotify ||
+        !normalizedInbound ||
+        !isValidPhone(normalizedNotify) ||
+        !isValidPhone(normalizedInbound)
+      ) {
+        // 5W: WHO tenant, WHAT page_owner unconfigured, WHERE this route,
+        // WHY no valid owner/inbound number. Metric so a tenant whose pages
+        // silently never work is visible without log spelunking.
+        errorsTotal.inc({ event: 'page_owner_not_configured' });
+        app.log.warn(
+          {
+            event: 'page_owner_not_configured',
+            tenantId: args.tenant_id,
+            notifyPhone,
+            inboundPhone,
+          },
+          'page_owner: no SMS-capable owner number configured — page not sent, agent told to take a message'
+        );
+        return fail(
+          reply,
+          "The owner doesn't have a text-capable number set up, so I can't page them right now. Offer to take a message instead."
+        );
+      }
+
+      // 2. Durable trace — a customer_messages row flagged as an urgent page.
+      const row = await withTenantClient(args.tenant_id, async (client) => {
+        let customerId: string | null = null;
+        const lookupPhone = callerPhone ?? callbackPhone;
+        if (lookupPhone && isValidPhone(lookupPhone)) {
+          const cust = await client.query<{ customer_id: string }>(
+            `SELECT customer_id FROM customers
+             WHERE tenant_id = $1 AND phone = $2
+               AND (is_deleted IS NULL OR is_deleted = false)
+             LIMIT 1`,
+            [args.tenant_id, lookupPhone]
+          );
+          customerId = cust.rows[0]?.customer_id ?? null;
+        }
+        const res = await client.query<{ message_id: string }>(
+          `INSERT INTO customer_messages
+             (tenant_id, customer_id, caller_phone, caller_name, callback_phone, message, call_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING message_id`,
+          [
+            args.tenant_id,
+            customerId,
+            callerPhone,
+            args.caller_name,
+            callbackPhone,
+            `[URGENT PAGE] ${args.reason}`,
+            args.call_id ?? null,
+          ]
+        );
+        return { message_id: res.rows[0]?.message_id ?? null };
+      });
+
+      // 3. The page itself.
+      const callbackDisplay = callbackPhone ?? callerPhone ?? 'no number left';
+      const body =
+        `URGENT page from ${args.caller_name} (${callbackDisplay}): ` +
+        `${args.reason.slice(0, 300)}${args.reason.length > 300 ? '…' : ''}` +
+        ' — via SecretaryHQ';
+      const sms = await sendSms({ from: normalizedInbound, to: normalizedNotify, body });
+      if (!sms.ok) {
+        // 5W: page row saved, SMS failed — the whole point of the tool (an
+        // IMMEDIATE page) did not happen, so this is a failure to the LLM.
+        errorsTotal.inc({ event: 'page_owner_sms_failed' });
+        app.log.error(
+          {
+            event: 'page_owner_sms_failed',
+            tenantId: args.tenant_id,
+            notifyPhone: normalizedNotify,
+            message_id: row.message_id,
+            error: sms.error,
+          },
+          'page_owner: SMS send failed — page recorded on dashboard but owner NOT paged'
+        );
+        return fail(
+          reply,
+          "I couldn't reach the owner by text just now. Offer to take a message instead."
+        );
+      }
+
+      return ok(reply, {
+        paged: true,
+        message_id: row.message_id,
+        message: 'The owner has been paged by text with the caller details.',
+      });
+    },
+    'Failed to page the owner'
+  );
+
   // capture-job-inquiry — persist a structured work/job inquiry + email the owner.
   // The agent runs a deterministic intake (company, contract vs full-time, rate,
   // duration, onsite/remote/hybrid, address/timezone) and calls this once it has
@@ -2308,6 +2488,227 @@ export function registerAgentToolRoutes(
       return ok(reply, { appointments: rows.rows });
     },
     'Failed to fetch appointments'
+  );
+
+  // customer-history — deeper history than customer-context: last ~10
+  // appointments (ANY status — past + upcoming, with service/employee/date/
+  // status), the saved preferences map, and the last ~3 post-call summaries
+  // from voice_sessions. Phone is server-injected by the agent (session
+  // context, same trust model as my-appointments) so the LLM can never
+  // enumerate another caller's history.
+  toolRoute(
+    app,
+    '/agent-tools/customer-history',
+    CustomerHistorySchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!normalized) {
+        return ok(reply, 'New caller - no history found.');
+      }
+
+      const data = await withTenantClient(args.tenant_id, async (client) => {
+        const cust = await client.query<{
+          customer_id: string;
+          name: string;
+          preferences: Record<string, unknown> | null;
+        }>(
+          `SELECT customer_id, name,
+                  COALESCE(metadata->'preferences', '{}'::jsonb) AS preferences
+           FROM customers
+           WHERE tenant_id = $1 AND phone = $2
+             AND (is_deleted IS NULL OR is_deleted = false)`,
+          [args.tenant_id, normalized]
+        );
+        if (cust.rows.length === 0) return null;
+        const customer = cust.rows[0];
+
+        const appts = await client.query<{
+          start_time: string;
+          status: string;
+          description: string | null;
+          service_name: string | null;
+          employee_name: string | null;
+        }>(
+          `SELECT a.start_time, a.status, a.description,
+                  s.name AS service_name,
+                  e.name AS employee_name
+           FROM appointments a
+           LEFT JOIN services s ON a.service_id = s.service_id AND s.tenant_id = a.tenant_id
+           LEFT JOIN employees e ON a.employee_id = e.employee_id AND e.tenant_id = a.tenant_id
+           WHERE a.tenant_id = $1 AND a.customer_id = $2
+             AND (a.is_deleted IS NULL OR a.is_deleted = false)
+           ORDER BY a.start_time DESC
+           LIMIT 10`,
+          [args.tenant_id, customer.customer_id]
+        );
+
+        // Post-call summaries live on voice_sessions.summary (written by the
+        // agent's callSummary at finalize). Match by customer_id OR the raw
+        // phone — forwarded-line calls may have caller_phone backfilled but no
+        // customer link (or vice versa).
+        const sums = await client.query<{ summary: string; started_at: string }>(
+          `SELECT summary, started_at
+           FROM voice_sessions
+           WHERE tenant_id = $1
+             AND (customer_id = $2 OR caller_phone = $3)
+             AND summary IS NOT NULL
+             AND (is_deleted IS NULL OR is_deleted = false)
+           ORDER BY started_at DESC
+           LIMIT 3`,
+          [args.tenant_id, customer.customer_id, normalized]
+        );
+
+        return { customer, appointments: appts.rows, summaries: sums.rows };
+      });
+
+      if (!data) return ok(reply, 'New caller - no history found.');
+      return ok(reply, {
+        name: data.customer.name || 'Unknown',
+        preferences: data.customer.preferences ?? {},
+        appointments: data.appointments,
+        recent_call_summaries: data.summaries,
+      });
+    },
+    'Failed to fetch customer history'
+  );
+
+  // send-self-service-link — text the caller a secure cancel/reschedule link
+  // for ONE of their own upcoming appointments (default: the next one).
+  // Ownership is phone-gated exactly like cancel/reschedule (the phone is
+  // server-injected by the agent). Token + URL generation reuses the exported
+  // appointmentService builders (the same path confirmations and the dashboard
+  // "Send self-service links" action use). The SMS goes through the
+  // consent-gated SMSService — an opted-out / never-consented number gets a
+  // graceful conversational error, never a text.
+  toolRoute(
+    app,
+    '/agent-tools/send-self-service-link',
+    SendSelfServiceLinkSchema,
+    async (args, reply) => {
+      const normalized = normalizePhone(args.phone);
+      if (!normalized || !isValidPhone(normalized)) {
+        return fail(reply, 'Invalid phone number');
+      }
+
+      // Resolve the target appointment under THIS caller's phone only.
+      const appt = await withTenantClient(args.tenant_id, async (client) => {
+        const res = await client.query<{
+          appointment_id: string;
+          start_time: string;
+          description: string | null;
+          tenant_timezone: string | null;
+        }>(
+          `SELECT a.appointment_id, a.start_time, a.description, t.timezone AS tenant_timezone
+           FROM appointments a
+           JOIN customers c ON a.customer_id = c.customer_id
+           JOIN tenants t ON a.tenant_id = t.tenant_id
+           WHERE a.tenant_id = $1 AND c.phone = $2
+             AND a.status = 'scheduled' AND a.start_time > NOW()
+             AND (a.is_deleted IS NULL OR a.is_deleted = false)
+             AND (c.is_deleted IS NULL OR c.is_deleted = false)
+             AND ($3::uuid IS NULL OR a.appointment_id = $3::uuid)
+           ORDER BY a.start_time ASC
+           LIMIT 1`,
+          [args.tenant_id, normalized, args.appointment_id ?? null]
+        );
+        return res.rows[0] ?? null;
+      });
+
+      if (!appt) {
+        return fail(
+          reply,
+          "I couldn't find an upcoming appointment under your number to send a link for."
+        );
+      }
+
+      // Consent gate — same checkConsent the SMSService uses internally, run
+      // up front so the LLM gets a specific, relayable reason (opt-outs revoke
+      // consent, so STOP'd numbers fail here too). SMSService re-checks on send.
+      const canText = await consentService.checkConsent(
+        args.tenant_id,
+        undefined,
+        normalized,
+        'sms'
+      );
+      if (!canText) {
+        return fail(
+          reply,
+          "This number hasn't agreed to receive texts from us, so I can't send the link. Offer to handle the reschedule or cancellation right here on the call instead."
+        );
+      }
+
+      const cancelLink = buildCancelLink(appt.appointment_id, args.tenant_id);
+      const rescheduleLink = buildRescheduleLink(appt.appointment_id, args.tenant_id);
+      if (!cancelLink || !rescheduleLink) {
+        // 5W: WHO tenant, WHAT link generation failed, WHERE this route, WHY
+        // no DASHBOARD_URL/BACKEND_PUBLIC_URL or empty JWT_SECRET. Metric so a
+        // misconfigured environment is visible, not a silent per-call shrug.
+        errorsTotal.inc({ event: 'self_service_link_unconfigured' });
+        app.log.warn(
+          {
+            event: 'self_service_link_unconfigured',
+            tenantId: args.tenant_id,
+            appointmentId: appt.appointment_id,
+          },
+          'send_self_service_link: link generation unavailable (missing public URL or JWT secret) — agent told to handle it live'
+        );
+        return fail(
+          reply,
+          "I can't send self-service links right now. Offer to handle the reschedule or cancellation on the call instead."
+        );
+      }
+
+      // Format the date in the TENANT's IANA timezone (fallback UTC) so the
+      // caller sees the correct calendar date — the server default zone can be
+      // a day off for a tenant in a different region.
+      const dateStr = new Intl.DateTimeFormat('en-US', {
+        timeZone: appt.tenant_timezone || 'UTC',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }).format(new Date(appt.start_time));
+      const body =
+        `Your ${appt.description ?? 'appointment'} on ${dateStr} — ` +
+        `Cancel: ${cancelLink} Reschedule: ${rescheduleLink} ` +
+        `Reply STOP to opt out.`;
+
+      // sendSMS re-throws RateLimitedError (per-tenant token bucket) — catch it
+      // (and anything else) into the same graceful shape: a 500 to the agent
+      // would be read as a technical glitch, but "try again on the call" is the
+      // right conversational recovery either way (RULE 5.4).
+      let smsResult: { success: boolean; error?: string };
+      try {
+        smsResult = await smsService.sendSMS(args.tenant_id, { to: normalized, body });
+      } catch (err) {
+        smsResult = { success: false, error: err instanceof Error ? err.message : 'send threw' };
+      }
+      if (!smsResult.success) {
+        // 5W: consent passed but the send failed (provider error, rate limit,
+        // missing tenant config). The caller was PROMISED a text — surface it.
+        errorsTotal.inc({ event: 'self_service_link_sms_failed' });
+        app.log.error(
+          {
+            event: 'self_service_link_sms_failed',
+            tenantId: args.tenant_id,
+            appointmentId: appt.appointment_id,
+            error: smsResult.error,
+          },
+          'send_self_service_link: SMS send failed — caller did not receive the link'
+        );
+        return fail(
+          reply,
+          "I couldn't send the text just now. Offer to handle the reschedule or cancellation right here on the call instead."
+        );
+      }
+
+      return ok(reply, {
+        sent: true,
+        appointment_id: appt.appointment_id,
+        message:
+          'Text sent — the caller will receive a link to cancel or reschedule that appointment themselves.',
+      });
+    },
+    'Failed to send self-service link'
   );
 
   // cancel-appointment — soft-cancel a scheduled appointment owned by the caller.

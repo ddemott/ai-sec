@@ -64,7 +64,7 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - **No rich media during calls** (e.g., photo of tire damage for auto shops).
 - **Outcome classification is good** (`callClassify.ts`: booked / no_availability / wrong_service / price / message / info + abandoned) but not yet driving automations (e.g., price-sensitive follow-up SMS).
 
-**Agent tools** (`agent/src/tools.ts` — 20 tools as of 2026-07-03):
+**Agent tools** (`agent/src/tools.ts` — 23 tools as of 2026-07-04):
 
 - `get_customer_context`: CRM lookup + history + preferences (called early when caller ID present).
 - `find_caller_by_name`: name-first CRM lookup for forwarded lines (caller ID is not the caller's own number); returns matching contacts + phone on file to confirm. Empty list = new caller.
@@ -84,15 +84,18 @@ Voice booking + context + policy RAG + preferences + transfer (recently complete
 - `cancel_appointment`: cancel caller's own appointment by UUID; phone ownership gate at backend — LLM can never cancel another caller's booking. (Added 2026-06-16.)
 - `reschedule_appointment`: move appointment to new start/end; same phone ownership gate; backend validates future time + non-overlap via GiST exclusion. (Backend endpoint + reminder reschedule added 2026-06-18.)
 - `capture_job_inquiry`: record a work/job inquiry (company, contract vs full-time, rate, onsite/remote, etc.) after intake and email it to the owner. (Added 2026-06-25.)
+- `page_owner_via_sms`: urgent mid-call SMS page to the owner (caller name + callback + one-line reason); persists a `[URGENT PAGE]`-flagged `customer_messages` row; at most one page per call (guard in session context); graceful fallback to take_message when no owner number is configured. (Added 2026-07-04.)
+- `get_detailed_customer_history`: deep history — last ~10 appointments (any status, with service/employee/date/status), saved preferences, and last ~3 `voice_sessions` call summaries. Phone server-injected like my-appointments. (Added 2026-07-04.)
+- `send_self_service_link`: texts the caller a secure cancel/reschedule link for one of their own upcoming appointments (default: next upcoming). Reuses the selfServiceToken machinery; SMS is consent-gated (opt-outs respected). Prompt proactively offers it in the cancel/reschedule flow. (Added 2026-07-04.)
 
 Current vs. desired for a complete receptionist:
 
-- Have: book, lookup, policy, basic transfer, preference capture, cancel, reschedule, my-appointments, take message.
-- Missing (lower priority): `page_owner_via_sms`, `get_detailed_customer_history` (beyond short context), real-time "is my tech running late?" status, warm transfer.
+- Have: book, lookup, policy, basic transfer, preference capture, cancel, reschedule, my-appointments, take message, urgent owner page, deep customer history, self-service link by text.
+- Missing (lower priority): real-time "is my tech running late?" status, warm transfer.
 
 **SHIPPED — Customer Self-Service Action Links** (was the P1 highest-leverage gap). Token-gated cancel/reschedule links generated + embedded in confirmations, public `/self/*` pages, dashboard "Send self-service links" button, token redemption + negative-case E2E all landed. Files: `src/routes/selfService.ts`, `dashboard/app/self/*`. Full original gap state + delivered design spec archived in `docs/RESOLVED.md` (2026-07-04 entry).
 
-**Still open — next-level voice tools that pair with self-service**: agent proactively offers "I can text you a link to reschedule yourself" instead of always doing it live.
+**SHIPPED 2026-07-04 — next-level voice tools that pair with self-service**: the agent now proactively offers "I can text you a link to reschedule yourself" (send_self_service_link tool + prompt step 3 in the cancel/reschedule flow) instead of always doing it live.
 
 ---
 

@@ -15,8 +15,13 @@ function selfServiceBaseUrl(): string {
 }
 
 /** Build a one-tap cancel link for SMS. Returns null when appointmentId is missing
- *  or no public URL is configured. */
-function buildCancelLink(appointmentId: string | undefined, tenantId: string): string | null {
+ *  or no public URL is configured. Exported so the agent-tools
+ *  send-self-service-link route reuses THIS exact generation path (same token
+ *  machinery, same URL shape) instead of duplicating token logic. */
+export function buildCancelLink(
+  appointmentId: string | undefined,
+  tenantId: string
+): string | null {
   if (!appointmentId) return null;
   const baseUrl = selfServiceBaseUrl();
   if (!baseUrl) return null;
@@ -26,8 +31,12 @@ function buildCancelLink(appointmentId: string | undefined, tenantId: string): s
 }
 
 /** Build a one-tap reschedule request link for SMS/email. Returns null when
- *  appointmentId is missing or no public URL is configured. */
-function buildRescheduleLink(appointmentId: string | undefined, tenantId: string): string | null {
+ *  appointmentId is missing or no public URL is configured. Exported for the
+ *  agent-tools send-self-service-link route (see buildCancelLink note). */
+export function buildRescheduleLink(
+  appointmentId: string | undefined,
+  tenantId: string
+): string | null {
   if (!appointmentId) return null;
   const baseUrl = selfServiceBaseUrl();
   if (!baseUrl) return null;

@@ -24,6 +24,14 @@ export interface SessionContext {
   /** SIP participant identity — the handle LiveKit's transferSipParticipant
    *  uses to target the caller leg. Null when the participant never joined. */
   participantIdentity: string | null;
+  /**
+   * Mutable per-call guard: set true by the page_owner_via_sms tool after a
+   * SUCCESSFUL page so the owner is paged AT MOST ONCE per call (a failed
+   * attempt doesn't set it — one clean retry after a transient failure is
+   * fine; repeat successful pages spamming the owner's phone are not).
+   * Optional so existing construction sites/tests need no change.
+   */
+  ownerPaged?: boolean;
 }
 
 /**
