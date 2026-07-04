@@ -2,6 +2,8 @@
 
 **Deep dive analysis** — 2026-06-23 (main branch; post doc hygiene pass)
 
+> **Closed 2026-07-04 (PRs #187–#192, all merged + deployed to prod, migration-free):** 3 new voice tools (`page_owner_via_sms`, `get_detailed_customer_history`, `send_self_service_link` → 23 tools); CSV bulk import/export (`/export/*.csv` + `/customers/import`); session-revocation UI (`/users/*/revoke-sessions`) + feature-readiness report (`/admin/feature-readiness`); first-time-fix analytics + failed-delivery drill-down (`/communications/history?status=failed`, now recording failed rows); weekday×hour utilization heatmap (`/analytics/utilization`). GAPS body lines below flipped in place.
+>
 > **Closed since this inventory was written (banner refreshed 2026-06-30 — body below not yet line-edited):** AI cost/usage metering (`ai_cost_events` + `/analytics/ai-cost`), customer **self-service action links** (cancel/reschedule tokens + dashboard "Send links" + public pages + E2E), **data export + audit-log** APIs and dashboard surfaces (`/export/tenant-data`, `/audit-log`), website-scan onboarding + RAG answer-debugger, analytics depth (cohorts/CLV/abandonment-by-service/date-range), forwarded-line caller matching (PR #125), and the RAG address-vocab fix. Treat any "missing/❌" claim below as **possibly already shipped** — cross-check `docs/TODO.md` (the live queue) before acting. GDPR purge (#68) + retention worker (#69) remain **legal-held**; PSTN inbound + Telnyx REFER + observability tokens remain the live P0 blockers.
 
 This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (154 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, AIASSISTANT_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
@@ -45,7 +47,7 @@ From `docs/TODO.md` + `AIASSISTANT_GO_LIVE_TODO.md` + source:
 - **Railway deploy gated on CI green via GitHub** (progress 2026-06-15): branch protection applied on `main` requiring the 4 CI jobs (Backend, Dashboard, Agent, E2E) + PR + enforce admins. Auto-deploys from `main` now blocked on red CI. **Remaining**: Enable "Wait for CI" on Railway services. (See `docs/TODO.md` Production Wiring Checklist.)
 - **Stripe never verified live** (test mode + CLI webhook replay outstanding per TODO). Checkout + 3-event webhook + `/billing/status` + `subscriptionGate` exist, but automatic tax missing, price IDs not on prod, no owner-facing flow.
 - **Legal / insurance / ops (user actions)**: Bonterms ToS/Privacy/DPA, TCPA-compliant SMS opt-in language at booking time, E&O + Cyber Liability insurance, LLC bank account (Stripe payouts), S-Corp election later. No in-app customer support/ticketing.
-- **Env/config surface risks**: Telnyx for provisioning/OTP; calendars and remaining CRM need their OAuth triples. No single "feature readiness" boot report beyond `envWarnings.ts`.
+- **Env/config surface risks**: Telnyx for provisioning/OTP; calendars and remaining CRM need their OAuth triples. **SHIPPED 2026-07-04** — a single "feature readiness" report: `src/services/featureReadiness.ts` (shared source of truth that `envWarnings` now consumes) emitted once as a structured boot log + served live at `GET /admin/feature-readiness` (super-admin), per-capability `ready|mocked|disabled|missing_config`.
 
 **Status**: Phase 13 in progress. Core is wired; the gaps are config + live validation + gates.
 
@@ -154,8 +156,8 @@ Strong primitives (`EmptyState`, focus-trap Modal, Toast, Badge, etc.), role gat
 - Scheduler: Mature (single source `employee_schedule`, atomic RPCs with 5 specific error codes, overrides, quick-book). Pending items include full sub-view consolidation and neutral language on any remaining "grading" UI.
 - Wizard: Draft-state Phase B (hold services/employees/shifts/etc. in local state until final "Done"; discard on dismiss) still open (large).
 - CRM + CustomerDetail: Functional + internal notes + history. No deep synthesis of "what this customer has said on calls."
-- No bulk operations (CSV import/export, mass actions).
-- No visual "coverage gaps" or utilization heatmaps beyond existing scheduler bars.
+- **SHIPPED 2026-07-04** — CSV bulk import/export: owner-gated `GET /export/{customers,appointments,calls}.csv` (hand-rolled RFC-4180 + formula-injection guard, no new dep) + `POST /customers/import` (bulk customer import: liberal header matching, per-row zod+normalizePhone validation, in-file + existing-tenant dedupe, 1 MB / 2000-row caps, per-row error report); Export/Import buttons in `CRMView` + appointment/call CSV exports in `BusinessSettingsView`. **Still missing**: mass in-app actions (bulk edit/delete), PDF export.
+- **SHIPPED 2026-07-04** — utilization heatmap: `GET /analytics/utilization` (weekday × hour grid of staffed vs booked minutes, tenant-local, cross-midnight-clamped, optional From/To) + `UtilizationHeatmap` CSS-grid panel in `AnalyticsView` (single-hue theme-var shading, per-cell aria-labels, neutral language). Prior "no visual coverage/utilization heatmap beyond scheduler bars" closed.
 - "Active call" badge exists; deeper live monitoring/barge does not.
 
 Neutral-language rule ("no percentages/warnings/opinions") partially applied after UX audits.
@@ -219,7 +221,7 @@ Prompt system (tenant persona override via `{{ }}` placeholders, customer prefer
   - Same for communication_history, old soft-deleted rows.
 - Call audio (if ever captured upstream) has zero retention/redaction/consent workflow. (LiveKit has Egress recording capability; Telnyx can record on the trunk. Nothing in the product wires storage (S3/Supabase Storage), playback in Calls tab, or per-call consent flag.)
 - **SHIPPED (voice capture)** — the AI now records verbal SMS-reminder consent → `consent_records` via the `record_sms_consent` tool + `/agent-tools/record-consent`, with TCPA disclosures in the prompt (informational reminders only, never marketing; PR #178). **Still open (legal)**: final ToS/consent wording sign-off + confirming the disclosure fires before the first confirmation SMS in production.
-- Account lock is SQL-only (no UI for `password_changed_at` bump).
+- **SHIPPED 2026-07-04** — account lock / session revocation now has a UI: `POST /users/me/revoke-sessions` ("log out everywhere", any role) + `POST /users/:id/revoke-sessions` (owner revokes a staff login; tenant-pinned UPDATE → cross-tenant/unknown 404 without existence leak). Both bump `password_changed_at`, which the JWT hook already treats as a revocation cut-off. "Log out of all sessions" button in `ProfileView` + per-staff owner action in `TeamAccessView`.
 - CORS still permissive by default in source.
 - No per-worker agent identity (single global secret).
 - Local test DB uses superuser (bypasses RLS); prod trusts Supabase managed role + FORCE.
@@ -271,7 +273,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 - Env var drift produces silent production failure modes (mocks, localhost URLs).
 - No canary / blue-green / feature flags.
 - Observability tokens not set → no metrics, no log aggregation, no Sentry in prod.
-- No automated "feature readiness" report at boot.
+- **SHIPPED 2026-07-04** — automated "feature readiness" report at boot (`featureReadiness.ts` structured boot log + `GET /admin/feature-readiness`; see §1).
 
 ---
 
@@ -318,7 +320,7 @@ Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/a
 - Granular RBAC beyond owner/front_desk.
 - Public API surface for power users or external integrators (current endpoints are internal + agent-tools + dashboard).
 - SSO/SAML (currently password + magic-link invites only).
-- Rich exports (CSV/PDF of calls, appointments, customers, analytics).
+- Rich exports — **CSV of calls, appointments, customers SHIPPED 2026-07-04** (`GET /export/*.csv`, see §6); PDF + analytics-export still open.
 - Smart proactive suggestions ("your Saturdays are empty — want to promote them to callers?").
 - Voice biometrics or "known caller" shortcuts.
 - Post-call SMS "how did we do?" review link or NPS.
