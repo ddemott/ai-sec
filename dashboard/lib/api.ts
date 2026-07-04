@@ -1322,11 +1322,18 @@ export const Api = {
   communications: {
     history: (
       tenantId: string | null,
-      opts?: { type?: 'all' | 'sms' | 'email'; limit?: number; offset?: number }
+      opts?: {
+        type?: 'all' | 'sms' | 'email';
+        /** Delivery-status filter (backend default 'all') — 'failed' powers the failed-delivery drill-down. */
+        status?: 'all' | 'sent' | 'failed' | 'queued';
+        limit?: number;
+        offset?: number;
+      }
     ) => {
       const params: Record<string, string> = {};
       if (tenantId) params.tenant_id = tenantId;
       if (opts?.type) params.type = opts.type;
+      if (opts?.status) params.status = opts.status;
       if (opts?.limit != null) params.limit = String(opts.limit);
       if (opts?.offset != null) params.offset = String(opts.offset);
       return apiFetch<{

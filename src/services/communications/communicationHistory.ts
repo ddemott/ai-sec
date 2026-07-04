@@ -1,10 +1,13 @@
 /**
  * Communication history recorder.
  *
- * Writes one append-only row to `communications_history` whenever an outbound
- * communication is actually sent. Called from the send success path of
- * EmailService.sendEmail / SMSService.sendSMS — the universal choke point that
- * every caller (route, reminders worker, appointmentService) bottoms out at.
+ * Writes one append-only row to `communications_history` for every outbound
+ * communication attempt. Called from BOTH the send success path (status='sent')
+ * and the send-failure catch path (status='failed', carrying the provider
+ * error) of EmailService.sendEmail / SMSService.sendSMS — the universal choke
+ * point that every caller (route, reminders worker, appointmentService) bottoms
+ * out at. The failed rows are what make the dashboard's ?status=failed
+ * drill-down real.
  *
  * IMPORTANT — RLS: `communications_history` has FORCE ROW LEVEL SECURITY with a
  * tenant-isolation policy whose USING clause doubles as the INSERT WITH CHECK.
@@ -14,9 +17,10 @@
  * `pool.query`. A bare insert would silently fail under RLS in production.
  *
  * IMPORTANT — defensive: a failed history write must NEVER break the send. The
- * recorder swallows every error (logging it) and returns void. The send has
- * already succeeded by the time this is called; losing a history row is an
- * acceptable, logged degradation, not a user-facing failure.
+ * recorder swallows every error (logging it) and returns void. By the time this
+ * is called the send has already resolved (succeeded, or failed with a result
+ * the caller is about to return); losing a history row is an acceptable, logged
+ * degradation, not a user-facing failure.
  */
 
 import { getPool, createWithTenantClient } from '../../database/index.js';
@@ -34,7 +38,8 @@ export interface CommunicationHistoryEntry {
 }
 
 /**
- * Insert a communications_history row for a sent communication.
+ * Insert a communications_history row for a communication attempt (status
+ * 'sent' on success, 'failed' on a send error).
  *
  * Best-effort: never throws. On any failure (DB down, RLS rejection, bad
  * shape) it logs and returns — the caller's send result is unaffected.

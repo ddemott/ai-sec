@@ -1,7 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Mail, MessageSquare, RefreshCw, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import {
+  Mail,
+  MessageSquare,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+} from 'lucide-react';
 import { Api } from '../lib/api';
 
 type ChannelFilter = 'all' | 'sms' | 'email';
@@ -13,6 +20,8 @@ interface CommRow {
   subject: string | null;
   body: string;
   status: string;
+  /** Provider failure detail recorded at send time; set on failed rows. */
+  error: string | null;
   created_at: string;
 }
 
@@ -23,11 +32,14 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<ChannelFilter>('all');
+  // Delivery-status drill-down: when on, only failed deliveries are shown
+  // (with their per-row error detail). Composes with the channel filter.
+  const [failedOnly, setFailedOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
-    async (f: ChannelFilter, p: number) => {
+    async (f: ChannelFilter, p: number, failed: boolean) => {
       if (!tenantId) {
         setRows([]);
         setTotal(0);
@@ -39,6 +51,7 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
       try {
         const res = await Api.communications.history(tenantId, {
           type: f,
+          status: failed ? 'failed' : undefined,
           limit: PAGE_SIZE,
           offset: p * PAGE_SIZE,
         });
@@ -59,8 +72,8 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
 
   useEffect(() => {
     setPage(0);
-    void load(filter, 0);
-  }, [filter, load]);
+    void load(filter, 0, failedOnly);
+  }, [filter, failedOnly, load]);
 
   function handleFilterChange(f: ChannelFilter) {
     setFilter(f);
@@ -69,14 +82,14 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
   function handlePrev() {
     const next = Math.max(0, page - 1);
     setPage(next);
-    void load(filter, next);
+    void load(filter, next, failedOnly);
   }
 
   function handleNext() {
     const maxPage = Math.ceil(total / PAGE_SIZE) - 1;
     const next = Math.min(maxPage, page + 1);
     setPage(next);
-    void load(filter, next);
+    void load(filter, next, failedOnly);
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -88,27 +101,42 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
         className="flex items-center justify-between px-4 py-2 border-b shrink-0"
         style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}
       >
-        <div className="flex gap-1" role="group" aria-label="Filter by channel">
-          {(['all', 'sms', 'email'] as ChannelFilter[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={filter === f}
-              onClick={() => handleFilterChange(f)}
-              className="px-3 py-1 rounded text-xs font-medium transition-colors"
-              style={
-                filter === f
-                  ? { backgroundColor: 'var(--accent)', color: 'var(--accent-text)' }
-                  : { color: 'var(--text-secondary)' }
-              }
-            >
-              {f === 'all' ? 'All' : f === 'sms' ? 'SMS' : 'Email'}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1" role="group" aria-label="Filter by channel">
+            {(['all', 'sms', 'email'] as ChannelFilter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                aria-pressed={filter === f}
+                onClick={() => handleFilterChange(f)}
+                className="px-3 py-1 rounded text-xs font-medium transition-colors"
+                style={
+                  filter === f
+                    ? { backgroundColor: 'var(--accent)', color: 'var(--accent-text)' }
+                    : { color: 'var(--text-secondary)' }
+                }
+              >
+                {f === 'all' ? 'All' : f === 'sms' ? 'SMS' : 'Email'}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-pressed={failedOnly}
+            onClick={() => setFailedOnly((v) => !v)}
+            className="px-3 py-1 rounded text-xs font-medium transition-colors"
+            style={
+              failedOnly
+                ? { backgroundColor: 'var(--accent)', color: 'var(--accent-text)' }
+                : { color: 'var(--text-secondary)' }
+            }
+          >
+            Failed only
+          </button>
         </div>
         <button
           type="button"
-          onClick={() => void load(filter, page)}
+          onClick={() => void load(filter, page, failedOnly)}
           className="p-1.5 rounded transition-colors"
           style={{ color: 'var(--text-secondary)' }}
           aria-label="Refresh"
@@ -121,14 +149,20 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {loading && (
-          <div className="flex items-center justify-center py-12 text-gray-400">
+          <div
+            className="flex items-center justify-center py-12"
+            style={{ color: 'var(--text-secondary)' }}
+          >
             <RefreshCw className="w-5 h-5 animate-spin mr-2" />
             Loading…
           </div>
         )}
 
         {!loading && error && (
-          <div className="flex items-center gap-2 px-4 py-4 text-sm" style={{ color: 'var(--danger)' }}>
+          <div
+            className="flex items-center gap-2 px-4 py-4 text-sm"
+            style={{ color: 'var(--danger)' }}
+          >
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </div>
@@ -136,10 +170,14 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
 
         {!loading && !error && rows.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-            <Mail className="w-10 h-10 mb-3 text-gray-300" />
-            <p className="font-medium text-gray-500">No sent messages</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Outbound SMS and email confirmations appear here.
+            <Mail className="w-10 h-10 mb-3" style={{ color: 'var(--text-muted)' }} />
+            <p className="font-medium" style={{ color: 'var(--text-secondary)' }}>
+              {failedOnly ? 'No failed deliveries' : 'No sent messages'}
+            </p>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              {failedOnly
+                ? 'Messages that could not be delivered appear here.'
+                : 'Outbound SMS and email confirmations appear here.'}
             </p>
           </div>
         )}
@@ -170,7 +208,10 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
                   style={{ borderColor: 'var(--border-soft)' }}
                 >
                   <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-1 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    <span
+                      className="flex items-center gap-1 text-xs font-medium"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
                       {row.channel === 'sms' ? (
                         <MessageSquare className="w-3.5 h-3.5" />
                       ) : (
@@ -179,16 +220,26 @@ export function CommsSentView({ tenantId }: { tenantId: string | null }) {
                       {row.channel.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--text-primary)' }}>
+                  <td
+                    className="px-4 py-2.5 font-mono text-xs"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
                     {row.recipient}
                   </td>
                   <td className="px-4 py-2.5 max-w-xs" style={{ color: 'var(--text-primary)' }}>
-                    {row.subject && (
-                      <p className="font-medium truncate">{row.subject}</p>
-                    )}
+                    {row.subject && <p className="font-medium truncate">{row.subject}</p>}
                     <p className="truncate text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {row.body}
                     </p>
+                    {row.status === 'failed' && row.error && (
+                      <p
+                        className="text-xs mt-0.5"
+                        style={{ color: 'var(--text-secondary)' }}
+                        title={row.error}
+                      >
+                        Delivery error: {row.error}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     <StatusBadge status={row.status} />

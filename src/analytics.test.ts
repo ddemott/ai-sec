@@ -275,15 +275,16 @@ describe('GET /analytics/calls', () => {
 describe('GET /analytics/cohorts', () => {
   it('HAPPY: date bounds reach all cohort queries; revenue query filters on start_time', async () => {
     // WHO: an owner scoping repeat-caller + CLV cohorts to a quarter.
-    // WHAT: start/end flow as $2/$3 into all FIVE cohort queries (repeat callers,
-    //       by_service, summary, top_customers, abandonment_by_service). The
-    //       revenue (top-customers) query is appointment-based, so it must bound
-    //       on a.start_time — NOT started_at (which it doesn't have).
+    // WHAT: start/end flow as $2/$3 into all SIX cohort queries (repeat callers,
+    //       by_service, summary, top_customers, abandonment_by_service,
+    //       first_time_fix). The revenue (top-customers) query is
+    //       appointment-based, so it must bound on a.start_time — NOT
+    //       started_at (which it doesn't have).
     // WHEN: GET /analytics/cohorts?start_date=&end_date=.
     // WHERE: optionalDateBounds() in the cohorts handler.
-    // WHY: a missing bound on one of the five would let stale rows leak into a
+    // WHY: a missing bound on one of the six would let stale rows leak into a
     //      date-filtered cohort view; the revenue query binding the wrong column
-    //      would 500 on an unknown column. Mock all five explicitly (FIFO) with
+    //      would 500 on an unknown column. Mock all six explicitly (FIFO) with
     //      the real summary shape so this doesn't silently rely on the empty-row
     //      fallback if the query order changes.
     queryResponses.push({ rows: [] }); // 1. repeat callers
@@ -293,6 +294,7 @@ describe('GET /analytics/cohorts', () => {
     }); // 3. summary (full shape)
     queryResponses.push({ rows: [] }); // 4. top customers
     queryResponses.push({ rows: [] }); // 5. abandonment_by_service
+    queryResponses.push({ rows: [{ distinct_callers: 0, first_call_booked: 0 }] }); // 6. first_time_fix
 
     const res = await app.inject({
       method: 'GET',
@@ -300,7 +302,7 @@ describe('GET /analytics/cohorts', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(queries).toHaveLength(5); // all five queries ran
+    expect(queries).toHaveLength(6); // all six queries ran
     for (const q of queries) {
       expect(q.params).toEqual([TENANT_ID, '2026-04-01', '2026-06-30']);
     }
@@ -323,7 +325,7 @@ describe('GET /analytics/cohorts', () => {
     // WHERE: isValidDateOnly round-trip guard in optionalDateBounds.
     // WHY: the PR contract is "malformed → all-time", not "malformed → 500". A
     //        regex-only check would let this through to Postgres and crash.
-    for (let i = 0; i < 5; i++) queryResponses.push({ rows: [] });
+    for (let i = 0; i < 6; i++) queryResponses.push({ rows: [] });
 
     const res = await app.inject({
       method: 'GET',
@@ -355,6 +357,7 @@ describe('GET /analytics/cohorts', () => {
     }); // summary (full shape)
     queryResponses.push({ rows: [] }); // top customers
     queryResponses.push(undefinedColumn); // abandonment → throws 42703
+    queryResponses.push({ rows: [{ distinct_callers: 0, first_call_booked: 0 }] }); // first_time_fix
 
     const res = await app.inject({
       method: 'GET',
@@ -381,6 +384,7 @@ describe('GET /analytics/cohorts', () => {
     }); // summary
     queryResponses.push({ rows: [] }); // top customers
     queryResponses.push(realError); // abandonment → throws a NON-42703 error
+    queryResponses.push({ rows: [{ distinct_callers: 0, first_call_booked: 0 }] }); // first_time_fix
 
     const res = await app.inject({
       method: 'GET',
@@ -675,6 +679,10 @@ describe('GET /analytics/cohorts', () => {
     queryResponses.push({
       rows: [{ service: 'Oil Change', abandoned_count: 3 }],
     });
+    // first_time_fix — 6th query: 6 of 10 distinct callers booked on call one.
+    queryResponses.push({
+      rows: [{ distinct_callers: 10, first_call_booked: 6 }],
+    });
 
     const res = await app.inject({
       method: 'GET',
@@ -703,6 +711,12 @@ describe('GET /analytics/cohorts', () => {
     });
     expect(body.abandonment_by_service[0]).toEqual({ service: 'Oil Change', abandoned_count: 3 });
     expect(body.summary).toMatchObject({ distinct_callers: 10, repeat_callers: 1 });
+    // first_time_fix: rate is numerator/denominator, both echoed for the panel.
+    expect((body as unknown as { first_time_fix: unknown }).first_time_fix).toEqual({
+      rate: 0.6,
+      first_call_booked: 6,
+      distinct_callers: 10,
+    });
 
     // WHY: repeat callers must be grouped on phone DIGITS so format variants
     //       collapse — assert the normalization + the >1 HAVING filter.
@@ -739,5 +753,11 @@ describe('GET /analytics/cohorts', () => {
     expect(body.by_service).toHaveLength(0);
     expect((body as { top_customers: unknown[] }).top_customers).toHaveLength(0);
     expect(body.summary.total_calls).toBe(0); // graceful default when no summary row
+    // No callers → rate must be null (unknown), NOT 0 (a real "nobody booked").
+    expect((body as unknown as { first_time_fix: unknown }).first_time_fix).toEqual({
+      rate: null,
+      first_call_booked: 0,
+      distinct_callers: 0,
+    });
   });
 });

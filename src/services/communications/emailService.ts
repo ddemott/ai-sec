@@ -57,6 +57,10 @@ export class EmailService {
    * Send an email message with consent checking
    */
   async sendEmail(tenantId: string, message: EmailMessage): Promise<CommunicationResult> {
+    // Hoisted so the send-failure catch can record the same subject/body the
+    // success path would have logged (templated when a template is used).
+    let subject = message.subject;
+    let text = message.text;
     try {
       const tenantConfig = await this.configService.getTenantConfig(tenantId);
       if (!tenantConfig) {
@@ -81,8 +85,6 @@ export class EmailService {
       }
 
       // Prepare email content
-      let subject = message.subject;
-      let text = message.text;
       let html = message.html;
 
       // Apply template if specified
@@ -126,9 +128,21 @@ export class EmailService {
       };
     } catch (error) {
       console.error('❌ Error sending email:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      // Record the FAILED delivery so the dashboard failed-delivery drill-down
+      // (?status=failed) has real rows. Best-effort — the recorder never throws,
+      // but we still guard so a history-write hiccup can't mask the send error.
+      await recordCommunicationHistory(tenantId, {
+        channel: 'email',
+        recipient: message.to,
+        subject,
+        body: text,
+        status: 'failed',
+        error: errorMessage,
+      }).catch(() => {});
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   }

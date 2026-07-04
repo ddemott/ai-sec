@@ -109,8 +109,8 @@ describe('GET /communications/history', () => {
     const historyQuery = dataQueries.find((q) => q.text.includes('communications_history'));
     expect(historyQuery).toBeDefined();
     expect(historyQuery!.text).toContain('WHERE tenant_id = $1');
-    // type defaults to 'all', limit defaults to 50, offset defaults to 0
-    expect(historyQuery!.params).toEqual([TENANT_ID, 'all', 50, 0]);
+    // type + status default to 'all', limit defaults to 50, offset defaults to 0
+    expect(historyQuery!.params).toEqual([TENANT_ID, 'all', 'all', 50, 0]);
   });
 
   it('HAPPY: returns an empty list and total 0 when the tenant has no history', async () => {
@@ -146,7 +146,45 @@ describe('GET /communications/history', () => {
 
     expect(res.statusCode).toBe(200);
     const historyQuery = handle.queries.find((q) => q.text.includes('communications_history'));
-    expect(historyQuery!.params).toEqual([TENANT_ID, 'sms', 10, 10]);
+    expect(historyQuery!.params).toEqual([TENANT_ID, 'sms', 'all', 10, 10]);
+  });
+
+  it('HAPPY: passes the delivery-status filter through to SQL (failed-only drill-down)', async () => {
+    // WHO: an owner drilling into failed deliveries from the dashboard
+    // WHAT: ?status=failed must reach the query as $3 so only failed rows return
+    // WHEN: the "Failed only" toggle is active on the comms history view
+    // WHERE: GET /communications/history handler, HistoryQuerySchema.status
+    // WHY: a dropped status filter would silently show ALL rows under a
+    //      "Failed only" label — the owner would misread delivery health
+    handle.queryResponses.push({ rows: [] });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/communications/history?status=failed',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const historyQuery = handle.queries.find((q) => q.text.includes('communications_history'));
+    expect(historyQuery!.text).toContain("($3 = 'all' OR status = $3)");
+    expect(historyQuery!.params).toEqual([TENANT_ID, 'all', 'failed', 50, 0]);
+  });
+
+  it('SAD: rejects an unknown status value with 400', async () => {
+    // WHO: a client passing a status outside the CHECK-constraint vocabulary
+    // WHAT: status=bounced is not in the enum (sent|failed|queued|all) → 400
+    // WHEN: bad input arrives (typo, stale client)
+    // WHERE: HistoryQuerySchema validation
+    // WHY: the status filter is an allowlist mirroring the DB CHECK; silently
+    //      coercing unknown values would return misleading "all" results
+    const res = await app.inject({
+      method: 'GET',
+      url: '/communications/history?status=bounced',
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toBe('Invalid query parameters');
   });
 
   it('SAD: rejects an out-of-range limit with 400', async () => {

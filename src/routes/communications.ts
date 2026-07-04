@@ -97,6 +97,10 @@ const ProcessOptOutSchema = z
 
 const HistoryQuerySchema = z.object({
   type: z.enum(['email', 'sms', 'all']).optional().default('all'),
+  // Delivery-status filter. The values mirror the communications_history
+  // status CHECK constraint (sent | failed | queued); 'all' (default) skips
+  // the filter. Powers the dashboard "Failed only" drill-down.
+  status: z.enum(['sent', 'failed', 'queued', 'all']).optional().default('all'),
   limit: z.coerce.number().min(1).max(100).optional().default(50),
   offset: z.coerce.number().min(0).optional().default(0),
 });
@@ -200,11 +204,17 @@ export function registerCommunicationRoutes(
   /**
    * GET /communications/history - Get communication history (paginated)
    *
-   * Tenant-scoped read of the communications_history table (written on the
-   * send success path of EmailService/SMSService). Filterable by channel via
-   * ?type=email|sms|all (default all); paginated via ?limit (1-100, default
-   * 50) + ?offset. `total` is the full filtered count, independent of the
-   * page window, so the dashboard can render pagination controls.
+   * Tenant-scoped read of the communications_history table. EmailService/
+   * SMSService write a status='sent' row on the send success path, and a
+   * best-effort status='failed' row (carrying the provider error) on the
+   * send-failure catch path — so the ?status=failed drill-down below has real
+   * rows. Filterable by channel via ?type=email|sms|all (default all) and by
+   * delivery status via ?status=sent|failed|queued|all (default all — the
+   * failed-delivery drill-down); paginated via ?limit (1-100, default 50) +
+   * ?offset. `total` is the full filtered count, independent of the page
+   * window, so the dashboard can render pagination controls. Rows carry the
+   * `error` column (provider failure detail recorded at send time) for failed
+   * sends.
    */
   app.get(
     '/communications/history',
@@ -221,7 +231,7 @@ export function registerCommunicationRoutes(
         });
       }
 
-      const { type, limit, offset } = parsed.data;
+      const { type, status, limit, offset } = parsed.data;
 
       const { history, total } = await withTenantClient(tenantId, async (client) => {
         // COUNT(*) OVER() gives the full filtered count alongside the paged
@@ -245,9 +255,10 @@ export function registerCommunicationRoutes(
              FROM communications_history
             WHERE tenant_id = $1
               AND ($2 = 'all' OR channel = $2)
+              AND ($3 = 'all' OR status = $3)
             ORDER BY created_at DESC, communications_history_id DESC
-            LIMIT $3 OFFSET $4`,
-          [tenantId, type, limit, offset]
+            LIMIT $4 OFFSET $5`,
+          [tenantId, type, status, limit, offset]
         );
 
         const rows = result.rows as Array<Record<string, unknown> & { total_count: string }>;
