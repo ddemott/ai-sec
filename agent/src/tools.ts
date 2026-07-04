@@ -98,6 +98,94 @@ function formatResponse(res: ToolResponse): string {
   return JSON.stringify({ error: res.error });
 }
 
+/**
+ * Spoken 12-hour clock from a local-naive datetime string
+ * ("2026-07-15T16:00:00" → "4:00 PM"). Returns the raw input if it can't be
+ * parsed, so the LLM still gets something to relay.
+ */
+function spokenClock(localNaive: string): string {
+  const m = /T(\d{2}):(\d{2})/.exec(localNaive);
+  if (!m) return localNaive;
+  const h24 = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  // Guard out-of-range values (e.g. a malformed "T99:99") so we don't emit a
+  // bogus "99:99" spoken time — fall back to the raw input as documented.
+  if (h24 > 23 || min > 59) return localNaive;
+  const ampm = h24 >= 12 ? 'PM' : 'AM';
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h}:${m[2]} ${ampm}`;
+}
+
+/**
+ * True ONLY when both times parse cleanly AND differ to the minute (compared
+ * on wall-clock: date + HH:MM). Uncertain input (unparseable) → false, so an
+ * ambiguous value never fires a spurious "your time wasn't open" note.
+ *
+ * FRAME ASSUMPTION: both args are compared as LOCAL wall-clock digits. That is
+ * correct because `requested_start` is prompted as local-naive (same as
+ * window_from) and `booked_start` is backend-converted via toLocalWallClock →
+ * local-naive. A trailing Z/offset on `requested_start` is stripped by the
+ * regex, so a Z-suffix alone is harmless — BUT if the LLM ever sends a genuine
+ * UTC *instant* (shifted digits, e.g. 21:30Z for 4:30pm local) this would false
+ * "time_changed" on a correct booking. This is the live-call thing to watch.
+ */
+function bookedTimeDiffers(requested: string, booked: string): boolean {
+  const norm = (s: string) => /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/.exec(s)?.[1] ?? null;
+  const r = norm(requested);
+  const b = norm(booked);
+  if (r === null || b === null) return false;
+  return r !== b;
+}
+
+/**
+ * Format a book_with_scheduling response for the LLM. On success it names the
+ * ACTUAL booked time (the backend returns it already converted to the tenant's
+ * local wall-clock) so the agent confirms what was really booked — not the time
+ * the caller asked for. `book_with_scheduling_atomic` takes the earliest open
+ * slot at or after `window_from`, so a caller who asked for a specific time can
+ * land on a different (usually earlier) slot; when `requestedStart` is supplied
+ * and the booked slot differs, the returned payload carries an explicit
+ * directive to tell the caller the real time + that their pick wasn't open.
+ *
+ * `requestedStart` MUST be the caller's specifically-requested start, NOT the
+ * search-window bound — for "next available" requests the caller named no time,
+ * so it's omitted and no mismatch note ever fires (the booked slot legitimately
+ * differs from the window bound by design).
+ *
+ * Falls back to the generic formatter for errors or any legacy/no-booked_start
+ * response shape (fail-safe: worst case the LLM still sees the raw result JSON).
+ */
+function formatBookingResponse(res: ToolResponse, requestedStart?: string): string {
+  if (!res.ok || typeof res.result !== 'object' || res.result === null) {
+    return formatResponse(res);
+  }
+  const r = res.result as {
+    appointment_id?: string;
+    employee_name?: string | null;
+    booked_start?: string | null;
+  };
+  const bookedStart = typeof r.booked_start === 'string' ? r.booked_start : null;
+  if (!bookedStart) return formatResponse(res);
+
+  const spoken = spokenClock(bookedStart);
+  const withWhom = r.employee_name ? ` with ${r.employee_name}` : '';
+  const payload: Record<string, unknown> = {
+    success: true,
+    appointment_id: r.appointment_id ?? null,
+    booked_time: spoken,
+    employee: r.employee_name ?? null,
+    instruction: `Booked${withWhom} for ${spoken}. Confirm THIS exact time (${spoken}) to the caller — it is the actual booked slot.`,
+  };
+  if (requestedStart && bookedTimeDiffers(requestedStart, bookedStart)) {
+    payload.time_changed = true;
+    payload.requested_time = spokenClock(requestedStart);
+    payload.instruction =
+      `Booked${withWhom} for ${spoken}, but the caller asked for ${spokenClock(requestedStart)}, which was NOT open. ` +
+      `Tell the caller you booked the closest opening — ${spoken}${withWhom} — and ask if that works or if they'd like a different time.`;
+  }
+  return JSON.stringify(payload);
+}
+
 export function buildTools(
   ctx: SessionContext,
   client: ToolsClient,
@@ -395,7 +483,7 @@ export function buildTools(
 
     book_with_scheduling: llm.tool({
       description:
-        "Find a slot AND book it in one call using a time window and requirements. Prefer this over get_scheduling_options + book_appointment when the caller says 'book the next available'.",
+        "Find a slot AND book it in one call using a time window and requirements. The default booking tool — use it after get_available_slots and when the caller says 'book the next available'. It books the EARLIEST open slot at or after window_from, so when the caller picked a SPECIFIC time, set window_from to exactly that time (a window that starts earlier will book them earlier than they asked). When the caller named a specific time, ALSO pass requested_start so the response can flag if the booked slot ended up different. The response returns the ACTUAL booked time (booked_time) — confirm THAT to the caller, not the time they requested.",
       parameters: {
         type: 'object',
         properties: {
@@ -405,6 +493,11 @@ export function buildTools(
           preferred_resource_id: { type: 'string' },
           window_from: { type: 'string' },
           window_to: { type: 'string' },
+          requested_start: {
+            type: 'string',
+            description:
+              'The exact start time the caller specifically asked for, local-naive ISO (e.g. 2026-07-15T16:30:00). Set ONLY when the caller named a specific time; OMIT for "next available" / open-ended requests. Lets the response tell the caller if the booked slot differs from their request.',
+          },
           phone: { type: 'string' },
           name: { type: 'string' },
           description: { type: 'string' },
@@ -419,6 +512,7 @@ export function buildTools(
         preferred_resource_id?: string;
         window_from: string;
         window_to: string;
+        requested_start?: string;
         phone: string;
         name?: string;
         description?: string;
@@ -440,7 +534,7 @@ export function buildTools(
         });
         const bookedId = extractAppointmentId(res);
         if (bookedId) outcome?.recordBooking(bookedId);
-        return formatResponse(res);
+        return formatBookingResponse(res, args.requested_start);
       },
     }),
 

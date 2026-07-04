@@ -457,6 +457,105 @@ describe('book_with_scheduling', () => {
   });
 });
 
+describe('book_with_scheduling — confirm the ACTUAL booked time', () => {
+  // WHO/WHY: prod bug — caller asked for 4:30, agent booked 4:00 (RPC takes the
+  //   earliest open slot >= window_from) yet CONFIRMED "4:30" back, because the
+  //   old formatter dumped raw JSON with no directive to read booked_start.
+  //   These pin the formatBookingResponse contract: name the real slot, and flag
+  //   a mismatch ONLY when the caller named a specific time (requested_start).
+
+  const bookedResult = (overrides: Record<string, unknown> = {}) => ({
+    ok: true as const,
+    result: {
+      success: true,
+      appointment_id: 'appt-confirm',
+      employee_name: 'Carlos',
+      booked_start: '2026-07-15T16:00:00',
+      booked_end: '2026-07-15T16:30:00',
+      error_message: null,
+      ...overrides,
+    },
+  });
+
+  it('SPECIFIC time booked exactly as requested → confirms the real slot, no mismatch flag', async () => {
+    const { client } = makeClient([
+      bookedResult({ booked_start: '2026-07-15T16:30:00', booked_end: '2026-07-15T17:00:00' }),
+    ]);
+    const tools = buildTools(makeCtx(), client);
+    const out = await exec(tools.book_with_scheduling, {
+      service_type: 'Oil Change',
+      window_from: '2026-07-15T16:30:00',
+      window_to: '2026-07-15T17:00:00',
+      requested_start: '2026-07-15T16:30:00',
+      phone: '+15559998888',
+    });
+    const parsed = JSON.parse(out) as Record<string, unknown>;
+    expect(parsed.booked_time).toBe('4:30 PM');
+    expect(parsed.employee).toBe('Carlos');
+    expect(parsed.time_changed).toBeUndefined();
+    expect(String(parsed.instruction)).toContain('4:30 PM');
+  });
+
+  it('SPECIFIC time but booked EARLIER → flags the change + names the real time (prod bug)', async () => {
+    // Caller asked 4:30; the only opening was 4:00. Must NOT parrot 4:30.
+    const { client } = makeClient([bookedResult()]); // booked_start 4:00
+    const tools = buildTools(makeCtx(), client);
+    const out = await exec(tools.book_with_scheduling, {
+      service_type: 'Oil Change',
+      window_from: '2026-07-15T16:30:00',
+      window_to: '2026-07-15T17:00:00',
+      requested_start: '2026-07-15T16:30:00',
+      phone: '+15559998888',
+    });
+    const parsed = JSON.parse(out) as Record<string, unknown>;
+    expect(parsed.time_changed).toBe(true);
+    expect(parsed.booked_time).toBe('4:00 PM');
+    expect(parsed.requested_time).toBe('4:30 PM');
+    expect(parsed.appointment_id).toBe('appt-confirm'); // preserved, not dropped
+    const instruction = String(parsed.instruction);
+    expect(instruction).toContain('4:00 PM'); // the actual slot
+    expect(instruction).toContain('4:30 PM'); // what they asked
+    expect(instruction).toMatch(/not open|wasn't open|NOT open/i);
+  });
+
+  it('NEXT-AVAILABLE (no requested_start) → NO mismatch flag even when slot != window bound', async () => {
+    // REGRESSION GUARD: window_from is a wide SEARCH BOUND here, not a request.
+    //   booked_start (4:00) differs from window_from (9:00) by design — firing a
+    //   "your 9:00 wasn't open" note would be wrong/confusing.
+    const { client } = makeClient([bookedResult()]); // booked 4:00
+    const tools = buildTools(makeCtx(), client);
+    const out = await exec(tools.book_with_scheduling, {
+      service_type: 'Oil Change',
+      window_from: '2026-07-15T09:00:00',
+      window_to: '2026-07-15T17:00:00',
+      phone: '+15559998888',
+      // requested_start intentionally omitted (open-ended "next available")
+    });
+    const parsed = JSON.parse(out) as Record<string, unknown>;
+    expect(parsed.time_changed).toBeUndefined();
+    expect(parsed.requested_time).toBeUndefined();
+    expect(parsed.booked_time).toBe('4:00 PM');
+  });
+
+  it('LEGACY shape (no booked_start) → falls back to the generic formatter, never throws', async () => {
+    const { client } = makeClient([
+      { ok: true, result: { success: true, appointment_id: 'appt-legacy' } },
+    ]);
+    const tools = buildTools(makeCtx(), client);
+    const out = await exec(tools.book_with_scheduling, {
+      service_type: 'Oil Change',
+      window_from: '2026-07-15T16:30:00',
+      window_to: '2026-07-15T17:00:00',
+      requested_start: '2026-07-15T16:30:00',
+      phone: '+15559998888',
+    });
+    const parsed = JSON.parse(out) as Record<string, unknown>;
+    // Generic formatter passthrough: raw result JSON, no booked_time/instruction.
+    expect(parsed.appointment_id).toBe('appt-legacy');
+    expect(parsed.booked_time).toBeUndefined();
+  });
+});
+
 describe('send_verification_code + verify_phone_code', () => {
   it('HAPPY: send uses LLM-provided phone (NOT context phone)', async () => {
     // WHO: Caller gave a phone verbally that differs from caller-ID
