@@ -296,6 +296,28 @@ export interface AnalyticsCohorts {
   };
 }
 
+/**
+ * One weekday × hour cell of the utilization heatmap (GET /analytics/utilization).
+ * Only cells with staffed capacity are returned; hours nobody works are absent.
+ * All hours are tenant-local (the backend converts via tenants.timezone).
+ */
+export interface UtilizationCell {
+  /** Day of week, 0 = Sunday … 6 = Saturday (Postgres DOW convention) */
+  dow: number;
+  /** Hour of day, 0-23, tenant-local */
+  hour: number;
+  /** Staff-minutes on shift during this hour across the queried window */
+  staffed_minutes: number;
+  /** Appointment-minutes booked during this hour across the queried window */
+  booked_minutes: number;
+  /** booked/staffed ratio; null guards the (unreturned) zero-staffed case */
+  utilization: number | null;
+}
+
+export interface AnalyticsUtilization {
+  cells: UtilizationCell[];
+}
+
 export interface AiCostRow {
   source: string;
   provider: string;

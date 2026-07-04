@@ -406,6 +406,165 @@ export function registerAnalyticsRoutes(
     }, 'Failed to load cohort analytics')
   );
 
+  // Utilization heatmap (GAPS §6) — weekday × hour grid of staffed capacity vs
+  // booked time, powering the dashboard's Utilization panel. For each
+  // (dow 0-6, hour 0-23) cell that has ANY staffed capacity in the window:
+  //   staffed_minutes — summed employee-minutes from employee_schedule shifts
+  //                     (is_off = false) overlapping that hour-of-day
+  //   booked_minutes  — summed appointment-minutes overlapping that hour.
+  //                     Occupancy statuses: 'scheduled' (the only status the
+  //                     booking RPCs treat as blocking a slot) plus 'completed'
+  //                     (past appointments that DID consume staffed time —
+  //                     excluding them would make history look artificially
+  //                     open). 'canceled' and soft-deleted rows are excluded,
+  //                     matching the RPCs' occupancy predicate.
+  // Hours with zero staffed capacity are omitted (utilization is undefined
+  // there — the UI renders them as unstaffed, not as 0%).
+  //
+  // Cross-midnight night shifts (start_time > end_time) follow the
+  // book_with_scheduling_atomic() semantics (see the night-shift OR-branch in
+  // 20260430000002_drop_employee_shifts.sql): a row dated D covers day D's
+  // wrap-around window — [00:00, end_time) and [start_time, 24:00) — because a
+  // 1am booking on day D is validated against day D's night-shift row (the RPC
+  // matches shift_date = the booking's local date, then
+  // `v_start_tod >= start OR v_end_tod <= end`). So the night shift is split
+  // into those two same-day segments, both attributed to D's weekday.
+  //
+  // All times are tenant-local (tenants.timezone, like the booking RPCs):
+  // shift times are already local; appointment timestamptz values are
+  // converted via AT TIME ZONE before bucketing, so "Tuesday 2pm" means the
+  // tenant's 2pm. Optional From/To window via optionalDateBounds (same
+  // contract as /analytics/calls + /analytics/cohorts); absent bounds default
+  // to the LAST 28 DAYS (not all-time — four full weeks keeps every weekday
+  // equally represented so no day looks artificially busy).
+  app.get(
+    '/analytics/utilization',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const { start, end } = optionalDateBounds(req.query as Record<string, string>);
+
+      const rows = await withTenantClient(tenantId, async (client) => {
+        const res = await client.query<{
+          dow: number;
+          hour: number;
+          staffed_minutes: number;
+          booked_minutes: number;
+        }>(
+          `WITH tenant_tz AS (
+             SELECT COALESCE(timezone, 'UTC') AS tz FROM tenants WHERE tenant_id = $1
+           ),
+           bounds AS (
+             -- Default window: last 28 days (inclusive of today, tenant-local).
+             SELECT COALESCE($2::date, (now() AT TIME ZONE t.tz)::date - 27) AS start_date,
+                    COALESCE($3::date, (now() AT TIME ZONE t.tz)::date) AS end_date
+             FROM tenant_tz t
+           ),
+           -- Working shifts flattened to same-day [m_start, m_end) segments in
+           -- minutes-since-midnight (24:00 → 1440). Night shifts contribute two
+           -- segments (see route comment). is_off rows carry NULL times.
+           shift_segments AS (
+             SELECT es.shift_date,
+                    (EXTRACT(EPOCH FROM es.start_time) / 60)::int AS m_start,
+                    (EXTRACT(EPOCH FROM es.end_time) / 60)::int AS m_end
+             FROM employee_schedule es, bounds b
+             WHERE es.tenant_id = $1 AND es.is_off = false
+               AND es.start_time IS NOT NULL AND es.end_time IS NOT NULL
+               AND es.start_time < es.end_time
+               AND es.shift_date BETWEEN b.start_date AND b.end_date
+             UNION ALL
+             -- Night shift, pre-midnight leg: [start_time, 24:00)
+             SELECT es.shift_date, (EXTRACT(EPOCH FROM es.start_time) / 60)::int, 1440
+             FROM employee_schedule es, bounds b
+             WHERE es.tenant_id = $1 AND es.is_off = false
+               AND es.start_time IS NOT NULL AND es.end_time IS NOT NULL
+               AND es.start_time > es.end_time
+               AND es.shift_date BETWEEN b.start_date AND b.end_date
+             UNION ALL
+             -- Night shift, post-midnight leg: [00:00, end_time)
+             SELECT es.shift_date, 0, (EXTRACT(EPOCH FROM es.end_time) / 60)::int
+             FROM employee_schedule es, bounds b
+             WHERE es.tenant_id = $1 AND es.is_off = false
+               AND es.start_time IS NOT NULL AND es.end_time IS NOT NULL
+               AND es.start_time > es.end_time
+               AND es.end_time > '00:00'::time
+               AND es.shift_date BETWEEN b.start_date AND b.end_date
+           ),
+           staffed AS (
+             SELECT EXTRACT(DOW FROM seg.shift_date)::int AS dow,
+                    h AS hour,
+                    SUM(LEAST(seg.m_end, (h + 1) * 60) - GREATEST(seg.m_start, h * 60))::int
+                      AS staffed_minutes
+             FROM shift_segments seg
+             CROSS JOIN LATERAL generate_series(seg.m_start / 60, (seg.m_end - 1) / 60) AS h
+             GROUP BY 1, 2
+           ),
+           -- Occupying appointments as tenant-local timestamps, CLAMPED to the
+           -- query window [start_date 00:00, end_date+1 00:00) in tenant-local
+           -- time. The clamp (GREATEST against the window start / LEAST against
+           -- the window end) stops a boundary-crossing appointment from
+           -- bucketing its OUT-of-window minutes onto a day/hour outside the
+           -- requested range: e.g. an appointment that starts the evening
+           -- BEFORE start_date and spills past midnight into it should
+           -- contribute only its in-window minutes, and one that runs past
+           -- midnight on end_date must not credit the next (out-of-window) day.
+           -- Because the buckets are keyed by weekday+hour, an unclamped
+           -- spill-over could land on a same-weekday cell that IS staffed
+           -- elsewhere in the window and silently inflate it. The WHERE is an
+           -- interval-OVERLAP test (not start-date-in-window) so appointments
+           -- that begin before the window but reach into it are included, then
+           -- trimmed by the clamp. The LEAST/end side is symmetric to the
+           -- GREATEST/start side. Interior cross-midnight minutes still
+           -- attribute to the calendar day they fall on (matching how a night
+           -- shift's post-midnight leg is credited to that same day).
+           appt_intervals AS (
+             SELECT GREATEST(a.start_time AT TIME ZONE t.tz, b.start_date::timestamp) AS s,
+                    LEAST(a.end_time AT TIME ZONE t.tz, (b.end_date + 1)::timestamp) AS e
+             FROM appointments a, tenant_tz t, bounds b
+             WHERE a.tenant_id = $1
+               AND a.is_deleted = false
+               AND a.status IN ('scheduled', 'completed')
+               -- Half-open overlap: interval intersects [window_start, window_end).
+               AND (a.start_time AT TIME ZONE t.tz) < (b.end_date + 1)::timestamp
+               AND (a.end_time AT TIME ZONE t.tz) > b.start_date::timestamp
+           ),
+           booked AS (
+             SELECT EXTRACT(DOW FROM h)::int AS dow,
+                    EXTRACT(HOUR FROM h)::int AS hour,
+                    ROUND(SUM(EXTRACT(EPOCH FROM
+                      (LEAST(i.e, h + interval '1 hour') - GREATEST(i.s, h))) / 60))::int
+                      AS booked_minutes
+             FROM appt_intervals i
+             CROSS JOIN LATERAL generate_series(
+               date_trunc('hour', i.s), i.e - interval '1 second', interval '1 hour') AS h
+             GROUP BY 1, 2
+           )
+           SELECT s.dow, s.hour, s.staffed_minutes,
+                  COALESCE(bk.booked_minutes, 0) AS booked_minutes
+           FROM staffed s
+           LEFT JOIN booked bk ON bk.dow = s.dow AND bk.hour = s.hour
+           ORDER BY s.dow, s.hour`,
+          [tenantId, start, end]
+        );
+        return res.rows;
+      });
+
+      const cells = rows.map((r) => ({
+        dow: r.dow,
+        hour: r.hour,
+        staffed_minutes: r.staffed_minutes,
+        booked_minutes: r.booked_minutes,
+        // Only staffed cells are returned, so staffed_minutes > 0 always holds
+        // today — the null branch is a contract guard, not a reachable state.
+        utilization: r.staffed_minutes > 0 ? r.booked_minutes / r.staffed_minutes : null,
+      }));
+
+      logEvent(req, 'analytics_utilization_viewed', { tenantId });
+      return reply.send({ cells });
+    }, 'Failed to load utilization analytics')
+  );
+
   // Coverage gap detection — returns per-service coverage status for a date range
   app.get(
     '/coverage',
