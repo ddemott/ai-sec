@@ -146,9 +146,39 @@ describe('GET /export/tenant-data → real DB', () => {
   });
 
   it('SECURITY: a front-desk caller is refused (403) — bulk PII export is owner-only', async () => {
+    // WHO: a front_desk user | WHAT: GET /export/tenant-data | WHEN: casual or
+    // malicious data grab | WHERE: the owner gate on the export route | WHY: a
+    // full-tenant PII dump in non-owner hands is an exfiltration path — must 403.
     role = 'front_desk';
     const res = await exportReq();
     expect(res.statusCode).toBe(403);
     expect(res.json().success).toBe(false);
+  });
+});
+
+describe('GET /export/*.csv → real DB', () => {
+  it('HAPPY: all three CSV exports run their JOINed SQL against the real schema without a 500', async () => {
+    // WHY: the CSV routes hardcode column names across 6 tables (customers,
+    // appointments, services, employees, resources, voice_sessions). A renamed
+    // column ships a prod 500 that a mocked pg client can never catch — same
+    // interpolated-SQL class this realdb suite exists for.
+    for (const kind of ['customers', 'appointments', 'calls'] as const) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/export/${kind}.csv`,
+        headers: { 'x-tenant-id': tenantId },
+      });
+      expect(res.statusCode, `${kind}.csv 500'd — a column likely drifted: ${res.body}`).toBe(200);
+      expect(res.headers['content-type']).toContain('text/csv');
+    }
+    // The seeded customer actually appears in the customers CSV.
+    const customersCsv = await app.inject({
+      method: 'GET',
+      url: '/export/customers.csv',
+      headers: { 'x-tenant-id': tenantId },
+    });
+    expect(customersCsv.body).toContain('Export Ed');
+    // Phone starts with "+" → formula-guarded with a leading single quote.
+    expect(customersCsv.body).toContain("'+15558880001");
   });
 });

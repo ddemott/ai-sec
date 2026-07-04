@@ -3,14 +3,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { type Customer } from '@/lib/types';
 import { MOCK_CUSTOMERS, MOCK_SUMMARIES } from '@/lib/mockData';
-import { Search, RefreshCw, ChevronRight, UserPlus } from 'lucide-react';
+import { Search, RefreshCw, ChevronRight, UserPlus, Download, Upload } from 'lucide-react';
 import { Api } from '../lib/api';
 import { detectTimezone } from '../lib/constants';
 import { formatPhone } from '../lib/phone';
-import { splitFullName } from '../lib/utils';
+import { splitFullName, downloadTextFile } from '../lib/utils';
 import { useFormState } from '../lib/hooks';
 import { EmptyState } from './ui/EmptyState';
-import { useActiveTenantId } from '../lib/SessionContext';
+import { useActiveTenantId, useSessionContext } from '../lib/SessionContext';
 import { Button } from './ui/Button';
 import { CustomerDetailPanel } from './CustomerDetailPanel';
 import { ConfirmModal } from './ui/ConfirmModal';
@@ -19,6 +19,10 @@ import { useConfirm } from '../lib/useConfirm';
 
 export default function CRMView() {
   const tenantId = useActiveTenantId();
+  const { role, isAdmin } = useSessionContext();
+  // CSV export/import are owner-gated on the backend (403 for front-desk);
+  // hide the buttons for non-owners rather than surfacing a dead control.
+  const isOwner = role === 'owner' || isAdmin;
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [summaries, setSummaries] = useState<
@@ -52,6 +56,83 @@ export default function CRMView() {
   const [focusedIdx, setFocusedIdx] = useState(-1);
   const listRef = useRef<HTMLDivElement>(null);
   const { state: confirmState, confirm, close: closeConfirm } = useConfirm();
+
+  // CSV export/import (bulk operations — owner-only)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
+
+  async function handleExportCsv() {
+    setExportingCsv(true);
+    try {
+      const csv = await Api.exportData.csv('customers', tenantId);
+      downloadTextFile(
+        `customers-${new Date().toISOString().slice(0, 10)}.csv`,
+        csv,
+        'text/csv;charset=utf-8'
+      );
+      showToast('Customer list exported.', 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Failed to export customers.', 'error');
+    } finally {
+      setExportingCsv(false);
+    }
+  }
+
+  function handleImportFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Reset so choosing the same file again re-triggers onChange.
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onerror = () => showToast('Could not read that file. Please try again.', 'error');
+    reader.onload = () => {
+      const csv = typeof reader.result === 'string' ? reader.result : '';
+      if (!csv.trim()) {
+        showToast('That file is empty.', 'error');
+        return;
+      }
+      confirm({
+        title: 'Import Customers',
+        message: `Import customers from "${file.name}"? Rows with an invalid phone number are skipped, and customers whose phone number already exists are left unchanged.`,
+        confirmLabel: 'Import',
+        onConfirm: async () => {
+          closeConfirm();
+          setImportingCsv(true);
+          try {
+            const res = await Api.customers.importCsv(tenantId, csv);
+            if (!res.success) {
+              showToast(res.error || 'Import failed.', 'error');
+              return;
+            }
+            showToast(
+              `Imported ${res.imported} customer${res.imported === 1 ? '' : 's'}.`,
+              'success'
+            );
+            const skipped = res.skipped_duplicates ?? 0;
+            const errorRows = res.errors?.length ?? 0;
+            if (skipped > 0 || errorRows > 0) {
+              const parts: string[] = [];
+              if (skipped > 0) parts.push(`${skipped} duplicate${skipped === 1 ? '' : 's'}`);
+              if (errorRows > 0) {
+                const first = res.errors[0];
+                parts.push(
+                  `${errorRows}${res.errors_truncated ? '+' : ''} invalid row${errorRows === 1 ? '' : 's'} (first: row ${first.row} — ${first.reason})`
+                );
+              }
+              showToast(`Skipped ${parts.join('; ')}.`, 'warning');
+            }
+            void fetchCustomers();
+          } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Import failed.', 'error');
+          } finally {
+            setImportingCsv(false);
+          }
+        },
+      });
+    };
+    reader.readAsText(file);
+  }
 
   // States
   const [isEditing, setIsEditing] = useState(false);
@@ -420,6 +501,38 @@ export default function CRMView() {
               </Button>
             </div>
           </div>
+          {isOwner && (
+            <div className="flex space-x-1 mb-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                isLoading={exportingCsv}
+                onClick={() => void handleExportCsv()}
+              >
+                <Download className="w-4 h-4" aria-hidden="true" />
+                Export CSV
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                isLoading={importingCsv}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="w-4 h-4" aria-hidden="true" />
+                Import CSV
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                aria-label="Choose a CSV file of customers to import"
+                onChange={handleImportFileChosen}
+              />
+            </div>
+          )}
           <div className="relative">
             <Search
               className="w-4 h-4 absolute left-3 top-2.5"

@@ -19,6 +19,9 @@ import '@testing-library/jest-dom';
 let mockTenantId: string | null = 'tenant-real-123';
 vi.mock('../lib/SessionContext', () => ({
   useActiveTenantId: () => mockTenantId,
+  // CRMView reads role/isAdmin to gate the CSV export/import buttons; a plain
+  // owner keeps the default view intact for the fetch-path tests below.
+  useSessionContext: () => ({ role: 'owner', isAdmin: false }),
 }));
 
 const mockListCustomers = vi.fn();

@@ -17,6 +17,9 @@ import {
 } from '../middleware';
 import { syncAppointmentToAll, syncCustomerToAll } from '../services/syncOrchestrator';
 import { assertRowAffected } from './routeHelpers';
+import { parseCsv, CsvParseError } from '../services/csv';
+import { normalizePhone } from '../../shared/phone';
+import { splitName } from '../../shared/name';
 
 const CustomerCreateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -55,6 +58,47 @@ const CustomerUpdateSchema = z.object({
   // by the booking path and the voice agent context.
   notes: z.string().max(2000).optional().nullable(),
 });
+
+const CustomerImportSchema = z.object({
+  tenant_id: z.string().uuid().optional(),
+  csv: z.string().min(1),
+});
+
+/** Hard limits for POST /customers/import (bulk onboarding, not ETL). */
+const IMPORT_MAX_BYTES = 1_000_000; // 1 MB of CSV text
+const IMPORT_MAX_ROWS = 2000; // data rows (header excluded)
+const IMPORT_MAX_ERRORS = 100; // cap the reported per-row error list
+
+/**
+ * Liberal header matching for the import CSV: case-insensitive, trimmed,
+ * spaces/dashes treated as underscores. Each canonical field lists the
+ * header spellings we accept (Excel/Sheets/CRM exports vary wildly).
+ */
+const IMPORT_HEADER_ALIASES: Record<string, string[]> = {
+  name: ['name', 'full_name', 'customer', 'customer_name', 'contact_name'],
+  first_name: ['first_name', 'firstname', 'first', 'given_name'],
+  last_name: ['last_name', 'lastname', 'last', 'surname', 'family_name'],
+  phone: ['phone', 'phone_number', 'mobile', 'cell', 'telephone', 'tel'],
+  email: ['email', 'e_mail', 'email_address', 'mail'],
+  notes: ['notes', 'note', 'comments', 'comment'],
+};
+
+/** Map a raw CSV header row to canonical-field → column-index. */
+function matchImportHeaders(headerRow: string[]): Record<string, number> {
+  const indexes: Record<string, number> = {};
+  headerRow.forEach((raw, i) => {
+    const norm = raw
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
+    for (const [field, aliases] of Object.entries(IMPORT_HEADER_ALIASES)) {
+      if (aliases.includes(norm) && !(field in indexes)) {
+        indexes[field] = i;
+      }
+    }
+  });
+  return indexes;
+}
 
 export function registerCustomerRoutes(
   app: AppFastifyInstance,
@@ -136,6 +180,223 @@ export function registerCustomerRoutes(
       syncCustomerToAll(pool, body.tenant_id, res.rows[0].customer_id, 'create', req.log);
       return reply.send({ success: true, customer: res.rows[0] });
     }, 'Failed to create customer')
+  );
+
+  // POST /customers/import — bulk CSV onboarding (docs/GAPS.md §6).
+  // Body is JSON `{ csv }` (no multipart dependency); the dashboard reads the
+  // file client-side via FileReader. Owner-gated: bulk PII writes are not a
+  // front-desk operation. Per row: validate + normalizePhone, skip+report
+  // invalid rows, dedupe against existing tenant customers AND within the
+  // file by normalized phone, insert the rest in one transaction.
+  app.post(
+    '/customers/import',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      // Owner-only (mirrors the export gate in exportData.ts; the platform
+      // super-admin tenant bypasses for cross-tenant support).
+      if (req.auth && req.auth.tenant_id !== SUPER_ADMIN_TENANT_ID && req.auth.role !== 'owner') {
+        return reply
+          .status(403)
+          .send({ success: false, error: 'Only owners can import customers' });
+      }
+
+      const parsed = CustomerImportSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+      }
+      const { csv } = parsed.data;
+
+      if (Buffer.byteLength(csv, 'utf8') > IMPORT_MAX_BYTES) {
+        return reply.status(400).send({
+          success: false,
+          error: `CSV too large — the limit is ${IMPORT_MAX_BYTES / 1_000_000} MB. Split the file and import in parts.`,
+        });
+      }
+
+      let records: string[][];
+      try {
+        records = parseCsv(csv);
+      } catch (err) {
+        if (err instanceof CsvParseError) {
+          return reply.status(400).send({ success: false, error: `Malformed CSV: ${err.message}` });
+        }
+        throw err;
+      }
+
+      if (records.length < 2) {
+        return reply.status(400).send({
+          success: false,
+          error: 'CSV must have a header row and at least one data row',
+        });
+      }
+
+      const [headerRow, ...dataRows] = records;
+      if (dataRows.length > IMPORT_MAX_ROWS) {
+        return reply.status(400).send({
+          success: false,
+          error: `Too many rows — the limit is ${IMPORT_MAX_ROWS} data rows per import (got ${dataRows.length}). Split the file and import in parts.`,
+        });
+      }
+
+      const cols = matchImportHeaders(headerRow);
+      if (cols.phone === undefined) {
+        return reply.status(400).send({
+          success: false,
+          error:
+            'CSV is missing a phone column (accepted headers: phone, phone_number, mobile, cell, telephone)',
+        });
+      }
+      if (cols.name === undefined && cols.first_name === undefined) {
+        return reply.status(400).send({
+          success: false,
+          error:
+            'CSV is missing a name column (accepted headers: name, full_name, customer_name, or first_name/last_name)',
+        });
+      }
+
+      // Validate + normalize every row BEFORE touching the DB.
+      const cell = (row: string[], idx: number | undefined): string =>
+        idx === undefined ? '' : (row[idx] ?? '').trim();
+      const errors: { row: number; reason: string }[] = [];
+      const seenPhones = new Set<string>();
+      const candidates: {
+        row: number;
+        name: string;
+        first_name: string | null;
+        last_name: string | null;
+        phone: string;
+        email: string | null;
+        notes: string | null;
+      }[] = [];
+      let inFileDuplicates = 0;
+
+      dataRows.forEach((row, i) => {
+        // Row numbers reported to the owner count the header as row 1, so the
+        // first data row is 2 — matching what they see in Excel/Sheets.
+        const rowNum = i + 2;
+        // Skip rows that are entirely blank cells (common trailing junk).
+        if (row.every((c) => c.trim() === '')) return;
+
+        let name = cell(row, cols.name);
+        const firstRaw = cell(row, cols.first_name);
+        const lastRaw = cell(row, cols.last_name);
+        if (!name) name = [firstRaw, lastRaw].filter(Boolean).join(' ');
+        if (!name) {
+          errors.push({ row: rowNum, reason: 'missing name' });
+          return;
+        }
+        const { firstName, lastName } = firstRaw
+          ? { firstName: firstRaw, lastName: lastRaw }
+          : splitName(name);
+
+        const phoneRaw = cell(row, cols.phone);
+        const phone = normalizePhone(phoneRaw);
+        if (!phone) {
+          errors.push({
+            row: rowNum,
+            reason: phoneRaw ? `invalid phone "${phoneRaw}"` : 'missing phone',
+          });
+          return;
+        }
+
+        const emailRaw = cell(row, cols.email);
+        if (emailRaw && !z.string().email().safeParse(emailRaw).success) {
+          errors.push({ row: rowNum, reason: `invalid email "${emailRaw}"` });
+          return;
+        }
+
+        if (seenPhones.has(phone)) {
+          inFileDuplicates++;
+          return;
+        }
+        seenPhones.add(phone);
+
+        candidates.push({
+          row: rowNum,
+          name,
+          first_name: firstName || null,
+          last_name: lastName || null,
+          phone,
+          email: emailRaw || null,
+          notes: cell(row, cols.notes) || null,
+        });
+      });
+
+      // Dedupe against existing (non-deleted) tenant customers by normalized
+      // phone, then insert the remainder in one transaction — an import is
+      // all-or-nothing for the rows that made it past validation.
+      const { imported, existingDuplicates } = await withTenantClient(tenantId, async (client) => {
+        const existingRes = await client.query<{ phone: string }>(
+          'SELECT phone FROM customers WHERE tenant_id = $1 AND is_deleted = false',
+          [tenantId]
+        );
+        const existingPhones = new Set(
+          existingRes.rows.map((r) => normalizePhone(r.phone) ?? r.phone)
+        );
+
+        const toInsert = candidates.filter((c) => !existingPhones.has(c.phone));
+        const dupCount = candidates.length - toInsert.length;
+        if (toInsert.length === 0) return { imported: 0, existingDuplicates: dupCount };
+
+        await client.query('BEGIN');
+        try {
+          // Multi-row inserts in batches (7 params/row keeps us far under the
+          // 65535 bind-parameter cap even at the 2000-row limit).
+          const BATCH = 500;
+          for (let start = 0; start < toInsert.length; start += BATCH) {
+            const batch = toInsert.slice(start, start + BATCH);
+            const values: unknown[] = [];
+            const tuples = batch.map((c, j) => {
+              const base = j * 7;
+              values.push(
+                tenantId,
+                c.name,
+                c.first_name,
+                c.last_name,
+                c.phone,
+                c.email,
+                c.notes ? { notes: c.notes } : {}
+              );
+              return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7})`;
+            });
+            await client.query(
+              `INSERT INTO customers (tenant_id, name, first_name, last_name, phone, email, metadata)
+               VALUES ${tuples.join(',')}`,
+              values
+            );
+          }
+          await client.query('COMMIT');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        }
+        return { imported: toInsert.length, existingDuplicates: dupCount };
+      });
+
+      const skippedDuplicates = inFileDuplicates + existingDuplicates;
+      logEvent(req, 'customers_imported', {
+        tenantId,
+        imported,
+        skippedDuplicates,
+        errorCount: errors.length,
+        totalRows: dataRows.length,
+      });
+      // NOTE: no per-row CRM sync dispatch here (unlike POST /customers/create).
+      // Firing up to 2000 fire-and-forget syncOrchestrator calls would saturate
+      // the 10-slot pool; bulk import is an onboarding operation and connected
+      // CRMs pick the rows up on their next full sync.
+      return reply.send({
+        success: true,
+        imported,
+        skipped_duplicates: skippedDuplicates,
+        total_rows: dataRows.length,
+        errors: errors.slice(0, IMPORT_MAX_ERRORS),
+        errors_truncated: errors.length > IMPORT_MAX_ERRORS,
+      });
+    }, 'Failed to import customers')
   );
 
   app.put(

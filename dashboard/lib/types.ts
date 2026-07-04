@@ -470,6 +470,21 @@ export interface TenantDataExportResponse {
   tables: Record<string, unknown[]>;
 }
 
+// --- CSV customer import (POST /customers/import) ---
+export interface CustomerImportRowError {
+  /** 1-based CSV row number counting the header as row 1 (matches Excel/Sheets). */
+  row: number;
+  reason: string;
+}
+
+export interface CustomerImportResult {
+  imported: number;
+  skipped_duplicates: number;
+  total_rows: number;
+  errors: CustomerImportRowError[];
+  errors_truncated?: boolean;
+}
+
 export interface DeletedRecord {
   record_id: string;
   tenant_id: string;
