@@ -155,6 +155,7 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
         { customer_id: 'cust-2', name: 'Bob Smith', visits: 2, revenue: 90 },
       ],
       abandonment_by_service: [{ service: 'Detailing', abandoned_count: 4 }],
+      first_time_fix: { rate: 0.6, first_call_booked: 6, distinct_callers: 10 },
       summary: {
         distinct_callers: 10,
         repeat_callers: 1,
@@ -181,6 +182,39 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
     expect(screen.getByText('Top Customers')).toBeInTheDocument();
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByText(/\$320 · 4 visits/i)).toBeInTheDocument();
+
+    // First-time-fix panel — rate as % + the numerator/denominator line.
+    expect(screen.getByText('First-Time Fix')).toBeInTheDocument();
+    expect(screen.getByText('60%')).toBeInTheDocument();
+    expect(screen.getByText(/6 of 10 callers booked on their first call/i)).toBeInTheDocument();
+  });
+
+  test('SAD: first_time_fix rate null (no callers) → panel shows the empty state, not 0%', async () => {
+    // WHO: a fresh tenant (or an older backend that doesn't return the field).
+    // WHAT: rate:null means "no data"; the panel must render its empty copy
+    //        instead of a fabricated 0% — a real 0% is a different fact.
+    // WHEN: getCohorts returns first_time_fix with rate null.
+    // WHERE: the First-Time Fix MetricCard's rate !== null branch.
+    // WHY: showing 0% would tell the owner "nobody ever books on the first
+    //       call" before a single call has happened.
+    mockApi.analytics.getCalls.mockResolvedValue({
+      totals: { total: 2, booked: 0, abandoned: 1 },
+      by_outcome: [],
+      by_day: [],
+    });
+    mockApi.analytics.getCohorts.mockResolvedValue({
+      repeat_callers: [],
+      by_service: [],
+      top_customers: [],
+      abandonment_by_service: [],
+      first_time_fix: { rate: null, first_call_booked: 0, distinct_callers: 0 },
+      summary: { distinct_callers: 0, repeat_callers: 0, repeat_call_volume: 0, total_calls: 0 },
+    });
+
+    render(<AnalyticsView />);
+
+    expect(await screen.findByText('First-Time Fix')).toBeInTheDocument();
+    expect(screen.getByText('No callers logged yet')).toBeInTheDocument();
   });
 
   test('HAPPY: picking a From date refetches calls + cohorts with that bound', async () => {

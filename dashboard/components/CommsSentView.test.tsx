@@ -28,6 +28,7 @@ const makeRow = (overrides = {}) => ({
   subject: null,
   body: 'Your appointment is confirmed.',
   status: 'sent',
+  error: null,
   created_at: '2026-06-17T10:00:00Z',
   ...overrides,
 });
@@ -46,7 +47,12 @@ describe('CommsSentView', () => {
         success: true,
         history: [
           makeRow({ body: 'Your appointment is confirmed.', channel: 'sms' }),
-          makeRow({ communications_history_id: 2, channel: 'email', subject: 'Reminder', body: 'See you tomorrow.' }),
+          makeRow({
+            communications_history_id: 2,
+            channel: 'email',
+            subject: 'Reminder',
+            body: 'See you tomorrow.',
+          }),
         ],
         total: 2,
       });
@@ -93,7 +99,10 @@ describe('CommsSentView', () => {
       fireEvent.click(screen.getByRole('button', { name: 'SMS' }));
 
       await waitFor(() => expect(mockApi.communications.history).toHaveBeenCalledTimes(2));
-      const secondCall = mockApi.communications.history.mock.calls[1] as [string, { type: string; offset: number }];
+      const secondCall = mockApi.communications.history.mock.calls[1] as [
+        string,
+        { type: string; offset: number },
+      ];
       expect(secondCall[1].type).toBe('sms');
       expect(secondCall[1].offset).toBe(0);
     });
@@ -114,13 +123,75 @@ describe('CommsSentView', () => {
       });
     });
 
+    test('Failed-only toggle passes status=failed to the API and resets to page 0', async () => {
+      // WHO: owner drilling into failed deliveries | WHAT: toggle sends status='failed' + offset 0
+      // WHEN: clicks "Failed only" | WHERE: toolbar toggle button
+      // WHY: the drill-down must reach the backend filter — a UI-only filter
+      //      would only filter the current page and misreport delivery health
+      mockApi.communications.history.mockResolvedValue({ success: true, history: [], total: 0 });
+
+      render(<CommsSentView tenantId={TENANT} />);
+      await waitFor(() => expect(mockApi.communications.history).toHaveBeenCalledTimes(1));
+      // Initial load: no status filter (undefined → backend default 'all').
+      const firstCall = mockApi.communications.history.mock.calls[0] as [
+        string,
+        { status?: string },
+      ];
+      expect(firstCall[1].status).toBeUndefined();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Failed only' }));
+
+      await waitFor(() => expect(mockApi.communications.history).toHaveBeenCalledTimes(2));
+      const secondCall = mockApi.communications.history.mock.calls[1] as [
+        string,
+        { status?: string; offset: number },
+      ];
+      expect(secondCall[1].status).toBe('failed');
+      expect(secondCall[1].offset).toBe(0);
+      expect(screen.getByRole('button', { name: 'Failed only' })).toHaveAttribute(
+        'aria-pressed',
+        'true'
+      );
+    });
+
+    test('failed row shows the per-row delivery error detail', async () => {
+      // WHO: owner asking "WHY did this message fail?" | WHAT: error text under the body
+      // WHEN: a failed row carries the provider error | WHERE: Message column
+      // WHY: "failed" alone is not actionable — the recorded error detail is
+      //      the whole point of the drill-down
+      mockApi.communications.history.mockResolvedValue({
+        success: true,
+        history: [
+          makeRow({
+            communications_history_id: 1,
+            status: 'failed',
+            error: 'Carrier rejected: destination unreachable (30003)',
+          }),
+          makeRow({ communications_history_id: 2, status: 'sent' }),
+        ],
+        total: 2,
+      });
+
+      render(<CommsSentView tenantId={TENANT} />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Delivery error: Carrier rejected: destination unreachable \(30003\)/)
+        ).toBeInTheDocument();
+      });
+      // Sent rows never render an error line.
+      expect(screen.getAllByText(/Delivery error:/)).toHaveLength(1);
+    });
+
     test('pagination controls have accessible names', async () => {
       // WHO: keyboard/screen-reader users | WHAT: prev/next buttons have aria-label
       // WHEN: more than PAGE_SIZE rows | WHERE: pagination footer
       // WHY: icon-only buttons need text equivalent for assistive tech
       mockApi.communications.history.mockResolvedValue({
         success: true,
-        history: Array.from({ length: 25 }, (_, i) => makeRow({ communications_history_id: i + 1 })),
+        history: Array.from({ length: 25 }, (_, i) =>
+          makeRow({ communications_history_id: i + 1 })
+        ),
         total: 50,
       });
 
@@ -144,6 +215,24 @@ describe('CommsSentView', () => {
 
       await waitFor(() => {
         expect(screen.getByText('No sent messages')).toBeInTheDocument();
+      });
+    });
+
+    test('Failed-only with zero failures shows the failed-specific empty state', async () => {
+      // WHO: owner checking delivery health when nothing failed
+      // WHAT: empty copy says "No failed deliveries", not "No sent messages"
+      // WHEN: Failed only is active and the API returns zero rows
+      // WHERE: empty-state branch keyed on failedOnly
+      // WHY: "No sent messages" under a failed filter would read as data loss
+      mockApi.communications.history.mockResolvedValue({ success: true, history: [], total: 0 });
+
+      render(<CommsSentView tenantId={TENANT} />);
+      await waitFor(() => expect(mockApi.communications.history).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Failed only' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('No failed deliveries')).toBeInTheDocument();
       });
     });
 

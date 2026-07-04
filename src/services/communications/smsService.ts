@@ -26,6 +26,9 @@ export class SMSService {
    * Send an SMS message with consent checking
    */
   async sendSMS(tenantId: string, message: SMSMessage): Promise<CommunicationResult> {
+    // Hoisted so the send-failure catch can record the same body the success
+    // path would have logged (templated when a template is used).
+    let body = message.body || '';
     try {
       const tenantConfig = await this.configService.getTenantConfig(tenantId);
       if (!tenantConfig) {
@@ -68,7 +71,6 @@ export class SMSService {
       }
 
       // Apply template if specified
-      let body = message.body || '';
       if (message.template) {
         body = this.applySMSTemplate(message.template, message.templateData || {});
       }
@@ -112,9 +114,20 @@ export class SMSService {
         throw error;
       }
       console.error('❌ Error sending SMS:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      // Record the FAILED delivery so the dashboard failed-delivery drill-down
+      // (?status=failed) has real rows. Best-effort — the recorder never throws,
+      // but we still guard so a history-write hiccup can't mask the send error.
+      await recordCommunicationHistory(tenantId, {
+        channel: 'sms',
+        recipient: message.to,
+        body,
+        status: 'failed',
+        error: errorMessage,
+      }).catch(() => {});
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   }

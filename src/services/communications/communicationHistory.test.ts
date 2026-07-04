@@ -18,7 +18,7 @@
  *           defensive catch) would leave the audit log empty in production
  *           while every gate stayed green
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import type { Client } from 'pg';
 import {
   ROOT_DB_URL,
@@ -32,6 +32,7 @@ import { closePool } from '../../database/index';
 import { recordCommunicationHistory } from './communicationHistory';
 import { SMSService } from './smsService';
 import { EmailService } from './emailService';
+import { providerRegistry } from './ProviderRegistry';
 import type { TenantConfigService, TenantConfig } from '../tenants/index';
 
 let root: Client;
@@ -266,5 +267,100 @@ describe('send path writes history (provider mocked, real DB)', () => {
     expect(rows.rows[0].recipient).toBe('send-path@example.com');
     expect(rows.rows[0].subject).toBe('Send-path subject');
     expect(rows.rows[0].status).toBe('sent');
+  });
+});
+
+describe('send-FAILURE path records a failed row (drill-down data source)', () => {
+  // Same real-seeded-tenant config stub as the success-path suite. The provider
+  // (SMS) / transporter (email) is forced to reject so we exercise the catch
+  // block that writes the status='failed' row — the row the dashboard
+  // ?status=failed drill-down reads. Without this row the drill-down is inert.
+  const buildConfigService = (): TenantConfigService =>
+    ({
+      getTenantConfig: vi.fn().mockResolvedValue({
+        tenantId,
+        name: 'History Co',
+        phone: '+15551234567',
+        settings: { smsEnabled: true, emailEnabled: true },
+      } satisfies TenantConfig),
+      getTenantConfigs: vi.fn().mockResolvedValue([]),
+      updateTenantConfig: vi.fn(),
+      getBusinessName: vi.fn().mockResolvedValue('History Co'),
+      getNotificationPreferences: vi.fn().mockResolvedValue({
+        smsEnabled: true,
+        emailEnabled: true,
+        reminderHours: [],
+        contactInfo: { phone: '+15551234567' },
+      }),
+    }) as unknown as TenantConfigService;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('SAD: SMSService.sendSMS records a status=failed row with the provider error', async () => {
+    // WHO: SMSService.sendSMS when the provider.sendSMS call rejects
+    // WHAT: a communications_history row with status='failed' + the error text
+    // WHEN: a real provider outage / rejected send (here: forced mock rejection)
+    // WHERE: SMSService.sendSMS catch block → recordCommunicationHistory
+    // WHY: the ?status=failed drill-down was inert because failures never wrote
+    //      a row — this proves the failed row now exists so the UI has data
+    const smsService = new SMSService(buildConfigService(), undefined);
+    // Force the (mock) provider's sendSMS to reject so the catch path runs.
+    vi.spyOn(providerRegistry.getDefaultProvider(), 'sendSMS').mockRejectedValue(
+      new Error('carrier rejected: 30007')
+    );
+
+    const result = await smsService.sendSMS(tenantId, {
+      to: '+15557770000',
+      body: 'This one fails',
+    });
+    // Sad path: the caller still gets a clean {success:false}, not a throw.
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('carrier rejected');
+
+    const rows = await root.query(
+      "SELECT * FROM communications_history WHERE tenant_id = $1 AND channel = 'sms'",
+      [tenantId]
+    );
+    expect(rows.rows).toHaveLength(1);
+    expect(rows.rows[0].status).toBe('failed');
+    expect(rows.rows[0].recipient).toBe('+15557770000');
+    expect(rows.rows[0].body).toBe('This one fails');
+    expect(rows.rows[0].error).toContain('carrier rejected');
+  });
+
+  it('SAD: EmailService.sendEmail records a status=failed row with the provider error', async () => {
+    // WHO: EmailService.sendEmail when transporter.sendMail rejects
+    // WHAT: a communications_history row with status='failed' + the error text
+    // WHEN: an SMTP/transport error on a real send (here: forced stub rejection)
+    // WHERE: EmailService.sendEmail catch block → recordCommunicationHistory
+    // WHY: email failures must also feed the ?status=failed drill-down, not just
+    //      vanish into a returned {success:false}
+    const emailService = new EmailService(buildConfigService(), undefined);
+    // Override the stub transporter so the send throws into the catch block.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (emailService as any).transporter = {
+      sendMail: vi.fn().mockRejectedValue(new Error('SMTP 550 mailbox unavailable')),
+    };
+
+    const result = await emailService.sendEmail(tenantId, {
+      to: 'bounce@example.com',
+      subject: 'Failed subject',
+      text: 'Failed body',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('SMTP 550');
+
+    const rows = await root.query(
+      "SELECT * FROM communications_history WHERE tenant_id = $1 AND channel = 'email'",
+      [tenantId]
+    );
+    expect(rows.rows).toHaveLength(1);
+    expect(rows.rows[0].status).toBe('failed');
+    expect(rows.rows[0].recipient).toBe('bounce@example.com');
+    expect(rows.rows[0].subject).toBe('Failed subject');
+    expect(rows.rows[0].body).toBe('Failed body');
+    expect(rows.rows[0].error).toContain('SMTP 550');
   });
 });

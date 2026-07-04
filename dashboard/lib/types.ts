@@ -278,6 +278,16 @@ export interface AnalyticsCohorts {
     revenue: number;
   }>;
   abandonment_by_service: Array<{ service: string; abandoned_count: number }>;
+  /**
+   * First-time-fix: of distinct callers, the share whose FIRST call ended in
+   * a booking. `rate` = first_call_booked / distinct_callers, or null when
+   * there are no callers (null = "no data", distinct from a real 0%).
+   */
+  first_time_fix: {
+    rate: number | null;
+    first_call_booked: number;
+    distinct_callers: number;
+  };
   summary: {
     distinct_callers: number;
     repeat_callers: number;

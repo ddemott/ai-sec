@@ -10,6 +10,7 @@ import {
   UserX,
   TrendingUp,
   ListChecks,
+  CheckCircle2,
 } from 'lucide-react';
 import { Api } from '../lib/api';
 import type { AnalyticsCalls, AnalyticsStats, AiCostSummary, AnalyticsCohorts } from '../lib/types';
@@ -773,6 +774,46 @@ export default function AnalyticsView() {
             ) : (
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 No abandoned bookings recorded yet
+              </p>
+            )}
+          </MetricCard>
+
+          {/* 12. First-time fix — callers resolved on first contact. Optional
+              access on first_time_fix so an older backend (field absent)
+              degrades to the empty state instead of crashing the grid. */}
+          <MetricCard
+            icon={CheckCircle2}
+            title="First-Time Fix"
+            subtitle="Callers whose first call ended in a booking"
+          >
+            {cohorts?.first_time_fix && cohorts.first_time_fix.rate !== null ? (
+              <div>
+                <div className="font-display text-3xl" style={{ color: 'var(--text-primary)' }}>
+                  {Math.round(cohorts.first_time_fix.rate * 100)}%
+                </div>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  {cohorts.first_time_fix.first_call_booked} of{' '}
+                  {cohorts.first_time_fix.distinct_callers} caller
+                  {cohorts.first_time_fix.distinct_callers === 1 ? '' : 's'} booked on their first
+                  call
+                </p>
+                <div
+                  className="h-1.5 rounded-full mt-3"
+                  style={{ backgroundColor: 'var(--border-soft)' }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.round(cohorts.first_time_fix.rate * 100)}%`,
+                      backgroundColor: 'var(--accent)',
+                      opacity: 0.8,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No callers logged yet
               </p>
             )}
           </MetricCard>
