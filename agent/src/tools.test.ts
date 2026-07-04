@@ -55,7 +55,7 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 20 expected tool names', () => {
+  it('HAPPY: exposes exactly the 23 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
@@ -71,13 +71,16 @@ describe('buildTools', () => {
         'get_available_slots',
         'get_company_policy_answer',
         'get_customer_context',
+        'get_detailed_customer_history',
         'get_my_appointments',
         'get_scheduling_options',
         'get_service_catalog',
         'identify_caller',
+        'page_owner_via_sms',
         'record_sms_consent',
         'reschedule_appointment',
         'save_customer_preference',
+        'send_self_service_link',
         'send_verification_code',
         'take_message',
         'transfer_call',
@@ -95,7 +98,12 @@ describe('buildTools', () => {
       capabilities: ['knowledge', 'messaging'],
     });
     expect(Object.keys(tools).sort()).toEqual(
-      ['capture_job_inquiry', 'get_company_policy_answer', 'take_message'].sort()
+      [
+        'capture_job_inquiry',
+        'get_company_policy_answer',
+        'page_owner_via_sms',
+        'take_message',
+      ].sort()
     );
   });
 
@@ -959,5 +967,201 @@ describe('identify_caller', () => {
 
     expect(result).toContain('ask the caller for their number');
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('page_owner_via_sms', () => {
+  it('HAPPY: injects tenant_id, caller-ID phone, and call_id; forwards LLM args', async () => {
+    // WHO: caller reporting something urgent (emergency at the property).
+    // WHAT: tool posts tenant_id + ctx.callerPhone + ctx.callId (context-
+    //        injected) plus caller_name/callback_phone/reason from the LLM.
+    // WHEN: mid-call, the moment the agent judges the matter escalation-worthy.
+    // WHERE: agent/src/tools.ts page_owner_via_sms → /agent-tools/page-owner
+    // WHY: tenant/caller/call correlation must come from context — the LLM can
+    //       never mis-scope a page onto another tenant or call.
+    const { client, calls } = makeClient([{ ok: true, result: { paged: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.page_owner_via_sms, {
+      caller_name: 'Alice Smith',
+      callback_phone: '+15559990000',
+      reason: 'water leak flooding the shop',
+    });
+
+    expect(calls[0].path).toBe('/agent-tools/page-owner');
+    expect(calls[0].body).toMatchObject({
+      tenant_id: TENANT_ID,
+      caller_name: 'Alice Smith',
+      callback_phone: '+15559990000',
+      caller_phone: CALLER_PHONE,
+      reason: 'water leak flooding the shop',
+      call_id: CALL_ID,
+    });
+  });
+
+  it('GUARD: second page on the same call short-circuits — no backend call (one page per call)', async () => {
+    // WHO: an over-eager model trying to page the owner twice on one call.
+    // WHAT: after one SUCCESSFUL page, the ctx.ownerPaged flag blocks any
+    //        further page — the tool returns a redirect string and never hits
+    //        the backend again.
+    // WHEN: any turn after the first successful page.
+    // WHERE: the ctx.ownerPaged guard at the top of execute().
+    // WHY: repeated pages spam the owner's phone; the guard makes "at most one
+    //       page per call" a structural property, not a prompt hope.
+    const { client, calls } = makeClient([{ ok: true, result: { paged: true } }]);
+    const ctx = makeCtx();
+    const tools = buildTools(ctx, client);
+
+    await exec(tools.page_owner_via_sms, { caller_name: 'Alice', reason: 'urgent leak' });
+    expect(ctx.ownerPaged).toBe(true);
+
+    const second = await exec(tools.page_owner_via_sms, {
+      caller_name: 'Alice',
+      reason: 'still leaking',
+    });
+
+    expect(second).toContain('already been paged');
+    expect(calls).toHaveLength(1); // only the first attempt reached the backend
+  });
+
+  it('SAD: a FAILED page does not set the guard — one clean retry stays possible', async () => {
+    // WHO: caller paging while the owner has no SMS-capable number configured.
+    // WHAT: backend returns success:false → tool relays the graceful error and
+    //        leaves ctx.ownerPaged unset (the owner was NOT actually paged).
+    // WHY: the guard exists to stop repeat SUCCESSFUL pages; locking it on a
+    //       transient failure would strand a genuinely urgent caller.
+    const { client, calls } = makeClient([
+      {
+        ok: false,
+        error: "The owner doesn't have a text-capable number set up, so I can't page them.",
+      },
+    ]);
+    const ctx = makeCtx();
+    const tools = buildTools(ctx, client);
+
+    const result = await exec(tools.page_owner_via_sms, {
+      caller_name: 'Bob',
+      reason: 'angry customer about to leave',
+    });
+
+    expect(result).toContain("text-capable number");
+    expect(ctx.ownerPaged).toBeUndefined();
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe('get_detailed_customer_history', () => {
+  it('HAPPY: injects tenant_id + caller-ID phone from context (LLM supplies nothing)', async () => {
+    // WHO: returning caller asking "when was I last in?".
+    // WHAT: tool posts tenant_id + ctx.callerPhone with NO LLM-supplied args
+    //        and relays the structured history payload.
+    // WHERE: agent/src/tools.ts get_detailed_customer_history →
+    //        /agent-tools/customer-history
+    // WHY: server-injected phone (same trust model as get_my_appointments) —
+    //       the LLM must never be able to pull another caller's history.
+    const { client, calls } = makeClient([
+      {
+        ok: true,
+        result: {
+          name: 'Jane Doe',
+          preferences: { preferred_stylist: 'Maria' },
+          appointments: [{ start_time: '2026-06-01T15:00:00Z', status: 'completed' }],
+          recent_call_summaries: [{ summary: 'Booked a haircut.', started_at: '2026-06-01' }],
+        },
+      },
+    ]);
+    const tools = buildTools(makeCtx(), client);
+
+    const result = await exec(tools.get_detailed_customer_history, {});
+
+    expect(calls[0].path).toBe('/agent-tools/customer-history');
+    expect(calls[0].body).toEqual({ tenant_id: TENANT_ID, phone: CALLER_PHONE });
+    expect(result).toContain('Jane Doe');
+    expect(result).toContain('preferred_stylist');
+  });
+
+  it('SAD: no verified caller phone → tells the agent to identify the caller first, no backend call', async () => {
+    // WHO: anonymous/forwarded-line caller not yet identified.
+    // WHAT: tool short-circuits with an "identify the caller first" error and
+    //        never reaches the backend.
+    // WHY: the task contract — without a verified phone there is no safe key
+    //       to look history up under; the agent must run identification first.
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    const result = await exec(tools.get_detailed_customer_history, {});
+
+    expect(result).toContain('identify the caller first');
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('send_self_service_link', () => {
+  it('HAPPY: forwards a specific appointment_id with context-injected tenant + phone', async () => {
+    // WHO: caller who picked one of several upcoming appointments to move.
+    // WHAT: tool posts tenant_id + ctx.callerPhone + the LLM-chosen
+    //        appointment_id (from get_my_appointments) to the backend.
+    // WHERE: agent/src/tools.ts send_self_service_link →
+    //        /agent-tools/send-self-service-link
+    // WHY: phone comes from context so ownership gating server-side is always
+    //       keyed to the actual caller, never an LLM-invented number.
+    const { client, calls } = makeClient([{ ok: true, result: { sent: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.send_self_service_link, { appointment_id: RESOURCE_ID });
+
+    expect(calls[0].path).toBe('/agent-tools/send-self-service-link');
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: CALLER_PHONE,
+      appointment_id: RESOURCE_ID,
+    });
+  });
+
+  it('HAPPY: appointment_id omitted → backend targets the caller\'s next upcoming appointment', async () => {
+    // WHO: caller with a single upcoming appointment ("text me the link").
+    // WHAT: no appointment_id in the body — the backend defaults to the next
+    //        upcoming appointment under the caller's phone.
+    const { client, calls } = makeClient([{ ok: true, result: { sent: true } }]);
+    const tools = buildTools(makeCtx(), client);
+
+    await exec(tools.send_self_service_link, {});
+
+    expect(calls[0].body.appointment_id).toBeUndefined();
+    expect(calls[0].body).toMatchObject({ tenant_id: TENANT_ID, phone: CALLER_PHONE });
+  });
+
+  it('SAD: no caller-ID → short-circuits with a handle-it-live redirect, no backend call', async () => {
+    // WHO: anonymous caller asking for a self-service text.
+    // WHAT: without a verified phone there is no ownership key — the tool
+    //        redirects the agent to handle the change live and never hits
+    //        the backend.
+    // WHY: same ownership gate as cancel/reschedule; a link sent without a
+    //       verified phone could target someone else's appointment.
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    const result = await exec(tools.send_self_service_link, {});
+
+    expect(result).toContain('Handle the cancel or reschedule on the call');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('SAD: consent-refused backend error relays verbatim so the agent pivots to live handling', async () => {
+    // WHO: caller whose number opted out (STOP) or never consented to texts.
+    // WHAT: backend fails with the consent message; the tool passes the exact
+    //        conversational error through for the LLM to relay.
+    const { client } = makeClient([
+      {
+        ok: false,
+        error:
+          "This number hasn't agreed to receive texts from us, so I can't send the link.",
+      },
+    ]);
+    const tools = buildTools(makeCtx(), client);
+
+    const result = await exec(tools.send_self_service_link, {});
+
+    expect(result).toContain("hasn't agreed to receive texts");
   });
 });

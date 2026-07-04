@@ -8,7 +8,7 @@
 // the model picks; unit tests only prove each tool works once called.
 //
 // WHAT IT DOES: replays the REAL system prompt (buildSystemPrompt) + the REAL
-// 20 tool schemas (buildTools — already OpenAI function-calling JSON Schema;
+// 23 tool schemas (buildTools — already OpenAI function-calling JSON Schema;
 // LiveKit passes them through verbatim) against the SAME model the agent runs
 // (gpt-4o-mini) via plain chat.completions. Tools are never executed — each
 // call is answered with a scripted synthetic result, and we grade the SEQUENCE
@@ -114,6 +114,28 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
   },
   cancel_appointment: { success: true, result: { canceled: true } },
   take_message: { success: true, result: { recorded: true } },
+  send_self_service_link: {
+    success: true,
+    result: {
+      sent: true,
+      message: 'Text sent — the caller will receive a link to cancel or reschedule themselves.',
+    },
+  },
+  page_owner_via_sms: {
+    success: true,
+    result: { paged: true, message: 'The owner has been paged by text with the caller details.' },
+  },
+  get_detailed_customer_history: {
+    success: true,
+    result: {
+      name: 'Jane Doe',
+      preferences: { preferred_stylist: 'Maria' },
+      appointments: [
+        { start_time: '2026-06-01T15:00:00', status: 'completed', service_name: 'Haircut' },
+      ],
+      recent_call_summaries: [{ summary: 'Booked a haircut with Maria.' }],
+    },
+  },
   get_company_policy_answer: {
     success: true,
     result: { answer: 'Yes, we offer beard trims for 15 dollars.' },
@@ -183,6 +205,33 @@ const CASES: EvalCase[] = [
     ],
     required: [['take_message']],
     forbidden: ['book_appointment', 'book_with_scheduling'],
+  },
+  {
+    // New 2026-07-04 tool: caller explicitly wants the self-service text
+    // instead of a live reschedule — the model must send the link, not run
+    // the live reschedule (or worse, cancel).
+    name: 'reschedule-by-text request sends send_self_service_link',
+    userTurns: [
+      "Hi, it's Jane Doe, 555-222-0001 — I need to move my haircut tomorrow, but I'm driving. Can you just text me a link so I can reschedule it myself later?",
+      'Yes please, text it to this number.',
+    ],
+    // A lone send_self_service_link is valid (omitted appointment_id targets
+    // the next upcoming appointment), so only the send itself is required;
+    // an optional get_my_appointments lookup first is also fine.
+    required: [['send_self_service_link']],
+    forbidden: ['cancel_appointment', 'reschedule_appointment'],
+  },
+  {
+    // New 2026-07-04 tool: an explicitly urgent "text the owner now, don't
+    // transfer me" request must use the page tool, not a live transfer and
+    // not a plain message.
+    name: 'urgent no-transfer escalation uses page_owner_via_sms',
+    userTurns: [
+      "This is John Rivera, 555-666-0004. There's water pouring through the ceiling of your shop right now. Don't transfer me — I can't stay on the line. Just text the owner immediately so they see it.",
+      "That's it — I have to go.",
+    ],
+    required: [['page_owner_via_sms']],
+    forbidden: ['transfer_call'],
   },
 ];
 

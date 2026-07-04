@@ -161,13 +161,14 @@ describe('buildSystemPrompt', () => {
     expect(prompt.toLowerCase()).toContain('take your name and number');
   });
 
-  it('HAPPY: mentions all 10 tools by name so the LLM knows its toolkit', () => {
+  it('HAPPY: mentions the core tools by name so the LLM knows its toolkit', () => {
     // WHY: If a tool name drifts here vs. the tool registry, the LLM
     //        may invoke the wrong name and the router 404s. Listing
     //        every tool in the prompt keeps this aligned.
     const prompt = buildSystemPrompt(BASE_CTX);
     for (const toolName of [
       'get_customer_context',
+      'get_detailed_customer_history',
       'get_service_catalog',
       'get_available_slots',
       'get_scheduling_options',
@@ -178,9 +179,36 @@ describe('buildSystemPrompt', () => {
       'send_verification_code',
       'verify_phone_code',
       'transfer_call',
+      'send_self_service_link',
+      'page_owner_via_sms',
     ]) {
       expect(prompt).toContain(toolName);
     }
+  });
+
+  it('HAPPY: cancel/reschedule flow proactively offers the self-service text link', () => {
+    // WHO: caller who wants to cancel or reschedule an existing appointment.
+    // WHAT: the prompt instructs the agent to OFFER texting a self-service
+    //        link before doing the change live (GAPS.md "next-level voice
+    //        tools" — link-first instead of always live).
+    // WHERE: "# Canceling and rescheduling" step 3.
+    // WHY: many callers prefer handling it themselves; the offer must be a
+    //       scripted step or the model will never volunteer it.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toContain('PROACTIVELY offer the self-service option');
+    expect(prompt).toContain('send_self_service_link(appointment_id)');
+  });
+
+  it('HAPPY: urgent-page section mandates the one-page-per-call rule and the message fallback', () => {
+    // WHO: caller with a genuinely urgent matter for the owner.
+    // WHAT: the "# Urgent matters" section exists, limits paging to once per
+    //        call, and steers failures to take_message (never retry loops).
+    // WHY: the tool enforces the guard structurally, but the prompt must say
+    //       it too or the model narrates failed retries at the caller.
+    const prompt = buildSystemPrompt(BASE_CTX);
+    expect(prompt).toContain('# Urgent matters');
+    expect(prompt).toContain('AT MOST ONCE per call');
+    expect(prompt).toMatch(/take a message instead/i);
   });
 
   it('SAD: prompt forbids markdown and "as an AI" filler', () => {

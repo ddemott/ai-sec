@@ -31,7 +31,7 @@
 #                                        non-zero below 80%). Real embeddings.
 #   toolselect                            Agent tool-SELECTION eval: replays the
 #                                        real system prompt + the real set of
-#                                        20 tool schemas through gpt-4o-mini and grades
+#                                        23 tool schemas through gpt-4o-mini and grades
 #                                        the tool sequence the model picks
 #                                        (e.g. available_slots must lead to
 #                                        book_with_scheduling, NEVER

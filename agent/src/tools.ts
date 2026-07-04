@@ -1,7 +1,7 @@
 /**
  * Tool definitions for the LiveKit agent.
  *
- * Each of the 20 backend /agent-tools/* routes is exposed to the LLM as a
+ * Each of the 23 backend /agent-tools/* routes is exposed to the LLM as a
  * function-tool. The `tenant_id` and (where relevant) `call_id` are
  * injected from the session context — the LLM never sees or supplies them.
  * This prevents an entire class of bugs where the LLM hallucinates or
@@ -43,7 +43,10 @@ const CAPABILITY_OF: Record<string, Capability> = {
   get_company_policy_answer: 'knowledge',
   take_message: 'messaging',
   capture_job_inquiry: 'messaging',
+  page_owner_via_sms: 'messaging',
   get_customer_context: 'identity',
+  get_detailed_customer_history: 'identity',
+  send_self_service_link: 'scheduling',
   find_caller_by_name: 'identity',
   identify_caller: 'identity',
   save_customer_preference: 'identity',
@@ -717,6 +720,54 @@ export function buildTools(
       },
     }),
 
+    page_owner_via_sms: llm.tool({
+      description:
+        "URGENTLY page the business owner by text, mid-call, with the caller's name, callback number, and a one-line reason. Use ONLY for genuinely urgent or escalation-worthy matters the owner should see immediately (an emergency at the property, an angry customer threatening to leave, a time-critical business issue) — for ordinary requests use take_message instead. You may page the owner AT MOST ONCE per call. If it reports it can't page, offer to take a message instead.",
+      parameters: {
+        type: 'object',
+        properties: {
+          caller_name: {
+            type: 'string',
+            description: "The caller's name as they gave it.",
+          },
+          callback_phone: {
+            type: 'string',
+            description:
+              "Number the owner should call back. Omit if the caller didn't give one (caller-ID is used).",
+          },
+          reason: {
+            type: 'string',
+            description:
+              "ONE short line saying why this is urgent, e.g. 'water leak flooding the shop'. Be specific.",
+          },
+        },
+        required: ['caller_name', 'reason'],
+        additionalProperties: false,
+      },
+      execute: async (args: { caller_name: string; callback_phone?: string; reason: string }) => {
+        // Per-call guard: one successful page maximum. The flag lives on the
+        // session context so it survives across turns for the whole call.
+        if (ctx.ownerPaged) {
+          return JSON.stringify({
+            error:
+              'The owner has already been paged once on this call — do not page again. Offer to take a message with any additional details instead.',
+          });
+        }
+        const res = await client.call('/agent-tools/page-owner', {
+          tenant_id: ctx.tenantId,
+          caller_name: args.caller_name,
+          callback_phone: args.callback_phone,
+          caller_phone: ctx.callerPhone ?? undefined,
+          reason: args.reason,
+          // Truthy check (not ??) so an empty-string callId is omitted — the
+          // backend call_id is min(1) and would 400 on ''.
+          call_id: ctx.callId || undefined,
+        });
+        if (res.ok) ctx.ownerPaged = true;
+        return formatResponse(res);
+      },
+    }),
+
     take_message: llm.tool({
       description:
         "Record a message from the caller for the business owner and send the owner an SMS alert. Use when the caller has a question you can't answer, wants a callback, or asks to leave a message. Always collect a name and the message content before calling this. A callback number is optional if you already have caller-ID.",
@@ -834,6 +885,65 @@ export function buildTools(
           // Truthy check (not ??) so an empty-string callId is omitted — the
           // backend call_id is min(1) and would 400 on ''.
           call_id: ctx.callId || undefined,
+        });
+        return formatResponse(res);
+      },
+    }),
+
+    get_detailed_customer_history: llm.tool({
+      description:
+        "Pull the caller's FULL history: their last ~10 appointments (any status, with service, staff member, date, and status), all saved preferences, and summaries of their last few calls. Deeper than get_customer_context — use when the caller asks about past visits ('when was I last in?', 'what did I have done last time?') or you need real history to answer well. Uses the verified caller phone automatically — no input needed.",
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      execute: async () => {
+        // Phone is SERVER-INJECTED from session context (same trust model as
+        // get_my_appointments) — the LLM never supplies it, so it can never
+        // enumerate another caller's history.
+        if (!ctx.callerPhone) {
+          return JSON.stringify({
+            error:
+              "No verified caller phone yet — identify the caller first (confirm their name and number, e.g. via find_caller_by_name or identify_caller), then I can pull their history.",
+          });
+        }
+        const res = await client.call(
+          '/agent-tools/customer-history',
+          { tenant_id: ctx.tenantId, phone: ctx.callerPhone },
+          { isReadOnly: true }
+        );
+        return formatResponse(res);
+      },
+    }),
+
+    send_self_service_link: llm.tool({
+      description:
+        "Text the caller a secure link to cancel or reschedule one of their upcoming appointments THEMSELVES. Offer this proactively when a caller wants to cancel or reschedule — many prefer a link over doing it live. Pass the appointment_id from get_my_appointments; omit it to target the caller's next upcoming appointment. Requires the caller's verified phone (caller-ID) and their prior consent to receive texts; on failure, handle the cancel/reschedule live on the call instead.",
+      parameters: {
+        type: 'object',
+        properties: {
+          appointment_id: {
+            type: 'string',
+            description:
+              "UUID of the appointment, exactly as returned by get_my_appointments. Omit to use the caller's next upcoming appointment.",
+          },
+        },
+        additionalProperties: false,
+      },
+      execute: async (args: { appointment_id?: string }) => {
+        // Ownership is phone-gated server-side, same as cancel/reschedule —
+        // the phone comes from session context, never from the LLM.
+        if (!ctx.callerPhone) {
+          return JSON.stringify({
+            error:
+              "I can't text a link without caller-ID to verify the appointment is theirs. Handle the cancel or reschedule on the call instead.",
+          });
+        }
+        const res = await client.call('/agent-tools/send-self-service-link', {
+          tenant_id: ctx.tenantId,
+          phone: ctx.callerPhone,
+          appointment_id: args.appointment_id,
         });
         return formatResponse(res);
       },
