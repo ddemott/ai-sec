@@ -64,7 +64,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── components/               ~60 feature components + ui/ primitives
 │   │   └── ui/                   Badge, Button, Card, ConfirmModal, FolderTabs, Input, Modal, Select, Toast, TimeInput, PhoneInput, CoverageBar
 │   ├── lib/                      api.ts, SessionContext, ThemeContext, VocabularyContext, hooks, types
-│   ├── e2e/                      71 Playwright tests (7 intentional skips)
+│   ├── e2e/                      33 Playwright spec files
 │   ├── server.js                 Custom HTTPS server (dev) + Railway deploy entry (prod)
 │   └── 22 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/
@@ -767,7 +767,7 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
 
 ```
                   ╱╲
-                 ╱19╲        Playwright e2e (full-stack, browser)
+                 ╱33╲        Playwright e2e (full-stack, browser)
                 ╱────╲
                ╱  ●    ╲      simulate.sh tools (on-demand agent-tools journey — real `/agent-tools/*` routes)
               ╱────────╲
@@ -787,9 +787,9 @@ Vitest + React Testing Library (jsdom). Renders components with all 4 providers 
 
 Deno's built-in test runner. Covers dispatcher + service layer in the edge function.
 
-### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 19 tests)
+### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 33 spec files)
 
-7 critical-fix tests (regression gates on toast, validation, unsaved-changes warning, NaN guards) + 12-step functional audit (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav).
+Full-stack browser coverage: regression gates (toast, validation, unsaved-changes warning, NaN guards), functional audit journeys (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav), auth/role gating, calendar sync, knowledge-base import, wizard flows, and self-service. Runs as a required CI job on every PR.
 
 ### 18.6 Live QA (`./scripts/simulate.sh tools`)
 

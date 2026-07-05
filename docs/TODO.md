@@ -138,5 +138,4 @@ Each screen below has had NO dedicated UX review (owner-judgment items). Most al
 ## 🎙️ Voice — Phase 2 (after live, needs agent code + redeploy)
 
 - [ ] Recording disclaimer → deterministic verbatim greeting (Illinois 2-party consent). Needs a `tenants.greeting` column + tenant-config route + `agent/src/index.ts` greeting line (currently hardcoded).
-- [ ] `get_my_appointments` transfer-fallback string (open follow-up from the realtime prompt/capabilities gate, PR #114).
-- [ ] Housekeeping: correct the stale note that old SIP connection id `2973577228794726874` exists — it does not; the real LiveKit connection is `2945038451784812111`.
+- [x] ~~`get_my_appointments` transfer-fallback string~~ — DONE 2026-07-05 (PR #198): the no-caller-ID fallbacks in `get_my_appointments`/cancel/reschedule now capability-gate the transfer offer (offer a message only when transfer is unwired).

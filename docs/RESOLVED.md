@@ -2061,3 +2061,13 @@ outside this repo; only this status update is committed.)
 ---
 
 </details>
+
+---
+
+## 2026-07-05 — Doc-hygiene: trimmed cold session logs from CLAUDE.md
+
+Moved here from the CLAUDE.md "Project Status" section (kept lean per the docs principle; the durable current-state stays in CLAUDE.md, and the #68/#69 legal-hold guardrail was preserved there as a one-liner):
+
+**Shipped + merged to main + DEPLOYED to prod 2026-06-22, PRs #56/#57/#58/#59** (verified live via `./scripts/simulate.sh status --env prod --deep` = 4/4 + new routes return 401 not 404 on prod): idempotent-read retry coverage in `toolsClient`; tenant-data export `GET /export/tenant-data`; per-tenant website-scan rate-limit; incident + telephony runbook (`docs/RUNBOOK.md`); owner audit-log API `GET /audit-log`; "explain this answer" RAG-debugger `POST /knowledge/explain`; owner admin guide (`docs/OWNER_GUIDE.md`); dashboard surfaces for audit-log + answer-debugger (Setup sub-tabs) + a "Download my data" export button; caller-facing source citations in `policy-answer`; website-scan happy-path + wizard browser-click E2E (stub-gated). No prod DB migration needed (all read existing schema).
+
+**Also shipped + merged 2026-06-22, PRs #64/#65/#66/#67:** abandonment-by-service analytics (migration `20260622010000` adds `voice_sessions.requested_service_id`; `book-with-scheduling` best-effort captures the requested service on success OR failure; `/analytics/cohorts` returns `abandonment_by_service`); optional From/To date-range filtering on `/analytics/calls` + `/analytics/cohorts` (`optionalDateBounds` — all-time when absent, calendar-invalid dates rejected via `isValidDateOnly`, end day-inclusive; From/To controls on `AnalyticsView`); `@typescript-eslint/unbound-method` promoted `warn → error` in all 3 eslint configs (0 violations). **Prod migrations DONE 2026-06-23:** `20260622000000` (audit-extend) + `20260622010000` (requested_service_id) applied + verified on prod (`requested_service_id` column + `trg_audit_services`/`trg_audit_employees` triggers present; `schema_migrations` at `20260622010000`).
