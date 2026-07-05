@@ -6,7 +6,8 @@
 verbatim in `docs/RESOLVED.md` under the 2026-07-05 entry).
 
 Items are ordered by what should be done first. Ownership tags:
-`(Dale)` = user/ops action, no code · `(code)` = codeable now · `(blocked)` = waiting on an external gate.
+`(Dale)` = user/ops action, no code · `(code)` = codeable now · `(blocked)` = waiting on an external gate ·
+**untagged** = deferred code work (the P3 / UX / doc-hygiene sections — no per-item owner because nothing there is scheduled).
 
 **Not backlogs (left as reusable procedure/reference, do not fold here):**
 `docs/BRANCH_CHECKLIST.md`, `docs/CODING_STANDARDS.md`, `docs/DEPLOYMENT.md`,
@@ -21,6 +22,8 @@ Ordered: the product must answer + transfer + book on a real call, then take mon
 then be gated/insured. Most of this is your action, not code — the code is shipped.
 
 ### 1. Voice path — make a real call work end-to-end
+
+_Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voice — Phase 2** at the bottom of this file._
 
 - [ ] **(Dale)** Enable **call transfer / REFER** on the Telnyx SIP Connection (`livekit-outbound`). Until then `transfer_call` fails at runtime and the agent silently degrades to taking a message. (Detail: `docs/RUNBOOK.md` §7c.)
 - [ ] **(Dale)** Set the **forward number** on the dashboard AI Persona → "Forward Calls to a Person" (your cell `+1 608 217 5303`). NULL = agent takes a message instead of transferring.
