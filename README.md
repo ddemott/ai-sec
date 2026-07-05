@@ -93,7 +93,7 @@ Below is a full list of its features:
 | **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). See `docs/AIASSISTANT_GO_LIVE_TODO.md` for remaining PSTN verification steps. |
 | **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                     |
 | **Tests**     | ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent) + 0 skips, zero TypeScript errors                                                                                                  |
-| **E2e**       | 33 Playwright spec files                                                                                                                                                                         |
+| **E2E**       | 33 Playwright spec files                                                                                                                                                                         |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -412,4 +412,4 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 Proprietary. All rights reserved.
 
-**Docs hygiene note (2026-07-04):** Documentation table above rebuilt from the actual `docs/` tree — was 10 rows, now the full inventory (3 root + 34 `docs/*.md` + subfolders), each purpose verified against the file's own header. `docs/README.md` (folder index) synced to match the same day. Prior pass 2026-06-23 (stale migration/route/test counts, ARCHITECTURE dedup, CLAUDE tools count, removed NEEDS-REFACTORING.md pointers). See docs/README.md + RESOLVED.md.
+**Docs hygiene note (2026-07-04):** Documentation table above rebuilt from the actual `docs/` tree — was 10 rows, now the full inventory (3 root + 37 `docs/*.md` incl. `docs/README.md` + subfolders), each purpose verified against the file's own header. `docs/README.md` (folder index) synced to match the same day. Prior pass 2026-06-23 (stale migration/route/test counts, ARCHITECTURE dedup, CLAUDE tools count, removed NEEDS-REFACTORING.md pointers). See docs/README.md + RESOLVED.md.
