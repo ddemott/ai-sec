@@ -30,16 +30,18 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       // Guard JSON parse: a non-JSON error body (e.g. a gateway 502 HTML page)
       // would otherwise throw here and be mislabeled as a connection error. The
       // sibling auth pages (register/forgot/reset) guard the same way.
+      // tenant_id/user_name are optional here BECAUSE the parse is guarded to {}
+      // on a non-JSON body — the presence check below is what makes proceeding safe.
       const data = (await response.json().catch(() => ({}))) as {
         success?: boolean;
-        tenant_id: string;
-        user_name: string;
+        tenant_id?: string;
+        user_name?: string;
         token?: string;
         role?: string;
         error?: string;
       };
 
-      if (response.ok && data.success) {
+      if (response.ok && data.success && data.tenant_id && data.user_name) {
         localStorage.setItem('tenantId', data.tenant_id);
         localStorage.setItem('userName', data.user_name);
         localStorage.setItem('userEmail', email);
@@ -50,7 +52,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         // after a fresh login if a prior owner-register left 'owner' in
         // localStorage. 2026-05-28 UX audit #5.
         if (data.role) localStorage.setItem('userRole', data.role);
-        onLoginSuccess(data);
+        onLoginSuccess({ tenant_id: data.tenant_id, user_name: data.user_name, role: data.role });
       } else {
         setError(data.error || 'Sign in failed. Please try again.');
       }

@@ -667,9 +667,15 @@ export default function AIConfigView() {
               </p>
             </div>
             {normalizePhone(config.inbound_phone) ? (
-              <a href={`tel:${normalizePhone(config.inbound_phone)}`} className="shrink-0">
-                <Button variant="secondary">Call {formatPhone(config.inbound_phone)}</Button>
-              </a>
+              <Button
+                variant="secondary"
+                className="shrink-0"
+                onClick={() => {
+                  window.location.href = `tel:${normalizePhone(config.inbound_phone)}`;
+                }}
+              >
+                Call {formatPhone(config.inbound_phone)}
+              </Button>
             ) : (
               <p className="text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>
                 No business number set up yet.
