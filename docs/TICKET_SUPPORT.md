@@ -9,8 +9,9 @@
 >
 > > "Hi Team, We have escalated these call examples to our team for investigation —
 > > we will let you know as soon as we hear back."
-> > Ticket is **alive and escalated**; ball is in Telnyx's court. No fix/cause yet —
-> > awaiting their findings on the inbound call examples (0s CDRs / error 10007).
+>
+> Ticket is **alive and escalated**; ball is in Telnyx's court. No fix/cause yet —
+> awaiting their findings on the inbound call examples (0s CDRs / error 10007).
 >
 > **Account is healthy now** (prerequisite that was blocking everything): account was
 > **suspended 2026-05-25** for a 30-day sustained negative balance — the real reason
