@@ -215,7 +215,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ```
 /
 ├── src/                    Fastify backend
-│   ├── index.ts            Entry point (29 route registrations)
+│   ├── index.ts            Entry point (30 route registrations)
 │   ├── middleware.ts        withHandler, tenant middleware, structured logging
 │   ├── routes/             30 route modules + shared routeHelpers.ts (incl. agentTools.ts for the LiveKit agent)
 │   ├── services/           Square CRM sync, calendar sync, communications (Telnyx-only for SMS + delivery receipts), reminders, token management, telnyxNumbers + telnyxSms (Telnyx is now the sole provider)

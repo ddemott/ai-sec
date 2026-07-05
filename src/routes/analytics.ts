@@ -11,6 +11,7 @@ import { parseDateRange } from './routeHelpers';
 import { z } from 'zod';
 import {
   DraftGraphSchema,
+  findDuplicateTmpIds,
   findMissingTmpIdReferences,
   weeksAheadFor,
   insertDraftGraph,
@@ -666,6 +667,15 @@ export function registerAnalyticsRoutes(
       // Fail fast on a broken draft graph: a shift or mapping that references a
       // tmp_id not present in the entity lists is a client bug, and silently
       // dropping it would produce a misleading coverage preview.
+      const duplicates = findDuplicateTmpIds(draft);
+      if (duplicates.length > 0) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Draft contains duplicate tmp_ids',
+          details: duplicates,
+        });
+      }
+
       const missing = findMissingTmpIdReferences(draft);
       if (missing.length > 0) {
         return reply.status(400).send({

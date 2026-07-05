@@ -103,6 +103,24 @@ describe('POST /setup/commit', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('SAD: a repeated tmp_id within employees → 400, writes nothing', async () => {
+    const res = await post('/setup/commit', {
+      services: [{ tmp_id: 's1', name: 'Cut', duration_minutes: 30 }],
+      employees: [
+        { tmp_id: 'e1', name: 'Tess' },
+        { tmp_id: 'e1', name: 'Duplicate Tess' },
+      ],
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/duplicate tmp_ids/i);
+
+    const { rows } = await setup.query(
+      'SELECT count(*)::int AS n FROM employees WHERE tenant_id = $1',
+      [tenantId]
+    );
+    expect(rows[0].n).toBe(0);
+  });
+
   it('SAD: a mapping referencing an unknown tmp_id → 400, writes nothing', async () => {
     const res = await post('/setup/commit', {
       services: [{ tmp_id: 's1', name: 'Cut', duration_minutes: 30 }],
@@ -215,6 +233,33 @@ describe('POST /setup/commit', () => {
     // 4-week default horizon → at least 4 Mondays land in employee_schedule.
     expect(rows.length).toBeGreaterThanOrEqual(4);
     expect(rows.every((r) => r.start_time.slice(0, 5) === '09:00')).toBe(true);
+  });
+
+  it('HAPPY: a duplicate mapping in the draft reports the real row count, not the attempt count', async () => {
+    // Two services both mapped to the same employee, PLUS the same mapping
+    // listed twice — ON CONFLICT DO NOTHING must skip the repeat, and the
+    // returned count must reflect rows actually created (2), not attempts (3).
+    const draft = {
+      services: [
+        { tmp_id: 's1', name: 'Cut', duration_minutes: 30 },
+        { tmp_id: 's2', name: 'Color', duration_minutes: 60 },
+      ],
+      employees: [{ tmp_id: 'e1', name: 'Tess' }],
+      service_employee: [
+        { service_tmp_id: 's1', employee_tmp_id: 'e1' },
+        { service_tmp_id: 's2', employee_tmp_id: 'e1' },
+        { service_tmp_id: 's1', employee_tmp_id: 'e1' }, // repeat of the first
+      ],
+    };
+    const res = await post('/setup/commit', draft);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().counts.serviceEmployee).toBe(2);
+
+    const { rows } = await setup.query(
+      'SELECT count(*)::int AS n FROM service_employee se JOIN employees e ON e.employee_id = se.employee_id WHERE e.tenant_id = $1',
+      [tenantId]
+    );
+    expect(rows[0].n).toBe(2);
   });
 
   it('SAD: idempotency guard rejects a second commit on an already-set-up tenant with 409, writes nothing new', async () => {

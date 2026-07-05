@@ -82,6 +82,26 @@ export const DraftGraphSchema = z.object({
 export type DraftGraph = z.infer<typeof DraftGraphSchema>;
 
 /**
+ * A repeated tmp_id within services/resources/employees is a client bug: the
+ * Map in insertDraftGraph keys on tmp_id, so a duplicate silently overwrites
+ * the earlier entry — insertDraftGraph still creates BOTH DB rows (each loop
+ * iteration inserts unconditionally), but only the last one is reachable from
+ * mappings/shifts, orphaning the first and skewing counts. Returns the
+ * duplicated tmp_ids — empty means every id in the graph is unique.
+ */
+export function findDuplicateTmpIds(draft: DraftGraph): string[] {
+  const duplicates = new Set<string>();
+  for (const list of [draft.services, draft.resources, draft.employees]) {
+    const seen = new Set<string>();
+    for (const item of list) {
+      if (seen.has(item.tmp_id)) duplicates.add(item.tmp_id);
+      seen.add(item.tmp_id);
+    }
+  }
+  return [...duplicates];
+}
+
+/**
  * Fail fast on a broken draft graph: a shift or mapping referencing a tmp_id
  * not present in the entity lists is a client bug. Silently dropping it (as
  * an early cut of dry-run did) produces a misleading preview or, worse for
@@ -223,12 +243,15 @@ export async function insertDraftGraph(
     const sid = serviceId.get(m.service_tmp_id);
     const eid = employeeId.get(m.employee_tmp_id);
     if (sid && eid) {
-      await client.query(
+      const { rowCount } = await client.query(
         `INSERT INTO service_employee (service_id, employee_id, tenant_id)
          VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
         [sid, eid, tenantId]
       );
-      serviceEmployeeCount++;
+      // ON CONFLICT DO NOTHING returns rowCount 0 on a skipped duplicate — only
+      // count rows actually inserted, so a repeated mapping in the draft
+      // doesn't inflate the reported count past what's really in the DB.
+      serviceEmployeeCount += rowCount ?? 0;
     }
   }
   let serviceResourceCount = 0;
@@ -236,12 +259,12 @@ export async function insertDraftGraph(
     const sid = serviceId.get(m.service_tmp_id);
     const rid = resourceId.get(m.resource_tmp_id);
     if (sid && rid) {
-      await client.query(
+      const { rowCount } = await client.query(
         `INSERT INTO service_resource (service_id, resource_id, tenant_id)
          VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
         [sid, rid, tenantId]
       );
-      serviceResourceCount++;
+      serviceResourceCount += rowCount ?? 0;
     }
   }
 
