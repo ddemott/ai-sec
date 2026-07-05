@@ -29,7 +29,7 @@ import UtilizationHeatmap from './UtilizationHeatmap';
  * 3. Busiest Hours — when bookings are made (from appointments)
  * 4. Caller Abandonment — calls that ended with no outcome + no booking (from voice_sessions)
  * 5. Return Rate by First Service — which services drive loyalty (from appointments)
- * 6. No-Show Pattern — which days have the most cancellations (from appointments)
+ * 6. Cancellation Pattern — which days have the most cancellations (from appointments)
  *
  * Plus a "Why callers reached out" outcome breakdown — the first WHY cut we can
  * surface from the call-level outcome data competitors don't capture. Richer WHY
@@ -565,10 +565,10 @@ export default function AnalyticsView() {
             )}
           </MetricCard>
 
-          {/* 7. No-Show Pattern — from appointments */}
+          {/* 7. Cancellation Pattern — from appointments (status === 'canceled') */}
           <MetricCard
             icon={UserX}
-            title="No-Show Pattern"
+            title="Cancellation Pattern"
             subtitle="Canceled appointments by day of week"
           >
             {summary ? (

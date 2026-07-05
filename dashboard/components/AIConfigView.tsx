@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { MOCK_TENANT } from '@/lib/mockData';
 import { type Tenant } from '@/lib/types';
 import {
   Settings,
@@ -14,7 +13,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { Api } from '../lib/api';
-import { normalizePhone } from '../../shared/phone';
+import { normalizePhone, formatPhone } from '../../shared/phone';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
@@ -57,6 +56,7 @@ export default function AIConfigView() {
   const tenantId = useActiveTenantId();
   const [config, setConfig] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -73,12 +73,19 @@ export default function AIConfigView() {
     try {
       const data = await Api.tenants.getConfig(tenantId);
       if (!data) {
-        setConfig(MOCK_TENANT);
+        // Do NOT fall back to a mock/demo tenant here: this is a real owner's
+        // workspace, and loading a foreign tenant's persona (editable, and Save
+        // would POST to THAT tenant_id) is a cross-tenant integrity bug. Surface
+        // an error instead. MOCK data belongs only to the no-tenant demo path.
+        setConfig(null);
+        setLoadError(true);
       } else {
         setConfig(data);
+        setLoadError(false);
       }
     } catch {
-      setConfig(MOCK_TENANT);
+      setConfig(null);
+      setLoadError(true);
     }
     setLoading(false);
     setDirty(false);
@@ -143,6 +150,24 @@ export default function AIConfigView() {
       normalizePhone(config?.forward_phone) === normalizePhone(config?.inbound_phone));
 
   if (loading) return <LoadingState message="Loading AI configuration…" />;
+
+  if (!config) {
+    return (
+      <div
+        className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center"
+        style={{ backgroundColor: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+      >
+        <p style={{ color: 'var(--text-secondary)' }}>
+          {loadError
+            ? "We couldn't load your AI settings. Check your connection and try again."
+            : 'No AI settings available.'}
+        </p>
+        <Button variant="secondary" onClick={() => void fetchConfig()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -431,21 +456,40 @@ export default function AIConfigView() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {(
                 [
-                  { key: 'tts_formal', label: 'Formal', description: 'Professional, no contractions' },
+                  {
+                    key: 'tts_formal',
+                    label: 'Formal',
+                    description: 'Professional, no contractions',
+                  },
                   { key: 'tts_warm', label: 'Warm', description: 'Empathetic, caring' },
-                  { key: 'tts_concise', label: 'Concise', description: 'Fewer words, faster to the point' },
-                  { key: 'tts_soft', label: 'Soft', description: 'Gentle, calm, soothing delivery' },
-                  { key: 'tts_cheerful', label: 'Cheerful', description: 'Bright, friendly, upbeat' },
+                  {
+                    key: 'tts_concise',
+                    label: 'Concise',
+                    description: 'Fewer words, faster to the point',
+                  },
+                  {
+                    key: 'tts_soft',
+                    label: 'Soft',
+                    description: 'Gentle, calm, soothing delivery',
+                  },
+                  {
+                    key: 'tts_cheerful',
+                    label: 'Cheerful',
+                    description: 'Bright, friendly, upbeat',
+                  },
                 ] as { key: keyof typeof config; label: string; description: string }[]
               ).map(({ key, label, description }) => (
                 <label
                   key={key}
                   className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border"
-                  style={{ borderColor: config?.[key] ? 'var(--accent)' : 'var(--border-soft)', backgroundColor: config?.[key] ? 'var(--accent-muted)' : 'transparent' }}
+                  style={{
+                    borderColor: config?.[key] ? 'var(--accent)' : 'var(--border-soft)',
+                    backgroundColor: config?.[key] ? 'var(--accent-muted)' : 'transparent',
+                  }}
                 >
                   <input
                     type="checkbox"
-                    checked={!!(config?.[key])}
+                    checked={!!config?.[key]}
                     onChange={(e) => {
                       const v = e.target.checked;
                       setConfig((prev) => (prev ? { ...prev, [key]: v } : null));
@@ -455,8 +499,15 @@ export default function AIConfigView() {
                     className="mt-0.5"
                   />
                   <span>
-                    <span className="block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{label}</span>
-                    <span className="block text-xs" style={{ color: 'var(--text-secondary)' }}>{description}</span>
+                    <span
+                      className="block text-sm font-medium"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {label}
+                    </span>
+                    <span className="block text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {description}
+                    </span>
                   </span>
                 </label>
               ))}
@@ -615,7 +666,21 @@ export default function AIConfigView() {
                 Save your changes and call your business number to hear the new persona.
               </p>
             </div>
-            <Button variant="secondary">Call My AI Now</Button>
+            {normalizePhone(config.inbound_phone) ? (
+              <Button
+                variant="secondary"
+                className="shrink-0"
+                onClick={() => {
+                  window.location.href = `tel:${normalizePhone(config.inbound_phone)}`;
+                }}
+              >
+                Call {formatPhone(config.inbound_phone)}
+              </Button>
+            ) : (
+              <p className="text-sm shrink-0" style={{ color: 'var(--text-muted)' }}>
+                No business number set up yet.
+              </p>
+            )}
           </Card>
         </section>
       </div>

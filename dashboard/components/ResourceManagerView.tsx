@@ -163,10 +163,12 @@ export default function ResourceManagerView() {
           setMappings([...mappings, { service_id: serviceId, resource_id: resourceId }]);
         }
       } else {
-        setError(res.error || 'Failed to update service mapping');
+        // showToast, not setError: this fires from inside the open edit modal,
+        // where the page-level error banner renders BEHIND the modal (invisible).
+        showToast(res.error || 'Failed to update service mapping', 'error');
       }
     } catch {
-      setError('Failed to update service mapping');
+      showToast('Failed to update service mapping', 'error');
     }
   }
 

@@ -137,10 +137,10 @@ export default function EmployeeManagementView() {
             showToast(res.error || 'Delete failed', 'error');
           }
         } catch {
-          showToast(
-            `${vocab.employee_label} is still connected to appointments or services.`,
-            'error'
-          );
+          // Reaching the catch means a network/fetch throw — apiMutate resolves
+          // {success:false} for HTTP errors (handled in the else above), so the
+          // FK-constraint "still connected" message doesn't belong here.
+          showToast('Could not remove — please try again.', 'error');
         }
       },
     });
