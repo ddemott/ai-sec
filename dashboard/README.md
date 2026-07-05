@@ -1,6 +1,4 @@
-## SecretaryHQ Dashboard
-
-## README.MD
+# SecretaryHQ Dashboard
 
 This is the **management UI** for the SecretaryHQ SaaS. It lets owners and admins:
 
