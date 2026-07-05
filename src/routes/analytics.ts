@@ -9,6 +9,7 @@ import {
 } from '../middleware';
 import { parseDateRange } from './routeHelpers';
 import { z } from 'zod';
+import { expandWeeklyToSchedule, type WeeklyShiftRow } from '../services/expandWeeklyToSchedule';
 
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -66,8 +67,16 @@ const CoverageDryRunSchema = z.object({
     .array(z.object({ service_tmp_id: z.string().min(1), resource_tmp_id: z.string().min(1) }))
     .max(2000)
     .default([]),
-  start_date: z.string().regex(DATE_ONLY_RE).optional(),
-  end_date: z.string().regex(DATE_ONLY_RE).optional(),
+  // refine (not just regex): reject calendar-invalid but well-shaped dates like
+  // 2026-02-30 here, so they never reach a `$n::date` cast (→ 500).
+  start_date: z
+    .string()
+    .refine(isValidDateOnly, 'start_date must be a real YYYY-MM-DD date')
+    .optional(),
+  end_date: z
+    .string()
+    .refine(isValidDateOnly, 'end_date must be a real YYYY-MM-DD date')
+    .optional(),
 });
 
 /**
@@ -676,6 +685,53 @@ export function registerAnalyticsRoutes(
           .toISOString()
           .split('T')[0];
 
+      // A window where end < start makes generate_series() return no rows and
+      // would silently report "no gaps" — reject it instead of misleading.
+      if (endDate < startDate) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'end_date must be on or after start_date' });
+      }
+
+      // Fail fast on a broken draft graph: a shift or mapping that references a
+      // tmp_id not present in the entity lists is a client bug, and silently
+      // dropping it would produce a misleading coverage preview.
+      const serviceTmpIds = new Set(draft.services.map((s) => s.tmp_id));
+      const employeeTmpIds = new Set(draft.employees.map((e) => e.tmp_id));
+      const resourceTmpIds = new Set(draft.resources.map((r) => r.tmp_id));
+      const missing: string[] = [];
+      for (const sh of draft.shifts) {
+        if (!employeeTmpIds.has(sh.employee_tmp_id))
+          missing.push(`shift → employee ${sh.employee_tmp_id}`);
+      }
+      for (const m of draft.service_employee) {
+        if (!serviceTmpIds.has(m.service_tmp_id))
+          missing.push(`mapping → service ${m.service_tmp_id}`);
+        if (!employeeTmpIds.has(m.employee_tmp_id))
+          missing.push(`mapping → employee ${m.employee_tmp_id}`);
+      }
+      for (const m of draft.service_resource) {
+        if (!serviceTmpIds.has(m.service_tmp_id))
+          missing.push(`mapping → service ${m.service_tmp_id}`);
+        if (!resourceTmpIds.has(m.resource_tmp_id))
+          missing.push(`mapping → resource ${m.resource_tmp_id}`);
+      }
+      if (missing.length > 0) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Draft references unknown tmp_ids',
+          details: [...new Set(missing)],
+        });
+      }
+
+      // Weeks needed to cover [startDate, endDate] so the expanded schedule spans
+      // the whole coverage window (expandWeeklyToSchedule fans weeksAhead*7 days).
+      const spanDays =
+        Math.round(
+          (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86_400_000
+        ) + 1;
+      const weeksAhead = Math.max(1, Math.ceil(spanDays / 7));
+
       const rows = await withTenantClient(tenantId, async (client) => {
         await client.query('BEGIN');
         try {
@@ -711,20 +767,31 @@ export function registerAnalyticsRoutes(
             employeeId.set(e.tmp_id, er[0].employee_id);
           }
 
-          // Fan each weekly-pattern row into date-specific employee_schedule rows
-          // across the coverage window (default 4 weeks when no end bound), so the
-          // RPC sees the same shape a real expand-weekly would produce.
+          // Fan each employee's weekly pattern into date-specific employee_schedule
+          // rows across the coverage window, reusing the batched expand-weekly
+          // helper (one multi-row INSERT per employee — avoids the historical
+          // per-row deadlock + N round-trips) so the RPC sees the same shape a
+          // real expand-weekly would produce.
+          const patternByEmployee = new Map<string, WeeklyShiftRow[]>();
           for (const sh of draft.shifts) {
             const empId = employeeId.get(sh.employee_tmp_id);
-            if (!empId) continue;
-            await client.query(
-              `INSERT INTO employee_schedule (tenant_id, employee_id, shift_date, start_time, end_time, is_off)
-               SELECT $1, $2, d::date, $4, $5, false
-               FROM generate_series($6::date, COALESCE($7::date, $6::date + INTERVAL '27 days'), '1 day') AS d
-               WHERE EXTRACT(DOW FROM d)::int = $3
-               ON CONFLICT (tenant_id, employee_id, shift_date) DO NOTHING`,
-              [tenantId, empId, sh.day_of_week, sh.start_time, sh.end_time, startDate, endDate]
-            );
+            if (!empId) continue; // validated above; defensive
+            const rowsForEmp = patternByEmployee.get(empId) ?? [];
+            rowsForEmp.push({
+              day_of_week: sh.day_of_week,
+              start_time: sh.start_time,
+              end_time: sh.end_time,
+            });
+            patternByEmployee.set(empId, rowsForEmp);
+          }
+          for (const [empId, pattern] of patternByEmployee) {
+            await expandWeeklyToSchedule(client, {
+              tenantId,
+              employeeId: empId,
+              pattern,
+              weeksAhead,
+              startDate: new Date(`${startDate}T00:00:00Z`),
+            });
           }
 
           for (const m of draft.service_employee) {

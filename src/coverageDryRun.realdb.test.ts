@@ -102,15 +102,31 @@ beforeEach((ctx) => {
 });
 
 describe('POST /coverage/dry-run', () => {
-  it('SAD: rejects a malformed draft (missing services) with 400', async () => {
+  it('SAD: rejects a malformed draft (missing services) with 400 and writes nothing', async () => {
+    const before = await tenantCounts(tenantId);
     const res = await post('/coverage/dry-run', { resources: [] });
     expect(res.statusCode).toBe(400);
     expect(res.json().success).toBe(false);
+    expect(await tenantCounts(tenantId)).toEqual(before);
   });
 
-  it('SAD: no tenant header → 401 (never runs the RPC anonymously)', async () => {
+  it('SAD: no tenant header → 401 (never runs the RPC anonymously) and writes nothing', async () => {
+    const before = await tenantCounts(tenantId);
     const res = await post('/coverage/dry-run', { services: [] }, false);
     expect(res.statusCode).toBe(401);
+    expect(await tenantCounts(tenantId)).toEqual(before);
+  });
+
+  it('SAD: a shift referencing an unknown employee tmp_id → 400', async () => {
+    const res = await post('/coverage/dry-run', {
+      services: [{ tmp_id: 's1', name: 'X', duration_minutes: 30 }],
+      employees: [],
+      shifts: [
+        { employee_tmp_id: 'ghost', day_of_week: 1, start_time: '09:00', end_time: '17:00' },
+      ],
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/unknown tmp_ids/i);
   });
 
   it('HAPPY: computes coverage over the draft (shifts → open hours) AND persists nothing', async () => {
