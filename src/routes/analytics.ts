@@ -9,13 +9,16 @@ import {
 } from '../middleware';
 import { parseDateRange } from './routeHelpers';
 import { z } from 'zod';
-import { expandWeeklyToSchedule, type WeeklyShiftRow } from '../services/expandWeeklyToSchedule';
+import {
+  DraftGraphSchema,
+  findDuplicateTmpIds,
+  findMissingTmpIdReferences,
+  weeksAheadFor,
+  insertDraftGraph,
+} from '../services/setupGraph';
 
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-// Draft graph posted by the setup wizard (Phase B) to preview coverage BEFORE
-// anything is persisted. Every entity carries a client-side `tmp_id` so mappings
-// + shifts can reference each other without real DB ids. See POST /coverage/dry-run.
 // One row of check_coverage_gaps output (per service, per date in the window).
 interface CoverageGapRow {
   service_id: string;
@@ -29,44 +32,12 @@ interface CoverageGapRow {
   details: Record<string, unknown> | null;
 }
 
-const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-const CoverageDryRunSchema = z.object({
-  services: z
-    .array(
-      z.object({
-        tmp_id: z.string().min(1),
-        name: z.string().min(1),
-        duration_minutes: z.number().int().positive().max(1440),
-      })
-    )
-    .max(200),
-  resources: z
-    .array(z.object({ tmp_id: z.string().min(1), name: z.string().min(1) }))
-    .max(200)
-    .default([]),
-  employees: z
-    .array(z.object({ tmp_id: z.string().min(1), name: z.string().min(1) }))
-    .max(200)
-    .default([]),
-  shifts: z
-    .array(
-      z.object({
-        employee_tmp_id: z.string().min(1),
-        day_of_week: z.number().int().min(0).max(6),
-        start_time: z.string().regex(HHMM_RE),
-        end_time: z.string().regex(HHMM_RE),
-      })
-    )
-    .max(2000)
-    .default([]),
-  service_employee: z
-    .array(z.object({ service_tmp_id: z.string().min(1), employee_tmp_id: z.string().min(1) }))
-    .max(2000)
-    .default([]),
-  service_resource: z
-    .array(z.object({ service_tmp_id: z.string().min(1), resource_tmp_id: z.string().min(1) }))
-    .max(2000)
-    .default([]),
+// Draft graph posted by the setup wizard (Phase B) to preview coverage BEFORE
+// anything is persisted. Shares DraftGraphSchema with POST /setup/commit
+// (src/routes/setup.ts) — see src/services/setupGraph.ts module doc. Every
+// entity carries a client-side `tmp_id` so mappings + shifts can reference
+// each other without real DB ids.
+const CoverageDryRunSchema = DraftGraphSchema.extend({
   // refine (not just regex): reject calendar-invalid but well-shaped dates like
   // 2026-02-30 here, so they never reach a `$n::date` cast (→ 500).
   start_date: z
@@ -696,126 +667,36 @@ export function registerAnalyticsRoutes(
       // Fail fast on a broken draft graph: a shift or mapping that references a
       // tmp_id not present in the entity lists is a client bug, and silently
       // dropping it would produce a misleading coverage preview.
-      const serviceTmpIds = new Set(draft.services.map((s) => s.tmp_id));
-      const employeeTmpIds = new Set(draft.employees.map((e) => e.tmp_id));
-      const resourceTmpIds = new Set(draft.resources.map((r) => r.tmp_id));
-      const missing: string[] = [];
-      for (const sh of draft.shifts) {
-        if (!employeeTmpIds.has(sh.employee_tmp_id))
-          missing.push(`shift → employee ${sh.employee_tmp_id}`);
+      const duplicates = findDuplicateTmpIds(draft);
+      if (duplicates.length > 0) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Draft contains duplicate tmp_ids',
+          details: duplicates,
+        });
       }
-      for (const m of draft.service_employee) {
-        if (!serviceTmpIds.has(m.service_tmp_id))
-          missing.push(`mapping → service ${m.service_tmp_id}`);
-        if (!employeeTmpIds.has(m.employee_tmp_id))
-          missing.push(`mapping → employee ${m.employee_tmp_id}`);
-      }
-      for (const m of draft.service_resource) {
-        if (!serviceTmpIds.has(m.service_tmp_id))
-          missing.push(`mapping → service ${m.service_tmp_id}`);
-        if (!resourceTmpIds.has(m.resource_tmp_id))
-          missing.push(`mapping → resource ${m.resource_tmp_id}`);
-      }
+
+      const missing = findMissingTmpIdReferences(draft);
       if (missing.length > 0) {
         return reply.status(400).send({
           success: false,
           error: 'Draft references unknown tmp_ids',
-          details: [...new Set(missing)],
+          details: missing,
         });
       }
 
-      // Weeks needed to cover [startDate, endDate] so the expanded schedule spans
-      // the whole coverage window (expandWeeklyToSchedule fans weeksAhead*7 days).
-      const spanDays =
-        Math.round(
-          (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86_400_000
-        ) + 1;
-      const weeksAhead = Math.max(1, Math.ceil(spanDays / 7));
+      const weeksAhead = weeksAheadFor(startDate, endDate);
 
       const rows = await withTenantClient(tenantId, async (client) => {
         await client.query('BEGIN');
         try {
-          const resourceId = new Map<string, string>();
-          for (const r of draft.resources) {
-            const { rows: rr } = await client.query<{ resource_id: string }>(
-              `INSERT INTO resources (tenant_id, name, description, is_auto_seeded)
-               VALUES ($1, $2, NULL, false) RETURNING resource_id`,
-              [tenantId, r.name]
-            );
-            resourceId.set(r.tmp_id, rr[0].resource_id);
-          }
-
-          const serviceId = new Map<string, string>();
-          for (const s of draft.services) {
-            const { rows: sr } = await client.query<{ service_id: string }>(
-              `INSERT INTO services
-                 (tenant_id, name, subtitle, description, duration_minutes,
-                  required_skills, required_resources, is_auto_seeded)
-               VALUES ($1, $2, NULL, NULL, $3, '{}', '{}', false) RETURNING service_id`,
-              [tenantId, s.name, s.duration_minutes]
-            );
-            serviceId.set(s.tmp_id, sr[0].service_id);
-          }
-
-          const employeeId = new Map<string, string>();
-          for (const e of draft.employees) {
-            const { rows: er } = await client.query<{ employee_id: string }>(
-              `INSERT INTO employees (tenant_id, name, first_name, last_name, email, phone, skills)
-               VALUES ($1, $2, NULL, NULL, NULL, NULL, '{}') RETURNING employee_id`,
-              [tenantId, e.name]
-            );
-            employeeId.set(e.tmp_id, er[0].employee_id);
-          }
-
-          // Fan each employee's weekly pattern into date-specific employee_schedule
-          // rows across the coverage window, reusing the batched expand-weekly
-          // helper (one multi-row INSERT per employee — avoids the historical
-          // per-row deadlock + N round-trips) so the RPC sees the same shape a
-          // real expand-weekly would produce.
-          const patternByEmployee = new Map<string, WeeklyShiftRow[]>();
-          for (const sh of draft.shifts) {
-            const empId = employeeId.get(sh.employee_tmp_id);
-            if (!empId) continue; // validated above; defensive
-            const rowsForEmp = patternByEmployee.get(empId) ?? [];
-            rowsForEmp.push({
-              day_of_week: sh.day_of_week,
-              start_time: sh.start_time,
-              end_time: sh.end_time,
-            });
-            patternByEmployee.set(empId, rowsForEmp);
-          }
-          for (const [empId, pattern] of patternByEmployee) {
-            await expandWeeklyToSchedule(client, {
-              tenantId,
-              employeeId: empId,
-              pattern,
-              weeksAhead,
-              startDate: new Date(`${startDate}T00:00:00Z`),
-            });
-          }
-
-          for (const m of draft.service_employee) {
-            const sid = serviceId.get(m.service_tmp_id);
-            const eid = employeeId.get(m.employee_tmp_id);
-            if (sid && eid) {
-              await client.query(
-                `INSERT INTO service_employee (service_id, employee_id, tenant_id)
-                 VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-                [sid, eid, tenantId]
-              );
-            }
-          }
-          for (const m of draft.service_resource) {
-            const sid = serviceId.get(m.service_tmp_id);
-            const rid = resourceId.get(m.resource_tmp_id);
-            if (sid && rid) {
-              await client.query(
-                `INSERT INTO service_resource (service_id, resource_id, tenant_id)
-                 VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-                [sid, rid, tenantId]
-              );
-            }
-          }
+          // insertDraftGraph writes the FULL column set it's given (description/
+          // price/contact fields included) — dry-run just never sends them, since
+          // a coverage preview doesn't need them and everything rolls back anyway.
+          await insertDraftGraph(client, tenantId, draft, {
+            weeksAhead,
+            startDate: new Date(`${startDate}T00:00:00Z`),
+          });
 
           const res = await client.query<CoverageGapRow>(
             `SELECT service_id, service_name, check_date, gap_hours, covered_hours,
