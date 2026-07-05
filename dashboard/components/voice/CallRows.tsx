@@ -54,7 +54,9 @@ export function ActiveCallRow({ call, tenantId, onSelect }: ActiveCallRowProps) 
             {call.customer_name || formatPhone(call.caller_phone)}
           </span>
         </div>
-        <span className="text-xs text-gray-500">{formatRelativeTime(call.started_at)}</span>
+        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          {formatRelativeTime(call.started_at)}
+        </span>
       </div>
       {call.is_known_customer && (
         <span className="text-xs ml-4" style={{ color: 'var(--success)' }}>
@@ -100,9 +102,9 @@ export function HistoryCallRow({ call, isSelected, onSelect }: HistoryCallRowPro
             call.customer_context?.customer?.name ||
             formatPhone(call.caller_phone)}
         </span>
-        <ChevronRight className="w-4 h-4 text-gray-400" />
+        <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
       </div>
-      <div className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
         <span>{formatRelativeTime(call.started_at)}</span>
         <span>·</span>
         <span>{formatDuration(call.duration_seconds)}</span>

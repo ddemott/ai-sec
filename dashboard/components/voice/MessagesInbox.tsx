@@ -9,6 +9,7 @@ import { Mail, MailOpen, RefreshCw, CheckCircle } from 'lucide-react';
 import { type CustomerMessage } from '@/lib/types';
 import { Api } from '../../lib/api';
 import { formatPhone } from '../../lib/phone';
+import { showToast } from '../ui/Toast';
 
 export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
   const [messages, setMessages] = useState<CustomerMessage[]>([]);
@@ -23,6 +24,11 @@ export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
         status: filter === 'all' ? undefined : filter,
       });
       setMessages(rows ?? []);
+    } catch {
+      // apiFetch throws on non-2xx — surface it instead of an unhandled
+      // rejection + console spam, and leave the list in a known (empty) state.
+      showToast('Could not load messages. Please try again.', 'error');
+      setMessages([]);
     } finally {
       setLoading(false);
     }
@@ -33,7 +39,15 @@ export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
   }, [load]);
 
   async function markStatus(msg: CustomerMessage, status: 'read' | 'actioned') {
-    await Api.voice.updateMessageStatus(msg.message_id, status);
+    // updateMessageStatus resolves {success:false} on an HTTP error (throws only
+    // on network) — don't optimistically flip the UI if the backend rejected it.
+    const res = await Api.voice
+      .updateMessageStatus(msg.message_id, status)
+      .catch(() => ({ success: false }));
+    if (!res.success) {
+      showToast('Could not update the message. Please try again.', 'error');
+      return;
+    }
     setMessages((prev) =>
       prev.map((m) => (m.message_id === msg.message_id ? { ...m, status } : m))
     );
@@ -69,7 +83,7 @@ export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
               {newCount > 0 && (
                 <span
                   className="text-xs font-bold px-1.5 py-0.5 rounded-full"
-                  style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+                  style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
                 >
                   {newCount}
                 </span>
@@ -92,7 +106,7 @@ export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
                 className="text-xs px-2 py-1 rounded capitalize"
                 style={
                   filter === f
-                    ? { backgroundColor: 'var(--accent)', color: '#fff' }
+                    ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
                     : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }
                 }
               >
@@ -192,9 +206,9 @@ export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
                   className="text-xs px-2 py-1 rounded capitalize"
                   style={
                     selected.status === 'new'
-                      ? { backgroundColor: 'var(--accent)', color: '#fff' }
+                      ? { backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }
                       : selected.status === 'actioned'
-                        ? { backgroundColor: 'var(--success)', color: '#fff' }
+                        ? { backgroundColor: 'var(--success)', color: 'var(--primary-text)' }
                         : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }
                   }
                 >
@@ -247,7 +261,7 @@ export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
                   <button
                     onClick={() => void markStatus(selected, 'actioned')}
                     className="text-sm px-3 py-1.5 rounded flex items-center gap-1.5"
-                    style={{ backgroundColor: 'var(--success)', color: '#fff' }}
+                    style={{ backgroundColor: 'var(--success)', color: 'var(--primary-text)' }}
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
                     Mark actioned
