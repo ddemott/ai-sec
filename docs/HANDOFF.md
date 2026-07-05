@@ -87,7 +87,7 @@ Both erase customer PII irreversibly. Built conservative + flagged per Dale's st
 - Broader-PII GDPR scope (voice_sessions/transcripts/appointment descriptions) — needs Dale's legal decision; unify #68's inline erasure SQL with `retentionService.anonymizeCustomerInTx` once both merge.
 - Pure-inquiry abandonment (callers who only asked availability) — `available-slots`/`scheduling-options` tools don't carry `call_id`; needs an agent-worker change.
 
-Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
+Full actionable list: `docs/TODO.md` (canonical). Category inventory folded into `docs/TODO.md` (GAPS archived in `docs/RESOLVED.md`).
 
 ---
 
@@ -110,4 +110,4 @@ Full actionable list: `docs/TODO.md` (canonical). Category inventory: `GAPS.md`.
 - Local DB: port 5433
 - Prod DB URL: encrypted at `~/.claude/projects/-home-dale-projects-secretary-hq/memory/db_url.enc`
   - Decrypt: `openssl enc -d -aes-256-cbc -pbkdf2 -base64 -pass pass:PASSWORD -in <file>`
-- Full gap inventory: `GAPS.md` (categories) + `docs/TODO.md` (actionable)
+- Full backlog: `docs/TODO.md` (GAPS category inventory folded in 2026-07-05; archived in `docs/RESOLVED.md`)
