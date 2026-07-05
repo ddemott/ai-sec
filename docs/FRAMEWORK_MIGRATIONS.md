@@ -24,7 +24,7 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 **Why:** LiveKit agent runs as a Node.js worker; keeping tools in Deno edge functions added a network hop and a second runtime. Consolidating into Fastify lets tools share the existing DB pool, middleware, and types.
 
-**Current implementation:** ~19 voice tools (capability-composed) in `src/routes/agentTools.ts` + `agent/src/tools.ts`. Auth via `x-agent-secret` header. All booking routes gate on `isValidPhone`. See agent tools catalog in `docs/ARCHITECTURE.md`.
+**Current implementation:** 23 voice tools (capability-composed) in `src/routes/agentTools.ts` + `agent/src/tools.ts`. Auth via `x-agent-secret` header. All booking routes gate on `isValidPhone`. See agent tools catalog in `docs/ARCHITECTURE.md`.
 
 ---
 
