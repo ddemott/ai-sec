@@ -85,15 +85,15 @@ Below is a full list of its features:
 
 [![CI](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml/badge.svg)](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml)
 
-|               |                                                                                                                                                                                                  |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Phase**     | 13 — Production Readiness                                                                                                                                                                        |
-| **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                                                             |
-| **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                          |
-| **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). See `docs/AIASSISTANT_GO_LIVE_TODO.md` for remaining PSTN verification steps. |
-| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                     |
-| **Tests**     | ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent) + 0 skips, zero TypeScript errors                                                                                                  |
-| **E2E**       | 33 Playwright spec files                                                                                                                                                                         |
+|               |                                                                                                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase**     | 13 — Production Readiness                                                                                                                                                                                      |
+| **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                                                                           |
+| **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                        |
+| **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). See `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7 for remaining PSTN verification steps. |
+| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                   |
+| **Tests**     | ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent) + 0 skips, zero TypeScript errors                                                                                                                |
+| **E2E**       | 33 Playwright spec files                                                                                                                                                                                       |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -340,16 +340,13 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 **Planning, tasks & status**
 
-| Doc                         | Purpose                                                           |
-| --------------------------- | ----------------------------------------------------------------- |
-| `docs/TODO.md`              | Unified task list — single source of truth for active work        |
-| `docs/GAPS.md`              | Cross-angle gap inventory (what's missing from every direction)   |
-| `docs/RESOLVED.md`          | Completed phases + historical bug tracker + session-notes archive |
-| `docs/HANDOFF.md`           | Latest session handoff notes                                      |
-| `docs/IMPROVEMENT_IDEAS.md` | Curated review-phase backlog                                      |
-| `docs/IMPROVEMENTS_TODO.md` | Proposals from the `/continuously-improve` background loop        |
-| `docs/TEST_COVERAGE.md`     | Test coverage status and gaps                                     |
-| `docs/TEST_DB_AUDIT.md`     | Mocked-DB vs real-SQL coverage map                                |
+| Doc                     | Purpose                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `docs/TODO.md`          | The one backlog — all open work, prioritized (GAPS + IMPROVEMENT_IDEAS + go-live folded in 2026-07-05) |
+| `docs/RESOLVED.md`      | Completed phases + historical bug tracker + session-notes archive (incl. the folded-doc snapshots)     |
+| `docs/HANDOFF.md`       | Latest session handoff notes                                                                           |
+| `docs/TEST_COVERAGE.md` | Test coverage status and gaps                                                                          |
+| `docs/TEST_DB_AUDIT.md` | Mocked-DB vs real-SQL coverage map                                                                     |
 
 **Voice AI**
 
@@ -357,7 +354,6 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | ------------------------------------ | ------------------------------------------------------------------- |
 | `docs/VOICE_AGENT_PLAYBOOK.md`       | Authoritative rulebook for building customer voice scripts          |
 | `docs/VOICE_DEADAIR_RESEARCH.md`     | Dead-air / latency research findings (mostly shipped)               |
-| `docs/AIASSISTANT_GO_LIVE_TODO.md`   | Go-live / Telnyx ops detail — single source for go-live steps       |
 | `docs/AIASSISTANT_PERSONA_DRAFT.md`  | Thinking Hammer persona + call-flow draft                           |
 | `docs/aiassistant-knowledge-base.md` | Source content for the Thinking Hammer AI assistant's KB            |
 | `docs/FRAMEWORK_MIGRATIONS.md`       | Voice-stack migration history (Vapi→LiveKit, Grok→OpenAI TTS, etc.) |
@@ -412,4 +408,4 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 Proprietary. All rights reserved.
 
-**Docs hygiene note (2026-07-04):** Documentation table above rebuilt from the actual `docs/` tree — was 10 rows, now the full inventory (3 root + 37 `docs/*.md` incl. `docs/README.md` + subfolders), each purpose verified against the file's own header. `docs/README.md` (folder index) synced to match the same day. Prior pass 2026-06-23 (stale migration/route/test counts, ARCHITECTURE dedup, CLAUDE tools count, removed NEEDS-REFACTORING.md pointers). See docs/README.md + RESOLVED.md.
+**Docs hygiene note (2026-07-05):** TODO consolidation — `GAPS.md`, `IMPROVEMENT_IDEAS.md`, `IMPROVEMENTS_TODO.md`, and `AIASSISTANT_GO_LIVE_TODO.md` were folded into `docs/TODO.md` (now the one backlog, deduped + prioritized) and deleted; their done items + verbatim snapshots were appended to `docs/RESOLVED.md`; navigational refs across CLAUDE/README/docs updated. Prior pass 2026-07-04 rebuilt this Documentation table from the actual `docs/` tree. See docs/README.md + RESOLVED.md.

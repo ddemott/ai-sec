@@ -898,3 +898,1166 @@ These closed items were annotated `SHIPPED` inline in GAPS.md; they had no remai
 - Owner admin guide + "how to read the analytics" — `docs/OWNER_GUIDE.md`.
 - Prod incident + telephony runbook — `docs/RUNBOOK.md` (agent-silent, reminders-not-sending, Stripe-webhook-400, backend-down, DB-pool-saturation, full Telnyx→LiveKit→agent path).
 - Stale edge-functions section removed from `docs/DEPLOYMENT.md` (phases renumbered).
+
+---
+
+## 2026-07-05 — Documentation consolidation: single TODO.md
+
+`docs/TODO.md` is now the **one** backlog. Four scattered TODO-bearing docs were folded into it and deleted: `AIASSISTANT_GO_LIVE_TODO.md`, `GAPS.md`, `IMPROVEMENT_IDEAS.md`, `IMPROVEMENTS_TODO.md`. Their **open** items were deduped + prioritized into the new TODO.md; their **done** items + analysis prose are archived verbatim below (git also preserves the originals). Reusable procedure/reference docs that merely use checkbox syntax were left intact (`BRANCH_CHECKLIST.md`, `CODING_STANDARDS.md`, `DEPLOYMENT.md`, `DEVELOPMENT_WORKFLOW.md`, `ALERTS.md`) — they are not backlogs. Telnyx/REFER go-live ops detail now lives solely in `docs/RUNBOOK.md` §7.
+
+### Migrated DONE items from docs/TODO.md (verbatim)
+
+- [x] **P0 verification gaps — testing trio** — DONE 2026-07-01 (branch: `test/blindspot-p0-verification`; per-item detail: `docs/TODO.md` "Verification blind spots" section, audit: `docs/TEST_DB_AUDIT.md`)
+  - Real-DB booking integration test in CI: `src/agentToolsBookingIntegration.test.ts` (mutation-verified against the tz bug).
+  - Tool-selection eval: `agent/scripts/sim-toolselect.ts` via `./scripts/simulate.sh toolselect` (baseline 6/6).
+  - Mocked-DB audit + 6 real-DB companion suites (analytics, auditLog, versionHistory, voice, reminders seed, customer search).
+- [x] **🐛 BUG — `/agent-tools/find-customer-by-name` ILIKE wildcard over-disclosure** — FOUND + FIXED same day (2026-07-01, by `agentToolsCustomerSearch.realdb.test.ts`). LIKE metacharacters (`%`/`_`/`\`) are now escaped before interpolation into `'%' || $2 || '%'`, so a `%` in a transcribed name matches literally instead of dumping the tenant address book. Regression test asserts zero matches for bare `%` and `___`.
+- [x] **🐛 BUG — `GET /voice/history` unvalidated query params → 500s** — FOUND + FIXED same day (2026-07-01, by `voice.realdb.test.ts`). `limit`/`offset` now digits-only-validated and `customer_id` UUID-validated (`requireValidUUID`) → clean 400s instead of pg `NaN`/22P02 500s. Regression tests added.
+- [x] **`scheduleForAppointment` reminder double-seed** — FOUND + FIXED same day (2026-07-01, by `scheduleForAppointment.realdb.test.ts`). Idempotency enforced at the DB layer: partial unique index `reminder_schedules_one_scheduled_per_type` (migration `20260701020000`) + `ON CONFLICT DO NOTHING` on the seed INSERT — race-safe under concurrency (parallel-seed test) with no cross-statement locks. (First attempt used an app-level probe, then a transaction + advisory lock per Copilot review — the lock deadlocked the appointments cascade in CI E2E; the unique index is the durable design.) Reschedule still reseeds (cancel-then-seed vacates the partial index).
+- [x] **🐛 BUG — version-history: deleted-list 500s on 4/6 tables + `restore_fields_from_version()` / `copy_fields_between_records()` dead on ALL tables** — FOUND + FIXED same day (2026-07-01, by `versionHistory.realdb.test.ts`, 33 tests). The two RPCs still queried bare `id` after the 2026-05 PK renames (`column "id" does not exist` — field-restore/copy-fields were 500ing in prod for every table); the deleted-records list hardcoded `t.name, t.phone` which don't exist on appointments/voice_sessions/services/resources. Fix: migration `20260701010000_fix_version_rpc_pk_names.sql` (PK-aware RPCs, same pattern as `soft_delete_record`, PLUS `jsonb_populate_record` decode — the original SET clause stringified jsonb, so a restored text field came back JSON-quoted; only reachable once the PK fix made the functions run) + per-table display columns in `versionHistory.ts`. **Prod migration apply needed before/at merge** (fix-forward: the functions are already dead in prod, so ordering can't make anything worse).
+
+- [x] **Blindspot P0 round 2 — multi-employee scheduling coverage + agent tool-call arg logging** — DONE 2026-07-02 (branch `test/blindspot-p0-round2`; detail: `docs/TODO.md` "Verification blind spots"). (1) `src/multiEmployeeScheduling.realdb.test.ts` — 7 real-DB tests proving skill matching, employee spillover, shift-aware assignment, capability-gated resource exhaustion, and the first true PARALLEL GiST double-book race (exactly 1 winner, 3 clean TIMESLOT_OCCUPIED). (2) `agent/src/redactToolArgs.ts` — the `function_tools_executed` log line now carries each tool call's ARGS (PII-redacted: phone/code keys digit-masked, time strings + names preserved) + per-call `is_error`; 13 unit tests. Remaining P0 observability: paid vendors (SENTRY_DSN / BETTER_STACK_TOKEN) ❌ DROPPED by decision (2026-07-02); alert rules stay optional/free — see "Prod config / observability" below.
+- [x] **UI — hero feature grid looks incomplete (empty 4th slot)** — DONE 2026-07-01. Added a 4th `feat-tile` to the hero `feat-grid-hero`: **"Shows You Why You're Losing Jobs"** (green bar-chart icon) — the WHY differentiator — so the 2-col grid is a full 2×2. `dashboard/app/page.tsx`.
+- [x] **🐛 BUG — deleting a customer orphans their appointments (can't cancel)** — FIXED 2026-07-02 (branch `fix/customer-delete-cancels-upcoming`). (Reported 2026-07-01, Dale — "Ab Smith".) `DELETE /customers/:id` now runs soft-delete + **auto-cancel of the customer's UPCOMING scheduled appointments in one transaction** (frees the slots; past/completed kept for history; already-canceled untouched), and mirrors `/appointments/:id/cancel` by dispatching `syncAppointmentToAll(…,'delete')` per canceled appointment so external calendars free too. One-time backfill migration `20260702000000_cancel_orphaned_appointments_of_deleted_customers` cancels the pre-fix orphans (data-only, no baseline regen; verified against a seeded orphan on local DB). 3 real-DB route tests (`src/customerDelete.realdb.test.ts`): upcoming-canceled/past-kept/already-canceled-stays, other-customer untouched, 404-path cancels nothing. **Prod migration APPLIED + VERIFIED 2026-07-02** (`schema_migrations` head = `20260702000000`, 154 total; the backfill matched zero rows on prod — no soft-deleted customers exist there, so it was a safety no-op).
+- [x] **🐛 BUG — landing page: pricing toggle + mobile hamburger menu are dead** — FIXED 2026-07-02 (branch `fix/landing-pricing-toggle-hamburger`). (Found 2026-07-01.) Root cause confirmed: `<script>` inside `dangerouslySetInnerHTML` never executes. Moved BOTH the pricing toggle (Monthly/Annual price swap + active state + annual note) and the full hamburger menu (open/close, backdrop tap, link-click close, Escape, body scroll lock, icon animation) into `useEffect`s in `LandingPage` — same pattern as the capability grid (PR #151); deleted the entire dead inline `<script>` (its `.reveal` observer part was already duplicated in a working effect) and the dead `onclick=` attributes. 5 component tests (`dashboard/app/page.test.tsx`): price swap both directions, annual-note visibility, hamburger open/backdrop-close, Escape/link-close, auth-redirect sad path.
+- [x] **Voice: "thinking" cover — looping key-typing bed** — DONE 2026-06-29 (`feat/thinking-sound-bed`), part (b). The SFX bed ships via LiveKit's built-in `voice.BackgroundAudioPlayer` (`thinkingSound: KEYBOARD_TYPING`, the clip ships in `@livekit/agents/resources` — no asset to source). `agent/src/session/thinkingSound.ts` (`attachThinkingSound`) wires it on a started session whose room is connected; the framework owns the 2nd-track publish, loop, mix, and `agent_state=thinking`→play / `speaking`→stop. Flag `ENABLE_THINKING_SOUND` (default OFF, RULE 10.2) + `THINKING_SOUND_VOLUME` env (0–1, default 0.5, live-tunable). 3 wiring unit tests (start / detach-idempotent / start-failure-swallowed); 402 agent tests green. **Part (a)** — the spoken cached filler — was already built as the output watchdog (`watchdog.ts`, `ENABLE_OUTPUT_WATCHDOG`); left as-is. The two are **independent, not layered** (watchdog `say()`→`speaking` would stop the bed; composing is a future real-call design). **Caveats stand:** the bed plays before ~every reply in pipeline (no per-turn deadline; fine as ambient); it MASKS a stall, doesn't fix it (RULE 2.4 — raise TPM / fix the tool). **Real-call validation (Dale, not CI):** does the 2nd track mix through to PSTN, volume, feel — flag stays OFF until confirmed. See VOICE_AGENT_PLAYBOOK §8.2.
+- [x] **Dashboard: "Delete old calls" button** — DONE 2026-06-29 (`feat/delete-old-calls`). Owner-gated **soft-delete** (recoverable; sets the already-existing `voice_sessions.is_deleted/deleted_at/deleted_by` — no migration needed). Backend: `DELETE /voice/session/:id` (single) + `POST /voice/delete-old {older_than_days}` (bulk, excludes `status='active'`); both owner-gated (front-desk 403, super-admin bypass) + RLS-scoped; also fixed `/voice/active` + `/voice/history` to filter `is_deleted = false` (they were leaking soft-deleted rows). Dashboard: `useConfirm()` dialogs + per-call delete (detail pane) + bulk "older than 30/90/180/365 days" control in the Call History header — both owner-only. Hard-delete (true PII erasure of caller_phone/transcripts) deliberately deferred to the legal-held GDPR/retention work (#68/#69). Tests: 8 backend (`src/voice.test.ts`) + 3 dashboard (`VoiceCallsView.test.tsx`); SQL + full owner JWT→gate→RLS path smoke-verified against a real local DB. Analytics already filtered `is_deleted = false`, so deleted calls drop out of stats too.
+
+- [x] **Per-tenant default buffer between appointments — SHIPPED 2026-07-01 via PR #137** (superseded the parked `feat/default-appointment-buffer`/PR #41, now CLOSED). `src/services/tenantBuffer.ts` + `getTenantBufferMinutes()` wired into the agent booking tools, buffer UI on the AI Persona / preferences page, and both migrations (`20260607000000_tenants_default_buffer` + `20260607000001_booking_buffer_enforcement`) — all in main. **Prod: both migrations applied + `tenants.default_buffer_minutes` column verified present 2026-07-02.** (The old #41 line here claimed "genuinely missing" — stale; reconciled 2026-07-02.)
+- [x] **`feat/knowledge-suggestions` (PR #42) — improved variant of the website-scan Q&A review UI. DONE 2026-06-23, re-landed as PR #82 (`6afed91`) → merged to main.** Recovered from `refs/pull/42/head` after the branch was deleted, re-applied clean on current main. Matched items now enter as `'suggested'` (owner reviews everything before live KB); approve path wrapped in a try/catch txn with ROLLBACK; the 0-row status-guard race now throws a 409 (was a reply.send() inside the txn callback → double-send + false approval log — fixed + tested). Also updated the `kb-import-website-stub` E2E to the new all-items-suggested contract (0 confirmed, ≥4 suggested) and renamed `confirmedItems`→`matchedItems`. No migration (table+statuses already in main). Grok's `feat/website-knowledge-import` overlaps the same handler — rebase that work on this.
+- [x] **`docs/website-import-priority` — RESOLVED 2026-07-02 (landed/superseded).** The branch no longer exists (not on origin, not local — verified). The feature it specced **shipped**: `src/routes/knowledge.ts` carries the website-import path (`knowledge.importWebsite.test.ts`), the review-UI landed via PR #82 (knowledge-suggestions, MERGED), and the design specs live in main under `docs/superpowers/plans/2026-06-09-website-knowledge-import-plan1-question-bank.md` + `docs/superpowers/specs/2026-06-09-website-knowledge-import-design.md`. Nothing to recover.
+- [x] **`fix/agent-tenant-resolution` — RESOLVED 2026-07-02 (superseded).** The branch no longer exists (not on origin, not local — verified) and its go-live-docs commits (`GO_LIVE_FINDINGS.md` / `TELNYX_HANDOVER.md`) are unreachable in git (no PR to restore). The Telnyx go-live ops detail they held is now covered in `docs/RUNBOOK.md` (12 Telnyx/REFER/SIP references) and `docs/AIASSISTANT_GO_LIVE_TODO.md` (40) — closed as superseded, no unique delta to fold.
+
+- [x] **PSTN inbound — CONFIRMED 2026-06-30.** A real call to `+1 630-822-9086` reached the agent (Beth) and held a full ~3-min conversation (`voice_sessions` row + transcript landed). Inbound path Telnyx → LiveKit → `ai-sec-agent` works; the `ai-sec-agent` deploy is validated. (The earlier "wrong number" symptom was a documentation transcription error — `866-9086` was never ours; `822-9086` is the real owned+routed DID.) Booking on that call failed for a separate reason — the employee-skills gap, root-caused + prod-patched same day; needs one more live call to confirm end-to-end (see below).
+- [x] **Remove DynaTire rows from prod DB** — DONE 2026-06-29: prod inspected, **zero DynaTire rows** present — already clean, no-op. Same pass found + removed a **stray duplicate demo-tenant row** (older seed superseded by the canonical one; no transactional data). The dup carried a second owner row for the same email → nondeterministic login (email is unique PER-tenant, not global). Removed; canonical intact. Login query hardened in PR #123 (`ORDER BY` + multi-tenant warning). Operational specifics in session memory, not the repo.
+
+- [x] **GAPS solo-backlog batch — 10 items, DONE + DEPLOYED 2026-07-04 (PRs #187–#192, all merged to main + live on prod, migration-free + dep-free).** Verified live via authenticated prod probe (`/analytics/utilization` 200, `/export/customers.csv` 200, `/admin/feature-readiness` 403-gated) + `simulate status --env prod --deep` = 4/4.
+  - **#188 — 3 new voice tools (20→23):** `page_owner_via_sms` (urgent mid-call owner SMS page, one-per-call guard, take_message fallback), `get_detailed_customer_history` (last ~10 appts any-status + prefs + last ~3 call summaries, phone server-injected), `send_self_service_link` (texts the caller a reschedule/cancel link reusing the selfService token path, consent+ownership gated; prompt now offers it proactively). Tenant-tz date formatting (review fix). toolselect eval → 8 cases (baseline 7/8, take_message case = model drift not regression).
+  - **#189 — CSV bulk import/export:** owner-gated `GET /export/{customers,appointments,calls}.csv` (`src/services/csv.ts` hand-rolled RFC-4180 + formula-injection guard incl. leading-whitespace bypass) + `POST /customers/import` (liberal headers, zod+normalizePhone, in-file + existing dedupe, 1 MB / 2000-row caps, per-row error report). Buttons in `CRMView` + `BusinessSettingsView`.
+  - **#190 — session revocation UI + feature-readiness:** `POST /users/me/revoke-sessions` + `POST /users/:id/revoke-sessions` (owner-gated, tenant-pinned, 404-no-leak) bumping `password_changed_at`; `ProfileView` + `TeamAccessView` buttons (try/finally guards). `src/services/featureReadiness.ts` (shared with `envWarnings`) → boot log + `GET /admin/feature-readiness` (super-admin).
+  - **#191 — analytics + comms:** `/analytics/cohorts` `first_time_fix` (share of distinct callers whose FIRST call booked); `GET /communications/history?status=failed` drill-down — **and the send-failure paths of smsService/emailService now record `status='failed'` rows** (the drill-down was inert before; found in review). `CommsSentView` "Failed only" filter.
+  - **#192 — utilization heatmap:** `GET /analytics/utilization` (weekday×hour staffed-vs-booked, tenant-local, cross-midnight-clamped) + `UtilizationHeatmap` theme-var CSS-grid panel in `AnalyticsView`.
+  - **#187 — docs:** GAPS.md trimmed (shipped specs/one-liners → RESOLVED.md).
+  - _5W/coverage note:_ all new tests happy+sad with inline 5W; every code-review-bot finding fixed + threads resolved before merge.
+- [x] **AI cost / usage meter** — instrument spend at call sites (added recording via aiCost helper to kb_ingestion, kb_query/policy paths in knowledge routes + agentTools; voice session via existing record-ai-cost + LiveKit collector; summary/classify costs folded into model_usage). Uses ai_cost_events table (data model chosen). "Usage this month" surfaced via /analytics/ai-cost + breakdown in AnalyticsView (partial UI pre-existed). 2026-06. (Remaining agent-side explicit TTS etc. covered by session usage.)
+- [x] **Self-service links — dashboard surface** — "Send self-service links" button (with loading + toast) in `AppointmentDetailPanel.tsx`; API client + POST /appointments/:id/send-self-service-links (generates tokens, sends via Telnyx SMS, returns links; also embedded in normal booking confirmations via appointmentService + templates). Backend + unit tests complete. (PR #34 + follow-ups.) 2026-06.
+- [x] **Self-service E2E** — added in workflows.spec.ts: book via helper → send-links trigger (API) → customer uses public /self/cancel and /self/reschedule pages (confirm, success states, DB effect) → negatives (invalid token UI) + double-use (idempotent already-canceled). Uses generated tokens matching backend + e2e fixtures. 2026-06.
+- [x] **Analytics depth — DONE 2026-06-22..23** (reconciled 2026-07-02: item was still `[ ]` though the body shows every sub-part shipped; the one genuine remainder — pure-inquiry abandonment — is carved out as its own item below). **RAG debugger API DONE 2026-06-22** (dashboard surface DONE — `ExplainAnswerView.tsx` in Setup → "Answer Debugger", verified 2026-07-02): `POST /knowledge/explain` (`src/routes/knowledge.ts`) — owner-gated; embeds the question the SAME way `/agent-tools/policy-answer` does (normalize → embed) and runs the real `search_tenant_docs_normalized` retrieval, returning ranked candidate chunks + similarity scores annotated with `above_threshold` / `used_in_production` (top-3 above 0.5) + a `would_answer` flag, so an owner sees WHY the AI answered (or didn't); 5 tests. **Dashboard DONE 2026-06-22**: `ExplainAnswerView` (Setup → "Answer Debugger" sub-tab — question box → ranked candidates with % match + "Used by AI" badges + a would-answer verdict + a **"What the AI would draw from" composed-answer box** (the exact cited context the agent would relay, via `composed_answer` on `/knowledge/explain`); tests updated). [x] **caller-facing source citations DONE 2026-06-22**: `/agent-tools/policy-answer` now resolves each matched chunk's source-doc title (joins `tenant_docs`) and prefixes the context with `[From "<title>"]` so the agent can attribute answers; prompt updated to use the marker naturally; agentTools + integration tests cover it. [x] **cohort + bookings-by-service DONE 2026-06-22**: `GET /analytics/cohorts` (`src/routes/analytics.ts`) — repeat-caller cohorts (grouped on phone DIGITS so format variants collapse; `HAVING count>1`) + bookings-by-service (join booked calls → appointment → service) + a repeat-caller summary (distinct/repeat/share); dashboard "Repeat Callers" + "Bookings by Service" panels in `AnalyticsView`; backend (2) + component (1) + E2E (1) tests. [x] **CLV DONE 2026-06-22**: `/analytics/cohorts` also returns `top_customers` (top 20 by lifetime booked revenue = `sum(service.price)` per customer, ::float8) + a "Top Customers" panel in `AnalyticsView`; unit + component + E2E-shape tests. [x] **abandonment-by-service DONE 2026-06-22**: migration `20260622010000` adds `voice_sessions.requested_service_id`; the `book-with-scheduling` agent tool best-effort fuzzy-resolves the requested service name → `service_id` and records it on the call's `voice_session` **whether the booking succeeds or fails** (no agent-worker change needed — that handler already carries `call_id` + `serviceType`); `/analytics/cohorts` returns `abandonment_by_service` (abandoned calls `appointment_id IS NULL` grouped by requested service) + an "Abandoned by Service" panel; backend capture test + analytics test + component + E2E-shape. **Prod action DONE 2026-06-23**: migration `20260622010000` applied + verified on prod (`voice_sessions.requested_service_id` column present). (Pure-inquiry abandonment — callers who only asked availability without a booking attempt — still untracked: the `available-slots`/`scheduling-options` tools don't carry `call_id`; would need an agent-worker change.) **Analytics depth complete** except that inquiry-only edge. [x] **From/To date-range filtering DONE 2026-06-22** (PRs #65/#66): `/analytics/calls` + `/analytics/cohorts` take optional `start_date`/`end_date` via new `optionalDateBounds` (all-time when absent; calendar-invalid dates like `2026-02-30` rejected to null by `isValidDateOnly` so they never reach a `$n::date` cast; `end` is day-inclusive; voice queries bound on `started_at`, revenue query on `start_time`); `AnalyticsView` gets From/To controls (range-change refetch keeps the page + controls on screen); backend + component tests. (#66 was a fix-forward for #65: a watcher race merged #65 before its review-fix commit registered, so the calendar-invalid-date guard + two other Copilot fixes landed via #66.)
+- [x] **Docs / runbooks** — DONE 2026-06-22: `docs/RUNBOOK.md` (incident + telephony playbook — triage, agent-silent, reminders-not-sending, Stripe-webhook-400, backend-down, DB-pool-saturation, full Telnyx→LiveKit→agent path incl. REFER + blocked-caller-ID OTP) **and** `docs/OWNER_GUIDE.md` (owner admin guide — dashboard tour, how-to-read-analytics: Call Volume / Booking Conversion / Caller Abandonment / Why Callers Reached Out, + FAQ). All three sub-parts (owner guide, telephony playbook, prod incident runbook) covered.
+- [x] **Agent reliability — idempotent-read retry** in `toolsClient` — DONE 2026-06-22: code wired (`agent/src/toolsClient.ts:50` `maxAttempts = opts.isReadOnly ? 2 : 1` — mutations never retried; one retry on transient 5xx / network throw; 7 read-tool call sites in `agent/src/tools.ts`) **+ now tested** — added 5 cases to `toolsClient.test.ts` (read retry→success, read exhaust both-5xx, mutation no-retry on 5xx, read retry on network throw, mutation no-retry on throw). The mutation-no-retry cases are the double-book guardrail. 14/14 green.
+- [x] **`simulate tools` → CI** — DONE: wired as a hard regression gate in `.github/workflows/ci.yml:269` ("Run simulate tools" step, `./scripts/simulate.sh tools --env local`; non-zero exit fails the E2E job). Runs the booking + recall journey against the live servers and flags `[dev]` gaps the same way the local harness does.
+- [x] **Remove vestigial edge-function section** from `docs/DEPLOYMENT.md` — DONE 2026-06-22: dropped the dead "Phase 3: Deploy Edge Functions" section (incl. vestigial `3.1 Link the Supabase CLI` — migrations apply via `setup-db.sh`, no CLI link needed) and renumbered Phases 4–8 → 3–7 + subsections.
+- [x] **Booking RPCs ignore `is_deleted` in overlap/availability checks** — **DONE 2026-07-01 (PR #139, migration `20260701000000`, prod-applied + verified).** Added `AND (is_deleted IS NULL OR is_deleted = false)` to all 8 appointment subqueries in `book_appointment_atomic` (3: resource/employee/user overlap) + `book_with_scheduling_atomic` (5: resource+employee availability, unskilled-branch resource, timeslot-occupied + employee-occupied diagnostics); `check_availability_with_tz` already filtered. Confirmed the bug was reachable (`soft_delete_record` is PK-aware since `20260513000004` → soft-deleting an appointment sets `is_deleted=true`, leaves `status='scheduled'`). Offer/book symmetry verified intact (the slot-offering reads already filtered). Also guarded 3 agentTools reads (`get_my_appointments`, cancel, reschedule) that still counted soft-deleted rows. Real-DB TDD (RED→GREEN, `booking-soft-delete.test.ts`); full suite 2020/2020.
+- [x] **Pure-inquiry abandonment tracking** — DONE 2026-07-02. `get_available_slots` + `get_scheduling_options` agent tools now thread `call_id` (schemas accept optional `call_id`); both handlers fire the same best-effort `requested_service_id` write as `book-with-scheduling`, extracted into a shared `captureRequestedService()` helper (fire-and-forget, COALESCE-guarded, never blocks the call). So a caller who only asks availability and never books is now attributed to their `voice_session` → counted in abandonment-by-service. Tests: 3 mocked route tests (available-slots + scheduling-options fire the capture with the right params; no `call_id` → no write) mirroring the existing book-with-scheduling capture test. Backend 2179 + agent 423 green.
+- [x] `@typescript-eslint/unbound-method` — DONE 2026-06-22. Zero violations across all 3 packages (the "heavy in tests" concern never materialized — vitest `vi.fn()` mocks are plain object properties the rule ignores); promoted to `error` in all three eslint configs. Also fixed a stray `no-unnecessary-type-assertion` error in `agent/src/tools.test.ts` that had slipped past CI (agent CI runs tsc+tests, not lint).
+
+- [x] **🐛 BUG (infra) — `supabase/baseline.sql` was STALE; local E2E used a schema missing 3 shipped tables.** Found + FIXED 2026-06-19 (`fix/baseline-sql-drift`). `rebuild-db.sh` prefers the single-file `baseline.sql` then `setup-db.sh --baseline` marks every later migration applied **without running it** — so tables created after the 2026-05-18 squash (`knowledge_suggestion`, `customer_messages`, `ai_cost_events`) were absent from any baseline-built DB (local Playwright `globalSetup`, `npm run db:rebuild`) while CI dodged it (builds from the chain + `PLAYWRIGHT_SKIP_DB_RESET=1`). **Fix:** (1) regenerated `baseline.sql` from the chain (33→36 tables); (2) added `scripts/generate-baseline.sh` + `npm run db:baseline` (spins a throwaway DB, applies the chain, `pg_dump --schema-only --no-owner --no-privileges`) as the canonical regen so it can't silently rot; (3) closed the guard hole — `verify-schema-alignment.ts` only scanned `ADD COLUMN`, so `CREATE TABLE` (inline columns) escaped it; added `checkMigrationTablesInBaseline` (every migration-created table, minus dropped/renamed, must appear in baseline) + 4 unit tests. Verified: full KB e2e 15/15 green via the **baseline** path; guard catches the old drift, passes the new baseline. Note: CI exercises the _chain_ path, not baseline — this drift class is only observable locally, so the guard now runs in prepare-commit/CI as the catch.
+
+- [x] **Gap #2: Analytics — DONE 2026-06-12** (shipped to main, deployed). `GET /analytics/stats` + `GET /analytics/calls` built; dashboard panels now real — Call Volume / Booking Conversion / Caller Abandonment from `voice_sessions` ("booked" keyed on `appointment_id IS NOT NULL`), + a first "Why Callers Reached Out" outcome breakdown. Backend unit + dashboard component + `analytics.spec.ts` E2E all green; harness asserts both routes.
+  - [x] **Follow-up: richer WHY classification — DONE 2026-06-12.** Agent's post-call classifier (`agent/src/callClassify.ts`, bounded/failsafe) categorizes non-booking calls into `no_availability` / `wrong_service` / `price` / `message` / `info` (null when unclear → stays `no_outcome` = abandoned, preserving that metric). Wired into the shutdown hook (only when no booking/transfer tool already set the outcome). Dashboard "Why Callers Reached Out" panel renders friendly labels. +8 agent + dashboard component tests; analytics E2E extended to seed a `no_availability` call and assert the label (run-verified).
+- [x] **Website-scan as onboarding step (fetch + LLM extract to KB).** Core backend + dedicated wizard step implemented: new step 7 "Import from website" (right before the policy questions step 8) with scan that prefills and saves answers for the starter questions. The questions step loads prefilled from DB. See details in the Back-to-Front subsection below. Backend, migration, UI step, prefill logic done. Advanced suggestion review still pending.
+
+- [x] **[prod]** **Reminder/comms SMS silently runs MockAdapter** — FIXED 2026-06-16: ProviderRegistry now defaults to Telnyx; boot warning fires if `TELNYX_PHONE_NUMBER` unset. **Prod action**: set `TELNYX_PHONE_NUMBER=+16308229086` on Railway.
+- [x] **[prod]** **Email silently runs mock transporter** — code FIXED: boot warning fires when `EMAIL_USER`/`EMAIL_PASS` unset (`envWarnings.ts:35`), matching the Telnyx/CORS/`DASHBOARD_URL` silent-degrade siblings. (Without the env, `emailService.ts:22` installs a mock returning a fake messageId → emails never send.) **Prod action**: set Gmail app-password env (`EMAIL_USER`/`EMAIL_PASS`) on Railway.
+- [x] **[prod]** **Agent `BACKEND_URL` defaults to `http://localhost:4001`** — FIXED 2026-06-16: `.default()` removed; agent now exits at startup if unset. **Prod action**: confirm `BACKEND_URL=https://ai-sec-production.up.railway.app` is set on `ai-sec-agent` Railway service.
+- [x] **[prod]** **`STRIPE_WEBHOOK_SECRET` empty → every webhook 400s** — FIXED 2026-06-17: boot warning now fires when `STRIPE_SECRET_KEY` is set but `STRIPE_WEBHOOK_SECRET` is missing. **Prod action**: set `STRIPE_WEBHOOK_SECRET` on Railway.
+- [x] **[prod] (security)** **`CORS_ORIGIN` unset reflects ANY origin** — FIXED 2026-06-16: boot warning now fires. **Prod action**: set `CORS_ORIGIN=<dashboard URL>` on Railway.
+- [x] **[prod]** **`DASHBOARD_URL` defaults to `https://localhost:4000`** — FIXED 2026-06-16: boot warning now fires. **Prod action**: set `DASHBOARD_URL=<dashboard URL>` on Railway.
+
+- [x] **[dev]** **Voice-session capture (outcome + appointment link + summary)** — DONE 2026-06-12. `CallOutcomeTracker` (`agent/src/callOutcome.ts`) is mutated by the booking tools (`recordBooking(appointment_id)`, guarded on a real id in the response) and the transfer tool (`recordTransfer`); the shutdown hook reads it and sends `outcome` + `appointment_id` + a bounded/failsafe post-call `summary` (`agent/src/callSummary.ts` — never throws, can't drop the session-end write) to `voice-session-end`. Backend `VoiceSessionEndSchema` now accepts `summary` + UUID-validated `appointment_id` and forwards them to the RPC (was hardcoded null). +14 agent + 2 backend tests; `simulate tools` now proves the link **persisted** via a `voice_sessions` DB read-back (appointment_id matches the booking, outcome=booked, summary stored).
+- [x] **[dev]** **Transfers invisible in Calls tab** — DONE (see Back-to-Front section line 215 + Gap #1). `recordTransfer()` sets `outcome='transferred'`; `end_voice_session` RPC sets `status='transferred'` when outcome matches. UI badge wired.
+- [x] **[dev]** **`GET /analytics/stats` missing** — DONE 2026-06-12 (Gap #2). Route at `src/routes/analytics.ts:24`; dashboard panels fully wired. See active build queue above.
+- [x] **[dev] SMS delivery monitoring** — DONE 2026-06-12: Delivery status webhooks + `message_delivery_status` table + metrics for Telnyx (legacy provider path removed 2026-06). `POST /communications/telnyx/status` wired.
+- [x] **[dev] `GET /communications/history` implemented** — DONE 2026-06-12 (`feat/communications-history`): real `communications_history` table, written on the Email/SMS send-success path, tenant-scoped paginated query. No live UI consumer yet (backend-only).
+- [x] **[dev]** **Stripe tax code wired** — `automatic_tax: { enabled: true }` added to checkout session in `billing.ts`, gated on `STRIPE_AUTO_TAX=true` env var. Set that on Railway after: (1) enable Stripe Tax in Stripe dashboard, (2) register nexus for IL + customer states. See Phase 13 user-action item.
+
+- [x] **[dev] — HIGH** **`supabase/baseline.sql` stale → drift guard** — DONE 2026-06-12. Baseline was missing `is_demo`/`demo_expires_at`/`tts_*`/`forward_phone`, so every `db:rebuild` + Playwright `globalSetup` DB lacked columns (`/demo/start` 500'd). Fix: proved the migration chain replays clean on empty (131 applied), regenerated `baseline.sql` via `pg_dump --schema-only` from the chain-built DB (now all 8 columns), and verified a full baseline rebuild → `simulate tools` journey passes. Added a **self-maintaining drift guard** (`checkMigrationColumnsInBaseline` in `scripts/verify-schema-alignment.ts` + 3 tests): scans every `ADD COLUMN` across migrations (minus dropped/renamed) and fails if any is absent from baseline — so this can't silently recur. Found by `scripts/simulate.sh tools`.
+
+- [x] Replace the dead `qa-live-test.py` references — DONE 2026-06-17: updated DEVELOPMENT_WORKFLOW.md, TEST_COVERAGE.md, ARCHITECTURE.md to reference `simulate.sh tools`.
+- [x] Add `simulate tools` (or an E2E equivalent) to CI — DONE: `ci.yml:269` runs `./scripts/simulate.sh tools --env local` as a hard gate in the E2E job (non-zero exit fails). (Canonical entry in the P2 master list above.)
+- [x] **Test RAG accuracy — DONE 2026-06-12.** `scripts/sim-rag.mjs` + `./scripts/simulate.sh rag` — seeds a known KB into a demo tenant (real embeddings via `/knowledge/add`), asks paraphrased caller questions through `/agent-tools/policy-answer`, grades retrieval (expected content present, + out-of-scope must fall back not hallucinate), reports a hit-rate and exits non-zero below 80%. On-demand quality tool (real OpenAI → not a CI gate; non-deterministic + costs). Run-verified: **9/9 (100%)** after query expansion fix. **Gates the website-scan onboarding idea** (`docs/STRATEGY.md`).
+  - [x] **Finding from the eval — FIXED 2026-06-12.** _"what's your address"_ fell back instead of retrieving the location doc — `address`↔`located` shares no vocabulary and scored 0.31 below threshold. Root cause: reductive `normalizeForEmbedding` applied to _query_ collapsed terse inputs below out-of-scope floor. Fix: new `shared/expandQueryForEmbedding.ts` (additive synonym expansion, inverse of normalize) on policy-answer path only + threshold 0.5→0.30. Docs/ingest untouched (no re-embed needed). See `shared/expandQueryForEmbedding.ts` + `src/queryExpander.test.ts`. Now ready for website-scan reliance.
+
+- [~] **Telnyx provisioning — DONE 2026-06-02.** Account for Thinking Hammer LLC funded ($10) + upgraded (trial 1-order cap lifted). SIP Connection `livekit-outbound` (`2945038451784812111`) → FQDN `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060`. `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` set (local `.env`; verify on Railway `ai-sec`). Number **`+1 630-866-1960`** purchased (id `2973794140900296302`), routed to `livekit-outbound`, connection activated. Old `+1-630-937-9478` is dead (order deleted). **2026-06-04 UPDATE:** LiveKit creds work (not dead); inbound trunk `ST_aUM3GuCuc9wL` already points at the numbers (normalized to +E.164). `+16308661960` is a dead recycled DID — **new test number `+1 630-822-9086` (id `2975078589701031880`) bought + fully wired.** Config verified clean end-to-end; remaining blocker is PSTN carrier propagation, not config. **NEXT:** different-carrier call to `+16308229086` while watching LiveKit `listRooms()`. See `docs/TICKET_SUPPORT.md` (the 2026-06-04 provisioning audit detail was folded in there; the standalone `PROVISIONING_AUDIT.md` was removed).
+  **2026-06-30 UPDATE:** Live number `+1 630-822-9086` — the real owned + routed DID (dial for the PSTN test). The long-documented `+1 630-866-9086` was a transcription error: never owned (routes to another business). `+1 630-866-1960` dead. Landing pages, dashboard constants, tests, and docs all corrected to 822-9086.
+- [x] **Browser-verify role gating + invite flow** — DONE 2026-06-03. Covered by green e2e: `auth-flows.spec.ts` (front_desk → 403 on /users/invite, /users/:id/role, GET /users), `workflows.spec.ts:630` (front-desk sees only Primary tabs; stale `?tab=my-business` URL snaps back to Home), `workflows.spec.ts:676` (owner invite creates user + reset token). Full suite 111 passed / 7 skipped.
+
+- [x] **Apply migration `20260606000000_tenants_customer_preferences.sql` to prod DB** — DONE 2026-06-11. Audit found the two columns (`save_preferences_enabled`, `preferences_instructions`) were already present in prod (hand-applied, untracked), so the AI-config page was NOT broken. `npm run db:migrate` against prod reconciled the tracker (recorded `20260606000000` + `20260610000000_tenant_grok_voice` which was in the same untracked-gap) and the run was a safe no-op on the existing columns.
+
+- [x] **SECURITY** Unauthenticated cross-tenant data access via `?tenant_id=` (read+write+delete) closed — `tenantMiddleware` 401s non-public/non-exempt requests with no `req.auth`; `requireTenantId` drops the body fallback. Probe 8 added (isolation suite now 39 probes). See `RESOLVED.md` + `docs/SECURITY.md`.
+- [x] **Deep `/ready` endpoint** — DB ping + pool saturation stats (`total/idle/waiting`); 503 when DB unreachable. `/health` stays shallow (liveness). A monitoring signal, not yet a traffic gate.
+- [x] **Pool fail-fast** — added `connectionTimeoutMillis: 5000`; pool-checkout under exhaustion now errors fast instead of hanging forever (the "many callers" failure mode).
+- [x] **Alerting visibility** — `withHandler` unhandled errors now route through `logError` → `errors_total` ticks (pre-fix pool-exhaustion errors were invisible to `rate(errors_total)` alerting).
+- [x] **Threadpool** — `GET /` + `/demo` no longer `fs.readFileSync` per request.
+- [x] **Gap 3 — client-error 500s → 400** `withHandler` now maps Postgres class-22 data exceptions (`22P02`/`22003`/`22007`/`22008` — e.g. a non-UUID `:id`) to 400 and does NOT tick `errors_total`. Confirmed live: `GET /records/customers/not-a-uuid/history` 500→400. Unit tests added (incl. a guard that non-class-22 errors stay 500). Fixes the ~12 unvalidated `:id` routes in one place + stops client garbage polluting 5xx/error-rate alerts.
+- [x] **Gap 1A — agent graceful recovery** `agent/src/prompt.ts` "Technical glitches" section: never speak raw error text (`500`/`timed out`/`backend`), recover in-character, never stall silently. Regression test pins it. (Wording is a placeholder for Dale to tune.)
+- [x] **Gap 2 — agent CI job** `agent/` (tsc + 99 tests) now runs in CI — was previously ungated entirely.
+- [x] **Testability extractions** `jsonContentTypeParser` (+ 400-on-bad-JSON fix) and `readinessHandler` extracted to modules with unit tests (incl. the `/ready` 503 DB-down branch). E2E added: anonymous-tenant 401, `/ready`, malformed-JSON.
+
+- [x] **`METRICS_TOKEN` on Railway backend — DONE** (confirmed set 2026-06-29: prod `/metrics` returns 401 not 404, i.e. the token gate is active). The metric data is exposed; standing up a scraper over it is optional (free path) per the observability decision above.
+- [x] **Load-test the booking path** — DONE 2026-06-19 (`feat/booking-load-probe`). Built `scripts/sim-load.mjs` (localhost-guarded — refuses any non-localhost backend without `--force` so a decrypted prod URL can't be blasted): provisions/uses a tenant, fires ramping concurrency (5/10/20/40) at `/agent-tools/book-with-scheduling`, buckets outcomes (success/conflict/pool-or-5xx/other/net) with p50/p95/p99 + throughput. **Finding (reframed per the architecture):** the deliverable is the failure MODE, not an absolute ceiling — a local dev-box + docker-Postgres number doesn't transfer to Railway. At 4× pool concurrency (40 vs `max=10`) the path **fails fast and cleanly** — flat p99 (~30–60ms locally), **zero pool-checkout-timeout / 5xx / dropped-connection errors**; contention is handled gracefully, validating the `connectionTimeoutMillis=5000` fail-fast design. **Context:** the agent runs ONE LiveKit worker per tenant, so concurrent bookings are bounded by simultaneous calls across DISTINCT tenants — a handful at beta scale — so `pool=10` is near-certainly fine for real load today; revisit pool/LiveKit sizing only when multi-tenant concurrency grows. Run: `SIM_AGENT_SECRET=… node scripts/sim-load.mjs` (optional `SIM_TENANT=…`).
+- [x] **Pool-exhaustion integration test** — DONE 2026-06-07 (`src/poolExhaustion.test.ts`). Real `Pool({max:1, connectionTimeoutMillis:500})`, holds the only client, hits a `withHandler`+`withPoolClient` route → checkout rejects at ~504ms (bounded, not a hang) → 500 + `errors_total{unhandled_route_error}` ticks via `withHandler`→`logError`. Control tests (free slot → 200; release → 200 again) prevent false-pass and prove recovery. Closes the gap left by the synthetic `middleware.test.ts` version.
+
+- [x] **P1 — Add E2E (Playwright) job to CI.** DONE 2026-05-28. `e2e` job added to `.github/workflows/ci.yml`: pgvector service, migrations + seed, backend build + start, dashboard build + start, `wait-on`, Playwright chromium install + test run, artifact upload on failure. **Needs first-run green in Actions before marking required.** The runtime security proof (anonymous-401, cross-tenant 403, `/ready`) runs only locally today. Concrete plan: new `e2e` job — `ankane/pgvector` service (mirror backend job) → `npm ci` (root + dashboard) → `npm run build` (backend) → start backend + dashboard → `npx playwright install --with-deps chromium` → `cd dashboard && npx playwright test`. **Needs first-run validation in Actions** (browser install + server startup are the usual flake sources) — don't mark required until one green run.
+- [x] **P2 — Wrap the agent `entry` tail in try/catch → `runFallback`.** DONE 2026-05-28. Added outer try/catch around ToolsClient + buildTools + fetchTenantConfig + buildSystemPrompt. Inner session.start catch retained; outer catch catches setup failures before session.start. Agent TS clean, 1397 tests passing.
+- [x] **P3 — (B) idempotent-read retry** in `toolsClient` — DONE 2026-06-22: one retry on transient 5xx / network throw for READ tools only (never mutations: a timed-out booking may have succeeded server-side → double-book). Wired (`toolsClient.ts:50`, gated `isReadOnly ? 2 : 1`; 7 read-tool call sites) + 5 tests added to `toolsClient.test.ts` (incl. the mutation-no-retry double-book guardrail). See canonical item above.
+- [x] **P3 — (C) latency filler** — DONE 2026-06-16. `buildTools` accepts optional `speakFiller` callback; wired into `get_available_slots`, `book_appointment`, `book_appointment_with_scheduling`, `answer_policy_question`. `index.ts` passes `session.say` (builds tools inside session try-block). Also fixed pre-existing TS error (`AgentHandoffItem` type narrowing in transcript handler).
+
+- [x] **P3 — Audit the ~12 `:id` routes** — DONE 2026-05-28. All 26 route files use `withHandler` (class-22 mapper fires automatically). One route (`jobber.ts:95`) bypasses `withHandler` but has its own manual UUID check. `requireValidUUID` is defined but unused — not needed since the mapper covers every route. No gaps found.
+
+- [x] Call transcript + summary flow end-to-end — DONE 2026-06-12 (TranscriptRecorder + callSummary.ts + callOutcome.ts, all wired into shutdown hook)
+- [x] Expanded live QA suite — REPLACED by `./scripts/simulate.sh tools` (qa-live-test.py deleted)
+- [x] Reminder delivery monitoring dashboard — DONE (`GET /reminders/delivery-stats` + ReminderDeliveryStats component in AnalyticsView)
+- [x] Add coverage for OTP + booking error codes — covered by agent unit tests; qa-live-test.py path is gone
+
+- [x] Apply migration `20260611000000_tenant_forward_phone.sql` to prod DB — DONE 2026-06-12 (column live, tracker records it).
+- [x] Commit + merge the transfer + transcript feature — DONE 2026-06-12 (PR #7 → main, CI green on all 4 checks, all 3 services deployed).
+- [x] **Capture + send transcript** — DONE 2026-06-10. New `agent/src/transcript.ts` `TranscriptRecorder` accumulates `conversation_item_added` turns (caller STT + agent replies incl. greeting); shutdown callback sends `transcript.render()` to `voice-session-end`; `agentTools.ts` schema gains `transcript` (max 100k) → `end_voice_session` param 5. DB column + `VoiceCallsView.tsx:611` display already existed. +5 agent + 2 backend tests; agent 127 / backend voice-session 7 green, both typecheck clean. **Validation pending: live call to confirm real transcript lands.**
+- [x] **Generate + send call summary** — DONE (Gap #1, 2026-06-12). `callSummary.ts` post-call GPT-4o-mini summary in shutdown hook → `voice-session-end`.
+- [x] **Set call outcome** — DONE (Gap #1, 2026-06-12). `CallOutcomeTracker` set by booking + transfer + `callClassify.ts`; shutdown hook sends `outcome` to `voice-session-end`.
+- [x] **Link booked appointment to the call** — DONE (Gap #1, 2026-06-12). `recordBooking(appointment_id)` in tools → shutdown hook → `voice-session-end` param.
+- [x] **Register transfer events in the call record** — DONE (via `recordTransfer()` setting outcome + migration-updated `end_voice_session` that sets status='transferred' when outcome='transferred'). UI already supported it. See feat/transfers-invisible-calls + related list work.
+
+- [x] **Implement `GET /analytics/stats`** — DONE 2026-06-12. Route live at `src/routes/analytics.ts`; dashboard panels fully wired with real `voice_sessions` data.
+- [x] **Wire the 3 stubbed call-based panels** — DONE 2026-06-12. Call Volume / Booking Conversion / Caller Abandonment all pull from real `voice_sessions`; "Why Callers Reached Out" breakdown wired via `callClassify.ts`.
+- [x] **Reminder delivery dashboard** — landing via PR #50 (`feat/reminder-delivery-stats`, cherry-picked from the never-merged `feat/transfers-invisible-calls`); mark fully done once #50 merges. `GET /reminders/delivery-stats` (tenant-isolated `reminder_schedules` aggregates: sent total/7d/30d, failed total/7d, scheduled, cancelled) + `ReminderDeliveryStats` cards wired into `AnalyticsView`. + route unit test (happy + empty/zeros, asserts tenant-scoped query). NOTE: the prior "[x] DONE" claims here and at the top of this file were premature — the code lived only on an unmerged branch and was absent from main until this cherry-pick (a baseline-drift-class bookkeeping gap). Now actually in main.
+
+- [x] **Surface pending/error sync counts** — Extended `CRMIntegrationCard` (and square provider config) to fetch + display `pending_count` / `error_count` / `total_mapped` from the existing `/.../sync/status` endpoints below the last-sync line. See list work on backfill branch. Prometheus metrics remain for ops.
+
+- [x] **Dedicated "Import from website" step in the SetupWizard (right before the questions/policy step).** Inserted as step 7 ("Import from website") after the review step (6), immediately before the "Teach Your AI" questions step (now 8). New component `Step7WebsiteScan.tsx` with URL input + scan button that runs the backend extract and saves matching starter answers via knowledge.add. The questions step now loads pre-existing answers (by matching question text in the tenant_docs) on mount and prefills + marks saved, so the scan directly helps answer the questions in the following step. Wizard updated (type to 9 steps, labels, arrays, "of 9", next button text, expand timing, comments). User-facing explanatory copy added to scan page per spec: "when questions are asked of your AI Assistant, the information from your company comes from here. Our system will scan your website... The following page is to answer any...". Also cleaned duplicate import box from questions step in main wizard (kept for Solo via prop). See the implementation in `Step7WebsiteScan.tsx`, updates to `Step7CallerQuestions.tsx` (load prefill + conditional import box), `index.tsx`, `WizardStepContent.tsx`, `types.ts`. Advanced per-question suggestion review UI with badges still pending (see other sub-items).
+- [x] **Wire question bank resolver into import + wizard.** DONE 2026-06-19 (`feat/question-bank-shared`). Moved the question bank to `shared/questionBank.ts` (single cross-runtime source) — killed the brittle backend→dashboard runtime import (`import('../../dashboard/lib/policyQuestions.js')`); `dashboard/lib/policyQuestions.ts` is now a thin re-export so all wizard / `KnowledgeBaseView` imports are unchanged. Added `resolveQuestions({ customs })` = static bank + tenant custom questions (`tenant_docs` source='custom-question'), deduped by normalized text. `import-website` now resolves via this (direct in-process resolve). **Deliberately NOT built** (build-principle / no dormant abstraction): `GET /knowledge/questions` endpoint (no HTTP consumer — backend resolves in-process, dashboard imports shared directly), `business_type` filtering (all 9 categories are universal across verticals), and a `question_bank` DB table. Unit + handler regression tests guard the silent-`[]` path.
+- [~] **E2E + simulate coverage for the step.** PARTIAL 2026-06-19 (`feat/question-bank-shared`). Added to `dashboard/e2e/knowledge-base.spec.ts`: tests 11-13 (suggestion review lifecycle — seed `knowledge_suggestion` → GET queue → PATCH confirmed ingests into live KB source=`website-scan` + status flips / PATCH rejected discards / cross-tenant approve → 404) and test 14 (`kb-import-website-stub`) which drives the REAL import-website handler — `resolveQuestions` (static bank + tenant custom questions) → real staging INSERT — with deterministic canned extraction via `KNOWLEDGE_IMPORT_E2E_STUB=1` (set on the e2e backend in `ci.yml`; CI's OPENAI key is `sk-dummy` so a real scan can't run there). Asserts the owner's custom question reaches the DB. Plus backend handler unit test (`src/routes/knowledge.importWebsite.test.ts`, mocked fetch). Run-verified 15/15 green against a migration-chain DB. **Real OpenAI scan path: live-smoke verified 2026-06-19** — real `POST /knowledge/import-website` against a local fixture site (`Joe's Auto Shop`) extracted 8 answers → 8 confirmed staged rows (real fetch + real GPT-4o-mini + real DB); not automated (cost/flake/network). **Still TODO (deferred):** wizard UI click-path E2E (paste URL → suggestions render → approve in the React UI). Deferred 2026-06-19 after a feasibility probe: the Suggestions surface sits under `AIInsightsView`'s `activeSubTab` (internal React state, NOT URL-routable — only `KnowledgeBaseView`'s inner `?tab=suggestions` is), and no existing e2e asserts KB UI _content_ as the super-admin storageState user (active-tenant selection is the blocker). Forcing one risks a flaky test; the approve logic is already covered at the component-unit (`KnowledgeSuggestions.test.tsx`) + API-E2E (tests 11-14) layers. Also `simulate.sh tools` import coverage (OpenAI-dependent — on-demand, like `simulate rag`). Gate on the RAG accuracy eval.
+- [x] **Docs / UX polish.** DONE 2026-06-19 (`feat/knowledge-import-polish`). (1) **Docs**: `docs/BETA_ONBOARDING.md` now documents the optional "Import from website" wizard step + the scan/review flow + "from your website" provenance (wizard section + Knowledge base section). (`aiassistant-knowledge-base.md` is tenant content, not onboarding — left alone.) (2) **Empty-vs-unanswered**: `KnowledgeBaseView` PolicyQuestionRow now shows a persistent green "Answered" marker for answers loaded from the DB (previously only current-session saves showed a marker, so a prior-session answer looked identical to a blank one). Per-category `answeredCount` badge already existed. (3) **Cost guardrails**: added `fetchWithTimeout` (AbortController) to the scan path — 8s per site page + 30s on the OpenAI extract — matching the codebase's OpenAI-timeout discipline; combined with existing bounds (maxPages 6, 8KB/page, 12KB prompt, max_tokens 3000, customs LIMIT 50) the endpoint can't hang a request/pool slot. Per-tenant scan rate-limit deferred (no abuse evidence; YAGNI). Verified: tsc clean (backend+dashboard), KB e2e 15/15 green.
+  - [x] **Per-row "from your website" provenance badge** — DONE 2026-06-19 (`feat/knowledge-import-low-items`). The wizard scan now saves matched answers with `source='website-scan'`; `KnowledgeBaseView` prefill accepts BOTH `policy-questionnaire` and `website-scan` (additive — scanned answers still pre-fill), carries `source` through the saved-answers map, and renders a distinct "From your website" marker (vs "Answered") on scan-sourced rows; scanned answers are excluded from the uploaded-files list + labeled "From website" in Review Everything. Editing a scanned answer drops the badge (server resets source on update — once edited it's owner-authored). The wizard's own questions-step prefill is title-based (not source-keyed) so onboarding is unaffected. **Regression guard:** new `KnowledgeBaseView.test.tsx` asserts both sources pre-fill + the two markers render. (Low-risk path chosen after confirming `tenant_docs` has no metadata column — `source` change was the only option short of a migration.)
+
+- [x] **RAG: "address" queries don't retrieve the address doc — FIXED 2026-06-29 (`fix/rag-address-vocab`).** Both the durable doc-side fix and the query-side palliative shipped (owner chose "both"). Original diagnosis (2026-06-23, real `text-embedding-3-small` cosines): every other positive scored 0.59–0.63; both address phrasings scored an outlier-low **0.302**; out-of-scope negatives ≤0.20. At the strict `> 0.30` threshold the address case cleared by only 0.002 → run-to-run embedding variance flipped hit/miss (nondeterministic at the boundary). Two root causes, both now addressed:
+  - **(1) Doc-side — the real fix.** The ingest normalizer was reducing the Q/A pair to a declarative `"Located at 123 Main Street downtown."`, **dropping the question form** `"Where are you located?"` — exactly the retrieval signal a caller asking "what's your address" needs. `prepareQADocument` (`src/services/knowledgeIngestion.ts`) now **prepends the raw question** to the normalized body before embedding, so the interrogative form always survives. NEW ingests benefit immediately; existing docs are backfilled by `scripts/reembed-qa-docs.mjs` (re-runs the same `prepareQADocument` over `tenant_docs` Q/A rows — pure data backfill, no schema change). **Manual prod step:** `npm run build && DATABASE_URL=… OPENAI_API_KEY=… node scripts/reembed-qa-docs.mjs --yes` (preview with `--dry-run`, scope with `--tenant <uuid>`).
+  - **(2) Query-side palliative.** `shared/expandQueryForEmbedding.ts` prompt now instructs the expander to emit **morphological / doc word-forms** (address→`located locate location where situated directions`), not just abstract synonyms — so it matches the doc's actual word "located" instead of "location".
+  - **Threshold untouched (0.30).** The "do NOT just lower the global threshold" guidance still holds — the fix raises the address vector above the cutoff rather than widening it, so the safe fall-back for genuinely-unknown topics is preserved.
+  - **Measured (real `text-embedding-3-small`, direct cosine probe over a 5-doc KB incl. deliberate near-neighbors):** address now scores **0.394** (was 0.302) — clears the strict `>0.30` cutoff by **~0.09** (vs 0.002 before, which is what made it flaky); nearest other real topic 0.255, true out-of-scope ≤0.19. **Not** the ~0.6 of lexically-overlapping positives — address↔located is a genuine semantic gap; 0.394 with ~0.09 headroom is enough to kill the boundary nondeterminism, not more. **False-positive check** (the dangerous direction, since both doc-prepend and a more aggressive expander widen the surface): "how much to color my hair" correctly ranks coloring (0.609) above haircut (0.382) — right doc wins by 0.23; out-of-scope "hamburgers" peaks at 0.191, all below 0.30 → still falls back. No new confident-wrong-answer surface observed on this corpus (still worth a re-check against a real dense tenant KB).
+  - **Verified:** `./scripts/simulate.sh rag --env local` (real OpenAI embeddings) PASS **9/9 (100%)** across **3 consecutive runs**, both address phrasings HIT every time, all out-of-scope falls back. `scripts/reembed-qa-docs.mjs` run-verified (`--dry-run` + a real `--yes` pass: 15/15 processed, 0 failed). Unit: `src/services/knowledgeIngestion.test.ts` (regression test asserting the question survives) + `src/queryExpander.test.ts` green.
+
+- [x] Continue `src/index.ts` extraction / cleanup — DONE 2026-05-28. Health/admin inline routes (/, /demo, /health, /ready, /metrics, /admin/purge-soft-reservations) extracted to `src/routes/health.ts`. index.ts: 386→303 lines. `/admin/purge-soft-reservations` now wrapped in `withHandler` (was bare try/catch). health.ts has no file-wide eslint-disable (targeted inline disables only).
+- [x] Finish broader CRM sync structure extraction (NEEDS-REFACTORING #10) — DONE (verified 2026-06-03). Clients + adapters moved to `src/services/crm/` (`e75b029`); shared layer fully extracted: `tokenManagement.getIntegrationTokens` (OAuth refresh), `syncMapHelpers` (sync-map/dedup incl. `ensureRemoteCustomer`/`isAlreadySynced`), `crmSyncStatus`, `syncPaginate`, `crmDisconnect`, `syncOrchestrator` dispatch loop. The remaining per-adapter code (jobber/hubspot/square/servicetitan) is genuinely provider-specific CRM-API logic over that shared layer — kept flat per "working flat beats a dormant abstraction." No further extraction warranted.
+
+- [x] **B4** Sub-tab URL persistence — verified working (2026-05-28). `?tab=` init + `history.pushState` on change + `popstate` for back/forward all wired in `dashboard/app/dashboard/page.tsx:70–95`. No changes needed.
+- [x] **C1 + C2** Schedule: 4 sub-views → 2, unify the 3 headers — DONE 2026-05-29 (`1a269ab`, verified 2026-06-03). `SchedulerView` now has 2 top-level tabs (`day`/`calendar`) + a segmented Day-mode control (Staff/Resources/List), one unified header bar (3 dup headers removed), and the "More" overflow dropdown gone. URL syncs `?subtab=day|calendar&daymode=…`. The TODO predated the commit.
+- [x] **E1** Demo mode — DONE 2026-05-29 (`4934ed5`, verified 2026-06-03). `/demo` now provisions a per-session isolated demo tenant (`is_demo=true`, 30-min TTL) seeded with automotive sample data — no real account needed. `src/routes/demo.ts` + `src/services/demoSeed.ts` + `dashboard/app/demo`. The TODO predated the commit.
+
+- [x] **Cluster B — verified defects** (3 sites, all done)
+  - [x] `SetupWizard/StepServices.tsx` — DONE 2026-05-21. Duration field now uses a raw-text display state; clearing leaves it empty (was forced to `0`), empty propagates `0` (saveService's `< 1` guard rejects it), never NaN. +3-test regression spec `StepServices.test.tsx`. (Note: it was an input-UX bug, not silent data loss — `saveService` already rejected `0`.)
+  - [x] `SuperAdminDashboard.tsx` — DONE 2026-05-21. Search input now controlled; filters sidebar cards by name (case-insensitive), shows a no-match message, and **disables drag-reorder while filtering** (added `draggable` prop to `TenantCard`; reorder math is by full-array index so a filtered subset would corrupt order). +3 tests in `superadmin.test.tsx`.
+  - [x] `SetupWizard/index.tsx` — DONE 2026-05-21. Seed hoisted to `runSeed` (reconcile by name-diff via `seedTargetRef`, so partial-failure retry finishes without topping-up a user's own services); failure now surfaces a Retry banner instead of a silent `console.warn`. +2 tests. **All three Cluster-B defects closed.**
+
+- [x] **Cluster C — overlay/dialog focus management.** DONE 2026-05-28. `useFocusTrap` hook (`dashboard/lib/useFocusTrap.ts`) added; all 8 surfaces updated: `WizardModeChooser` (role/aria + trap + backdrop), `WizardWelcome` (trap + Escape + backdrop), `FirstRunTour` (trap + Escape + backdrop), `SetupWizard/index` (trap + Escape), `AppointmentPopover` (Tab trap + X button), `StaffProfileCard` (role + X + focus management), `EmployeeDayFocusPanel` (role + aria-labelledby + trap), `SkillMapFixPanel` (aria-label on ✕). 743 tests passing (+17 new).
+- [x] **Cluster D — accessible action controls.** DONE 2026-05-28. All 7 surfaces: Step{Employees,Services,Resources} — `onMouseEnter/Leave` → CSS `hover:` + `focus-visible:` + rings; SkillManagementView delete — `focus-visible:ring-2`; StaffSwimLaneView — aria-label specific with shift times; AppointmentBlock — `role="button"`, `tabIndex=0`, `onKeyDown` Enter/Space, `aria-label`. 746 tests (+3 new).
+- [x] **Cluster E — empty / loading / filtered-no-results distinctness.** DONE 2026-05-28. `AppointmentListSidebar` — skeleton rows during load; `VoiceCallsView` — Filter icon + "Clear filter" CTA for no-results (vs PhoneOff for "no calls ever"); `EmployeeManagementView` — dashed empty state after load; `CustomerDetailPanel` — 3 italic-text empties → `EmptyState` compact with icons. `KnowledgeBaseView`/`DeletedRecordsPanel` already had strong distinction; `MyTeamView` is routing-only. 746 tests passing.
+
+- [x] `SetupWizard/WizardWelcome.tsx` — DONE 2026-05-28 (`c804025`). Removed inaccurate "10 minutes / 6 quick questions" copy.
+- [x] `SkillMatrixView.tsx` footer + `Step7GoLive.tsx` — drop persuasive/reassurance phrasing; state what changes factually. Done 2026-05-28.
+- [x] `SetupProgressPill.tsx` — DONE 2026-05-28 (`bdd549e`). Removed `hidden` class; pill visible on all screen sizes.
+- [x] `ProfileView.tsx` — "Security" card "coming soon" placeholder → replaced with factual account info (session expiry 8h + password-change instruction). DONE 2026-05-28.
+
+- [x] **`tenants /update-config` partial-update safety.** Already implemented — read-then-merge in place (lines 204–207 `body.field !== undefined` check inside the `FOR UPDATE` transaction). Verified 2026-05-28. Standalone small PR.
+
+- [x] Responsive fallbacks for wide matrices/maps — verified present 2026-06-03. `ResourceColumnsView`/`SkillRelationshipMap` already scroll (`overflow-x-auto`/`overflow-auto`); `OutlookLayout` has an `md:hidden` mobile nav; `SchedulerDateNav` is compact. `mobile-responsive.spec.ts` covers no-horizontal-overflow on 390px + Android. No change needed.
+
+- [x] `@typescript-eslint/no-explicit-any` + `no-unsafe-*` family — DONE 2026-05-28. Fixed all 13 files / 59 warnings: typed `response.json()` casts in `api.ts`, `hooks.ts`, `LoginView`, `register`, `forgot-password`, `reset-password`; cast `JSON.parse` returns in `NewSchedulerView`; eslint-disable for `react-big-calendar` third-party `any` (unfixable at source); removed unused `Wrench`/`QuickAction`/`Save`/`rate` symbols; fixed unescaped entities in `Step7CallerQuestions`. Dashboard lint: **0 warnings, 0 errors**.
+- [x] `@typescript-eslint/no-misused-promises` — DONE 2026-05-28. Zero violations across all 3 packages; promoted to `error` in all three eslint configs.
+- [x] `@typescript-eslint/await-thenable` — DONE 2026-05-28. Zero violations; promoted to `error` in all three eslint configs.
+- [x] `@typescript-eslint/unbound-method` — DONE 2026-06-22. Zero violations across all 3 packages; promoted to `error` in all three eslint configs (matches the no-misused-promises / await-thenable pattern above). Stray pre-existing `no-unnecessary-type-assertion` error in `agent/src/tools.test.ts` fixed in the same PR.
+
+- [x] **End-to-end booking integration test in CI** — DONE 2026-07-01 (`src/agentToolsBookingIntegration.test.ts`): real route → `book_with_scheduling_atomic` → real Postgres; asserts stored UTC instant, assigned employee, `status='scheduled'`, local read-back, EMPLOYEE_NOT_SCHEDULED + TIMESLOT_OCCUPIED sad paths, + the serviceResolver ambiguous-`name` regression. Mutation-verified. Runs in CI.
+- [x] **Agent tool-selection eval** — DONE 2026-07-01 (`agent/scripts/sim-toolselect.ts`, `./scripts/simulate.sh toolselect`): replays the REAL prompt + 20 tool schemas through gpt-4o-mini, grades the chosen tool sequence. 6 cases incl. bug-#3 regression. On-demand (OpenAI-gated), not CI. Baseline 6/6. (2026-07-04: now 23 tool schemas / 8 cases after the page-owner / customer-history / self-service-link tools; baseline 7/8 — the take_message case rotted via model drift, fails identically on unmodified main; see VOICE_AGENT_PLAYBOOK gotchas.)
+- [x] **Audit every DB-mocking `*.test.ts`** — DONE 2026-07-01: full audit in `docs/TEST_DB_AUDIT.md`. All HIGH-risk gaps got real-DB companions (surfaced 3 real issues). MED round-2 companions added 2026-07-02; advisor verdict: MED vein exhausted.
+- [x] **Multi-employee / multi-service scheduling coverage** — DONE 2026-07-02 (`src/multiEmployeeScheduling.realdb.test.ts`, 7 tests): skill matching, employee spillover, shift-aware assignment, capability-gated resource exhaustion, first true PARALLEL GiST double-book race. Runs in CI.
+
+- [x] **Agent logs tool-call ARGS** (PII-redacted) — DONE 2026-07-02 (`agent/src/redactToolArgs.ts` + 13 tests). `function_tools_executed` carries `tool_calls:[{name,args,is_error}]`; phone/code keys digit-masked, time strings + names preserved.
+
+- [~] **Books 30 min early** — a 4:30 request stored 4:00. **CODE DONE 2026-07-04 (branch `fix/booking-confirm-actual-time`); live-proof pending.** Root: `book_with_scheduling_atomic` books the EARLIEST open slot ≥ `window_from`, so a window that starts before the caller's pick books them earlier. Sharpened the `book_with_scheduling` tool description + prompt step 4 to set `window_from` to EXACTLY the picked time (not earlier). **Note: this MITIGATES, not prevents** — a hard stop would need intent-aware slot selection in the RPC; instead the confirm-real-slot fix below makes any early booking *audible* to the caller (safety net). Verified by unit tests only; the behavior closes on a live booking call + `toolselect`.
+- [~] **Agent confirms the REQUESTED time, not the actual `booked_start`** — it said "4:30" while booking 4:00. **CODE DONE 2026-07-04 (same branch).** The backend already returns the actual tenant-local `booked_start`/`booked_end` + `employee_name` (agentTools.ts:1677); the gap was agent-side — `book_with_scheduling` dumped raw JSON with no directive. New `formatBookingResponse(res, requestedStart)` (`agent/src/tools.ts`) surfaces the ACTUAL booked time (`booked_time`) + employee, and when the caller named a specific time (new optional `requested_start` param) and the slot differs, flags `time_changed` with an explicit "their time wasn't open, tell them the real one" directive. Prompt step 5 + a scoped exception to the one-confirmation rule now require confirming the response's time and re-engaging on `time_changed`. **Regression-guarded:** the mismatch fires ONLY off the explicit `requested_start`, NOT `window_from` — so the "next available" flow (window_from is a search bound) never gets a spurious "your 9am wasn't open" note. 4 deterministic unit tests (match/mismatch/next-available-no-note/legacy-fallback); 430 agent tests green, tsc + eslint clean. Live-proof: a real booking call where the requested slot is taken.
+- [x] **`book_appointment` / `check_availability` resource_id trap** — **FIXED 2026-07-03 (branch `fix/booking-tool-resource-id-trap`).** Both require a `resource_id` that only `get_scheduling_options` returns; `get_available_slots` yields spoken times with NO resource_id, so the LLM would dead-end here (prod bug #3). Made misuse fail loudly instead of removing the valid path: (1) sharpened the three tool descriptions (`get_available_slots` now states it returns no bookable resource_id → use `book_with_scheduling`; `book_appointment`/`check_availability` state the resource_id must come from `get_scheduling_options`, else use `book_with_scheduling`); (2) added a runtime guard — an empty/blank `resource_id` short-circuits to a `RESOURCE_ID_REQUIRED` redirect toward `book_with_scheduling` **without hitting the backend** (which would 400 on the non-UUID anyway). 3 new unit tests in `agent/src/tools.test.ts` (guard fires + no backend call, for both tools; plus a check_availability happy path); 42/42 green, agent tsc clean. The `toolselect` eval already pins the bug-#3 sequence (`get_available_slots → book_with_scheduling`, never `book_appointment`) — run `./scripts/simulate.sh toolselect` (OpenAI-gated, on-demand) to confirm the sharpened descriptions hold.
+
+- [~] **Duplicate `Dale DeMott` employee** in prod (one soft-deleted, one active) — **GUARD ADDED 2026-07-03 (branch `fix/duplicate-active-employee-guard`); prod-row cleanup still pending (needs prod DB access).** `POST /employees/create` now rejects (409) a new employee whose normalized name (`LOWER(TRIM(name))`) collides with an existing **non-deleted** employee in the same tenant — so an accidental double-create can't split schedules/skills across two active rows again. Soft-deleted twins do NOT block (re-hire path preserved); blank names skip the check. Chose an app-level 409 over a partial UNIQUE index because genuine same-named staff are rare-but-legal (owner disambiguates the display name) and an index couldn't apply while prod still holds the duplicate. 3 real-DB tests (`src/routes/employees.realdb.test.ts`: happy create, dup-active 409 + no second row, soft-deleted-twin re-add allowed). **Remaining (Dale/prod):** delete or merge the existing duplicate active `Dale DeMott` row in prod.
+- [~] **No cleanup pass** for soft-deleted employees/services lingering in mapping tables (`service_employee`). **INVESTIGATED 2026-07-03 → not a live problem; do NOT auto-clean.** Soft-deleting an employee/service leaves its `service_employee`/`service_resource` rows in place, but since PR #139 (migration `20260701000000`) the booking RPCs filter `is_deleted` employees out of every availability/overlap check, so a stale mapping can never surface a deleted employee/service in a booking — the rows are inert. Hard-deleting them on a *soft*-delete would also break restore symmetry (a restored employee would silently lose their skill/service mappings). Any future cleanup must be a scoped hard-delete-only pass (drop mappings only when the parent is HARD-deleted), not wired into the soft-delete path.
+- [x] **`password_resets` RLS conflicts with the invite flow (latent, prod-safe today)** — **FIXED 2026-07-03 (branch `fix/password-resets-rls-invite`, option b).** `POST /users/invite` used to INSERT `password_resets` inside `withTenantClient` (tenant context set), tripping the `password_resets_unauthenticated_only` `WITH CHECK` → `42501` under a non-`BYPASSRLS` role (latent — prod's `postgres`/`rolbypassrls=true` bypassed it). Fix: the token INSERT now runs via `withPoolClient(pool, …)` with **no** tenant context — structurally identical to how the forgot/reset-password flow writes the table (`auth.ts`), honoring the policy's intent (only the unauthenticated flow writes `password_resets`). No migration; pure code. The real-DB suite's invite **HAPPY** path is now exercisable under the locked-down `api_user` (was previously un-testable) — `src/routes/users.realdb.test.ts` asserts both the `users` row and the `password_resets` token land; 7/7 green. Chose (b) over (a) a scoped policy because (a) would poke an authenticated-write hole in a table that has no tenant isolation to enforce (keyed by `user_id`), weakening the invariant.
+
+
+### Archived: docs/AIASSISTANT_GO_LIVE_TODO.md (deleted 2026-07-05; open items → TODO.md P0 Voice; ops detail → RUNBOOK §7)
+
+<details><summary>Full pre-deletion snapshot</summary>
+
+# **PERSONA_NAME** Go-Live — Resume Checklist
+
+> **SINGLE SOURCE for go-live / Telnyx ops detail (2026-07-02).** `docs/TODO.md` tracks go-live *blockers* as one-line items and defers here for the operational detail (REFER enablement, DID routing, recording disclaimer, transfer wiring). Don't duplicate step-by-step go-live procedure into TODO.md.
+
+# (file renamed to AIASSISTANT\_ for generic codename, was BETH_GO_LIVE_TODO.md)
+
+# Persona name variable in seed (currently 'Chris')
+
+# Marker: **PERSONA_NAME** (use in docs/comments for the name; change only in seed var)
+
+Last worked: 2026-06-05. Owner: Dale. Claude walks you through each step.
+
+**Goal:** **PERSONA_NAME** answers real calls on `+1 630-822-9086` (live) for Thinking Hammer LLC
+(tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`). Test verification number `+1 630-822-9086`. (Previous `+1 630-866-1960` dead.)
+
+> ## 📩 2026-06-05 — Telnyx support escalated; account healthy
+>
+> Telnyx (Mark Morse, 13:55 UTC) replied: _"We have escalated these call examples to
+> our team for investigation — we will let you know as soon as we hear back."_ Ticket
+> alive + escalated; awaiting Telnyx. Account suspension (30-day negative balance,
+> 2026-05-25 — the real inbound-killer) cleared 2026-06-03: paid → re-enabled →
+> upgraded → ID + account verification approved. Full thread in `docs/TICKET_SUPPORT.md`.
+> **Still blocked on:** (a) Telnyx's escalation findings, AND (b) the different-carrier
+> dial test below.
+
+> ## 🔄 2026-06-30 UPDATE — live number corrected to 822-9086
+>
+> Live number `+1 630-822-9086` — the real owned + routed Telnyx DID. **Inbound CONFIRMED reachable 2026-06-30** (a real call reached the agent + logged a session/transcript).
+> The long-documented `+1 630-866-9086` was a transcription error: that DID was **never owned** (it routes to another business that answers). `+1 630-866-1960` is a dead recycled DID.
+> Landing pages, CLAUDE, RUNBOOK, TODO, tests, and `inbound_phone` fixtures now all use **822-9086**. Open PSTN verification steps target **822-9086**.
+
+> ## ⚠️ 2026-06-04 UPDATE — supersedes the "NOT LiveKit / Telnyx-domain / do NOT
+>
+> ## mutate the trunk" conclusion below.
+>
+> Full live-API audit found **all config correct**; the inbound failure is **PSTN
+> number-reachability**, not LiveKit or Telnyx config. Details in
+> `docs/TICKET_SUPPORT.md` (top) — the 2026-06-04 provisioning-audit detail was folded in there; the standalone `PROVISIONING_AUDIT.md` was removed.
+>
+> - The earlier "INVITE never reaches LiveKit → don't touch the trunk" was based on a
+>   broken test (Dale dialing from his cursed/unsynced carrier — that call never even
+>   reaches Telnyx). We **did** touch the trunk (correctly): normalized its number to
+>   `+E.164` and added the new number.
+> - **New test number bought + fully wired today: `+1 630-822-9086`** (Telnyx id
+>   `2975078589701031880`, on connection `2945038451784812111`, in LiveKit trunk
+>   `ST_aUM3GuCuc9wL`). `+16308661960` is a dead recycled DID — stop testing it.
+> - **NEXT STEP:** call `+16308229086` from a **different carrier** (not Dale's phone)
+>   while monitoring LiveKit `listRooms()`. Room appears → pipe works, wait for
+>   carrier propagation. Nothing → investigate UDP transport to LiveKit Cloud.
+
+> ## 🔁 2026-06-11 — Live call-transfer (transfer_call) shipped; needs Telnyx REFER enabled
+>
+> Built `transfer_call`: when a caller needs a human, the agent cold-transfers the
+> live PSTN leg off LiveKit to `tenants.forward_phone` (owner cell) via SIP REFER
+> (`SipClient.transferSipParticipant` → `tel:<E.164>`). Set the number on the
+> dashboard AI Persona page ("Forward Calls to a Person"). Code + tests green; NULL
+> = no forwarding (agent takes a message).
+> **RUNTIME DEPENDENCY — not solvable in code:** LiveKit's transfer rides a SIP
+> REFER back through the **inbound trunk**, so the **Telnyx SIP Connection must
+> have call transfer / REFER enabled**. Until that's turned on Telnyx-side, every
+> transfer fails at runtime (the agent degrades to taking a message). Verify on the
+> same different-carrier test call as the inbound-path check below.
+> Caller ID on the transferred leg shows the trunk number (can't be set per-transfer).
+
+---
+
+## DONE (verified)
+
+- [x] **PERSONA_NAME** persona + booking model + 19 KB docs seeded on tenant d5e3c6a1 (prod DB).
+- [x] Telnyx account funded ($10) + upgraded (trial 1-order cap lifted).
+- [x] Number **`+1 630-866-1960`** purchased. Resource id `2973794140900296302`. Status: active.
+- [x] Number routed to Telnyx SIP connection **`livekit-outbound`** (`2945038451784812111`).
+- [x] That connection activated (was `active:false`).
+- [x] **2026-06-03** Step 1 — live LiveKit creds recovered from Railway (`ai-sec-agent`
+      service vars, key `APILz8…4i7Y`) + synced to local `.env`; `listRooms()` verified OK.
+      Dead key was `APIUXRAMQuWQkkk`.
+- [x] **2026-06-03** Step 2 — inbound trunk rebuilt with new number. List-field update is
+      unsupported, so old trunk+rule were deleted and recreated. **Current live IDs:** - trunk **`ST_aUM3GuCuc9wL`** (`telnyx-inbound`, numbers `["16308661960"]`,
+      **allowedAddresses `["0.0.0.0/0"]`**). - dispatch rule **`SDR_WEL49AwBB4NW`** (`thinkinghammer-dispatch`, individual,
+      roomPrefix `call-`) → trunk above → agent `ai-secretary-agent`, metadata
+      `{"tenant_id":"d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0"}`. - ⚠️ CIDR fix: first rebuild carried `allowedAddresses:["0.0.0.0"]` from the old
+      (never-proven-live) trunk — that's the literal host 0.0.0.0, a deny-all allowlist
+      that silently rejects every caller. Corrected to `0.0.0.0/0` (accept any source IP).
+      Number format kept WITHOUT leading `+` (`16308661960`), matching the old working shape.
+      TODO security hardening (post-go-live): tighten `allowedAddresses` to Telnyx's
+      published SIP signaling CIDRs instead of accept-any. - Dead intermediates (already deleted, ignore): `ST_Li58t3gXgo4N`/`SDR_if97ky4Zf7e6`
+      (orig), `ST_w2eymtkQpKcq`/`SDR_Cvs2989McV68` (broken CIDR).
+- [x] **2026-06-03** Step 3 — tenant phone fields written to prod DB (was `phone_status='failed'`,
+      now `inbound_phone='+16308661960'`, `phone_status='active'`, `telnyx_phone_number_id='2973794140900296302'`).
+- [x] **2026-06-03** Step 4 — `ai-sec-agent` deployment SUCCESS; logs show "registered worker";
+      `agent/src/index.ts:253` registers `agentName: 'ai-secretary-agent'` (matches new rule).
+      PROVEN LIVE: an explicit `AgentDispatchClient.createDispatch(room, "ai-secretary-agent",
+    {tenant_id:d5e3c6a1})` was picked up in ~1s (agent participant joined). Worker is
+      connected NOW, not just booted. Test room cleaned up. → only the PSTN leg is untested.
+
+---
+
+## TODO — to finish go-live (in order)
+
+> Steps 1–4 COMPLETE 2026-06-03 (see DONE section). Only the live test remains.
+
+### 5. LIVE TEST — call `+1 630-866-1960` ← ONLY REMAINING STEP (Dale dials)
+
+- **PERSONA_NAME** should greet (name + recording notice + 3-path question).
+- Walk each path: personal / programming / SecretaryHQ.
+- Try a real booking → confirm row lands in `appointments` for tenant d5e3c6a1
+  inside Dale's Mon–Fri 1–5pm window (out-of-window should reject).
+
+**2026-06-03 ~16:00 UTC — INSTRUMENTED DIAL (decisive). Leg localized: NOT LiveKit.**
+Telnyx support (earlier) said the number is active but the FQDN connection "lacks inbound
+call handling." Re-verified via API: connection `2945038451784812111` inbound
+`default_primary_fqdn_id` = `2945040817925916333`, which MATCHES the live LiveKit FQDN
+`ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` — so the static config LOOKS correctly wired.
+To stop guessing, ran a measured dial:
+
+- Baseline `RoomServiceClient.listRooms()` = 0. Dale dialed `+16308661960`. Polled again at
+  +0s and +5s = **still 0 rooms.** No `call-*` room, no participant — **the SIP INVITE never
+  reached LiveKit.**
+- Dale heard his **carrier's** recorded intercept: "The number you dialed is not in service…
+  dial 611 for customer service. **Message EL402IL53**" (EL…IL = an Illinois carrier SIT).
+- **Conclusion:** the call dies UPSTREAM of LiveKit (Telnyx or originating carrier). LiveKit
+  is exonerated — the earlier LiveKit trunk `+`/no-`+` DNIS-format theory is RULED OUT (no
+  INVITE arrives to reject). Do NOT mutate the LiveKit trunk. This matches Telnyx support's
+  "inbound not handled" direction: despite the inbound FQDN pointer being set, Telnyx is not
+  delivering inbound INVITEs to our SIP server.
+- **Next (Telnyx-domain, see `docs/TICKET_SUPPORT.md` for the reply):** go back to Telnyx with
+  the data — "We use FQDN SIP trunking (your Option 1) to LiveKit; connection
+  `2945038451784812111` inbound `default_primary_fqdn_id` points to our FQDN; on an inbound
+  call NOTHING arrives at our SIP server. Are you (a) finding no inbound route, or (b) routing
+  to the FQDN and getting a SIP failure — and what cause code do you see?" Plus Dale checks
+  Mission Control → the number's inbound routing + the FQDN connection's SIP debugging/call
+  flow. Do NOT create a Call Control/TeXML app (their options 2/3 — wrong for LiveKit).
+
+---
+
+**2026-06-03 09:33 UTC — first dial returned SIT "the number you dialed is not in service."**
+Diagnosed as PSTN activation lag, NOT config. Verified correct end-to-end:
+
+- Telnyx: `+16308661960` status active, voice-enabled, on FQDN connection `livekit-outbound`
+  (`2945038451784812111`) → FQDN `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060`, no
+  call-forwarding, inbound_call_screening disabled.
+- LiveKit: trunk `ST_aUM3GuCuc9wL` accepts the number + `0.0.0.0/0`; rule `SDR_WEL49AwBB4NW`
+  → agent; worker proven live (explicit dispatch picked up in ~1s).
+- Number was only ~8h old at dial time (purchased 2026-06-03T01:18Z). SIT intercept =
+  originating carrier's routing tables not yet propagated; often per-carrier.
+- Could NOT pull CDRs (Telnyx detail_records record_type=voice rejected; cdr_usage_reports 404) to prove whether the call reached Telnyx. The different-carrier retest below closes that.
+- **Next:** (1) retest from a DIFFERENT phone/carrier; (2) wait up to 24h from purchase;
+  (3) if dead past 24h from multiple carriers, open Telnyx ticket (number active +
+  voice-configured but SIT not-in-service, no inbound CDRs).
+
+**2026-06-03 ~12:40 UTC — STILL DEAD. Dale dialed by hand, heard recorded
+"Sorry, no longer in service."** Number now ~11h old (bought 01:18Z). Full Telnyx
+re-verification via API (all clean — config is NOT the problem):
+
+- Number order `success`; number `status=active`, `release_in_progress=false`,
+  `phone_number_type=local`, `source_type=number_order` (recycled DID).
+- `/voice` settings: connection `livekit-outbound` (`2945038451784812111`) assigned,
+  `inbound_call_screening=disabled`, `call_forwarding_enabled=false`, `translated_number=""`.
+- FQDN connection: `active=true`, primary FQDN `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060`.
+- LiveKit trunk/rule/worker all proven live 2026-06-03 (see DONE §, Step 4).
+
+**Root cause (high confidence): recycled-DID sticky disconnect at the PSTN layer, NOT
+SIP/config.** The symptom is decisive: a _recorded_ "no longer in service" announcement is
+a **carrier intercept** — the call dies at the originating/transit carrier and never reaches
+Telnyx. A SIP/trunk/LiveKit fault would give dead air, fast-busy, or rings-then-silence —
+never a spoken announcement. `+16308661960` is a recycled local number; its prior owner's
+disconnect record is still cached in carrier LERG/routing tables. Telnyx now owns + routes it
+correctly, but the wider PSTN has not refreshed.
+
+**Action plan (Dale — cannot be fixed from code/API):**
+
+1. **Open a Telnyx support ticket now** (most effective). Wording: "Inbound calls to
+   +16308661960 from multiple carriers hit a recorded 'no longer in service' intercept. No
+   inbound CDRs. Number shows active + voice-configured on FQDN connection `livekit-outbound`.
+   Suspect a stale disconnect record on a recycled DID — please push an upstream
+   routing/activation refresh." Log the ticket number in `docs/TICKET_SUPPORT.md`.
+2. **Retest from a different carrier** (phone on another network) — confirms carrier-cache
+   vs universal failure.
+3. **Wait** — recycled-number intercepts commonly clear 24–72h post-purchase on their own.
+4. **Fastest fallback:** release this DID, buy a _different_ fresh number (no disconnect
+   history routes immediately) via `POST /provisioning/activate` (search→purchase→assign),
+   then redo Step 2 (trunk numbers) + Step 3 (tenant phone fields) for the new number.
+
+> Minor config note for whoever picks this up: connection inbound has `dnis_number_format=e164`
+> (Telnyx sends `+16308661960` with leading `+`), but the LiveKit trunk number list is
+> `["16308661960"]` (no `+`). Irrelevant while calls never reach Telnyx, but verify the match
+> once the PSTN intercept clears — if **PERSONA_NAME** still doesn't answer after a real INVITE lands,
+> normalize one side.
+
+**If the call fails, the symptom tells you the layer:**
+
+- **Dead air / instant hangup / fast-busy** → Telnyx not forwarding to LiveKit's inbound
+  SIP URI, or trunk rejecting. Check the Telnyx connection's INBOUND routing actually
+  targets LiveKit's inbound SIP host (the connection is named `livekit-outbound` — verify
+  its inbound leg, not just outbound). Trunk allowlist/number-match already fixed.
+- **Rings, connects, then silence (no agent joins)** → worker not connected to LiveKit
+  _right now_. Deployment shows SUCCESS but that only proves it booted 2026-06-02; pull
+  FRESH `ai-sec-agent` logs (Railway token method: memory `reference-railway-headless`)
+  and look for a recent reconnect/crash. Redeploy the service to force a fresh registration.
+- ****PERSONA_NAME** answers but booking fails** → tenant data / booking RPC, not telephony.
+
+---
+
+## PHASE 2 — after live (separate work, needs agent code + redeploy)
+
+- [ ] Recording disclaimer → deterministic verbatim greeting (Illinois 2-party
+      consent). Needs `tenants.greeting` column + tenant-config route +
+      `tenantConfig.ts` + `agent/src/index.ts` greeting line (currently hardcoded
+      "Thanks for calling…").
+- [ ] Personal-call transfer tool → Dale's cell, via
+      `livekit-server-sdk` TransferSipParticipant. Depends on Telnyx outbound PSTN
+      (now that account is upgraded, may work — untested). v1 fallback: **PERSONA_NAME** books
+      a callback / takes a message.
+
+---
+
+## Side items (not blocking)
+
+- [ ] Review the 1 pending improvement proposal: `/improve` → "Wizard pre-fill
+      from business template" (a/r/s).
+- [ ] Correct stale note: old SIP connection id `2973577228794726874` in earlier
+      memory does NOT exist. Real LiveKit connection = `2945038451784812111`.
+
+</details>
+
+### Archived: docs/GAPS.md (deleted 2026-07-05; open gaps → TODO.md; analysis retained here)
+
+<details><summary>Full pre-deletion snapshot</summary>
+
+# SecretaryHQ — Gaps & Missing Pieces
+
+**Deep dive analysis** — 2026-06-23 (main branch; post doc hygiene pass)
+
+> **Closed 2026-07-04 (PRs #187–#192, all merged + deployed to prod, migration-free):** 3 new voice tools (`page_owner_via_sms`, `get_detailed_customer_history`, `send_self_service_link` → 23 tools); CSV bulk import/export (`/export/*.csv` + `/customers/import`); session-revocation UI (`/users/*/revoke-sessions`) + feature-readiness report (`/admin/feature-readiness`); first-time-fix analytics + failed-delivery drill-down (`/communications/history?status=failed`, now recording failed rows); weekday×hour utilization heatmap (`/analytics/utilization`). GAPS body lines below flipped in place.
+>
+> **Closed since this inventory was written (banner refreshed 2026-06-30 — body below not yet line-edited):** AI cost/usage metering (`ai_cost_events` + `/analytics/ai-cost`), customer **self-service action links** (cancel/reschedule tokens + dashboard "Send links" + public pages + E2E), **data export + audit-log** APIs and dashboard surfaces (`/export/tenant-data`, `/audit-log`), website-scan onboarding + RAG answer-debugger, analytics depth (cohorts/CLV/abandonment-by-service/date-range), forwarded-line caller matching (PR #125), and the RAG address-vocab fix. Treat any "missing/❌" claim below as **possibly already shipped** — cross-check `docs/TODO.md` (the live queue) before acting. GDPR purge (#68) + retention worker (#69) remain **legal-held**; PSTN inbound + Telnyx REFER + observability tokens remain the live P0 blockers.
+
+This document captures a comprehensive inventory of what the project is missing, from every angle. It is derived from live code (`src/`, `agent/`, `dashboard/`, `shared/`), schema (154 migrations), tests, CI, runtime behavior (mocks, env gates), and all key docs (TODO.md, AIASSISTANT_GO_LIVE_TODO.md, STRATEGY.md, COMPETITOR_WEAKPOINTS.md, DEPLOYMENT.md, SECURITY.md, TEST_COVERAGE.md, RESOLVED.md, HANDOFF.md, etc.).
+
+**Context**: Multi-tenant Voice AI Reception SaaS for service businesses (tire shops, salons, auto, trades, fitness, food & beverage). **HIPAA verticals are permanently excluded.** Strong foundation in voice (Telnyx + LiveKit), atomic booking, RLS multi-tenancy, dashboard, and recent shipments (live call-transfer + transcripts + summaries + outcomes + analytics + simulate harness + competitor CRM removal + data export/audit/RAG debugger + doc consistency hygiene).
+
+Many items below are already tracked in `docs/TODO.md` (especially Phase 13 production wiring, `[prod]` silent-degrade risks, and AIASSISTANT checklist). This file expands into unstated angles and provides a single "get to these things" reference. Use it alongside (not instead of) the active TODOs, simulate harness, and prepare-commit workflow.
+
+**Update rule**: Refresh this file after major shipments or when a new class of gap surfaces. Cross-link back to specific files/lines and docs when possible.
+
+---
+
+## Executive Summary
+
+The project is unusually mature for a solo-dev codebase. Core engine (booking RPCs + RLS + voice agent tools + recent call outcome plumbing) is production-grade. The remaining gaps are primarily:
+
+- **Wiring & config** (silent mocks, missing prod envs, un-gated deploys).
+- **Last-mile product** (customer self-service, billing UI, comms providers live, no-show depth).
+- **Live validation** (PSTN inbound is the single biggest blocker for any real customer).
+- **Ops visibility** (observability tokens, cost metering, load testing).
+- **Business surface** (legal docs, support tooling, plan management).
+
+Focus next sessions on the AIASSISTANT checklist + all `[prod]` silent items + Stripe verification. That unblocks paid customers and makes everything else visible.
+
+---
+
+## 1. Production Readiness & Go-Live Blockers (Highest Risk)
+
+From `docs/TODO.md` + `AIASSISTANT_GO_LIVE_TODO.md` + source:
+
+- **PSTN inbound path unverified** for the live number (`+1 630-822-9086`). Different-carrier dial to test number `+1 630-822-9086` + `listRooms()` monitoring still required. Previous `+1 630-866-1960` dead. Carrier propagation / recycled-DID issues diagnosed; Telnyx ticket escalated. Agent + LiveKit + Telnyx SIP config proven in isolation, but real voice is the blocker for `__PERSONA_NAME__` (tenant `d5e3c6a1...`) and any paying customer.
+- **Telnyx REFER / call transfer not enabled** on the SIP Connection. `transfer_call` tool (shipped) degrades to "take a message" when `forward_phone` is set.
+- **`[prod]` silent-degrade risks — code fixes shipped 2026-06-16/17** (boot warnings now fire for all of these; prod env vars still need to be set):
+  - ~~Reminders/comms SMS → MockAdapter~~ — FIXED: `ProviderRegistry` defaults to Telnyx. Set `TELNYX_PHONE_NUMBER=+16308229086` on Railway.
+  - Email → mock transporter without `EMAIL_USER`/`EMAIL_PASS` — boot warning fires; set Gmail app-password on Railway.
+  - ~~Agent `BACKEND_URL` defaults to localhost~~ — FIXED: config validation now fails at startup if unset. Set `BACKEND_URL` on `ai-sec-agent`.
+  - ~~`STRIPE_WEBHOOK_SECRET` empty → webhooks 400~~ — boot warning fires; set on Railway.
+  - ~~`CORS_ORIGIN` unset reflects ANY origin~~ — boot warning fires; set on Railway.
+  - ~~`DASHBOARD_URL` defaults to localhost~~ — boot warning fires; set on Railway.
+- **Observability — paid vendors DECLINED (decision 2026-07-02)**: `BETTER_STACK_TOKEN` + `SENTRY_DSN` intentionally not set — no paid observability vendor at this stage. In place + free: `/metrics` (Prometheus-style, gated by `METRICS_TOKEN`), Pino JSON logs on Railway live-tail, `/ready` deep readiness. No error-grouping/alerts until a free path (e.g. Grafana Cloud over `/metrics`) is chosen. Not a gap — a cost decision.
+- **Railway deploy gated on CI green via GitHub** (progress 2026-06-15): branch protection applied on `main` requiring the 4 CI jobs (Backend, Dashboard, Agent, E2E) + PR + enforce admins. Auto-deploys from `main` now blocked on red CI. **Remaining**: Enable "Wait for CI" on Railway services. (See `docs/TODO.md` Production Wiring Checklist.)
+- **Stripe never verified live** (test mode + CLI webhook replay outstanding per TODO). Checkout + 3-event webhook + `/billing/status` + `subscriptionGate` exist, but automatic tax missing, price IDs not on prod, no owner-facing flow.
+- **Legal / insurance / ops (user actions)**: Bonterms ToS/Privacy/DPA, TCPA-compliant SMS opt-in language at booking time, E&O + Cyber Liability insurance, LLC bank account (Stripe payouts), S-Corp election later. No in-app customer support/ticketing.
+- **Env/config surface risks**: Telnyx for provisioning/OTP; calendars and remaining CRM need their OAuth triples. **SHIPPED 2026-07-04** — a single "feature readiness" report: `src/services/featureReadiness.ts` (shared source of truth that `envWarnings` now consumes) emitted once as a structured boot log + served live at `GET /admin/feature-readiness` (super-admin), per-capability `ready|mocked|disabled|missing_config`.
+
+**Status**: Phase 13 in progress. Core is wired; the gaps are config + live validation + gates.
+
+---
+
+## 2. Core Product / Receptionist Feature Gaps
+
+Voice booking + context + policy RAG + preferences + transfer (recently completed) are solid. Missing receptionist table stakes:
+
+- **SHIPPED (partial)** — **customer self-service reschedule/cancel links**: token-gated public pages (`src/routes/selfService.ts` + `dashboard/app/self/*`) + "Send self-service links" dashboard action + E2E. **Still missing**: public booking widget/embed, full customer portal/login, "manage all my appointments" hub, web callback request. Intake is still voice-only + staff dashboard.
+- **No waitlist, callback queue, or "call me back" tooling** beyond `transfer_call`. NULL `forward_phone` just takes a message.
+- **No-show / follow-up automation is thin**. Reminders exist (60s poll scheduler, retry columns, `GET /reminders/delivery-stats`, some UI). No auto no-show marking from external calendars, predictive scoring, auto-rebook offers, or waitlist promotion. Cancellations supported via API/UI; voice "cancel" flows limited.
+- **Call recordings absent from product**. `voice_sessions` now captures transcripts (`transcript.ts`), summaries (`callSummary.ts`), outcomes (`callOutcome.ts`), and `appointment_id` links (all recently wired). No audio storage, dashboard playback, redaction, or retention policy. (Upstream LiveKit/Telnyx recording possible but unwired.)
+- **Limited multi-party / warm transfer**. Cold SIP REFER only.
+- **Shallow "book for someone else" / family / group support**. Basic `CustomerContext` + notes exist; no advanced corporate or recurring profiles.
+- **No rich media during calls** (e.g., photo of tire damage for auto shops).
+- **Outcome classification is good** (`callClassify.ts`: booked / no_availability / wrong_service / price / message / info + abandoned) but not yet driving automations (e.g., price-sensitive follow-up SMS).
+
+**Agent tools** (`agent/src/tools.ts` — 23 tools as of 2026-07-04):
+
+- `get_customer_context`: CRM lookup + history + preferences (called early when caller ID present).
+- `find_caller_by_name`: name-first CRM lookup for forwarded lines (caller ID is not the caller's own number); returns matching contacts + phone on file to confirm. Empty list = new caller.
+- `get_service_catalog`: list services with duration/price.
+- `get_available_slots`: open times for a service_type on a YYYY-MM-DD (tenant TZ).
+- `get_scheduling_options`: (resource, employee) combos in a window + capability/skill filters.
+- `check_availability`: exact resource+start/end check (noted as SLOW; prompt auto-injects filler).
+- `book_appointment`: specific slot (requires verified phone; wires `call_id` and records outcome for voice_sessions link).
+- `book_with_scheduling`: window + requirements → auto-pick + book (preferred for "next available").
+- `get_company_policy_answer`: RAG over tenant_docs (uses query expansion + pgvector).
+- `send_verification_code` + `verify_phone_code`: Telnyx SMS OTP for blocked-CID bookings.
+- `identify_caller`: upsert customer by phone+name (non-booking capture).
+- `save_customer_preference`: durable facts (preferred_stylist etc.) for future calls.
+- `transfer_call`: SIP REFER to `tenants.forward_phone` (or message fallback); records outcome.
+- `take_message`: collect caller name + message + optional callback phone, persist to `customer_messages`, SMS-notify owner. (Added 2026-06-16.)
+- `get_my_appointments`: list caller's upcoming scheduled appointments by phone (server-injected — LLM never supplies it). Returns service_name + employee_name for natural voice ("your Oil Change with Mike"). (Added 2026-06-16.)
+- `cancel_appointment`: cancel caller's own appointment by UUID; phone ownership gate at backend — LLM can never cancel another caller's booking. (Added 2026-06-16.)
+- `reschedule_appointment`: move appointment to new start/end; same phone ownership gate; backend validates future time + non-overlap via GiST exclusion. (Backend endpoint + reminder reschedule added 2026-06-18.)
+- `capture_job_inquiry`: record a work/job inquiry (company, contract vs full-time, rate, onsite/remote, etc.) after intake and email it to the owner. (Added 2026-06-25.)
+- `page_owner_via_sms`: urgent mid-call SMS page to the owner (caller name + callback + one-line reason); persists a `[URGENT PAGE]`-flagged `customer_messages` row; at most one page per call (guard in session context); graceful fallback to take_message when no owner number is configured. (Added 2026-07-04.)
+- `get_detailed_customer_history`: deep history — last ~10 appointments (any status, with service/employee/date/status), saved preferences, and last ~3 `voice_sessions` call summaries. Phone server-injected like my-appointments. (Added 2026-07-04.)
+- `send_self_service_link`: texts the caller a secure cancel/reschedule link for one of their own upcoming appointments (default: next upcoming). Reuses the selfServiceToken machinery; SMS is consent-gated (opt-outs respected). Prompt proactively offers it in the cancel/reschedule flow. (Added 2026-07-04.)
+
+Current vs. desired for a complete receptionist:
+
+- Have: book, lookup, policy, basic transfer, preference capture, cancel, reschedule, my-appointments, take message, urgent owner page, deep customer history, self-service link by text.
+- Missing (lower priority): real-time "is my tech running late?" status, warm transfer.
+
+**SHIPPED — Customer Self-Service Action Links** (was the P1 highest-leverage gap). Token-gated cancel/reschedule links generated + embedded in confirmations, public `/self/*` pages, dashboard "Send self-service links" button, token redemption + negative-case E2E all landed. Files: `src/routes/selfService.ts`, `dashboard/app/self/*`. Full original gap state + delivered design spec archived in `docs/RESOLVED.md` (2026-07-04 entry).
+
+**SHIPPED 2026-07-04 — next-level voice tools that pair with self-service**: the agent now proactively offers "I can text you a link to reschedule yourself" (send_self_service_link tool + prompt step 3 in the cancel/reschedule flow) instead of always doing it live.
+
+---
+
+## 3. Integrations Maturity
+
+- **CRM**: Only Square remains (strategic removal of Jobber/HubSpot/ServiceTitan — they bundle competing AI receptionists; see `docs/STRATEGY.md` and `COMPETITOR_WEAKPOINTS.md`). Full `src/services/crm/` (client + sync + status + disconnect + webhook + scaffold). Tested via `SYNC_TEST_RECORDER`. No deep bidirectional reads (pull open jobs/tickets into voice context).
+- **Calendar**: Google + Outlook fully coded (`googleCalendar.ts`, `outlookCalendar.ts`, `calendarSync.ts`, OAuth factory, mutation-driven sync) but entirely env-gated (`GOOGLE_*` / `OUTLOOK_*`) and unproven in production. No per-tenant calendar view or live conflict surface beyond the internal scheduler grid.
+- **Communications (SMS/Email)**: Routes + history (`communications_history` table + `GET /communications/history`) + consent + opt-out + delivery receipts + per-tenant rate limiting + retry policy all wired. ProviderRegistry defaults to Telnyx (see silent-degrade section). Email is nodemailer-only (no SendGrid/etc.). Templates are basic Handlebars.
+  - **Actionability gap** (ties directly to self-service): Current SMS (smsService.ts applySMSTemplate) are 1-2 sentences with only STOP. No "tap here to reschedule", no deep links, no structured replies parsed back into the system. Reminders are scheduled in `reminderScheduler.ts` (polling) + `scheduleForAppointment.ts`; delivery stats added recently, and the comms-history view now has a per-row failed-delivery drill-down (`GET /communications/history?status=failed` + "Failed only" filter with the recorded provider error detail on `CommsSentView`).
+  - Reliability: retryPolicy + rate limiter good on paper; live behavior unknown until providers are set (mock always "succeeds"). No bounce / complaint handling beyond basic opt-out.
+- **Provisioning/Phone**: Excellent — `/provisioning/activate` does search → purchase → assign to SIP connection and writes tenant fields. Telnyx + LiveKit plumbing mature. No porting, vanity numbers, or easy multi-number support.
+- **No payments processing** for the business's own customers (intentional per strategy).
+- **No accounting** (QuickBooks/Xero), no marketing automation, no inventory sync.
+- OAuth state (JWT) and webhook HMAC/raw-body verification are strong (SECURITY.md).
+
+---
+
+## 4. Billing & Monetization
+
+Backend (`src/routes/billing.ts`):
+
+- `POST /billing/checkout` (customer create/upsert + Stripe session with metadata).
+- `POST /billing/webhook` (handles `checkout.session.completed`, `invoice.payment_failed`, `customer.subscription.deleted`).
+- `GET /billing/status`.
+- `subscriptionGate` middleware (returns 402 for non-active tenants except super-admin + exempt paths like `/billing`, `/health`, auth).
+
+Tiers (Solo/Growth/Pro) + price ID env vars exist.
+
+**Everything from the original 2026-06-15 audit is SHIPPED** (billing UI `BillingView.tsx`, typed `billing` API namespace incl. `'professional'`, `automatic_tax` behind `STRIPE_AUTO_TAX=true`, Stripe Customer Portal via `POST /billing/portal`; full delivered spec archived in `docs/RESOLVED.md`, 2026-07-04 entry) **except**:
+
+- **STILL OPEN** — never run against real Stripe (test-mode + `stripe listen` + full round-trip). This is a Dale/env action, not code.
+
+---
+
+**Usage / Cost Metering tie-in** (see also Reliability section): **SHIPPED** — AI spend is now metered (`ai_cost_events` table) and surfaced via `/analytics/ai-cost` + a breakdown in `AnalyticsView`. **Still open**: tying metered usage to Stripe as billing items, and soft/hard plan caps.
+
+---
+
+## 5. Onboarding, Knowledge & Setup
+
+- Wizard (solo + team modes), 30 business templates (now in seed + `business_templates` table), vocabulary system, first-run tour, setup progress pill, and `/demo` ephemeral tenant are strong.
+- **Website scan onboarding**: Core fetch + LLM extract + `knowledge_suggestion` staging + dedicated Step 7 (`Step7WebsiteScan.tsx`) + prefill of later policy questions step shipped 2026-06-12. **SHIPPED since**: per-question suggestion review UI (`KnowledgeSuggestions`), scan happy-path + wizard click-path E2E, and cost/rate-limit guardrails (`src/services/scanRateLimit.ts`). **Still pending**: periodic re-scan of stale KB (deferred — needs a `last_scanned` column + is a cost/product call).
+- Knowledge base: File upload, `knowledgeIngestion.ts` (chunking + embeddings), pgvector RAG via `/agent-tools/policy-answer` + `shared/expandQueryForEmbedding.ts` (recent accuracy win). `simulate rag` harness reports 100% hit-rate on known seeds. **SHIPPED**: caller-facing source citations (`[From "<title>"]` in `policy-answer`) + admin "explain this answer" debugger (`POST /knowledge/explain` + `ExplainAnswerView`). **Still missing**: periodic re-scan.
+- Policy questions: Static bank + tenant customs.
+- No "import from existing calendar/CRM" step beyond the website scan.
+
+---
+
+## 6. Dashboard, UX & Staff Features
+
+Strong primitives (`EmptyState`, focus-trap Modal, Toast, Badge, etc.), role gating (owner vs front_desk snaps back), `?tab=` / `?subtab=` URL sync, mobile responsive spec, guided tour, setup pill.
+
+**Gaps** (many already in UX backlog / TODO.md):
+
+- Analytics (`AnalyticsView.tsx`): Real data from `/analytics/stats` + calls + conversion + abandonment + "Why Callers Reached Out" + reminder delivery stats (recent work). Still surface-level; lacks a true "ask anything over my transcripts" owner copilot.
+- Scheduler: Mature (single source `employee_schedule`, atomic RPCs with 5 specific error codes, overrides, quick-book). Pending items include full sub-view consolidation and neutral language on any remaining "grading" UI.
+- Wizard: Draft-state Phase B (hold services/employees/shifts/etc. in local state until final "Done"; discard on dismiss) still open (large).
+- CRM + CustomerDetail: Functional + internal notes + history. No deep synthesis of "what this customer has said on calls."
+- **SHIPPED 2026-07-04** — CSV bulk import/export: owner-gated `GET /export/{customers,appointments,calls}.csv` (hand-rolled RFC-4180 + formula-injection guard, no new dep) + `POST /customers/import` (bulk customer import: liberal header matching, per-row zod+normalizePhone validation, in-file + existing-tenant dedupe, 1 MB / 2000-row caps, per-row error report); Export/Import buttons in `CRMView` + appointment/call CSV exports in `BusinessSettingsView`. **Still missing**: mass in-app actions (bulk edit/delete), PDF export.
+- **SHIPPED 2026-07-04** — utilization heatmap: `GET /analytics/utilization` (weekday × hour grid of staffed vs booked minutes, tenant-local, cross-midnight-clamped, optional From/To) + `UtilizationHeatmap` CSS-grid panel in `AnalyticsView` (single-hue theme-var shading, per-cell aria-labels, neutral language). Prior "no visual coverage/utilization heatmap beyond scheduler bars" closed.
+- "Active call" badge exists; deeper live monitoring/barge does not.
+
+Neutral-language rule ("no percentages/warnings/opinions") partially applied after UX audits.
+
+---
+
+## 7. Voice AI & Reliability Specifics
+
+Prompt system (tenant persona override via `{{ }}` placeholders, customer preferences, availability discipline, "Technical glitches" recovery section) + post-call classify/summary/transcript + graceful fallback all present and recently hardened (`agent/src/` modules: `prompt.ts`, `callClassify.ts`, `callSummary.ts`, `transcript.ts`, `callOutcome.ts`, `transferClient.ts`, `fallback.ts`).
+
+**Known issues**:
+
+- Occasional filler phrases ("Absolutely!", etc.) still slip through.
+- Agent resilience: Outer try/catch + fallback shipped; "speak filler before slow tools" (getAvailableSlots etc.) and idempotent-read retry still open (P3 items).
+- Single LiveKit agent worker per tenant (no automatic scaling for high-volume shops).
+- No multi-language or accent surface (English primary; per-tenant `tts_voice` (OpenAI ids: shimmer/nova/...) / `tts_speed` via `tenants` columns; legacy `tts_soft`/`tts_cheerful` columns are inert Grok-only artifacts).
+- No real-time owner listen-in or coaching during calls.
+
+---
+
+## 8. Reliability, Ops, Scaling & Cost Control
+
+- DB pool well-tuned (`max=10`, `connectionTimeoutMillis=5000` fail-fast, server-side GUC timeouts, RLS via `withTenantClient`).
+- Load testing of the booking path (concurrent calls until pool exhaustion or latency cliff) deferred (explicit note in TODO).
+- Reminders: Pure polling worker (`src/workers/reminderScheduler.ts`, 60s tick, batch ≤100). Not event-driven or queue-backed.
+- **AI cost blind spot (historical at time of writing)**: Per-call spend (OpenAI GPT-4o-mini + embeddings + summaries + Grok TTS + Deepgram) was completely untracked per-tenant or globally at one point. (AI cost metering via `ai_cost_events` + /analytics/ai-cost has since shipped; see CLAUDE.md and recent PRs. Legacy 'xai' provider rows may exist in the table from before the 2026-06-25 removal.)
+  - Instrumentation points included (and former Grok TTS calls were in the now-deleted `agent/src/grokTTS.ts`).
+  - Proposed data model (additive, low risk):
+    - New table `tenant_usage` or daily aggregates `tenant_daily_usage (tenant_id, date, calls: int, llm_tokens: bigint, tts_chars: bigint, stt_seconds: int, embedding_calls: int, estimated_cost_usd: numeric)`.
+    - Or simpler start: append to `voice_sessions` a `cost_usd` column + `models_used` json (populated in the `voice-session-end` handler).
+    - Prometheus counters already exist in `src/services/metrics.ts` — extend with cost labels or a separate `ai_cost_usd_total{tenant, provider}`.
+  - Exposure: owner dashboard "Usage this month" card (calls + est. AI cost), soft cap warnings ("approaching plan"), hard cap optional (return "busy" or fall back to cheaper model).
+  - Tie to billing: later, report usage to Stripe as metered billing items on the subscription.
+  - Owner-visible in P1 cluster below.
+- No horizontal scaling story for agent workers or backend under concurrent voice load.
+- Soft-reservation purge + GiST exclusion constraints + atomic booking RPCs provide good race safety.
+- No chaos/failure-injection harness beyond `scripts/simulate.sh`.
+
+---
+
+## 9. Security, Privacy & Compliance (Non-HIPAA)
+
+**Very strong** (SECURITY.md + 2026-05-21 hardening pass):
+
+- RLS + `FORCE ROW LEVEL SECURITY` on all tenant-scoped tables.
+- `tenantMiddleware` (401 on unauthenticated non-public requests; 403 on cross-tenant override under JWT).
+- JWT (8h) with `password_changed_at` revocation.
+- Webhook signature verification (raw body, HMAC) for Stripe + all providers.
+- Agent secret with `timingSafeEqual` + `AGENT_SECRET_OLD` rotation support.
+- `subscriptionGate`, class-22 input errors mapped to 400 (not 500 + error metric), 39 isolation probes run in every CI build.
+- Consent / opt-out records + per-tenant SMS rate limiting.
+
+**Gaps** (with concrete "what good looks like"):
+
+- No explicit "right to be forgotten" flow beyond soft-delete + cascades (voice transcripts/summaries/notes remain).
+  - Current soft-delete (`versionHistory.ts`, `deleted_customers_view`, restore RPC) is good for accidents but not for "erase my data".
+  - Need a hard-purge path (GDPR/CCPA style) that: (a) redacts/anonymizes voice_sessions (null phone + transcript), (b) deletes or anonymizes customer notes/preferences, (c) keeps aggregate analytics if desired, (d) writes to audit.
+  - UI: "Delete all my customer data" (with confirmation + export-first) in Settings or Customers.
+- No automated data retention / purge policy (old calls, transcripts, recordings).
+  - No worker or cron that purges `voice_sessions` + transcripts/summaries older than N days (configurable per tenant? or global 1-2 years).
+  - Same for communication_history, old soft-deleted rows.
+- Call audio (if ever captured upstream) has zero retention/redaction/consent workflow. (LiveKit has Egress recording capability; Telnyx can record on the trunk. Nothing in the product wires storage (S3/Supabase Storage), playback in Calls tab, or per-call consent flag.)
+- **SHIPPED (voice capture)** — the AI now records verbal SMS-reminder consent → `consent_records` via the `record_sms_consent` tool + `/agent-tools/record-consent`, with TCPA disclosures in the prompt (informational reminders only, never marketing; PR #178). **Still open (legal)**: final ToS/consent wording sign-off + confirming the disclosure fires before the first confirmation SMS in production.
+- **SHIPPED 2026-07-04** — account lock / session revocation now has a UI: `POST /users/me/revoke-sessions` ("log out everywhere", any role) + `POST /users/:id/revoke-sessions` (owner revokes a staff login; tenant-pinned UPDATE → cross-tenant/unknown 404 without existence leak). Both bump `password_changed_at`, which the JWT hook already treats as a revocation cut-off. "Log out of all sessions" button in `ProfileView` + per-staff owner action in `TeamAccessView`.
+- CORS still permissive by default in source.
+- No per-worker agent identity (single global secret).
+- Local test DB uses superuser (bypasses RLS); prod trusts Supabase managed role + FORCE.
+
+---
+
+## 10. Analytics, Insights & Intelligence
+
+Major recent progress (2026-06-12): `/analytics/stats`, call volume/conversion/abandonment from `voice_sessions`, outcome classification wired into shutdown, transcripts + summaries + appointment links, reminder delivery stats, "Why Callers Reached Out" panel.
+
+**Still light**:
+
+- **SHIPPED** — cohort (repeat-caller), CLV (`top_customers` by lifetime revenue), bookings-by-service, service-specific abandonment (`abandonment_by_service`), and first-time-fix rate (`first_time_fix`: share of distinct callers whose FIRST call ended in a booking — "resolved on first contact") via `GET /analytics/cohorts` + panels in `AnalyticsView`; optional From/To date-range filtering.
+- No owner "ask anything" copilot over their own call transcripts + KB + appointments.
+- Prometheus metrics (`booking_attempts_total`, `tool_calls_total`, `errors_total`, HTTP histograms, etc.) exist in `src/services/metrics.ts` but are token-gated ops-only.
+- No A/B testing surface for prompts/greetings per tenant.
+
+---
+
+## 11. Testing & QA
+
+**Excellent for solo project** (~1910 backend + 716 dashboard + 91 agent unit tests; ~146 Playwright E2E covering major workflows; all green on recent runs). Strong 5W comments, real-DB isolation, `SYNC_TEST_RECORDER` for sync contract, drift detectors.
+
+- `scripts/simulate.sh` (status, tools journey that flags `[dev]` gaps, rag eval at 100%, browser call dispatch) is a standout recent addition.
+- E2E covers booking races, wizard-to-first-booking, role gating, mobile, tenant delete cascade, analytics, comms history, cancel/restore, etc.
+
+**Gaps**:
+
+- Live PSTN voice end-to-end (the `__PERSONA_NAME__` blocker; one E2E skip is voice calls).
+- Real external OAuth + Stripe + live CRM paths (orchestration only via recorder).
+- RAG eval is manual/on-demand (costs money, non-deterministic).
+- No property-based or sustained load tests.
+- Low coverage pockets remain (reminder processor/repository, some comms adapters, certain dashboard primitives).
+- Full multi-step wizard still mostly unit-tested (E2E cost is high).
+
+---
+
+## 12. DevOps, Deployment, CI/CD
+
+- All three Railway services (ai-sec backend, ai-sec-agent, dashboard) deploy exclusively from `main` (verified via Railway GraphQL).
+- Nixpacks + `railway.json`. Full portable workflow kit (`PORTABLE_DEVELOPMENT_WORKFLOW.md`, hooks, `prepare-commit.sh`, `pre-pr`, `checks`, branch creator).
+- CI (`.github/workflows/ci.yml`): backend (pgvector service + forced DB tests), dashboard (typecheck + vitest), agent, e2e (Playwright). First all-green achieved recently.
+- Health endpoints: shallow `/health`, deep `/ready` (pool saturation + DB ping; 503 on unreachable).
+- Backend changes require explicit `npm run build` + restart (documented).
+
+**Major gaps**:
+
+- **SHIPPED (partial)** — GitHub branch protection on `main` gates merges (and thus Railway deploys from `main`) on the 4 CI jobs green. **Still open**: enable Railway's own "Wait for CI" toggle on the 3 services for defense-in-depth.
+- Env var drift produces silent production failure modes (mocks, localhost URLs).
+- No canary / blue-green / feature flags.
+- Observability tokens not set → no metrics, no log aggregation, no Sentry in prod.
+- **SHIPPED 2026-07-04** — automated "feature readiness" report at boot (`featureReadiness.ts` structured boot log + `GET /admin/feature-readiness`; see §1).
+
+---
+
+## 13. Documentation & Process
+
+**Outstanding** self-documentation hygiene:
+
+- `CLAUDE.md` (living spec with key directories, DB conventions, build principles, "test it or delete it").
+- `docs/TODO.md` (active queue with `[prod]`/`[dev]` tags, simulate harness results).
+- `RESOLVED.md`, `HANDOFF.md`, `SECURITY.md`, `TEST_COVERAGE.md`, `DEPLOYMENT.md`, `BETA_ONBOARDING.md`, `STRATEGY.md`, `COMPETITOR_WEAKPOINTS.md`, diagrams, session archives.
+- Drift detectors (`npm run verify:claude-md`, `verify:schema`), AGENTS.md mechanical refactor rules, 5W test comments, prepare-commit.
+
+**Gaps**: none open — previous items (owner admin guide `docs/OWNER_GUIDE.md`, incident/telephony runbook `docs/RUNBOOK.md`, stale edge-functions section removed from `docs/DEPLOYMENT.md`) all shipped; archived in `docs/RESOLVED.md` (2026-07-04 entry).
+
+---
+
+## 14. Business / Legal / GTM / Ops
+
+- Strong strategy (receptionist wedge first, then optional ops; cross-platform; no seat tax; attack platform-bundler weaknesses; focus non-trades verticals where incumbents don't bundle receptionists).
+- No in-product support/ticketing system for customers (internal `TICKET_SUPPORT.md` only for Telnyx).
+- No usage-based alerts for owners ("47 calls this week — approaching plan limits").
+- Pricing tiers well-documented in strategy but not productized in the dashboard UI.
+- No public marketing/landing site beyond minimal static assets + demo.
+- No partner/affiliate/reseller program.
+- Solo-founder concentration risk (bus factor 1).
+
+---
+
+## 15. Scalability, Performance & Cost
+
+- Known limits: pool `max=10` + single agent worker per tenant. Never load-tested under realistic concurrent voice load.
+- AI spend (OpenAI + former xAI + Deepgram per call) is invisible and uncapped. (Note: ai_cost_events metering has been added since this inventory was first written.)
+- RAG is pure pgvector cosine + expansion; no hybrid search, reranking, or response caching.
+- No CDN/edge story for dashboard or static KB.
+- Reminder scheduler is simple polling.
+- No read replicas or advanced connection strategies.
+
+---
+
+## 16. Additional "Table Stakes" or Future-Proofing Gaps
+
+- International numbers / multi-country support (Telnyx capable; code and templates are US-centric).
+- White-label / reseller dashboard theming.
+- Granular RBAC beyond owner/front_desk.
+- Public API surface for power users or external integrators (current endpoints are internal + agent-tools + dashboard).
+- SSO/SAML (currently password + magic-link invites only).
+- Rich exports — **CSV of calls, appointments, customers SHIPPED 2026-07-04** (`GET /export/*.csv`, see §6); PDF + analytics-export still open.
+- Smart proactive suggestions ("your Saturdays are empty — want to promote them to callers?").
+- Voice biometrics or "known caller" shortcuts.
+- Post-call SMS "how did we do?" review link or NPS.
+- Payments for the tenant's own customers (explicitly out of scope for now per strategy).
+
+---
+
+## Prioritized Action Clusters (Rough Order)
+
+**P0 — Unblock any real customer / `__PERSONA_NAME__` go-live**
+
+- Complete AIASSISTANT checklist (different-carrier PSTN test + Telnyx REFER enable + forward_phone set on dashboard).
+- Set remaining Railway env vars (TELNYX*PHONE_NUMBER, DASHBOARD_URL, CORS_ORIGIN, STRIPE*\* vars, EMAIL_USER/PASS, BACKEND_URL on agent) — code fixes shipped, boot warns on missing.
+- Set Railway observability tokens + basic alerts (`errors_total`, booking failures, pool waiting, etc.).
+- Gate Railway deploys on CI green (branch protection or Railway "wait for CI").
+- Stripe live verification (test keys + CLI replay + full owner checkout → webhook → status → gate).
+- Legal docs (Bonterms) + TCPA language + basic insurance.
+
+**P1 — Customer success & trust**
+
+- Customer self-service (detailed design above). Entry points: `src/services/communications/{smsService.ts, appointmentService.ts, emailTemplates.ts}`, `src/routes/appointments.ts` (add token-gated handlers or new `selfService.ts` route), `dashboard/lib/api.ts`, new or extended components in `AppointmentDetailPanel.tsx` or a new `SelfServiceLinks.tsx`. Add `?token=` handling that bypasses normal auth for these actions only. Start with cancel link (easiest).
+- Live comms providers: Telnyx is default (SMS + provisioning + SIP for LiveKit). ProviderRegistry + direct telnyxSms paths wired. Set TELNYX\_\* creds on Railway. (See `TELEPHONY_PROVIDER` for any override, though none planned.)
+- Billing UI for owners (current plan, upgrade buttons, invoices). See expanded Billing section. Start with Stripe Customer Portal session creation (quick) + status display. Entry: `src/routes/billing.ts` + `dashboard/components/` (new card or Settings subsection) + api.ts extension (add `createPortalSession`).
+- Richer outcome-driven automations (follow-up on "price" or "no_availability" calls). Wire `callClassify.ts` results into reminder or post-call comms paths.
+- Owner-facing cost/usage meter (calls + AI spend). See Cost subsection. Instrument the 5-6 points listed; surface in Analytics or new Usage card.
+- Full calendar sync live (Google/Outlook) for at least one tenant. Env vars + OAuth app setup + prove a real sync round-trip (use the existing `calendarSync.ts` + test recorder pattern).
+
+**P2 — Quality, scale & defensibility**
+
+- Agent latency fillers + resilience items.
+- Load test booking path + define scaling knobs (pool size, worker count).
+- Data export + retention/purge policy + visible audit log for owners.
+- Website-scan polish + E2E + RAG gating.
+- Calendar sync proven + exposed.
+- Deeper analytics / owner copilot over transcripts.
+- Multi-language / voice style surface if demand appears.
+
+**P3 — Moat & expansion**
+
+- Safe-partner CRM depth (Square or future non-bundling platforms).
+- Public booking widget / embed (when strategy says it's time).
+- White-label / reseller.
+- Public API.
+
+---
+
+## How to Use This Document
+
+1. Treat `docs/TODO.md` as the living execution queue (it has the `[prod]` tags, simulate results, and concrete next steps).
+2. Use this `GAPS.md` for "did we miss an entire category?" thinking before planning a phase.
+3. Before any customer onboarding, walk the P0 cluster above + run `./scripts/simulate.sh status --deep && ./scripts/simulate.sh tools`.
+4. After shipping something big (e.g., billing UI, self-service links), add a dated section here and move closed items to RESOLVED.md style notes.
+
+**Ship = merge to main via PR + prod DB migration apply (if any) + Railway deploy from main + live validation with simulate + real call if voice-related.**
+
+This file was generated from a full-repo deep dive on 2026-06-15 and expanded same-day with deeper design specs on self-service (full token + template + route sketch), billing (API surface + Stripe Portal quick win), AI cost instrumentation points, data export/retention requirements, and comms actionability. It will decay if not maintained — run the drift detectors (`npm run verify:claude-md`) after touching related code/docs and update this file (add dated "Expanded" or "Closed" notes).
+
+**Inconsistencies spotted during expansion (low-hanging polish)**: all three (billing.checkout plan typing, in-app billing surface, `'professional'` client paths) SHIPPED — archived in `docs/RESOLVED.md` (2026-07-04 entry).
+
+---
+
+**Next step for the reader**: Open `docs/TODO.md` and `docs/AIASSISTANT_GO_LIVE_TODO.md`, pick the top unblocked item from the P0 cluster, create a feature branch, and start executing. The simulate harness will tell you immediately when a link is wired.
+
+</details>
+
+### Archived: docs/IMPROVEMENT_IDEAS.md (deleted 2026-07-05; open ideas → TODO.md P3/UX)
+
+<details><summary>Full pre-deletion snapshot</summary>
+
+# Improvement Ideas — Curated Backlog
+
+> **Restructured 2026-05-29.** Items verified against current code; done items moved to Closed section. All remaining items reworded to be bite-size.
+>
+> **Where things live:**
+> - Mechanical/type/naming/convention work → complete (history in `RESOLVED.md`)
+> - Blocking launch + UX audit pass 2 → `docs/TODO.md`
+> - "Would be nice someday" → this file
+
+---
+
+## Quick wins (< 30 min each)
+
+
+---
+
+## Small (< 1 hr each)
+
+### Agent: speak filler before slow tool calls
+**File:** `agent/src/tools.ts`
+**Do:** Before `getAvailableSlots`, `bookAppointment`, and `searchKnowledgeBase` tool calls, emit a short filler utterance (e.g. `"One moment while I check that."`) to cover the up-to-8s silence window. **First verify:** check LiveKit Agents Node SDK for the correct mid-session speech API (not `say()` — look for `session.say()`, `agent.say()`, or equivalent in the LiveKit agent context object passed to tool handlers).
+**Done when:** Caller hears a phrase before tool network round-trip; no dead air on slow calls.
+**Why:** 8s silence sounds like a dropped call. P3(C) from production hardening backlog.
+`small` | impact: `medium`
+
+---
+
+## Medium (1–3 hr each)
+
+---
+
+## Large (dedicated session each)
+
+### ~~Finish CRM sync structure extraction~~ — CLOSED 2026-06-30 (invalid)
+**No longer actionable.** Two reasons: (1) Jobber/HubSpot/ServiceTitan were **removed** 2026-06-12 as competitors (`docs/STRATEGY.md`) — only Square remains; the `jobberSync.ts`/`hubspotSync.ts`/`servicetitanSync.ts` files no longer exist. (2) The extraction itself was **DONE** (verified 2026-06-03, see `docs/TODO.md` "Non-blocking / Polish") — Square's client/sync live under `src/services/crm/` over a shared layer (`tokenManagement`, `syncMapHelpers`, `crmSyncStatus`, `syncOrchestrator`). Nothing left to do.
+
+### Schedule C1+C2: consolidate 4 sub-views → 2 + unified header
+**File:** `dashboard/components/SchedulerView.tsx` (currently 4 sub-views: calendar, staff, resources, list)
+**Do:** Merge list into calendar view (Day/Month toggle); merge staff + resources into one Team/Resources view. Unify the three separate sub-view headers into one consistent shell.
+**Done when:** Schedule tab has 2 sub-views; single header renders across both; all scheduler E2E tests pass.
+**Why:** UX audit C1+C2 — 4 sub-views with 3 different headers is fragmented for a core daily-use screen.
+`large` | impact: `high`
+
+### E1: Threaded demo mode (session flag + sample data)
+**Do:** Replace the static `/demo` page with a session flag (`isDemoMode`) that injects sample data into the live dashboard. Super-admin can activate demo mode for any tenant; data is read-only and resets on flag clear.
+**Done when:** `/demo` route removed; demo mode works within the real dashboard shell; no static page.
+**Why:** Static demo page requires maintenance in parallel with real UI — a session-flag approach stays in sync automatically.
+`large` | impact: `medium`
+
+### P2.5: Wizard draft state Phase B
+**Files:** `dashboard/components/SetupWizard/` (~5K lines across wizard infrastructure)
+**Do:** Hold services/resources/employees/shifts/mappings in local state during wizard flow; commit to DB only on Step 7 "Done" click; discard on dismiss. Requires `useWizardCrud.ts` rewrite + `VocabularyProvider` accepting `overrideTemplate` for draft business_type.
+**Done when:** No DB writes during wizard navigation; back/dismiss discards all state; `SetupWizard.backToPicker.test.tsx` auto-seed-rollback contract preserved.
+**Why:** Phase A fixed visible re-pick bug; Phase B is the principled fix for "data should not be solid until wizard completes."
+`large` | impact: `high`
+
+### P3: Dense-view decomposition (multiple sessions)
+**Targets:** `SettingsView`, `TenantEditPanel`, `AppointmentView`, `DashboardHome`, `CustomerDetailPanel`, `DeletedRecordsPanel`, `NewSchedulerView`/`SchedulerView` overlap, `ShiftManagementView`, `ServiceAssignmentView`/`SkillAssignmentsView`/`SkillMatrixView`
+**Do:** Split each overloaded view into focused sub-components. Sequence with C1+C2 (scheduler consolidation) and Cluster C (Modal primitive migration) to avoid duplicated churn.
+**Done when:** Each target view is split with no single file over ~300 lines; existing tests pass.
+**Why:** These screens mix rendering, orchestration, and form state — each is a regression risk in a frequently-touched area.
+`large` | impact: `high`
+
+---
+
+## Closed / Done
+
+Items confirmed done against current code (2026-05-29):
+
+- **parseDateRange in calendar routes** — calendar.ts has no date-range params (only OAuth code/state). Item was invalid; closed.
+- **UUID_RE → requireValidUUID in mappings.ts** — done 2026-05-29. `UUID_RE` deleted; all 4 handlers use `requireValidUUID` from routeHelpers. Tests updated.
+- **Batch tenant reorder** — done 2026-05-29. Single `UPDATE … FROM unnest($1::uuid[], $2::int[])` replaces per-row loop. Test updated.
+- **CRM auth-init success envelope** — done 2026-05-29. All 4 CRM providers (jobber, hubspot, square, servicetitan) return `{ success: true, authUrl }`. `api.ts` types + `CRMIntegrationCard` updated. Tests updated.
+- **KB alert() → toast** — `KnowledgeBaseView.tsx` already uses `showToast()` for delete failures. `alert()` count: 0.
+- **Shared Tenant type** — `SuperAdminDashboard.tsx`, `TenantCard.tsx`, `TenantEditPanel.tsx` all import `TenantFull` from `dashboard/lib/types.ts`. No local duplicates.
+- **Super-Admin destructive/reorder tests** — `dashboard/superadmin.test.tsx` covers reorder, duplicate-name rejection, and delete confirmation gate.
+- **Date-range query parsing (analytics)** — `analytics.ts` already imports and uses `parseDateRange` from `routeHelpers`. *(Calendar routes have no date params.)*
+- **Extract Shared Route Guards** — `routeHelpers.ts` already provides `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`. Used across route modules.
+- **All mechanical-refactor backlog items** (former `REFACTORING_TODO.md`) — fully closed 2026-05-27; history in `RESOLVED.md`.
+
+Items completed 2026-05-29 (this session):
+
+- **Add skill route tests (delete + not-found)** — `src/routes/skills.test.ts` (7 tests): GET list, POST create happy+2 sad, DELETE success, DELETE 404, DELETE 401. Commit `2471d58`.
+- **Move appointment calendar config to a shared module** — `dashboard/lib/appointments/calendarConfig.ts` exports `localizer`, `CalendarEvent`, `ZOOM_LEVELS`, `CALENDAR_TIMESLOTS`, `CALENDAR_MIN/MAX/SCROLL_TO`, `toCalendarEvent()`. `AppointmentView.tsx` imports from there. Commit `178f7c3`.
+- **Persist KB tab + search to URL query params** — `KnowledgeBaseView.tsx` reads `?tab=` and `?q=` on mount; tab/search changes update URL via `replaceState`; `popstate` listener syncs back/forward. Commit `8122ae1`.
+- **Normalize skill/service names via `shared/name.ts`** — `skills.ts` imports `slugify` from `shared/name`; inline `toLowerCase().trim().replace(/\s+/g, '-')` removed. Commit `0e19b58`.
+- **Analytics feedback access tests** — `src/analytics.test.ts`: 4 new tests covering `GET /call-summaries` missing param → 400, tenant-scoped query, `GET /feedback` normal tenant scoped, super-admin cross-tenant. Commit `cda0e05`.
+- **Billing + provisioning unhappy-path tests** — `src/routes/billing.test.ts` (4 tests), `src/routes/provisioning.test.ts` (7 tests). Activate 503/400/409×2, deactivate partial-cleanup warning → 200+warnings, status happy+404, billing 503+404. Commit `b7b6aaf`.
+- **CRM disconnect + sync-status parity tests** — already covered by existing `jobber-routes.test.ts`, `hubspot-routes.test.ts`, `square-routes.test.ts` (verified 2026-05-29).
+- **Mapping-route tests (idempotency + tenant scoping)** — already covered in `src/routes/mappings.test.ts` (verified 2026-05-29).
+- **Appointment mock-mode + super-admin routing tests** — `dashboard/appointment.test.tsx` extended with 2 super-admin routing tests: create routes to customer's `tenant_id`, guard blocks create with no customer. Commit `84e58d8`.
+- **Extract provisioning state machine into a service** — `src/services/provisioningService.ts` (`activatePhone` + `deactivatePhone`); route thinned to validation + switch(result.status); all 5 log events preserved via result union fields. Service tests (6). Commit `3aefcb7`.
+- **CRM route scaffold unification** — `src/routes/crmRouteScaffold.ts` handles 6 shared endpoints; all 4 provider files (jobber/hubspot/square/servicetitan) reduced to scaffold call + webhook. Commit `85a8524`.
+- **Extract Super-Admin state into `useSuperAdminTenants` hook** — `dashboard/lib/useSuperAdminTenants.ts`; `SuperAdminDashboard.tsx` 490→210 lines. Commit `4f77a64`.
+- **Extract knowledge document ingestion into a service** — `src/services/knowledgeIngestion.ts` (extractFileContent, splitIntoChunks, prepareQADocument, validators); `knowledge.ts` route uses service. Service tests (10). Commit `125d6a4`.
+- **VoiceCallsView: extract row subcomponents** — `<ActiveCallRow>`, `<HistoryCallRow>`, `<OutcomeBadge>` extracted; inline row JSX removed; OutcomeBadge also used in right-panel detail view. Commit `6d63653`.
+
+## Self-Review — 2026-05-28
+**Cycles since last self-review:** 0
+**What's working:** The UX backlog is finally back to zero, and the current process correctly treated root `improvement-ideas.md` as retired while continuing to use the canonical root `ux-review-notes.md` for component coverage. The rebuilt UX notes also stayed useful by clustering related views instead of spraying random one-file entries.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions were enough to handle the tricky parts, canonical-file resets, full-path matching, and append-only behavior. The only important live adjustment was following the repo’s own archival note that moved idea work to `docs/IMPROVEMENT_IDEAS.md`.
+
+## Ideas — 2026-05-30 (code patterns)
+
+### Task: Extract reusable URL query state hook for dashboard shallow state
+**Status:** ✅ DONE 2026-07-02 (PR #167) — `dashboard/lib/useUrlQueryState.ts` (TDD, 8 cases); KnowledgeBaseView (tab+q) and SkillAssignmentsView (view) migrated off their own useSearchParams/replaceState/popstate wiring.
+**Files to change:** `dashboard/components/KnowledgeBaseView.tsx:L396-L437`, `dashboard/components/SkillAssignmentsView.tsx:L31-L51`, `dashboard/lib/useUrlQueryState.ts` (new), `dashboard/components/SkillAssignmentsView.test.tsx:L1-L106`
+**What to do:** Add a small client-side hook that owns four things currently being hand-written in view components: reading an initial query-param value, validating it against an allowed set, writing updates with `window.history.replaceState`, and reacting to browser `popstate`. Move the `tab` and `q` handling in `KnowledgeBaseView` and the `view` handling in `SkillAssignmentsView` onto that hook instead of each component building its own `URLSearchParams` logic. Keep the hook shallow, string-based, and intentionally limited to URL state, not API state.
+**Done when:**
+- [ ] `KnowledgeBaseView` no longer contains its own `useSearchParams` + `replaceState` + `popstate` wiring for `tab` and `q`
+- [ ] `SkillAssignmentsView` uses the same hook for `view` and still keeps `grid` as the default canonical URL state
+- [ ] `SkillAssignmentsView.test.tsx` still passes, and new or updated assertions cover back/forward synchronization through the shared hook
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** This removes duplicated browser-state plumbing from two screens, makes future deep-linkable tabs cheaper to build, and centralizes the tricky `popstate` behavior in one place.
+**Tradeoff:** Small abstraction cost up front, plus a little care needed to keep the hook generic without becoming a mini-router.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** About 1-2 hours of straightforward extraction buys back repeated, easy-to-get-wrong URL state code across multiple dashboard shells, so the return is solid.
+
+### Task: Add popstate-safe view persistence to SkillAssignmentsView
+**Status:** ✅ DONE 2026-07-02 (PR #167) — `view` now driven by the shared hook (not a one-time initialView snapshot); browser back/forward re-syncs the Grid/Map view. New popstate test proves the flip.
+**Files to change:** `dashboard/components/SkillAssignmentsView.tsx:L31-L83`, `dashboard/components/SkillAssignmentsView.test.tsx:L1-L106`
+**What to do:** Keep the existing `?view=map` deep-link behavior, but make the rendered view stay in sync when navigation changes happen outside the click handler, especially browser back/forward and parent-shell URL rewrites. The simplest path is to drive `view` from the extracted query-state helper instead of a one-time `initialView` snapshot from `useSearchParams()`. Extend the component test file with a case that starts on `?view=map`, rewrites the URL back to grid, dispatches `popstate`, and verifies the rendered marker flips back to Grid.
+**Done when:**
+- [ ] `SkillAssignmentsView` no longer relies on a one-time `initialView` read for long-lived state
+- [ ] A test proves browser back/forward style URL changes update the rendered Grid/Map view
+- [ ] Existing toggle and `aria-pressed` tests still pass
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** Right now the toggle is deep-linkable but not fully navigation-safe, which is exactly the sort of subtle shell bug that is annoying to debug later.
+**Tradeoff:** Slightly more state wiring and one more test branch for a bug that only shows up during navigation edge cases.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** Under an hour of focused cleanup closes a real navigation edge case in a high-traffic admin view, which is a good trade.
+
+### Task: Persist AIInsights sub-tab selection with the shared URL-state helper
+**Status:** ✅ DONE 2026-07-02 (PR #167) — sub-tab mirrored to a scoped `?aiTab=persona|knowledge` via the shared hook; new `AIInsightsView.test.tsx` covers default/deep-link/click/popstate. (The spec's `analytics` sub-tab no longer exists; mirrored the real 2 tabs.)
+**Files to change:** `dashboard/components/AIInsightsView.tsx:L1-L53`, `dashboard/lib/useUrlQueryState.ts` (new), `dashboard/components/AIInsightsView.test.tsx` (new)
+**What to do:** Mirror the active `AIInsightsView` sub-tab to a query param such as `?aiTab=persona|knowledge|analytics`, using the same shared hook instead of local `useState` only. Initialize from the URL, preserve the existing default of `persona`, and add a focused component test file that verifies default render, deep-link render, click-to-update URL behavior, and back/forward synchronization. Keep the param scoped so it does not collide with existing `tab`, `subtab`, or `view` usage elsewhere in the dashboard.
+**Done when:**
+- [ ] Reloading or revisiting the page preserves the selected AI Persona / Knowledge Base / Analytics sub-tab
+- [ ] `AIInsightsView` uses validated URL-backed state rather than local-only tab state
+- [ ] A new test file covers default, deep-link, click update, and `popstate` sync behavior
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** This brings one more tabbed shell into line with the dashboard’s growing deep-link conventions and makes debugging or sharing exact Phone Assistant states much easier.
+**Tradeoff:** Adds one more query param convention to maintain, so naming and validation need to stay disciplined.
+**Size:** small (< 1hr)
+**Impact:** medium
+**Effort vs Gain:** This is a small polish task with moderate day-to-day value, especially once the shared hook exists, so it is worth doing after the extraction.
+
+## Self-Review — 2026-05-30
+**Cycles since last self-review:** 1
+**What's working:** The UX pass now has full component coverage, and the improvement review was strongest when it stayed narrow, read a small file cluster deeply, and proposed bounded follow-up instead of broad “refactor this” advice.
+**What I changed in HEARTBEAT.md:** Added one line telling future runs not to append a status-only UX note once full coverage is complete and no new component files were found.
+**Why:** That avoids burning cycles and cluttering `ux-review-notes.md` with empty confirmation entries now that the component backlog is exhausted.
+
+## Ideas — 2026-05-31 (developer experience)
+
+### Task: Extend useFocusTrap to handle outside-dismiss overlays and migrate StaffProfileCard onto it
+**Status:** ✅ DONE 2026-07-02 (PR #168) — added opt-in `onOutsideDismiss` (5th positional param, existing callers unaffected); StaffProfileCard dropped its ~55-line hand-rolled effect. Existing keyboard tests pass + 2 new outside-mousedown tests.
+**Files to change:** `dashboard/lib/useFocusTrap.ts:L1-L79`, `dashboard/components/scheduler/StaffProfileCard.tsx:L1-L106`, `dashboard/components/scheduler/StaffProfileCard.test.tsx:L49-L86`, `dashboard/components/scheduler/scheduler.test.tsx:L694-L729`
+**What to do:** Expand `useFocusTrap` so callers can opt into outside-click dismissal in addition to Escape, Tab trapping, focus restore, and optional scroll locking. Then delete the custom `mousedown`/`keydown`/focus-restore effect from `StaffProfileCard` and replace it with the shared hook. Keep the hook small: accept an optional `onInteractOutside` callback or boolean flag, register the outside listener only while open, and preserve the current “do not steal focus if autofocus already landed inside” behavior.
+**Done when:**
+- [ ] `StaffProfileCard` no longer owns its own focus trap, Escape handler, outside-click wiring, or previous-focus restore effect
+- [ ] `useFocusTrap` supports the outside-dismiss case without regressing existing modal/panel callers
+- [ ] Existing `StaffProfileCard` keyboard tests still pass, and a test proves outside click still closes the card through the shared hook
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** Overlay accessibility behavior is currently split between one shared hook and one hand-rolled implementation. Pulling the card back onto the common primitive reduces subtle drift and makes future overlay fixes land in one place.
+**Tradeoff:** Slightly broadens the hook API, so the abstraction needs discipline to stay overlay-focused instead of growing into a generic event manager.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** Roughly 1-2 hours of careful consolidation removes duplicate accessibility plumbing in a high-interaction area, which is a healthy return.
+
+### Task: Extract a shared SchedulerSidePanel shell for right-edge scheduler drawers
+**Status:** ✅ DONE 2026-07-02 — `dashboard/components/scheduler/SchedulerSidePanel.tsx` owns the fixed drawer container + slide-in + header chrome + scrolling body + optional sticky footer. QuickBookPanel (footer CTA) + EmployeeDayFocusPanel (role=dialog + focus-trap ref) both adopt it via props so each keeps its exact behavior. scheduler suite 145/145; dashboard 816/816.
+**Files to change:** `dashboard/components/scheduler/QuickBookPanel.tsx:L246-L357`, `dashboard/components/scheduler/EmployeeDayFocusPanel.tsx:L55-L168`, `dashboard/components/scheduler/SchedulerSidePanel.tsx` (new), `dashboard/components/scheduler/scheduler.test.tsx:L694-L862`, `dashboard/components/scheduler/QuickBookPanel.test.tsx:L65-L183`
+**What to do:** Create a narrow presentational shell for the repeated right-edge scheduler drawer pattern: fixed right positioning, width, border, slide-in animation, header row with title/icon/close action, scrollable body, and optional sticky footer. Move `QuickBookPanel` and `EmployeeDayFocusPanel` onto that shell while leaving their business logic, data shaping, and inner content in place. Pass the panel title, icon, close label, main content, and optional footer as props so both drawers keep their current behavior without carrying duplicated layout chrome.
+**Done when:**
+- [ ] `QuickBookPanel` and `EmployeeDayFocusPanel` no longer duplicate the outer fixed drawer container and header chrome
+- [ ] The new shell supports an optional footer so Quick Book keeps its sticky CTA while Employee Focus remains body-only
+- [ ] Existing panel tests still pass with selectors updated only where the shared shell intentionally changes markup
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** These two scheduler drawers already share a lot of shell behavior, and the next overlay tweak will otherwise need to be made twice. A small shell reduces copy-paste churn without forcing the inner flows into the same component.
+**Tradeoff:** Adds one more component boundary, and if the shell becomes too opinionated it could fight legitimate differences between quick-book and focus-review workflows.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** About 1-2 hours of extraction should pay back quickly because scheduler overlay polish currently has to be duplicated by hand.
+
+### Task: Move StaffProfileCard action controls onto shared button primitives and tokens
+**Status:** ✅ DONE 2026-07-02 — the close control (→ `<Button variant="ghost" size="sm">`) and the Mark-off action (→ `<Button variant="warning">`) now render through the shared Button primitive instead of raw `<button>` + hand-rolled classes/inline styles. Mark-off keeps its exact disabled + "Marking off…" progress behavior (uses `disabled`, not `isLoading`, so no new spinner). Existing keyboard/aria/disabled tests still pass (11/11); dashboard 816/816.
+**Files to change:** `dashboard/components/scheduler/StaffProfileCard.tsx:L131-L257`, `dashboard/components/ui/Button.tsx`, `dashboard/components/scheduler/StaffProfileCard.test.tsx:L88-L141`
+**What to do:** Replace the card’s custom close button and custom “Mark off” action button with the shared `Button` primitive, adding a small variant or size only if the current primitive truly cannot express the compact icon-close and warning-tinted full-width action. Keep the card’s current copy and behavior, but stop hand-authoring hover, disabled, and font styles inline. If the primitive needs one scheduler-safe warning style, add it centrally instead of leaving this card as a one-off.
+**Done when:**
+- [ ] The close control and Mark off action in `StaffProfileCard` render through shared button primitives instead of raw `<button>` styling
+- [ ] Disabled/loading behavior for the Mark off action still matches current behavior
+- [ ] Existing StaffProfileCard tests still pass, with any new assertions covering the primitive-backed disabled and accessible-label behavior
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** This keeps a frequently used scheduler popover aligned with the dashboard’s shared interaction system and cuts one more pocket of bespoke styling that will drift over time.
+**Tradeoff:** If `Button` needs a new variant, that adds a little design-surface maintenance to avoid turning the primitive into a catch-all.
+**Size:** small (< 1hr)
+**Impact:** low
+**Effort vs Gain:** Less than an hour of tidy-up removes a bespoke control pair in a high-traffic surface, so the gain is modest but clean.
+
+## Self-Review — 2026-05-31
+**Cycles since last self-review:** 0
+**What's working:** The UX pass now stays cheap because full coverage can be confirmed with a quick path-count diff, and the improvement pass still produces better output when it sticks to one tight file cluster instead of sampling the whole repo.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current heartbeat instructions already handled the finished UX backlog correctly and still left enough freedom to pivot into a fresh code slice for improvement review.
+
+## Ideas — 2026-06-01 (architecture)
+
+### Task: Split version history routes into focused registrars and shared helpers
+**Status:** ✅ DONE 2026-07-02 (PR #169) — shared helpers/config/schemas extracted to `src/routes/versionHistoryHelpers.ts` (versionHistory.ts 858→721 lines); 89/89 unit+realdb tests unchanged. Deliberately kept routes in one registrar (the helper duplication was the real payload; a multi-registrar split adds churn with no behavior gain).
+**Files to change:** `src/routes/versionHistory.ts:L18-L187`, `src/routes/versionHistory.ts:L198-L520`, `src/routes/versionHistory.ts:L527-L850`, `src/routes/versionHistory/validators.ts` (new), `src/routes/versionHistory/historyRoutes.ts` (new), `src/routes/versionHistory/recoveryRoutes.ts` (new), `src/versionHistory.test.ts:L1-L1188`
+**What to do:** Keep `registerVersionHistoryRoutes()` as the public entrypoint, but move the current inline helpers and route blocks into smaller modules grouped by concern. Put shared table validation, body validation, error-response creation, and table metadata in `validators.ts`. Move history, compare, and restore-preview reads into `historyRoutes.ts`. Move restore-fields, restore deleted, copy-fields, and deleted-record listing into `recoveryRoutes.ts`. Have the top-level file compose those registrars so route URLs and behavior stay unchanged. Update `src/versionHistory.test.ts` only as needed to keep imports and route registration pointed at the same public function.
+**Done when:**
+- [ ] `src/routes/versionHistory.ts` becomes a thin composition file instead of owning every helper and route body inline
+- [ ] Shared validation and error-shape code lives in one helper module, not repeated inside route closures
+- [ ] Route URLs, payloads, and response shapes remain unchanged
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** The current 850-line route file mixes validation, SQL shaping, recovery logic, and read-only history logic in one place, which makes future fixes risky and keeps the file stuck in any-heavy territory.
+**Tradeoff:** This is mostly structural work, so the payoff is maintainability rather than visible user-facing change, and careless extraction could create import churn if the boundaries are not kept simple.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** A couple hours of careful extraction should pay back quickly because this is a dense route cluster with a lot of behavior packed into one file.
+
+### Task: Centralize version-history system-field exclusion by table-aware primary key
+**Status:** ✅ DONE 2026-07-02 — `shared/versionHistoryFields.ts` (`excludedSystemFields(table)` — common audit cols + the table's real PK) now backs the backend restore-preview builder + DeletedRecordsPanel + RecordHistoryModal (killed 3 duplicate `id`-only lists). Also folded the canonical `VERSIONED_TABLES`/`PK_COLUMN_BY_TABLE` here (versionHistoryHelpers re-exports). Realdb test asserts restore-preview no longer emits the table PK; 5 shared-helper unit tests.
+**Files to change:** `src/routes/versionHistory.ts:L66-L76`, `src/routes/versionHistory.ts:L795-L816`, `dashboard/components/DeletedRecordsPanel.tsx:L166-L174`, `dashboard/components/RecordHistoryModal.tsx:L428-L440`, `shared/versionHistoryFields.ts` (new), `src/versionHistory.test.ts:L330-L356`
+**What to do:** Create one shared helper that returns the non-restorable, non-display system fields for each versioned table, including the real table-specific primary key (`customer_id`, `appointment_id`, `employee_id`, etc.), tenant metadata, and soft-delete audit fields. Use that helper in the backend restore-preview builder and in both dashboard recovery surfaces instead of maintaining three separate exclusion lists that only know about a bare `id` column. Add or update a route test proving restore-preview does not emit the table PK as a selectable field.
+**Done when:**
+- [ ] Restore preview excludes the table-specific primary key, not just a generic `id`
+- [ ] DeletedRecordsPanel and RecordHistoryModal use the same exclusion source instead of local hard-coded arrays
+- [ ] No recovery UI shows internal PK or audit-only fields as copy/restore choices
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** Right now the recovery stack duplicates exclusion logic and is out of sync with the project’s renamed PK convention, which makes internal fields more likely to leak into restore or copy workflows.
+**Tradeoff:** Shared cross-runtime constants add one more module to keep clean, and the helper needs to stay narrowly scoped so it does not turn into a dumping ground for unrelated field rules.
+**Size:** small (< 1hr)
+**Impact:** high
+**Effort vs Gain:** Under an hour of focused cleanup closes a real correctness gap in a recovery flow, so the return is strong.
+
+### Task: Add a batch restore payload so mixed-version field restores use one request
+**Status:** ✅ DONE 2026-07-02 — `RestoreFieldsSchema` now accepts either the legacy `{ source_version, fields }` OR a batch `{ restores: [{ source_version, fields }] }`. The restore-fields route runs every group inside ONE `BEGIN…COMMIT` transaction (ROLLBACK on any failed group — no partial restore); audit metadata applies to all groups. RecordHistoryModal sends one grouped request instead of N sequential ones. Real-DB tests: multi-version batch restore + partial-failure rollback (row unchanged). Mocked route tests updated for the BEGIN/COMMIT sequence. Backend 2178/2178.
+**Files to change:** `dashboard/components/RecordHistoryModal.tsx:L211-L257`, `dashboard/lib/api.ts:L1043-L1059`, `src/routes/versionHistory.ts:L342-L420`, `src/versionHistory.test.ts:L180-L205`
+**What to do:** Replace the modal’s per-version restore loop with a single batch payload that can carry multiple `{ source_version, fields[] }` groups in one submit. Extend the restore-fields route schema to accept either the current single-group shape or a new `restores` array, then execute the grouped restores inside one request-scoped transaction while preserving the existing audit metadata. Update the dashboard API client to send the grouped payload and keep the success response shape stable so the modal can still reload history and close cleanly after one submit.
+**Done when:**
+- [ ] RecordHistoryModal no longer loops over grouped versions and fires multiple sequential restore requests for one user action
+- [ ] The backend accepts and processes a multi-group restore payload in one request
+- [ ] Audit metadata (`restored_by`, `change_source`) still applies to every grouped restore
+- [ ] All existing tests pass, new tests cover the change
+**Why it matters:** The current modal turns one restore action into several network round trips, which is slower, harder to reason about on partial failure, and more likely to leave the UI mid-operation if one request fails after earlier ones succeeded.
+**Tradeoff:** The route schema and handler become a little more complex because they need to support grouped work, and test coverage has to be explicit about partial-failure behavior.
+**Size:** medium (1-3hr)
+**Impact:** medium
+**Effort vs Gain:** About 1-2 hours of API tightening removes avoidable multi-request restore behavior in a sensitive recovery flow, which is a solid payoff.
+
+## Self-Review — 2026-06-01
+**Cycles since last self-review:** 0
+**What's working:** The heartbeat process handled a fully complete UX backlog correctly, and the latest improvement ideas stay strongest when they zoom into one subsystem and name exact line ranges instead of proposing broad “clean up version history” work.
+**What I changed in HEARTBEAT.md:** No changes needed
+**Why:** The current instructions already prevented wasted UX-note churn after full coverage and still pushed this cycle toward concrete, non-duplicate architecture work.
+
+</details>
+
+### Archived: docs/IMPROVEMENTS_TODO.md (deleted 2026-07-05; inbox drained, 1 open = Wizard Phase B → TODO.md UX)
+
+<details><summary>Full pre-deletion snapshot</summary>
+
+# Improvements TODO
+
+Proposals generated by the `/continuously-improve` background loop.
+**Review and approval required before implementing anything here.**
+
+Status lifecycle: `proposed` → `approved` / `rejected` → `done`
+
+This file is append-only by the loop. Humans update Status fields.
+
+> **Status 2026-06-30:** inbox effectively drained — 3 of the 4 proposals below are `done`. The one remaining open item ("Wizard pre-fill from business template", approved) is the **SetupWizard draft-state Phase B** work tracked canonically in `docs/TODO.md` (UX backlog → "Wizard Phase B") and `docs/IMPROVEMENT_IDEAS.md`. Nothing new from the loop since 2026-06-03.
+
+Cross-references: [docs/TODO.md](TODO.md) | [docs/IMPROVEMENT_IDEAS.md](IMPROVEMENT_IDEAS.md)
+
+---
+
+### [2026-06-02] process — Wizard pre-fill from business template
+
+**Target:** `dashboard/` onboarding wizard + `src/templates/`
+**Category:** process
+**Priority:** high
+**Effort:** M (30min–2hr)
+**Status:** approved
+
+**Proposal:**
+When a new tenant selects a business type during onboarding (e.g., "Hair Salon"), the wizard should pre-populate every form field with values from the matching YAML template (`salon_v1`, `automotive_v1`, etc.). The user reviews, tweaks their specific details (name, hours, address), and confirms — one tab-through instead of a blank form. Currently templates apply data to the DB after the wizard but fields are blank during entry.
+
+**Rationale:**
+Templates exist but the UX doesn't realize their value — users still type everything from scratch. Pre-fill turns a 20-minute setup into a 2-minute review. Bella's Hair Studio in the seed serves as the reference dataset for building and testing this flow.
+
+**Implementation note (2026-06-02, approved):** real effort is L, not M. This IS the SetupWizard draft-state rework already scoped in [docs/TODO.md](TODO.md) → "`SetupWizard` + `SoloWizard` draft state" (Phase B): hold services/resources/employees/shifts/mappings in local state, pre-fill from the matching YAML template, commit to DB only on the Step 7 Done click, discard on dismiss. Touches `useWizardCrud.ts` + every `Step*.tsx` + ~5 test files (~5K lines); needs `VocabularyProvider` to accept an `overrideTemplate`. **Open on a fresh branch in a dedicated session.** Preserve the auto-seed-rollback contract in `dashboard/components/SetupWizard/SetupWizard.backToPicker.test.tsx`.
+
+---
+
+### [2026-06-03] skill — commit-code embeds Pixel Agents project specifics
+
+**Target:** `skill: commit-code` (SKILL.md Step 4, lines ~84–86)
+**Category:** skill
+**Priority:** medium
+**Effort:** S (<30min)
+**Status:** done 2026-06-03
+
+**Proposal:**
+Step 4 of the global `commit-code` skill hardcodes test commands for a different project: "For the Pixel Agents project specifically: `npm run test:daemon` / `npm run test:webview` … `npm run e2e`". This repo has none of those scripts (its tests are `npm test` → vitest, `cd dashboard && npm test`, Playwright e2e). Baking one project's commands into a global skill misleads every other repo. Replace the Pixel-Agents block with project-agnostic guidance (detect the runner from package.json, run the fast suite, gate E2E on whether changes touch the relevant surface) — or move the project-specific note into that project's local memory/CLAUDE.md. Done = no project name appears in the global skill's Step 4.
+
+**Resolution (2026-06-03):** Approved by Dale + fixed. Genericized the leak in BOTH global skills (the same audit found `start-feature` had it too):
+- `commit-code` SKILL.md Step 4: dropped the "For the Pixel Agents project specifically" block; kept the already-generic "detect runner / gate E2E on touched surface" guidance.
+- `start-feature` SKILL.md: 5 sites genericized — intro line, "Pixel Agents Feature Lifecycle" heading, baseline gates (`npm run check-types`/`daemon`/`webview` → generic typecheck/lint/build/test), dev-loop test commands, closing "proper way for Pixel Agents" line.
+- Verified: `grep -niE "pixel agents|test:daemon|test:webview|check-types"` across both skills → 0 hits.
+- Note: global skills live in `~/.claude/skills/` (outside this repo), so the edits are not in this commit — only this status update is.
+
+---
+
+### [2026-06-03] skill — continuously-improve: `fully_analyzed` skip is unwired (no state field backs it)
+
+**Target:** `skill: continuously-improve` (SKILL.md — skills-phase "Skip a skill if" + State file schema)
+**Category:** skill
+**Priority:** medium
+**Effort:** S (<30min)
+**Status:** done 2026-06-03 (option B)
+
+**Resolution (2026-06-03):** Fixed via option B — removed the dead "Skip a skill if `fully_analyzed`…" paragraph from the skills phase. It referenced state fields the schema never defined and no step ever wrote, so the optimization could never fire; deleting it removes the contradiction with zero added state complexity (per "delete the dormant abstraction"). Skill lives in `~/.claude/skills/`; only this status update is committed.
+
+**Proposal:**
+The skills-phase says "Skip a skill if its path in state has `fully_analyzed: true` AND its file mtime hasn't changed since that flag was set" and "Mark `fully_analyzed` only after 2 passes with no findings" — but the documented `.improve/state.json` schema has no per-skill structure, no `fully_analyzed` field, and no mtime store, and no step ever writes them. So the optimization can never fire: a skill that's been analyzed twice with zero findings gets re-analyzed forever, wasting one of the 3 capped analyses per session. Fix by adding a defined state sub-object (e.g. `"skill_state": { "<name>": { "fully_analyzed": true, "mtime": "<iso>", "clean_passes": 1 } }`) to the schema + a Step-5 instruction to write it, OR drop the skip-optimization paragraph entirely if it's not worth the state complexity. Done = the skip rule references a field the schema actually defines and a step actually writes.
+
+---
+
+### [2026-06-03] skill — create-tests: Step 6 mislabels the Vitest shuffle flag
+
+**Target:** `skill: create-tests` (SKILL.md Step 6 — Verify independence, line ~114)
+**Category:** skill
+**Priority:** low
+**Effort:** S (<30min)
+**Status:** done 2026-06-03
+
+**Proposal:**
+Step 6 says "Vitest/Jest: `--shuffle` (Vitest) or `--randomize` equivalent" — but `--shuffle` is Jest's flag (Jest 28+); Vitest has no bare `--shuffle` and randomizes via `--sequence.shuffle` (CLI) / `sequence.shuffle` (config). `npx vitest run --shuffle` errors out. Since Vitest is this repo's primary runner (backend + dashboard), the independence-verification step is broken on the main path — the reader falls back to the "run each file alone" alternative, but the documented command is simply wrong. Fix: relabel to `Vitest: --sequence.shuffle · Jest: --shuffle`. Done = each runner is paired with its real flag.
+
+**Resolution (2026-06-03):** Fixed in the global skill — line now reads
+`Vitest: --sequence.shuffle · Jest: --shuffle`. (Skill lives in `~/.claude/skills/`,
+outside this repo; only this status update is committed.)
+
+---
+
+</details>

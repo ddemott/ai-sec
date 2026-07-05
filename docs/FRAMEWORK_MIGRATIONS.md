@@ -14,7 +14,7 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 **Current stack:** Telnyx (carrier + SIP trunk) → LiveKit Cloud (SIP ingress) → LiveKit Agent worker (Node) → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default voice `shimmer`; per-tenant voice + speed via `tenants.tts_voice` / `tts_speed`; fully OpenAI since 2026-06-25 removal of xAI Grok) → Fastify `/agent-tools/*`.
 
-**Open follow-up:** First live PSTN call still pending full different-carrier verification — see `docs/AIASSISTANT_GO_LIVE_TODO.md` and `docs/TODO.md`.
+**Open follow-up:** First live PSTN call still pending full different-carrier verification — see `docs/TODO.md` (P0 Voice) and `docs/RUNBOOK.md` section 7.
 
 ---
 
