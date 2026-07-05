@@ -52,6 +52,31 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('AIConfigView — load-failure never leaks a foreign tenant', () => {
+  test('SAD: a null/failed getConfig shows an error state + Retry, NOT another tenant config', async () => {
+    // WHO: a real owner whose getConfig transiently fails (or returns null).
+    // WHAT: the view must NOT fall back to a mock/demo tenant's persona — that
+    //        would render a foreign tenant's editable config, and Save would POST
+    //        to THAT tenant_id (cross-tenant write). It shows an error + Retry.
+    // WHEN: any AI-config load where the backend errors.
+    // WHERE: AIConfigView fetchConfig failure path (was `setConfig(MOCK_TENANT)`).
+    // WHY: cross-tenant data integrity — never edit/save another tenant's config.
+    mockGetConfig.mockResolvedValue(null);
+    render(<AIConfigView />);
+
+    expect(await screen.findByText(/couldn't load your AI settings/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+    // No system-prompt editor rendered — i.e. no foreign config surfaced.
+    expect(screen.queryByTestId('preferences-instructions')).not.toBeInTheDocument();
+  });
+
+  test('SAD: a rejected getConfig also shows the error state (no crash, no foreign config)', async () => {
+    mockGetConfig.mockRejectedValue(new Error('network'));
+    render(<AIConfigView />);
+    expect(await screen.findByText(/couldn't load your AI settings/i)).toBeInTheDocument();
+  });
+});
+
 describe('AIConfigView — Customer Preferences', () => {
   test('HAPPY: textarea is disabled until the toggle is turned on, then enabled', async () => {
     // WHO: an owner opening Phone Assistant config with preferences off.

@@ -161,7 +161,7 @@ export function CustomerDetailPanel({
                 </>
               ) : (
                 <div className="flex space-x-2">
-                  <Button variant="ghost" onClick={onCancelEdit}>
+                  <Button variant="ghost" onClick={onCancelEdit} aria-label="Cancel editing">
                     <X className="w-5 h-5" />
                   </Button>
                   <Button onClick={isCreating ? onCreate : onSave} isLoading={saving}>

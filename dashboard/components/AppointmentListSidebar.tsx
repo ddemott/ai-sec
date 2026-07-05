@@ -101,6 +101,7 @@ export function AppointmentListSidebar({
             role="button"
             tabIndex={0}
             aria-label={`Open appointment for ${apt.customers?.name || 'Unknown'}`}
+            aria-pressed={selectedAppointment?.appointment_id === apt.appointment_id}
             onClick={() => onSelectAppointment(apt)}
             onKeyDown={(e) => {
               // Rows are selectable divs (not <button>, to keep the block layout);

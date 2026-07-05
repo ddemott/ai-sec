@@ -89,12 +89,12 @@ export function useSuperAdminTenants(
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     void fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync form when selection changes
@@ -143,6 +143,10 @@ export function useSuperAdminTenants(
         setHasReordered(false);
         setOriginalOrder([]);
         notifyTenantsChanged();
+      } else {
+        // apiMutate resolves {success:false} on an HTTP error (only network
+        // throws) — without this the reorder silently fails to persist.
+        setError(res.error || 'Failed to save order');
       }
     } catch {
       setError('Failed to save order');

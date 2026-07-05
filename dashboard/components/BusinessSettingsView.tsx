@@ -22,8 +22,6 @@ import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 import { Input } from './ui/Input';
 import type { EffectiveShift } from '../lib/types';
-import { ConfirmModal } from './ui/ConfirmModal';
-import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
 
 export default function BusinessSettingsView() {
@@ -33,7 +31,6 @@ export default function BusinessSettingsView() {
   const refreshVocabulary = useVocabularyRefresh();
 
   const [teamSize, setTeamSize] = useState<number | null>(null);
-  const { state: confirmState, close: closeConfirm } = useConfirm();
 
   // Assistant name — owner-editable; the agent introduces itself with this.
   const [personaName, setPersonaName] = useState('');
@@ -184,7 +181,9 @@ export default function BusinessSettingsView() {
       window.history.replaceState({}, '', url.pathname);
     }
     if (params.get('calendarError')) {
-      console.error('Calendar connection failed:', params.get('calendarError'));
+      // The owner just came back from an OAuth attempt that failed — tell them,
+      // don't only console.error (they'd otherwise see nothing and assume it worked).
+      showToast("Couldn't connect your calendar. Please try again.", 'error');
       const url = new URL(window.location.href);
       url.searchParams.delete('calendarError');
       window.history.replaceState({}, '', url.pathname);
@@ -625,7 +624,6 @@ export default function BusinessSettingsView() {
         {/* RESOURCES & CAPACITY removed 2026-06-03 (IA merge Phase 2): the
             canonical resource editor is the "Resources" sub-tab under Setup
             (ResourceManagerView). This team-only block duplicated it. */}
-        <ConfirmModal {...confirmState} onClose={closeConfirm} />
       </div>
     </div>
   );

@@ -27,7 +27,17 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = (await response.json()) as { success?: boolean; tenant_id: string; user_name: string; token?: string; role?: string; error?: string };
+      // Guard JSON parse: a non-JSON error body (e.g. a gateway 502 HTML page)
+      // would otherwise throw here and be mislabeled as a connection error. The
+      // sibling auth pages (register/forgot/reset) guard the same way.
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        tenant_id: string;
+        user_name: string;
+        token?: string;
+        role?: string;
+        error?: string;
+      };
 
       if (response.ok && data.success) {
         localStorage.setItem('tenantId', data.tenant_id);

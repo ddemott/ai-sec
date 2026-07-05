@@ -134,7 +134,14 @@ function SoloScheduleView({
           start_time: r.start_time,
           end_time: r.end_time,
         }));
-      await Api.shifts.expandWeekly(tenantId, employeeId, pattern);
+      const res = await Api.shifts.expandWeekly(tenantId, employeeId, pattern);
+      if (!res.success) {
+        // apiMutate resolves {success:false} on a server 4xx/5xx (only network
+        // drops throw) — without this check a rejected save would still flip
+        // "Schedule saved".
+        showToast(res.error || 'Failed to save schedule', 'error');
+        return;
+      }
       setSaved(true);
       showToast('Schedule saved', 'success');
     } catch {
@@ -397,13 +404,17 @@ export default function ShiftManagementView() {
       }
     }
     try {
-      await Api.shifts.schedule.save(tenantId, {
+      const res = await Api.shifts.schedule.save(tenantId, {
         employee_id: selectedEmployeeId,
         shift_date: editingDate,
         start_time: modalForm.is_off ? undefined : modalForm.start_time,
         end_time: modalForm.is_off ? undefined : modalForm.end_time,
         is_off: modalForm.is_off,
       });
+      if (!res.success) {
+        showToast(res.error || 'Failed to save schedule', 'error');
+        return;
+      }
       setIsModalOpen(false);
       void fetchShifts();
     } catch {
@@ -414,7 +425,11 @@ export default function ShiftManagementView() {
   async function handleDelete(dateStr: string) {
     if (!tenantId || !selectedEmployeeId) return;
     try {
-      await Api.shifts.schedule.remove(selectedEmployeeId, dateStr, tenantId);
+      const res = await Api.shifts.schedule.remove(selectedEmployeeId, dateStr, tenantId);
+      if (!res.success) {
+        showToast(res.error || 'Failed to remove schedule', 'error');
+        return;
+      }
       void fetchShifts();
     } catch {
       showToast('Failed to remove schedule', 'error');
@@ -424,11 +439,15 @@ export default function ShiftManagementView() {
   async function handleClearDay(dateStr: string) {
     if (!selectedEmployeeId || !tenantId) return;
     try {
-      await Api.shifts.schedule.save(tenantId, {
+      const res = await Api.shifts.schedule.save(tenantId, {
         employee_id: selectedEmployeeId,
         shift_date: dateStr,
         is_off: true,
       });
+      if (!res.success) {
+        showToast(res.error || 'Failed to clear schedule', 'error');
+        return;
+      }
       void fetchShifts();
     } catch {
       showToast('Failed to clear schedule', 'error');
@@ -461,6 +480,10 @@ export default function ShiftManagementView() {
             toDateStr(weekStart),
             toDateStr(nextWeekStart)
           );
+          if (!result.success) {
+            showToast(result.error || 'Failed to copy shifts', 'error');
+            return;
+          }
           showToast(
             `Copied ${result.copied} shift${result.copied === 1 ? '' : 's'} to next week`,
             'success'
