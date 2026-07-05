@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-07-05 (29 route modules, 154 migrations, 23 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
+**Last verified:** 2026-07-05 (30 route modules, 154 migrations, 23 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
@@ -43,7 +43,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via OpenAI (fully since 2026-06-25 Grok removal; no XAI key; runFallback also OpenAI))
 - **Tools**: 23 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
-- **API**: Fastify (29 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
+- **API**: Fastify (30 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
 - **DB**: Postgres + pgvector on Supabase, 154 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — deployed on Railway (production dashboard service)
 
@@ -54,9 +54,9 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 ```
 /
 ├── src/                          Fastify backend (Node)
-│   ├── index.ts                  Entry — registers 29 route modules (~280 lines)
+│   ├── index.ts                  Entry — registers 30 route modules (~280 lines)
 │   ├── middleware.ts             withHandler, tenantMiddleware, registerJwtAuthHook, generateToken, AppError, logEvent
-│   ├── routes/                   29 route modules + routeHelpers.ts
+│   ├── routes/                   30 route modules + routeHelpers.ts
 │   ├── services/                 flat files (calendar sync, OAuth, name/token/SMS utilities) + communications/ (Telnyx-only SMS + delivery webhooks), reminders/, tenants/, usage/ subdirs
 │   └── database/                 getPool() singleton + createWithTenantClient(pool) factory + DatabaseService adapter
 ├── dashboard/                    Next.js 14 App Router
@@ -121,7 +121,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
                                 ▼
                     ┌─────────────────────┐
                     │  Fastify Backend    │  ai-sec-production.up.railway.app
-                    │  29 route modules   │  Railway (Nixpacks, Node 20)
+                    │  30 route modules   │  Railway (Nixpacks, Node 20)
                     └──────────┬──────────┘
                                │
           ┌────────────────────┼─────────────────────┐
@@ -380,7 +380,7 @@ Releases the Telnyx number via the API and clears `telnyx_phone_number_id`, `inb
 
 ### 9.1 Route modules (29)
 
-29 route modules under `src/routes/` (per the canonical count maintained in CLAUDE.md and enforced by the `verify:claude-md` drift guard; 28 registered calls in `src/index.ts` + 1 internal scaffold helper), covering: auth, tenants, appointments, customers, employees, users, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, square (sole surviving external CRM after competitor removals 2026-06-12), agentTools, demo, voice, versionHistory, communications, reminders, health (extracted), selfService, exportData (tenant data portability), and auditLog (owner change history). Recent additions include data export and audit surfaces (2026-06). `src/index.ts` is slim — imports each `register*Routes(...)` and wires them. The `withTenantClient` it passes is built from `createWithTenantClient(pool)` (see `src/database/index.ts`); the pool itself comes from `getPool()` so the reminder scheduler and communications service share the same singleton.
+30 route modules under `src/routes/` (per the canonical count maintained in CLAUDE.md and enforced by the `verify:claude-md` drift guard; 29 registered calls in `src/index.ts` + 1 internal scaffold helper), covering: auth, tenants, appointments, customers, employees, users, shifts, resources, services, mappings, skills, calendar, knowledge, analytics, vocabulary, billing, provisioning, square (sole surviving external CRM after competitor removals 2026-06-12), agentTools, demo, voice, versionHistory, communications, reminders, health (extracted), selfService, exportData (tenant data portability), auditLog (owner change history), and setup (wizard Phase B commit endpoint). Recent additions include data export and audit surfaces (2026-06). `src/index.ts` is slim — imports each `register*Routes(...)` and wires them. The `withTenantClient` it passes is built from `createWithTenantClient(pool)` (see `src/database/index.ts`); the pool itself comes from `getPool()` so the reminder scheduler and communications service share the same singleton.
 
 ### 9.2 Middleware layer (`src/middleware.ts`)
 

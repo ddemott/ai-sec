@@ -37,6 +37,7 @@ import { registerSkillRoutes } from './routes/skills';
 import { registerCalendarRoutes } from './routes/calendar';
 import { registerKnowledgeRoutes } from './routes/knowledge';
 import { registerAnalyticsRoutes } from './routes/analytics';
+import { registerSetupRoutes } from './routes/setup';
 import { registerVocabularyRoutes } from './routes/vocabulary';
 import { registerBillingRoutes, subscriptionGate } from './routes/billing';
 import { registerProvisioningRoutes } from './routes/provisioning';
@@ -250,6 +251,7 @@ registerSkillRoutes(app, pool, withTenantClient);
 registerCalendarRoutes(app, pool, withTenantClient);
 registerKnowledgeRoutes(app, pool, getEmbedding, withTenantClient, normalizeForEmbedding);
 registerAnalyticsRoutes(app, pool, withTenantClient);
+registerSetupRoutes(app, pool, withTenantClient);
 registerVocabularyRoutes(app, pool, withTenantClient);
 registerBillingRoutes(app, pool);
 
