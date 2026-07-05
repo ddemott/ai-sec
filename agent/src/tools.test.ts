@@ -146,6 +146,18 @@ describe('no-caller-ID fallback: transfer offer is capability-gated', () => {
     expect(out).not.toContain('transfer');
   });
 
+  it('SAD: offers ONLY a message when this call has no transfer wiring (execute is null)', async () => {
+    // WHO: a call where createTransferExecutor returned null — the SIP participant
+    //       never joined / no LiveKit context — so transfer_call can't run even
+    //       though a forward number is configured.
+    // WHY: promising a transfer here is a dead-end (transfer_call → "not available").
+    const noExecutor = { forwardPhone: '+16085551234', execute: null };
+    const tools = buildTools(noPhone(), makeClient([]).client, noExecutor);
+    const out = await exec(tools.get_my_appointments, {});
+    expect(out).toContain('take a message');
+    expect(out).not.toContain('transfer');
+  });
+
   it("SAD: offers ONLY a message when the 'transfer' capability is not in the active subset", async () => {
     // scheduling is active (so cancel/reschedule/get_my_appointments exist) but
     // transfer is not — the fallback must not promise a transfer.

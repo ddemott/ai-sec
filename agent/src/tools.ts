@@ -198,14 +198,17 @@ export function buildTools(
   opts?: { capabilities?: readonly Capability[] }
 ): llm.ToolContext {
   // Only offer a live transfer in the no-caller-ID fallbacks when one can
-  // actually happen: the 'transfer' capability is active for this session AND a
-  // destination number is configured. Otherwise the agent would promise "I can
-  // transfer you" the runtime can't honor (transfer_call returns not_configured
-  // → dead-end). Mirrors the prompt's capability gating (PR #114) + the
-  // forwardPhone check. When transfer is unavailable we offer only a message.
+  // actually happen: the 'transfer' capability is active for this session, a
+  // destination number is configured (forwardPhone), AND this call has transfer
+  // wiring (transfer.execute — null when the SIP participant never joined / no
+  // LiveKit context). Otherwise the agent would promise "I can transfer you" the
+  // runtime can't honor (transfer_call returns not_configured / "not available"
+  // → dead-end). Mirrors the prompt's capability gating (PR #114). When transfer
+  // is unavailable we offer only a message.
   const canOfferTransfer =
     (!opts?.capabilities || opts.capabilities.includes('transfer')) &&
-    !!transfer?.forwardPhone;
+    !!transfer?.forwardPhone &&
+    !!transfer?.execute;
   const transferOrMessage = canOfferTransfer ? 'transfer or take a message' : 'take a message';
 
   const allTools: llm.ToolContext = {
