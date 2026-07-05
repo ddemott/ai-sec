@@ -8,8 +8,76 @@ import {
   type AppRequest,
 } from '../middleware';
 import { parseDateRange } from './routeHelpers';
+import { z } from 'zod';
+import { expandWeeklyToSchedule, type WeeklyShiftRow } from '../services/expandWeeklyToSchedule';
 
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+// Draft graph posted by the setup wizard (Phase B) to preview coverage BEFORE
+// anything is persisted. Every entity carries a client-side `tmp_id` so mappings
+// + shifts can reference each other without real DB ids. See POST /coverage/dry-run.
+// One row of check_coverage_gaps output (per service, per date in the window).
+interface CoverageGapRow {
+  service_id: string;
+  service_name: string;
+  check_date: string;
+  gap_hours: number[] | null;
+  covered_hours: number[] | null;
+  total_open_hours: number;
+  coverage_pct: string | number;
+  status: string;
+  details: Record<string, unknown> | null;
+}
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const CoverageDryRunSchema = z.object({
+  services: z
+    .array(
+      z.object({
+        tmp_id: z.string().min(1),
+        name: z.string().min(1),
+        duration_minutes: z.number().int().positive().max(1440),
+      })
+    )
+    .max(200),
+  resources: z
+    .array(z.object({ tmp_id: z.string().min(1), name: z.string().min(1) }))
+    .max(200)
+    .default([]),
+  employees: z
+    .array(z.object({ tmp_id: z.string().min(1), name: z.string().min(1) }))
+    .max(200)
+    .default([]),
+  shifts: z
+    .array(
+      z.object({
+        employee_tmp_id: z.string().min(1),
+        day_of_week: z.number().int().min(0).max(6),
+        start_time: z.string().regex(HHMM_RE),
+        end_time: z.string().regex(HHMM_RE),
+      })
+    )
+    .max(2000)
+    .default([]),
+  service_employee: z
+    .array(z.object({ service_tmp_id: z.string().min(1), employee_tmp_id: z.string().min(1) }))
+    .max(2000)
+    .default([]),
+  service_resource: z
+    .array(z.object({ service_tmp_id: z.string().min(1), resource_tmp_id: z.string().min(1) }))
+    .max(2000)
+    .default([]),
+  // refine (not just regex): reject calendar-invalid but well-shaped dates like
+  // 2026-02-30 here, so they never reach a `$n::date` cast (→ 500).
+  start_date: z
+    .string()
+    .refine(isValidDateOnly, 'start_date must be a real YYYY-MM-DD date')
+    .optional(),
+  end_date: z
+    .string()
+    .refine(isValidDateOnly, 'end_date must be a real YYYY-MM-DD date')
+    .optional(),
+});
 
 /**
  * True only for a real calendar date in YYYY-MM-DD form. The regex alone is not
@@ -584,6 +652,192 @@ export function registerAnalyticsRoutes(
       });
       return reply.send(res.rows);
     }, 'Failed to check coverage gaps')
+  );
+
+  // POST /coverage/dry-run — coverage for a DRAFT graph that isn't in the DB yet
+  // (setup-wizard Phase B holds services/employees/shifts/mappings in local state
+  // and commits only on Done). We reuse the real check_coverage_gaps RPC as the
+  // single source of truth by inserting the draft inside a transaction, running
+  // the RPC, and ALWAYS rolling back — nothing is ever persisted. Coverage rows
+  // come back keyed on the ephemeral service_id created here, so the client
+  // matches them to its draft services by NAME.
+  app.post(
+    '/coverage/dry-run',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const parsed = CoverageDryRunSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+      }
+      const draft = parsed.data;
+      const startDate = draft.start_date ?? new Date().toISOString().split('T')[0];
+      // Coverage needs a BOUNDED window — check_coverage_gaps runs
+      // generate_series(start, end), and generate_series(start, NULL) yields no
+      // rows (→ empty coverage). Default to a 4-week horizon (matches the
+      // wizard's forward-schedule expansion) when the caller gives no end.
+      const endDate =
+        draft.end_date ??
+        new Date(Date.parse(`${startDate}T00:00:00Z`) + 27 * 86_400_000)
+          .toISOString()
+          .split('T')[0];
+
+      // A window where end < start makes generate_series() return no rows and
+      // would silently report "no gaps" — reject it instead of misleading.
+      if (endDate < startDate) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'end_date must be on or after start_date' });
+      }
+
+      // Fail fast on a broken draft graph: a shift or mapping that references a
+      // tmp_id not present in the entity lists is a client bug, and silently
+      // dropping it would produce a misleading coverage preview.
+      const serviceTmpIds = new Set(draft.services.map((s) => s.tmp_id));
+      const employeeTmpIds = new Set(draft.employees.map((e) => e.tmp_id));
+      const resourceTmpIds = new Set(draft.resources.map((r) => r.tmp_id));
+      const missing: string[] = [];
+      for (const sh of draft.shifts) {
+        if (!employeeTmpIds.has(sh.employee_tmp_id))
+          missing.push(`shift → employee ${sh.employee_tmp_id}`);
+      }
+      for (const m of draft.service_employee) {
+        if (!serviceTmpIds.has(m.service_tmp_id))
+          missing.push(`mapping → service ${m.service_tmp_id}`);
+        if (!employeeTmpIds.has(m.employee_tmp_id))
+          missing.push(`mapping → employee ${m.employee_tmp_id}`);
+      }
+      for (const m of draft.service_resource) {
+        if (!serviceTmpIds.has(m.service_tmp_id))
+          missing.push(`mapping → service ${m.service_tmp_id}`);
+        if (!resourceTmpIds.has(m.resource_tmp_id))
+          missing.push(`mapping → resource ${m.resource_tmp_id}`);
+      }
+      if (missing.length > 0) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Draft references unknown tmp_ids',
+          details: [...new Set(missing)],
+        });
+      }
+
+      // Weeks needed to cover [startDate, endDate] so the expanded schedule spans
+      // the whole coverage window (expandWeeklyToSchedule fans weeksAhead*7 days).
+      const spanDays =
+        Math.round(
+          (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86_400_000
+        ) + 1;
+      const weeksAhead = Math.max(1, Math.ceil(spanDays / 7));
+
+      const rows = await withTenantClient(tenantId, async (client) => {
+        await client.query('BEGIN');
+        try {
+          const resourceId = new Map<string, string>();
+          for (const r of draft.resources) {
+            const { rows: rr } = await client.query<{ resource_id: string }>(
+              `INSERT INTO resources (tenant_id, name, description, is_auto_seeded)
+               VALUES ($1, $2, NULL, false) RETURNING resource_id`,
+              [tenantId, r.name]
+            );
+            resourceId.set(r.tmp_id, rr[0].resource_id);
+          }
+
+          const serviceId = new Map<string, string>();
+          for (const s of draft.services) {
+            const { rows: sr } = await client.query<{ service_id: string }>(
+              `INSERT INTO services
+                 (tenant_id, name, subtitle, description, duration_minutes,
+                  required_skills, required_resources, is_auto_seeded)
+               VALUES ($1, $2, NULL, NULL, $3, '{}', '{}', false) RETURNING service_id`,
+              [tenantId, s.name, s.duration_minutes]
+            );
+            serviceId.set(s.tmp_id, sr[0].service_id);
+          }
+
+          const employeeId = new Map<string, string>();
+          for (const e of draft.employees) {
+            const { rows: er } = await client.query<{ employee_id: string }>(
+              `INSERT INTO employees (tenant_id, name, first_name, last_name, email, phone, skills)
+               VALUES ($1, $2, NULL, NULL, NULL, NULL, '{}') RETURNING employee_id`,
+              [tenantId, e.name]
+            );
+            employeeId.set(e.tmp_id, er[0].employee_id);
+          }
+
+          // Fan each employee's weekly pattern into date-specific employee_schedule
+          // rows across the coverage window, reusing the batched expand-weekly
+          // helper (one multi-row INSERT per employee — avoids the historical
+          // per-row deadlock + N round-trips) so the RPC sees the same shape a
+          // real expand-weekly would produce.
+          const patternByEmployee = new Map<string, WeeklyShiftRow[]>();
+          for (const sh of draft.shifts) {
+            const empId = employeeId.get(sh.employee_tmp_id);
+            if (!empId) continue; // validated above; defensive
+            const rowsForEmp = patternByEmployee.get(empId) ?? [];
+            rowsForEmp.push({
+              day_of_week: sh.day_of_week,
+              start_time: sh.start_time,
+              end_time: sh.end_time,
+            });
+            patternByEmployee.set(empId, rowsForEmp);
+          }
+          for (const [empId, pattern] of patternByEmployee) {
+            await expandWeeklyToSchedule(client, {
+              tenantId,
+              employeeId: empId,
+              pattern,
+              weeksAhead,
+              startDate: new Date(`${startDate}T00:00:00Z`),
+            });
+          }
+
+          for (const m of draft.service_employee) {
+            const sid = serviceId.get(m.service_tmp_id);
+            const eid = employeeId.get(m.employee_tmp_id);
+            if (sid && eid) {
+              await client.query(
+                `INSERT INTO service_employee (service_id, employee_id, tenant_id)
+                 VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+                [sid, eid, tenantId]
+              );
+            }
+          }
+          for (const m of draft.service_resource) {
+            const sid = serviceId.get(m.service_tmp_id);
+            const rid = resourceId.get(m.resource_tmp_id);
+            if (sid && rid) {
+              await client.query(
+                `INSERT INTO service_resource (service_id, resource_id, tenant_id)
+                 VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+                [sid, rid, tenantId]
+              );
+            }
+          }
+
+          const res = await client.query<CoverageGapRow>(
+            `SELECT service_id, service_name, check_date, gap_hours, covered_hours,
+                    total_open_hours, coverage_pct, status, details
+             FROM check_coverage_gaps($1, $2::DATE, $3::DATE)`,
+            [tenantId, startDate, endDate]
+          );
+          return res.rows;
+        } finally {
+          // Never persist the draft — this is a preview. ROLLBACK runs on both the
+          // success and error paths (the rows are already materialized in JS).
+          await client.query('ROLLBACK');
+        }
+      });
+
+      logEvent(req, 'coverage_dry_run', {
+        services: draft.services.length,
+        employees: draft.employees.length,
+        shifts: draft.shifts.length,
+      });
+      return reply.send(rows);
+    }, 'Failed to preview coverage')
   );
 
   // GET /coverage/staffing was removed 2026-04-30 along with the
