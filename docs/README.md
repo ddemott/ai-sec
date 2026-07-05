@@ -31,7 +31,6 @@ This folder contains the project's technical and operational documentation.
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | [TODO.md](TODO.md)                   | **The one backlog** — all open work, prioritized (GAPS + ideas + go-live folded in 2026-07-05) |
 | [RESOLVED.md](RESOLVED.md)           | Completed phases + historical bug tracker + session archive (incl. the folded-doc snapshots)   |
-| [HANDOFF.md](HANDOFF.md)             | Latest session handoff notes                                                                   |
 | [TEST_COVERAGE.md](TEST_COVERAGE.md) | Test coverage status and gaps                                                                  |
 | [TEST_DB_AUDIT.md](TEST_DB_AUDIT.md) | Mocked-DB vs real-SQL coverage map                                                             |
 

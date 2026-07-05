@@ -344,7 +344,6 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | ----------------------- | ------------------------------------------------------------------------------------------------------ |
 | `docs/TODO.md`          | The one backlog — all open work, prioritized (GAPS + IMPROVEMENT_IDEAS + go-live folded in 2026-07-05) |
 | `docs/RESOLVED.md`      | Completed phases + historical bug tracker + session-notes archive (incl. the folded-doc snapshots)     |
-| `docs/HANDOFF.md`       | Latest session handoff notes                                                                           |
 | `docs/TEST_COVERAGE.md` | Test coverage status and gaps                                                                          |
 | `docs/TEST_DB_AUDIT.md` | Mocked-DB vs real-SQL coverage map                                                                     |
 
