@@ -120,6 +120,47 @@ describe('buildTools', () => {
   });
 });
 
+describe('no-caller-ID fallback: transfer offer is capability-gated', () => {
+  // WHO: a caller with blocked caller-ID asks to cancel/reschedule; the agent
+  //       can't verify ownership so it falls back to "transfer or take a message".
+  // WHAT: that fallback must only PROMISE a transfer when a live transfer can
+  //        actually happen — the 'transfer' capability active AND a forward number
+  //        configured. Otherwise it promises just a message.
+  // WHERE: agent/src/tools.ts buildTools `canOfferTransfer` → the 3 fallbacks.
+  // WHY: promising "I can transfer you" when transfer is unwired is a dead-end —
+  //       transfer_call returns not_configured and the caller hears a broken offer.
+  const noPhone = () => makeCtx({ callerPhone: null });
+  const withForward = { forwardPhone: '+16085551234', execute: vi.fn() };
+  const noForward = { forwardPhone: null, execute: vi.fn() };
+
+  it('HAPPY: offers transfer when the transfer capability is active AND a forward number is set', async () => {
+    const tools = buildTools(noPhone(), makeClient([]).client, withForward);
+    const out = await exec(tools.get_my_appointments, {});
+    expect(out).toContain('transfer or take a message');
+  });
+
+  it('SAD: offers ONLY a message when no forward number is configured', async () => {
+    const tools = buildTools(noPhone(), makeClient([]).client, noForward);
+    const out = await exec(tools.cancel_appointment, { appointment_id: 'x' });
+    expect(out).toContain('take a message');
+    expect(out).not.toContain('transfer');
+  });
+
+  it("SAD: offers ONLY a message when the 'transfer' capability is not in the active subset", async () => {
+    // scheduling is active (so cancel/reschedule/get_my_appointments exist) but
+    // transfer is not — the fallback must not promise a transfer.
+    const tools = buildTools(noPhone(), makeClient([]).client, withForward, undefined, undefined, {
+      capabilities: ['scheduling'],
+    });
+    const out = await exec(tools.reschedule_appointment, {
+      appointment_id: 'x',
+      new_start: '2026-07-15T16:00:00',
+    });
+    expect(out).toContain('take a message');
+    expect(out).not.toContain('transfer');
+  });
+});
+
 describe('formatResponse (never-empty guard)', () => {
   it('SAD: an ok response with an undefined result yields a non-empty string, never silence', async () => {
     // WHO: a tool whose backend returned { success:true } with no result field.

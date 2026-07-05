@@ -197,6 +197,17 @@ export function buildTools(
   speakFiller?: (phrase: string) => void,
   opts?: { capabilities?: readonly Capability[] }
 ): llm.ToolContext {
+  // Only offer a live transfer in the no-caller-ID fallbacks when one can
+  // actually happen: the 'transfer' capability is active for this session AND a
+  // destination number is configured. Otherwise the agent would promise "I can
+  // transfer you" the runtime can't honor (transfer_call returns not_configured
+  // → dead-end). Mirrors the prompt's capability gating (PR #114) + the
+  // forwardPhone check. When transfer is unavailable we offer only a message.
+  const canOfferTransfer =
+    (!opts?.capabilities || opts.capabilities.includes('transfer')) &&
+    !!transfer?.forwardPhone;
+  const transferOrMessage = canOfferTransfer ? 'transfer or take a message' : 'take a message';
+
   const allTools: llm.ToolContext = {
     get_customer_context: llm.tool({
       description:
@@ -961,7 +972,7 @@ export function buildTools(
         if (!ctx.callerPhone) {
           return JSON.stringify({
             error:
-              "I can't look up appointments without caller-ID. If you'd like help canceling or rescheduling, I can transfer you or take a message.",
+              `I can't look up appointments without caller-ID. If you'd like help canceling or rescheduling, I can ${transferOrMessage}.`,
           });
         }
         const res = await client.call(
@@ -992,7 +1003,7 @@ export function buildTools(
         if (!ctx.callerPhone) {
           return JSON.stringify({
             error:
-              "I can't cancel without caller-ID to verify ownership. Offer to transfer or take a message.",
+              `I can't cancel without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
           });
         }
         const res = await client.call('/agent-tools/cancel-appointment', {
@@ -1035,7 +1046,7 @@ export function buildTools(
         if (!ctx.callerPhone) {
           return JSON.stringify({
             error:
-              "I can't reschedule without caller-ID to verify ownership. Offer to transfer or take a message.",
+              `I can't reschedule without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
           });
         }
         speakFiller?.('One moment while I move that for you...');
