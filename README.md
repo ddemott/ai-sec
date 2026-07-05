@@ -93,7 +93,7 @@ Below is a full list of its features:
 | **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). See `docs/AIASSISTANT_GO_LIVE_TODO.md` for remaining PSTN verification steps. |
 | **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                     |
 | **Tests**     | ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent) + 0 skips, zero TypeScript errors                                                                                                  |
-| **E2e**       | 29 Playwright spec files (~212 tests)                                                                                                                                                            |
+| **E2E**       | 33 Playwright spec files                                                                                                                                                                         |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -148,7 +148,7 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
 | **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                        |
 | **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                |
 | **Database**      | PostgreSQL + pgvector, 154 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`) |
-| **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; 19 voice tools (most backed by Fastify `/agent-tools/*`; `transfer_call` uses SIP REFER)                                                                                              |
+| **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; 23 voice tools (most backed by Fastify `/agent-tools/*`; `transfer_call` uses SIP REFER)                                                                                              |
 | **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                 |
 | **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                  |
 | **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                          |
@@ -241,7 +241,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ```bash
 npm test                              # Backend (~1,940 tests)
 cd dashboard && npx vitest run        # Dashboard (~790 tests)
-cd dashboard && npx playwright test   # E2E (~30 spec files; ~110-120 tests in recent runs)
+cd dashboard && npx playwright test   # E2E (33 spec files)
 ```
 
 ### Coverage
@@ -252,7 +252,7 @@ cd dashboard && npx playwright test   # E2E (~30 spec files; ~110-120 tests in r
 | Backend services                  | ~570  |
 | Middleware, scheduling, constants | ~500  |
 | Dashboard components + views      | ~747  |
-| Playwright e2e (29 spec files)    | ~212  |
+| Playwright e2e (33 spec files)    | —     |
 
 ### Test Philosophy
 
@@ -310,24 +310,101 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | Square CRM sync        | Bidirectional customer + appointment sync                             |
 | Knowledge base         | 40 policy Q&A pairs, document upload, RAG via pgvector                |
 | Contextual feedback    | In-app feedback button on every page                                  |
-| Playwright e2e         | 29 spec files, ~212 tests                                             |
+| Playwright e2e         | 33 spec files                                                         |
 
 ---
 
 ## Documentation
 
-| Doc                            | Purpose                                                                                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CLAUDE.md`                    | Developer conventions, code patterns, project context                                                                                      |
-| `docs/TODO.md`                 | Unified task list — all remaining work                                                                                                     |
-| `docs/ARCHITECTURE.md`         | Full technical architecture deep-dive                                                                                                      |
-| `docs/DIAGRAMS.md`             | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.)                                                                            |
-| `docs/DEPLOYMENT.md`           | Step-by-step deployment guide                                                                                                              |
-| `docs/DESIGN_HANDOFF.md`       | Visual brand system + design decisions (frozen — March 24 session)                                                                         |
-| `docs/UI_UX_DESIGN.md`         | Living design brief — interaction design + UX principles                                                                                   |
-| `docs/RESOLVED.md`             | Completed phases + historical bug tracker + session-notes archive (absorbs the former PLAN.md / BUGS.md / CURRENT_STATUS_ARCHIVED)         |
-| `docs/FRAMEWORK_MIGRATIONS.md` | Migration index — Vapi→LiveKit (shipped), Edge→Fastify (shipped), OpenAI TTS→xAI Grok (2026-05) then fully back to OpenAI TTS (2026-06-25) |
-| `docs/IMPROVEMENT_IDEAS.md`    | Curated review-phase backlog (~160 tasks, 10 phases, 2026-04-10/11)                                                                        |
+`docs/README.md` is the in-folder index. Full inventory below (verified 2026-07-04).
+
+**Root**
+
+| Doc               | Purpose                                                                 |
+| ----------------- | ----------------------------------------------------------------------- |
+| `README.md`       | This file — project overview, quick start, status                       |
+| `CLAUDE.md`       | Developer conventions, code patterns, project context (agents + humans) |
+| `DEMO_SECTION.md` | Public voice-demo plan (BLOCKED / not started; kept at root on purpose) |
+
+**Core reference**
+
+| Doc                    | Purpose                                                         |
+| ---------------------- | --------------------------------------------------------------- |
+| `docs/README.md`       | Documentation index + docs-hygiene principles                   |
+| `docs/ARCHITECTURE.md` | Full technical architecture deep-dive                           |
+| `docs/DIAGRAMS.md`     | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.) |
+| `docs/DEPLOYMENT.md`   | Step-by-step deployment guide (Railway env, deploy commands)    |
+| `docs/SECURITY.md`     | Security model — RLS, auth, hardening, posture                  |
+| `docs/RUNBOOK.md`      | Production incident + telephony recovery playbook               |
+| `docs/ALERTS.md`       | Alerting rules (optional; paid observability decided against)   |
+
+**Planning, tasks & status**
+
+| Doc                         | Purpose                                                           |
+| --------------------------- | ----------------------------------------------------------------- |
+| `docs/TODO.md`              | Unified task list — single source of truth for active work        |
+| `docs/GAPS.md`              | Cross-angle gap inventory (what's missing from every direction)   |
+| `docs/RESOLVED.md`          | Completed phases + historical bug tracker + session-notes archive |
+| `docs/HANDOFF.md`           | Latest session handoff notes                                      |
+| `docs/IMPROVEMENT_IDEAS.md` | Curated review-phase backlog                                      |
+| `docs/IMPROVEMENTS_TODO.md` | Proposals from the `/continuously-improve` background loop        |
+| `docs/TEST_COVERAGE.md`     | Test coverage status and gaps                                     |
+| `docs/TEST_DB_AUDIT.md`     | Mocked-DB vs real-SQL coverage map                                |
+
+**Voice AI**
+
+| Doc                                  | Purpose                                                             |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `docs/VOICE_AGENT_PLAYBOOK.md`       | Authoritative rulebook for building customer voice scripts          |
+| `docs/VOICE_DEADAIR_RESEARCH.md`     | Dead-air / latency research findings (mostly shipped)               |
+| `docs/AIASSISTANT_GO_LIVE_TODO.md`   | Go-live / Telnyx ops detail — single source for go-live steps       |
+| `docs/AIASSISTANT_PERSONA_DRAFT.md`  | Thinking Hammer persona + call-flow draft                           |
+| `docs/aiassistant-knowledge-base.md` | Source content for the Thinking Hammer AI assistant's KB            |
+| `docs/FRAMEWORK_MIGRATIONS.md`       | Voice-stack migration history (Vapi→LiveKit, Grok→OpenAI TTS, etc.) |
+
+**Onboarding & operations**
+
+| Doc                       | Purpose                                               |
+| ------------------------- | ----------------------------------------------------- |
+| `docs/BETA_ONBOARDING.md` | First-day / first-week guide for new beta customers   |
+| `docs/OWNER_GUIDE.md`     | Plain-language guide to each dashboard tab for owners |
+| `docs/TICKET_SUPPORT.md`  | Telnyx support ticket status + escalation             |
+
+**Product & strategy**
+
+| Doc                             | Purpose                                         |
+| ------------------------------- | ----------------------------------------------- |
+| `docs/MISSION_STATEMENT.md`     | Product mission and goals                       |
+| `docs/STRATEGY.md`              | Product + competitive strategy (positioning)    |
+| `docs/COMPETITOR_WEAKPOINTS.md` | Competitor attack map                           |
+| `docs/SECRETARYHQ_FEATURES.md`  | Organized capability outline with status legend |
+
+**Design**
+
+| Doc                      | Purpose                                           |
+| ------------------------ | ------------------------------------------------- |
+| `docs/DESIGN_HANDOFF.md` | Visual brand system + design decisions (frozen)   |
+| `docs/UI_UX_DESIGN.md`   | Living design brief — interaction + UX principles |
+
+**Workflow & standards**
+
+| Doc                                     | Purpose                                                |
+| --------------------------------------- | ------------------------------------------------------ |
+| `docs/DEVELOPMENT_WORKFLOW.md`          | Repeatable dev process for this project                |
+| `docs/PORTABLE_DEVELOPMENT_WORKFLOW.md` | Project-agnostic version of the workflow (copyable)    |
+| `docs/ADOPTING_THE_WORKFLOW.md`         | How another project points at + adopts the workflow    |
+| `docs/CODING_STANDARDS.md`              | Naming conventions + code-style rules                  |
+| `docs/BRANCH_CHECKLIST.md`              | Checklist for starting + finishing feature-branch work |
+| `docs/LESSONS_LEARNED.md`               | Running log of hard-won debugging lessons              |
+| `docs/AGENTS.md`                        | Agent-oriented codebase brief                          |
+
+**Subfolders**
+
+| Path                              | Contents                                                       |
+| --------------------------------- | -------------------------------------------------------------- |
+| `docs/legaldocs/`                 | Consent/privacy language + Thinking Hammer LLC setup summary   |
+| `docs/superpowers/`               | Feature specs + implementation plans (per-feature design docs) |
+| `docs/diagrams/`, `docs/mockups/` | Visual diagram assets + UI mockups                             |
 
 ---
 
@@ -335,4 +412,4 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 Proprietary. All rights reserved.
 
-**Docs hygiene note (2026-06-23):** Additional mechanical sync pass on this branch (stale migration/route/test counts in this file, ARCHITECTURE section header/dedup, CLAUDE tools count, removed references to deleted NEEDS-REFACTORING.md file). See docs/README.md + RESOLVED.md.
+**Docs hygiene note (2026-07-04):** Documentation table above rebuilt from the actual `docs/` tree — was 10 rows, now the full inventory (3 root + 37 `docs/*.md` incl. `docs/README.md` + subfolders), each purpose verified against the file's own header. `docs/README.md` (folder index) synced to match the same day. Prior pass 2026-06-23 (stale migration/route/test counts, ARCHITECTURE dedup, CLAUDE tools count, removed NEEDS-REFACTORING.md pointers). See docs/README.md + RESOLVED.md.
