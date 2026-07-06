@@ -1,28 +1,22 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { type Customer } from '@/lib/types';
 import { MOCK_CUSTOMERS, MOCK_SUMMARIES } from '@/lib/mockData';
-import { Search, RefreshCw, ChevronRight, UserPlus, Download, Upload } from 'lucide-react';
 import { Api } from '../lib/api';
-import { detectTimezone } from '../lib/constants';
-import { formatPhone } from '../lib/phone';
-import { splitFullName, downloadTextFile } from '../lib/utils';
-import { useFormState } from '../lib/hooks';
-import { EmptyState } from './ui/EmptyState';
 import { useActiveTenantId, useSessionContext } from '../lib/SessionContext';
-import { Button } from './ui/Button';
 import { CustomerDetailPanel } from './CustomerDetailPanel';
+import { CustomerSidebar } from './crm/CustomerSidebar';
+import { useCustomerForm } from '../lib/useCustomerForm';
+import { useConfirm } from '../lib/useConfirm';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { showToast } from './ui/Toast';
-import { useConfirm } from '../lib/useConfirm';
 
 export default function CRMView() {
   const tenantId = useActiveTenantId();
   const { role, isAdmin } = useSessionContext();
-  // CSV export/import are owner-gated on the backend (403 for front-desk);
-  // hide the buttons for non-owners rather than surfacing a dead control.
   const isOwner = role === 'owner' || isAdmin;
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [summaries, setSummaries] = useState<
@@ -49,119 +43,29 @@ export default function CRMView() {
       location?: string;
     }[]
   >([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  // Keyboard-nav focus index into the filtered customer list
-  // (UX audit Flows 4.1 row 5, 2026-05-18). -1 means nothing
-  // focused; ArrowDown from the search input sets it to 0.
-  const [focusedIdx, setFocusedIdx] = useState(-1);
-  const listRef = useRef<HTMLDivElement>(null);
+
   const { state: confirmState, confirm, close: closeConfirm } = useConfirm();
 
-  // CSV export/import (bulk operations — owner-only)
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [exportingCsv, setExportingCsv] = useState(false);
-  const [importingCsv, setImportingCsv] = useState(false);
-
-  async function handleExportCsv() {
-    setExportingCsv(true);
-    try {
-      const csv = await Api.exportData.csv('customers', tenantId);
-      downloadTextFile(
-        `customers-${new Date().toISOString().slice(0, 10)}.csv`,
-        csv,
-        'text/csv;charset=utf-8'
-      );
-      showToast('Customer list exported.', 'success');
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Failed to export customers.', 'error');
-    } finally {
-      setExportingCsv(false);
-    }
-  }
-
-  function handleImportFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    // Reset so choosing the same file again re-triggers onChange.
-    e.target.value = '';
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onerror = () => showToast('Could not read that file. Please try again.', 'error');
-    reader.onload = () => {
-      const csv = typeof reader.result === 'string' ? reader.result : '';
-      if (!csv.trim()) {
-        showToast('That file is empty.', 'error');
-        return;
-      }
-      confirm({
-        title: 'Import Customers',
-        message: `Import customers from "${file.name}"? Rows with an invalid phone number are skipped, and customers whose phone number already exists are left unchanged.`,
-        confirmLabel: 'Import',
-        onConfirm: async () => {
-          closeConfirm();
-          setImportingCsv(true);
-          try {
-            const res = await Api.customers.importCsv(tenantId, csv);
-            if (!res.success) {
-              showToast(res.error || 'Import failed.', 'error');
-              return;
-            }
-            showToast(
-              `Imported ${res.imported} customer${res.imported === 1 ? '' : 's'}.`,
-              'success'
-            );
-            const skipped = res.skipped_duplicates ?? 0;
-            const errorRows = res.errors?.length ?? 0;
-            if (skipped > 0 || errorRows > 0) {
-              const parts: string[] = [];
-              if (skipped > 0) parts.push(`${skipped} duplicate${skipped === 1 ? '' : 's'}`);
-              if (errorRows > 0) {
-                const first = res.errors[0];
-                parts.push(
-                  `${errorRows}${res.errors_truncated ? '+' : ''} invalid row${errorRows === 1 ? '' : 's'} (first: row ${first.row} — ${first.reason})`
-                );
-              }
-              showToast(`Skipped ${parts.join('; ')}.`, 'warning');
-            }
-            void fetchCustomers();
-          } catch (err) {
-            showToast(err instanceof Error ? err.message : 'Import failed.', 'error');
-          } finally {
-            setImportingCsv(false);
-          }
-        },
-      });
-    };
-    reader.readAsText(file);
-  }
-
-  // States
-  const [isEditing, setIsEditing] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [saving, setSaving] = useState(false);
   const {
-    form: editForm,
-    setField,
-    setForm: setEditForm,
-  } = useFormState({
-    first_name: '',
-    last_name: '',
-    phone: '',
-    email: '',
-    address: '',
-    address_line2: '',
-    city: '',
-    state: '',
-    postal_code: '',
-    timezone: 'America/New_York',
-    notes: '',
+    isEditing,
+    setIsEditing,
+    isCreating,
+    setIsCreating,
+    saving,
+    editForm,
+    handleEditFormChange,
+    handleSave,
+    handleCreate,
+    startNewCustomer,
+  } = useCustomerForm({
+    selectedCustomer,
+    tenantId,
+    onSaved: () => void fetchCustomers(),
+    onCreated: () => void fetchCustomers(),
   });
-  const handleEditFormChange = (field: string, value: string) =>
-    setField(field as keyof typeof editForm, value);
 
   useEffect(() => {
-    if (tenantId) {
-      void fetchCustomers();
-    }
+    if (tenantId) void fetchCustomers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId]);
 
@@ -169,36 +73,9 @@ export default function CRMView() {
     if (selectedCustomer) {
       void fetchHistory(selectedCustomer.customer_id);
       void fetchCustomerAppointments(selectedCustomer.customer_id);
-      const { first, last } = splitFullName(selectedCustomer.name || '');
-      const derivedFirst = selectedCustomer.first_name || first || '';
-      const derivedLast = selectedCustomer.last_name || last || '';
-      setEditForm({
-        first_name: derivedFirst,
-        last_name: derivedLast,
-        phone: formatPhone(selectedCustomer.phone) || '',
-        email: selectedCustomer.email || '',
-        address: selectedCustomer.address || '',
-        address_line2: selectedCustomer.address_line2 || '',
-        city: selectedCustomer.city || '',
-        state: selectedCustomer.state || '',
-        postal_code: selectedCustomer.postal_code || '',
-        timezone: selectedCustomer.timezone || 'America/New_York',
-        notes: (selectedCustomer.metadata?.notes as string) || '',
-      });
-      setIsEditing(false);
-      setIsCreating(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCustomer]);
-
-  // Auto-detect timezone
-  useEffect(() => {
-    if (!isEditing && !isCreating) return;
-    const tz = detectTimezone(editForm.city, editForm.state);
-    if (tz) {
-      setEditForm((prev) => ({ ...prev, timezone: tz }));
-    }
-  }, [editForm.city, editForm.state, isEditing, isCreating, setEditForm]);
 
   async function fetchCustomers() {
     setLoading(true);
@@ -213,19 +90,14 @@ export default function CRMView() {
         }
       } else {
         setCustomers(data);
-        if (!selectedCustomer) setSelectedCustomer((data)[0]);
+        if (!selectedCustomer) setSelectedCustomer(data[0]);
       }
     } catch {
-      // Mock data is the DEMO fallback (no tenant). For a REAL tenant a fetch
-      // error must NOT fabricate customers — showing "Bob Smith"/"Alice Johnson"
-      // as if real masks the failure. Surface an error and keep the list empty.
       if (!tenantId) {
         setCustomers(MOCK_CUSTOMERS);
         if (!selectedCustomer) setSelectedCustomer(MOCK_CUSTOMERS[0]);
       } else {
         setCustomers([]);
-        // Clear the selection too — leaving a stale customer in the detail pane
-        // over an emptied list is an inconsistent state (Copilot review).
         setSelectedCustomer(null);
         showToast('Could not load customers. Please try again.', 'error');
       }
@@ -236,24 +108,52 @@ export default function CRMView() {
   async function fetchHistory(customerId: string) {
     try {
       const data = await Api.callSummaries.list(tenantId, customerId);
-      if (!data || data.length === 0) {
-        setSummaries(tenantId ? [] : MOCK_SUMMARIES.filter((s) => s.customer_id === customerId));
-      } else {
-        setSummaries(data);
-      }
+      setSummaries(
+        !data || data.length === 0
+          ? tenantId
+            ? []
+            : MOCK_SUMMARIES.filter((s) => s.customer_id === customerId)
+          : data
+      );
     } catch {
-      // Same rule as fetchCustomers: no fabricated call summaries for a real tenant.
-      setSummaries(tenantId ? [] : MOCK_SUMMARIES.filter((s) => s.customer_id === customerId));
+      setSummaries(
+        tenantId ? [] : MOCK_SUMMARIES.filter((s) => s.customer_id === customerId)
+      );
     }
   }
 
   async function fetchCustomerAppointments(customerId: string) {
     try {
       const data = await Api.customers.appointments(customerId, tenantId);
-      setCustomerAppointments((data || []));
+      setCustomerAppointments(data || []);
     } catch {
       setCustomerAppointments([]);
     }
+  }
+
+  function handleDelete() {
+    if (!selectedCustomer) return;
+    confirm({
+      title: 'Delete Customer',
+      message: `Are you sure you want to delete ${selectedCustomer.name}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await Api.customers.delete(selectedCustomer.customer_id);
+          if (res.success) {
+            showToast('Customer deleted.', 'success');
+            setSelectedCustomer(null);
+            void fetchCustomers();
+          } else {
+            showToast(res.error || 'Failed to delete customer.', 'error');
+          }
+        } catch (e) {
+          console.error(e);
+          showToast('Failed to delete customer.', 'error');
+        }
+      },
+    });
   }
 
   function handleCancelAppointment(appointmentId: string) {
@@ -294,10 +194,6 @@ export default function CRMView() {
             if (selectedCustomer) void fetchCustomerAppointments(selectedCustomer.customer_id);
             return;
           }
-          // Status-conflict semantics: TIMESLOT_OCCUPIED means the slot was
-          // rebooked while this appointment was canceled — operator must
-          // book new instead. NOT_CANCELED means another session already
-          // restored it; refresh shows truth.
           if (res.error_code === 'TIMESLOT_OCCUPIED') {
             showToast(
               'That time slot is no longer available. Book a new appointment instead.',
@@ -333,360 +229,33 @@ export default function CRMView() {
     [customerAppointments]
   );
 
-  const filteredCustomers = useMemo(() => {
-    if (!searchQuery.trim()) return customers;
-    const q = searchQuery.toLowerCase();
-    return customers.filter(
-      (c) =>
-        (c.name || '').toLowerCase().includes(q) ||
-        (c.phone || '').includes(q) ||
-        (c.email || '').toLowerCase().includes(q)
-    );
-  }, [customers, searchQuery]);
-
-  async function handleSave() {
-    if (!selectedCustomer) return;
-    setSaving(true);
-
-    try {
-      const res = await Api.customers.update(
-        selectedCustomer.customer_id,
-        selectedCustomer.tenant_id,
-        {
-          first_name: editForm.first_name,
-          last_name: editForm.last_name,
-          name: `${editForm.first_name} ${editForm.last_name}`.trim(),
-          phone: editForm.phone,
-          email: editForm.email,
-          address: editForm.address,
-          address_line2: editForm.address_line2,
-          city: editForm.city,
-          state: editForm.state,
-          postal_code: editForm.postal_code,
-          timezone: editForm.timezone,
-          notes: editForm.notes,
-        }
-      );
-
-      if (res.success) {
-        setIsEditing(false);
-        setIsCreating(false);
-        await fetchCustomers();
-      } else {
-        // apiMutate resolves {success:false} on non-2xx (never throws), so
-        // without a toast a rejected save (validation/RLS) was fully silent.
-        showToast(res.error || 'Failed to save changes.', 'error');
-      }
-    } catch (e) {
-      console.error(e);
-      showToast('Failed to save changes.', 'error');
-    }
-    setSaving(false);
+  function handleSelectCustomer(customer: Customer) {
+    setSelectedCustomer(customer);
+    setIsCreating(false);
+    setShowDetailOnMobile(true);
   }
-
-  async function handleCreate() {
-    setSaving(true);
-
-    try {
-      const res = await Api.customers.create(tenantId, {
-        first_name: editForm.first_name,
-        last_name: editForm.last_name,
-        name: `${editForm.first_name} ${editForm.last_name}`.trim(),
-        phone: editForm.phone,
-        email: editForm.email,
-        address: editForm.address,
-        address_line2: editForm.address_line2,
-        city: editForm.city,
-        state: editForm.state,
-        postal_code: editForm.postal_code,
-        timezone: editForm.timezone,
-        notes: editForm.notes,
-      });
-      if (res.success) {
-        setIsCreating(false);
-        void fetchCustomers();
-      } else {
-        // Silent-failure guard: a rejected create (duplicate phone, validation,
-        // RLS 403) resolves {success:false} — tell the owner instead of nothing.
-        showToast(res.error || 'Failed to create customer.', 'error');
-      }
-    } catch (e) {
-      console.error(e);
-      showToast('Failed to create customer.', 'error');
-    }
-    setSaving(false);
-  }
-
-  function handleDelete() {
-    if (!selectedCustomer) return;
-    confirm({
-      title: 'Delete Customer',
-      message: `Are you sure you want to delete ${selectedCustomer.name}? This cannot be undone.`,
-      confirmLabel: 'Delete',
-      onConfirm: async () => {
-        closeConfirm();
-        try {
-          const res = await Api.customers.delete(selectedCustomer.customer_id);
-          if (res.success) {
-            showToast('Customer deleted.', 'success');
-            setSelectedCustomer(null);
-            void fetchCustomers();
-          } else {
-            // Surface the failure instead of swallowing it — the old handler
-            // logged to console only, so a failed delete looked like nothing
-            // happened (reported 2026-07-01).
-            showToast(res.error || 'Failed to delete customer.', 'error');
-          }
-        } catch (e) {
-          console.error(e);
-          // Stable user-facing message (matches the other toasts here; avoids
-          // leaking raw fetch/error details).
-          showToast('Failed to delete customer.', 'error');
-        }
-      },
-    });
-  }
-
-  const startNewCustomer = () => {
-    setIsCreating(true);
-    setIsEditing(false);
-    setSelectedCustomer(null);
-    setEditForm({
-      first_name: '',
-      last_name: '',
-      phone: '',
-      email: '',
-      address: '',
-      address_line2: '',
-      city: '',
-      state: '',
-      postal_code: '',
-      timezone: 'America/New_York',
-      notes: '',
-    });
-  };
 
   return (
     <div
       className="flex flex-1 overflow-hidden relative transition-colors duration-200"
       style={{ color: 'var(--text-primary)' }}
     >
-      {/* ITEM LIST PANE */}
-      <section
-        className={`w-full md:w-80 flex flex-col ${showDetailOnMobile ? 'hidden md:flex' : 'flex'}`}
-        style={{ backgroundColor: 'var(--bg-raised)', borderRight: '1px solid var(--border-soft)' }}
-      >
-        <header
-          className="p-4 sticky top-0 z-10"
-          style={{
-            borderBottom: '1px solid var(--border-soft)',
-            backgroundColor: 'var(--bg-surface)',
-          }}
-        >
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold">Customers</h2>
-            <div className="flex space-x-1">
-              <Button onClick={startNewCustomer} size="sm" className="gap-2">
-                <UserPlus className="w-4 h-4" />
-                Add Customer
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={fetchCustomers}
-                size="sm"
-                className="p-1.5"
-                aria-label="Refresh customers"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-          </div>
-          {isOwner && (
-            <div className="flex space-x-1 mb-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5"
-                isLoading={exportingCsv}
-                onClick={() => void handleExportCsv()}
-              >
-                <Download className="w-4 h-4" aria-hidden="true" />
-                Export CSV
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5"
-                isLoading={importingCsv}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="w-4 h-4" aria-hidden="true" />
-                Import CSV
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                aria-label="Choose a CSV file of customers to import"
-                onChange={handleImportFileChosen}
-              />
-            </div>
-          )}
-          <div className="relative">
-            <Search
-              className="w-4 h-4 absolute left-3 top-2.5"
-              style={{ color: 'var(--text-muted)' }}
-            />
-            <input
-              data-shortcut-target="search"
-              type="text"
-              placeholder="Search customers..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setFocusedIdx(-1);
-              }}
-              onKeyDown={(e) => {
-                // ArrowDown from the search input → focus first row.
-                // Enter (with a search term but no focused row yet) →
-                // auto-select the first match.
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  if (filteredCustomers.length > 0) setFocusedIdx(0);
-                } else if (e.key === 'Enter' && filteredCustomers.length > 0) {
-                  e.preventDefault();
-                  const first = filteredCustomers[0];
-                  setSelectedCustomer(first);
-                  setIsCreating(false);
-                  setShowDetailOnMobile(true);
-                }
-              }}
-              role="combobox"
-              aria-expanded={filteredCustomers.length > 0}
-              aria-controls="crm-customer-list"
-              aria-activedescendant={
-                focusedIdx >= 0
-                  ? `crm-customer-row-${filteredCustomers[focusedIdx]?.customer_id}`
-                  : undefined
-              }
-              className="w-full pl-9 pr-4 py-2 border-none rounded-md text-sm outline-none"
-              style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-primary)' }}
-            />
-          </div>
-        </header>
-        <div
-          ref={listRef}
-          id="crm-customer-list"
-          role="listbox"
-          aria-label="Customers"
-          className="flex-1 overflow-y-auto pb-20 md:pb-0"
-          onKeyDown={(e) => {
-            // Keyboard nav through the filtered list. ArrowUp/Down
-            // moves focus, Enter selects, Escape returns focus to
-            // the search input.
-            if (filteredCustomers.length === 0) return;
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setFocusedIdx((i) => Math.min(i + 1, filteredCustomers.length - 1));
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setFocusedIdx((i) => Math.max(i - 1, 0));
-            } else if (e.key === 'Enter' && focusedIdx >= 0) {
-              e.preventDefault();
-              const c = filteredCustomers[focusedIdx];
-              if (c) {
-                setSelectedCustomer(c);
-                setIsCreating(false);
-                setShowDetailOnMobile(true);
-              }
-            } else if (e.key === 'Escape') {
-              e.preventDefault();
-              setFocusedIdx(-1);
-              document.querySelector<HTMLInputElement>('[data-shortcut-target="search"]')?.focus();
-            }
-          }}
-        >
-          {filteredCustomers.length === 0 && !loading && (
-            <div className="p-6 text-center">
-              {searchQuery ? (
-                <EmptyState
-                  icon={UserPlus}
-                  title={`No customers match "${searchQuery}"`}
-                  variant="compact"
-                />
-              ) : (
-                <EmptyState
-                  icon={UserPlus}
-                  title="No customers yet"
-                  description="Customers are added automatically when your AI handles calls. You can also add one manually."
-                  variant="compact"
-                  action={
-                    <Button
-                      variant="primary"
-                      size="md"
-                      onClick={() => {
-                        setIsCreating(true);
-                        setSelectedCustomer(null);
-                      }}
-                    >
-                      <UserPlus className="w-4 h-4 mr-1.5" aria-hidden="true" />
-                      Add customer
-                    </Button>
-                  }
-                />
-              )}
-            </div>
-          )}
-          {filteredCustomers.map((c, idx) => {
-            const isSelected = selectedCustomer?.customer_id === c.customer_id;
-            const isFocused = focusedIdx === idx;
-            return (
-              <div
-                key={c.customer_id}
-                id={`crm-customer-row-${c.customer_id}`}
-                role="option"
-                tabIndex={isFocused ? 0 : -1}
-                aria-selected={isSelected}
-                ref={(el) => {
-                  // Focus the row when it becomes the keyboard cursor target.
-                  if (el && isFocused && document.activeElement !== el) el.focus();
-                }}
-                onMouseEnter={() => setFocusedIdx(-1)}
-                onClick={() => {
-                  setSelectedCustomer(c);
-                  setIsCreating(false);
-                  setShowDetailOnMobile(true);
-                }}
-                className={`p-4 cursor-pointer transition flex justify-between items-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${isSelected ? 'border-l-4' : ''}`}
-                style={{
-                  borderBottom: '1px solid var(--border-soft)',
-                  ...(isSelected
-                    ? { backgroundColor: 'var(--bg-surface)', borderLeftColor: 'var(--accent)' }
-                    : isFocused
-                      ? { backgroundColor: 'var(--accent-muted)' }
-                      : {}),
-                }}
-              >
-                <div>
-                  <p
-                    className="text-sm font-semibold"
-                    style={{ color: isSelected ? 'var(--accent-soft)' : 'var(--text-primary)' }}
-                  >
-                    {c.name || 'Unknown'}
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    {formatPhone(c.phone)}
-                  </p>
-                </div>
-                <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      <CustomerSidebar
+        customers={customers}
+        selectedCustomer={selectedCustomer}
+        loading={loading}
+        isOwner={isOwner}
+        tenantId={tenantId}
+        showDetailOnMobile={showDetailOnMobile}
+        onSelectCustomer={handleSelectCustomer}
+        onAddCustomer={() => {
+          startNewCustomer();
+          setShowDetailOnMobile(true);
+        }}
+        onRefresh={() => void fetchCustomers()}
+        onImportDone={() => void fetchCustomers()}
+      />
 
-      {/* DETAIL PANE */}
       <CustomerDetailPanel
         selectedCustomer={selectedCustomer}
         isCreating={isCreating}
@@ -703,8 +272,8 @@ export default function CRMView() {
           setIsEditing(false);
           setIsCreating(false);
         }}
-        onSave={handleSave}
-        onCreate={handleCreate}
+        onSave={() => void handleSave()}
+        onCreate={() => void handleCreate()}
         onDelete={handleDelete}
         onCancelAppointment={handleCancelAppointment}
         onReactivateAppointment={handleReactivateAppointment}

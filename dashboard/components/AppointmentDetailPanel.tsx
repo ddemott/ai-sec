@@ -1,34 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { formatPhone } from '../lib/phone';
 import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { Select } from './ui/Select';
-import { Card } from './ui/Card';
-import { Badge } from './ui/Badge';
 import { Modal } from './ui/Modal';
-import { CustomerCombobox } from './ui/CustomerCombobox';
 import { useServiceMappings } from '../lib/hooks';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { filterEmployeesByService, filterResourcesByService } from '../lib/availability';
-import {
-  Calendar as CalendarIcon,
-  ChevronLeft,
-  Save,
-  X,
-  MapPin,
-  Navigation,
-  Copy,
-  Edit,
-  StickyNote,
-  Trash2,
-  Send,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { formatCustomerAddress } from '../lib/utils';
+import { Calendar as CalendarIcon } from 'lucide-react';
 import { useAppointmentDetail } from '../lib/AppointmentDetailContext';
 import type { Appointment } from '../lib/types';
 import { Api } from '../lib/api';
 import { showToast } from './ui/Toast';
+import { AppointmentPanelHeader } from './appointments/AppointmentPanelHeader';
+import { AppointmentEditForm } from './appointments/AppointmentEditForm';
+import { AppointmentViewDisplay } from './appointments/AppointmentViewDisplay';
 
 interface AppointmentDetailPanelProps {
   customers: {
@@ -100,11 +83,6 @@ export function AppointmentDetailPanel({
 
   const onFormChange = (f: typeof form) => setForm(f);
 
-  // Booking-alignment filter (audit P1 #4 follow-up: "system only books
-  // when everything aligns"). Derive service_id from the form's free-text
-  // `description` field — the panel doesn't track service_id directly,
-  // matching is by name (the same convention the auto-end-time effect
-  // below uses).
   const tenantId = useActiveTenantId();
   const [isSendingLinks, setIsSendingLinks] = useState(false);
 
@@ -184,71 +162,18 @@ export function AppointmentDetailPanel({
     >
       {selectedAppointment || isCreating ? (
         <>
-          <header
-            className="p-4 md:p-8 sticky top-0 z-10 shadow-sm flex items-center justify-between"
-            style={{
-              borderBottom: '1px solid var(--border-soft)',
-              backgroundColor: 'var(--bg-surface)',
-            }}
-          >
-            <div className="flex items-start">
-              <button
-                onClick={onCloseMobile}
-                aria-label="Back to appointment list"
-                className="md:hidden p-2 -ml-2 mr-2"
-                style={{ color: 'var(--accent-soft)' }}
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-display">
-                  {isCreating
-                    ? `New ${vocab.booking_label}`
-                    : isEditing
-                      ? `Edit ${vocab.booking_label}`
-                      : selectedAppointment?.description}
-                </h1>
-                {selectedAppointment?.status === 'canceled' && (
-                  <Badge variant="danger">Canceled</Badge>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              {!isEditing && !isCreating ? (
-                <>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={onDelete}
-                    title="Cancel this appointment"
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" /> Cancel Appointment
-                  </Button>
-                  {selectedAppointment?.status === 'scheduled' && (
-                    <Button variant="secondary" onClick={onEdit}>
-                      <Edit className="w-4 h-4 mr-2" /> Edit Details
-                    </Button>
-                  )}
-                  {selectedAppointment?.status === 'scheduled' &&
-                    selectedAppointment?.customers?.phone && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => void handleSendLinks()}
-                        isLoading={isSendingLinks}
-                        title="Send cancel/reschedule links to customer via SMS"
-                      >
-                        <Send className="w-4 h-4 mr-1" /> Send Links
-                      </Button>
-                    )}
-                </>
-              ) : (
-                <Button variant="ghost" onClick={onCancelEdit}>
-                  <X className="w-6 h-6" />
-                </Button>
-              )}
-            </div>
-          </header>
+          <AppointmentPanelHeader
+            selectedAppointment={selectedAppointment}
+            isCreating={isCreating}
+            isEditing={isEditing}
+            isSendingLinks={isSendingLinks}
+            vocab={vocab}
+            onEdit={onEdit}
+            onCancelEdit={onCancelEdit}
+            onDelete={onDelete}
+            onSendLinks={() => void handleSendLinks()}
+            onCloseMobile={onCloseMobile}
+          />
 
           <div className="p-4 md:p-8 space-y-8">
             {error && (
@@ -258,319 +183,37 @@ export function AppointmentDetailPanel({
             )}
 
             {isEditing || isCreating ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                  <Card
-                    title="Drive To"
-                    icon={<Navigation className="w-4 h-4" />}
-                    variant="success"
-                  >
-                    <div className="space-y-4">
-                      <Input
-                        label="Location / Address"
-                        value={form.location}
-                        onChange={(e) => onFormChange({ ...form, location: e.target.value })}
-                        placeholder="Business address or mobile location"
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <Input
-                          type="datetime-local"
-                          label="Start Time"
-                          step="900"
-                          value={form.start_time}
-                          onChange={(e) => onFormChange({ ...form, start_time: e.target.value })}
-                        />
-                        <Input
-                          type="datetime-local"
-                          label="End Time"
-                          step="900"
-                          value={form.end_time}
-                          onChange={(e) => onFormChange({ ...form, end_time: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  </Card>
-
-                  <Card title="Customer Details">
-                    <div className="space-y-4">
-                      {isCreating ? (
-                        <CustomerCombobox
-                          label="Select Customer"
-                          customers={customers}
-                          value={form.customer_id}
-                          onChange={(newCustomerId) => {
-                            const customer = findCustomerById(newCustomerId);
-                            const suggestedLocation = formatCustomerAddress(customer);
-                            onFormChange({
-                              ...form,
-                              customer_id: newCustomerId,
-                              location: form.location || suggestedLocation,
-                            });
-                          }}
-                          selectTestId="appointment-customer-select"
-                          searchTestId="appointment-customer-search"
-                        />
-                      ) : (
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input
-                            label="First Name"
-                            value={form.customer_first_name}
-                            onChange={(e) =>
-                              onFormChange({ ...form, customer_first_name: e.target.value })
-                            }
-                          />
-                          <Input
-                            label="Last Name"
-                            value={form.customer_last_name}
-                            onChange={(e) =>
-                              onFormChange({ ...form, customer_last_name: e.target.value })
-                            }
-                          />
-                        </div>
-                      )}
-                      <Input
-                        label="Phone Number"
-                        value={form.customer_phone}
-                        onChange={(e) => onFormChange({ ...form, customer_phone: e.target.value })}
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <Select
-                          label={vocab.resource_label}
-                          value={form.resource_id}
-                          onChange={(e) => onFormChange({ ...form, resource_id: e.target.value })}
-                          options={eligibleResources.map((r) => ({
-                            label: r.name,
-                            value: r.resource_id,
-                          }))}
-                        />
-                        <Select
-                          label={`${vocab.employee_label} Assigned`}
-                          value={form.employee_id}
-                          onChange={(e) => onFormChange({ ...form, employee_id: e.target.value })}
-                          options={[
-                            { label: 'Unassigned', value: '' },
-                            ...eligibleEmployees.map((e) => ({
-                              label: `${e.name} ${e.type === 'user' ? '(Owner)' : ''}`,
-                              value: e.employee_id.toString(),
-                            })),
-                          ]}
-                        />
-                      </div>
-                      {alignmentBlocked && (
-                        <div
-                          className="p-3 text-sm rounded-lg border"
-                          style={{
-                            color: 'var(--warning, #eab308)',
-                            background: 'var(--warning-muted, rgba(234,179,8,0.10))',
-                            borderColor: 'var(--warning-muted, rgba(234,179,8,0.3))',
-                          }}
-                          role="status"
-                          data-testid="appointment-alignment-blocked"
-                        >
-                          {noEligibleEmployees && noEligibleResources
-                            ? `No qualified ${vocab.employee_label.toLowerCase()} or ${vocab.resource_label.toLowerCase()} configured for this service. Assign one in Back Office → Service Assignments first.`
-                            : noEligibleEmployees
-                              ? `No ${vocab.employee_label.toLowerCase()} is configured to perform this service. Assign one in Back Office → Service Assignments first.`
-                              : `No ${vocab.resource_label.toLowerCase()} is configured for this service. Assign one in Back Office → Service Assignments first.`}
-                        </div>
-                      )}
-                      <div>
-                        <label
-                          className="block text-xs font-bold uppercase mb-1"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
-                          Internal Notes
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={form.customer_notes}
-                          onChange={(e) =>
-                            onFormChange({ ...form, customer_notes: e.target.value })
-                          }
-                          className="w-full p-2.5 rounded-lg outline-none text-sm italic"
-                          style={{
-                            backgroundColor: 'var(--bg-raised)',
-                            border: '1px solid var(--border-soft)',
-                            color: 'var(--text-primary)',
-                          }}
-                          placeholder="Private notes..."
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                </div>
-
-                <div className="space-y-6">
-                  <Card title="Summary" variant="dark">
-                    <div className="space-y-4">
-                      <Select
-                        label="Service"
-                        value={form.description}
-                        onChange={(e) => onFormChange({ ...form, description: e.target.value })}
-                        options={[
-                          { label: 'Walk-in (no service)', value: '' },
-                          ...services.map((s) => ({
-                            label: `${s.name} (${s.duration_minutes}min)`,
-                            value: s.name,
-                          })),
-                        ]}
-                      />
-                    </div>
-                  </Card>
-
-                  <div className="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3 pt-6">
-                    <Button variant="secondary" className="px-8 py-3" onClick={onCancelEdit}>
-                      Discard
-                    </Button>
-                    <Button
-                      className="flex-1 py-3"
-                      onClick={isCreating ? onSave : onRequestUpdateConfirmation}
-                      isLoading={saving}
-                      disabled={alignmentBlocked}
-                      data-testid="update-appointment-btn"
-                    >
-                      {!saving && <Save className="w-5 h-5 mr-2" />}
-                      {isCreating
-                        ? `Create ${vocab.booking_label}`
-                        : `Update ${vocab.booking_label}`}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <AppointmentEditForm
+                form={form}
+                onFormChange={onFormChange}
+                services={services}
+                vocab={vocab}
+                eligibleEmployees={eligibleEmployees}
+                eligibleResources={eligibleResources}
+                alignmentBlocked={alignmentBlocked}
+                noEligibleEmployees={noEligibleEmployees}
+                noEligibleResources={noEligibleResources}
+                customers={customers}
+                findCustomerById={findCustomerById}
+                isCreating={isCreating}
+                saving={saving}
+                onCancelEdit={onCancelEdit}
+                onSave={onSave}
+                onRequestUpdateConfirmation={onRequestUpdateConfirmation}
+              />
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                  <Card
-                    title="Drive To"
-                    icon={<Navigation className="w-4 h-4" />}
-                    variant="success"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start">
-                        <MapPin className="w-5 h-5 text-green-600 dark:text-green-500 mr-3 mt-1 flex-shrink-0" />
-                        <div>
-                          <p className="text-lg font-bold text-green-900 dark:text-green-100 leading-tight">
-                            {selectedAppointment?.location || 'No address provided'}
-                          </p>
-                          <p className="text-xs text-green-600 dark:text-green-500 mt-2 font-medium">
-                            {(() => {
-                              const { start, end } = getServiceBaseTimes(
-                                selectedAppointment as Appointment
-                              );
-                              return `${format(start, 'PPPP')} from ${format(start, 'p')} to ${format(end, 'p')}`;
-                            })()}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          navigator.clipboard.writeText(selectedAppointment?.location || '')
-                        }
-                        title="Copy Address"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </Card>
-
-                  <Card title="Customer Details">
-                    <div className="space-y-4">
-                      <div
-                        className="flex justify-between items-center pb-2"
-                        style={{ borderBottom: '1px solid var(--border-soft)' }}
-                      >
-                        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          Name
-                        </span>
-                        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                          {selectedAppointment?.customers?.name}
-                        </span>
-                      </div>
-                      <div
-                        className="flex justify-between items-center pb-2"
-                        style={{ borderBottom: '1px solid var(--border-soft)' }}
-                      >
-                        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          Phone
-                        </span>
-                        <a
-                          href={`tel:${selectedAppointment?.customers?.phone}`}
-                          className="font-bold underline"
-                          style={{ color: 'var(--accent-soft)' }}
-                        >
-                          {formatPhone(selectedAppointment?.customers?.phone)}
-                        </a>
-                      </div>
-                      <div
-                        className="flex justify-between items-center pb-2"
-                        style={{ borderBottom: '1px solid var(--border-soft)' }}
-                      >
-                        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          {vocab.resource_label}
-                        </span>
-                        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                          {resources.find((r) => r.resource_id === selectedAppointment?.resource_id)
-                            ?.name || 'Unknown'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span
-                          className="text-sm"
-                          style={{ color: 'var(--text-secondary)' }}
-                        >{`${vocab.employee_label} Assigned`}</span>
-                        <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                          {employees.find(
-                            (e) =>
-                              e.employee_id.toString() ===
-                              selectedAppointment?.employee_id?.toString()
-                          )?.name || 'Unassigned'}
-                        </span>
-                      </div>
-                      {!!selectedAppointment?.customers?.metadata?.notes && (
-                        <div
-                          className="mt-4 pt-4"
-                          style={{ borderTop: '1px solid var(--border-soft)' }}
-                        >
-                          <p
-                            className="text-xs font-bold uppercase tracking-widest mb-1 flex items-center"
-                            style={{ color: 'var(--text-muted)' }}
-                          >
-                            <StickyNote className="w-3 h-3 mr-1" /> Customer Notes
-                          </p>
-                          <p
-                            className="text-sm italic leading-relaxed"
-                            style={{ color: 'var(--text-secondary)' }}
-                          >
-                            {typeof selectedAppointment.customers?.metadata?.notes === 'string'
-                              ? selectedAppointment.customers.metadata.notes
-                              : ''}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                </div>
-                <Card title="Summary" variant="dark">
-                  <p className="text-lg leading-relaxed font-medium italic">
-                    {(() => {
-                      // Compute each lookup once (Copilot review — the literal
-                      // previously ran employees.find twice per render).
-                      const resourceName =
-                        resources.find((r) => r.resource_id === selectedAppointment?.resource_id)
-                          ?.name || 'Unknown';
-                      const employee = employees.find(
-                        (e) =>
-                          e.employee_id.toString() === selectedAppointment?.employee_id?.toString()
-                      );
-                      return `This appointment for ${selectedAppointment?.customers?.name} is scheduled for ${selectedAppointment?.description.toLowerCase()} on ${resourceName}${employee ? `, assigned to ${employee.name}` : ''}.`;
-                    })()}
-                  </p>
-                </Card>
-              </div>
+              selectedAppointment && (
+                <AppointmentViewDisplay
+                  selectedAppointment={selectedAppointment}
+                  resources={resources}
+                  employees={employees}
+                  vocab={vocab}
+                  getServiceBaseTimes={getServiceBaseTimes}
+                />
+              )
             )}
           </div>
+
           <Modal
             isOpen={showConfirmModal && !isCreating}
             onClose={onCancelUpdate}
