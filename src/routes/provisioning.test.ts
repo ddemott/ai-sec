@@ -359,4 +359,32 @@ describe('POST /provisioning/port-inquiry', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true });
   });
+
+  it('SAFETY: neither PLATFORM_ADMIN_EMAIL nor EMAIL_USER configured — still 200, no crash', async () => {
+    // WHO: a deployment missing both email env vars (a real misconfiguration,
+    //      not a hypothetical — EMAIL_USER is optional platform-wide).
+    // WHAT: sendPortRequestEmail would otherwise be called with an empty
+    //      `to`, throwing on every single request. The route must detect
+    //      this explicitly (logs it) rather than let every call 500 or
+    //      spam identical error logs from inside the mailer.
+    const prevAdmin = process.env.PLATFORM_ADMIN_EMAIL;
+    const prevEmailUser = process.env.EMAIL_USER;
+    delete process.env.PLATFORM_ADMIN_EMAIL;
+    delete process.env.EMAIL_USER;
+    try {
+      handle.queryResponses.push({ rows: [{ name: 'Test Biz' }] });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provisioning/port-inquiry',
+        payload: { tenant_id: TENANT_ID, phone_number: '+16305551234' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ success: true });
+    } finally {
+      if (prevAdmin !== undefined) process.env.PLATFORM_ADMIN_EMAIL = prevAdmin;
+      if (prevEmailUser !== undefined) process.env.EMAIL_USER = prevEmailUser;
+    }
+  });
 });

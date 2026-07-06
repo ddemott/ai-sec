@@ -227,18 +227,29 @@ export function registerProvisioningRoutes(
       // Best-effort: the owner already sees a confirmation in the UI
       // regardless (the request itself succeeded); a flaky SMTP send
       // shouldn't block that. Logged so a silent failure is diagnosable.
-      try {
-        await sendPortRequestEmail(
-          process.env.PLATFORM_ADMIN_EMAIL || process.env.EMAIL_USER || '',
-          {
+      const adminEmail = process.env.PLATFORM_ADMIN_EMAIL || process.env.EMAIL_USER;
+      if (!adminEmail) {
+        // Neither env var configured — sendMail would otherwise be called
+        // with an empty `to`, throwing on every single request and filling
+        // logs with the same noise. Detect the misconfiguration explicitly
+        // instead.
+        logError(
+          req,
+          'port_inquiry_email_failed',
+          new Error('PLATFORM_ADMIN_EMAIL and EMAIL_USER both unset — nowhere to send'),
+          { tenant_id }
+        );
+      } else {
+        try {
+          await sendPortRequestEmail(adminEmail, {
             tenantId: tenant_id,
             tenantName,
             phoneNumber: phone_number,
             notes: notes ?? null,
-          }
-        );
-      } catch (err) {
-        logError(req, 'port_inquiry_email_failed', err, { tenant_id });
+          });
+        } catch (err) {
+          logError(req, 'port_inquiry_email_failed', err, { tenant_id });
+        }
       }
 
       logEvent(req, 'port_inquiry_submitted', { tenant_id, phone_number });

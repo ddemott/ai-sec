@@ -16,6 +16,7 @@ import { useActiveTenantId } from '../../lib/SessionContext';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { showToast } from '../ui/Toast';
+import { normalizePhone, isValidPhone } from '../../../shared/phone';
 
 /**
  * Phone go-live UX — mounted in BOTH Step7GoLive.tsx (the wizard's step 9)
@@ -72,6 +73,13 @@ function useCallDetector(tenantId: string | null, sinceIso: string | null, activ
   const [detected, setDetected] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const stop = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     setDetected(false);
     if (!active || !tenantId || !sinceIso) return;
@@ -83,6 +91,9 @@ function useCallDetector(tenantId: string | null, sinceIso: string | null, activ
         const latest = res.calls?.[0];
         if (latest && Date.parse(latest.started_at) >= since) {
           setDetected(true);
+          // Detection is a one-shot event — no point polling every 5s for
+          // the rest of the component's life once the call already landed.
+          stop();
         }
       } catch {
         // transient fetch failure — next tick retries, nothing to surface
@@ -90,10 +101,8 @@ function useCallDetector(tenantId: string | null, sinceIso: string | null, activ
     };
     void poll();
     timerRef.current = setInterval(() => void poll(), POLL_INTERVAL_MS);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [tenantId, sinceIso, active]);
+    return stop;
+  }, [tenantId, sinceIso, active, stop]);
 
   return detected;
 }
@@ -112,7 +121,14 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
   // sees the number flip to active, so a call from before this visit never
   // falsely counts as "the test call."
   const [activatedAt, setActivatedAt] = useState<string | null>(null);
-  const [rawNumberConfirmedThisSession, setRawNumberConfirmedThisSession] = useState(false);
+  // Two distinct booleans, deliberately not merged: stageBPassed gates
+  // whether Stage B renders at all (true once EITHER a real call lands OR
+  // the owner explicitly skips) and stops the poll either way. rawNumberConfirmed
+  // is stricter — true ONLY when a real call was actually detected — and is
+  // the sole thing allowed to justify Stage C's "is live" claim. Conflating
+  // these was the bug: "I'll test it later" must never read as "confirmed live."
+  const [stageBPassed, setStageBPassed] = useState(false);
+  const [rawNumberConfirmed, setRawNumberConfirmed] = useState(false);
 
   // Stage C state
   const [hasExistingNumber, setHasExistingNumber] = useState<boolean | null>(null);
@@ -169,10 +185,13 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
   const rawNumberDetected = useCallDetector(
     tenantId,
     activatedAt,
-    status === 'active' && !rawNumberConfirmedThisSession && !forwardedFromPhone
+    status === 'active' && !stageBPassed && !forwardedFromPhone
   );
   useEffect(() => {
-    if (rawNumberDetected) setRawNumberConfirmedThisSession(true);
+    if (rawNumberDetected) {
+      setRawNumberConfirmed(true);
+      setStageBPassed(true);
+    }
   }, [rawNumberDetected]);
 
   // Forwarding card: does a call to the OWNER'S REAL number reach the AI?
@@ -180,13 +199,24 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
 
   async function handleSaveForwarding() {
     if (!tenantId || !forwardInput.trim()) return;
+    // forwarded_from_phone drives the agent's caller-ID forwarded-line
+    // match — an unnormalized or garbage value would silently break that
+    // guard (a legit forwarded call would no longer match). Validate +
+    // canonicalize to the same E.164 shape the agent compares against,
+    // same as AIConfigView's own forwarded_from_phone handling.
+    if (!isValidPhone(forwardInput)) {
+      showToast('Enter a valid phone number (10+ digits)', 'error');
+      return;
+    }
+    const normalized = normalizePhone(forwardInput) as string;
     setSavingForward(true);
     try {
       const res = await Api.tenants.updateConfig(tenantId, {
-        forwarded_from_phone: forwardInput.trim(),
+        forwarded_from_phone: normalized,
       });
       if (res.success) {
-        setForwardedFromPhone(forwardInput.trim());
+        setForwardedFromPhone(normalized);
+        setForwardInput(normalized);
         setForwardSavedAt(new Date().toISOString());
         showToast('Forwarding number saved');
       } else {
@@ -293,7 +323,7 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
   // ── Stage B: number is provisioned, prove it actually answers ─────────
   // Skipped entirely for a returning visit where forwarding was already
   // configured — that owner has clearly been through this before.
-  const showStageB = !rawNumberConfirmedThisSession && !forwardedFromPhone;
+  const showStageB = !stageBPassed && !forwardedFromPhone;
   if (showStageB) {
     return (
       <div className="space-y-6">
@@ -321,7 +351,7 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
         </div>
         <button
           type="button"
-          onClick={() => setRawNumberConfirmedThisSession(true)}
+          onClick={() => setStageBPassed(true)}
           className="text-xs underline-offset-2 hover:underline text-center w-full block"
           style={{ color: 'var(--text-secondary)' }}
         >
@@ -333,17 +363,35 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
 
   // ── Stage C: the fork ───────────────────────────────────────────────────
   const askQuestion = hasExistingNumber === null && !forwardedFromPhone;
+  // "is live" is only ever claimed once a real call actually confirmed it —
+  // either the raw-number check this session, or forwarded_from_phone was
+  // already set on mount (proof it was verified in some PAST session, the
+  // same column the voice agent reads). Skipping Stage B ("I'll test it
+  // later") with no prior history must NOT read as "live" — that's exactly
+  // the bug this design replaces.
+  const confirmedLive = rawNumberConfirmed || !!forwardedFromPhone;
 
   return (
     <div className="space-y-6">
       <PanelHeader />
-      <div className="p-4 rounded-xl border border-green-200 dark:border-green-900/40 bg-green-50 dark:bg-green-950/20 flex items-center gap-3">
-        <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
-        <span className="text-sm text-green-700 dark:text-green-300">
-          <strong className="font-display tracking-wide">{inboundPhone}</strong> is live — your AI
-          receptionist answers calls to this number.
-        </span>
-      </div>
+      {confirmedLive ? (
+        <div className="p-4 rounded-xl border border-green-200 dark:border-green-900/40 bg-green-50 dark:bg-green-950/20 flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
+          <span className="text-sm text-green-700 dark:text-green-300">
+            <strong className="font-display tracking-wide">{inboundPhone}</strong> is live — your AI
+            receptionist answers calls to this number.
+          </span>
+        </div>
+      ) : (
+        <div className="p-4 rounded-xl border border-yellow-200 dark:border-yellow-900/40 bg-yellow-50 dark:bg-yellow-950/20 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0" />
+          <span className="text-sm text-yellow-700 dark:text-yellow-300">
+            <strong className="font-display tracking-wide">{inboundPhone}</strong> is provisioned,
+            but not yet verified — call it when you get a chance to confirm your AI receptionist
+            answers.
+          </span>
+        </div>
+      )}
 
       {askQuestion ? (
         <div className="p-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 space-y-4">
@@ -405,7 +453,12 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
             >
               Save
             </Button>
-            {forwardedFromPhone && !forwardingDetected && (
+            {/* Gated on forwardSavedAt (a save THIS session), not
+                forwardedFromPhone alone — on a returning visit where it was
+                already set from a prior session, there's no active poll
+                (useCallDetector needs forwardSavedAt to run at all), so this
+                would otherwise spin forever with nothing actually checking. */}
+            {forwardSavedAt && !forwardingDetected && (
               <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-100 dark:bg-gray-800">
                 <Loader2
                   className="w-4 h-4 animate-spin shrink-0"

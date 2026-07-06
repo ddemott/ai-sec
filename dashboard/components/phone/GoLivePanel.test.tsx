@@ -193,6 +193,50 @@ describe('GoLivePanel — Stage B (verify the raw number)', () => {
     ).toBeInTheDocument();
   });
 
+  test('skipping verification never claims "is live" — shows "not yet verified" instead', async () => {
+    // WHO: an owner who clicked "I'll test it later" without a real call
+    //      ever confirming the raw number answers.
+    // WHAT: Stage C must NOT render the "is live" claim in this case — that
+    //      claim is reserved for an actually-confirmed number. This is the
+    //      exact bug the design doc calls out as the thing being replaced.
+    mockStatus.mockResolvedValue({
+      phone_status: 'active',
+      inbound_phone: '+16305551234',
+      forwarded_from_phone: null,
+    });
+    render(<GoLivePanel />);
+
+    await screen.findByText('Your number is ready');
+    fireEvent.click(screen.getByText(/test it later/i));
+
+    expect(screen.queryByText(/is live/i)).toBeNull();
+    expect(screen.getByText(/not yet verified/i)).toBeInTheDocument();
+  });
+
+  test('useCallDetector stops polling once a call is detected — no unbounded background traffic', async () => {
+    mockStatus.mockResolvedValue({
+      phone_status: 'active',
+      inbound_phone: '+16305551234',
+      forwarded_from_phone: null,
+    });
+    render(<GoLivePanel />);
+
+    await screen.findByText('Your number is ready');
+    mockGetHistory.mockImplementation(() =>
+      oneCallStartedAt(new Date(Date.now() + 1000).toISOString())
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    await waitFor(() => expect(screen.queryByText('Your number is ready')).toBeNull());
+
+    const callsAtDetection = mockGetHistory.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20000); // 4 more poll intervals worth
+    });
+    expect(mockGetHistory.mock.calls.length).toBe(callsAtDetection);
+  });
+
   test('a returning visit with forwarded_from_phone already set skips Stage B entirely', async () => {
     mockStatus.mockResolvedValue({
       phone_status: 'active',
@@ -207,6 +251,13 @@ describe('GoLivePanel — Stage B (verify the raw number)', () => {
     expect(
       screen.queryByText('Do you already have a phone number customers call today?')
     ).toBeNull();
+    // No forever-spinning verify prompt: forwardSavedAt was never set THIS
+    // session (the save happened in a prior one), so nothing is actively
+    // polling — the prompt gates on forwardSavedAt, not forwardedFromPhone.
+    expect(screen.queryByText(/if the AI answers, forwarding works/i)).toBeNull();
+    // getHistory is never called for forwarding verification without an
+    // active poll window.
+    expect(mockGetHistory).not.toHaveBeenCalled();
   });
 });
 
@@ -264,6 +315,38 @@ describe('GoLivePanel — Stage C fork', () => {
     });
 
     await waitFor(() => expect(screen.getByText(/Forwarding verified/i)).toBeInTheDocument());
+  });
+
+  test('a garbage forwarding number is rejected client-side, not saved', async () => {
+    // WHO: an owner who fat-fingers the forwarding number field.
+    // WHAT: forwarded_from_phone drives the agent's caller-ID match — an
+    //       un-normalized or too-short value would silently disable that
+    //       guard. Validate before ever calling updateConfig.
+    await advanceToStageC();
+    fireEvent.click(screen.getByRole('button', { name: /Yes, I have one/i }));
+
+    fireEvent.change(screen.getByLabelText(/Your real business number/i), {
+      target: { value: '123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  test('a save normalizes a human-formatted number to E.164 before sending', async () => {
+    await advanceToStageC();
+    fireEvent.click(screen.getByRole('button', { name: /Yes, I have one/i }));
+
+    fireEvent.change(screen.getByLabelText(/Your real business number/i), {
+      target: { value: '(608) 217-5303' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateConfig).toHaveBeenCalledWith(TENANT_ID, {
+        forwarded_from_phone: '+16082175303',
+      })
+    );
   });
 
   test('port inquiry submits and shows a confirmation — no table, just the email call', async () => {
