@@ -139,7 +139,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
     if (step !== 6 || !tenantId) return;
     setCoverageLoading(true);
     Api.coverage
-      .dryRun(buildDraftGraph())
+      .dryRun(tenantId, buildDraftGraph())
       .then((data) => setCoverageData(Array.isArray(data) ? data : []))
       .catch(() => setCoverageData([]))
       .finally(() => setCoverageLoading(false));

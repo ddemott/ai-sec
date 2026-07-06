@@ -53,6 +53,7 @@ import { registerSelfServiceRoutes } from './routes/selfService';
 import { registerExportRoutes } from './routes/exportData';
 import { registerAuditLogRoutes } from './routes/auditLog';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
+import { buildStubTelnyxProvisioning } from './services/telnyxNumbersStub';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { startVoiceSessionReaper, stopVoiceSessionReaper } from './workers/voiceSessionReaper';
 import { createGetEmbedding } from '../shared/getEmbedding';
@@ -255,10 +256,19 @@ registerSetupRoutes(app, pool, withTenantClient);
 registerVocabularyRoutes(app, pool, withTenantClient);
 registerBillingRoutes(app, pool);
 
+// PROVISIONING_E2E_STUB: lets the provisioning routes stay "configured" (past
+// the `if (!telnyx) return 503` guard) with zero real Telnyx credentials, so
+// E2E can exercise the real activate/deactivate state machine + DB update
+// path. activatePhone() itself short-circuits before calling telnyx.client
+// when the stub is active (see provisioningService.ts); this stub client
+// exists so any OTHER path that touches it (e.g. deactivatePhone's release())
+// degrades to a safe no-op instead of a doomed real HTTP call.
 const telnyxProvisioning =
   TELNYX_API_KEY && TELNYX_SIP_CONNECTION_ID
     ? { client: new TelnyxNumbersClient(TELNYX_API_KEY), sipConnectionId: TELNYX_SIP_CONNECTION_ID }
-    : null;
+    : process.env.PROVISIONING_E2E_STUB === '1'
+      ? buildStubTelnyxProvisioning()
+      : null;
 registerProvisioningRoutes(app, pool, telnyxProvisioning);
 registerSquareRoutes(app, pool, withTenantClient);
 registerVoiceRoutes(app, pool, withTenantClient);

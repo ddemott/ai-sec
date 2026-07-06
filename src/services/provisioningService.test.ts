@@ -107,6 +107,42 @@ describe('activatePhone', () => {
     expect(telnyx.client.release).not.toHaveBeenCalled();
   });
 
+  it('E2E STUB: PROVISIONING_E2E_STUB=1 skips telnyx.client entirely, still updates the DB for real', async () => {
+    // WHO: an E2E test driving the real wizard/GoLivePanel click-path with no
+    //      Telnyx credentials configured.
+    // WHAT: the stub short-circuits before any telnyx.client.* call, but the
+    //      state-machine (provisioning → active) and DB UPDATE still run for
+    //      real — this is what lets E2E assert the real committed row shape,
+    //      not just that a button click didn't throw.
+    // WHERE: the PROVISIONING_E2E_STUB branch in activatePhone, before the
+    //      try block that calls telnyx.client.
+    const prev = process.env.PROVISIONING_E2E_STUB;
+    process.env.PROVISIONING_E2E_STUB = '1';
+    try {
+      const telnyx = buildMockTelnyxClient();
+      const pool = buildMockPool([
+        { rows: [{ tenant_id: TENANT_ID, name: 'Test Biz', phone_status: 'inactive' }] },
+        { rows: [], rowCount: 1 }, // UPDATE SET provisioning
+        { rows: [], rowCount: 1 }, // UPDATE SET active (stub path)
+      ]);
+
+      const result = await activatePhone(pool, telnyx, TENANT_ID, '608');
+
+      expect(result.status).toBe('ok');
+      if (result.status === 'ok') {
+        expect(result.phone_number).toMatch(/^\+1608\d{7}$/);
+        expect(result.telnyx_phone_number_id).toMatch(/^stub-pn-/);
+      }
+      // The whole point: zero real Telnyx calls.
+      expect(telnyx.client.searchAvailable).not.toHaveBeenCalled();
+      expect(telnyx.client.orderNumber).not.toHaveBeenCalled();
+      expect(telnyx.client.assignToConnection).not.toHaveBeenCalled();
+    } finally {
+      if (prev === undefined) delete process.env.PROVISIONING_E2E_STUB;
+      else process.env.PROVISIONING_E2E_STUB = prev;
+    }
+  });
+
   it('ROLLBACK: orderNumber succeeds, assignToConnection throws → release called, result failed', async () => {
     // WHO: super-admin whose SIP connection assignment fails mid-provision
     // WHAT: orderNumber returns a purchased ID, assignToConnection throws →

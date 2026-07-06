@@ -568,6 +568,12 @@ describe('SetupWizard: Step 9 Go Live', () => {
     const body = JSON.parse(commitCalls[0][1]!.body as string);
     expect(body.services).toHaveLength(1);
     expect(body.employees).toHaveLength(1);
+    // tenant_id must be explicit in the body — requireTenantId() falls back
+    // to the JWT's own tenant when it's absent, which is wrong for a
+    // super-admin managing a DIFFERENT tenant (found via a real E2E run
+    // where a super-admin's wizard commit silently landed in the
+    // super-admin's own platform tenant instead of the impersonated one).
+    expect(body.tenant_id).toBe('f234e471-0e60-4163-86c9-93cfd9338e3a');
   });
 
   test('a commit failure blocks the transition and surfaces the error, leaving the draft intact', async () => {
