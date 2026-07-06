@@ -99,27 +99,35 @@ test.describe('Setup wizard — Import from website step (browser click-path)', 
 
       // The wizard opens with the template's services auto-seeded into the
       // draft. Jump to Step 3 (enabled once those services land) and add one
-      // employee through the real UI — canAdvanceTo(7) needs both.
-      const staffChip = page.getByRole('button', { name: /Who works here/i });
+      // employee through the real UI — canAdvanceTo(7) needs both. Scoped to
+      // the wizard dialog: the header's setup-progress pill has an aria-label
+      // that also contains "Who works here" (one of its 6 remaining-steps
+      // items), which an unscoped getByRole would ambiguously match too.
+      const wizardDialog = page.getByRole('dialog', { name: /Setup Assistant/i });
+      const staffChip = wizardDialog.getByRole('button', { name: /Who works here/i });
       await expect(staffChip).toBeEnabled({ timeout: 10000 });
       await staffChip.click();
-      await page.getByRole('button', { name: /Add an employee/i }).click();
-      await page.getByPlaceholder('First name').fill('Wizard');
-      await page.getByPlaceholder('Last name').fill('Tech');
-      await page.getByRole('button', { name: /^Add Employee$/i }).click();
-      await expect(page.getByText('Wizard Tech')).toBeVisible({ timeout: 4000 });
+      await wizardDialog.getByRole('button', { name: /Add an employee/i }).click();
+      await wizardDialog.getByPlaceholder('First name').fill('Wizard');
+      await wizardDialog.getByPlaceholder('Last name').fill('Tech');
+      await wizardDialog.getByRole('button', { name: /^Add Employee$/i }).click();
+      await expect(wizardDialog.getByText('Wizard Tech')).toBeVisible({ timeout: 4000 });
 
       // Jump to the "Import from website" step via its chip.
-      const scanChip = page.getByRole('button', { name: /Import from website/i });
+      const scanChip = wizardDialog.getByRole('button', { name: /Import from website/i });
       await expect(scanChip).toBeEnabled({ timeout: 10000 });
       await scanChip.click();
 
       // The scan step body.
-      await expect(page.getByText(/Import from your website/i)).toBeVisible({ timeout: 4000 });
+      await expect(wizardDialog.getByText(/Import from your website/i)).toBeVisible({
+        timeout: 4000,
+      });
 
       // Type a URL + scan.
-      await page.getByPlaceholder('https://www.yourbusiness.com').fill('https://example-shop.com');
-      await page.getByRole('button', { name: /Scan website & pre-fill answers/i }).click();
+      await wizardDialog
+        .getByPlaceholder('https://www.yourbusiness.com')
+        .fill('https://example-shop.com');
+      await wizardDialog.getByRole('button', { name: /Scan website & pre-fill answers/i }).click();
 
       // The stub extracts + saves the starter answers → success message.
       await expect(page.getByText(/extracted and saved/i)).toBeVisible({ timeout: 15000 });
