@@ -280,4 +280,83 @@ describe('GET /provisioning/status', () => {
     expect(res.statusCode).toBe(404);
     expect(res.json()).toMatchObject({ success: false, error: 'Tenant not found' });
   });
+
+  it('HAPPY: includes forwarded_from_phone for GoLivePanel Stage C', async () => {
+    // WHO: GoLivePanel's Stage C forwarding card, deciding whether to show
+    //      "already configured" or the empty prompt.
+    // WHAT: the SELECT now includes forwarded_from_phone alongside the
+    //      existing provisioning columns.
+    handle.queryResponses.push({
+      rows: [
+        {
+          phone_status: 'active',
+          inbound_phone: '+16305551234',
+          telnyx_phone_number_id: 'pn-abc',
+          forwarded_from_phone: '+16082175303',
+        },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/provisioning/status?tenant_id=${TENANT_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ forwarded_from_phone: '+16082175303' });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// POST /provisioning/port-inquiry
+// ────────────────────────────────────────────────────────────────────
+
+describe('POST /provisioning/port-inquiry', () => {
+  it('SAD: returns 400 on an invalid payload', async () => {
+    // WHO: a malformed request (missing phone_number)
+    // WHAT: PortInquirySchema.safeParse rejects → 400 before any DB query
+    const res = await app.inject({
+      method: 'POST',
+      url: '/provisioning/port-inquiry',
+      payload: { tenant_id: TENANT_ID },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, error: 'Validation failed' });
+    expect(handle.queries).toHaveLength(0);
+  });
+
+  it('SAD: returns 404 when tenant not found', async () => {
+    handle.queryResponses.push({ rows: [] });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/provisioning/port-inquiry',
+      payload: { tenant_id: TENANT_ID, phone_number: '+16305551234' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ success: false, error: 'Tenant not found' });
+  });
+
+  it('HAPPY: returns success — no porting API is invoked, no table written', async () => {
+    // WHO: an owner asking to port their real number instead of forwarding.
+    // WHAT: tenant lookup succeeds → best-effort email to the platform admin
+    //      → 200. No port_requests-style table exists to write to (see
+    //      design doc §3 — that table was deliberately cut).
+    handle.queryResponses.push({ rows: [{ name: 'Test Biz' }] });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/provisioning/port-inquiry',
+      payload: {
+        tenant_id: TENANT_ID,
+        phone_number: '+16305551234',
+        notes: 'Currently with Verizon',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true });
+  });
 });

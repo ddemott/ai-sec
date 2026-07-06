@@ -1086,14 +1086,27 @@ export const Api = {
       ),
 
     deactivate: (tenantId: string) =>
-      apiMutate<{ success: boolean }>(`/provisioning/deactivate`, 'POST', { tenant_id: tenantId }),
+      apiMutate<{ success: boolean; warnings?: string[] }>(`/provisioning/deactivate`, 'POST', {
+        tenant_id: tenantId,
+      }),
 
     status: (tenantId: string) =>
       apiFetch<{
         phone_status: string;
         inbound_phone: string | null;
         telnyx_phone_number_id: string | null;
+        forwarded_from_phone: string | null;
       }>(`/provisioning/status`, { tenant_id: tenantId }),
+
+    // Owner wants to port their real number into Telnyx instead of
+    // forwarding. Emails the platform admin — no porting API is invoked
+    // (a real LNP port always needs a human). See GoLivePanel Stage C.
+    portInquiry: (tenantId: string, phoneNumber: string, notes?: string) =>
+      apiMutate<{ success: boolean }>(`/provisioning/port-inquiry`, 'POST', {
+        tenant_id: tenantId,
+        phone_number: phoneNumber,
+        ...(notes ? { notes } : {}),
+      }),
   },
 
   // --- SQUARE CRM ---

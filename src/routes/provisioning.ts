@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { withHandler, logEvent, logError, type AppRequest } from '../middleware';
 import { type TelnyxNumbersClient } from '../services/telnyxNumbers';
 import { activatePhone, deactivatePhone } from '../services/provisioningService';
+import { sendPortRequestEmail } from '../services/communications/systemEmail';
 
 const ActivateSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -167,8 +168,12 @@ export function registerProvisioningRoutes(
 
       const client = await pool.connect();
       try {
+        // forwarded_from_phone added for GoLivePanel (docs/superpowers/specs/
+        // 2026-07-05-wizard-phase-b-design.md §3) — the panel's Stage C
+        // forwarding card needs to know the currently-saved value to render
+        // "already configured" vs. the empty prompt, without a second fetch.
         const res = await client.query(
-          'SELECT phone_status, inbound_phone, telnyx_phone_number_id FROM tenants WHERE tenant_id = $1',
+          'SELECT phone_status, inbound_phone, telnyx_phone_number_id, forwarded_from_phone FROM tenants WHERE tenant_id = $1',
           [tenant_id]
         );
         if (res.rows.length === 0) {
@@ -180,5 +185,64 @@ export function registerProvisioningRoutes(
         client.release();
       }
     }, 'Failed to get provisioning status')
+  );
+
+  // POST /provisioning/port-inquiry — owner wants to port their existing
+  // number into Telnyx instead of forwarding. No porting API is invoked (a
+  // real LNP port always needs a human — LOA + carrier cutover); this just
+  // emails Dale the details so he can start the manual process. No table,
+  // no credentials collected — see design doc §3 "Kill Proposal 2's
+  // port_requests table + credential intake entirely."
+  const PortInquirySchema = z.object({
+    tenant_id: z.string().uuid(),
+    phone_number: z.string().min(7).max(30),
+    notes: z.string().max(1000).optional(),
+  });
+  app.post(
+    '/provisioning/port-inquiry',
+    withHandler(async (req: AppRequest, reply) => {
+      const parsed = PortInquirySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+      }
+      const { tenant_id, phone_number, notes } = parsed.data;
+
+      const client = await pool.connect();
+      let tenantName: string;
+      try {
+        const res = await client.query<{ name: string }>(
+          'SELECT name FROM tenants WHERE tenant_id = $1',
+          [tenant_id]
+        );
+        if (res.rows.length === 0) {
+          return reply.status(404).send({ success: false, error: 'Tenant not found' });
+        }
+        tenantName = res.rows[0].name;
+      } finally {
+        client.release();
+      }
+
+      // Best-effort: the owner already sees a confirmation in the UI
+      // regardless (the request itself succeeded); a flaky SMTP send
+      // shouldn't block that. Logged so a silent failure is diagnosable.
+      try {
+        await sendPortRequestEmail(
+          process.env.PLATFORM_ADMIN_EMAIL || process.env.EMAIL_USER || '',
+          {
+            tenantId: tenant_id,
+            tenantName,
+            phoneNumber: phone_number,
+            notes: notes ?? null,
+          }
+        );
+      } catch (err) {
+        logError(req, 'port_inquiry_email_failed', err, { tenant_id });
+      }
+
+      logEvent(req, 'port_inquiry_submitted', { tenant_id, phone_number });
+      return reply.send({ success: true });
+    }, 'Failed to submit port inquiry')
   );
 }

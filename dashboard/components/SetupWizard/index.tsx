@@ -355,8 +355,6 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
             onToggleResourceAssignment={crud.toggleResourceAssignment}
             coverageData={crud.coverageData}
             coverageLoading={crud.coverageLoading}
-            phoneStatus={null}
-            inboundPhone={null}
             loading={false}
             saving={crud.saving}
             error={crud.error}

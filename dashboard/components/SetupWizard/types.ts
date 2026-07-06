@@ -179,8 +179,3 @@ export interface Step6Props {
   coverageData: CoverageItem[];
   loading: boolean;
 }
-
-export interface Step7Props {
-  phoneStatus: string | null;
-  inboundPhone: string | null;
-}

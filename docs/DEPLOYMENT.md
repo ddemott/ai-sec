@@ -19,26 +19,33 @@ This guide walks through migrating from the local Docker development environment
 ## Phase 1: Supabase Project Setup
 
 ### 1.1 Create the Project
+
 1. Go to [supabase.com/dashboard](https://supabase.com/dashboard) and click **New Project**.
 2. Choose a name (e.g., `ai-sec-prod`), set a strong database password, and select a region close to your users.
 3. Wait for the project to provision (~2 minutes).
 
 ### 1.2 Note Your Credentials
+
 From **Project Settings** > **API**, save these values:
+
 - **Project URL**: `https://<PROJECT_ID>.supabase.co`
 - **Project ID**: The `<PROJECT_ID>` portion
 - **anon key**: Public API key (not needed for this app, but good to have)
 - **service_role key**: Server-side key with full access
 
 From **Project Settings** > **Database**:
+
 - **Connection string**: `postgres://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres`
 - **Connection pooler string** (Transaction mode): For high-concurrency use
 
 ### 1.3 Enable Required Extensions
+
 In the Supabase SQL Editor, run:
+
 ```sql
 CREATE EXTENSION IF NOT EXISTS pgvector;
 ```
+
 - `pgvector`: Required for RAG knowledge base embeddings
 
 (`pg_net` is no longer required — the old `notify_n8n_on_appointment` trigger is dead code. All async work runs inline in Fastify route handlers.)
@@ -48,6 +55,7 @@ CREATE EXTENSION IF NOT EXISTS pgvector;
 ## Phase 2: Database Migration
 
 ### 2.1 Run Pre-flight Check
+
 Before applying migrations, validate that your cloud database meets all prerequisites:
 
 ```bash
@@ -57,6 +65,7 @@ Before applying migrations, validate that your cloud database meets all prerequi
 This checks: connectivity, extensions (pgvector, pg_net), role creation, database state, PostgreSQL version, and migration file count. Fix any FAIL items before proceeding.
 
 ### 2.2 Apply Migrations
+
 Use the existing `setup-db.sh` script, passing the production connection string:
 
 ```bash
@@ -66,10 +75,13 @@ Use the existing `setup-db.sh` script, passing the production connection string:
 This applies all 154 migrations in order and seeds the database with the Bella's Hair Studio demo tenant.
 
 ### 2.3 RLS Enforcement
+
 No separate `api_user` role is needed. The backend connects as the `postgres` role via `DATABASE_URL`, and `FORCE ROW LEVEL SECURITY` on all 20 RLS-enabled tables (migration `20260323000000_force_rls_single_pool.sql`) enforces tenant isolation even under superuser. `withTenantClient()` sets `app.current_tenant_id` per request.
 
 ### 2.4 Verify the Schema
+
 Spot-check that critical objects exist:
+
 ```sql
 -- Tables
 SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;
@@ -94,6 +106,7 @@ WHERE schemaname = 'public' AND rowsecurity = true;
 The Fastify backend serves the dashboard and management API. Deploy options:
 
 ### Option A: Railway (Current Setup)
+
 Railway is configured via `railway.json` + `nixpacks.toml` in the repo root.
 
 1. **Build**: Nixpacks auto-detects Node.js 20, runs `npm install && npm run build`
@@ -106,9 +119,11 @@ Railway is configured via `railway.json` + `nixpacks.toml` in the repo root.
 **Graceful shutdown**: The backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
 ### Option B: Render / Fly.io
+
 These platforms also support Node.js apps with similar config. Use the same env vars and start command.
 
 ### Option C: Run on a VPS
+
 ```bash
 npm install
 npm run build
@@ -122,83 +137,86 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... node dist/src/index.js
 This is the single source of truth for environment variables across all three deployable services. Verified against code 2026-05-05 — env-var contract unchanged since 2026-04-30 audit (no new services or required vars added in the 2026-05-04 / 2026-05-05 cleanup sessions).
 
 #### Backend (Fastify) — required at boot
+
 The backend exits on startup if any of these are missing in production (see `src/services/envWarnings.ts`).
 
-| Variable | Description |
-|---|---|
-| `DATABASE_URL` | Supabase Postgres connection string (use session-mode pooler) |
-| `JWT_SECRET` | Secret for signing JWT tokens (change from default!) |
-| `OPENAI_API_KEY` | LLM (post-call summaries, normalization) + RAG embeddings |
-| `STRIPE_SECRET_KEY` | Stripe API key (test or live) |
-| `NODE_ENV` | Set to `production` (skips local TLS, trusts `x-forwarded-proto`) |
+| Variable            | Description                                                       |
+| ------------------- | ----------------------------------------------------------------- |
+| `DATABASE_URL`      | Supabase Postgres connection string (use session-mode pooler)     |
+| `JWT_SECRET`        | Secret for signing JWT tokens (change from default!)              |
+| `OPENAI_API_KEY`    | LLM (post-call summaries, normalization) + RAG embeddings         |
+| `STRIPE_SECRET_KEY` | Stripe API key (test or live)                                     |
+| `NODE_ENV`          | Set to `production` (skips local TLS, trusts `x-forwarded-proto`) |
 
 #### Backend — required for full functionality
+
 The backend boots without these but specific features fail or warn loudly.
 
-| Variable | Required for | Description |
-|---|---|---|
-| `AGENT_SECRET` | Voice AI tools | Shared secret the LiveKit agent presents on every `/agent-tools/*` call. Must match the agent's `AGENT_SECRET`. Min 32 chars. |
-| `TELNYX_API_KEY` | Phone provisioning + SMS OTP | Carrier API key. Boot warns if missing. |
-| `TELNYX_SIP_CONNECTION_ID` | Phone provisioning | SIP Connection ID purchased numbers are routed to (e.g. `2945038451784812111`). |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook | Signing secret created after deploy. Webhook handler rejects unsigned requests. |
-| `STRIPE_SOLO_PRICE_ID` | Billing checkout | Stripe price ID for Solo plan ($129/mo). |
-| `STRIPE_GROWTH_PRICE_ID` | Billing checkout | Stripe price ID for Growth plan ($279/mo). |
-| `STRIPE_PRO_PRICE_ID` | Billing checkout | Stripe price ID for Professional plan ($449/mo, backlog tier). |
-| `DASHBOARD_URL` | Stripe checkout + OAuth redirects | Public URL of the dashboard. Default `https://localhost:4000`. **Phase 13 blocker if not set in prod.** |
+| Variable                   | Required for                      | Description                                                                                                                   |
+| -------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_SECRET`             | Voice AI tools                    | Shared secret the LiveKit agent presents on every `/agent-tools/*` call. Must match the agent's `AGENT_SECRET`. Min 32 chars. |
+| `TELNYX_API_KEY`           | Phone provisioning + SMS OTP      | Carrier API key. Boot warns if missing.                                                                                       |
+| `TELNYX_SIP_CONNECTION_ID` | Phone provisioning                | SIP Connection ID purchased numbers are routed to (e.g. `2945038451784812111`).                                               |
+| `STRIPE_WEBHOOK_SECRET`    | Stripe webhook                    | Signing secret created after deploy. Webhook handler rejects unsigned requests.                                               |
+| `STRIPE_SOLO_PRICE_ID`     | Billing checkout                  | Stripe price ID for Solo plan ($129/mo).                                                                                      |
+| `STRIPE_GROWTH_PRICE_ID`   | Billing checkout                  | Stripe price ID for Growth plan ($279/mo).                                                                                    |
+| `STRIPE_PRO_PRICE_ID`      | Billing checkout                  | Stripe price ID for Professional plan ($449/mo, backlog tier).                                                                |
+| `DASHBOARD_URL`            | Stripe checkout + OAuth redirects | Public URL of the dashboard. Default `https://localhost:4000`. **Phase 13 blocker if not set in prod.**                       |
 
 #### Backend — optional / tuning
 
-| Variable | Default | Description |
-|---|---|---|
-| `JWT_EXPIRY` | `8h` | Token expiry duration |
-| `PORT` | `4001` | Server port |
-| `CORS_ORIGIN` | (none) | Permitted CORS origin for cross-domain dashboard requests |
-| `STRIPE_ENTERPRISE_PRICE_ID` | (none) | Stripe price ID for Enterprise plan (not yet shipped) |
-| `ENABLE_REMINDER_SCHEDULER` | `false` outside prod | Forces the appointment-reminder background worker on in dev |
-| `TELEPHONY_PROVIDER` | `telnyx` | (Optional) Override default SMS provider (Telnyx is the only supported provider; legacy support removed) |
-| `TELEPHONY_SIMULATION_MODE` | `false` | If `true`, voice/SMS providers no-op (test/dev) |
-| `SMS_SIMULATION_MODE` | `false` | If `true`, SMS service no-ops (test/dev) |
-| `EMAIL_USER`, `EMAIL_PASS` | (none) | nodemailer SMTP creds for transactional email |
-| `TELNYX_*` (API_KEY, SIP_CONNECTION_ID, PHONE_NUMBER, WEBHOOK_SECRET) | (required for prod) | Telnyx for numbers, SIP, SMS, OTP |
-| `BETTER_STACK_TOKEN` | (none) | Source token for Better Stack (Logtail) log aggregation. When set, backend + agent forward Pino logs in addition to writing to stdout. Unset = stdout only (local dev / no aggregation). See "Observability" below. |
-| `LOG_LEVEL` | `info` (prod) / `debug` (dev) | Pino log level (`trace` `debug` `info` `warn` `error` `fatal`). Env knob for dialing back verbosity if free-tier ingest is approached without redeploy. |
-| `SENTRY_DSN` | (none) | DSN for Sentry error monitoring. When set, backend + agent send unhandled exceptions and `logError` calls to Sentry for grouping + alert-on-spike. Unset = no Sentry calls (local dev / tests). See "Observability" below. |
-| `SENTRY_ENVIRONMENT` | `$NODE_ENV` | Override the Sentry environment tag (`production` / `staging` / `development`). Defaults to `NODE_ENV` when unset. |
-| `SENTRY_RELEASE` | (none) | Optional release tag (e.g. git SHA) so Sentry can group events by build. Set to `$RAILWAY_GIT_COMMIT_SHA` on Railway. |
+| Variable                                                              | Default                       | Description                                                                                                                                                                                                                |
+| --------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JWT_EXPIRY`                                                          | `8h`                          | Token expiry duration                                                                                                                                                                                                      |
+| `PORT`                                                                | `4001`                        | Server port                                                                                                                                                                                                                |
+| `CORS_ORIGIN`                                                         | (none)                        | Permitted CORS origin for cross-domain dashboard requests                                                                                                                                                                  |
+| `STRIPE_ENTERPRISE_PRICE_ID`                                          | (none)                        | Stripe price ID for Enterprise plan (not yet shipped)                                                                                                                                                                      |
+| `ENABLE_REMINDER_SCHEDULER`                                           | `false` outside prod          | Forces the appointment-reminder background worker on in dev                                                                                                                                                                |
+| `TELEPHONY_PROVIDER`                                                  | `telnyx`                      | (Optional) Override default SMS provider (Telnyx is the only supported provider; legacy support removed)                                                                                                                   |
+| `TELEPHONY_SIMULATION_MODE`                                           | `false`                       | If `true`, voice/SMS providers no-op (test/dev)                                                                                                                                                                            |
+| `SMS_SIMULATION_MODE`                                                 | `false`                       | If `true`, SMS service no-ops (test/dev)                                                                                                                                                                                   |
+| `EMAIL_USER`, `EMAIL_PASS`                                            | (none)                        | nodemailer SMTP creds for transactional email                                                                                                                                                                              |
+| `PLATFORM_ADMIN_EMAIL`                                                | falls back to `EMAIL_USER`    | Recipient for platform-internal notifications with no per-tenant owner (currently: `POST /provisioning/port-inquiry`'s "owner wants to port their number" email). Not tenant-facing.                                       |
+| `TELNYX_*` (API_KEY, SIP_CONNECTION_ID, PHONE_NUMBER, WEBHOOK_SECRET) | (required for prod)           | Telnyx for numbers, SIP, SMS, OTP                                                                                                                                                                                          |
+| `BETTER_STACK_TOKEN`                                                  | (none)                        | Source token for Better Stack (Logtail) log aggregation. When set, backend + agent forward Pino logs in addition to writing to stdout. Unset = stdout only (local dev / no aggregation). See "Observability" below.        |
+| `LOG_LEVEL`                                                           | `info` (prod) / `debug` (dev) | Pino log level (`trace` `debug` `info` `warn` `error` `fatal`). Env knob for dialing back verbosity if free-tier ingest is approached without redeploy.                                                                    |
+| `SENTRY_DSN`                                                          | (none)                        | DSN for Sentry error monitoring. When set, backend + agent send unhandled exceptions and `logError` calls to Sentry for grouping + alert-on-spike. Unset = no Sentry calls (local dev / tests). See "Observability" below. |
+| `SENTRY_ENVIRONMENT`                                                  | `$NODE_ENV`                   | Override the Sentry environment tag (`production` / `staging` / `development`). Defaults to `NODE_ENV` when unset.                                                                                                         |
+| `SENTRY_RELEASE`                                                      | (none)                        | Optional release tag (e.g. git SHA) so Sentry can group events by build. Set to `$RAILWAY_GIT_COMMIT_SHA` on Railway.                                                                                                      |
 
 #### Backend — Calendar OAuth (set per integration you use)
 
 Each integration is independent — set the trio for the ones you wire up. All optional at boot. (The competitor-CRM integrations — Jobber, HubSpot, ServiceTitan, GoHighLevel — were removed from the codebase 2026-06-12; their env vars are no longer used. **Square sync remains live** — see its row below.)
 
-| Provider | Variables |
-|---|---|
-| Google Calendar | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` (e.g. `https://your-backend/calendar/auth/google/callback`) |
-| Outlook Calendar | `OUTLOOK_CLIENT_ID`, `OUTLOOK_CLIENT_SECRET`, `OUTLOOK_CALLBACK_URL` |
+| Provider          | Variables                                                                                                                                                                                                                                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Google Calendar   | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` (e.g. `https://your-backend/calendar/auth/google/callback`)                                                                                                                                                                                        |
+| Outlook Calendar  | `OUTLOOK_CLIENT_ID`, `OUTLOOK_CLIENT_SECRET`, `OUTLOOK_CALLBACK_URL`                                                                                                                                                                                                                                                 |
 | Square (CRM sync) | `SQUARE_CLIENT_ID`, `SQUARE_CLIENT_SECRET`, `SQUARE_CALLBACK_URL` (OAuth) + `SQUARE_WEBHOOK_SIGNATURE_KEY` (HMAC-SHA256 verification for the `/square/webhook` receiver). Square is the one surviving external CRM sync provider — bidirectional push/pull via `src/services/crm/squareClient.ts` + `squareSync.ts`. |
 
 #### Agent worker (`agent/`) — validated by Zod at startup
 
 The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in that order. Missing/invalid → process exits with the failed Zod issue. See `agent/src/config.ts` for the schema.
 
-| Variable | Required | Description |
-|---|---|---|
-| `LIVEKIT_URL` | Yes | LiveKit Cloud WSS URL (must start with `wss://`) |
-| `LIVEKIT_API_KEY` | Yes | LiveKit Cloud API key |
-| `LIVEKIT_API_SECRET` | Yes | LiveKit Cloud API secret |
-| `AGENT_SECRET` | Yes | Min 32 chars. Must match backend's `AGENT_SECRET`. |
-| `OPENAI_API_KEY` | Yes | LLM (GPT-4o-mini) + TTS (primary, voice `shimmer` default) + fallback TTS |
-| `DEEPGRAM_API_KEY` | Yes | STT (Nova-3) |
-| `BACKEND_URL` | No | Where the agent posts `/agent-tools/*` calls. Default `http://localhost:4001`. |
-| `BETTER_STACK_TOKEN` | No | Same value as the backend's `BETTER_STACK_TOKEN`. When set, agent forwards Pino logs to Better Stack alongside stdout; unset = stdout only. Per-call child logger adds `tenant_id` + `call_id` to every line so support can pull a specific call's full timeline with one filter. See "Observability" below. |
-| `LOG_LEVEL` | No | `trace` \| `debug` \| `info` (default) \| `warn` \| `error` |
-| `SENTRY_DSN` | No | Same DSN as the backend (one Sentry project hosts both services; the `service` tag separates them). When set, agent forwards unhandled exceptions + fallback-triggered events to Sentry. Unset = no Sentry calls. See "Observability" below. |
+| Variable             | Required | Description                                                                                                                                                                                                                                                                                                  |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `LIVEKIT_URL`        | Yes      | LiveKit Cloud WSS URL (must start with `wss://`)                                                                                                                                                                                                                                                             |
+| `LIVEKIT_API_KEY`    | Yes      | LiveKit Cloud API key                                                                                                                                                                                                                                                                                        |
+| `LIVEKIT_API_SECRET` | Yes      | LiveKit Cloud API secret                                                                                                                                                                                                                                                                                     |
+| `AGENT_SECRET`       | Yes      | Min 32 chars. Must match backend's `AGENT_SECRET`.                                                                                                                                                                                                                                                           |
+| `OPENAI_API_KEY`     | Yes      | LLM (GPT-4o-mini) + TTS (primary, voice `shimmer` default) + fallback TTS                                                                                                                                                                                                                                    |
+| `DEEPGRAM_API_KEY`   | Yes      | STT (Nova-3)                                                                                                                                                                                                                                                                                                 |
+| `BACKEND_URL`        | No       | Where the agent posts `/agent-tools/*` calls. Default `http://localhost:4001`.                                                                                                                                                                                                                               |
+| `BETTER_STACK_TOKEN` | No       | Same value as the backend's `BETTER_STACK_TOKEN`. When set, agent forwards Pino logs to Better Stack alongside stdout; unset = stdout only. Per-call child logger adds `tenant_id` + `call_id` to every line so support can pull a specific call's full timeline with one filter. See "Observability" below. |
+| `LOG_LEVEL`          | No       | `trace` \| `debug` \| `info` (default) \| `warn` \| `error`                                                                                                                                                                                                                                                  |
+| `SENTRY_DSN`         | No       | Same DSN as the backend (one Sentry project hosts both services; the `service` tag separates them). When set, agent forwards unhandled exceptions + fallback-triggered events to Sentry. Unset = no Sentry calls. See "Observability" below.                                                                 |
 
 #### Dashboard (Next.js)
 
-| Variable | Required | Description |
-|---|---|---|
-| `NEXT_PUBLIC_API_BASE_URL` | Yes | Backend public URL. Compiled into the bundle at build time. |
-| `NODE_ENV` | (auto) | Next.js sets this; check for production-only code paths only. |
+| Variable                   | Required | Description                                                   |
+| -------------------------- | -------- | ------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_BASE_URL` | Yes      | Backend public URL. Compiled into the bundle at build time.   |
+| `NODE_ENV`                 | (auto)   | Next.js sets this; check for production-only code paths only. |
 
 ---
 
@@ -207,9 +225,11 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 The dashboard is a Next.js app in the `dashboard/` directory. In production the full stack (including dashboard) is hosted on Railway (see Phase 3 for backend/agent and `railway.json` + `nixpacks.toml` at root; the dashboard service is `dashboard-production-cee3`).
 
 ### Option A: Railway (Current Production Path)
+
 The dashboard is built and deployed as part of the Railway monorepo services alongside the backend and agent worker. Environment variables (e.g. `NEXT_PUBLIC_API_BASE_URL`) are configured in the Railway dashboard for the dashboard service. No separate Vercel project needed.
 
 ### Option B: Self-hosted / Alternative Platforms
+
 ```bash
 cd dashboard
 npm install
@@ -228,12 +248,14 @@ Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed backend.
 The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** (SIP ingress) → **LiveKit Agent worker** (Node, deployed on Railway as `ai-sec-agent`). One LiveKit dispatch rule routes every tenant's number to the same agent worker; tenant identity flows in via SIP dispatch metadata. There are no per-tenant orchestrator entities — buying a Telnyx number and pointing it at the SIP Connection is the entire per-tenant config.
 
 ### 5.1 LiveKit Cloud: Project + dispatch rule (one-time)
+
 1. Sign in to [cloud.livekit.io](https://cloud.livekit.io) and create a project (e.g., `AI-Secretary`).
 2. From **Settings → Keys**, copy the WSS URL, API Key, and API Secret. Set them in Railway as `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
 3. Create a SIP inbound trunk and a dispatch rule that routes inbound SIP traffic to agent name `ai-secretary-agent`. The agent worker self-registers with this name when it boots.
 4. Note the SIP FQDN LiveKit gives you (looks like `<project-slug>.sip.livekit.cloud:5060`). You'll point Telnyx at it.
 
 ### 5.2 Telnyx: SIP Connection pointing at LiveKit (one-time)
+
 1. Sign in to [portal.telnyx.com](https://portal.telnyx.com).
 2. **Voice → SIP Connections → Create FQDN Connection** named `livekit-outbound`.
 3. **Inbound** tab → set **Default Primary FQDN** to the LiveKit SIP FQDN from 5.1, port 5060, DNS A record. Sequential routing. Codecs G722/G711U/G711A. DTMF: RFC 2833.
@@ -243,6 +265,7 @@ The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** 
 7. Set Telnyx API key in Railway as `TELNYX_API_KEY` (same key handles SMS OTP).
 
 ### 5.3 Buying a number (per-tenant, automated)
+
 Buying happens through the backend's `/provisioning/activate` endpoint, not the portal. The flow:
 
 1. SuperAdmin clicks **Activate Phone** on a tenant in the dashboard (or `POST /provisioning/activate` directly).
@@ -254,6 +277,7 @@ Buying happens through the backend's `/provisioning/activate` endpoint, not the 
 After step 4, calls to the new number flow Telnyx → LiveKit → agent. No Telnyx-portal clicks per tenant.
 
 ### 5.4 Deploy the LiveKit agent worker
+
 The agent worker lives in `agent/` and runs as a separate Railway service (`ai-sec-agent`). It registers with LiveKit Cloud on boot using the `LIVEKIT_*` env vars and stays connected. Required env vars on the agent service:
 
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 5.1
@@ -281,13 +305,16 @@ Required env vars for async integrations are all set in Railway (Google/Outlook 
 ## Phase 7: Post-Deployment Verification
 
 ### 7.1 Dashboard Smoke Test
+
 1. Open the dashboard URL
 2. Log in with the seeded credentials (`admin@secretaryhq.com` / `password`)
 3. Verify you can see appointments, customers, and resources
 4. Try creating a test appointment through the UI
 
 ### 7.2 Agent-tools Smoke Test
+
 Test a tool route directly against the deployed backend (the same path the LiveKit agent uses):
+
 ```bash
 # Get customer context — same payload shape the agent's tool client uses
 curl -X POST https://ai-sec-production.up.railway.app/agent-tools/customer-context \
@@ -298,15 +325,18 @@ curl -X POST https://ai-sec-production.up.railway.app/agent-tools/customer-conte
     "caller_phone": "+15555550100"
   }'
 ```
+
 A 200 with a JSON body confirms the route is up and the agent secret is correctly configured. A 401 means `AGENT_SECRET` doesn't match between agent and backend.
 
 ### 7.3 Live Call Test
+
 1. Call the Telnyx phone number
 2. The AI should greet you with the tenant's first message
 3. Test the full flow: identify as customer, ask about availability, book an appointment
 4. Verify the appointment appears in the dashboard
 
 ### 7.4 Knowledge Base Test
+
 1. Upload a policy PDF via the dashboard's Knowledge Base tab
 2. Call in and ask a policy question (e.g., "What's your cancellation policy?")
 3. Verify the AI answers using the uploaded document content
@@ -331,14 +361,14 @@ If the token is unset, both services keep running with stdout-only logging — t
 
 ### Filterable fields baked into every line
 
-| Field | Source | Use |
-|---|---|---|
-| `service` | `ai-sec-backend` or `ai-sec-agent` | Split the two services in one source |
-| `env` | `production` / `development` / `test` | Drop dev noise from prod incident filters |
-| `tenant_id` | Backend: `tenantMiddleware` enriches request logger. Agent: per-call child logger after `sessionCtx` resolves. | Pull all logs for one tenant |
-| `call_id` | Agent: from SIP participant attributes (`sip.callID`). | Pull one specific call's full timeline |
-| `caller_phone` | Agent: from SIP participant attributes. Null for anonymous callers. | Cross-reference a customer's reported call without knowing the call_id |
-| `event` | Both: explicit event name in `log.info({ event: '...' }, msg)` calls. | Filter by lifecycle stage (`call_start`, `session_started`, `tenant_config_fetched`, `fallback_triggered`, etc.) |
+| Field          | Source                                                                                                         | Use                                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `service`      | `ai-sec-backend` or `ai-sec-agent`                                                                             | Split the two services in one source                                                                             |
+| `env`          | `production` / `development` / `test`                                                                          | Drop dev noise from prod incident filters                                                                        |
+| `tenant_id`    | Backend: `tenantMiddleware` enriches request logger. Agent: per-call child logger after `sessionCtx` resolves. | Pull all logs for one tenant                                                                                     |
+| `call_id`      | Agent: from SIP participant attributes (`sip.callID`).                                                         | Pull one specific call's full timeline                                                                           |
+| `caller_phone` | Agent: from SIP participant attributes. Null for anonymous callers.                                            | Cross-reference a customer's reported call without knowing the call_id                                           |
+| `event`        | Both: explicit event name in `log.info({ event: '...' }, msg)` calls.                                          | Filter by lifecycle stage (`call_start`, `session_started`, `tenant_config_fetched`, `fallback_triggered`, etc.) |
 
 ### Common support queries
 
@@ -395,12 +425,12 @@ Same opt-in pattern via `@sentry/nextjs`. Three files own it:
 
 Env vars on the dashboard Railway service (`dashboard-production-cee3`):
 
-| Var | Purpose |
-|---|---|
-| `SENTRY_DSN` | Same DSN as backend + agent. Server-side init reads this. |
-| `NEXT_PUBLIC_SENTRY_DSN` | Same value — exposed to the browser bundle for client-side init. |
-| `SENTRY_AUTH_TOKEN` | (CI/CD only) source-map upload token. Get from Sentry → Settings → Auth Tokens. Unset = no symbol-map upload, stack traces stay minified. |
-| `SENTRY_ORG` / `SENTRY_PROJECT` | Required when `SENTRY_AUTH_TOKEN` is set. |
+| Var                             | Purpose                                                                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `SENTRY_DSN`                    | Same DSN as backend + agent. Server-side init reads this.                                                                                 |
+| `NEXT_PUBLIC_SENTRY_DSN`        | Same value — exposed to the browser bundle for client-side init.                                                                          |
+| `SENTRY_AUTH_TOKEN`             | (CI/CD only) source-map upload token. Get from Sentry → Settings → Auth Tokens. Unset = no symbol-map upload, stack traces stay minified. |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | Required when `SENTRY_AUTH_TOKEN` is set.                                                                                                 |
 
 If `NEXT_PUBLIC_SENTRY_DSN` is unset, client-side init no-ops; `instrumentation.ts` checks `SENTRY_DSN` for the same opt-in on the server side. Same as the other two services: local dev / tests make zero Sentry calls.
 
@@ -424,14 +454,14 @@ Before going live, verify:
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---|---|
-| `/agent-tools/*` returns 401 | `AGENT_SECRET` mismatch — must be identical on the backend and agent Railway services |
-| `/provisioning/activate` returns 503 | `TELNYX_API_KEY` or `TELNYX_SIP_CONNECTION_ID` missing on backend service |
-| LiveKit agent worker disconnects on boot | Check `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` on the agent service; the worker logs the rejection reason |
+| Problem                                          | Solution                                                                                                                                                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/agent-tools/*` returns 401                     | `AGENT_SECRET` mismatch — must be identical on the backend and agent Railway services                                                                                                         |
+| `/provisioning/activate` returns 503             | `TELNYX_API_KEY` or `TELNYX_SIP_CONNECTION_ID` missing on backend service                                                                                                                     |
+| LiveKit agent worker disconnects on boot         | Check `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` on the agent service; the worker logs the rejection reason                                                                     |
 | Calls to a Telnyx number return "not in service" | Carrier-side LERG propagation. Verify the number is `active` and bound to the right SIP Connection via Telnyx API; if so, open a Telnyx support ticket — see `TICKET_SUPPORT.md` for template |
-| Database connection refused | Verify connection string and that Supabase allows your IP |
-| Migrations fail on Supabase | `pgvector` extension must be enabled first |
-| CORS errors on dashboard | Update CORS origin in `src/index.ts` to your dashboard domain |
-| JWT errors after deploy | Ensure `JWT_SECRET` is the same across backend restarts |
-| Knowledge base search returns nothing | Verify `pgvector` extension is enabled and documents have embeddings |
+| Database connection refused                      | Verify connection string and that Supabase allows your IP                                                                                                                                     |
+| Migrations fail on Supabase                      | `pgvector` extension must be enabled first                                                                                                                                                    |
+| CORS errors on dashboard                         | Update CORS origin in `src/index.ts` to your dashboard domain                                                                                                                                 |
+| JWT errors after deploy                          | Ensure `JWT_SECRET` is the same across backend restarts                                                                                                                                       |
+| Knowledge base search returns nothing            | Verify `pgvector` extension is enabled and documents have embeddings                                                                                                                          |
