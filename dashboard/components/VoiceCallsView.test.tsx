@@ -10,7 +10,10 @@ import '@testing-library/jest-dom';
 import React from 'react';
 
 // Mutable role for owner-gating tests (hoisted so the vi.mock factory can read it).
-const { roleRef } = vi.hoisted(() => ({ roleRef: { current: 'owner' } }));
+const { roleRef } = vi.hoisted(() => {
+  const roleRef: { current: 'owner' | 'front_desk' } = { current: 'owner' };
+  return { roleRef };
+});
 
 // Mock tenant context
 vi.mock('../lib/SessionContext', () => ({
