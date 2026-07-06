@@ -30,6 +30,14 @@ module.exports = {
     '*.config.js',
     '*.config.cjs',
     '*.config.ts',
+    // Standalone simulation helper aren't in tsconfig.json's `include`
+    // (scoped to src/ for the build) and are run directly via tsx, never
+    // compiled. Same treatment as the backend's scripts/**/*.mjs carve-out —
+    // typed linting can't parse a file outside its project, so it's excluded
+    // rather than force-included into the build tsconfig. Named explicitly
+    // (not scripts/**/*.ts) so a future .ts file dropped in this dir still
+    // gets linted by default.
+    'scripts/sim-toolselect.ts',
   ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'warn',

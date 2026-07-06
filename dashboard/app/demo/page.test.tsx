@@ -24,7 +24,7 @@ vi.mock('next/navigation', () => ({
 import DemoPage from './page';
 
 function mockFetch(response: Partial<Response>): void {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response as Response));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response));
 }
 
 function mockFetchReject(err: Error): void {

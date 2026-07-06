@@ -212,8 +212,8 @@ export default function CRMView() {
           setCustomers([]);
         }
       } else {
-        setCustomers(data as unknown as Customer[]);
-        if (!selectedCustomer) setSelectedCustomer((data as unknown as Customer[])[0]);
+        setCustomers(data);
+        if (!selectedCustomer) setSelectedCustomer((data)[0]);
       }
     } catch {
       // Mock data is the DEMO fallback (no tenant). For a REAL tenant a fetch
@@ -239,7 +239,7 @@ export default function CRMView() {
       if (!data || data.length === 0) {
         setSummaries(tenantId ? [] : MOCK_SUMMARIES.filter((s) => s.customer_id === customerId));
       } else {
-        setSummaries(data as typeof summaries);
+        setSummaries(data);
       }
     } catch {
       // Same rule as fetchCustomers: no fabricated call summaries for a real tenant.
@@ -250,7 +250,7 @@ export default function CRMView() {
   async function fetchCustomerAppointments(customerId: string) {
     try {
       const data = await Api.customers.appointments(customerId, tenantId);
-      setCustomerAppointments((data || []) as typeof customerAppointments);
+      setCustomerAppointments((data || []));
     } catch {
       setCustomerAppointments([]);
     }

@@ -45,7 +45,7 @@ export default function BusinessTypeSection({ tenantId, onChanged }: BusinessTyp
     Promise.all([Api.tenants.getConfig(tenantId), Api.templates.listFull()])
       .then(([cfg, tpls]) => {
         if (!active) return;
-        setConfig(cfg as Tenant | null);
+        setConfig(cfg);
         setTemplates(Array.isArray(tpls) ? tpls : []);
       })
       .catch(() => {

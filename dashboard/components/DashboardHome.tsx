@@ -130,10 +130,10 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
     setResources(resR.status === 'fulfilled' && Array.isArray(resR.value) ? resR.value : []);
     setCustomers(custR.status === 'fulfilled' && Array.isArray(custR.value) ? custR.value : []);
     if (configR.status === 'fulfilled') {
-      setTenantPhone((configR.value as import('../lib/types').Tenant)?.inbound_phone ?? null);
+      setTenantPhone((configR.value)?.inbound_phone ?? null);
     }
     if (statsR.status === 'fulfilled' && statsR.value) {
-      setAnalyticsStats(statsR.value as AnalyticsStats);
+      setAnalyticsStats(statsR.value);
     }
 
     const anyFailed = results.some((r) => r.status === 'rejected');

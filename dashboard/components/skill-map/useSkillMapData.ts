@@ -94,7 +94,7 @@ export function useSkillMapData(
         .filter((e) => e.type !== 'user')
         .map((e) => ({
           id: `emp-${e.employee_id}`,
-          type: 'employee' as NodeType,
+          type: 'employee',
           name: e.name,
           rawId: e.employee_id,
         }));
@@ -102,7 +102,7 @@ export function useSkillMapData(
       // Build resource nodes
       const resNodes: SkillMapNode[] = (resources || []).map((r) => ({
         id: `res-${r.resource_id}`,
-        type: 'resource' as NodeType,
+        type: 'resource',
         name: r.name,
         rawId: r.resource_id,
       }));
@@ -110,7 +110,7 @@ export function useSkillMapData(
       // Build service nodes (middle column — these ARE the "skills" in the map)
       const svcNodes: SkillMapNode[] = (services || []).map((s) => ({
         id: `skill-${s.service_id}`,
-        type: 'skill' as NodeType,
+        type: 'skill',
         name: s.name,
         rawId: s.service_id,
       }));

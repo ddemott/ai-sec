@@ -18,7 +18,7 @@ import LoginView from './LoginView';
 const originalFetch = global.fetch;
 
 beforeEach(() => {
-  global.fetch = vi.fn() as unknown as typeof fetch;
+  global.fetch = vi.fn();
   // Clear localStorage between tests so auth-success doesn't leak state
   window.localStorage.clear();
 });

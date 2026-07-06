@@ -24,7 +24,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'location', {
     configurable: true,
     writable: true,
-    value: { href: '' } as Location,
+    value: { href: '' },
   });
   localStorage.clear();
   mockApi.templates.list.mockReset().mockResolvedValue([

@@ -44,7 +44,7 @@ describe('Step7CallerQuestions — document upload', () => {
     render(<Step7CallerQuestions tenantId="t1" />);
     expect(screen.getByTestId('kb-download-example')).toBeInTheDocument();
 
-    const input = screen.getByTestId('kb-document-upload') as HTMLInputElement;
+    const input = screen.getByTestId('kb-document-upload');
     const file = new File(['**Q: X?\n**A: Y'], 'faq.md', { type: 'text/markdown' });
     fireEvent.change(input, { target: { files: [file] } });
 
