@@ -2,8 +2,8 @@ import type { TelnyxProvisioningConfig } from '../routes/provisioning';
 import type { TelnyxNumbersClient } from './telnyxNumbers';
 
 /**
- * Deterministic, zero-network stand-in for TelnyxProvisioningConfig, active
- * only when PROVISIONING_E2E_STUB=1 (strict opt-in, same discipline as
+ * Zero-network stand-in for TelnyxProvisioningConfig, active only when
+ * PROVISIONING_E2E_STUB=1 (strict opt-in, same discipline as
  * KNOWLEDGE_IMPORT_E2E_STUB). activatePhone() itself short-circuits before
  * ever calling telnyx.client's methods (see provisioningService.ts) — this
  * object exists so any OTHER code path that touches it (deactivatePhone's
