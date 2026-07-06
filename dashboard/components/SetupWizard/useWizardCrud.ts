@@ -131,6 +131,10 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
 
   // Coverage preview: reruns whenever step 6 is active or the draft graph it
   // depends on changes shape, so the coverage view reflects the live draft.
+  // buildDraftGraph is a real dependency (not suppressed) — its own deps are
+  // every draft field, so a genuine future path where step 6 stays active
+  // while the draft changes underneath it (e.g. a later back/forward-nav
+  // change) refetches instead of silently showing a stale preview.
   useEffect(() => {
     if (step !== 6 || !tenantId) return;
     setCoverageLoading(true);
@@ -139,8 +143,7 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
       .then((data) => setCoverageData(Array.isArray(data) ? data : []))
       .catch(() => setCoverageData([]))
       .finally(() => setCoverageLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, tenantId]);
+  }, [step, tenantId, buildDraftGraph]);
 
   const resetAll = useCallback(() => {
     setDraftServices([]);
@@ -197,10 +200,23 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
 
   /** "Change business type": drop only auto-seeded rows so a re-pick reseeds
    *  cleanly from the newly chosen template; anything the owner typed by hand
-   *  survives (the exact nicety the old DB-tracked refs provided). */
+   *  survives (the exact nicety the old DB-tracked refs provided). Cascades
+   *  the same as deleteService/deleteResource — a mapping made in Step 5
+   *  against an auto-seeded service/resource before backing up to Step 1
+   *  must not survive as a dangling tmp_id reference. */
   const clearAutoSeeded = useCallback(() => {
     setDraftServices((prev) => prev.filter((s) => !autoSeededServiceTmpIds.has(s.service_id)));
     setDraftResources((prev) => prev.filter((r) => !autoSeededResourceTmpIds.has(r.resource_id)));
+    setServiceEmployeeMappings((prev) =>
+      prev.filter((m) => !autoSeededServiceTmpIds.has(m.service_id))
+    );
+    setServiceResourceMappings((prev) =>
+      prev.filter(
+        (m) =>
+          !autoSeededServiceTmpIds.has(m.service_id) &&
+          !(m.resource_id && autoSeededResourceTmpIds.has(m.resource_id))
+      )
+    );
     setAutoSeededServiceTmpIds(new Set());
     setAutoSeededResourceTmpIds(new Set());
   }, [autoSeededServiceTmpIds, autoSeededResourceTmpIds]);

@@ -232,4 +232,31 @@ describe('useWizardCrud — buildDraftGraph serialization', () => {
     act(() => result.current.clearAutoSeeded());
     expect(result.current.draftServices.map((s) => s.name)).toEqual(['My Custom']);
   });
+
+  it('clearAutoSeeded cascades to mappings made against the dropped rows', () => {
+    const { result } = setup();
+
+    act(() => result.current.seedServices(['Haircut']));
+    const seededServiceId = result.current.draftServices[0].service_id;
+
+    act(() => result.current.startAddEmployee());
+    act(() =>
+      result.current.setEditingEmployee({ first_name: 'Tess', last_name: '', email: '', phone: '' })
+    );
+    act(() => result.current.saveEmployee());
+    const employeeId = result.current.draftEmployees[0].employee_id;
+
+    act(() => result.current.toggleEmployeeAssignment(seededServiceId, employeeId));
+    expect(result.current.serviceEmployeeMappings).toHaveLength(1);
+
+    act(() => result.current.clearAutoSeeded());
+
+    expect(result.current.draftServices).toHaveLength(0);
+    expect(result.current.serviceEmployeeMappings).toHaveLength(0);
+    // The employee itself wasn't auto-seeded — it survives.
+    expect(result.current.draftEmployees).toHaveLength(1);
+
+    const graph = result.current.buildDraftGraph();
+    expect(graph.service_employee).toHaveLength(0);
+  });
 });
