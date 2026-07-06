@@ -152,7 +152,7 @@ describe('BusinessSettingsView', () => {
     // @ts-expect-error — intentional test-only override; window.location is read-only in DOM lib
     delete window.location;
     // @ts-expect-error — intentional test-only override
-    window.location = { ...window.location, href: '', search: '' } as Location;
+    window.location = { ...window.location, href: '', search: '' };
   });
 
   afterEach(() => {

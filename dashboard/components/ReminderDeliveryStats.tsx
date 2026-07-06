@@ -32,7 +32,7 @@ export default function ReminderDeliveryStats() {
     setError(null);
     try {
       const data = await Api.reminders.deliveryStats(tenantId);
-      setStats(data as DeliveryStats);
+      setStats(data);
     } catch (e) {
       setError('Failed to load reminder delivery stats');
       console.error(e);

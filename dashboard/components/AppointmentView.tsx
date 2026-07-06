@@ -609,7 +609,7 @@ function AppointmentViewInner({
                   ...apt,
                   start_time: startIso,
                   end_time: endIso,
-                } as Appointment);
+                });
                 setIsEditing(true);
                 setIsCreating(false);
                 setShowDetailOnMobile(true);
@@ -638,7 +638,7 @@ function AppointmentViewInner({
                   ...apt,
                   start_time: startIso,
                   end_time: endIso,
-                } as Appointment);
+                });
                 setIsEditing(true);
                 setIsCreating(false);
                 setShowDetailOnMobile(true);

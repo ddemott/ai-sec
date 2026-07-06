@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { Building2, RefreshCw, Search, Globe, ShieldAlert } from 'lucide-react';
-import { formatPhone } from '../lib/phone';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
@@ -175,7 +174,7 @@ export default function SuperAdminDashboard({ onSelectTenant, currentTenantId }:
             if (isFiltering && visible.length === 0) {
               return (
                 <div className="p-4 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  No businesses match "{search.trim()}".
+                  No businesses match &quot;{search.trim()}&quot;.
                 </div>
               );
             }

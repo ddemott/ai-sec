@@ -35,7 +35,7 @@ describe('Step7WebsiteScan — document upload', () => {
     });
 
     render(<Step7WebsiteScan tenantId="t1" />);
-    const input = screen.getByTestId('kb-document-upload') as HTMLInputElement;
+    const input = screen.getByTestId('kb-document-upload');
     const file = new File(['**Q: Do you sell gift cards?\n**A: Yes.'], 'faq.md', {
       type: 'text/markdown',
     });
@@ -82,7 +82,7 @@ describe('Step7WebsiteScan — document upload', () => {
     mockImportDocument.mockResolvedValue({ success: false, error: 'Unsupported file type ".exe"' });
 
     render(<Step7WebsiteScan tenantId="t1" />);
-    const input = screen.getByTestId('kb-document-upload') as HTMLInputElement;
+    const input = screen.getByTestId('kb-document-upload');
     const file = new File(['x'], 'bad.exe', { type: 'application/octet-stream' });
     fireEvent.change(input, { target: { files: [file] } });
 
