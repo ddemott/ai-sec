@@ -97,20 +97,32 @@ test.describe('Setup wizard — Import from website step (browser click-path)', 
       await expect(firstType).toBeVisible({ timeout: 4000 });
       await firstType.click();
 
-      // The wizard opens with the template's services auto-seeded into the
-      // draft. Jump to Step 3 (enabled once those services land) and add one
-      // employee through the real UI — canAdvanceTo(7) needs both. Scoped to
-      // the wizard dialog: the header's setup-progress pill has an aria-label
-      // that also contains "Who works here" (one of its 6 remaining-steps
-      // items), which an unscoped getByRole would ambiguously match too.
+      // The wizard opens on Step 1 with an EMPTY draft — none of the seeded
+      // business_templates.example_services rows are populated in this DB
+      // (all `{}`), so nothing auto-seeds. Add one service, then one
+      // employee, through the real UI — canAdvanceTo(7) needs both. Scoped
+      // to the wizard dialog throughout: the header's setup-progress pill
+      // has an aria-label that also contains "Who works here" (one of its 6
+      // remaining-steps items), which an unscoped getByRole would
+      // ambiguously match too.
       const wizardDialog = page.getByRole('dialog', { name: /Setup Assistant/i });
+      await wizardDialog.getByRole('button', { name: /Add a service/i }).click();
+      await wizardDialog.getByLabel('Service Name').fill('Wizard Service');
+      await wizardDialog.getByRole('button', { name: /^Add Service$/i }).click();
+      await expect(wizardDialog.getByText('Wizard Service')).toBeVisible({ timeout: 4000 });
+
+      // Employee copy is vocab-personalized per business type (e.g. "Add a
+      // mechanic" for auto-shop, "Add a stylist" for salon — no template in
+      // this seed uses the generic "Employee" label), so both the open-form
+      // trigger and the in-form save button are matched by shape, not by a
+      // specific vocab word.
       const staffChip = wizardDialog.getByRole('button', { name: /Who works here/i });
       await expect(staffChip).toBeEnabled({ timeout: 10000 });
       await staffChip.click();
-      await wizardDialog.getByRole('button', { name: /Add an employee/i }).click();
+      await wizardDialog.getByRole('button', { name: /^Add (a|an) \S+$/i }).click();
       await wizardDialog.getByPlaceholder('First name').fill('Wizard');
       await wizardDialog.getByPlaceholder('Last name').fill('Tech');
-      await wizardDialog.getByRole('button', { name: /^Add Employee$/i }).click();
+      await wizardDialog.getByRole('button', { name: /^Add \S+$/i }).click();
       await expect(wizardDialog.getByText('Wizard Tech')).toBeVisible({ timeout: 4000 });
 
       // Jump to the "Import from website" step via its chip.
