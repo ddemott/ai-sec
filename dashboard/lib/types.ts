@@ -359,6 +359,44 @@ export interface CoverageItem {
   details: Record<string, unknown>;
 }
 
+/**
+ * Wizard Phase B draft graph — mirrors the backend's DraftGraphSchema exactly
+ * (src/services/setupGraph.ts) so the same payload serializes for both
+ * POST /coverage/dry-run (preview) and POST /setup/commit (persist). Every
+ * entity is keyed by a client-generated tmp_id (see
+ * SetupWizard/draftIds.ts `newTmpId()`) stored in the entity's normal
+ * *_id field — WizardService/WizardResource/WizardEmployee need no changes.
+ */
+export interface WizardDraftGraph {
+  services: Array<{
+    tmp_id: string;
+    name: string;
+    duration_minutes: number;
+    subtitle?: string;
+    description?: string;
+    price?: number;
+  }>;
+  resources: Array<{ tmp_id: string; name: string; description?: string }>;
+  employees: Array<{
+    tmp_id: string;
+    name: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+  }>;
+  shifts: Array<{
+    employee_tmp_id: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+  }>;
+  service_employee: Array<{ service_tmp_id: string; employee_tmp_id: string }>;
+  service_resource: Array<{ service_tmp_id: string; resource_tmp_id: string }>;
+  start_date?: string;
+  end_date?: string;
+}
+
 export interface CallSummary {
   call_summary_id: string;
   tenant_id: string;

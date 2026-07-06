@@ -22,6 +22,7 @@ import type {
   AiCostSummary,
   Vocabulary,
   CoverageItem,
+  WizardDraftGraph,
   CallSummary,
   CrmSyncStatus,
   SquareSettings,
@@ -273,6 +274,39 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(errorText || `API Error: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+/**
+ * POST a JSON body, get back a RAW (unwrapped) JSON response — for the small
+ * set of POST endpoints that return data directly rather than the
+ * `{success, error?}` envelope apiMutate expects (e.g. POST /coverage/dry-run,
+ * which mirrors GET /coverage's raw-array shape). Throws on a non-2xx
+ * response (mirrors apiFetch) so callers use try/catch, not a success check.
+ */
+async function apiPostRaw<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+  await ensureTokenFresh();
+  const url = `${API_BASE_URL}${endpoint}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    handleFetchError(err);
+    throw err;
+  }
+
+  const authError = await checkAuthFailure(response);
+  if (authError) throw new Error(authError);
+
+  if (!response.ok) {
+    const json = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(json.error || `API Error: ${response.status}`);
   }
   return response.json() as Promise<T>;
 }
@@ -773,6 +807,27 @@ export const Api = {
       if (endDate) params.end_date = endDate;
       return apiFetch<CoverageItem[]>(`/coverage`, params);
     },
+    // Wizard Phase B — coverage for a DRAFT graph that isn't in the DB yet.
+    // Tenant comes from the auth token (requireTenantId server-side), not a
+    // param — same as setup.commit below.
+    dryRun: (draft: WizardDraftGraph) =>
+      apiPostRaw<CoverageItem[]>(`/coverage/dry-run`, draft as unknown as Record<string, unknown>),
+  },
+
+  // --- SETUP (Wizard Phase B) ---
+  setup: {
+    // Commits the wizard's draft entity graph — same shape as coverage.dryRun,
+    // but persists. See docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md.
+    commit: (draft: WizardDraftGraph) =>
+      apiMutate<{
+        counts: {
+          services: number;
+          resources: number;
+          employees: number;
+          serviceEmployee: number;
+          serviceResource: number;
+        };
+      }>(`/setup/commit`, 'POST', draft as unknown as Record<string, unknown>),
   },
 
   // --- KNOWLEDGE BASE (RAG) ---
