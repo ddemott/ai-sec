@@ -52,6 +52,7 @@ export function PolicyQuestionField({
     setStatus('idle');
 
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
     if (newVal.trim().length < 2) return;
 
     timerRef.current = setTimeout(async () => {

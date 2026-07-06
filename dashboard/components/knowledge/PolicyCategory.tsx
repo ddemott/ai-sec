@@ -8,7 +8,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from '../ui/Badge';
-import type { POLICY_QUESTIONS } from '../../lib/policyQuestions';
+import type { PolicyQuestion } from '../../lib/policyQuestions';
 import { PolicyQuestionField } from './PolicyQuestionField';
 
 type SavedAnswer = { id: string; answer: string; source?: string };
@@ -21,7 +21,7 @@ export function PolicyCategory({
   defaultOpen = false,
 }: {
   category: string;
-  questions: typeof POLICY_QUESTIONS;
+  questions: PolicyQuestion[];
   savedAnswers: Map<string, SavedAnswer>;
   onSave: (
     question: string,
