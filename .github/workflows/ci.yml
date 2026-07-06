@@ -336,6 +336,11 @@ jobs:
           # Lets the import-website E2E exercise the real resolver → staging path
           # with canned extraction (no live OpenAI; CI's key is sk-dummy).
           KNOWLEDGE_IMPORT_E2E_STUB: '1'
+          # Lets GoLivePanel E2E specs exercise the real activate state-machine
+          # + DB update path with no Telnyx account configured. Also makes
+          # /provisioning/activate "configured" (past the telnyx-null 503
+          # guard) with zero real credentials.
+          PROVISIONING_E2E_STUB: '1'
           # Serve plain HTTP — wait-on, the dashboard, and Playwright all hit
           # http://localhost:4001. Without this the backend boots HTTPS with a
           # self-signed cert and every probe/request fails the TLS handshake.

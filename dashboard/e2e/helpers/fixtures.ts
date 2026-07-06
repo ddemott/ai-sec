@@ -127,6 +127,21 @@ export async function createEmployeeAs(
   return body.employee.employee_id as string;
 }
 
+export async function createServiceAs(
+  req: APIRequestContext,
+  token: string,
+  tenantId: string,
+  name: string
+): Promise<string> {
+  const res = await req.post(`${BACKEND_URL}/services/create`, {
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    data: { tenant_id: tenantId, name, duration_minutes: 30 },
+  });
+  expect(res.status(), `service ${name} create must succeed`).toBe(200);
+  const body = await res.json();
+  return body.service.service_id as string;
+}
+
 export async function createResourceAs(
   req: APIRequestContext,
   token: string,
@@ -291,7 +306,6 @@ export async function updateAppointmentAs(
   });
   return { status: res.status(), body: await res.json() };
 }
-
 
 /**
  * Convenience: direct INSERT of a scheduled appointment for tests that

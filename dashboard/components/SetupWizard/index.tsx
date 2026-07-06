@@ -165,7 +165,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       setCommitting(true);
       setCommitError(null);
       try {
-        const res = await Api.setup.commit(crud.buildDraftGraph());
+        const res = await Api.setup.commit(tenantId, crud.buildDraftGraph());
         if (!res.success) {
           setCommitError(res.error || 'Failed to complete setup');
           return; // stay on the current step — draft intact, nothing advanced

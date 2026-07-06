@@ -808,17 +808,26 @@ export const Api = {
       return apiFetch<CoverageItem[]>(`/coverage`, params);
     },
     // Wizard Phase B — coverage for a DRAFT graph that isn't in the DB yet.
-    // Tenant comes from the auth token (requireTenantId server-side), not a
-    // param — same as setup.commit below.
-    dryRun: (draft: WizardDraftGraph) =>
-      apiPostRaw<CoverageItem[]>(`/coverage/dry-run`, draft as unknown as Record<string, unknown>),
+    // tenant_id must be sent explicitly (same as every other mutating Api.*
+    // call) — requireTenantId() falls back to the JWT's own tenant when it's
+    // absent, which is wrong for a super-admin managing a DIFFERENT tenant
+    // (the wizard would silently commit into the super-admin's own tenant
+    // instead of the one being set up). tenantMiddleware validates this
+    // user-supplied value against the JWT (must match, or caller must be
+    // super-admin) before requireTenantId ever sees it.
+    dryRun: (tenantId: string | null, draft: WizardDraftGraph) =>
+      apiPostRaw<CoverageItem[]>(`/coverage/dry-run`, {
+        tenant_id: tenantId,
+        ...draft,
+      }),
   },
 
   // --- SETUP (Wizard Phase B) ---
   setup: {
     // Commits the wizard's draft entity graph — same shape as coverage.dryRun,
     // but persists. See docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md.
-    commit: (draft: WizardDraftGraph) =>
+    // tenant_id explicit for the same reason as coverage.dryRun above.
+    commit: (tenantId: string | null, draft: WizardDraftGraph) =>
       apiMutate<{
         counts: {
           services: number;
@@ -827,7 +836,10 @@ export const Api = {
           serviceEmployee: number;
           serviceResource: number;
         };
-      }>(`/setup/commit`, 'POST', draft as unknown as Record<string, unknown>),
+      }>(`/setup/commit`, 'POST', {
+        tenant_id: tenantId,
+        ...draft,
+      }),
   },
 
   // --- KNOWLEDGE BASE (RAG) ---

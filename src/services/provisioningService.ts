@@ -136,6 +136,33 @@ export async function activatePhone(
       tenantId,
     ]);
 
+    // PROVISIONING_E2E_STUB: strict opt-in (literal "1") that swaps the real
+    // Telnyx search/order/assign HTTP calls for a canned number (unique per
+    // call, not reproducible run-to-run — it's built from Date.now()), so
+    // E2E can exercise the REAL state-machine + DB update path (not just the
+    // route) without a live Telnyx account. Same env-gated test-hook
+    // discipline as KNOWLEDGE_IMPORT_E2E_STUB. Off by default. inbound_phone
+    // is UNIQUE — Date.now() keeps repeated activations across a test run
+    // from colliding.
+    if (process.env.PROVISIONING_E2E_STUB === '1') {
+      const stubPhoneNumber = `+1${areaCode || '555'}${Date.now().toString().slice(-7)}`;
+      const stubPhoneNumberId = `stub-pn-${Date.now()}`;
+      await client.query(
+        `UPDATE tenants SET
+          telnyx_phone_number_id = $1,
+          inbound_phone = $2,
+          phone_status = 'active'
+        WHERE tenant_id = $3`,
+        [stubPhoneNumberId, stubPhoneNumber, tenantId]
+      );
+      return {
+        status: 'ok',
+        phone_number: stubPhoneNumber,
+        telnyx_phone_number_id: stubPhoneNumberId,
+        tenant_id: tenantId,
+      };
+    }
+
     let purchasedId: string | null = null;
 
     try {
