@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFocusTrap } from '../../lib/useFocusTrap';
 import { ChevronRight, ChevronLeft, Check, X, Wand2 } from 'lucide-react';
 import { Api } from '../../lib/api';
-import { useStaticData } from '../../lib/hooks';
 import { useActiveTenantId } from '../../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { Button } from '../ui/Button';
@@ -12,13 +11,7 @@ import { showToast } from '../ui/Toast';
 import { WizardStepContent } from './WizardStepContent';
 import { useWizardCrud } from './useWizardCrud';
 import { markFirstRunTourPending } from '../FirstRunTour';
-import type {
-  WizardStep,
-  WizardService,
-  WizardResource,
-  WizardEmployee,
-  SetupWizardProps,
-} from './types';
+import type { WizardStep, SetupWizardProps } from './types';
 
 // Step labels are verbs/outcomes ("What you offer", "Who works here") so the
 // chip strip teaches a new owner what each step does without having to enter
@@ -44,7 +37,6 @@ function getStepLabels(_vocab: {
 
 export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWizardProps) {
   const tenantId = useActiveTenantId();
-  const { services, resources, employees, loading, refresh } = useStaticData(tenantId);
   const vocab = useVocabulary();
   const STEP_LABELS = getStepLabels(vocab);
   const [step, setStep] = useState<WizardStep>(1);
@@ -57,7 +49,18 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
   // with no signal or recovery. Drives the retry banner in the body.
   const [seedError, setSeedError] = useState<string | null>(null);
 
-  const crud = useWizardCrud(tenantId, step, refresh);
+  const crud = useWizardCrud(tenantId, step);
+
+  // Wizard Phase B: the entity graph (services/resources/employees/shifts/
+  // mappings) commits ONCE, when the owner advances into step 9 ("Go Live") —
+  // not on the final Done click. Step 9 is where a REAL phone number gets
+  // activated (a real external purchase, independent of the wizard's own
+  // Next/Done flow); committing any later would let an owner activate a live,
+  // answering phone number backed by a draft that was never actually saved.
+  // See docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md §2.
+  const [hasCommitted, setHasCommitted] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -72,54 +75,38 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
   }, [isOpen]);
 
   const seedingRef = useRef(false);
-  // The starter services we committed to seeding, captured ONCE when the
-  // catalog was empty. Reconciling against this (not the live `services`)
-  // means a retry after a partial failure finishes the original set without
-  // topping-up a user who already has their own services.
-  const seedTargetRef = useRef<string[]>([]);
-  // IDs of services + resources THIS wizard instance created via auto-seed,
-  // so "Change business type" can delete them on the way back to the
-  // picker (otherwise the next pick's gate `services.length === 0` would
-  // stay closed and the user would keep seeing the previous template's
-  // services — the exact bug Dale flagged 2026-05-27).
-  const autoSeededServiceIdsRef = useRef<Set<string>>(new Set());
-  const autoSeededResourceIdsRef = useRef<Set<string>>(new Set());
 
-  // Reset on open. seedTargetRef must reset too — leaving it primed from
-  // a prior open would make a re-pick try to recreate the previous
-  // template's example_services instead of refilling from the new
-  // template (auto-seed bug, 2026-05-27).
+  // Reset on open — including the commit flag, so reopening the wizard always
+  // starts from a fresh, uncommitted draft.
   useEffect(() => {
     if (isOpen) {
       setStep(1);
       crud.resetAll();
       seedingRef.current = false;
-      seedTargetRef.current = [];
-      autoSeededServiceIdsRef.current = new Set();
-      autoSeededResourceIdsRef.current = new Set();
       setSeedError(null);
+      setHasCommitted(false);
+      setCommitError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // Auto-seed example services + one default resource from the
-  // business template when none exist.
-  //
-  // Services seed: pulls template.example_services so the owner lands
-  // on step 1 with a starter catalog they can edit.
-  //
-  // Resource seed (D3, 2026-05-17): single-location teams should not
-  // have to manually add their first "Bay 1" / "Chair 1" / "Truck 1"
-  // before they can advance. Step 2 now lands pre-filled with one
-  // default named by the vocabulary ("Main Location" for generic
-  // templates, "<vocab.resource_label> 1" otherwise). Owners with
-  // multi-station shops keep using "Add a <resource>" as before.
-  // Seed missing starter data. Reconcile (not all-or-nothing): creates only
-  // the services in seedTargetRef not yet present + a default resource if none
-  // exists, then refreshes. Safe to call repeatedly — that's what makes the
-  // retry below able to finish a partial seed. On failure it sets seedError
-  // (was previously a silent console.warn) so the body can offer a Retry.
-  const runSeed = useCallback(async () => {
+  // Auto-seed example services + one default resource from the business
+  // template when the wizard opens. Phase B: this pushes into LOCAL draft
+  // state only (crud.seedServices / crud.seedDefaultResource) — no DB writes,
+  // so there is nothing to reconcile on retry (a local push either fully
+  // happens or, if the template fetch below fails, doesn't happen at all) and
+  // nothing to clean up if the owner picks a different business type (see
+  // handleBackToPicker). The only failure mode left is the two read-only
+  // fetches themselves — surfaced via seedError + the Retry banner below.
+  // Deliberately NOT useCallback: `crud` (from useWizardCrud) is a fresh
+  // object every render, so a memoized runSeed with a restricted dep array
+  // would permanently close over whatever `crud.seedServices` was on the
+  // render that created it — a stale-closure bug (caught by the back-to-
+  // picker test below hitting the analogous case in handleBackToPicker).
+  // Redefining this plain function every render means the effect + the Retry
+  // button always call the CURRENT render's crud.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  async function runSeed() {
     if (!tenantId) return;
     seedingRef.current = true;
     setSeedError(null);
@@ -130,91 +117,33 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       ]);
       const tpl = (templates || []).find((t) => t.business_type === config?.business_type);
 
-      // Capture the target set ONCE, only when the catalog is empty — so a
-      // user who already has services never gets template ones added.
-      if (services.length === 0 && seedTargetRef.current.length === 0) {
-        seedTargetRef.current = tpl?.example_services ?? [];
-      }
-      const missing = seedTargetRef.current.filter(
-        (name) => !services.some((s) => s.name === name)
-      );
-      for (const name of missing) {
-        // is_auto_seeded persists the "I am a template default" tag in
-        // the DB so a business_type change handled server-side (POST
-        // /tenants/:id/update-config) can roll these back even after a
-        // page reload. The in-session autoSeededServiceIdsRef below
-        // still tracks ids for the same-session re-pick rollback path.
-        const result = await Api.services.create(tenantId, {
-          name,
-          duration_minutes: 30,
-          is_auto_seeded: true,
-        });
-        const newId = result?.service?.service_id;
-        if (newId) autoSeededServiceIdsRef.current.add(String(newId));
-      }
+      crud.seedServices(tpl?.example_services ?? []);
 
-      if (resources.length === 0) {
-        const defaultName =
-          vocab.resource_label === 'Resource' ? 'Main Location' : `${vocab.resource_label} 1`;
-        const result = await Api.resources.create(tenantId, {
-          name: defaultName,
-          description: 'Auto-created — rename or add more in this step',
-          is_auto_seeded: true,
-        });
-        const newId = result?.resource?.resource_id;
-        if (newId) autoSeededResourceIdsRef.current.add(String(newId));
-      }
-
-      await refresh();
+      const defaultName =
+        vocab.resource_label === 'Resource' ? 'Main Location' : `${vocab.resource_label} 1`;
+      crud.seedDefaultResource(defaultName, 'Auto-created — rename or add more in this step');
     } catch (err) {
       setSeedError(err instanceof Error ? err.message : 'Failed to set up starter data');
     }
-  }, [tenantId, services, resources, vocab, refresh]);
+  }
 
-  // Auto-seed on open when nothing exists yet. seedingRef gates it to one
-  // auto-run; the Retry button calls runSeed() directly to bypass the gate.
+  // Auto-seed once per open. seedingRef gates the automatic run; the Retry
+  // button calls runSeed() directly to bypass the gate. runSeed is
+  // deliberately NOT memoized (see its definition above) so this effect
+  // re-evaluates on every render, but seedingRef.current makes every
+  // re-evaluation past the first a no-op — the intended behavior, not a
+  // missing dependency.
   useEffect(() => {
-    if (!isOpen || !tenantId || loading || seedingRef.current) return;
-    if (services.length > 0 && resources.length > 0) return;
+    if (!isOpen || !tenantId || seedingRef.current) return;
     void runSeed();
-  }, [isOpen, tenantId, loading, services.length, resources.length, runSeed]);
-
-  const activeServices: WizardService[] = services
-    .filter((s) => !(s as { is_deleted?: boolean }).is_deleted)
-    .map((s) => ({
-      service_id: s.service_id,
-      name: s.name,
-      description: s.description,
-      duration_minutes: s.duration_minutes,
-      price: s.price,
-    }));
-  const activeResources: WizardResource[] = resources
-    .filter((r) => r.is_active !== false)
-    .map((r) => ({
-      resource_id: r.resource_id,
-      name: r.name,
-      description: r.description ?? undefined,
-      is_active: r.is_active,
-    }));
-  const activeEmployees: WizardEmployee[] = employees
-    .filter((e) => !e.is_deleted && e.is_active !== false)
-    .map((e) => ({
-      employee_id: e.employee_id,
-      name: e.name,
-      first_name: e.first_name ?? undefined,
-      last_name: e.last_name ?? undefined,
-      email: e.email ?? undefined,
-      phone: e.phone ?? undefined,
-      type: e.type,
-      is_active: e.is_active,
-    }));
+  }, [isOpen, tenantId, runSeed]);
 
   const canAdvanceTo = (target: WizardStep): boolean => {
     if (target <= step) return true; // backward always allowed
-    if (loading) return true; // don't block while data is loading
-    if (target >= 2 && activeServices.length === 0) return false;
-    if (target >= 4 && activeEmployees.length === 0) return false;
-    if (target >= 5 && (activeEmployees.length === 0 || activeServices.length === 0)) return false;
+    if (target >= 2 && crud.draftServices.length === 0) return false;
+    if (target >= 4 && crud.draftEmployees.length === 0) return false;
+    if (target >= 5 && (crud.draftEmployees.length === 0 || crud.draftServices.length === 0))
+      return false;
     return true;
   };
 
@@ -224,63 +153,56 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       showToast('Complete this step before continuing', 'warning');
       return;
     }
-    // On the way into step 8 (Go Live), fan each employee's weekly
-    // availability into 4 weeks of date-specific employee_schedule
-    // rows. Booking RPCs read only employee_schedule, so without this
-    // a tenant could activate the phone and still have every booking
-    // attempt return EMPLOYEE_NOT_SCHEDULED. Errors are non-fatal —
-    // we log and continue so a flaky network doesn't strand the user.
-    if (next === 9 && tenantId) {
-      // Group the in-memory shift form-state by employee so each
-      // employee's pattern is fanned independently.
-      for (const emp of activeEmployees) {
-        const empPattern = crud.shifts
-          .filter(
-            (s) => String(s.employee_id) === String(emp.employee_id) && s.start_time && s.end_time
-          )
-          .map((s) => ({
-            day_of_week: s.day_of_week,
-            start_time: s.start_time.slice(0, 5),
-            end_time: s.end_time.slice(0, 5),
-          }));
-        try {
-          await Api.shifts.expandWeekly(tenantId, String(emp.employee_id), empPattern);
-        } catch (err) {
-          console.warn(`Failed to expand weekly schedule for employee ${emp.employee_id}:`, err);
+
+    // Commit the entity graph on the transition into step 9 — see the
+    // hasCommitted doc comment above. Once committed in this session, going
+    // back and forward again just re-enters step 9 without re-committing:
+    // the graph is already real, and a second commit would 409 (the backend's
+    // idempotency guard) — editing a committed catalog belongs in My Business,
+    // not a second wizard commit (docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md
+    // §3 "Open risks" #3).
+    if (next === 9 && tenantId && !hasCommitted) {
+      setCommitting(true);
+      setCommitError(null);
+      try {
+        const res = await Api.setup.commit(crud.buildDraftGraph());
+        if (!res.success) {
+          setCommitError(res.error || 'Failed to complete setup');
+          return; // stay on the current step — draft intact, nothing advanced
         }
+        setHasCommitted(true);
+      } catch (err) {
+        setCommitError(err instanceof Error ? err.message : 'Failed to complete setup');
+        return;
+      } finally {
+        setCommitting(false);
       }
     }
     setStep(next);
   };
   const goBack = () => setStep((s) => Math.max(s - 1, 1) as WizardStep);
 
-  // "Change business type" — only meaningful on Step 1 and only when
-  // the parent wired an onBackToPicker callback (i.e. the user reached
-  // the wizard via the BusinessTypePicker, not the dismissed-banner
-  // shortcut). Wipes auto-seeded rows so the next pick's runSeed sees
-  // an empty catalog and reseeds for the freshly chosen template;
-  // user-typed rows are left intact because their ids never entered
-  // the autoSeeded* sets in the first place.
-  const handleBackToPicker = useCallback(async () => {
+  // "Change business type" — only meaningful on Step 1 and only when the
+  // parent wired an onBackToPicker callback (i.e. the user reached the wizard
+  // via the BusinessTypePicker, not the dismissed-banner shortcut). Phase B:
+  // drops only the auto-seeded draft rows (crud.clearAutoSeeded) so a re-pick
+  // reseeds cleanly from the newly chosen template; user-typed rows survive.
+  // No DB calls — nothing was ever written pre-commit, so there is nothing to
+  // delete server-side (the old best-effort Api.*.delete cleanup is gone).
+  // Deliberately NOT useCallback — see the runSeed comment above; `crud`
+  // is fresh every render, and this must always see the CURRENT draft's
+  // auto-seeded tmp_ids, not whichever render first created a memoized
+  // version of this function.
+  async function handleBackToPicker() {
     if (!onBackToPicker) return;
-    if (tenantId) {
-      const serviceIds = Array.from(autoSeededServiceIdsRef.current);
-      const resourceIds = Array.from(autoSeededResourceIdsRef.current);
-      autoSeededServiceIdsRef.current = new Set();
-      autoSeededResourceIdsRef.current = new Set();
-      seedTargetRef.current = [];
-      // Best-effort: a delete that fails (e.g. the user edited the row
-      // and the backend now considers it user-owned) is swallowed so we
-      // still return the user to the picker. A subsequent reseed will
-      // simply skip the name if it still exists.
-      await Promise.all([
-        ...serviceIds.map((id) => Api.services.delete(id, tenantId).catch(() => undefined)),
-        ...resourceIds.map((id) => Api.resources.delete(id, tenantId).catch(() => undefined)),
-      ]);
-      await refresh();
-    }
+    crud.clearAutoSeeded();
+    // NOT resetting seedingRef here (the isOpen effect above already resets
+    // it on the wizard's next real reopen for the new business type) — doing
+    // so while THIS instance is still mounted would immediately re-trigger
+    // the auto-seed effect for the CURRENT (not-yet-changed) business type,
+    // reseeding right back what clearAutoSeeded() just removed.
     await onBackToPicker();
-  }, [onBackToPicker, tenantId, refresh]);
+  }
 
   const goToStep = (s: WizardStep) => {
     if (canAdvanceTo(s)) setStep(s);
@@ -354,6 +276,17 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
+          {hasCommitted && step < 9 && (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2"
+            >
+              <span className="text-xs text-amber-800 dark:text-amber-300">
+                Your business is already set up. Changes here won&apos;t be saved — edit services,
+                staff, and hours from My Business after closing this wizard.
+              </span>
+            </div>
+          )}
           {seedError && (
             <div
               role="alert"
@@ -368,10 +301,21 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
               </Button>
             </div>
           )}
+          {commitError && (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2"
+            >
+              <span className="text-xs text-red-800 dark:text-red-300">
+                Couldn’t finish setting up your business: {commitError}. Nothing was lost — fix the
+                issue above and try again.
+              </span>
+            </div>
+          )}
           <WizardStepContent
             step={step}
             tenantId={tenantId}
-            services={activeServices}
+            services={crud.draftServices}
             editingService={crud.editingService}
             editingServiceId={crud.editingServiceId}
             onAddService={crud.startAddService}
@@ -380,7 +324,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
             onSaveService={crud.saveService}
             onCancelEditService={crud.cancelEditService}
             onChangeService={crud.setEditingService}
-            resources={activeResources}
+            resources={crud.draftResources}
             editingResource={crud.editingResource}
             editingResourceId={crud.editingResourceId}
             onAddResource={crud.startAddResource}
@@ -389,7 +333,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
             onSaveResource={crud.saveResource}
             onCancelEditResource={crud.cancelEditResource}
             onChangeResource={crud.setEditingResource}
-            employees={activeEmployees}
+            employees={crud.draftEmployees}
             editingEmployee={crud.editingEmployee}
             editingEmployeeId={crud.editingEmployeeId}
             onAddEmployee={crud.startAddEmployee}
@@ -413,7 +357,7 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
             coverageLoading={crud.coverageLoading}
             phoneStatus={null}
             inboundPhone={null}
-            loading={loading}
+            loading={false}
             saving={crud.saving}
             error={crud.error}
           />
@@ -447,7 +391,13 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
               </Button>
             )}
             {step < 9 ? (
-              <Button variant="primary" size="sm" onClick={goNext}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => void goNext()}
+                disabled={committing}
+                isLoading={committing}
+              >
                 {step === 8 ? 'Go Live' : 'Next'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
@@ -456,17 +406,9 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
                 variant="success"
                 size="sm"
                 onClick={() => {
-                  // Promote auto-seeded rows to user-owned so a later
-                  // business_type change (post-launch, from Settings)
-                  // doesn't wipe the catalog the owner just signed off
-                  // on. Best-effort: a failure here doesn't block close.
-                  if (tenantId) {
-                    Api.tenants.finalizeSetup(tenantId).catch(() => undefined);
-                  }
-                  // Arm the first-run tour for this tenant. DashboardHome
-                  // picks up the flag on its next mount and shows the
-                  // overview modal. Only fires on the step-7 Done path —
-                  // dismissing the wizard mid-flow does not arm the tour.
+                  // The entity graph already committed on entering this step
+                  // (see goNext) — Done is purely "close + arm the first-run
+                  // tour," no further persistence happens here.
                   markFirstRunTourPending(tenantId);
                   onClose();
                 }}

@@ -7,15 +7,22 @@
  * at "user can advance"; it never proves that a tenant who finishes
  * the wizard can immediately book without operator intervention.
  *
- * The wizard's load-bearing finalize work happens in the step 6 → 7
- * transition (SetupWizard/index.tsx:114) — for each active employee,
- * the in-memory weekly availability grid is fanned into 4 weeks of
- * date-specific employee_schedule rows via POST /shifts/expand-weekly.
- * Booking RPCs read employee_schedule exclusively. If that fan-out
- * silently breaks (silent because the wizard catches and logs each
- * employee's failure individually), every booking attempt for the
- * brand-new tenant will return EMPLOYEE_NOT_SCHEDULED and the demo
- * dies.
+ * The wizard's load-bearing finalize work is fanning each employee's
+ * in-memory weekly availability grid into 4 weeks of date-specific
+ * employee_schedule rows. Pre-Phase-B this happened via a per-employee
+ * POST /shifts/expand-weekly loop on the wizard's step 6→7 transition;
+ * as of Phase B (2026-07-05, PR B/#205 + PR C) it's one call —
+ * POST /setup/commit, fired on the transition into step 9 — that inserts
+ * the whole entity graph (services/resources/employees/mappings) AND fans
+ * shifts into employee_schedule inside a single transaction. This spec
+ * doesn't drive the wizard UI itself (see wizard-website-scan.spec.ts and
+ * wizard-solo-path.spec.ts for browser click-paths) — it calls the
+ * underlying endpoints directly to pin the DOWNSTREAM contract: booking
+ * RPCs read employee_schedule exclusively, so whichever endpoint fills it,
+ * a silent fan-out failure means every booking attempt for the brand-new
+ * tenant returns EMPLOYEE_NOT_SCHEDULED and the demo dies. That contract
+ * is unchanged by Phase B, hence /shifts/expand-weekly (still a real,
+ * standalone route) remains the direct, minimal way to pin it here.
  *
  * What's covered:
  *   - Happy path: /register → seed services + resource + employee +

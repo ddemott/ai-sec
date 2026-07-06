@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Api } from '../../lib/api';
 import { roundUpTo15 } from '../../lib/duration';
+import type { WizardDraftGraph } from '../../lib/types';
+import { newTmpId } from './draftIds';
 import type {
   WizardStep,
   ServiceForm,
@@ -18,17 +20,39 @@ import type {
 import { EMPTY_SERVICE, EMPTY_RESOURCE, EMPTY_EMPLOYEE } from './types';
 
 /**
- * Extracts all CRUD operations and step-specific data fetching from SetupWizard.
- * Reduces the main wizard component to just layout + navigation.
+ * Wizard Phase B: draft-commit state. Everything the owner enters — services,
+ * resources, employees, shifts, mappings — lives ONLY in this hook's React
+ * state until the wizard commits the whole graph in one call
+ * (Api.setup.commit, fired by index.tsx on the transition into step 9 — see
+ * docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md). Nothing here
+ * makes a mutating API call; dismissing the wizard before commit leaves zero
+ * DB rows. Shifts were already local-state before Phase B (the precedent this
+ * hook now extends to every other entity type).
+ *
+ * Entities are keyed by a client-generated tmp_id (draftIds.ts) stored in the
+ * same *_id field the committed version will eventually have — so every
+ * Step*.tsx component renders unchanged, indifferent to whether the string
+ * it's holding is a tmp id or a real UUID.
  */
-export function useWizardCrud(
-  tenantId: string | null,
-  step: WizardStep,
-  refresh: () => Promise<void>
-) {
-  // Shared state
-  const [saving, setSaving] = useState(false);
+export function useWizardCrud(tenantId: string | null, step: WizardStep) {
+  // Shared state. `saving` is always false now — every mutation below is a
+  // synchronous local-state update, no network round-trip to show a spinner
+  // for. Kept as a literal (not removed) so Step1-3Props' `saving: boolean`
+  // contract needs no change.
+  const saving = false;
   const [error, setError] = useState<string | null>(null);
+
+  // Draft entities (Phase B — local until commit)
+  const [draftServices, setDraftServices] = useState<WizardService[]>([]);
+  const [draftResources, setDraftResources] = useState<WizardResource[]>([]);
+  const [draftEmployees, setDraftEmployees] = useState<WizardEmployee[]>([]);
+  // tmp_ids of entities THIS wizard instance auto-seeded from the business
+  // template, so "Change business type" can drop only those (never a
+  // user-typed row) before a re-pick reseeds from the new template. Local-only
+  // now — nothing was ever written, so there's nothing to delete server-side
+  // (the DB-cleanup this used to require is gone entirely).
+  const [autoSeededServiceTmpIds, setAutoSeededServiceTmpIds] = useState<Set<string>>(new Set());
+  const [autoSeededResourceTmpIds, setAutoSeededResourceTmpIds] = useState<Set<string>>(new Set());
 
   // Step 1 — Services
   const [editingService, setEditingService] = useState<ServiceForm | null>(null);
@@ -42,59 +66,91 @@ export function useWizardCrud(
   const [editingEmployee, setEditingEmployee] = useState<EmployeeForm | null>(null);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
 
-  // Step 4 — Shifts (ephemeral form state — persisted to
-  // employee_schedule on transition to the questions step (now step 8) via Api.shifts.expandWeekly)
+  // Step 4 — Shifts (ephemeral form state, unchanged from pre-Phase-B — this
+  // was always the precedent the rest of the hook now follows).
   const [shifts, setShifts] = useState<WizardShift[]>([]);
   const [selectedShiftEmployee, setSelectedShiftEmployee] = useState<string | null>(null);
 
-  // Step 5 — Assignments
+  // Step 5 — Assignments (draft-local mappings, keyed on tmp_ids)
   const [serviceEmployeeMappings, setServiceEmployeeMappings] = useState<WizardMapping[]>([]);
   const [serviceResourceMappings, setServiceResourceMappings] = useState<WizardMapping[]>([]);
-  const [mappingsLoading, setMappingsLoading] = useState(false);
 
-  // Step 6 — Coverage
+  // Step 6 — Coverage (preview against the draft via POST /coverage/dry-run)
   const [coverageData, setCoverageData] = useState<CoverageItem[]>([]);
   const [coverageLoading, setCoverageLoading] = useState(false);
 
-  // Step 4 (Shifts) is now ephemeral form state — no fetch on entry.
-  // All toggling/updating happens in-memory until the wizard finalizes
-  // and goNext() (in index.tsx) sends the pattern to expand-weekly.
+  /** Serializes the current draft into the shape both /coverage/dry-run and
+   *  /setup/commit expect. Only sends fields the wizard actually captures
+   *  today (services: name/description/duration; resources: name/description;
+   *  employees: name/first_name/last_name/email/phone) — price/subtitle exist
+   *  in the backend schema for future use but this UI doesn't collect them. */
+  const buildDraftGraph = useCallback((): WizardDraftGraph => {
+    return {
+      services: draftServices.map((s) => ({
+        tmp_id: s.service_id,
+        name: s.name,
+        description: s.description || undefined,
+        duration_minutes: s.duration_minutes,
+      })),
+      resources: draftResources.map((r) => ({
+        tmp_id: r.resource_id,
+        name: r.name,
+        description: r.description || undefined,
+      })),
+      employees: draftEmployees.map((e) => ({
+        tmp_id: e.employee_id,
+        name: e.name,
+        first_name: e.first_name || undefined,
+        last_name: e.last_name || undefined,
+        email: e.email || undefined,
+        phone: e.phone || undefined,
+      })),
+      shifts: shifts
+        .filter((s) => s.employee_id)
+        .map((s) => ({
+          employee_tmp_id: s.employee_id as string,
+          day_of_week: s.day_of_week,
+          start_time: s.start_time,
+          end_time: s.end_time,
+        })),
+      service_employee: serviceEmployeeMappings
+        .filter((m) => m.employee_id)
+        .map((m) => ({ service_tmp_id: m.service_id, employee_tmp_id: m.employee_id as string })),
+      service_resource: serviceResourceMappings
+        .filter((m) => m.resource_id)
+        .map((m) => ({ service_tmp_id: m.service_id, resource_tmp_id: m.resource_id as string })),
+    };
+  }, [
+    draftServices,
+    draftResources,
+    draftEmployees,
+    shifts,
+    serviceEmployeeMappings,
+    serviceResourceMappings,
+  ]);
 
-  // Fetch mappings when entering step 5
+  // Coverage preview: reruns whenever step 6 is active or the draft graph it
+  // depends on changes shape, so the coverage view reflects the live draft.
+  // buildDraftGraph is a real dependency (not suppressed) — its own deps are
+  // every draft field, so a genuine future path where step 6 stays active
+  // while the draft changes underneath it (e.g. a later back/forward-nav
+  // change) refetches instead of silently showing a stale preview.
   useEffect(() => {
-    if (step === 5 && tenantId) {
-      setMappingsLoading(true);
-      Promise.all([
-        Api.mappings.listServiceEmployee(tenantId),
-        Api.mappings.listServiceResource(tenantId),
-      ])
-        .then(([empMaps, resMaps]) => {
-          setServiceEmployeeMappings(Array.isArray(empMaps) ? empMaps : []);
-          setServiceResourceMappings(Array.isArray(resMaps) ? resMaps : []);
-        })
-        .catch(() => {
-          setServiceEmployeeMappings([]);
-          setServiceResourceMappings([]);
-        })
-        .finally(() => setMappingsLoading(false));
-    }
-  }, [step, tenantId]);
-
-  // Fetch coverage when entering step 6
-  useEffect(() => {
-    if (step === 6 && tenantId) {
-      setCoverageLoading(true);
-      Api.coverage
-        .check(tenantId)
-        .then((data: CoverageItem[]) => {
-          setCoverageData(Array.isArray(data) ? data : []);
-        })
-        .catch(() => setCoverageData([]))
-        .finally(() => setCoverageLoading(false));
-    }
-  }, [step, tenantId]);
+    if (step !== 6 || !tenantId) return;
+    setCoverageLoading(true);
+    Api.coverage
+      .dryRun(buildDraftGraph())
+      .then((data) => setCoverageData(Array.isArray(data) ? data : []))
+      .catch(() => setCoverageData([]))
+      .finally(() => setCoverageLoading(false));
+  }, [step, tenantId, buildDraftGraph]);
 
   const resetAll = useCallback(() => {
+    setDraftServices([]);
+    setDraftResources([]);
+    setDraftEmployees([]);
+    setAutoSeededServiceTmpIds(new Set());
+    setAutoSeededResourceTmpIds(new Set());
     setEditingService(null);
     setEditingServiceId(null);
     setEditingResource(null);
@@ -109,7 +165,63 @@ export function useWizardCrud(
     setError(null);
   }, []);
 
-  // --- Service CRUD ---
+  // --- Auto-seed (Phase B: pushes into local draft state, no DB writes) ---
+
+  /** Adds a draft service per name not already present (by name — avoids
+   *  re-seeding over a user-typed row with the same name). Marks each as
+   *  auto-seeded so a later "Change business type" can drop exactly these. */
+  const seedServices = useCallback(
+    (names: string[]) => {
+      const existingNames = new Set(draftServices.map((s) => s.name));
+      const toAdd = names.filter((name) => !existingNames.has(name));
+      if (toAdd.length === 0) return;
+      const newIds = new Set<string>();
+      const newServices: WizardService[] = toAdd.map((name) => {
+        const id = newTmpId();
+        newIds.add(id);
+        return { service_id: id, name, duration_minutes: 30 };
+      });
+      setDraftServices((prev) => [...prev, ...newServices]);
+      setAutoSeededServiceTmpIds((prev) => new Set([...prev, ...newIds]));
+    },
+    [draftServices]
+  );
+
+  /** Adds one default resource if the draft has none yet. */
+  const seedDefaultResource = useCallback(
+    (name: string, description: string) => {
+      if (draftResources.length > 0) return;
+      const id = newTmpId();
+      setDraftResources([{ resource_id: id, name, description }]);
+      setAutoSeededResourceTmpIds(new Set([id]));
+    },
+    [draftResources]
+  );
+
+  /** "Change business type": drop only auto-seeded rows so a re-pick reseeds
+   *  cleanly from the newly chosen template; anything the owner typed by hand
+   *  survives (the exact nicety the old DB-tracked refs provided). Cascades
+   *  the same as deleteService/deleteResource — a mapping made in Step 5
+   *  against an auto-seeded service/resource before backing up to Step 1
+   *  must not survive as a dangling tmp_id reference. */
+  const clearAutoSeeded = useCallback(() => {
+    setDraftServices((prev) => prev.filter((s) => !autoSeededServiceTmpIds.has(s.service_id)));
+    setDraftResources((prev) => prev.filter((r) => !autoSeededResourceTmpIds.has(r.resource_id)));
+    setServiceEmployeeMappings((prev) =>
+      prev.filter((m) => !autoSeededServiceTmpIds.has(m.service_id))
+    );
+    setServiceResourceMappings((prev) =>
+      prev.filter(
+        (m) =>
+          !autoSeededServiceTmpIds.has(m.service_id) &&
+          !(m.resource_id && autoSeededResourceTmpIds.has(m.resource_id))
+      )
+    );
+    setAutoSeededServiceTmpIds(new Set());
+    setAutoSeededResourceTmpIds(new Set());
+  }, [autoSeededServiceTmpIds, autoSeededResourceTmpIds]);
+
+  // --- Service CRUD (local draft mutations — no API calls) ---
   const startAddService = () => {
     setEditingService({ ...EMPTY_SERVICE });
     setEditingServiceId(null);
@@ -131,8 +243,8 @@ export function useWizardCrud(
     setError(null);
   };
 
-  async function saveService() {
-    if (!editingService || !tenantId) return;
+  function saveService() {
+    if (!editingService) return;
     if (!editingService.name.trim()) {
       setError('Service name is required');
       return;
@@ -141,52 +253,42 @@ export function useWizardCrud(
       setError('Duration must be at least 1 minute');
       return;
     }
-    setSaving(true);
     setError(null);
-    try {
-      // 15-minute snap (matches the booking grid). A 22-minute service
-      // occupies the same 14:00–14:30 slot anyway; rounding up at save
-      // keeps the stored value honest about what the schedule allocates.
-      const duration = roundUpTo15(editingService.duration_minutes);
-      if (editingServiceId) {
-        await Api.services.update(editingServiceId, tenantId, {
-          name: editingService.name.trim(),
-          description: editingService.description.trim(),
-          duration_minutes: duration,
-        });
-      } else {
-        await Api.services.create(tenantId, {
-          name: editingService.name.trim(),
-          description: editingService.description.trim(),
-          duration_minutes: duration,
-        });
-      }
-      await refresh();
-      setEditingService(null);
-      setEditingServiceId(null);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || 'Failed to save service');
-    } finally {
-      setSaving(false);
+    // 15-minute snap (matches the booking grid). A 22-minute service
+    // occupies the same 14:00–14:30 slot anyway; rounding up at save
+    // keeps the stored value honest about what the schedule allocates.
+    const duration = roundUpTo15(editingService.duration_minutes);
+    const name = editingService.name.trim();
+    const description = editingService.description.trim();
+    if (editingServiceId) {
+      setDraftServices((prev) =>
+        prev.map((s) =>
+          s.service_id === editingServiceId
+            ? { ...s, name, description, duration_minutes: duration }
+            : s
+        )
+      );
+    } else {
+      setDraftServices((prev) => [
+        ...prev,
+        { service_id: newTmpId(), name, description, duration_minutes: duration },
+      ]);
     }
+    setEditingService(null);
+    setEditingServiceId(null);
   }
 
-  async function deleteService(id: string) {
-    if (!tenantId) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const result = await Api.services.delete(String(id), tenantId);
-      if (!result.success) {
-        setError(result.error || 'Failed to delete service');
-        return;
-      }
-      await refresh();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || 'Failed to delete service');
-    } finally {
-      setSaving(false);
-    }
+  function deleteService(id: string) {
+    setDraftServices((prev) => prev.filter((s) => s.service_id !== id));
+    // Cascade: a mapping left pointing at a deleted service would make the
+    // next coverage preview or commit 400 on a dangling tmp_id.
+    setServiceEmployeeMappings((prev) => prev.filter((m) => m.service_id !== id));
+    setServiceResourceMappings((prev) => prev.filter((m) => m.service_id !== id));
+    setAutoSeededServiceTmpIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   }
 
   // --- Resource CRUD ---
@@ -206,48 +308,34 @@ export function useWizardCrud(
     setError(null);
   };
 
-  async function saveResource() {
-    if (!editingResource || !tenantId) return;
+  function saveResource() {
+    if (!editingResource) return;
     if (!editingResource.name.trim()) {
       setError('Resource name is required');
       return;
     }
-    setSaving(true);
     setError(null);
-    try {
-      if (editingResourceId) {
-        await Api.resources.update(
-          editingResourceId,
-          { name: editingResource.name.trim(), description: editingResource.description.trim() },
-          tenantId
-        );
-      } else {
-        await Api.resources.create(tenantId, {
-          name: editingResource.name.trim(),
-          description: editingResource.description.trim(),
-        });
-      }
-      await refresh();
-      setEditingResource(null);
-      setEditingResourceId(null);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || 'Failed to save resource');
-    } finally {
-      setSaving(false);
+    const name = editingResource.name.trim();
+    const description = editingResource.description.trim();
+    if (editingResourceId) {
+      setDraftResources((prev) =>
+        prev.map((r) => (r.resource_id === editingResourceId ? { ...r, name, description } : r))
+      );
+    } else {
+      setDraftResources((prev) => [...prev, { resource_id: newTmpId(), name, description }]);
     }
+    setEditingResource(null);
+    setEditingResourceId(null);
   }
 
-  async function deleteResource(id: string) {
-    if (!tenantId) return;
-    setSaving(true);
-    try {
-      await Api.resources.delete(id, tenantId);
-      await refresh();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || 'Failed to delete resource');
-    } finally {
-      setSaving(false);
-    }
+  function deleteResource(id: string) {
+    setDraftResources((prev) => prev.filter((r) => r.resource_id !== id));
+    setServiceResourceMappings((prev) => prev.filter((m) => m.resource_id !== id));
+    setAutoSeededResourceTmpIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   }
 
   // --- Employee CRUD ---
@@ -272,71 +360,54 @@ export function useWizardCrud(
     setError(null);
   };
 
-  async function saveEmployee() {
-    if (!editingEmployee || !tenantId) return;
+  function saveEmployee() {
+    if (!editingEmployee) return;
     if (!editingEmployee.first_name.trim()) {
       setError('First name is required');
       return;
     }
-    setSaving(true);
     setError(null);
-    try {
-      const name =
-        `${editingEmployee.first_name.trim()} ${editingEmployee.last_name.trim()}`.trim();
-      if (editingEmployeeId) {
-        await Api.employees.update(editingEmployeeId, {
-          tenant_id: tenantId,
-          name,
-          first_name: editingEmployee.first_name.trim(),
-          last_name: editingEmployee.last_name.trim(),
-          email: editingEmployee.email.trim(),
-          phone: editingEmployee.phone.trim(),
-        });
-      } else {
-        await Api.employees.create(tenantId, {
-          name,
-          first_name: editingEmployee.first_name.trim(),
-          last_name: editingEmployee.last_name.trim(),
-          email: editingEmployee.email.trim(),
-          phone: editingEmployee.phone.trim(),
-        });
-      }
-      await refresh();
-      setEditingEmployee(null);
-      setEditingEmployeeId(null);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || 'Failed to save employee');
-    } finally {
-      setSaving(false);
+    const first_name = editingEmployee.first_name.trim();
+    const last_name = editingEmployee.last_name.trim();
+    const name = `${first_name} ${last_name}`.trim();
+    const email = editingEmployee.email.trim();
+    const phone = editingEmployee.phone.trim();
+    if (editingEmployeeId) {
+      setDraftEmployees((prev) =>
+        prev.map((e) =>
+          e.employee_id === editingEmployeeId
+            ? { ...e, name, first_name, last_name, email, phone }
+            : e
+        )
+      );
+    } else {
+      setDraftEmployees((prev) => [
+        ...prev,
+        { employee_id: newTmpId(), name, first_name, last_name, email, phone },
+      ]);
     }
+    setEditingEmployee(null);
+    setEditingEmployeeId(null);
   }
 
-  async function deleteEmployee(id: string) {
-    if (!tenantId) return;
-    setSaving(true);
-    try {
-      await Api.employees.delete(String(id), tenantId);
-      await refresh();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || 'Failed to delete employee');
-    } finally {
-      setSaving(false);
-    }
+  function deleteEmployee(id: string) {
+    setDraftEmployees((prev) => prev.filter((e) => e.employee_id !== id));
+    // Cascade: drop this employee's shifts and service_employee mappings so a
+    // later coverage preview or commit never references a deleted tmp_id.
+    setShifts((prev) => prev.filter((s) => s.employee_id !== id));
+    setServiceEmployeeMappings((prev) => prev.filter((m) => m.employee_id !== id));
+    if (selectedShiftEmployee === id) setSelectedShiftEmployee(null);
   }
 
-  // --- Shift handlers (mutate local state only — pattern is sent to
-  //     expand-weekly when the user crosses into the questions step (now step 8)). ---
-
+  // --- Shift handlers (unchanged — already local-state pre-Phase-B) ---
   function toggleShift(employeeId: string, dayOfWeek: number, startTime: string, endTime: string) {
     setShifts((prev) => {
       const existingIdx = prev.findIndex(
         (s) => String(s.employee_id) === String(employeeId) && s.day_of_week === dayOfWeek
       );
       if (existingIdx >= 0) {
-        // Toggle off → remove the row
         return prev.filter((_, i) => i !== existingIdx);
       }
-      // Toggle on → add a fresh row keyed on employee+day
       return [
         ...prev,
         {
@@ -358,56 +429,43 @@ export function useWizardCrud(
     );
   }
 
-  // --- Assignment toggle ---
-  async function toggleEmployeeAssignment(serviceId: string, employeeId: string) {
-    if (!tenantId) return;
-    const exists = serviceEmployeeMappings.some(
-      (m: WizardMapping) =>
-        m.service_id === serviceId && String(m.employee_id) === String(employeeId)
-    );
-    setSaving(true);
-    setError(null);
-    try {
-      if (exists) {
-        await Api.mappings.unassignServiceEmployee(String(serviceId), employeeId, tenantId);
-      } else {
-        await Api.mappings.assignServiceEmployee(String(serviceId), employeeId, tenantId);
-      }
-      const updated = await Api.mappings.listServiceEmployee(tenantId);
-      setServiceEmployeeMappings(Array.isArray(updated) ? updated : []);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || 'Failed to update assignment');
-    } finally {
-      setSaving(false);
-    }
+  // --- Assignment toggle (local draft mappings) ---
+  function toggleEmployeeAssignment(serviceId: string, employeeId: string) {
+    setServiceEmployeeMappings((prev) => {
+      const exists = prev.some(
+        (m) => m.service_id === serviceId && String(m.employee_id) === String(employeeId)
+      );
+      return exists
+        ? prev.filter(
+            (m) => !(m.service_id === serviceId && String(m.employee_id) === String(employeeId))
+          )
+        : [...prev, { service_id: serviceId, employee_id: employeeId }];
+    });
   }
 
-  async function toggleResourceAssignment(serviceId: string, resourceId: string) {
-    if (!tenantId) return;
-    const exists = serviceResourceMappings.some(
-      (m: WizardMapping) => m.service_id === serviceId && m.resource_id === resourceId
-    );
-    setSaving(true);
-    setError(null);
-    try {
-      if (exists) {
-        await Api.mappings.unassignServiceResource(String(serviceId), resourceId, tenantId);
-      } else {
-        await Api.mappings.assignServiceResource(String(serviceId), resourceId, tenantId);
-      }
-      const updated = await Api.mappings.listServiceResource(tenantId);
-      setServiceResourceMappings(Array.isArray(updated) ? updated : []);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err) || 'Failed to update assignment');
-    } finally {
-      setSaving(false);
-    }
+  function toggleResourceAssignment(serviceId: string, resourceId: string) {
+    setServiceResourceMappings((prev) => {
+      const exists = prev.some((m) => m.service_id === serviceId && m.resource_id === resourceId);
+      return exists
+        ? prev.filter((m) => !(m.service_id === serviceId && m.resource_id === resourceId))
+        : [...prev, { service_id: serviceId, resource_id: resourceId }];
+    });
   }
 
   return {
     saving,
     error,
     resetAll,
+    // Draft entities (replace what index.tsx used to derive from useStaticData)
+    draftServices,
+    draftResources,
+    draftEmployees,
+    // Auto-seed
+    seedServices,
+    seedDefaultResource,
+    clearAutoSeeded,
+    // Commit
+    buildDraftGraph,
     // Services
     editingService,
     editingServiceId,
@@ -445,7 +503,7 @@ export function useWizardCrud(
     // Assignments
     serviceEmployeeMappings,
     serviceResourceMappings,
-    mappingsLoading,
+    mappingsLoading: false,
     toggleEmployeeAssignment,
     toggleResourceAssignment,
     // Coverage
