@@ -53,6 +53,7 @@ interface MockQueryRow {
   name?: string;
   phone_status?: string;
   telnyx_phone_number_id?: string | null;
+  forwarded_from_phone?: string | null;
 }
 
 function buildMockPool(responses: Array<{ rows: MockQueryRow[]; rowCount?: number }>): Pool {
@@ -291,5 +292,32 @@ describe('deactivatePhone', () => {
       expect(result.release_error).toBe(releaseError);
       expect(result.release_phone_number_id).toBe('pn-abc');
     }
+  });
+
+  it('SAFETY: forwarded_from_phone still set → a warning is added, deactivation still proceeds', async () => {
+    // WHO: an owner deactivating a DID their business still forwards real
+    //      callers into.
+    // WHAT: releasing the number while forwarded_from_phone is set strands
+    //      every real caller the moment the carrier delivers into a dead
+    //      DID. The fix warns (doesn't block — the owner may be
+    //      deliberately tearing down) and DB state still clears normally.
+    // WHERE: the forwarded_from_phone check added to deactivatePhone.
+    const telnyx = buildMockTelnyxClient();
+    const pool = buildMockPool([
+      { rows: [{ telnyx_phone_number_id: 'pn-abc', forwarded_from_phone: '+16082175303' }] },
+      { rows: [], rowCount: 1 },
+    ]);
+
+    const result = await deactivatePhone(pool, telnyx, TENANT_ID);
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain('+16082175303');
+      expect(result.warnings[0]).toContain('Forwarded-From');
+      expect(result.release_error).toBeUndefined();
+    }
+    // Deactivation still proceeds — this is a warning, not a block.
+    expect(telnyx.client.release).toHaveBeenCalledWith('pn-abc');
   });
 });

@@ -18,11 +18,25 @@ vi.mock('../lib/SessionContext', () => ({
 
 const mockGetConfig = vi.fn();
 const mockUpdateConfig = vi.fn();
+// GoLivePanel (mounted inside AIConfigView — see the "Go Live" section) needs
+// its own Api surface. Defaulting status to 'active' with no
+// forwarded_from_phone keeps it out of Stage A/B noise for tests that don't
+// care about it; the raw-number test-call poll it would otherwise start is
+// harmless (its fetch just no-ops against getHistory's default below).
+const mockProvisioningStatus = vi.fn();
 vi.mock('../lib/api', () => ({
   Api: {
     tenants: {
       getConfig: (...args: unknown[]) => mockGetConfig(...args),
       updateConfig: (...args: unknown[]) => mockUpdateConfig(...args),
+    },
+    provisioning: {
+      status: (...args: unknown[]) => mockProvisioningStatus(...args),
+      activate: vi.fn(),
+      portInquiry: vi.fn(),
+    },
+    voice: {
+      getHistory: vi.fn().mockResolvedValue({ calls: [], total: 0, has_more: false }),
     },
   },
 }));
@@ -46,6 +60,12 @@ const BASE_CONFIG: Tenant = {
 beforeEach(() => {
   mockGetConfig.mockReset();
   mockUpdateConfig.mockReset().mockResolvedValue({ success: true });
+  mockProvisioningStatus.mockReset().mockResolvedValue({
+    phone_status: 'active',
+    inbound_phone: '+16305551234',
+    telnyx_phone_number_id: 'pn-abc',
+    forwarded_from_phone: null,
+  });
 });
 
 afterEach(() => {
@@ -251,29 +271,36 @@ describe('AIConfigView — Customer Preferences', () => {
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
-  test('HAPPY: distinct forwarded-from + transfer numbers save without a loop error', async () => {
-    // WHO: an owner whose forwarded line and human-transfer line are different
-    //      numbers (the supported configuration).
-    // WHAT: no loop error renders and the new forwarded_from_phone reaches the
-    //      updateConfig payload, normalized to E.164.
-    // WHEN: the two numbers differ and the owner saves.
-    // WHERE: AIConfigView handleSave payload + forwardLoops (false here).
-    // WHY: the guard must not block or drop a legitimate distinct pairing.
+  test('HAPPY: the batched Save never includes forwarded_from_phone — GoLivePanel owns that column independently', async () => {
+    // WHO: an owner editing the system prompt (or any other batched field)
+    //      on the same page GoLivePanel's forwarding card lives on.
+    // WHAT: forwarded_from_phone must be ABSENT from the header Save's
+    //      payload. GoLivePanel makes its own immediate
+    //      Api.tenants.updateConfig({forwarded_from_phone}) call the moment
+    //      the owner saves it there — two save paths writing the same
+    //      column on one page would let whichever fires last silently
+    //      clobber the other until a reload.
+    // WHERE: AIConfigView handleSave payload.
+    // WHY: this is exactly the dual-write bug flagged in design review when
+    //      GoLivePanel was mounted here (docs/superpowers/specs/2026-07-05-
+    //      wizard-phase-b-design.md §3) — see GoLivePanel.test.tsx for its
+    //      own forwarding-save coverage.
     mockGetConfig.mockResolvedValue({
       ...BASE_CONFIG,
       forward_phone: '+16305551234',
+      forwarded_from_phone: '+16082175303',
     });
     render(<AIConfigView />);
 
-    const fwdFromInput = await screen.findByLabelText(/forwarded-from number/i);
-    fireEvent.change(fwdFromInput, { target: { value: '+1 (608) 217-5303' } });
-
-    expect(screen.queryByText(/loop back to the assistant/i)).not.toBeInTheDocument();
-
+    await screen.findByDisplayValue('You are Debbie.');
+    fireEvent.change(screen.getByDisplayValue('You are Debbie.'), {
+      target: { value: 'You are Debbie, updated.' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
     await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
     const [, payload] = mockUpdateConfig.mock.calls[0];
-    expect(payload.forwarded_from_phone).toBe('+16082175303');
+    expect(payload).not.toHaveProperty('forwarded_from_phone');
   });
 
   test('HAPPY: editing the buffer field sends default_buffer_minutes to updateConfig', async () => {

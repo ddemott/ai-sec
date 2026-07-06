@@ -545,11 +545,7 @@ describe('SetupWizard: Step 9 Go Live', () => {
 
   test('shows Go Live heading and description', async () => {
     await goToStep9();
-    expect(
-      screen.getByText(
-        'Assign a phone number to this business. Inbound calls will route to the AI receptionist.'
-      )
-    ).toBeInTheDocument();
+    expect(screen.getByText('Get your AI receptionist answering real calls.')).toBeInTheDocument();
   });
 
   test('commits the draft graph exactly once via POST /setup/commit on entering step 9', async () => {
@@ -656,12 +652,12 @@ describe('SetupWizard: Step 9 Go Live', () => {
 
     fireEvent.click(screen.getByText('Activate AI Phone Line'));
 
+    // Activation success lands on Stage B (verify the raw number actually
+    // answers) — GoLivePanel never claims "live" before a real call is
+    // confirmed. See GoLivePanel.test.tsx for the full stage-by-stage flow.
     await waitFor(() => {
-      expect(screen.getByText('Your AI line is live')).toBeInTheDocument();
+      expect(screen.getByText('Your number is ready')).toBeInTheDocument();
       expect(screen.getByText('+1 (630) 555-1234')).toBeInTheDocument();
-      expect(
-        screen.getByText('Try calling this number to test your AI receptionist.')
-      ).toBeInTheDocument();
     });
   });
 
@@ -704,8 +700,10 @@ describe('SetupWizard: Step 9 Go Live', () => {
 
     await goToStep9();
 
+    // No forwarded_from_phone yet → still Stage B (raw-number verification),
+    // not a "live" claim.
     await waitFor(() => {
-      expect(screen.getByText('Your AI line is live')).toBeInTheDocument();
+      expect(screen.getByText('Your number is ready')).toBeInTheDocument();
       expect(screen.getByText('+1 (312) 555-9999')).toBeInTheDocument();
     });
   });

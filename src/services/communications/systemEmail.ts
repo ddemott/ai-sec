@@ -176,3 +176,59 @@ export async function sendJobInquiryEmail(to: string, fields: JobInquiryFields):
     html,
   });
 }
+
+/** Fields captured when an owner asks to port their existing number into Telnyx. */
+export interface PortRequestFields {
+  tenantId: string;
+  tenantName: string;
+  phoneNumber: string;
+  notes?: string | null;
+}
+
+/**
+ * Notify the platform admin (Dale) that an owner wants to port their real
+ * number into Telnyx, replacing forwarding entirely. This is a PLATFORM
+ * notification (same class as password-reset/invite), not a tenant-facing
+ * email — no porting API is invoked here or anywhere; a real LNP port always
+ * needs a human (LOA + carrier cutover), so this is just the structured
+ * heads-up that starts that manual process. Deliberately no credentials or
+ * carrier-account details are collected or emailed — see design doc
+ * (docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md §3) for why
+ * that was cut from the original proposal.
+ */
+export async function sendPortRequestEmail(to: string, fields: PortRequestFields): Promise<void> {
+  const orDash = (v: string | null | undefined): string => (v && v.trim() ? v : '—');
+
+  const subject = `Port request — ${fields.tenantName}`;
+  const text =
+    `${fields.tenantName} (tenant ${fields.tenantId}) wants to port their existing number ` +
+    `${fields.phoneNumber} into Telnyx instead of forwarding.\n\n` +
+    `Notes: ${orDash(fields.notes)}\n\n` +
+    `This requires a manual port in the Telnyx portal — no automated action was taken.`;
+
+  const escPort = (s: string): string =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const portHtml = `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1a1a1a;max-width:560px;margin:0 auto;padding:24px">
+<h2 style="margin:0 0 16px">Port request — ${escPort(fields.tenantName)}</h2>
+<p><strong>${escPort(fields.tenantName)}</strong> (tenant <code>${escPort(fields.tenantId)}</code>) wants to port their existing number into Telnyx instead of forwarding.</p>
+<table style="border-collapse:collapse;margin:16px 0">
+<tr><td style="padding:4px 12px 4px 0;color:#666;white-space:nowrap">Number to port</td><td style="padding:4px 0"><strong>${escPort(fields.phoneNumber)}</strong></td></tr>
+<tr><td style="padding:4px 12px 4px 0;color:#666;white-space:nowrap">Notes</td><td style="padding:4px 0">${escPort(orDash(fields.notes))}</td></tr>
+</table>
+<p style="color:#666;font-size:14px">This requires a manual port in the Telnyx portal — no automated action was taken.</p>
+</body></html>`;
+
+  await getTransporter().sendMail({
+    from: `"SecretaryHQ" <${process.env.EMAIL_USER ?? 'no-reply@secretaryhq.com'}>`,
+    to,
+    subject,
+    text,
+    html: portHtml,
+  });
+}

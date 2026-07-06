@@ -235,18 +235,33 @@ export async function deactivatePhone(
 ): Promise<DeactivateResult> {
   const client = await pool.connect();
   try {
-    const tenantRes = await client.query<{ telnyx_phone_number_id: string | null }>(
-      'SELECT telnyx_phone_number_id FROM tenants WHERE tenant_id = $1',
-      [tenantId]
-    );
+    const tenantRes = await client.query<{
+      telnyx_phone_number_id: string | null;
+      forwarded_from_phone: string | null;
+    }>('SELECT telnyx_phone_number_id, forwarded_from_phone FROM tenants WHERE tenant_id = $1', [
+      tenantId,
+    ]);
 
     if (tenantRes.rows.length === 0) {
       return { status: 'not_found' };
     }
 
-    const { telnyx_phone_number_id } = tenantRes.rows[0];
+    const { telnyx_phone_number_id, forwarded_from_phone } = tenantRes.rows[0];
     const warnings: string[] = [];
     let releaseError: unknown;
+
+    // Real hazard, not just noise: if the business still forwards their real,
+    // published number into this DID (forwarded_from_phone set), releasing it
+    // strands every real caller the moment carrier-side forwarding delivers a
+    // call to a now-dead number. Warn, don't block — the owner may be
+    // deliberately tearing down (e.g. switching providers) and knows this.
+    if (forwarded_from_phone) {
+      warnings.push(
+        `This number is still set as your Forwarded-From line (${forwarded_from_phone}). ` +
+          `Callers to that number will stop reaching anyone once this DID is released — ` +
+          `update or remove the forwarding on your carrier's side first.`
+      );
+    }
 
     if (telnyx_phone_number_id) {
       try {

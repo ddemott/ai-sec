@@ -256,13 +256,20 @@ export function TenantEditPanel({
                           onConfirm: async () => {
                             closeConfirm();
                             try {
-                              await Api.provisioning.deactivate(selectedTenant.tenant_id);
+                              const res = await Api.provisioning.deactivate(
+                                selectedTenant.tenant_id
+                              );
                               onTenantUpdate({
                                 ...selectedTenant,
                                 phone_status: 'deprovisioned',
                                 inbound_phone: null,
                                 telnyx_phone_number_id: null,
                               });
+                              // Surfaces the forwarded_from_phone hazard warning
+                              // (releasing a DID the tenant still forwards real
+                              // calls into) — informational, deactivation already
+                              // completed.
+                              res.warnings?.forEach((w) => showToast(w, 'warning'));
                             } catch (err: unknown) {
                               const msg =
                                 err instanceof Error ? err.message : 'Failed to deactivate phone';

@@ -20,6 +20,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { showToast } from './ui/Toast';
 import { LoadingState } from './ui/LoadingState';
+import { GoLivePanel } from './phone/GoLivePanel';
 
 // Per-industry starter example for the Customer Preferences textarea, so an
 // owner isn't staring at a blank box. Matched loosely on the tenant's
@@ -113,9 +114,12 @@ export default function AIConfigView() {
         // Normalize to clean E.164 for storage so the agent builds a valid
         // tel: URI. Blank/invalid → null (forwarding off → AI takes a message).
         forward_phone: normalizePhone(config.forward_phone),
-        // The line the tenant forwards INTO the assistant. Normalize the same
-        // way so the agent's caller-ID match compares clean E.164.
-        forwarded_from_phone: normalizePhone(config.forwarded_from_phone),
+        // forwarded_from_phone is intentionally NOT in this batched save —
+        // GoLivePanel (rendered below) owns that field end-to-end with its
+        // own immediate Api.tenants.updateConfig call. Two save paths for
+        // the same column on one page would let this batched Save silently
+        // clobber whatever GoLivePanel just wrote (or vice versa) until a
+        // reload. See docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md §3.
         // Normalize owner notification phone the same way.
         owner_phone: normalizePhone(config.owner_phone),
         default_buffer_minutes: config.default_buffer_minutes ?? 0,
@@ -274,32 +278,12 @@ export default function AIConfigView() {
           />
         </section>
 
-        {/* Forwarded-from number — the line that forwards calls INTO the AI. */}
+        {/* Go Live — provisioning, test-call verification, and the
+            forwarding/porting fork. Owns forwarded_from_phone end-to-end
+            (its own immediate save) — deliberately NOT part of this page's
+            batched handleSave; see the comment there. */}
         <section className="space-y-4">
-          <h2
-            className="text-lg font-bold flex items-center"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            <PhoneForwarded className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
-            Forwarded-From Number
-          </h2>
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            If you forward your business line into the assistant, put that line here. The assistant
-            then knows the caller ID is your forwarding line — not the customer — and will ask the
-            caller for their name and number instead.
-          </p>
-          <Input
-            type="tel"
-            label="Forwarded-from number"
-            value={config?.forwarded_from_phone || ''}
-            onChange={(e) => {
-              setConfig((prev) =>
-                prev ? { ...prev, forwarded_from_phone: e.target.value } : null
-              );
-              setDirty(true);
-            }}
-            placeholder="Ex: +1 608 217 5303"
-          />
+          <GoLivePanel />
         </section>
 
         {/* Forward Calls Section — live transfer to a human (owner cell). */}

@@ -82,10 +82,6 @@ interface WizardStepContentProps {
   coverageData: CoverageItem[];
   coverageLoading: boolean;
 
-  // Step 7 — Go Live
-  phoneStatus: string | null;
-  inboundPhone: string | null;
-
   // Shared
   loading: boolean;
   saving: boolean;
@@ -135,8 +131,6 @@ export function WizardStepContent({
   onToggleResourceAssignment,
   coverageData,
   coverageLoading,
-  phoneStatus,
-  inboundPhone,
   loading,
   saving,
   error,
@@ -237,7 +231,7 @@ export function WizardStepContent({
     case 8:
       return <Step7CallerQuestions tenantId={tenantId} showWebsiteImport={false} />;
     case 9:
-      return <Step7GoLive phoneStatus={phoneStatus} inboundPhone={inboundPhone} />;
+      return <Step7GoLive />;
     default:
       return null;
   }
