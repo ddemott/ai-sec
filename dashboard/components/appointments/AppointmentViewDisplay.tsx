@@ -49,7 +49,7 @@ export function AppointmentViewDisplay({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigator.clipboard.writeText(selectedAppointment.location || '')}
+              onClick={() => void navigator.clipboard.writeText(selectedAppointment.location || '')}
               title="Copy Address"
             >
               <Copy className="w-4 h-4" />

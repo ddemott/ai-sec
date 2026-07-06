@@ -249,6 +249,7 @@ export default function CRMView() {
         showDetailOnMobile={showDetailOnMobile}
         onSelectCustomer={handleSelectCustomer}
         onAddCustomer={() => {
+          setSelectedCustomer(null);
           startNewCustomer();
           setShowDetailOnMobile(true);
         }}

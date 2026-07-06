@@ -91,8 +91,8 @@ export function AppointmentPanelHeader({
               )}
           </>
         ) : (
-          <Button variant="ghost" onClick={onCancelEdit}>
-            <span className="text-xl leading-none">✕</span>
+          <Button variant="ghost" onClick={onCancelEdit} aria-label="Cancel edit">
+            <span className="text-xl leading-none" aria-hidden="true">✕</span>
           </Button>
         )}
       </div>
