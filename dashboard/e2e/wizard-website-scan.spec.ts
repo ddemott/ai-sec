@@ -10,25 +10,22 @@
  * OpenAI call or external site fetch. Skipped when the stub is off so a local
  * `npx playwright test` never makes a live network/LLM call.
  *
- * Why pre-seed exactly one employee: the wizard gates the step-7 chip on
- * `canAdvanceTo(7)` which needs BOTH services and employees to exist. Picking a
- * business type in the picker auto-seeds the template's services, and the
- * pre-seeded employee satisfies the rest — while keeping `needsSetup` true
- * (services are still empty until the picker runs) so the welcome dialog
- * auto-opens, which is the entry point this test drives.
+ * Phase B (2026-07-05): the wizard's services/employees are DRAFT-local state
+ * now — nothing is written to the DB until POST /setup/commit fires on
+ * entering step 9, so a pre-seeded employee (created directly via the API,
+ * as this test used to do) is invisible to the wizard's own canAdvanceTo(7)
+ * gate. The employee is added through the wizard's own Step 3 UI instead —
+ * the template auto-seeds services into the draft on open, satisfying the
+ * services half of the gate, and `needsSetup` stays true (nothing is
+ * committed to the DB yet) so the welcome dialog still auto-opens.
  *
- * Tenant cleanup via cleanTenantData in finally (one DELETE cascades the tree).
+ * Tenant cleanup via cleanTenantData in finally (one DELETE cascades the tree
+ * — a no-op here since nothing was ever committed, but harmless/cheap insurance).
  */
 import { test, expect } from './helpers/test';
 import type { Page } from '@playwright/test';
 import { Pool } from 'pg';
-import {
-  PG_URL,
-  registerFreshTenant,
-  createEmployeeAs,
-  cleanTenantData,
-  type RegisteredTenant,
-} from './helpers/fixtures';
+import { PG_URL, registerFreshTenant, cleanTenantData, type RegisteredTenant } from './helpers/fixtures';
 
 let pool: Pool;
 test.beforeAll(() => {
@@ -78,10 +75,6 @@ test.describe('Setup wizard — Import from website step (browser click-path)', 
     let tenant: RegisteredTenant | null = null;
     try {
       tenant = await registerFreshTenant(request);
-      // Pre-seed one employee so canAdvanceTo(7) only needs the services the
-      // picker will auto-seed. Resources/services stay empty → needsSetup stays
-      // true → welcome auto-opens.
-      await createEmployeeAs(request, tenant.token, tenant.tenantId, 'Wizard Tech');
 
       await switchToFreshTenant(page, tenant.tenantId, `Scan ${tenant.tenantId.slice(0, 6)}`);
 
@@ -104,9 +97,19 @@ test.describe('Setup wizard — Import from website step (browser click-path)', 
       await expect(firstType).toBeVisible({ timeout: 4000 });
       await firstType.click();
 
-      // The wizard opens. Jump to the "Import from website" step via its chip
-      // (enabled now that services + the seeded employee exist). Playwright waits
-      // for the chip to become actionable while the seeded services load.
+      // The wizard opens with the template's services auto-seeded into the
+      // draft. Jump to Step 3 (enabled once those services land) and add one
+      // employee through the real UI — canAdvanceTo(7) needs both.
+      const staffChip = page.getByRole('button', { name: /Who works here/i });
+      await expect(staffChip).toBeEnabled({ timeout: 10000 });
+      await staffChip.click();
+      await page.getByRole('button', { name: /Add an employee/i }).click();
+      await page.getByPlaceholder('First name').fill('Wizard');
+      await page.getByPlaceholder('Last name').fill('Tech');
+      await page.getByRole('button', { name: /^Add Employee$/i }).click();
+      await expect(page.getByText('Wizard Tech')).toBeVisible({ timeout: 4000 });
+
+      // Jump to the "Import from website" step via its chip.
       const scanChip = page.getByRole('button', { name: /Import from website/i });
       await expect(scanChip).toBeEnabled({ timeout: 10000 });
       await scanChip.click();
