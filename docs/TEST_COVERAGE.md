@@ -26,13 +26,7 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 
 Total unit tests: ~3,643 passing (~2,324 backend + ~874 dashboard + ~445 agent). Counts are the 2026-07-06 CLAUDE.md figures; re-run for exact numbers.
 
-> **Note on the 7 skips**: 6 are `calendar-sync.spec.ts` tests that
-> require the backend to start with `SYNC_TEST_RECORDER=1`. Without the
-> env var, the spec's `beforeEach` skip-guards every test with a clear
-> message. Run `SYNC_TEST_RECORDER=1 npm start && cd dashboard && npx
-> playwright test` to flip them to passing — total becomes 61 passed,
-> 1 skipped. The remaining 1 skip is in `full-functional-audit.spec.ts`
-> Voice Calls section, deferred until Telnyx PSTN clears.
+> **On skipped e2e tests**: `calendar-sync.spec.ts` tests skip without `SYNC_TEST_RECORDER=1` (set it + restart the backend to run them). One test in `full-functional-audit.spec.ts` (Voice Calls) is deferred until Telnyx PSTN clears. Re-run the suite to get current pass/skip counts.
 
 ## Unit test coverage (V8)
 

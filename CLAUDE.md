@@ -11,7 +11,7 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 ## Architecture
 
 - **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + OpenAI (TTS) → Fastify `/agent-tools/*`
-- **Backend**: Fastify (30 route modules under `src/routes/`) → Postgres (Railway)
+- **Backend**: Fastify (29 route modules under `src/routes/`) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `ai-sec-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind + TS
 - **Database**: Postgres + pgvector, RLS multi-tenancy, atomic booking RPCs
@@ -31,7 +31,7 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 
 Items below capture hidden context — things you can't grep for. Everything else (flat service files, type definitions, doc tree) is derivable from the filesystem.
 
-- `/src` — Fastify backend (slim `index.ts` + 30 route modules)
+- `/src` — Fastify backend (slim `index.ts` + 29 route modules)
 - `/src/routes/routeHelpers.ts` — `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`
 - `/src/services/communications/` — CommunicationService + email/sms/appointment services + Handlebars templates + ProviderRegistry (Telnyx + Mock). Consent-gated.
 - `/src/services/reminders/` — ReminderService schedules; reminderProcessor delivers via CommunicationService; reminderRepository handles DB.
@@ -126,7 +126,7 @@ Durable rules-of-engagement that override "build for the future":
 
 **Backend**
 
-- Slim `index.ts` registers 30 route modules. Tenant-scoped routes use `withTenantClient()` for RLS.
+- Slim `index.ts` registers 29 route modules. Tenant-scoped routes use `withTenantClient()` for RLS.
 - All mutations: Zod-validated, response shape `{ success, error?, details? }`, `assertRowAffected()` returns 404 on zero-row UPDATE/DELETE (never silent success).
 - Production env validation: refuses to start without `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`.
 - Graceful shutdown on SIGTERM/SIGINT (closes Fastify + drains pool — required for Railway).
@@ -155,7 +155,7 @@ Durable rules-of-engagement that override "build for the future":
 
 ## Project Status
 
-**Phase 13 (Production Readiness) in progress.** ~2,324 backend + ~874 dashboard + ~445 agent tests passing (verified 2026-07-06 against real test_db / vitest). 30 route modules under `src/routes/`. 35 Playwright e2e spec files run on every PR. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + observability setup in `docs/DEPLOYMENT.md`. Per-session shipped history lives in `docs/RESOLVED.md`.
+**Phase 13 (Production Readiness) in progress.** ~2,324 backend + ~874 dashboard + ~445 agent tests passing (verified 2026-07-06 against real test_db / vitest). 29 route modules under `src/routes/`. 35 Playwright e2e spec files run on every PR. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + observability setup in `docs/DEPLOYMENT.md`. Per-session shipped history lives in `docs/RESOLVED.md`.
 
 **Legal-hold — do NOT merge/enable without owner + legal sign-off:** PR #68 (`POST /customers/:id/purge`, single-customer GDPR/CCPA erasure, kill-switch `ENABLE_CUSTOMER_PURGE`) and PR #69 (automated data-retention worker, `ENABLE_RETENTION_WORKER` + explicit `RETENTION_DAYS`). Both erase PII irreversibly and are inert until enabled. Branches deleted 2026-06-23; restorable from the PR pages. See `docs/TODO.md` → Legal-hold.
 

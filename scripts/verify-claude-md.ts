@@ -195,10 +195,15 @@ function gitIsCommitReachable(sha: string, branch: string = 'main'): boolean {
 function countRoutes(repoRoot: string): number {
   const dir = join(repoRoot, 'src/routes');
   if (!existsSync(dir)) return 0;
-  // Exclude tests and any *Helpers.ts module (routeHelpers.ts,
-  // versionHistoryHelpers.ts, …) — those are shared helpers, not route modules.
+  // Exclude tests, *Helpers.ts (routeHelpers.ts, versionHistoryHelpers.ts, …),
+  // and *Scaffold.ts (crmRouteScaffold.ts — a shared route scaffold used by
+  // other route files, not registered directly in index.ts).
   return readdirSync(dir).filter(
-    (f) => f.endsWith('.ts') && !f.endsWith('.test.ts') && !f.endsWith('Helpers.ts')
+    (f) =>
+      f.endsWith('.ts') &&
+      !f.endsWith('.test.ts') &&
+      !f.endsWith('Helpers.ts') &&
+      !f.endsWith('Scaffold.ts')
   ).length;
 }
 
