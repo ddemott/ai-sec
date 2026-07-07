@@ -34,6 +34,10 @@ function formatShiftTime(t: string) {
   return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, '0')}${ampm}`;
 }
 
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function WeekView({ tenantId, employees, vocab, onNavigate }: WeekViewProps) {
   const [weekAppts, setWeekAppts] = useState<
     { date: string; count: number; appts: { time: string; desc: string; employee?: string }[] }[]
@@ -54,20 +58,22 @@ export function WeekView({ tenantId, employees, vocab, onNavigate }: WeekViewPro
     for (let i = 0; i < 3; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(toLocalDateStr(d));
     }
 
-    const weekEnd = days[2];
+    // Local midnight → ISO so Postgres TIMESTAMPTZ comparison is timezone-correct.
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfWindow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3);
     try {
       const appts = await Api.appointments.list(tenantId, {
-        startDate: days[0],
-        endDate: new Date(new Date(weekEnd).getTime() + 86400000).toISOString().split('T')[0],
+        startDate: startOfToday.toISOString(),
+        endDate: endOfWindow.toISOString(),
       });
       const apptList = Array.isArray(appts) ? appts.filter((a) => a.status === 'scheduled') : [];
 
       const byDay = days.map((date) => {
         const dayAppts = apptList
-          .filter((a) => a.start_time.startsWith(date))
+          .filter((a) => toLocalDateStr(new Date(a.start_time)) === date)
           .sort((a, b) => a.start_time.localeCompare(b.start_time));
         return {
           date,
@@ -138,7 +144,8 @@ export function WeekView({ tenantId, employees, vocab, onNavigate }: WeekViewPro
         const date = new Date(day.date + 'T12:00:00');
         const dayName = DAY_NAMES[date.getDay()];
         const dayNum = date.getDate();
-        const isToday = day.date === new Date().toISOString().split('T')[0];
+        const todayLocal = toLocalDateStr(new Date());
+        const isToday = day.date === todayLocal;
         const dayShifts = weekShifts[day.date] || [];
         const workingStaff = dayShifts.filter((s) => !s.isOff);
 

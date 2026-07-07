@@ -85,11 +85,16 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   async function loadData() {
     setLoading(true);
     setLoadError(null);
-    const today = new Date().toISOString().split('T')[0];
-    const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+    const todayDate = new Date();
+    // Use local midnight as ISO so Postgres TIMESTAMPTZ >= comparison is timezone-correct.
+    const startOfToday = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
+    const endOfWindow = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + 8);
 
     const results = await Promise.allSettled([
-      Api.appointments.list(tenantId, { startDate: today, endDate: weekEnd }),
+      Api.appointments.list(tenantId, {
+        startDate: startOfToday.toISOString(),
+        endDate: endOfWindow.toISOString(),
+      }),
       Api.employees.list(tenantId),
       Api.services.list(tenantId),
       Api.resources.list(tenantId),

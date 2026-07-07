@@ -42,9 +42,15 @@ export function HomeTodaySchedule({
   onNavigate,
   onNewBooking,
 }: HomeTodayScheduleProps) {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayDate = new Date();
+  const todayStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
   const todayAppointments = appointments
-    .filter((a) => a.status === 'scheduled' && a.start_time.startsWith(todayStr))
+    .filter((a) => {
+      if (a.status !== 'scheduled') return false;
+      const d = new Date(a.start_time);
+      const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return localDate === todayStr;
+    })
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   return (
@@ -73,6 +79,11 @@ export function HomeTodaySchedule({
 
       {todayAppointments.length === 0 ? (
         <div className="py-4 text-center">
+          <Calendar
+            className="w-8 h-8 mx-auto mb-2 opacity-30"
+            style={{ color: 'var(--accent-soft)' }}
+            aria-hidden="true"
+          />
           <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
             Nothing booked for today yet.
           </p>
