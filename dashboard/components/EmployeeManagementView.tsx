@@ -1,33 +1,21 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Users, PlusCircle, CheckCircle2, AlertCircle, Tag, Trash2 } from 'lucide-react';
+import { Users, PlusCircle, AlertCircle } from 'lucide-react';
 import { Api } from '../lib/api';
-import { formatPhone } from '../lib/phone';
 import { useStaticData } from '../lib/hooks';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
-import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { PhoneInput } from './ui/PhoneInput';
-import { Badge } from './ui/Badge';
-import { Modal } from './ui/Modal';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { LoadingState } from './ui/LoadingState';
 import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
-
-type Employee = {
-  employee_id: string;
-  name: string;
-  first_name?: string | null;
-  last_name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  is_active: boolean;
-  type?: string;
-};
+import { EmployeeCard } from './employees/EmployeeCard';
+import { EmployeeEditModal } from './employees/EmployeeEditModal';
+import type { EmployeeEditForm } from './employees/EmployeeEditModal';
+import type { Employee } from '../lib/types';
 
 export default function EmployeeManagementView() {
   const tenantId = useActiveTenantId();
@@ -35,9 +23,8 @@ export default function EmployeeManagementView() {
   const { employees, services, loading, error, refresh } = useStaticData(tenantId);
   const [mappings, setMappings] = useState<{ service_id: string; employee_id?: string }[]>([]);
 
-  // Edit State
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<EmployeeEditForm>({
     first_name: '',
     last_name: '',
     email: '',
@@ -46,10 +33,7 @@ export default function EmployeeManagementView() {
   });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  // Add Employee State
   const [newEmployee, setNewEmployee] = useState({ first_name: '', last_name: '' });
-
   const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
 
   useEffect(() => {
@@ -80,9 +64,8 @@ export default function EmployeeManagementView() {
         setNewEmployee({ first_name: '', last_name: '' });
         void refresh();
       } else {
-        // Surface the backend reason (e.g. the duplicate-name 409) — apiMutate
-        // returns { success:false, error } rather than throwing, so without this
-        // the add silently did nothing and kept the form values.
+        // Surface the backend reason (e.g. duplicate-name 409) — without this the
+        // add silently did nothing and kept the form values.
         showToast(res.error || `Failed to add ${vocab.employee_label.toLowerCase()}`, 'error');
       }
     } catch (err) {
@@ -112,7 +95,6 @@ export default function EmployeeManagementView() {
         showToast(res.error || 'Failed to save changes', 'error');
       }
     } catch {
-      console.error('Update failed');
       showToast('Failed to save changes', 'error');
     } finally {
       setSaving(false);
@@ -137,9 +119,8 @@ export default function EmployeeManagementView() {
             showToast(res.error || 'Delete failed', 'error');
           }
         } catch {
-          // Reaching the catch means a network/fetch throw — apiMutate resolves
-          // {success:false} for HTTP errors (handled in the else above), so the
-          // FK-constraint "still connected" message doesn't belong here.
+          // Reaching catch means a network throw — apiMutate resolves {success:false}
+          // for HTTP errors, so the FK-constraint message doesn't belong here.
           showToast('Could not remove — please try again.', 'error');
         }
       },
@@ -147,7 +128,7 @@ export default function EmployeeManagementView() {
   }
 
   async function toggleService(serviceId: string, employeeId: string) {
-    const isMapped = (mappings || []).some(
+    const isMapped = mappings.some(
       (m) => m.service_id === serviceId && m.employee_id === employeeId
     );
     try {
@@ -169,6 +150,8 @@ export default function EmployeeManagementView() {
     return <LoadingState message="Loading staff data…" />;
   }
 
+  const staffEmployees = (employees || []).filter((e) => e.type !== 'user');
+
   return (
     <div
       className="flex-1 flex flex-col overflow-y-auto p-8 transition-colors duration-200"
@@ -181,10 +164,9 @@ export default function EmployeeManagementView() {
           </div>
           <div>
             <h1 className="text-3xl font-display">{vocab.employee_plural}</h1>
-            <p
-              className="text-sm"
-              style={{ color: 'var(--text-secondary)' }}
-            >{`Manage ${vocab.employee_plural.toLowerCase()} and assign them to services.`}</p>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {`Manage ${vocab.employee_plural.toLowerCase()} and assign them to services.`}
+            </p>
           </div>
         </div>
 
@@ -223,7 +205,7 @@ export default function EmployeeManagementView() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {(employees || []).filter((e) => e.type !== 'user').length === 0 && !loading && (
+        {staffEmployees.length === 0 && !loading && (
           <div
             className="col-span-full flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-2xl"
             style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
@@ -237,213 +219,41 @@ export default function EmployeeManagementView() {
             </p>
           </div>
         )}
-        {(employees || [])
-          .filter((e) => e.type !== 'user')
-          .map((emp) => (
-            <Card
-              key={emp.employee_id}
-              onClick={() => {
-                setSelectedEmployee(emp);
-                setEditForm({
-                  first_name: emp.first_name || emp.name || '',
-                  last_name: emp.last_name || '',
-                  email: emp.email || '',
-                  phone: emp.phone || '',
-                  is_active: emp.is_active !== false,
-                });
-                setIsEditModalOpen(true);
-              }}
-              className="cursor-pointer hover:shadow-xl transition-all group"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div
-                  className="p-3 rounded-2xl shadow-sm border"
-                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
-                >
-                  <Users
-                    className="w-6 h-6 group-hover:opacity-80 transition-colors"
-                    style={{ color: 'var(--text-muted)' }}
-                  />
-                </div>
-                <Badge variant={emp.is_active ? 'success' : 'secondary'}>
-                  {emp.is_active ? 'Active' : 'On Leave'}
-                </Badge>
-              </div>
-
-              <h3 className="text-xl font-bold mb-1">{emp.name}</h3>
-              {(emp.phone || emp.email) && (
-                <div
-                  className="text-xs mb-2 space-y-0.5"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {emp.phone && <div>{formatPhone(emp.phone)}</div>}
-                  {emp.email && <div>{emp.email}</div>}
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-1">
-                {(mappings || []).filter((m) => m.employee_id === emp.employee_id).length > 0 ? (
-                  (mappings || [])
-                    .filter((m) => m.employee_id === emp.employee_id)
-                    .map((m) => {
-                      const s = (services || []).find((s) => s.service_id === m.service_id);
-                      return s ? (
-                        <Badge key={s.service_id} variant="primary">
-                          {s.name}
-                        </Badge>
-                      ) : null;
-                    })
-                ) : (
-                  <span className="text-xs italic" style={{ color: 'var(--text-muted)' }}>
-                    No services provided
-                  </span>
-                )}
-              </div>
-            </Card>
-          ))}
+        {staffEmployees.map((emp) => (
+          <EmployeeCard
+            key={emp.employee_id}
+            employee={emp}
+            services={services || []}
+            mappings={mappings}
+            onClick={() => {
+              setSelectedEmployee(emp);
+              setEditForm({
+                first_name: emp.first_name || emp.name || '',
+                last_name: emp.last_name || '',
+                email: emp.email || '',
+                phone: emp.phone || '',
+                is_active: emp.is_active !== false,
+              });
+              setIsEditModalOpen(true);
+            }}
+          />
+        ))}
       </div>
 
-      {/* QUICK-EDIT MODAL */}
-      <Modal
-        isOpen={isEditModalOpen && !!selectedEmployee}
+      <EmployeeEditModal
+        isOpen={isEditModalOpen}
+        employee={selectedEmployee}
+        form={editForm}
+        onFormChange={(updates) => setEditForm((f) => ({ ...f, ...updates }))}
+        services={services || []}
+        mappings={mappings}
+        saving={saving}
         onClose={() => setIsEditModalOpen(false)}
-        title={selectedEmployee?.name || ''}
-        disableBackdropClose
-        footer={
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdateEmployee} isLoading={saving}>
-              Save Changes
-            </Button>
-          </div>
-        }
-      >
-        {selectedEmployee && (
-          <div className="space-y-8 max-h-[70vh] overflow-y-auto pr-2">
-            {/* IDENTIFICATION EDIT */}
-            <section className="space-y-4">
-              <h4
-                className="text-xs font-bold uppercase tracking-widest flex items-center"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <Users className="w-3 h-3 mr-2" /> Basic Info
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="First Name"
-                  value={editForm.first_name}
-                  onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
-                />
-                <Input
-                  label="Last Name"
-                  value={editForm.last_name}
-                  onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Email"
-                  type="email"
-                  placeholder="employee@email.com"
-                  value={editForm.email}
-                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                />
-                <PhoneInput
-                  label="Phone"
-                  value={editForm.phone}
-                  onChange={(val) => setEditForm({ ...editForm, phone: val })}
-                />
-              </div>
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                  Active
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={editForm.is_active}
-                  aria-label="Active"
-                  onClick={() => setEditForm({ ...editForm, is_active: !editForm.is_active })}
-                  className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                  style={
-                    editForm.is_active
-                      ? { backgroundColor: 'var(--accent)' }
-                      : { backgroundColor: 'var(--bg-raised)' }
-                  }
-                >
-                  <span
-                    className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${editForm.is_active ? 'translate-x-6' : 'translate-x-1'}`}
-                  />
-                </button>
-              </div>
-            </section>
-
-            {/* Service Toggle Section */}
-            <section>
-              <h4
-                className="text-xs font-bold uppercase tracking-widest mb-4 flex items-center"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <Tag className="w-3 h-3 mr-2" /> Authorized Services
-              </h4>
-              <div className="grid grid-cols-1 gap-2">
-                {(services || []).map((service) => {
-                  const isMapped = (mappings || []).some(
-                    (m) =>
-                      m.service_id === service.service_id &&
-                      m.employee_id === selectedEmployee.employee_id
-                  );
-                  return (
-                    <button
-                      key={service.service_id}
-                      onClick={() =>
-                        toggleService(service.service_id, selectedEmployee.employee_id)
-                      }
-                      aria-pressed={isMapped}
-                      aria-label={`${isMapped ? 'Remove' : 'Add'} ${service.name}`}
-                      className={`flex items-center justify-between p-4 rounded-2xl text-sm font-bold transition-all ${isMapped ? 'text-white shadow-lg' : ''}`}
-                      style={
-                        isMapped
-                          ? { backgroundColor: 'var(--accent)' }
-                          : { backgroundColor: 'var(--bg-raised)', color: 'var(--text-secondary)' }
-                      }
-                    >
-                      {service.name}
-                      {isMapped ? (
-                        <CheckCircle2 className="w-5 h-5 text-white" />
-                      ) : (
-                        <PlusCircle className="w-5 h-5 opacity-30" />
-                      )}
-                    </button>
-                  );
-                })}
-                {(services || []).length === 0 && (
-                  <div
-                    className="text-center p-8 border-2 border-dashed rounded-3xl"
-                    style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
-                  >
-                    No services defined in the catalog.
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* DELETE SECTION */}
-            <section className="pt-6 border-t" style={{ borderColor: 'var(--border-soft)' }}>
-              <Button
-                variant="ghost"
-                className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 w-full justify-center"
-                icon={Trash2}
-                onClick={() => handleDeleteEmployee(selectedEmployee.employee_id)}
-              >
-                {`Remove ${vocab.employee_label}`}
-              </Button>
-            </section>
-          </div>
-        )}
-      </Modal>
+        onSave={handleUpdateEmployee}
+        onDelete={handleDeleteEmployee}
+        onToggleService={toggleService}
+        employeeLabel={vocab.employee_label}
+      />
 
       <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>
