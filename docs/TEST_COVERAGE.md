@@ -20,11 +20,11 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
 | Backend (`npm test`) | ~2,324 | ✅ | ~190s |
-| Dashboard (`cd dashboard && npm test`) | ~874 | ✅ | ~15s |
+| Dashboard (`cd dashboard && npm test`) | ~929 | ✅ | ~15s |
 | Agent (`cd agent && npm test`) | ~496 | ✅ | ~1s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 35 spec files (exact pass count: re-run to verify) | ✅ | ~175s |
 
-Total unit tests: ~3,694 passing (~2,324 backend + ~874 dashboard + ~496 agent). Counts are the 2026-07-07 CLAUDE.md figures; re-run for exact numbers.
+Total unit tests: ~3,749 passing (~2,324 backend + ~929 dashboard + ~496 agent). Counts are the 2026-07-07 CLAUDE.md figures; re-run for exact numbers.
 
 > **On skipped e2e tests**: `calendar-sync.spec.ts` tests skip without `SYNC_TEST_RECORDER=1` (set it + restart the backend to run them). One test in `full-functional-audit.spec.ts` (Voice Calls) is deferred until Telnyx PSTN clears. Re-run the suite to get current pass/skip counts.
 
@@ -115,14 +115,14 @@ the test still passes.
 ### Dashboard
 | File | Statements | Notes |
 |---|---|---|
-| `components/ui/TimeInput.tsx` | 0% | UI primitive without coverage |
-| `lib/logger.ts` | 0% | |
-| `lib/policyQuestions.ts` | 0% | |
-| `lib/ThemeContext.tsx` | 9.52% | |
-| `lib/VocabularyContext.tsx` | 13.04% | |
-| `components/ui/Toast.tsx` | 21.87% | |
-| `components/ui/FeedbackButton.tsx` | 29.16% | |
+| `lib/policyQuestions.ts` | 0% | Pure re-export shim — no logic to test |
 | `lib/api.ts` | 39.47% | Many namespaced helpers unexercised |
+| `components/ui/TimeInput.tsx` | ~100% | Added 2026-07-07 (10 tests) |
+| `lib/logger.ts` | ~100% | Added 2026-07-07 (7 tests) |
+| `lib/ThemeContext.tsx` | ~90%+ | Added 2026-07-07 (10 tests) |
+| `lib/VocabularyContext.tsx` | ~90%+ | Added 2026-07-07 (8 tests) |
+| `components/ui/Toast.tsx` | ~90%+ | Added 2026-07-07 (13 tests total: 4 existing + 9 new) |
+| `components/ui/FeedbackButton.tsx` | ~90%+ | Added 2026-07-07 (11 tests) |
 
 ## Regenerating
 

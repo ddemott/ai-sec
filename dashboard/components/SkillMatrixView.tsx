@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { ShieldCheck, Users, Wrench, Check, X, Search } from 'lucide-react';
+import { ShieldCheck, Search } from 'lucide-react';
 import { Api } from '../lib/api';
 import { useStaticData } from '../lib/hooks';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { Input } from './ui/Input';
 import { showToast } from './ui/Toast';
+import { SkillMatrix } from './skills/SkillMatrix';
 
 export default function SkillMatrixView() {
   const tenantId = useActiveTenantId();
@@ -197,138 +198,15 @@ export default function SkillMatrixView() {
         </div>
       </header>
 
-      {/* MATRIX GRID */}
-      <div
-        className="flex-1 overflow-auto border rounded-3xl"
-        style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-raised)' }}
-      >
-        <table className="w-full border-collapse min-w-[800px]">
-          <thead
-            className="sticky top-0 z-20 border-b"
-            style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
-          >
-            <tr>
-              <th
-                className="p-4 text-left text-xs font-bold uppercase tracking-widest sticky left-0 z-30 min-w-[200px]"
-                style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-muted)' }}
-              >
-                Entity
-              </th>
-              {(services || []).map((service) => (
-                <th
-                  key={service.service_id}
-                  className="p-4 text-center text-xs font-bold uppercase tracking-widest border-l min-w-[150px]"
-                  style={{ color: 'var(--text-muted)', borderColor: 'var(--border-soft)' }}
-                >
-                  {service.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredEntities.map((entity, idx) => (
-              <tr
-                key={`${entity.type}-${entity.entity_id}`}
-                className={idx % 2 === 0 ? 'bg-white/50 dark:bg-white/5' : ''}
-              >
-                <td
-                  className="p-4 border-b sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]"
-                  style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
-                >
-                  <div className="flex items-center">
-                    <div
-                      className={`p-1.5 rounded-lg mr-3 ${entity.type === 'employee' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : ''}`}
-                      style={
-                        entity.type === 'resource'
-                          ? { backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }
-                          : undefined
-                      }
-                    >
-                      {entity.type === 'employee' ? (
-                        <Users className="w-3 h-3" />
-                      ) : (
-                        <Wrench className="w-3 h-3" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-bold text-sm leading-none mb-1">{entity.name}</div>
-                      <div className="text-xs text-gray-400 uppercase font-bold tracking-tighter">
-                        {entity.type === 'employee' ? vocab.employee_label : vocab.resource_label}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                {(services || []).map((service) => {
-                  const isMapped =
-                    entity.type === 'employee'
-                      ? (empMappings || []).some(
-                          (m) =>
-                            m.employee_id === entity.entity_id &&
-                            m.service_id === service.service_id
-                        )
-                      : (resMappings || []).some(
-                          (m) =>
-                            m.resource_id === entity.entity_id &&
-                            m.service_id === service.service_id
-                        );
-
-                  return (
-                    <td
-                      key={service.service_id}
-                      className="p-0 border-b border-l text-center"
-                      style={{ borderColor: 'var(--border-soft)' }}
-                    >
-                      <button
-                        disabled={saving}
-                        onClick={() =>
-                          toggleMapping(entity.type, entity.entity_id, service.service_id)
-                        }
-                        aria-pressed={isMapped}
-                        aria-label={`${isMapped ? 'Remove' : 'Add'} ${service.name} for ${entity.name}`}
-                        className={`w-full h-full p-4 flex items-center justify-center transition-all ${isMapped ? '' : 'text-gray-300 dark:text-gray-800 hover:text-gray-400 dark:hover:text-gray-700'}`}
-                        style={
-                          isMapped
-                            ? {
-                                backgroundColor: 'var(--accent-muted)',
-                                color: 'var(--accent-soft)',
-                              }
-                            : undefined
-                        }
-                      >
-                        {isMapped ? (
-                          <Check className="w-5 h-5 stroke-[3]" />
-                        ) : (
-                          <X className="w-4 h-4 opacity-30" />
-                        )}
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <footer className="mt-6 flex items-center justify-between text-xs text-gray-400 font-medium shrink-0 px-2">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center">
-            <div
-              className="w-3 h-3 rounded-full mr-2"
-              style={{ backgroundColor: 'var(--success)' }}
-            />{' '}
-            {vocab.employee_label}
-          </div>
-          <div className="flex items-center">
-            <div
-              className="w-3 h-3 rounded-full mr-2"
-              style={{ backgroundColor: 'var(--accent)' }}
-            />{' '}
-            {vocab.resource_label}
-          </div>
-        </div>
-        <p>Changes save immediately.</p>
-      </footer>
+      <SkillMatrix
+        entities={filteredEntities}
+        services={services || []}
+        empMappings={empMappings}
+        resMappings={resMappings}
+        saving={saving}
+        vocab={vocab}
+        onToggle={toggleMapping}
+      />
     </div>
   );
 }
