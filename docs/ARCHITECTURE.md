@@ -64,7 +64,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── components/               ~60 feature components + ui/ primitives
 │   │   └── ui/                   Badge, Button, Card, ConfirmModal, FolderTabs, Input, Modal, Select, Toast, TimeInput, PhoneInput, CoverageBar
 │   ├── lib/                      api.ts, SessionContext, ThemeContext, VocabularyContext, hooks, types
-│   ├── e2e/                      33 Playwright spec files
+│   ├── e2e/                      35 Playwright spec files
 │   ├── server.js                 Custom HTTPS server (dev) + Railway deploy entry (prod)
 │   └── 22 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/

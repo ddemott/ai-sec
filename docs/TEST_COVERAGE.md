@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Headline counts last reconciled:** 2026-06-30 to the canonical living numbers in `CLAUDE.md` → Project Status (~1,940 backend + ~790 dashboard + ~360 agent, verified 2026-06-22 against real `test_db`/vitest). The **per-file V8 coverage %** + the e2e workflow tables below are from the **2026-05-22** run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
+**Headline counts last reconciled:** 2026-07-06 to the canonical living numbers in `CLAUDE.md` → Project Status (~2,324 backend + ~874 dashboard + ~445 agent, verified 2026-07-06 against real `test_db`/vitest). The **per-file V8 coverage %** + the e2e workflow tables below are from the **2026-05-22** run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
 
 **Prior refresh:** 2026-05-22 — Walk-in customer create modal work. Replaced the single "Full name" field in CustomerCombobox with a proper `CustomerCreateModal` (split name, phone, email, address, timezone, internal notes). `name` is now derived from first+last on submit. Dashboard test count: 705 → 716.
 
@@ -19,12 +19,12 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | ~1,940 | ✅ | ~108s |
-| Dashboard (`cd dashboard && npm test`) | ~790 | ✅ | ~7s |
-| Agent (`cd agent && npm test`) | ~360 | ✅ | ~1s |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 99 passed, 7 skipped | ✅ | ~175s |
+| Backend (`npm test`) | ~2,324 | ✅ | ~190s |
+| Dashboard (`cd dashboard && npm test`) | ~874 | ✅ | ~15s |
+| Agent (`cd agent && npm test`) | ~445 | ✅ | ~1s |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 35 spec files (exact pass count: re-run to verify) | ✅ | ~175s |
 
-Total unit tests: ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent). Counts are the 2026-06-22 CLAUDE.md figures; re-run for exact numbers.
+Total unit tests: ~3,643 passing (~2,324 backend + ~874 dashboard + ~445 agent). Counts are the 2026-07-06 CLAUDE.md figures; re-run for exact numbers.
 
 > **Note on the 7 skips**: 6 are `calendar-sync.spec.ts` tests that
 > require the backend to start with `SYNC_TEST_RECORDER=1`. Without the
