@@ -26,7 +26,7 @@ vi.mock('./api', () => ({ Api: mockApi }));
 
 // useSessionContext provides the tenant + managedTenant IDs
 const { sessionRef } = vi.hoisted(() => ({
-  sessionRef: { current: { tenantId: 'tenant-a', managedTenantId: null } },
+  sessionRef: { current: { tenantId: null as string | null, managedTenantId: null as string | null } },
 }));
 vi.mock('./SessionContext', () => ({
   useSessionContext: () => sessionRef.current,
@@ -67,7 +67,7 @@ function RefreshConsumer() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  sessionRef.current = { tenantId: 'tenant-a', managedTenantId: null };
+  sessionRef.current = { tenantId: 'tenant-a' as string | null, managedTenantId: null as string | null };
 });
 
 describe('VocabularyProvider — fetch on mount', () => {
