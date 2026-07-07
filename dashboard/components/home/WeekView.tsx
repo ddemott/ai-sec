@@ -61,19 +61,19 @@ export function WeekView({ tenantId, employees, vocab, onNavigate }: WeekViewPro
       days.push(toLocalDateStr(d));
     }
 
-    const weekEnd = days[2];
-    const dayAfterEnd = new Date(today);
-    dayAfterEnd.setDate(dayAfterEnd.getDate() + 3);
+    // Local midnight → ISO so Postgres TIMESTAMPTZ comparison is timezone-correct.
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfWindow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3);
     try {
       const appts = await Api.appointments.list(tenantId, {
-        startDate: days[0],
-        endDate: toLocalDateStr(dayAfterEnd),
+        startDate: startOfToday.toISOString(),
+        endDate: endOfWindow.toISOString(),
       });
       const apptList = Array.isArray(appts) ? appts.filter((a) => a.status === 'scheduled') : [];
 
       const byDay = days.map((date) => {
         const dayAppts = apptList
-          .filter((a) => a.start_time.startsWith(date))
+          .filter((a) => toLocalDateStr(new Date(a.start_time)) === date)
           .sort((a, b) => a.start_time.localeCompare(b.start_time));
         return {
           date,

@@ -45,7 +45,12 @@ export function HomeTodaySchedule({
   const todayDate = new Date();
   const todayStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
   const todayAppointments = appointments
-    .filter((a) => a.status === 'scheduled' && a.start_time.startsWith(todayStr))
+    .filter((a) => {
+      if (a.status !== 'scheduled') return false;
+      const d = new Date(a.start_time);
+      const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return localDate === todayStr;
+    })
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   return (
