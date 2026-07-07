@@ -25,15 +25,34 @@ then be gated/insured. Most of this is your action, not code — the code is shi
 
 _Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voice — Phase 2** at the bottom of this file._
 
-- [ ] **(Dale)** Enable **call transfer / REFER** on the Telnyx SIP Connection (`livekit-outbound`). Until then `transfer_call` fails at runtime and the agent silently degrades to taking a message. (Detail: `docs/RUNBOOK.md` §7c.)
-- [ ] **(Dale)** Set the **forward number** on the dashboard AI Persona → "Forward Calls to a Person" (your cell `+1 608 217 5303`). NULL = agent takes a message instead of transferring.
+- [x] **(Dale)** Enable **call transfer / REFER** on the Telnyx SIP Connection (`livekit-outbound`). ~~Until then `transfer_call` fails at runtime and the agent silently degrades to taking a message.~~ **RESOLVED 2026-07-07**: No toggle exists in Telnyx UI — FQDN connections support SIP REFER by default. Nothing to configure.
 - [ ] **(Dale)** Confirm `TELNYX_API_KEY` + `TELNYX_SIP_CONNECTION_ID` are set on Railway (currently local `.env` only) — else blocked-caller-ID OTP + provisioning 503. Also confirm `TELNYX_PHONE_NUMBER=+16308229086`.
-- [ ] **(Dale, blocked on a 2nd phone)** **Live validation call** from a different carrier → `+1 630-822-9086`: (a) booking lands in `appointments` for tenant `d5e3c6a1` inside a real shift window; (b) "talk to a person" rings your cell + the Calls tab shows the transcript; (c) confirm natural dialog — asks preferred time, widens when none fit, never imposes a slot, recalls preferences across calls. (PSTN inbound itself already confirmed 2026-06-30; this closes the booking + transfer + preference legs.)
+- [ ] **(Dale, use wife's phone)** **Live validation call** — do these steps together in one sitting:
+  1. Set the **forward number** on the dashboard AI Persona → "Forward Calls to a Person" (`+1 608 217 5303`) before calling.
+  2. Have wife call `+1 630-822-9086` (must use her phone — can't call from your cell and forward to it).
+  3. Validate booking: appointment lands in `appointments` for tenant `d5e3c6a1` inside a real shift window.
+  4. Validate transfer: say "talk to a person" → your cell rings + Calls tab shows the transcript.
+  5. Validate dialog: agent asks preferred time, widens when none fit, never imposes a slot, recalls preferences across calls.
+  (PSTN inbound itself already confirmed 2026-06-30; this closes the booking + transfer + preference legs.)
 
 ### 2. Billing — be able to take money
 
-- [ ] **(Dale)** **Stripe test-mode round-trip** (`stripe listen`, no real money): checkout → webhook signature verifies → `checkout.session.completed` activates the tenant gate → `invoice.payment_failed` handled → `customer.subscription.deleted` revokes → plan gating (Solo/Growth/Pro) enforces. Set the 5 Stripe env vars on Railway (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO/GROWTH/PRO_PRICE_ID`) + register the webhook at `/billing/webhook` (3 events). (`./scripts/simulate.sh stripe` path-checks the wiring; the live round-trip needs real keys + the CLI.)
-- [ ] **(Dale)** **Stripe Tax**: enable Stripe Tax in the dashboard, register nexus (IL + customer states), set `STRIPE_AUTO_TAX=true` on Railway. (Code done — `automatic_tax` gated behind the flag.)
+- [ ] **(Dale)** **Decide final tier pricing** before creating Stripe products — current placeholders ($129/$279) have not been validated. Research findings + cost model (2026-07-07):
+  - **Variable cost per call (5-min avg):** Telnyx ~$0.03 + LiveKit ~$0.02–0.05 + Deepgram $0.02 + OpenAI LLM ~$0.001 + OpenAI TTS ~$0.02–0.09 = **~$0.09–0.17/call**
+  - **Loss point:** an uncapped Solo tier at 1,000 calls costs $90–170 in variable cost alone — near-zero or negative margin at $129/mo
+  - **Recommended Solo cap: ~300–400 calls/month** → variable cost ~$27–51, gross margin ~$78–102 on $129/mo
+  - **Competitor benchmarks (verified July 2026):** Rosie AI $49/$149/$299 (250/1,000/2,000 min); Goodcall $79/$129/$249/agent (100/250/500 unique customers/mo); Signpost $199/$399/$749 (AI-only → hybrid human+AI)
+  - **Key differentiator to keep:** include booking + call transfer at ALL tiers — competitors (Rosie, Goodcall) gate these to mid-tier. Lead with "full receptionist from day one."
+  - **Suggested tier shape:** Solo ~$99–129/mo (1 location, ~300 calls/mo cap, full booking+transfer) · Growth ~$199–249/mo (multi-location or higher volume, Square CRM sync, analytics) · Pro ~$349+/mo (unlimited volume, priority support)
+  - **Volume metering is NOT built yet** — tiers are flat subscriptions today; cap enforcement + usage meter is a P1 build item (see P2 section below). Go flat-rate for first customer, retrofit volume once real usage data exists.
+- [ ] **(Dale)** **Stripe setup** — do these in order:
+  1. **Open an LLC bank account** for Thinking Hammer LLC — required before Stripe can pay out. (Also listed under Legal §5 below.)
+  2. **Connect bank account to Stripe** — add it in Stripe dashboard → Settings → Bank accounts & scheduling.
+  3. **Create products + prices** in Stripe dashboard — Solo, Growth, Pro plans. Note the 3 price IDs.
+  4. **Set 5 env vars on Railway**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID`.
+  5. **Register the webhook** in Stripe dashboard → `https://ai-sec-production.up.railway.app/billing/webhook` for 3 events: `checkout.session.completed`, `invoice.payment_failed`, `customer.subscription.deleted`.
+  6. **Test-mode round-trip** (no real money): run `stripe listen --forward-to https://ai-sec-production.up.railway.app/billing/webhook`, trigger a test checkout, verify each event activates/revokes the tenant gate. (`./scripts/simulate.sh stripe` path-checks the wiring first.)
+- [ ] **(Dale)** **Stripe Tax** (after round-trip verified): enable Stripe Tax in Stripe dashboard → Tax → Settings; register nexus for IL + customer states; set `STRIPE_AUTO_TAX=true` on Railway. (Code done — `automatic_tax` gated behind the flag.)
 
 ### 3. Deploy gate — protect main
 
@@ -78,6 +97,7 @@ Both erase PII irreversibly (kill-switched off / inert until enabled). Branches 
 
 ## 🟢 P2 — Quality, scale & ops visibility
 
+- [ ] **(code)** **Volume metering + tier cap enforcement** — do after first customer, once real usage data sets the bands. Data already exists (`voice_sessions` per tenant per month). Build: (1) monthly call counter endpoint; (2) per-plan limit config (Solo ~300–400 calls, Growth ~1,000, Pro unlimited); (3) dashboard usage meter + 80% warning banner; (4) soft cap enforcement. No Stripe Metered Billing needed — flat bands with a DB query. See pricing notes in §2 Billing above.
 - [ ] **(Dale/code)** _(Optional)_ Repoint Railway `healthcheckPath` → `/ready` to gate deploy **promotion** on DB reachability (behavior change — could block promotion during a DB blip; your call).
 - [ ] **(code)** **Alert rules** (optional, free) — PromQL rules are written + ready in `docs/ALERTS.md` (error-rate, http-5xx, p95, booking-failure, pool-waiting). Wire them off the free `/metrics` + `/ready` signals (Grafana Cloud free tier or Railway-native) if/when a paging path is stood up. Low priority. (Paid vendors Sentry/Better Stack were **declined** 2026-07-02 — code keeps the no-op hooks.)
 - [ ] **(code)** **Website-scan re-scan scheduler** — periodic re-scan of stale KB. Deferred: needs a `last_scanned` column/migration + is a cost/product call.
