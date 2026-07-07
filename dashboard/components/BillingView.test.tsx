@@ -8,7 +8,7 @@
  * WHY: Checkout + portal redirect paths were completely untested; a broken
  *   Api.billing.checkout call would show no error and leave the user stuck.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
@@ -32,13 +32,24 @@ import { showToast } from './ui/Toast';
 
 const mockToast = vi.mocked(showToast);
 
-// Suppress window.location.href assignment errors in jsdom
+// Capture original location so tests that stub it can restore cleanly.
+const origLocation = window.location;
+
 beforeEach(() => {
   vi.clearAllMocks();
   // Default: inactive free-trial tenant
   mockApi.billing.status.mockResolvedValue({
     subscription_status: 'inactive',
     subscription_plan: null,
+  });
+});
+
+afterEach(() => {
+  // Restore window.location after any test that stubs it for redirect assertions.
+  Object.defineProperty(window, 'location', {
+    writable: true,
+    configurable: true,
+    value: origLocation,
   });
 });
 

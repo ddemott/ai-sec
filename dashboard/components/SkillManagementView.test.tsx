@@ -18,7 +18,7 @@ vi.mock('./ui/LoadingState', () => ({
   LoadingState: ({ message }: { message: string }) => <div>{message}</div>,
 }));
 vi.mock('./ui/ConfirmModal', () => ({
-  ConfirmModal: ({ open }: { open: boolean }) => open ? <div>Confirm Modal</div> : null,
+  ConfirmModal: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div>Confirm Modal</div> : null,
 }));
 
 const { mockStaticData, mockApi, mockConfirm } = vi.hoisted(() => ({
@@ -34,7 +34,7 @@ const { mockStaticData, mockApi, mockConfirm } = vi.hoisted(() => ({
     },
   },
   mockConfirm: {
-    state: { open: false },
+    state: { isOpen: false, title: '', message: '', confirmLabel: '', onConfirm: () => {} },
     confirm: vi.fn(),
     close: vi.fn(),
   },
@@ -61,7 +61,7 @@ beforeEach(() => {
   mockStaticData.skills = SAMPLE_SKILLS;
   mockStaticData.loading = false;
   mockStaticData.refresh = vi.fn();
-  mockConfirm.state = { open: false };
+  mockConfirm.state = { isOpen: false, title: '', message: '', confirmLabel: '', onConfirm: () => {} };
   mockConfirm.confirm = vi.fn();
   mockConfirm.close = vi.fn();
 });

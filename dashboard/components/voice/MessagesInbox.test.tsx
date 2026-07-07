@@ -120,9 +120,15 @@ describe('MessagesInbox — filter tabs', () => {
     );
   });
 
-  test('HAPPY: "all" filter passes undefined status', async () => {
+  test('HAPPY: "all" filter passes undefined status on re-click', async () => {
     render(<MessagesInbox tenantId="tenant-test" />);
     await waitFor(() => expect(screen.getByText('Alice Smith')).toBeInTheDocument());
+    // Switch away from 'all' first so clicking 'all' triggers a real refetch
+    fireEvent.click(screen.getByRole('button', { name: 'new' }));
+    await waitFor(() =>
+      expect(mockApi.voice.listMessages).toHaveBeenCalledWith('tenant-test', { status: 'new' })
+    );
+    mockApi.voice.listMessages.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'all' }));
     await waitFor(() =>
       expect(mockApi.voice.listMessages).toHaveBeenCalledWith('tenant-test', { status: undefined })

@@ -8,7 +8,7 @@
  * WHY: Connect + disconnect paths were completely untested; a broken getAuthUrl
  *   call would silently fail with no user feedback.
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
@@ -16,6 +16,9 @@ import React from 'react';
 vi.mock('./ui/Toast', () => ({ showToast: vi.fn() }));
 
 import { CRMIntegrationCard } from './CRMIntegrationCard';
+
+// Capture original location so afterEach can restore it cleanly.
+const origLocation = window.location;
 
 // Provider is passed as a prop — mock the provider methods directly.
 function makeProvider(overrides: Partial<Parameters<typeof CRMIntegrationCard>[0]['provider']> = {}) {
@@ -34,12 +37,22 @@ function makeProvider(overrides: Partial<Parameters<typeof CRMIntegrationCard>[0
   };
 }
 
-// Suppress window.location.href assignment errors in jsdom
 beforeEach(() => {
   vi.clearAllMocks();
+  // Stub window.location so redirect assertions work in jsdom.
   Object.defineProperty(window, 'location', {
     writable: true,
+    configurable: true,
     value: { href: '', search: '', pathname: '/dashboard', hostname: 'localhost' },
+  });
+});
+
+afterEach(() => {
+  // Restore the real location object so this stub doesn't bleed into other test files.
+  Object.defineProperty(window, 'location', {
+    writable: true,
+    configurable: true,
+    value: origLocation,
   });
 });
 
