@@ -34,6 +34,10 @@ export function SkillMatrix({
   vocab,
   onToggle,
 }: SkillMatrixProps) {
+  // Precompute O(N) lookup Sets so each cell check is O(1) rather than O(N)
+  const empMappingSet = new Set(empMappings.map((m) => `${m.employee_id}::${m.service_id}`));
+  const resMappingSet = new Set(resMappings.map((m) => `${m.resource_id}::${m.service_id}`));
+
   return (
     <>
       <div
@@ -47,6 +51,7 @@ export function SkillMatrix({
           >
             <tr>
               <th
+                scope="col"
                 className="p-4 text-left text-xs font-bold uppercase tracking-widest sticky left-0 z-30 min-w-[200px]"
                 style={{ backgroundColor: 'var(--bg-raised)', color: 'var(--text-muted)' }}
               >
@@ -55,6 +60,7 @@ export function SkillMatrix({
               {services.map((service) => (
                 <th
                   key={service.service_id}
+                  scope="col"
                   className="p-4 text-center text-xs font-bold uppercase tracking-widest border-l min-w-[150px]"
                   style={{ color: 'var(--text-muted)', borderColor: 'var(--border-soft)' }}
                 >
@@ -69,8 +75,9 @@ export function SkillMatrix({
                 key={`${entity.type}-${entity.entity_id}`}
                 className={idx % 2 === 0 ? 'bg-white/50 dark:bg-white/5' : ''}
               >
-                <td
-                  className="p-4 border-b sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]"
+                <th
+                  scope="row"
+                  className="p-4 border-b sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)] font-normal text-left"
                   style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
                 >
                   <div className="flex items-center">
@@ -95,20 +102,12 @@ export function SkillMatrix({
                       </div>
                     </div>
                   </div>
-                </td>
+                </th>
                 {services.map((service) => {
                   const isMapped =
                     entity.type === 'employee'
-                      ? empMappings.some(
-                          (m) =>
-                            m.employee_id === entity.entity_id &&
-                            m.service_id === service.service_id
-                        )
-                      : resMappings.some(
-                          (m) =>
-                            m.resource_id === entity.entity_id &&
-                            m.service_id === service.service_id
-                        );
+                      ? empMappingSet.has(`${entity.entity_id}::${service.service_id}`)
+                      : resMappingSet.has(`${entity.entity_id}::${service.service_id}`);
 
                   return (
                     <td
