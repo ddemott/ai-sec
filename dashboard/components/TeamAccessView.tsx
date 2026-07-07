@@ -7,34 +7,18 @@ import { useActiveTenantId } from '@/lib/SessionContext';
 import { useConfirm } from '../lib/useConfirm';
 import type { TeamUser } from '@/lib/types';
 import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { Modal } from './ui/Modal';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { showToast } from './ui/Toast';
 import { EmptyState } from './ui/EmptyState';
+import { InviteTeamMemberModal } from './team/InviteTeamMemberModal';
 
 type Role = 'owner' | 'front_desk';
-
-const ROLE_LABEL: Record<Role, string> = {
-  owner: 'Owner',
-  front_desk: 'Front Desk',
-};
-
-const ROLE_DESCRIPTION: Record<Role, string> = {
-  owner: 'Full access — can configure services, staff, vocabulary, and team logins.',
-  front_desk: 'Daily-use access only — schedule, customers, calls. No configuration.',
-};
 
 export default function TeamAccessView() {
   const tenantId = useActiveTenantId();
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteName, setInviteName] = useState('');
-  const [inviteRole, setInviteRole] = useState<Role>('front_desk');
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviting, setInviting] = useState(false);
   const [pendingRoleId, setPendingRoleId] = useState<string | null>(null);
   const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
   const { state: confirmState, confirm: confirmAction, close: closeConfirm } = useConfirm();
@@ -56,28 +40,15 @@ export default function TeamAccessView() {
     void loadUsers();
   }, [loadUsers]);
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setInviteError(null);
-    if (!tenantId) return;
-    setInviting(true);
-    const res = await Api.users.invite(tenantId, {
-      email: inviteEmail.trim(),
-      full_name: inviteName.trim(),
-      role: inviteRole,
-    });
-    setInviting(false);
+  async function handleInvite(data: { email: string; full_name: string; role: Role }) {
+    if (!tenantId) return { success: false as const, error: 'No tenant' };
+    const res = await Api.users.invite(tenantId, data);
     if (res.success) {
-      setInviteOpen(false);
-      setInviteEmail('');
-      setInviteName('');
-      setInviteRole('front_desk');
-      showToast(`Invite sent to ${inviteEmail.trim()}`, 'success');
+      showToast(`Invite sent to ${data.email}`, 'success');
       void loadUsers();
-    } else {
-      setInviteError(res.error || 'Invite failed');
     }
-  };
+    return res;
+  }
 
   const handleRoleChange = async (user: TeamUser, nextRole: Role) => {
     if (!tenantId || nextRole === user.role) return;
@@ -88,7 +59,7 @@ export default function TeamAccessView() {
       setUsers((prev) =>
         prev.map((u) => (u.user_id === user.user_id ? { ...u, role: nextRole } : u))
       );
-      showToast(`${user.email} is now ${ROLE_LABEL[nextRole]}`, 'success');
+      showToast(`${user.email} is now ${nextRole === 'owner' ? 'Owner' : 'Front Desk'}`, 'success');
     } else {
       showToast(res.error || 'Could not update role', 'error');
     }
@@ -105,8 +76,7 @@ export default function TeamAccessView() {
         if (!tenantId) return;
         setPendingRevokeId(user.user_id);
         // apiMutate rethrows network/fetch errors — without try/catch the row
-        // would stay stuck in its loading state with no feedback. finally always
-        // clears the flag; catch surfaces the failure via the toast system.
+        // would stay stuck in its loading state with no feedback.
         try {
           const res = await Api.users.revokeUserSessions(user.user_id, tenantId);
           if (res.success) {
@@ -250,95 +220,11 @@ export default function TeamAccessView() {
         )}
       </div>
 
-      <Modal
+      <InviteTeamMemberModal
         isOpen={inviteOpen}
-        onClose={() => {
-          if (!inviting) setInviteOpen(false);
-        }}
-        title="Invite a teammate"
-        footer={
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setInviteOpen(false)}
-              disabled={inviting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" form="invite-form" isLoading={inviting}>
-              Send invite
-            </Button>
-          </div>
-        }
-      >
-        <form id="invite-form" onSubmit={handleInvite} className="space-y-4">
-          <Input
-            label="Full name"
-            type="text"
-            required
-            autoComplete="name"
-            value={inviteName}
-            onChange={(e) => setInviteName(e.target.value)}
-            placeholder="Pat Lopez"
-          />
-          <Input
-            label="Email"
-            type="email"
-            required
-            autoComplete="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            placeholder="pat@business.com"
-          />
-          <div>
-            <label
-              className="block text-xs font-bold uppercase mb-1"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              Role
-            </label>
-            <div className="space-y-2">
-              {(['front_desk', 'owner'] as Role[]).map((r) => (
-                <label
-                  key={r}
-                  className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition"
-                  style={{
-                    borderColor: inviteRole === r ? 'var(--accent)' : 'var(--border)',
-                    backgroundColor: inviteRole === r ? 'var(--accent-muted)' : 'var(--bg-card)',
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="invite-role"
-                    value={r}
-                    checked={inviteRole === r}
-                    onChange={() => setInviteRole(r)}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {ROLE_LABEL[r]}
-                    </div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                      {ROLE_DESCRIPTION[r]}
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-          {inviteError && (
-            <p role="alert" className="text-sm" style={{ color: 'var(--danger)' }}>
-              {inviteError}
-            </p>
-          )}
-          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            They&rsquo;ll receive an email with a link to set their password and sign in. The link
-            expires in 3 days.
-          </p>
-        </form>
-      </Modal>
+        onClose={() => setInviteOpen(false)}
+        onSubmit={handleInvite}
+      />
 
       <ConfirmModal {...confirmState} onClose={closeConfirm} />
     </div>

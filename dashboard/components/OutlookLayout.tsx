@@ -6,15 +6,13 @@ import {
   Users,
   Settings,
   Bot,
-  LogOut,
-  User,
   Globe,
+  User,
   Wrench,
   ShieldCheck,
   ChevronRight,
   LayoutDashboard,
   Phone,
-  Keyboard,
 } from 'lucide-react';
 import { Api } from '../lib/api';
 import { FolderTab, FolderTabBar } from './ui/FolderTabs';
@@ -25,6 +23,10 @@ import { SetupProgressPill } from './SetupProgressPill';
 import { DemoBanner } from './DemoBanner';
 import { useAnchorRect } from '../lib/useAnchorRect';
 import { AppShell } from './AppShell';
+import { TenantSwitcherDropdown } from './layout/TenantSwitcherDropdown';
+import { ProfileMenuDropdown } from './layout/ProfileMenuDropdown';
+import { ThemeSelectorDropdown } from './layout/ThemeSelectorDropdown';
+import { MobileTabBar } from './layout/MobileTabBar';
 
 type Tab =
   | 'dashboard'
@@ -404,282 +406,53 @@ export function OutlookLayout({
           {children}
         </div>
 
-        {/* MOBILE NAVIGATION — mirrors the primary tabs.
-          UX audit #4 (2026-05-18): the admin Globe was previously
-          rendered in this row too, which combined with 4 primary + 3
-          advanced tabs forced a horizontal scroll on iPhone SE (375px).
-          Globe lives in the top utility row (and the FolderTabBar's
-          `right` slot is visible at every viewport), so dropping it
-          from the bottom-row mobile nav doesn't lose admin access.
-          Label font bumped from text-[9px] (sub-WCAG body-text size)
-          to text-[11px] — fits 4 primary tabs at 375px without
-          overflow and reads cleanly. */}
-        <nav
-          aria-label="Mobile navigation"
-          className="md:hidden flex flex-col border-t transition-colors duration-200 safe-area-pb"
-          style={{ backgroundColor: 'var(--sidebar-bg)', borderColor: 'var(--border)' }}
-        >
-          <div
-            className="flex h-14 overflow-x-auto no-scrollbar border-b"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className="relative flex-1 min-w-[64px] flex flex-col items-center justify-center shrink-0"
-                  style={
-                    activeTab === tab.id
-                      ? { color: 'var(--accent-soft)' }
-                      : { color: 'var(--text-muted)' }
-                  }
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-[11px] mt-0.5 font-medium">{tab.label}</span>
-                  {tab.id === 'ai-insights' && unansweredCount > 0 && (
-                    <span
-                      className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center rounded-full text-[8px] font-bold leading-none"
-                      style={{ backgroundColor: 'var(--accent)', color: 'var(--primary-text)' }}
-                    >
-                      {unansweredCount > 99 ? '99+' : unansweredCount}
-                    </span>
-                  )}
-                  {tab.id === 'calls' && activeCallCount > 0 && (
-                    <span
-                      className="absolute top-1 right-1 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center rounded-full text-[8px] font-bold leading-none animate-pulse"
-                      style={{
-                        backgroundColor: 'var(--danger, #dc2626)',
-                        color: 'var(--primary-text)',
-                      }}
-                      aria-label={`${activeCallCount} active call${activeCallCount > 1 ? 's' : ''}`}
-                    >
-                      {activeCallCount > 99 ? '99+' : activeCallCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+        {/* MOBILE NAVIGATION — mirrors the primary tabs only (no admin Globe;
+          Globe is in FolderTabBar right slot visible at all viewports).
+          Label font is text-[11px] — fits 4 primary tabs at 375px without overflow. */}
+        <MobileTabBar
+          tabs={visibleTabs}
+          activeTab={activeTab}
+          unansweredCount={unansweredCount}
+          activeCallCount={activeCallCount}
+          onSelectTab={(tab) => setActiveTab(tab as Tab)}
+        />
       </div>
 
-      {/* Tenant switcher dropdown.
-        Uses CSS vars (not hardcoded bg-white/gray classes) so it theme-
-        matches midnight, nord, sunset, forest, etc. — otherwise the panel
-        pops as a bright-white rectangle in 6 of 8 themes. */}
+      {/* Tenant switcher dropdown — uses CSS vars to theme-match all 8 themes */}
       {tenantDropdownOpen && (
-        <>
-          <div className="fixed inset-0 z-[99]" onClick={() => setTenantDropdownOpen(false)} />
-          <div
-            data-testid="tenant-switcher-panel"
-            className="fixed z-[100] w-64 rounded-xl shadow-2xl border overflow-hidden"
-            style={{
-              top: tenantBtnRect ? tenantBtnRect.bottom + 4 : 0,
-              left: tenantBtnRect ? tenantBtnRect.left : 0,
-              backgroundColor: 'var(--bg-raised)',
-              color: 'var(--text-primary)',
-              borderColor: 'var(--border-soft)',
-            }}
-          >
-            <div
-              className="p-2 border-b text-xs font-bold uppercase tracking-widest"
-              style={{
-                backgroundColor: 'var(--bg-surface)',
-                borderColor: 'var(--border-soft)',
-                color: 'var(--text-muted)',
-              }}
-            >
-              Switch Active Business
-            </div>
-            <div
-              className="max-h-60 overflow-y-auto"
-              role="listbox"
-              aria-label="Select active business"
-              onKeyDown={(e) => {
-                const items = e.currentTarget.querySelectorAll('[role="option"]');
-                const focused = e.currentTarget.querySelector<HTMLElement>(':focus');
-                const idx = focused ? Array.from(items).indexOf(focused) : -1;
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  const next = items[idx + 1] as HTMLElement | undefined;
-                  next?.focus();
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  const prev = items[idx - 1] as HTMLElement | undefined;
-                  prev?.focus();
-                } else if (e.key === 'Enter' && focused) {
-                  focused.click();
-                }
-              }}
-            >
-              {allTenants.map((t) => (
-                <button
-                  key={t.tenant_id}
-                  role="option"
-                  aria-selected={managedTenantId === t.tenant_id}
-                  onClick={() => {
-                    if (onSelectTenant) onSelectTenant(t.tenant_id, t.name);
-                    setTenantDropdownOpen(false);
-                    if (activeTab === 'all-businesses') setActiveTab('dashboard');
-                  }}
-                  className="w-full text-left px-4 py-3 flex flex-col transition-colors border-b hover:brightness-125"
-                  style={{
-                    backgroundColor:
-                      managedTenantId === t.tenant_id ? 'var(--accent-muted)' : undefined,
-                    borderColor: 'var(--border-soft)',
-                  }}
-                >
-                  <span className="text-sm font-bold">{t.name}</span>
-                  <span className="text-xs opacity-50 uppercase tracking-tighter">
-                    {t.business_type}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
+        <TenantSwitcherDropdown
+          allTenants={allTenants}
+          managedTenantId={managedTenantId}
+          anchorRect={tenantBtnRect}
+          onClose={() => setTenantDropdownOpen(false)}
+          onSelect={(id, name) => { if (onSelectTenant) onSelectTenant(id, name); }}
+          onSelectTab={(tab) => setActiveTab(tab as Tab)}
+          activeTab={activeTab}
+        />
       )}
 
       {/* Profile dropdown menu */}
       {profileMenuOpen && (
-        <>
-          <div className="fixed inset-0 z-[99]" onClick={() => setProfileMenuOpen(false)} />
-          <div
-            className="fixed z-[100] w-56 rounded-xl shadow-2xl border overflow-hidden"
-            style={{
-              backgroundColor: 'var(--bg-raised)',
-              borderColor: 'var(--border-soft)',
-              top: profileBtnRect ? profileBtnRect.bottom + 4 : 0,
-              right: 16,
-            }}
-          >
-            {/* User info header */}
-            <div
-              className="px-4 py-3 border-b"
-              style={{ borderColor: 'var(--border-soft)', backgroundColor: 'var(--bg-surface)' }}
-            >
-              <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                {userName || 'User'}
-              </div>
-              <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                Signed in
-              </div>
-            </div>
-            {/* Menu items */}
-            <div className="py-1">
-              <button
-                onClick={() => {
-                  setActiveTab('profile');
-                  setProfileMenuOpen(false);
-                }}
-                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors hover:brightness-125"
-                style={{
-                  color: 'var(--text-primary)',
-                  backgroundColor: activeTab === 'profile' ? 'var(--accent-muted)' : 'transparent',
-                }}
-              >
-                <User className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-                My Profile
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('setup');
-                  setProfileMenuOpen(false);
-                }}
-                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors hover:brightness-125"
-                style={{
-                  color: 'var(--text-primary)',
-                  backgroundColor: activeTab === 'setup' ? 'var(--accent-muted)' : 'transparent',
-                }}
-              >
-                <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-                Setup
-              </button>
-              {onShowShortcuts && (
-                <button
-                  onClick={() => {
-                    setProfileMenuOpen(false);
-                    onShowShortcuts();
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors hover:brightness-125"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  <Keyboard className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-                  Keyboard shortcuts
-                </button>
-              )}
-            </div>
-            {/* Logout */}
-            {onLogout && (
-              <div className="border-t py-1" style={{ borderColor: 'var(--border-soft)' }}>
-                <button
-                  onClick={() => {
-                    setProfileMenuOpen(false);
-                    onLogout();
-                  }}
-                  className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors"
-                  style={{ color: 'var(--red)' }}
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
-                </button>
-              </div>
-            )}
-          </div>
-        </>
+        <ProfileMenuDropdown
+          userName={userName}
+          anchorRect={profileBtnRect}
+          activeTab={activeTab}
+          onClose={() => setProfileMenuOpen(false)}
+          onSelectTab={(tab) => setActiveTab(tab as Tab)}
+          onShowShortcuts={onShowShortcuts}
+          onLogout={onLogout}
+        />
       )}
 
       {/* Theme swatch picker */}
       {themeSelectorOpen && (
-        <>
-          <div className="fixed inset-0 z-[99]" onClick={() => setThemeSelectorOpen(false)} />
-          <div
-            className="fixed z-[100] rounded-xl shadow-2xl border p-3"
-            style={{
-              backgroundColor: 'var(--bg-raised)',
-              borderColor: 'var(--border-soft)',
-              top: themeBtnRect ? themeBtnRect.bottom + 4 : 0,
-              left: themeBtnRect ? themeBtnRect.left : 0,
-            }}
-          >
-            <div className="grid grid-cols-4 gap-2">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    setTheme(t.id);
-                    setThemeSelectorOpen(false);
-                  }}
-                  title={t.name}
-                  aria-label={t.name}
-                  aria-pressed={theme === t.id}
-                  className="flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all hover:brightness-110"
-                  style={
-                    theme === t.id
-                      ? { boxShadow: '0 0 0 2px var(--accent)', backgroundColor: 'var(--accent-muted)' }
-                      : undefined
-                  }
-                >
-                  <span
-                    className="flex rounded overflow-hidden shrink-0"
-                    style={{ width: 36, height: 24, border: '1px solid rgba(255,255,255,0.1)' }}
-                  >
-                    <span style={{ flex: 2, backgroundColor: t.preview.bg }} />
-                    <span style={{ flex: 1, backgroundColor: t.preview.accent }} />
-                  </span>
-                  <span
-                    className="text-xs leading-none whitespace-nowrap"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    {t.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
+        <ThemeSelectorDropdown
+          currentTheme={theme}
+          themes={THEMES}
+          anchorRect={themeBtnRect}
+          onClose={() => setThemeSelectorOpen(false)}
+          onSelect={setTheme}
+        />
       )}
 
       {/* Feedback button — appears on every page with automatic context */}

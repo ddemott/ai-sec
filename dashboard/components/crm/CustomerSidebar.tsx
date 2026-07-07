@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useMemo, useRef, useState } from 'react';
-import { Search, RefreshCw, ChevronRight, UserPlus, Download, Upload } from 'lucide-react';
+import { Search, RefreshCw, UserPlus, Download, Upload } from 'lucide-react';
 import { type Customer } from '@/lib/types';
-import { formatPhone } from '../../lib/phone';
 import { downloadTextFile } from '../../lib/utils';
 import { Api } from '../../lib/api';
 import { Button } from '../ui/Button';
@@ -11,6 +10,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { showToast } from '../ui/Toast';
 import { useConfirm } from '../../lib/useConfirm';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { CustomerListItem } from './CustomerListItem';
 
 interface CustomerSidebarProps {
   customers: Customer[];
@@ -282,51 +282,16 @@ export function CustomerSidebar({
               )}
             </div>
           )}
-          {filteredCustomers.map((c, idx) => {
-            const isSelected = selectedCustomer?.customer_id === c.customer_id;
-            const isFocused = focusedIdx === idx;
-            return (
-              <div
-                key={c.customer_id}
-                id={`crm-customer-row-${c.customer_id}`}
-                role="option"
-                tabIndex={isFocused ? 0 : -1}
-                aria-selected={isSelected}
-                ref={(el) => {
-                  if (el && isFocused && document.activeElement !== el) el.focus();
-                }}
-                onMouseEnter={() => setFocusedIdx(-1)}
-                onClick={() => onSelectCustomer(c)}
-                className={`p-4 cursor-pointer transition flex justify-between items-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${isSelected ? 'border-l-4' : ''}`}
-                style={{
-                  borderBottom: '1px solid var(--border-soft)',
-                  ...(isSelected
-                    ? {
-                        backgroundColor: 'var(--bg-surface)',
-                        borderLeftColor: 'var(--accent)',
-                      }
-                    : isFocused
-                      ? { backgroundColor: 'var(--accent-muted)' }
-                      : {}),
-                }}
-              >
-                <div>
-                  <p
-                    className="text-sm font-semibold"
-                    style={{
-                      color: isSelected ? 'var(--accent-soft)' : 'var(--text-primary)',
-                    }}
-                  >
-                    {c.name || 'Unknown'}
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    {formatPhone(c.phone)}
-                  </p>
-                </div>
-                <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-              </div>
-            );
-          })}
+          {filteredCustomers.map((c, idx) => (
+            <CustomerListItem
+              key={c.customer_id}
+              customer={c}
+              isSelected={selectedCustomer?.customer_id === c.customer_id}
+              isFocused={focusedIdx === idx}
+onClick={() => onSelectCustomer(c)}
+              onMouseEnter={() => setFocusedIdx(-1)}
+            />
+          ))}
         </div>
       </section>
       <ConfirmModal {...confirmState} onClose={closeConfirm} />

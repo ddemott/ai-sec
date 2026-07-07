@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Sparkles, Info } from 'lucide-react';
+import { ToggleSwitch } from '../ui/ToggleSwitch';
 
 function preferencesPlaceholder(businessType?: string | null): string {
   const t = (businessType || '').toLowerCase();
@@ -48,24 +49,11 @@ export function CustomerPreferencesSection({
           <Sparkles className="w-5 h-5 mr-2" style={{ color: 'var(--accent-soft)' }} />
           Customer Preferences
         </h2>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={savePreferencesEnabled}
-          aria-label="Save customer preferences"
-          onClick={onToggle}
-          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-          style={{
-            backgroundColor: savePreferencesEnabled ? 'var(--accent)' : 'var(--border-soft)',
-          }}
-        >
-          <span
-            className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-            style={{
-              transform: savePreferencesEnabled ? 'translateX(24px)' : 'translateX(4px)',
-            }}
-          />
-        </button>
+        <ToggleSwitch
+          checked={savePreferencesEnabled}
+          onChange={onToggle}
+          label="Save customer preferences"
+        />
       </div>
       <div
         className="border p-4 rounded-xl flex items-start"

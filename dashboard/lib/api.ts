@@ -51,9 +51,6 @@ export const API_BASE_URL =
 
 export const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
-/**
- * Common headers for all API requests (BUG-012: includes JWT token)
- */
 const getHeaders = () => {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -65,9 +62,6 @@ const getHeaders = () => {
   return headers;
 };
 
-/**
- * Safe localStorage access utility
- */
 export function getLocalStorageItem(key: string) {
   if (typeof window !== 'undefined' && window.localStorage) {
     return window.localStorage.getItem(key);
@@ -75,10 +69,7 @@ export function getLocalStorageItem(key: string) {
   return null;
 }
 
-/**
- * Logic to determine which tenant_id to send based on current session
- * If current user is SuperAdmin, we use the specific entity's tenant_id
- */
+// SuperAdmin callers pass the entity's own tenant_id; non-admins use their JWT tenant.
 export function getTargetTenantId(entityTenantId?: string) {
   const currentTenantId = getLocalStorageItem('tenantId');
   if (currentTenantId === SUPER_ADMIN_TENANT_ID && entityTenantId) {
@@ -87,21 +78,12 @@ export function getTargetTenantId(entityTenantId?: string) {
   return currentTenantId;
 }
 
-/**
- * Module-level callback invoked when any API response returns 402 (subscription required).
- * Registered once by the dashboard root on mount so the plain api.ts module can trigger
- * a toast without importing React components.
- */
 let subscriptionRequiredCallback: (() => void) | null = null;
 
 export function setSubscriptionRequiredCallback(cb: () => void): void {
   subscriptionRequiredCallback = cb;
 }
 
-/**
- * Force logout: clear all auth state and redirect to login.
- * Single source of truth for auth cleanup — used by apiFetch, apiMutate, and hooks.
- */
 export function forceLogout() {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('tenantId');
@@ -113,9 +95,7 @@ export function forceLogout() {
   }
 }
 
-/**
- * Decode JWT payload without verification (client-side expiry check only).
- */
+// Client-side only — never used for auth decisions, only proactive refresh timing.
 function decodeJwtPayload(token: string): { exp?: number } | null {
   try {
     const parts = token.split('.');
@@ -126,10 +106,6 @@ function decodeJwtPayload(token: string): { exp?: number } | null {
   }
 }
 
-/**
- * Check if the current token is within 10 minutes of expiry and refresh it proactively.
- * Prevents users from being forcibly logged out mid-session.
- */
 let refreshInProgress: Promise<void> | null = null;
 const TOKEN_REFRESH_BUFFER_MS = 10 * 60 * 1000; // 10 minutes before expiry
 
@@ -180,11 +156,6 @@ async function ensureTokenFresh(): Promise<void> {
   return refreshInProgress;
 }
 
-/**
- * Check response for auth failures (401, tenant-not-found 404) and force logout if needed.
- * Also handles 402 (subscription required) by firing the registered callback.
- * Returns an error message string if a terminal condition was triggered, or null if fine.
- */
 async function checkAuthFailure(response: Response): Promise<string | null> {
   if (response.status === 401) {
     forceLogout();
@@ -208,10 +179,7 @@ async function checkAuthFailure(response: Response): Promise<string | null> {
   return null;
 }
 
-/**
- * Detect self-signed cert errors and redirect user to accept the backend certificate.
- * Browser throws TypeError("Failed to fetch") when the cert is untrusted.
- */
+// Browser throws TypeError("Failed to fetch") when the self-signed cert is untrusted.
 let certRedirectTriggered = false;
 function handleFetchError(err: unknown) {
   if (
@@ -231,16 +199,8 @@ function handleFetchError(err: unknown) {
   }
 }
 
-/**
- * Generic Fetcher
- */
-/**
- * Build the query record for the analytics endpoints: tenant_id plus an
- * optional From/To window. Empty/absent bounds are dropped so the backend
- * treats them as all-time. Returns undefined when there is no tenant — the
- * endpoints require tenant_id, so sending date bounds without it would only
- * produce a tenant-less request (400/404); better to send nothing.
- */
+// Returns undefined (not just empty) when tenant is absent — the analytics endpoints
+// require tenant_id, so sending date bounds without it produces a 400/404.
 function analyticsQuery(
   tenantId: string | null,
   range?: { start_date?: string; end_date?: string }
@@ -250,6 +210,10 @@ function analyticsQuery(
   if (range?.start_date) query.start_date = range.start_date;
   if (range?.end_date) query.end_date = range.end_date;
   return query;
+}
+
+function tenantParam(tenantId: string | null | undefined): Record<string, string> | undefined {
+  return tenantId ? { tenant_id: tenantId } : undefined;
 }
 
 export async function apiFetch<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
@@ -278,13 +242,8 @@ export async function apiFetch<T>(endpoint: string, params?: Record<string, stri
   return response.json() as Promise<T>;
 }
 
-/**
- * POST a JSON body, get back a RAW (unwrapped) JSON response — for the small
- * set of POST endpoints that return data directly rather than the
- * `{success, error?}` envelope apiMutate expects (e.g. POST /coverage/dry-run,
- * which mirrors GET /coverage's raw-array shape). Throws on a non-2xx
- * response (mirrors apiFetch) so callers use try/catch, not a success check.
- */
+// For POST endpoints that return raw JSON (not the {success,error} envelope).
+// Throws on non-2xx so callers use try/catch, not a success check.
 async function apiPostRaw<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
   await ensureTokenFresh();
   const url = `${API_BASE_URL}${endpoint}`;
@@ -311,9 +270,34 @@ async function apiPostRaw<T>(endpoint: string, body: Record<string, unknown>): P
   return response.json() as Promise<T>;
 }
 
-/**
- * Generic Mutation (POST/PUT/DELETE)
- */
+async function apiUpload<T>(endpoint: string, file: File, tenantId?: string | null): Promise<T> {
+  await ensureTokenFresh();
+  const formData = new FormData();
+  formData.append('file', file);
+  if (tenantId) formData.append('tenant_id', tenantId);
+
+  const token = getLocalStorageItem('authToken');
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'POST', headers, body: formData });
+  } catch (err) {
+    handleFetchError(err);
+    throw err;
+  }
+
+  const authError = await checkAuthFailure(response);
+  if (authError) throw new Error(authError);
+
+  if (!response.ok) {
+    const json = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(json.error || `API Error: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 async function apiMutate<T>(
   endpoint: string,
   method: 'POST' | 'PUT' | 'DELETE' | 'PATCH',
@@ -350,14 +334,11 @@ async function apiMutate<T>(
   return { success: true, ...obj } as { success: boolean; error?: string } & T;
 }
 
-/**
- * Entity-Specific API Library
- */
 export const Api = {
   // --- CUSTOMERS ---
   customers: {
     list: (tenantId: string | null) =>
-      apiFetch<Customer[]>(`/customers`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Customer[]>(`/customers`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Customer>) =>
       apiMutate<{ customer: Customer }>(`/customers/create`, 'POST', {
@@ -378,7 +359,7 @@ export const Api = {
     appointments: (customerId: string, tenantId: string | null) =>
       apiFetch<Appointment[]>(
         `/customers/${customerId}/appointments`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
     // Bulk CSV onboarding — the caller reads the file client-side (FileReader)
@@ -475,14 +456,14 @@ export const Api = {
       apiMutate<{ message?: string; cancelLink?: string; rescheduleLink?: string }>(
         `/appointments/${id}/send-self-service-links`,
         'POST',
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
   },
 
   // --- RESOURCES ---
   resources: {
     list: (tenantId: string | null) =>
-      apiFetch<Resource[]>(`/resources`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Resource[]>(`/resources`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Resource>) =>
       apiMutate<{ resource: Resource }>(`/resources/create`, 'POST', {
@@ -500,7 +481,7 @@ export const Api = {
   // --- EMPLOYEES ---
   employees: {
     list: (tenantId: string | null) =>
-      apiFetch<Employee[]>(`/employees`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Employee[]>(`/employees`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Employee>) =>
       apiMutate<{ employee: Employee }>(`/employees/create`, 'POST', {
@@ -520,7 +501,7 @@ export const Api = {
     list: (tenantId: string | null) =>
       apiFetch<{ success: true; users: TeamUser[] }>(
         `/users`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
     invite: (
@@ -549,7 +530,7 @@ export const Api = {
     listServiceResource: (tenantId: string | null) =>
       apiFetch<ServiceMapping[]>(
         `/mappings/service-resource`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
     assignServiceResource: (serviceId: string, resourceId: string, tenantId: string | null) =>
@@ -575,14 +556,14 @@ export const Api = {
     listServiceEmployee: (tenantId: string | null) =>
       apiFetch<ServiceMapping[]>(
         `/mappings/service-employee`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
   },
 
   // --- SERVICES ---
   services: {
     list: (tenantId: string | null) =>
-      apiFetch<Service[]>(`/services`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Service[]>(`/services`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Service>) =>
       apiMutate<{ service: Service }>(`/services/create`, 'POST', { tenant_id: tenantId, ...data }),
@@ -607,7 +588,7 @@ export const Api = {
       list: (tenantId: string | null) =>
         apiFetch<ScheduleEntry[]>(
           `/shifts/overrides`,
-          tenantId ? { tenant_id: tenantId } : undefined
+          tenantParam(tenantId)
         ),
 
       forDate: (tenantId: string | null, employeeId: string, startDate: string, endDate: string) =>
@@ -682,13 +663,13 @@ export const Api = {
     getSettings: (tenantId: string | null) =>
       apiFetch<CalendarSettings | null>(
         `/calendar/settings`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
     getAuthUrl: (tenantId: string | null, provider: 'google' | 'outlook' = 'google') =>
       apiFetch<{ url: string }>(
         `/calendar/auth/${provider}`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
     updateSettings: (tenantId: string | null, data: Partial<CalendarSettings>) =>
@@ -704,13 +685,13 @@ export const Api = {
   // --- ANALYTICS ---
   analytics: {
     getStats: (tenantId: string | null) =>
-      apiFetch<AnalyticsStats>(`/analytics/stats`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<AnalyticsStats>(`/analytics/stats`, tenantParam(tenantId)),
 
     getCalls: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
       apiFetch<AnalyticsCalls>(`/analytics/calls`, analyticsQuery(tenantId, range)),
 
     getAiCost: (tenantId: string | null) =>
-      apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantParam(tenantId)),
 
     getCohorts: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
       apiFetch<AnalyticsCohorts>(`/analytics/cohorts`, analyticsQuery(tenantId, range)),
@@ -724,14 +705,14 @@ export const Api = {
     deliveryStats: (tenantId: string | null) =>
       apiFetch<ReminderDeliveryStats>(
         `/reminders/delivery-stats`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
   },
 
   // --- MASTER SKILLS ---
   skills: {
     list: (tenantId: string | null) =>
-      apiFetch<Skill[]>(`/skills`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Skill[]>(`/skills`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Skill>) =>
       apiMutate<{ skill: Skill }>(`/skills/create`, 'POST', { tenant_id: tenantId, ...data }),
@@ -743,7 +724,7 @@ export const Api = {
       apiMutate(
         `/skills/${encodeURIComponent(name)}`,
         'DELETE',
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
   },
 
@@ -786,16 +767,16 @@ export const Api = {
   // --- CALL SUMMARIES ---
   callSummaries: {
     list: (tenantId: string | null, customerId: string) =>
-      apiFetch<CallSummary[]>(
-        `/call-summaries`,
-        tenantId ? { tenant_id: tenantId, customer_id: customerId } : { customer_id: customerId }
-      ),
+      apiFetch<CallSummary[]>(`/call-summaries`, {
+        ...tenantParam(tenantId),
+        customer_id: customerId,
+      }),
   },
 
   // --- VOCABULARY ---
   vocabulary: {
     get: (tenantId: string | null) =>
-      apiFetch<Vocabulary>(`/vocabulary`, tenantId ? { tenant_id: tenantId } : undefined),
+      apiFetch<Vocabulary>(`/vocabulary`, tenantParam(tenantId)),
   },
 
   // --- COVERAGE ---
@@ -854,7 +835,7 @@ export const Api = {
           source: string;
           created_at: string;
         }>
-      >(`/knowledge`, tenantId ? { tenant_id: tenantId } : undefined),
+      >(`/knowledge`, tenantParam(tenantId)),
 
     delete: (id: string, tenantId: string | null) =>
       apiMutate(`/knowledge/${id}`, 'DELETE', { tenant_id: tenantId }),
@@ -895,53 +876,23 @@ export const Api = {
           caller_message: string | null;
           created_at: string;
         }>;
-      }>(`/knowledge/unanswered`, tenantId ? { tenant_id: tenantId } : undefined),
+      }>(`/knowledge/unanswered`, tenantParam(tenantId)),
 
     resolveUnanswered: (id: string, tenantId: string | null) =>
       apiMutate<{ success: boolean }>(`/knowledge/unanswered/${id}/resolve`, 'PATCH', {
         tenant_id: tenantId,
       }),
 
-    ingest: async (tenantId: string | null, file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (tenantId) formData.append('tenant_id', tenantId);
+    ingest: (tenantId: string | null, file: File) =>
+      apiUpload<{ success: boolean; chunksIngested: number; error?: string }>(
+        `/knowledge/ingest`,
+        file,
+        tenantId
+      ),
 
-      const token = getLocalStorageItem('authToken');
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const response = await fetch(`${API_BASE_URL}/knowledge/ingest`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-
-      return response.json() as Promise<{
-        success: boolean;
-        chunksIngested: number;
-        error?: string;
-      }>;
-    },
-
-    // Upload a PDF/txt/md info sheet: prefills the standard questions from its
-    // prose and adds any **Q:/**A: custom questions, all staged for review.
-    importDocument: async (tenantId: string | null, file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (tenantId) formData.append('tenant_id', tenantId);
-
-      const token = getLocalStorageItem('authToken');
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const response = await fetch(`${API_BASE_URL}/knowledge/import-document`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-
-      return response.json() as Promise<{
+    // Prefills standard questions from the document prose; adds Q:/A: custom questions staged for review.
+    importDocument: (tenantId: string | null, file: File) =>
+      apiUpload<{
         success: boolean;
         standard_answers?: Array<{
           questionId: string | null;
@@ -952,8 +903,7 @@ export const Api = {
         malformed?: string[];
         confirmed?: number;
         error?: string;
-      }>;
-    },
+      }>(`/knowledge/import-document`, file, tenantId),
 
     importWebsite: (tenantId: string | null, url: string) =>
       apiMutate<{
@@ -978,7 +928,7 @@ export const Api = {
           status: string;
           created_at: string;
         }>;
-      }>(`/knowledge/suggestions`, tenantId ? { tenant_id: tenantId } : undefined),
+      }>(`/knowledge/suggestions`, tenantParam(tenantId)),
 
     approveSuggestion: (id: string, tenantId: string | null) =>
       apiMutate<{ success: boolean }>(`/knowledge/suggestions/${id}`, 'PATCH', {
@@ -1032,7 +982,7 @@ export const Api = {
     tenantData: (tenantId: string | null) =>
       apiFetch<TenantDataExportResponse>(
         `/export/tenant-data`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
     // CSV exports return text/csv, not JSON, so apiFetch (which json()s the
@@ -1126,13 +1076,13 @@ export const Api = {
     getSettings: (tenantId: string | null) =>
       apiFetch<SquareSettings | null>(
         `/square/settings`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
     getAuthUrl: (tenantId: string | null) =>
       apiFetch<{ success: boolean; authUrl: string }>(
         `/square/auth`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
     disconnect: (tenantId: string | null) =>
@@ -1148,20 +1098,18 @@ export const Api = {
     getSyncStatus: (tenantId: string | null) =>
       apiFetch<CrmSyncStatus>(
         `/square/sync/status`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
   },
 
   // --- VOICE CRM (Call Context) ---
   voice: {
-    // Get active calls for dashboard
     getActiveCalls: (tenantId: string | null) =>
       apiFetch<{ calls: VoiceSessionDisplay[]; total: number }>(
         `/voice/active`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
-    // Get call history with optional filters
     getHistory: (
       tenantId: string | null,
       opts?: { customer_id?: string; status?: string; limit?: number; offset?: number }
@@ -1178,28 +1126,18 @@ export const Api = {
       );
     },
 
-    // Get a specific voice session
     getSession: (tenantId: string | null, callId: string) =>
-      apiFetch<VoiceSession>(
-        `/voice/session/${callId}`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
+      apiFetch<VoiceSession>(`/voice/session/${callId}`, tenantParam(tenantId)),
 
-    // Get customer context (for viewing customer profile enrichment)
     getCustomerContext: (tenantId: string | null, customerId: string) =>
-      apiFetch<CustomerContext>(
-        `/voice/customer/${customerId}/context`,
-        tenantId ? { tenant_id: tenantId } : undefined
-      ),
+      apiFetch<CustomerContext>(`/voice/customer/${customerId}/context`, tenantParam(tenantId)),
 
-    // Get call history for a specific customer
     getCustomerCalls: (tenantId: string | null, customerId: string, limit?: number) =>
       apiFetch<{ calls: VoiceSession[] }>(`/voice/customer/${customerId}/calls`, {
         ...(tenantId ? { tenant_id: tenantId } : {}),
         ...(limit ? { limit: String(limit) } : {}),
       }),
 
-    // Add a note to a customer
     addCustomerNote: (
       tenantId: string | null,
       data: { customer_id: string; note: string; note_type?: string; call_id?: string }
@@ -1222,14 +1160,13 @@ export const Api = {
         older_than_days: olderThanDays,
       }),
 
-    // Get customer context by phone (used during active calls)
+    // Used during active calls to look up context by incoming phone number.
     getContextByPhone: (tenantId: string | null, phone: string) =>
       apiFetch<CustomerContext>(
         `/voice/context/${encodeURIComponent(phone)}`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
-    // List caller messages left during voice calls (owner inbox)
     listMessages: (
       tenantId: string | null,
       opts?: { status?: string; limit?: number; offset?: number }
@@ -1246,21 +1183,18 @@ export const Api = {
           : undefined
       ),
 
-    // Mark a message as read or actioned
     updateMessageStatus: (messageId: string, status: 'new' | 'read' | 'actioned') =>
       apiMutate<{ success: boolean }>(`/voice/messages/${messageId}`, 'PATCH', { status }),
   },
 
   // --- Version History API ---
   versionHistory: {
-    // Get full history for a record
     getHistory: (tenantId: string | null, table: VersionedTable, recordId: string) =>
       apiFetch<RecordHistoryResponse>(
         `/records/${table}/${recordId}/history`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
-    // Get a specific version
     getVersion: (
       tenantId: string | null,
       table: VersionedTable,
@@ -1269,10 +1203,9 @@ export const Api = {
     ) =>
       apiFetch<RecordVersion>(
         `/records/${table}/${recordId}/version/${versionNumber}`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
-    // Compare two versions
     compareVersions: (
       tenantId: string | null,
       table: VersionedTable,
@@ -1288,17 +1221,15 @@ export const Api = {
         differences: VersionComparison[];
       }>(
         `/records/${table}/${recordId}/compare/${versionA}/${versionB}`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
-    // Get restore preview (all fields with historical values)
     getRestorePreview: (tenantId: string | null, table: VersionedTable, recordId: string) =>
       apiFetch<RecordRestorePreview>(
         `/records/${table}/${recordId}/restore-preview`,
-        tenantId ? { tenant_id: tenantId } : undefined
+        tenantParam(tenantId)
       ),
 
-    // Restore specific fields from a version
     restoreFields: (
       tenantId: string | null,
       table: VersionedTable,
@@ -1318,7 +1249,6 @@ export const Api = {
         { tenant_id: tenantId, ...data }
       ),
 
-    // Soft delete a record
     softDelete: (
       tenantId: string | null,
       table: VersionedTable,
@@ -1331,7 +1261,6 @@ export const Api = {
         { tenant_id: tenantId, ...(data || {}) }
       ),
 
-    // Restore a soft-deleted record
     restoreDeleted: (
       tenantId: string | null,
       table: VersionedTable,
@@ -1344,7 +1273,6 @@ export const Api = {
         { tenant_id: tenantId, ...(data || {}) }
       ),
 
-    // Get deleted records for a table
     getDeleted: (
       tenantId: string | null,
       table: VersionedTable,
@@ -1360,7 +1288,6 @@ export const Api = {
       );
     },
 
-    // Copy fields from one record to another
     copyFields: (
       tenantId: string | null,
       table: VersionedTable,
@@ -1378,7 +1305,6 @@ export const Api = {
         { tenant_id: tenantId, ...data }
       ),
 
-    // Get recent changes across all tables
     getRecentChanges: (
       tenantId: string | null,
       opts?: {

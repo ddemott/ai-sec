@@ -14,7 +14,7 @@
 //      template change can't nuke a tuned persona.
 
 import React, { useEffect, useState } from 'react';
-import { Check, Eye, LayoutTemplate, X } from 'lucide-react';
+import { Check, Eye, LayoutTemplate } from 'lucide-react';
 import { Api } from '../lib/api';
 import type { BusinessTemplate, Tenant } from '@/lib/types';
 import { Card } from './ui/Card';
@@ -23,6 +23,7 @@ import { Modal } from './ui/Modal';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { useConfirm } from '../lib/useConfirm';
 import { showToast } from './ui/Toast';
+import { TemplatePreviewModal } from './business/TemplatePreviewModal';
 
 interface BusinessTypeSectionProps {
   tenantId: string | null;
@@ -245,116 +246,13 @@ export default function BusinessTypeSection({ tenantId, onChanged }: BusinessTyp
 
       {/* Preview modal: details + Apply (gated by confirmation) */}
       {previewTemplate && (
-        <Modal isOpen={true} onClose={() => setPreviewTemplate(null)} title="">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold">{previewTemplate.display_name}</h2>
-                <p className="text-xs text-gray-400 mt-0.5 uppercase tracking-wider">
-                  {previewTemplate.category || 'Business Template'}
-                </p>
-              </div>
-              <button
-                onClick={() => setPreviewTemplate(null)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="bg-gray-50 dark:bg-gray-800/30 rounded-lg p-3 space-y-1">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                Dashboard Labels
-              </p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                <div>
-                  <span className="text-gray-400">Resources called:</span>{' '}
-                  <span className="font-medium">
-                    {previewTemplate.resource_plural || 'Resources'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Staff called:</span>{' '}
-                  <span className="font-medium">
-                    {previewTemplate.employee_plural || 'Employees'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Bookings called:</span>{' '}
-                  <span className="font-medium">
-                    {previewTemplate.booking_label || 'Appointments'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">Default resource:</span>{' '}
-                  <span className="font-medium">
-                    {previewTemplate.default_resource_name || 'Station 1'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                AI System Prompt
-              </p>
-              <div className="bg-gray-50 dark:bg-gray-800/30 rounded-lg p-3 text-sm font-mono leading-relaxed max-h-40 overflow-y-auto">
-                {previewTemplate.system_prompt_template}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                Greeting Message
-              </p>
-              <div className="bg-gray-50 dark:bg-gray-800/30 rounded-lg p-3 text-sm italic">
-                &quot;{previewTemplate.first_message}&quot;
-              </div>
-            </div>
-
-            {previewTemplate.example_services && previewTemplate.example_services.length > 0 && (
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Suggested Services
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {previewTemplate.example_services.map((svc, i) => (
-                    <span
-                      key={i}
-                      className="text-xs px-2 py-1 rounded-full"
-                      style={{
-                        backgroundColor: 'var(--accent-muted)',
-                        color: 'var(--accent-soft)',
-                      }}
-                    >
-                      {svc}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div
-              className="flex items-center justify-between pt-3 border-t"
-              style={{ borderColor: 'var(--border-soft)' }}
-            >
-              <p className="text-xs text-gray-400">
-                {config?.business_type === previewTemplate.business_type
-                  ? 'This is your current template.'
-                  : 'Applying will overwrite your AI persona, voice, and first message.'}
-              </p>
-              <Button
-                onClick={() => handleApplyClick(previewTemplate)}
-                disabled={config?.business_type === previewTemplate.business_type || applying}
-                isLoading={applying}
-              >
-                {config?.business_type === previewTemplate.business_type
-                  ? 'Already applied'
-                  : 'Apply to my business'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
+        <TemplatePreviewModal
+          template={previewTemplate}
+          currentBusinessType={config?.business_type ?? null}
+          applying={applying}
+          onClose={() => setPreviewTemplate(null)}
+          onApply={handleApplyClick}
+        />
       )}
 
       <ConfirmModal
