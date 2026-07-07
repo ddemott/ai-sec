@@ -20,11 +20,11 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
 | Backend (`npm test`) | ~2,324 | ✅ | ~190s |
-| Dashboard (`cd dashboard && npm test`) | ~929 | ✅ | ~15s |
+| Dashboard (`cd dashboard && npm test`) | ~1010 | ✅ | ~15s |
 | Agent (`cd agent && npm test`) | ~496 | ✅ | ~1s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 35 spec files (exact pass count: re-run to verify) | ✅ | ~175s |
 
-Total unit tests: ~3,749 passing (~2,324 backend + ~929 dashboard + ~496 agent). Counts are the 2026-07-07 CLAUDE.md figures; re-run for exact numbers.
+Total unit tests: ~3,830 passing (~2,324 backend + ~1,010 dashboard + ~496 agent). Counts are the 2026-07-07 CLAUDE.md figures; re-run for exact numbers.
 
 > **On skipped e2e tests**: `calendar-sync.spec.ts` tests skip without `SYNC_TEST_RECORDER=1` (set it + restart the backend to run them). One test in `full-functional-audit.spec.ts` (Voice Calls) is deferred until Telnyx PSTN clears. Re-run the suite to get current pass/skip counts.
 
@@ -123,6 +123,13 @@ the test still passes.
 | `lib/VocabularyContext.tsx` | ~90%+ | Added 2026-07-07 (8 tests) |
 | `components/ui/Toast.tsx` | ~90%+ | Added 2026-07-07 (13 tests total: 4 existing + 9 new) |
 | `components/ui/FeedbackButton.tsx` | ~90%+ | Added 2026-07-07 (11 tests) |
+| `lib/coverage.ts` | ~100% | Added 2026-07-07 (10 tests — critical 'closed'→'uncovered' branch) |
+| `components/VersionBadge.tsx` | ~90%+ | Added 2026-07-07 (5 tests — env-var gate, ISO-slice format) |
+| `components/SkillManagementView.tsx` | ~80%+ | Added 2026-07-07 (11 tests — create/delete/loading states) |
+| `components/BillingView.tsx` | ~75%+ | Added 2026-07-07 (14 tests — plan display/checkout/portal) |
+| `components/KnowledgeSuggestions.tsx` | ~85%+ | Added 2026-07-07 (12 tests — approve/reject/error paths) |
+| `components/voice/MessagesInbox.tsx` | ~80%+ | Added 2026-07-07 (14 tests — filter/select/mark-read/actioned) |
+| `components/CRMIntegrationCard.tsx` | ~80%+ | Added 2026-07-07 (15 tests — connect/disconnect/sync/status) |
 
 ## Regenerating
 
