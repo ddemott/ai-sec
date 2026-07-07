@@ -61,7 +61,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   └── database/                 getPool() singleton + createWithTenantClient(pool) factory + DatabaseService adapter
 ├── dashboard/                    Next.js 14 App Router
 │   ├── app/                      page.tsx (landing), dashboard/page.tsx (app shell), layout.tsx, globals.css
-│   ├── components/               ~60 feature components + ui/ primitives
+│   ├── components/               ~80 feature components + ui/ primitives
 │   │   └── ui/                   Badge, Button, Card, ConfirmModal, FolderTabs, Input, Modal, Select, Toast, TimeInput, PhoneInput, CoverageBar
 │   ├── lib/                      api.ts, SessionContext, ThemeContext, VocabularyContext, hooks, types
 │   ├── e2e/                      35 Playwright spec files
