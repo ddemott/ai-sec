@@ -13,6 +13,9 @@
  * slice it, so server and client render identical text.
  */
 export function VersionBadge() {
+  // Hidden by default. Add NEXT_PUBLIC_SHOW_VERSION_BADGE=true to .env.local to enable.
+  if (process.env.NEXT_PUBLIC_SHOW_VERSION_BADGE !== 'true') return null;
+
   const version = process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0';
   const sha = process.env.NEXT_PUBLIC_BUILD_SHA || 'dev';
   const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME || '';

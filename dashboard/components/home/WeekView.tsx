@@ -34,6 +34,10 @@ function formatShiftTime(t: string) {
   return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, '0')}${ampm}`;
 }
 
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function WeekView({ tenantId, employees, vocab, onNavigate }: WeekViewProps) {
   const [weekAppts, setWeekAppts] = useState<
     { date: string; count: number; appts: { time: string; desc: string; employee?: string }[] }[]
@@ -54,14 +58,16 @@ export function WeekView({ tenantId, employees, vocab, onNavigate }: WeekViewPro
     for (let i = 0; i < 3; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
-      days.push(d.toISOString().split('T')[0]);
+      days.push(toLocalDateStr(d));
     }
 
     const weekEnd = days[2];
+    const dayAfterEnd = new Date(today);
+    dayAfterEnd.setDate(dayAfterEnd.getDate() + 3);
     try {
       const appts = await Api.appointments.list(tenantId, {
         startDate: days[0],
-        endDate: new Date(new Date(weekEnd).getTime() + 86400000).toISOString().split('T')[0],
+        endDate: toLocalDateStr(dayAfterEnd),
       });
       const apptList = Array.isArray(appts) ? appts.filter((a) => a.status === 'scheduled') : [];
 
@@ -138,7 +144,8 @@ export function WeekView({ tenantId, employees, vocab, onNavigate }: WeekViewPro
         const date = new Date(day.date + 'T12:00:00');
         const dayName = DAY_NAMES[date.getDay()];
         const dayNum = date.getDate();
-        const isToday = day.date === new Date().toISOString().split('T')[0];
+        const todayLocal = toLocalDateStr(new Date());
+        const isToday = day.date === todayLocal;
         const dayShifts = weekShifts[day.date] || [];
         const workingStaff = dayShifts.filter((s) => !s.isOff);
 

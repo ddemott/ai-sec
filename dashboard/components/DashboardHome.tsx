@@ -85,8 +85,11 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
   async function loadData() {
     setLoading(true);
     setLoadError(null);
-    const today = new Date().toISOString().split('T')[0];
-    const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+    const todayDate = new Date();
+    const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+    const weekEndDate = new Date(todayDate);
+    weekEndDate.setDate(weekEndDate.getDate() + 7);
+    const weekEnd = `${weekEndDate.getFullYear()}-${String(weekEndDate.getMonth() + 1).padStart(2, '0')}-${String(weekEndDate.getDate()).padStart(2, '0')}`;
 
     const results = await Promise.allSettled([
       Api.appointments.list(tenantId, { startDate: today, endDate: weekEnd }),
