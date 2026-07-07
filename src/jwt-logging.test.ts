@@ -134,12 +134,16 @@ describe('Fix #13: Knowledge ingest auth header', () => {
     const src = fs.readFileSync('dashboard/lib/api.ts', 'utf8');
 
     // Auth lives in the shared apiUpload helper; ingest: calls it.
-    const uploadSection = src.substring(src.indexOf('async function apiUpload'));
+    const uploadIdx = src.indexOf('async function apiUpload');
+    expect(uploadIdx).toBeGreaterThan(-1); // guard: marker must exist
+    const uploadSection = src.substring(uploadIdx);
     expect(uploadSection).toContain('Authorization');
     expect(uploadSection).toContain('Bearer');
     expect(uploadSection).toContain('authToken');
     // ingest: must delegate to apiUpload (not inline its own fetch)
-    const ingestSection = src.substring(src.indexOf('ingest:'));
+    const ingestIdx = src.indexOf('ingest:');
+    expect(ingestIdx).toBeGreaterThan(-1); // guard: marker must exist
+    const ingestSection = src.substring(ingestIdx);
     expect(ingestSection).toContain('apiUpload');
   });
 
@@ -151,7 +155,9 @@ describe('Fix #13: Knowledge ingest auth header', () => {
 
     // Auth header initialisation in the shared apiUpload helper uses an empty
     // headers object (no Content-Type) and conditionally adds Authorization.
-    const uploadSection = src.substring(src.indexOf('async function apiUpload'));
+    const uploadIdx = src.indexOf('async function apiUpload');
+    expect(uploadIdx).toBeGreaterThan(-1); // guard: marker must exist
+    const uploadSection = src.substring(uploadIdx);
     expect(uploadSection).toContain('const headers: Record<string, string> = {}');
   });
 });

@@ -20,7 +20,8 @@ export function ToggleSwitch({ checked, onChange, label }: ToggleSwitchProps) {
       style={{ backgroundColor: checked ? 'var(--accent)' : 'var(--border-soft)' }}
     >
       <span
-        className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`}
+        className={`inline-block h-4 w-4 rounded-full transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`}
+        style={{ backgroundColor: 'var(--primary-text)' }}
       />
     </button>
   );
