@@ -414,7 +414,7 @@ export function OutlookLayout({
           activeTab={activeTab}
           unansweredCount={unansweredCount}
           activeCallCount={activeCallCount}
-          onSelectTab={setActiveTab}
+          onSelectTab={(tab) => setActiveTab(tab as Tab)}
         />
       </div>
 
@@ -426,7 +426,7 @@ export function OutlookLayout({
           anchorRect={tenantBtnRect}
           onClose={() => setTenantDropdownOpen(false)}
           onSelect={(id, name) => { if (onSelectTenant) onSelectTenant(id, name); }}
-          onSelectTab={setActiveTab}
+          onSelectTab={(tab) => setActiveTab(tab as Tab)}
           activeTab={activeTab}
         />
       )}
@@ -438,7 +438,7 @@ export function OutlookLayout({
           anchorRect={profileBtnRect}
           activeTab={activeTab}
           onClose={() => setProfileMenuOpen(false)}
-          onSelectTab={setActiveTab}
+          onSelectTab={(tab) => setActiveTab(tab as Tab)}
           onShowShortcuts={onShowShortcuts}
           onLogout={onLogout}
         />
