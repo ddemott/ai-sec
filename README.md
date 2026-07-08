@@ -92,8 +92,8 @@ Below is a full list of its features:
 | **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                        |
 | **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). See `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7 for remaining PSTN verification steps. |
 | **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                   |
-| **Tests**     | ~3,090 passing (~1,940 backend + ~790 dashboard + ~360 agent) + 0 skips, zero TypeScript errors                                                                                                                |
-| **E2E**       | 33 Playwright spec files                                                                                                                                                                                       |
+| **Tests**     | ~3,830 passing (~2,324 backend + ~1,010 dashboard + ~496 agent) + 0 skips, zero TypeScript errors                                                                                                              |
+| **E2E**       | 35 Playwright spec files                                                                                                                                                                                       |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -135,7 +135,7 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                 — OpenAI GPT-4o-mini (LLM)
                                 — OpenAI TTS (default voice `shimmer`)
                                           |
-                                Fastify backend (30 route modules; agent calls /agent-tools/*)
+                                Fastify backend (29 route modules; agent calls /agent-tools/*)
                                           |
                                 PostgreSQL + pgvector (RLS multi-tenancy)
                                           |
@@ -145,7 +145,7 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
 | Layer             | Tech                                                                                                                                                                                                                                               |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), OpenAI TTS (default voice `shimmer`; per-tenant voice/speed via dashboard AI Persona page; fully OpenAI since 2026-06-25)             |
-| **Backend**       | Fastify 4.x, 30 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                        |
+| **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                        |
 | **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                |
 | **Database**      | PostgreSQL + pgvector, 154 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`) |
 | **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; 23 voice tools (most backed by Fastify `/agent-tools/*`; `transfer_call` uses SIP REFER)                                                                                              |
@@ -215,9 +215,9 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ```
 /
 ├── src/                    Fastify backend
-│   ├── index.ts            Entry point (30 route registrations)
+│   ├── index.ts            Entry point (29 route registrations)
 │   ├── middleware.ts        withHandler, tenant middleware, structured logging
-│   ├── routes/             30 route modules + shared routeHelpers.ts (incl. agentTools.ts for the LiveKit agent)
+│   ├── routes/             29 route modules + shared helpers (routeHelpers.ts, versionHistoryHelpers.ts, crmRouteScaffold.ts)
 │   ├── services/           Square CRM sync, calendar sync, communications (Telnyx-only for SMS + delivery receipts), reminders, token management, telnyxNumbers + telnyxSms (Telnyx is now the sole provider)
 │   └── database/           DatabaseService interface + Postgres implementation
 ├── agent/                  LiveKit Agents worker (Node) — Deepgram STT + OpenAI LLM + OpenAI TTS (fully since 2026-06-25)
