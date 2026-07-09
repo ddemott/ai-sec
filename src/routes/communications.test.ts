@@ -17,6 +17,7 @@ import { createHmac } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 
 import { registerCommunicationRoutes } from './communications';
+import { jsonContentTypeParser } from '../jsonContentTypeParser';
 import { buildRouteTestApp, type RouteTestAppHandle } from '../test-utils-mock';
 
 const TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -293,18 +294,17 @@ describe('POST /communications/telnyx/status (delivery-status webhook)', () => {
     expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeUndefined();
   });
 
-  it('SAD: empty body 400s on missing id/status BEFORE the signature check', async () => {
-    // WHO: any caller POSTing an empty body to the Telnyx status webhook
-    // WHAT: 400 "Missing message id or status", never reaching HMAC verification
-    // WHEN: 2026-07-08 — jsonContentTypeParser began parsing an empty body as
-    //       `{}` instead of rejecting it with 400 "Invalid JSON"
-    // WHERE: communications.ts:412 recomputes its HMAC input as
-    //        JSON.stringify(req.body ?? {}) rather than reading req.rawBody,
-    //        so it would sign the synthesized `{}` — unlike billing.ts/square.ts
-    // WHY: this route's safety now rests on the id/status guard at line 423
-    //      firing first. That ordering is load-bearing and was previously only
-    //      an incidental consequence of the parser rejecting empty bodies.
-    //      Pin it so a reordering can't silently open a signing path.
+  it('SAD: an unsigned `{}` body dies at the signature check, not the id/status guard', async () => {
+    // WHO: any caller POSTing a payload-less `{}` to the Telnyx status webhook
+    // WHAT: 403 "Invalid Telnyx signature" — verification runs before parsing
+    // WHEN: TELNYX_WEBHOOK_SECRET is configured (prod)
+    // WHERE: the signature-verification branch, which now reads req.rawBody
+    // WHY: pins the ORDERING. Before 2026-07-09 an unsigned caller reached the
+    //      parse path and was only stopped by the id/status guard; that made
+    //      the guard load-bearing for security. Now nothing unsigned gets past
+    //      the HMAC. NB: `payload: {}` sends the two bytes `{}` — NOT an empty
+    //      body. The genuinely-empty case needs the production content-type
+    //      parser and is covered in the describe block below.
     process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
     const res = await app.inject({
       method: 'POST',
@@ -313,8 +313,35 @@ describe('POST /communications/telnyx/status (delivery-status webhook)', () => {
       payload: {},
     });
 
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toMatch(/invalid telnyx signature/i);
+    expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeUndefined();
+  });
+
+  it('SAD: malformed payload 400s only after a valid signature', async () => {
+    // WHO: Telnyx (or a key holder) sending a correctly-signed but empty shape
+    // WHAT: signature passes, then the id/status guard 400s with no DB write
+    // WHEN: signature verification is enabled
+    // WHERE: the malformed-guard, which now sits after verification
+    // WHY: reordering verification ahead of parsing must not lose the 400 —
+    //      a signed-but-garbage payload is still garbage.
+    process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
+    const timestamp = '1700000000';
+    const rawBody = '{"data":{"event_type":"message.finalized","payload":{}}}';
+    const sig = createHmac('sha256', 'whsec_test').update(`${timestamp}|${rawBody}`).digest('hex');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      headers: {
+        'telnyx-signature': `t=${timestamp},v1=${sig}`,
+        'content-type': 'application/json',
+      },
+      payload: rawBody,
+    });
+
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toMatch(/missing message id or status/i);
+    expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeUndefined();
   });
 
   it('HAPPY: valid signature (secret set) passes verification and records', async () => {
@@ -325,18 +352,179 @@ describe('POST /communications/telnyx/status (delivery-status webhook)', () => {
     // WHY: real signed receipts must be accepted, not just rejected
     process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
     const timestamp = '1700000000';
-    // rawBody must equal JSON.stringify(req.body) as the route recomputes it.
     const rawBody = JSON.stringify(validPayload);
     const sig = createHmac('sha256', 'whsec_test').update(`${timestamp}|${rawBody}`).digest('hex');
     const res = await app.inject({
       method: 'POST',
       url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
-      headers: { 'telnyx-signature': `t=${timestamp},v1=${sig}` },
-      payload: validPayload,
+      headers: {
+        'telnyx-signature': `t=${timestamp},v1=${sig}`,
+        'content-type': 'application/json',
+      },
+      payload: rawBody,
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
     expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeTruthy();
+  });
+
+  it('HAPPY: signature over raw bytes that JSON.stringify would not reproduce', async () => {
+    // WHO: real Telnyx, whose wire bytes carry their own whitespace + key order
+    // WHAT: a body signed as-sent verifies, though JSON.stringify(parsed body)
+    //       yields different bytes (re-ordered keys, no padding) and a different HMAC
+    // WHEN: any production delivery receipt — Telnyx does not promise that its
+    //       serialization matches Node's
+    // WHERE: the signature-verification branch reading req.rawBody
+    // WHY: THE regression test for the 2026-07-09 fix. The route used to sign
+    //      JSON.stringify(req.body ?? {}), so every payload whose bytes differed
+    //      from Node's serialization 403'd in prod while the suite stayed green.
+    //      Asserting the two byte strings differ is what gives this test teeth.
+    process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
+    const timestamp = '1700000000';
+    // Same JSON value as validPayload, different bytes: padded + keys reversed.
+    const rawBody =
+      '{ "data" : { "payload" : { "errors" : [],  "to" : [ { "status" : "delivered" } ],  "id" : "msg_abc123" },  "event_type" : "message.finalized" } }';
+    expect(rawBody).not.toBe(JSON.stringify(JSON.parse(rawBody)));
+    expect(JSON.parse(rawBody)).toEqual(validPayload);
+
+    const sig = createHmac('sha256', 'whsec_test').update(`${timestamp}|${rawBody}`).digest('hex');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      headers: {
+        'telnyx-signature': `t=${timestamp},v1=${sig}`,
+        'content-type': 'application/json',
+      },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    const upsert = handle.queries.find((q) => q.text.includes('message_delivery_status'));
+    expect(upsert, 'expected an upsert into message_delivery_status').toBeTruthy();
+    expect(upsert!.params).toContain('msg_abc123');
+  });
+});
+
+/**
+ * The route tests above run on the shared mock harness, whose content-type
+ * parser rejects an empty body (`JSON.parse('')` throws). Production's
+ * `jsonContentTypeParser` does the opposite: it synthesizes `{}` as the parsed
+ * body while leaving `rawBody` as the untouched empty buffer.
+ *
+ * That divergence is precisely where the 2026-07-08 "Try live demo" 400 hid
+ * (see docs/LESSONS_LEARNED.md — "Two mocks facing each other test nothing").
+ * So this block registers the REAL parser and pins the contract that matters
+ * for a webhook: an empty body must be HMAC'd as empty bytes, never as the
+ * synthesized `{}` that req.body reports.
+ */
+describe('POST /communications/telnyx/status — with the PRODUCTION content-type parser', () => {
+  let prodHandle: RouteTestAppHandle;
+  let prodApp: FastifyInstance;
+
+  beforeAll(async () => {
+    prodHandle = buildRouteTestApp((app, pool, withTenantClient) => {
+      registerCommunicationRoutes(app, pool, withTenantClient);
+    });
+    prodApp = prodHandle.app;
+    // Swap the harness's parser for the one prod actually runs.
+    prodApp.removeContentTypeParser('application/json');
+    prodApp.addContentTypeParser(
+      'application/json',
+      { parseAs: 'buffer' },
+      jsonContentTypeParser as never
+    );
+    await prodApp.ready();
+  });
+
+  afterAll(async () => {
+    await prodApp.close();
+  });
+
+  it('SAD: a truly empty body is HMAC-checked as empty bytes and 403s', async () => {
+    // WHO: an unsigned caller (or a probe) POSTing zero bytes with a JSON content-type
+    // WHAT: 403 — the route signs `t|` + "" and gets a mismatch
+    // WHEN: TELNYX_WEBHOOK_SECRET is set
+    // WHERE: the signature branch reading req.rawBody (empty buffer, not `{}`)
+    // WHY: the parser hands req.body = {} for an empty body. A route that
+    //      HMAC'd JSON.stringify(req.body) would therefore sign the literal
+    //      "{}" — bytes the client never sent. Pin that rawBody stays empty so
+    //      the signature check fails honestly instead of validating a forgery
+    //      the parser invented. Copilot flagged (PR #224) that the sibling test
+    //      above sends `{}` and never reaches this branch; this one does.
+    process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
+    const res = await prodApp.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      headers: { 'telnyx-signature': 't=123,v1=deadbeef', 'content-type': 'application/json' },
+      payload: '',
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toMatch(/invalid telnyx signature/i);
+    expect(
+      prodHandle.queries.find((q) => q.text.includes('message_delivery_status'))
+    ).toBeUndefined();
+  });
+
+  it('SAD: an empty body signed as the synthesized `{}` is REJECTED', async () => {
+    // WHO: an attacker who knows the parser turns an empty body into `{}`
+    // WHAT: a signature computed over the string "{}" must NOT validate an
+    //       empty request, because the bytes on the wire were empty
+    // WHEN: TELNYX_WEBHOOK_SECRET is set
+    // WHERE: the signature branch — rawBody ("") vs req.body ({})
+    // WHY: this is the actual exploit shape of the old bug, inverted. Under
+    //      JSON.stringify(req.body ?? {}) this request would have VERIFIED.
+    //      It must not. (Signing here only proves the check reads raw bytes;
+    //      a real attacker still needs the secret.)
+    process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
+    const timestamp = '1700000000';
+    const sigOverSynthesized = createHmac('sha256', 'whsec_test')
+      .update(`${timestamp}|{}`)
+      .digest('hex');
+    const res = await prodApp.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      headers: {
+        'telnyx-signature': `t=${timestamp},v1=${sigOverSynthesized}`,
+        'content-type': 'application/json',
+      },
+      payload: '',
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(
+      prodHandle.queries.find((q) => q.text.includes('message_delivery_status'))
+    ).toBeUndefined();
+  });
+
+  it('HAPPY: a correctly-signed real payload still verifies under the prod parser', async () => {
+    // WHO: genuine Telnyx
+    // WHAT: HMAC over the exact wire bytes → 200 + upsert
+    // WHEN: normal delivery receipt
+    // WHERE: signature branch → recordDeliveryStatus
+    // WHY: the two SAD tests above would both pass if the route rejected
+    //      everything. Prove the prod parser preserves rawBody well enough for
+    //      a real receipt to verify end-to-end.
+    process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
+    const timestamp = '1700000000';
+    const rawBody =
+      '{"data":{"event_type":"message.finalized","payload":{"id":"msg_prod1","to":[{"status":"delivered"}]}}}';
+    const sig = createHmac('sha256', 'whsec_test').update(`${timestamp}|${rawBody}`).digest('hex');
+    const res = await prodApp.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      headers: {
+        'telnyx-signature': `t=${timestamp},v1=${sig}`,
+        'content-type': 'application/json',
+      },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const upsert = prodHandle.queries.find((q) => q.text.includes('message_delivery_status'));
+    expect(upsert, 'expected an upsert into message_delivery_status').toBeTruthy();
+    expect(upsert!.params).toContain('msg_prod1');
   });
 });

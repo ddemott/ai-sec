@@ -14,7 +14,7 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
 import { CommunicationService } from '../services/communications/index.js';
 import { ConsentService } from '../services/consentService.js';
@@ -399,8 +399,10 @@ export function registerCommunicationRoutes(
    * is read from ?tenant_id= on the URL the adapter appended.
    *
    * Verification: if TELNYX_WEBHOOK_SECRET is set we validate the
-   * telnyx-signature header (HMAC-SHA256 of timestamp|body). A bad signature
-   * → 403. Without the secret configured we accept + log (dev/staging).
+   * telnyx-signature header (HMAC-SHA256 of `timestamp|rawBody`) against the
+   * exact bytes received — never a re-stringified `req.body`, whose key order
+   * and whitespace need not match what Telnyx signed. A bad signature → 403.
+   * Without the secret configured we accept + log (dev/staging).
    *
    * Payload shape (Telnyx v2):
    *   data.event_type  — "message.finalized" | "message.sent" | "message.failed"
@@ -409,9 +411,54 @@ export function registerCommunicationRoutes(
    *   data.payload.errors[]    — error objects (optional)
    */
   app.post('/communications/telnyx/status', async (req: AppRequest, reply) => {
-    const rawBody = JSON.stringify(req.body ?? {});
-    const payload = (req.body ?? {}) as Record<string, unknown>;
+    // Signature verification runs BEFORE the payload is read: an unsigned
+    // caller must never reach the parsing/DB path.
+    const webhookSecret = process.env.TELNYX_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const rawBuffer = (req as { rawBody?: Buffer | string }).rawBody;
+      const rawBody =
+        typeof rawBuffer === 'string'
+          ? rawBuffer
+          : rawBuffer instanceof Buffer
+            ? rawBuffer.toString('utf8')
+            : null;
 
+      if (rawBody === null) {
+        req.log.error(
+          { event: 'telnyx_status_callback_missing_raw_body' },
+          'Raw body missing for Telnyx status callback — verification cannot proceed'
+        );
+        return reply.status(400).send({ success: false, error: 'Raw body unavailable' });
+      }
+
+      const sigHeader = (req.headers['telnyx-signature'] as string) || '';
+      const parts = Object.fromEntries(
+        sigHeader.split(',').map((p) => p.split('=') as [string, string])
+      );
+      const timestamp = parts['t'] ?? '';
+      const receivedSig = parts['v1'] ?? '';
+      const expected = createHmac('sha256', webhookSecret)
+        .update(`${timestamp}|${rawBody}`)
+        .digest('hex');
+      const received = Buffer.from(receivedSig, 'hex');
+      const expectedBuf = Buffer.from(expected, 'hex');
+      const signatureValid =
+        received.length === expectedBuf.length && timingSafeEqual(received, expectedBuf);
+      if (!signatureValid) {
+        req.log.warn(
+          { event: 'telnyx_status_callback_invalid_signature' },
+          'Telnyx status callback signature mismatch'
+        );
+        return reply.status(403).send({ success: false, error: 'Invalid Telnyx signature' });
+      }
+    } else {
+      req.log.info(
+        { event: 'telnyx_status_callback_unverified' },
+        'TELNYX_WEBHOOK_SECRET unset — accepting Telnyx status callback without signature verification'
+      );
+    }
+
+    const payload = (req.body ?? {}) as Record<string, unknown>;
     const data = payload.data as Record<string, unknown> | undefined;
     const innerPayload = data?.payload as Record<string, unknown> | undefined;
     const messageSid = innerPayload?.id as string | undefined;
@@ -428,34 +475,6 @@ export function registerCommunicationRoutes(
       return reply
         .status(400)
         .send({ success: false, error: 'Missing message id or status in Telnyx payload' });
-    }
-
-    // Signature verification when TELNYX_WEBHOOK_SECRET is configured.
-    // Telnyx signs: HMAC-SHA256(secret, timestamp + "|" + rawBody).
-    // Header: telnyx-signature  value: t=<epoch>,v1=<hex>
-    const webhookSecret = process.env.TELNYX_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const sigHeader = (req.headers['telnyx-signature'] as string) || '';
-      const parts = Object.fromEntries(
-        sigHeader.split(',').map((p) => p.split('=') as [string, string])
-      );
-      const timestamp = parts['t'] ?? '';
-      const receivedSig = parts['v1'] ?? '';
-      const expected = createHmac('sha256', webhookSecret)
-        .update(`${timestamp}|${rawBody}`)
-        .digest('hex');
-      if (!receivedSig || receivedSig !== expected) {
-        req.log.warn(
-          { event: 'telnyx_status_callback_invalid_signature', messageSid },
-          'Telnyx status callback signature mismatch'
-        );
-        return reply.status(403).send({ success: false, error: 'Invalid Telnyx signature' });
-      }
-    } else {
-      req.log.info(
-        { event: 'telnyx_status_callback_unverified' },
-        'TELNYX_WEBHOOK_SECRET unset — accepting Telnyx status callback without signature verification'
-      );
     }
 
     const tenantId = (req.query as Record<string, string | undefined>)?.tenant_id ?? null;

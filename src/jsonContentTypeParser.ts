@@ -41,14 +41,12 @@ export function jsonContentTypeParser(
   // that names the missing fields.
   //
   // Webhooks: `rawBody` (set above) is always the exact received bytes — empty
-  // stays empty — so the verifiers that read it, billing.ts (Stripe) and
-  // square.ts, still fail an empty body instead of being handed a synthesized
-  // `{}`. This does NOT generalize to every webhook. communications.ts (Telnyx)
-  // recomputes its HMAC input as `JSON.stringify(req.body ?? {})`, so the `{}`
-  // synthesized here is what it would sign. That route stays safe only because
-  // it 400s on a missing message id/status *before* reaching its signature
-  // check — not because of anything this parser does. Any new webhook must
-  // verify against `req.rawBody`, never against a re-stringified `req.body`.
+  // stays empty — so the verifiers that read it (billing.ts/Stripe, square.ts,
+  // communications.ts/Telnyx) fail an empty body instead of being handed a
+  // synthesized `{}`. Any new webhook must verify against `req.rawBody`, never
+  // against a re-stringified `req.body`: JSON.stringify does not reproduce the
+  // sender's key order or whitespace, so the HMAC input would not be the bytes
+  // that were signed. (Telnyx did exactly that until 2026-07-09.)
   if (text.trim() === '') {
     done(null, {});
     return;

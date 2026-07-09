@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Api } from './api';
 import { useActiveTenantId } from '@/lib/SessionContext';
 import { buildMappingMaps, type ServiceMappingMaps } from './availability';
@@ -102,6 +102,26 @@ export function useStaticData(tenantIdOverride?: string | null) {
 // Use these when a component only needs 1-2 resource types.
 // Avoids fetching all 5 when only 1 is needed.
 
+/**
+ * True while the component is mounted. Read it after every `await` before
+ * calling a setter: these hooks fire their fetch from an effect with no
+ * cancellation, so a component that unmounts mid-flight would otherwise
+ * setState on a dead tree. Under jsdom that surfaces as an unhandled
+ * `ReferenceError: window is not defined` once the test environment is torn
+ * down — which fails the whole vitest run even though every test passed.
+ * Mirrors the `let cancelled = false` idiom used by useTenantTimezone below.
+ */
+function useIsMounted() {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  return mounted;
+}
+
 function useEntityList<T>(
   fetcher: (tenantId: string) => Promise<T[]>,
   tenantIdOverride?: string | null
@@ -110,19 +130,22 @@ function useEntityList<T>(
   const tenantId = tenantIdOverride !== undefined ? tenantIdOverride : contextTenantId;
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
+  const mounted = useIsMounted();
 
   const refresh = useCallback(async () => {
     if (!tenantId) return;
     setLoading(true);
     try {
       const result = await fetcher(tenantId);
+      if (!mounted.current) return;
       setData(Array.isArray(result) ? result : []);
     } catch {
+      if (!mounted.current) return;
       setData([]);
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
-  }, [tenantId, fetcher]);
+  }, [tenantId, fetcher, mounted]);
 
   useEffect(() => {
     void refresh();
@@ -175,6 +198,7 @@ export function useServiceMappings(tenantIdOverride?: string | null): {
     Awaited<ReturnType<typeof Api.mappings.listServiceResource>>
   >([]);
   const [loading, setLoading] = useState(false);
+  const mounted = useIsMounted();
 
   const refresh = useCallback(async () => {
     if (!tenantId) return;
@@ -184,6 +208,7 @@ export function useServiceMappings(tenantIdOverride?: string | null): {
         Api.mappings.listServiceEmployee(tenantId),
         Api.mappings.listServiceResource(tenantId),
       ]);
+      if (!mounted.current) return;
       setServiceEmployeeRows(
         seRes.status === 'fulfilled' && Array.isArray(seRes.value) ? seRes.value : []
       );
@@ -191,9 +216,9 @@ export function useServiceMappings(tenantIdOverride?: string | null): {
         srRes.status === 'fulfilled' && Array.isArray(srRes.value) ? srRes.value : []
       );
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
-  }, [tenantId]);
+  }, [tenantId, mounted]);
 
   useEffect(() => {
     void refresh();
