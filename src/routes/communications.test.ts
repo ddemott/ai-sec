@@ -293,6 +293,30 @@ describe('POST /communications/telnyx/status (delivery-status webhook)', () => {
     expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeUndefined();
   });
 
+  it('SAD: empty body 400s on missing id/status BEFORE the signature check', async () => {
+    // WHO: any caller POSTing an empty body to the Telnyx status webhook
+    // WHAT: 400 "Missing message id or status", never reaching HMAC verification
+    // WHEN: 2026-07-08 — jsonContentTypeParser began parsing an empty body as
+    //       `{}` instead of rejecting it with 400 "Invalid JSON"
+    // WHERE: communications.ts:412 recomputes its HMAC input as
+    //        JSON.stringify(req.body ?? {}) rather than reading req.rawBody,
+    //        so it would sign the synthesized `{}` — unlike billing.ts/square.ts
+    // WHY: this route's safety now rests on the id/status guard at line 423
+    //      firing first. That ordering is load-bearing and was previously only
+    //      an incidental consequence of the parser rejecting empty bodies.
+    //      Pin it so a reordering can't silently open a signing path.
+    process.env.TELNYX_WEBHOOK_SECRET = 'whsec_test';
+    const res = await app.inject({
+      method: 'POST',
+      url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
+      headers: { 'telnyx-signature': 't=123,v1=deadbeef', 'content-type': 'application/json' },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/missing message id or status/i);
+  });
+
   it('HAPPY: valid signature (secret set) passes verification and records', async () => {
     // WHO: a genuine Telnyx call with a correct HMAC signature
     // WHAT: v1 == HMAC-SHA256(secret, `${t}|${rawBody}`) → 200 + upsert

@@ -90,10 +90,16 @@ describe('jsonContentTypeParser', () => {
     expect(done).toHaveBeenCalledWith(null, {});
   });
 
-  it('HAPPY: empty body still preserves rawBody so webhook HMAC fails honestly', () => {
-    // WHY: Stripe/Square signature checks verify the exact received bytes. An
-    //      empty body must reach them as empty — never as a synthesized `{}` —
-    //      so verification fails rather than passing on fabricated input.
+  it('HAPPY: empty body preserves rawBody so rawBody-based webhook HMAC fails honestly', () => {
+    // WHY: the verifiers that read req.rawBody — billing.ts (Stripe) and
+    //      square.ts — check the exact received bytes. An empty body must
+    //      reach them as empty, never as a synthesized `{}`, so verification
+    //      fails rather than passing on fabricated input.
+    //      Scope note: this does NOT cover communications.ts (Telnyx), which
+    //      recomputes its HMAC input as JSON.stringify(req.body ?? {}) and so
+    //      would sign the `{}` synthesized here. That route stays safe for a
+    //      different reason — it 400s on a missing message id/status before
+    //      the signature check — not because rawBody is preserved.
     const req: { rawBody?: Buffer } = {};
     const raw = Buffer.from('', 'utf8');
 

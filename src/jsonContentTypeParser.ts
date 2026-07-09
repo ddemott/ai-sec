@@ -38,9 +38,17 @@ export function jsonContentTypeParser(
   // route ever ran — which is exactly how the production "Try live demo"
   // button broke: it declared the content-type but sent no body. Routes still
   // reject a genuinely empty payload via their own Zod schemas, with an error
-  // that names the missing fields. Webhook signature checks are unaffected:
-  // rawBody stays the exact received bytes (empty), so HMAC verification
-  // fails as it should rather than being handed a synthesized `{}`.
+  // that names the missing fields.
+  //
+  // Webhooks: `rawBody` (set above) is always the exact received bytes — empty
+  // stays empty — so the verifiers that read it, billing.ts (Stripe) and
+  // square.ts, still fail an empty body instead of being handed a synthesized
+  // `{}`. This does NOT generalize to every webhook. communications.ts (Telnyx)
+  // recomputes its HMAC input as `JSON.stringify(req.body ?? {})`, so the `{}`
+  // synthesized here is what it would sign. That route stays safe only because
+  // it 400s on a missing message id/status *before* reaching its signature
+  // check — not because of anything this parser does. Any new webhook must
+  // verify against `req.rawBody`, never against a re-stringified `req.body`.
   if (text.trim() === '') {
     done(null, {});
     return;
