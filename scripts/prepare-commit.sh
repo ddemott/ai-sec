@@ -31,13 +31,18 @@ echo ""
 
 FAILED=0
 
+# Each configured command runs in a SUBSHELL. The commands in
+# workflow.config.json chain directory changes ("npm test && cd dashboard &&
+# npm test"), and a bare `eval` would leak that `cd` into this script's own
+# shell — every later step then runs from dashboard/ and fails looking for
+# root-level scripts (verify:claude-md). Keep the parentheses.
 run_or_skip() {
     local label="$1"
     local cmd="$2"
     if is_real_command "$cmd"; then
         echo ">>> $label"
         echo "    Command: $cmd"
-        if eval "$cmd"; then
+        if (eval "$cmd"); then
             echo "    ✅ $label passed"
         else
             echo "    ❌ $label failed"
