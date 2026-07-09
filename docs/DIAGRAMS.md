@@ -285,7 +285,7 @@ sequenceDiagram
   participant DB as Postgres
   participant API as Fastify /voice
 
-  Caller->>Telnyx: Dial +1 (630) 397-0194
+  Caller->>Telnyx: Dial +1 (630) 822-9086
   Telnyx->>Vapi: SIP INVITE
   Vapi->>Vapi: STT warmup (Deepgram)
   Vapi->>Caller: greeting (TTS audio)

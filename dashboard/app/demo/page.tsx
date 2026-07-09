@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -18,7 +17,6 @@ interface DemoStartResponse {
 }
 
 export default function DemoPage() {
-  const router = useRouter();
   const [status, setStatus] = useState<'starting' | 'error'>('starting');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -55,7 +53,12 @@ export default function DemoPage() {
         localStorage.setItem('demoExpiresAt', data.expires_at);
         localStorage.setItem('demoTenantId', data.tenant_id);
 
-        router.push('/dashboard');
+        // Hard navigation, NOT router.push(). SessionProvider lives in the root
+        // layout and reads localStorage in a mount-once useEffect(…, []). A
+        // client-side push keeps that provider mounted, so it never re-reads the
+        // session we just wrote → tenantId stays null → /dashboard renders the
+        // login screen. A full page load remounts the provider.
+        window.location.href = '/dashboard';
       } catch (err) {
         if (!cancelled) {
           setErrorMsg(err instanceof Error ? err.message : 'Network error');
@@ -69,7 +72,7 @@ export default function DemoPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount — router is stable in production Next.js
+  }, []); // run once on mount
 
   if (status === 'error') {
     return (

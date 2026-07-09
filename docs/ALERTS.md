@@ -265,6 +265,6 @@ or a Slack/Discord channel reviewed daily. Don't send everything to one firehose
 - [ ] Load the §3 rules (or §4 log queries).
 - [ ] Configure §5 routing to a watched channel.
 - [ ] Fire a test alert (e.g. temporarily lower a threshold) → confirm it reaches your phone → restore.
-- [ ] Set `BETTER_STACK_TOKEN` + `SENTRY_DSN` on backend **and** agent for full log + exception coverage.
+- [ ] _(Only if a paid/free vendor path is ever chosen — declined 2026-07-02.)_ Set `BETTER_STACK_TOKEN` + `SENTRY_DSN` on backend **and** agent for full log + exception coverage.
 
 When this checklist is green, mark the **"Alert rules"** P0 item done in `docs/TODO.md`.
