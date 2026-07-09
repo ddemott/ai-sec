@@ -72,7 +72,26 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - '.github/workflows/**'
-              - '!**/*.md'
+              # NB: do NOT append a negation like '!**/*.md' here. dorny/paths-filter
+              # feeds this list to picomatch, where a negated pattern in an array
+              # matches every file that ISN'T markdown — so '.gitignore', 'LICENSE'
+              # and 'workflow.config.json' all matched `code` and ran the full
+              # pipeline. The skip only ever worked for .md files. A .md inside a
+              # code dir now triggers a run; that over-runs (safe) rather than
+              # under-runs, and there is exactly one such file in the repo.
+
+      # Make the skip/run decision visible in the log. `code` is '' on a push to
+      # main (the filter step is PR-only), which the guards read as "not false"
+      # => run. A filter malfunction therefore over-runs rather than silently
+      # skipping the suite on a real code change.
+      - name: Report change-detection decision
+        run: |
+          echo "event=${{ github.event_name }} code=${{ steps.changes.outputs.code }}"
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ steps.changes.outputs.code }}" != "false" ]; then
+            echo "==> running the full job"
+          else
+            echo "==> docs/config-only change: skipping heavy steps (check still reports success)"
+          fi
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -84,13 +103,13 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Apply migrations
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: bash scripts/setup-db.sh
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
       - name: Seed database
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         # `src/index.test.ts` asserts `/tenants` and `/templates` return
         # the seeded rows. Without this step CI's fresh test_db has only
         # the schema (from migrations) but zero rows — both tests then
@@ -101,7 +120,7 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
       - name: TypeScript check
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npx tsc --noEmit
 
       # NOT gated — the drift detector validates CLAUDE.md against the tree, so
@@ -110,7 +129,7 @@ jobs:
         run: npm run verify:claude-md
 
       - name: Run backend tests
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npm test
         env:
           # Refuses to silent-skip DB-dependent tests. If the postgres
@@ -149,7 +168,26 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - '.github/workflows/**'
-              - '!**/*.md'
+              # NB: do NOT append a negation like '!**/*.md' here. dorny/paths-filter
+              # feeds this list to picomatch, where a negated pattern in an array
+              # matches every file that ISN'T markdown — so '.gitignore', 'LICENSE'
+              # and 'workflow.config.json' all matched `code` and ran the full
+              # pipeline. The skip only ever worked for .md files. A .md inside a
+              # code dir now triggers a run; that over-runs (safe) rather than
+              # under-runs, and there is exactly one such file in the repo.
+
+      # Make the skip/run decision visible in the log. `code` is '' on a push to
+      # main (the filter step is PR-only), which the guards read as "not false"
+      # => run. A filter malfunction therefore over-runs rather than silently
+      # skipping the suite on a real code change.
+      - name: Report change-detection decision
+        run: |
+          echo "event=${{ github.event_name }} code=${{ steps.changes.outputs.code }}"
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ steps.changes.outputs.code }}" != "false" ]; then
+            echo "==> running the full job"
+          else
+            echo "==> docs/config-only change: skipping heavy steps (check still reports success)"
+          fi
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -159,15 +197,15 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
 
       - name: Install dependencies
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npm ci --no-audit --no-fund
 
       - name: TypeScript check
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npx tsc --noEmit
 
       - name: Run dashboard tests
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npm test
 
   agent:
@@ -199,7 +237,26 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - '.github/workflows/**'
-              - '!**/*.md'
+              # NB: do NOT append a negation like '!**/*.md' here. dorny/paths-filter
+              # feeds this list to picomatch, where a negated pattern in an array
+              # matches every file that ISN'T markdown — so '.gitignore', 'LICENSE'
+              # and 'workflow.config.json' all matched `code` and ran the full
+              # pipeline. The skip only ever worked for .md files. A .md inside a
+              # code dir now triggers a run; that over-runs (safe) rather than
+              # under-runs, and there is exactly one such file in the repo.
+
+      # Make the skip/run decision visible in the log. `code` is '' on a push to
+      # main (the filter step is PR-only), which the guards read as "not false"
+      # => run. A filter malfunction therefore over-runs rather than silently
+      # skipping the suite on a real code change.
+      - name: Report change-detection decision
+        run: |
+          echo "event=${{ github.event_name }} code=${{ steps.changes.outputs.code }}"
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ steps.changes.outputs.code }}" != "false" ]; then
+            echo "==> running the full job"
+          else
+            echo "==> docs/config-only change: skipping heavy steps (check still reports success)"
+          fi
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -209,7 +266,7 @@ jobs:
           cache-dependency-path: agent/package-lock.json
 
       - name: Install dependencies
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npm ci --no-audit --no-fund
 
       # The agent worker (prompt, toolsClient, tools, sessionContext, tenant
@@ -217,11 +274,11 @@ jobs:
       # vitest suite ran only locally. A prompt or tool-contract regression
       # (e.g. dropping the infrastructure-error guidance) could ship unseen.
       - name: TypeScript check
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npx tsc --noEmit
 
       - name: Run agent tests
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npm test
 
   e2e:
@@ -271,11 +328,29 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - '.github/workflows/**'
-              # Markdown anywhere (incl. inside code dirs) doesn't affect E2E.
-              - '!**/*.md'
+              # NB: do NOT append a negation like '!**/*.md' here. dorny/paths-filter
+              # feeds this list to picomatch, where a negated pattern in an array
+              # matches every file that ISN'T markdown — so '.gitignore', 'LICENSE'
+              # and 'workflow.config.json' all matched `code` and ran the full
+              # pipeline. The skip only ever worked for .md files. A .md inside a
+              # code dir now triggers a run; that over-runs (safe) rather than
+              # under-runs, and there is exactly one such file in the repo.
+
+      # Make the skip/run decision visible in the log. `code` is '' on a push to
+      # main (the filter step is PR-only), which the guards read as "not false"
+      # => run. A filter malfunction therefore over-runs rather than silently
+      # skipping the suite on a real code change.
+      - name: Report change-detection decision
+        run: |
+          echo "event=${{ github.event_name }} code=${{ steps.changes.outputs.code }}"
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ steps.changes.outputs.code }}" != "false" ]; then
+            echo "==> running the full job"
+          else
+            echo "==> docs/config-only change: skipping heavy steps (check still reports success)"
+          fi
 
       - name: Set up Node.js 20
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -284,7 +359,7 @@ jobs:
       # Cache the downloaded browser binaries so `playwright install` is a no-op
       # on a hit (saves the ~30-60s Chromium download every run).
       - name: Cache Playwright browsers
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
@@ -292,7 +367,7 @@ jobs:
 
       # Cache Next.js's incremental build cache to speed up `next build`.
       - name: Cache Next.js build
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         uses: actions/cache@v4
         with:
           path: dashboard/.next/cache
@@ -304,17 +379,17 @@ jobs:
             nextbuild-${{ runner.os }}-${{ hashFiles('dashboard/package-lock.json') }}-
 
       - name: Install root + dashboard dependencies
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npm ci --no-audit --no-fund && cd dashboard && npm ci --no-audit --no-fund
 
       - name: Apply migrations and seed
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: bash scripts/setup-db.sh && bash scripts/seed-db.sh
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
       - name: Build backend
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npm run build
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
@@ -324,7 +399,7 @@ jobs:
           AGENT_SECRET: ci-agent-secret
 
       - name: Start backend
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: node dist/src/index.js > /tmp/backend.log 2>&1 &
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
@@ -347,29 +422,29 @@ jobs:
           USE_HTTPS: 'false'
 
       - name: Build dashboard
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: cd dashboard && npm run build
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
 
       - name: Start dashboard
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: cd dashboard && npm run start > /tmp/dashboard.log 2>&1 &
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:4001
           PORT: 4000
 
       - name: Wait for servers
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: |
           npx wait-on http://localhost:4001/health http://localhost:4000 --timeout 60000
 
       - name: Install Playwright browsers
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: cd dashboard && npx playwright install --with-deps chromium
 
       - name: Run Playwright E2E
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: cd dashboard && npx playwright test
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
@@ -408,7 +483,7 @@ jobs:
           KNOWLEDGE_IMPORT_E2E_STUB: '1'
 
       - name: Run simulate tools (agent-tools journey as regression guard)
-        if: steps.changes.outputs.code == 'true' || github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         # Runs the realistic booking + recall journey against the live servers
         # in this job. Flags [dev] gaps the same way `simulate.sh tools` does
         # locally. Non-zero exit will fail the job (like other steps).
