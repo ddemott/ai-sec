@@ -30,6 +30,10 @@ export default function DemoPage() {
         const res = await fetch(`${API_BASE}/demo/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          // Body is required: declaring application/json with no body makes
+          // the backend's JSON parser reject the request 400 before the route
+          // runs. /demo/start takes no parameters, so send an empty object.
+          body: JSON.stringify({}),
         });
 
         const data: DemoStartResponse = await res.json() as DemoStartResponse;

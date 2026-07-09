@@ -31,8 +31,30 @@ export function jsonContentTypeParser(
   done: (err: Error | null, body?: unknown) => void
 ): void {
   req.rawBody = rawBody;
+  const text = rawBody.toString('utf8');
+  // An empty (or whitespace-only) body with Content-Type: application/json is
+  // treated as `{}`, matching express.json(). JSON.parse('') throws, so the
+  // pre-2026-07-08 behavior was a cryptic 400 "Invalid JSON" raised before the
+  // route ever ran — which is exactly how the production "Try live demo"
+  // button broke: it declared the content-type but sent no body. Routes still
+  // reject a genuinely empty payload via their own Zod schemas, with an error
+  // that names the missing fields.
+  //
+  // Webhooks: `rawBody` (set above) is always the exact received bytes — empty
+  // stays empty — so the verifiers that read it, billing.ts (Stripe) and
+  // square.ts, still fail an empty body instead of being handed a synthesized
+  // `{}`. This does NOT generalize to every webhook. communications.ts (Telnyx)
+  // recomputes its HMAC input as `JSON.stringify(req.body ?? {})`, so the `{}`
+  // synthesized here is what it would sign. That route stays safe only because
+  // it 400s on a missing message id/status *before* reaching its signature
+  // check — not because of anything this parser does. Any new webhook must
+  // verify against `req.rawBody`, never against a re-stringified `req.body`.
+  if (text.trim() === '') {
+    done(null, {});
+    return;
+  }
   try {
-    done(null, JSON.parse(rawBody.toString('utf8')));
+    done(null, JSON.parse(text));
   } catch {
     // Tag the error 400: malformed JSON is a CLIENT error. Without an
     // explicit statusCode the global error handler defaults to 500, which

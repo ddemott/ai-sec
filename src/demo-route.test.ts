@@ -18,6 +18,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
 import { registerDemoRoutes, resetDemoRateLimitForTesting } from './routes/demo';
+import { jsonContentTypeParser } from './jsonContentTypeParser';
 
 type MockQueryResult = { rows: Record<string, unknown>[]; rowCount?: number };
 
@@ -46,6 +47,13 @@ function buildApp(queryResponses: MockQueryResult[]): {
   const generateToken = vi.fn(() => 'mock-jwt-token');
 
   const app = Fastify({ logger: false });
+  // Register the REAL production content-type parser, not Fastify's default.
+  // Without this the suite exercises a parser prod never uses — which is how
+  // the 2026-07-08 "Try live demo" 400 hid: inject() with no payload sets no
+  // content-type, so the JSON path was never touched from either side.
+  // removeContentTypeParser must precede add for built-in types.
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, jsonContentTypeParser);
   registerDemoRoutes(app as never, mockPool, generateToken);
 
   return { app, mockPool, queries };
@@ -94,6 +102,33 @@ describe('POST /demo/start', () => {
     expect(body.tenant_id).toBeDefined();
     expect(body.expires_at).toBeDefined();
     expect(body.ttl_minutes).toBe(30);
+  });
+
+  it('REGRESSION: declares application/json with no body → 200, not 400', async () => {
+    // WHO: every prospect clicking "Try live demo" on the landing page
+    // WHAT: fetch() sets Content-Type: application/json and passes no body
+    // WHEN: 2026-07-08 — reproduced against production, returned
+    //       400 {"success":false,"error":"Invalid JSON"} on every click
+    // WHERE: jsonContentTypeParser, before registerDemoRoutes' handler runs
+    // WHY: neither suite covered this shape. The backend test injected with no
+    //      payload (no content-type → parser skipped) and the dashboard test
+    //      stubbed fetch outright, so the one request shape the browser
+    //      actually sends was tested by nobody. /demo/start was healthy the
+    //      entire time; the button in front of it was not.
+    const { app } = buildApp([
+      { rows: [{ count: '0' }] },
+      { rows: [{ tenant_id: 'demo-uuid-1234', user_id: 'user-uuid-5678' }], rowCount: 1 },
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/demo/start',
+      headers: { 'x-forwarded-for': nextIp(), 'content-type': 'application/json' },
+      // No payload — exactly what the browser sent.
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect((JSON.parse(res.body) as { success: boolean }).success).toBe(true);
   });
 
   it('returns 429 after exceeding per-IP rate limit', async () => {

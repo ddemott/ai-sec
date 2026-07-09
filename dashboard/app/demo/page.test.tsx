@@ -42,6 +42,40 @@ describe('DemoPage', () => {
     vi.unstubAllGlobals();
   });
 
+  it('REGRESSION: sends a body alongside the JSON content-type', async () => {
+    // WHO: visitor clicking "Try live demo"
+    // WHAT: the POST must carry a body, not just declare application/json
+    // WHEN: 2026-07-08 — shipping the header without a body made the backend
+    //       parser reject every click with 400 "Invalid JSON"
+    // WHERE: the fetch() in DemoPage's useEffect
+    // WHY: this suite stubs fetch, so it can never catch a backend rejection.
+    //      What it CAN do is pin the request shape the backend agreed to
+    //      accept. Asserting the body exists is the half of the contract that
+    //      lives on this side of the mock.
+    mockFetch({
+      ok: true,
+      json: async () => ({
+        success: true,
+        token: 't',
+        tenant_id: 'x',
+        user_id: 'y',
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        ttl_minutes: 30,
+      }),
+    });
+
+    render(<DemoPage />);
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalled();
+    });
+
+    const init = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
+    expect(init.body).toBeDefined();
+    // Must be valid JSON — the parser on the other side calls JSON.parse on it.
+    expect(() => JSON.parse(init.body as string)).not.toThrow();
+  });
+
   it('HAPPY: sets auth token and redirects to /dashboard on success', async () => {
     // WHO: visitor clicking "Try live demo"
     // WHAT: token + tenant_id stored in localStorage, router.push('/dashboard') called
