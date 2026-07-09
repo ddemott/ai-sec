@@ -31,8 +31,22 @@ export function jsonContentTypeParser(
   done: (err: Error | null, body?: unknown) => void
 ): void {
   req.rawBody = rawBody;
+  const text = rawBody.toString('utf8');
+  // An empty (or whitespace-only) body with Content-Type: application/json is
+  // treated as `{}`, matching express.json(). JSON.parse('') throws, so the
+  // pre-2026-07-08 behavior was a cryptic 400 "Invalid JSON" raised before the
+  // route ever ran — which is exactly how the production "Try live demo"
+  // button broke: it declared the content-type but sent no body. Routes still
+  // reject a genuinely empty payload via their own Zod schemas, with an error
+  // that names the missing fields. Webhook signature checks are unaffected:
+  // rawBody stays the exact received bytes (empty), so HMAC verification
+  // fails as it should rather than being handed a synthesized `{}`.
+  if (text.trim() === '') {
+    done(null, {});
+    return;
+  }
   try {
-    done(null, JSON.parse(rawBody.toString('utf8')));
+    done(null, JSON.parse(text));
   } catch {
     // Tag the error 400: malformed JSON is a CLIENT error. Without an
     // explicit statusCode the global error handler defaults to 500, which

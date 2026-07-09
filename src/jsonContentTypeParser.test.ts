@@ -64,15 +64,42 @@ describe('jsonContentTypeParser', () => {
     expect(req.rawBody).toBe(raw);
   });
 
-  it('SAD: empty body is invalid JSON → done(Error), still no throw', () => {
-    // WHY: an empty Content-Type: application/json POST must not crash the
-    //      parser; JSON.parse('') throws → must be funneled through done().
+  it('HAPPY: empty body with a JSON content-type parses as {} — not a 400', () => {
+    // WHY: this assertion was inverted until 2026-07-08. A fetch() that sets
+    //      Content-Type: application/json but passes no `body` (the shape the
+    //      dashboard's "Try live demo" button sent) hit JSON.parse('') → throw
+    //      → 400 "Invalid JSON" before the route ran. Every prospect who
+    //      clicked the button got an error screen while /demo/start was
+    //      healthy. Empty now means `{}`, matching express.json(); routes that
+    //      genuinely require fields still reject via their Zod schemas.
     const req: { rawBody?: Buffer } = {};
     const done = vi.fn();
 
     jsonContentTypeParser(req, Buffer.from('', 'utf8'), done);
 
     expect(done).toHaveBeenCalledTimes(1);
-    expect(done.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect(done).toHaveBeenCalledWith(null, {});
+  });
+
+  it('HAPPY: whitespace-only body also parses as {}', () => {
+    const req: { rawBody?: Buffer } = {};
+    const done = vi.fn();
+
+    jsonContentTypeParser(req, Buffer.from('  \n\t ', 'utf8'), done);
+
+    expect(done).toHaveBeenCalledWith(null, {});
+  });
+
+  it('HAPPY: empty body still preserves rawBody so webhook HMAC fails honestly', () => {
+    // WHY: Stripe/Square signature checks verify the exact received bytes. An
+    //      empty body must reach them as empty — never as a synthesized `{}` —
+    //      so verification fails rather than passing on fabricated input.
+    const req: { rawBody?: Buffer } = {};
+    const raw = Buffer.from('', 'utf8');
+
+    jsonContentTypeParser(req, raw, vi.fn());
+
+    expect(req.rawBody).toBe(raw);
+    expect(req.rawBody?.length).toBe(0);
   });
 });
