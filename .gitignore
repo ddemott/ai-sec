@@ -1,7 +1,8 @@
 # dependencies
-/node_modules
-/dashboard/node_modules
-/agent/node_modules
+# Unanchored so it matches at ANY depth, not just the three known workspaces.
+# vitest writes a cache to src/node_modules/.vite, which the previous anchored
+# rules missed — it showed up as untracked noise in every `git status`.
+node_modules/
 
 # build artifacts
 /dist
