@@ -57,7 +57,9 @@ _Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voi
 ### 3. Deploy gate — protect main
 
 - [ ] **(Dale)** Enable the **"Wait for CI"** toggle on the 3 Railway services (branch protection already blocks red merges; this closes the deploy-side gap).
-- [ ] **(Dale, code)** **Prove the gate** end-to-end: open a deliberate-fail PR → confirm it's blocked → fix → confirm green unblocks.
+- [x] ~~**(Dale, code)** **Prove the gate** end-to-end~~ — **PROVEN 2026-07-09 (PR #227).** A deliberately-failing test made `Backend` red → `mergeStateStatus: BLOCKED` → `gh pr merge` **refused** with `the base branch policy prohibits the merge`. Deleting the test flipped all 4 checks green → `CLEAN` → merge allowed. Branch protection holds.
+  - **Not tested, deliberately:** `gh pr merge --admin`. If `enforce_admins` didn't hold, that would merge a failing test to `main` and deploy broken code to Railway. The API reports `enforce_admins: true` — verified-by-config, not by experiment.
+  - **This proves the MERGE gate only.** The **deploy** gate is still open: after #226 merged, Railway brought up the new backend at `19:27:03Z` while CI didn't go green until `19:31:27Z` — prod deployed ~4 min *ahead* of its checks. That is exactly what the "Wait for CI" toggle above closes. Branch protection stops a red PR from merging; nothing yet stops a merged commit from deploying before CI confirms it.
 
 ### 4. Security housekeeping
 
