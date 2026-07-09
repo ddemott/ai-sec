@@ -96,7 +96,7 @@
 ## 11. Platform & Observability
 
 - ✅ Health + readiness endpoints, Prometheus-style metrics
-- ✅ Structured logging (Sentry, Better Stack), per-request enrichment
+- ✅ Structured logging (Pino → stdout), per-request enrichment. _(Sentry / Better Stack hooks exist but are unset — paid observability was declined 2026-07-02.)_
 - ✅ On-demand system simulation harness (`scripts/simulate.sh`) — `status` (health board) · `tools` (realistic end-to-end journey) · `call` (talk to the agent in a browser, no phone)
 
 ---

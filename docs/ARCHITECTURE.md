@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-07-05 (29 route modules, 154 migrations, 23 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
+**Last verified:** 2026-07-08 (29 route modules, 154 migrations, 23 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
@@ -66,9 +66,8 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── lib/                      api.ts, SessionContext, ThemeContext, VocabularyContext, hooks, types
 │   ├── e2e/                      35 Playwright spec files
 │   ├── server.js                 Custom HTTPS server (dev) + Railway deploy entry (prod)
-│   └── 22 *.test.tsx files       Vitest + React Testing Library
+│   └── 92 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/
-│   ├── functions/                Empty post-661d21d (former vapi-tools deleted with the Vapi rip-out)
 │   ├── migrations/               154 SQL migrations
 │   └── seed.sql                  Platform admin + Bella's Hair Studio demo tenant
 ├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `ai-sec-agent`
@@ -101,7 +100,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
                                │ PSTN / SIP
                                ▼
                        ┌──────────────────┐
-                       │  Telnyx (SIP)    │  +1 (630) 937-9478 (decommissioned; see current live number)
+                       │  Telnyx (SIP)    │  +1 (630) 822-9086 (live)
                        └────────┬─────────┘
                                 │ SIP trunk
                                 ▼
@@ -545,7 +544,7 @@ Specific error codes: `TIMESLOT_OCCUPIED`, `NO_SKILLED_EMPLOYEE`, `EMPLOYEE_NOT_
 
 ### 11.5 Scheduling algorithm (`shared/scheduling.ts`)
 
-Shared between Node (tool runtime) and Deno (edge function). Takes the tenant, the service, and a date range → returns a list of viable (resource, employee, start, end) tuples. Uses `get_effective_shifts_bulk()` + single query for existing appointments → returns diagnostics object (`"no skilled employee on 4/23"`, `"all 3 bays busy 9-noon"`) so the LLM can explain **why** no slots exist.
+Shared between the Fastify backend (`../shared/...`) and the dashboard (`../../shared/...`) — see `/shared`. Takes the tenant, the service, and a date range → returns a list of viable (resource, employee, start, end) tuples. Uses `get_effective_shifts_bulk()` + single query for existing appointments → returns diagnostics object (`"no skilled employee on 4/23"`, `"all 3 bays busy 9-noon"`) so the LLM can explain **why** no slots exist.
 
 ---
 
@@ -737,7 +736,7 @@ Every component consumes CSS custom properties (`--bg`, `--fg`, `--accent`, `--b
 
 ### 16.7 Test harness
 
-Vitest + React Testing Library (jsdom). 22 test files, 465 tests. Contexts are provided by a shared `renderWithProviders()` helper. Happy + sad paths with 5W diagnostic comments (Who / What / When / Where / Why) — failure messages are self-debugging.
+Vitest + React Testing Library (jsdom). 92 test files, 1,012 tests. Contexts are provided by a shared `renderWithProviders()` helper. Happy + sad paths with 5W diagnostic comments (Who / What / When / Where / Why) — failure messages are self-debugging.
 
 ### 16.8 Dev server
 
@@ -775,19 +774,21 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
             ╱────────────╲
 ```
 
-### 18.2 Backend (`npm test` — 1,479 tests)
+### 18.2 Backend (`npm test` — 2,328 tests, 183 files)
 
 Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, calendar sync, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: Bella's Hair Studio caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
 
-### 18.3 Dashboard (`cd dashboard && npm test` — 498 tests, 23 files)
+### 18.3 Dashboard (`cd dashboard && npm test` — 1,012 tests, 92 files)
 
 Vitest + React Testing Library (jsdom). Renders components with all 4 providers (Session, Theme, Vocabulary, AppointmentDetail). Tests interactions (click, keyboard, form submission), accessibility (role/tabIndex/aria attributes), and error states.
 
-### 18.4 Edge functions (`deno task test --no-check`)
+### 18.4 Agent (`cd agent && npm test` — 496 tests, 36 files)
 
-Deno's built-in test runner. Covers dispatcher + service layer in the edge function.
+Vitest. Covers the LiveKit Agents worker: prompt assembly, the 23 tool schemas, `toolsClient`, transcript recording, call-outcome tracking, the bounded post-call summary, and the TTS dead-air fallback.
 
-### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 33 spec files)
+_(The former Supabase edge-function suite — `deno task test --no-check` — was removed with `supabase/functions/` itself when the backend moved to Fastify. See `docs/FRAMEWORK_MIGRATIONS.md`.)_
+
+### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 35 spec files)
 
 Full-stack browser coverage: regression gates (toast, validation, unsaved-changes warning, NaN guards), functional audit journeys (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav), auth/role gating, calendar sync, knowledge-base import, wizard flows, and self-service. Runs as a required CI job on every PR.
 

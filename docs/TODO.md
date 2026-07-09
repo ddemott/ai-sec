@@ -33,7 +33,7 @@ _Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voi
   3. Validate booking: appointment lands in `appointments` for tenant `d5e3c6a1` inside a real shift window.
   4. Validate transfer: say "talk to a person" → your cell rings + Calls tab shows the transcript.
   5. Validate dialog: agent asks preferred time, widens when none fit, never imposes a slot, recalls preferences across calls.
-  (PSTN inbound itself already confirmed 2026-06-30; this closes the booking + transfer + preference legs.)
+     (PSTN inbound itself already confirmed 2026-06-30; this closes the booking + transfer + preference legs.)
 
 ### 2. Billing — be able to take money
 
@@ -84,6 +84,9 @@ Both erase PII irreversibly (kill-switched off / inert until enabled). Branches 
 
 ## 🟡 P1 — Customer success & trust (non-blocking, do after P0)
 
+- [x] ~~**`/demo/start` per-IP limiter is a global bucket**~~ — **investigated 2026-07-08, NOT a bug.** A controlled 16-min quiet-window test returned 200, so the window resets normally; the persistent 429s were self-inflicted test traffic. A spoofed `X-Forwarded-For` has no effect because Railway overwrites it with the true client IP (correct, non-spoofable). No action.
+- [ ] **(code)** **Telnyx webhook verifies a re-stringified body.** `src/routes/communications.ts:412` computes its HMAC input as `JSON.stringify(req.body ?? {})` instead of reading `req.rawBody` (which `billing.ts`/`square.ts` correctly do). Any real Telnyx payload whose bytes differ from `JSON.stringify` output (key order, whitespace) fails verification. The test at `communications.test.ts:305` hardcodes the workaround, so the suite can't see it. Found 2026-07-08 via Copilot review on PR #222.
+- [ ] **(code)** **`npm run prepare-commit` reports a false failure.** Its `eval "$cmd"` leaks a `cd dashboard` into the parent shell, so every step after the dashboard tests runs from the wrong directory (`Missing script: "verify:claude-md"`). The repo's own pre-commit gate has been red on `main` regardless of code state. Fix: run each step in a subshell.
 - [ ] **(Dale)** Verify **reminder delivery stats** in prod once Telnyx creds are confirmed on Railway.
 - [ ] **(Dale/code)** **Pricing tiers (Pro/Enterprise)** positioning.
 

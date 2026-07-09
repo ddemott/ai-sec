@@ -15,11 +15,20 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// vi.mock must be at top-level so Vitest can hoist it before the import below.
-const mockPush = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+// The demo page navigates with window.location.href (a HARD load), not
+// router.push — SessionProvider only reads localStorage on mount, so a
+// client-side push would land on /dashboard with a null session (login screen).
+// Capture assignments to location.href instead of mocking next/navigation.
+let hrefAssignments: string[] = [];
+function stubLocation(): void {
+  hrefAssignments = [];
+  const loc = { ...window.location } as unknown as Location;
+  Object.defineProperty(loc, 'href', {
+    set: (v: string) => { hrefAssignments.push(v); },
+    get: () => 'https://test.local/demo',
+  });
+  Object.defineProperty(window, 'location', { value: loc, writable: true, configurable: true });
+}
 
 import DemoPage from './page';
 
@@ -35,6 +44,7 @@ describe('DemoPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    stubLocation();
   });
 
   afterEach(() => {
@@ -67,13 +77,47 @@ describe('DemoPage', () => {
     render(<DemoPage />);
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalled();
+      expect(hrefAssignments).toContain('/dashboard');
     });
 
     const init = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
     expect(init.body).toBeDefined();
     // Must be valid JSON — the parser on the other side calls JSON.parse on it.
     expect(() => JSON.parse(init.body as string)).not.toThrow();
+  });
+
+  it('REGRESSION: navigates with a HARD page load, never a client-side push', async () => {
+    // WHO: every visitor clicking "Try live demo"
+    // WHAT: /dashboard is reached via window.location.href, forcing a full load
+    // WHEN: 2026-07-08 — with router.push('/dashboard') the demo landed on the
+    //       LOGIN SCREEN in production, despite a valid token in localStorage
+    // WHERE: SessionProvider (app/providers.tsx → root layout) reads localStorage
+    //        in a mount-once useEffect(…, []). A client-side push keeps it
+    //        mounted, so it never re-reads the session the demo page just wrote
+    //        → tenantId stays null → app/dashboard/page.tsx renders <LoginView/>
+    // WHY: this is the second half of the "Try live demo" outage. Fixing the
+    //      400 got the token issued; only a hard load makes the session apply.
+    mockFetch({
+      ok: true,
+      json: async () => ({
+        success: true,
+        token: 't',
+        tenant_id: 'x',
+        user_id: 'y',
+        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        ttl_minutes: 30,
+      }),
+    });
+
+    render(<DemoPage />);
+
+    await waitFor(() => {
+      expect(hrefAssignments).toContain('/dashboard');
+    });
+    // The session must already be persisted when the hard load fires, otherwise
+    // the remounted provider reads an empty localStorage.
+    expect(localStorage.getItem('tenantId')).toBe('x');
+    expect(localStorage.getItem('authToken')).toBe('t');
   });
 
   it('HAPPY: sets auth token and redirects to /dashboard on success', async () => {
@@ -97,7 +141,7 @@ describe('DemoPage', () => {
     render(<DemoPage />);
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/dashboard');
+      expect(hrefAssignments).toContain('/dashboard');
     });
 
     expect(localStorage.getItem('authToken')).toBe('test-demo-jwt');
@@ -159,7 +203,7 @@ describe('DemoPage', () => {
     });
 
     expect(screen.getByText(/demo capacity is full/i)).toBeInTheDocument();
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(hrefAssignments).toHaveLength(0);
     expect(localStorage.getItem('authToken')).toBeNull();
   });
 
@@ -203,7 +247,7 @@ describe('DemoPage', () => {
     // The catch block sets errorMsg from the Error — verify error state is shown
     // and no auth side-effects occurred.
     expect(screen.getByRole('link', { name: /back to home/i })).toBeInTheDocument();
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(hrefAssignments).toHaveLength(0);
     expect(localStorage.getItem('authToken')).toBeNull();
   });
 

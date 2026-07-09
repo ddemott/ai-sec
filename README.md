@@ -85,15 +85,15 @@ Below is a full list of its features:
 
 [![CI](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml/badge.svg)](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml)
 
-|               |                                                                                                                                                                                                                |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Phase**     | 13 — Production Readiness                                                                                                                                                                                      |
-| **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                                                                           |
-| **Dashboard** | Live on Railway (`dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                        |
-| **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). See `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7 for remaining PSTN verification steps. |
-| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                   |
-| **Tests**     | ~3,830 passing (~2,324 backend + ~1,010 dashboard + ~496 agent) + 0 skips, zero TypeScript errors                                                                                                              |
-| **E2E**       | 35 Playwright spec files                                                                                                                                                                                       |
+|               |                                                                                                                                                                                                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Phase**     | 13 — Production Readiness                                                                                                                                                                                                                                                                              |
+| **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                                                                                                                                                                   |
+| **Dashboard** | Live at `https://www.secretaryhq.com` (Railway origin `dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                                                                           |
+| **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). PSTN inbound reaches the agent (confirmed 2026-06-30); the booking + transfer legs still need a live different-carrier call — see `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7. |
+| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                                                                                                           |
+| **Tests**     | ~3,836 passing (~2,328 backend + ~1,012 dashboard + ~496 agent) + 0 skips, zero TypeScript errors                                                                                                                                                                                                      |
+| **E2E**       | 35 Playwright spec files                                                                                                                                                                                                                                                                               |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -239,9 +239,9 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (~1,940 tests)
-cd dashboard && npx vitest run        # Dashboard (~790 tests)
-cd dashboard && npx playwright test   # E2E (33 spec files)
+npm test                              # Backend (~2,328 tests)
+cd dashboard && npx vitest run        # Dashboard (~1,012 tests)
+cd dashboard && npx playwright test   # E2E (35 spec files)
 ```
 
 ### Coverage
@@ -252,7 +252,7 @@ cd dashboard && npx playwright test   # E2E (33 spec files)
 | Backend services                  | ~570  |
 | Middleware, scheduling, constants | ~500  |
 | Dashboard components + views      | ~747  |
-| Playwright e2e (33 spec files)    | —     |
+| Playwright e2e (35 spec files)    | —     |
 
 ### Test Philosophy
 
@@ -310,7 +310,7 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | Square CRM sync        | Bidirectional customer + appointment sync                             |
 | Knowledge base         | 40 policy Q&A pairs, document upload, RAG via pgvector                |
 | Contextual feedback    | In-app feedback button on every page                                  |
-| Playwright e2e         | 33 spec files                                                         |
+| Playwright e2e         | 35 spec files                                                         |
 
 ---
 

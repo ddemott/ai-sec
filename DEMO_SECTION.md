@@ -23,11 +23,14 @@ broken product.
   - **Patched (prod data):** set Dale's `employees.skills = {consultation}` +
     added the `tenant_skills` row. Verified via the real RPC (rolled back): booking
     now succeeds and assigns Dale.
-  - [ ] **Remaining — make it structural (not a hand patch):** backfill migration
-        (`employee.skills ⊇ service.required_skills` per `service_employee` mapping) +
-        seed/Solo-wizard fix (solo owner = employee holding all service skills) +
-        app-level guard on service↔employee mapping. Without these, a `db:rebuild`,
-        any new tenant, and the demo seed all reproduce the bug.
+  - [x] **Backfill migration — DONE.** `supabase/migrations/20260630000000_default_service_and_skill_backfill.sql`
+        adds `tenants.default_service_id` (service-match fallthrough) **and** backfills
+        `employees.skills` so the `required_skills` of a service are held by the employees
+        mapped to it. A `db:rebuild` no longer reproduces the bug.
+  - [ ] **Remaining — seed / Solo-wizard + app-level guard:** make a solo owner
+        automatically an employee holding all service skills, and guard the
+        service↔employee mapping at the app layer. (The migration fixes existing
+        rows; nothing yet stops a _new_ tenant from being created skill-less.)
   - [ ] **Remaining — confirm live:** one real call to `822-9086`, book a time in
         Dale's Mon–Fri 1–5pm window, verify the appointment row lands.
 
@@ -42,8 +45,9 @@ to the receptionist, it books into _their_ demo schedule, they watch it land in
 the dashboard live.
 
 Why browser/WebRTC: same agent brain (Deepgram → GPT-4o-mini → OpenAI TTS), but
-**sidesteps the unverified PSTN inbound path**, **drops carrier + number cost**,
-and gives **clean per-prospect isolation**. (It does NOT make the AI inference
+**avoids the PSTN path entirely** (inbound reaches the agent — confirmed
+2026-06-30 — but the booking + transfer legs are still unverified on a live
+call), **drops carrier + number cost**, and gives **clean per-prospect isolation**. (It does NOT make the AI inference
 free — token burn is identical to a phone call; that's why the caps below exist.)
 
 Scope decision (B): this section is the **safety guards that make the voice demo
@@ -61,6 +65,30 @@ Realtime-vs-pipeline voice-quality choice are **separate** and out of scope here
 - Browser voice join mechanism exists internally: `scripts/simulate.sh call` /
   `agent/scripts/sim-call.mjs` (dispatch agent into a room + print a browser join
   URL). Not yet productized for prospects.
+
+### ⚠️ Live defects found 2026-07-08 (dashboard demo, not the voice demo)
+
+- [x] **"Try live demo" 400'd for every visitor since it shipped** — the button's
+      `fetch` declared `Content-Type: application/json` with **no body**;
+      `JSON.parse('')` threw in `jsonContentTypeParser` → `400 Invalid JSON`
+      before the route ran. `/demo/start` was healthy the whole time.
+      **Fixed + deployed 2026-07-08 (PR #222).**
+- [x] **…and it still landed on the LOGIN SCREEN after that fix.** `/demo/start`
+      returned 200 and wrote the session, but `app/demo/page.tsx` navigated with
+      `router.push('/dashboard')`. `SessionProvider` (root layout, via
+      `app/providers.tsx`) reads `localStorage` in a **mount-once**
+      `useEffect(…, [])`. A client-side push keeps that provider mounted, so it
+      never re-read the session → `tenantId` stayed `null` →
+      `app/dashboard/page.tsx` rendered `<LoginView/>`. Fixed by using a **hard
+      navigation** (`window.location.href = '/dashboard'`), which remounts the
+      provider. **2026-07-08.**
+- **Rate limiter: verified CORRECT, no action.** The per-IP limiter (3 starts /
+  15 min) initially looked like a global bucket — 429s persisted past the window
+  and a spoofed `X-Forwarded-For` landed in the same bucket. A controlled
+  16-minute quiet-window test returned **200**, so the window resets normally;
+  the earlier 429s were self-inflicted test traffic. The spoof has no effect
+  because Railway **overwrites** `X-Forwarded-For` with the true client IP —
+  which is the desired, non-spoofable behavior.
 
 ### Subtasks
 
