@@ -4,6 +4,12 @@
 # rules missed — it showed up as untracked noise in every `git status`.
 node_modules/
 
+# Per-branch scratch worklist: scripts/create-feature-branch.sh copies
+# docs/BRANCH_CHECKLIST.md here on every new branch. Commit 453e538 untracked the
+# root copy but left the script's `cp`, so it surfaced as untracked noise forever.
+# Anchored — docs/BRANCH_CHECKLIST.md stays tracked as the source of truth.
+/BRANCH_CHECKLIST.md
+
 # build artifacts
 /dist
 /dashboard/.next
