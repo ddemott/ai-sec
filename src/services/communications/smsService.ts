@@ -14,11 +14,28 @@ import { buildLogger } from '../logger.js';
  * thread) when BETTER_STACK_TOKEN is set. Building it at module scope would
  * create a second shipper alongside the one in index.ts for every process that
  * merely imports this file — including the unit-test runner.
+ *
+ * `service` stays `ai-sec-backend`: logger.ts documents it as the top-level
+ * discriminator (`ai-sec-backend` | `ai-sec-agent`) that Better Stack filters on.
+ * A third value would fragment backend logs. The subsystem goes in `component`.
  */
 let smsLogger: ReturnType<typeof buildLogger> | null = null;
 function log() {
-  smsLogger ??= buildLogger({ service: 'sms' });
+  smsLogger ??= buildLogger({ service: 'ai-sec-backend' }).child({ component: 'sms' });
   return smsLogger;
+}
+
+/**
+ * Strip phone numbers out of a provider error string before it reaches a log sink.
+ *
+ * `TelnyxSmsAdapter` throws `Telnyx SMS failed <status>: <body>`, and Telnyx
+ * error bodies echo the `to`/`from` numbers. Logging that raw would put full
+ * phone numbers in Better Stack — defeating the `recipient_last4` care taken
+ * everywhere else in this file. Matches 7+ digit runs with the usual separators;
+ * an HTTP status (3 digits) is left alone.
+ */
+export function redactPhoneNumbers(text: string): string {
+  return text.replace(/\+?\d[\d\s().-]{5,}\d/g, '[redacted-phone]');
 }
 
 /** Provider name for metric labels; bounded enum ('telnyx' | 'mock'), safe cardinality. */
@@ -160,7 +177,10 @@ export class SMSService {
           tenant_id: tenantId,
           provider: providerName(),
           recipient_last4: message.to.slice(-4),
-          error_message: errorMessage,
+          // Redacted: Telnyx error bodies echo the to/from numbers (adapter
+          // interpolates the raw body into the message). The DB row keeps the
+          // original — communications_history.recipient already holds the number.
+          error_message: redactPhoneNumbers(errorMessage),
         },
         'SMS send failed'
       );
@@ -238,7 +258,10 @@ export class SMSService {
           tenant_id: tenantId,
           provider: providerName(),
           recipient_last4: message.to.slice(-4),
-          error_message: errorMessage,
+          // Redacted: Telnyx error bodies echo the to/from numbers (adapter
+          // interpolates the raw body into the message). The DB row keeps the
+          // original — communications_history.recipient already holds the number.
+          error_message: redactPhoneNumbers(errorMessage),
         },
         'System SMS send failed (opt-out confirmation may not have been delivered)'
       );

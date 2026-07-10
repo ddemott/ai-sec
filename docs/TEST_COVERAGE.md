@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Headline counts last reconciled:** 2026-07-07 to the canonical living numbers in `CLAUDE.md` → Project Status (~2,338 backend + ~1,017 dashboard + ~496 agent, verified 2026-07-09 against real `test_db`/vitest). The **per-file V8 coverage %** + the e2e workflow tables below are from the **2026-05-22** run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
+**Headline counts last reconciled:** 2026-07-09 to the canonical living numbers in `CLAUDE.md` → Project Status (~2,340 backend + ~1,017 dashboard + ~496 agent, verified 2026-07-09 against real `test_db`/vitest). The **per-file V8 coverage %** + the e2e workflow tables below are from the **2026-05-22** run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
 
 **Prior refresh:** 2026-05-22 — Walk-in customer create modal work. Replaced the single "Full name" field in CustomerCombobox with a proper `CustomerCreateModal` (split name, phone, email, address, timezone, internal notes). `name` is now derived from first+last on submit. Dashboard test count: 705 → 716.
 
@@ -19,12 +19,12 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | ~2,338 | ✅ | ~190s |
+| Backend (`npm test`) | ~2,340 | ✅ | ~190s |
 | Dashboard (`cd dashboard && npm test`) | ~1,017 | ✅ | ~15s |
 | Agent (`cd agent && npm test`) | ~496 | ✅ | ~1s |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 35 spec files (exact pass count: re-run to verify) | ✅ | ~175s |
 
-Total unit tests: ~3,851 passing (~2,338 backend + ~1,017 dashboard + ~496 agent). Counts are the 2026-07-09 CLAUDE.md figures; re-run for exact numbers.
+Total unit tests: ~3,853 passing (~2,340 backend + ~1,017 dashboard + ~496 agent). Counts are the 2026-07-09 CLAUDE.md figures; re-run for exact numbers.
 
 > **On skipped e2e tests**: `calendar-sync.spec.ts` tests skip without `SYNC_TEST_RECORDER=1` (set it + restart the backend to run them). One test in `full-functional-audit.spec.ts` (Voice Calls) is deferred until Telnyx PSTN clears. Re-run the suite to get current pass/skip counts.
 

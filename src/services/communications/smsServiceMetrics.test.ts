@@ -16,10 +16,10 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-import { SMSService } from './smsService';
-import { providerRegistry } from './ProviderRegistry';
-import { registry, smsSendsTotal } from '../metrics';
-import { RateLimitedError, smsRateLimiter } from './smsRateLimit';
+import { SMSService, redactPhoneNumbers } from './smsService.js';
+import { providerRegistry } from './ProviderRegistry.js';
+import { registry, smsSendsTotal } from '../metrics.js';
+import { RateLimitedError, smsRateLimiter } from './smsRateLimit.js';
 
 const TENANT = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
@@ -120,6 +120,40 @@ describe('sms_sends_total', () => {
     expect(counterValue('rate_limited')).toBe(1);
     expect(counterValue('failed')).toBe(0);
     expect(registry.expose()).not.toContain('errors_total{event="sms_send_failed"}');
+  });
+});
+
+describe('redactPhoneNumbers — keep PII out of the log sink', () => {
+  it('SAD: strips the to/from numbers a Telnyx error body echoes back', async () => {
+    // WHO: a log sink (Better Stack) receiving an sms_send_failed event
+    // WHAT: the raw provider error carries full E.164 numbers; they must not ship
+    // WHEN: TelnyxSmsAdapter throws `Telnyx SMS failed <status>: <body>` (line 56)
+    // WHERE: redactPhoneNumbers, applied to error_message on both failure paths
+    // WHY: the rest of this file logs only recipient_last4. Interpolating the raw
+    //      provider body would leak the very numbers that care was protecting.
+    //      Flagged by Copilot on PR #231 — a real hole, not a style nit.
+    const raw =
+      'Telnyx SMS failed 422: {"errors":[{"detail":"to +16305551234 from +16308229086 invalid"}]}';
+    const safe = redactPhoneNumbers(raw);
+
+    expect(safe).not.toContain('16305551234');
+    expect(safe).not.toContain('16308229086');
+    expect(safe).toContain('[redacted-phone]');
+    // The HTTP status is 3 digits and must survive — it is the diagnostic.
+    expect(safe).toContain('422');
+  });
+
+  it('HAPPY: leaves a phone-free error message untouched', async () => {
+    // WHO: the ordinary provider error
+    // WHAT: no digits runs → string is unchanged
+    // WHEN: 'from number not owned', 'TELNYX_API_KEY not configured', etc.
+    // WHERE: redactPhoneNumbers
+    // WHY: a redactor that mangles every message destroys the diagnostic value
+    //      the log exists for. Prove it only touches phone-shaped runs.
+    expect(redactPhoneNumbers('from number not owned')).toBe('from number not owned');
+    expect(redactPhoneNumbers('TELNYX_API_KEY not configured')).toBe(
+      'TELNYX_API_KEY not configured'
+    );
   });
 });
 
