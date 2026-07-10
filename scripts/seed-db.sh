@@ -12,7 +12,9 @@ DB_URL="${1:-${DATABASE_URL:-postgres://postgres:postgres@localhost:5433/postgre
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 SEED_FILE="$ROOT_DIR/supabase/seed.sql"
 
-echo "[secretaryhq] Seeding database: ${DB_URL%%@*}@***"
+# Redact the userinfo (user:password) before logging — DB_URL may be a real
+# credentialed URL passed as $1 or inherited from DATABASE_URL.
+echo "[secretaryhq] Seeding database: $(printf '%s' "$DB_URL" | sed -E 's#(://)[^@/]*@#\1***:***@#')"
 
 if ! command -v psql >/dev/null 2>&1; then
   echo "Error: psql is not installed."
