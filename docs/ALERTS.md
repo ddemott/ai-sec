@@ -1,9 +1,14 @@
 # Alerting — SecretaryHQ
 
-> **Status 2026-07-02:** paid observability vendors (Sentry, Better Stack) were **decided against** — these rules are kept as an **optional, free-path** reference (wire them over the existing free `/metrics` + `/ready` via e.g. Grafana Cloud free tier). Not a go-live requirement.
+> **Status 2026-07-09:** **no hosted monitoring destination is planned.** Paid vendors (Sentry, Better Stack) were declined 2026-07-02, and a search for a genuinely free-forever alternative came up empty: **UptimeRobot's free plan has prohibited commercial / revenue-generating use since 2024-12-01**, Grafana Cloud free doesn't expire but is capped (10K active series, 14-day retention, then $6.50/1K), and Healthchecks.io free does heartbeats, not metric thresholds. Every "free forever" tier is free-_within-limits the vendor can move_.
+>
+> This file **stays** as a collector-agnostic PromQL reference — it costs nothing to keep, matches the live registry exactly, and is paste-and-go if a destination is ever chosen. The metrics themselves are already live and free at `GET /metrics` (Bearer `METRICS_TOKEN`) and `GET /ready`.
+>
+> If you want the one alert that matters without any vendor — "SMS failure ratio crossed 20%", the signal that would have caught the dead `TELNYX_PHONE_NUMBER` on day one — see the zero-vendor GitHub Actions option in `docs/TODO.md` P2.
 
-Ready-to-apply alert rules for the production backend + agent. Closes the
-**P0 "Alert rules" item** in `docs/TODO.md`. The metric names, label keys, and
+Ready-to-apply alert rules for the production backend + agent. The **"Alert rules"
+item was dropped from `docs/TODO.md` P2 on 2026-07-09** (no vendor met the
+free-forever bar); these rules remain as reference. The metric names, label keys, and
 label _values_ below match the live registry in `src/services/metrics.ts`
 exactly — paste them as written.
 
@@ -15,15 +20,15 @@ runbook section.
 
 ## 0. Status of prerequisites (as of 2026-06-29)
 
-| Prereq                                             | State         | Note                                                                                                                                    |
-| -------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `METRICS_TOKEN` on Railway backend                 | **SET** ✅    | Verified live: `GET /metrics` returns `401` (not `404`), i.e. the token gate is active. Scrapes work once a collector sends the Bearer. |
-| Prometheus / metrics collector scraping `/metrics` | **NOT wired** | No scraper is hitting prod yet. Stand one up (§2) — this is the remaining blocker for metric-based alerts.                              |
-| `BETTER_STACK_TOKEN` on backend + agent            | **NOT set**   | Until set, logs are stdout-only (Railway live-tail). Better Stack also offers **log-pattern alerts** (§4) as a no-scraper fallback.     |
-| `SENTRY_DSN` on backend + agent                    | **NOT set**   | Sentry covers _exceptions/error grouping_, complementary to the metric alerts here.                                                     |
+| Prereq                                             | State                       | Note                                                                                                                                    |
+| -------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `METRICS_TOKEN` on Railway backend                 | **SET** ✅                  | Verified live: `GET /metrics` returns `401` (not `404`), i.e. the token gate is active. Scrapes work once a collector sends the Bearer. |
+| Prometheus / metrics collector scraping `/metrics` | **NOT wired — by decision** | No scraper is hitting prod, and none is planned (see status note above). `/metrics` is live and free; §2 is here if that ever changes.  |
+| `BETTER_STACK_TOKEN` on backend + agent            | **NOT set**                 | Until set, logs are stdout-only (Railway live-tail). Better Stack also offers **log-pattern alerts** (§4) as a no-scraper fallback.     |
+| `SENTRY_DSN` on backend + agent                    | **NOT set**                 | Sentry covers _exceptions/error grouping_, complementary to the metric alerts here.                                                     |
 
 So today: the metric **data exists and is exposed**; you need either (a) a
-Prometheus scrape + alertmanager/Grafana, or (b) Better Stack log alerts, to
+Prometheus scrape + alertmanager, or (b) Better Stack log alerts, to
 turn it into pages. §2 and §4 cover both. §3 is the rule catalog (collector-agnostic PromQL).
 
 ---
@@ -73,9 +78,16 @@ scrape_configs:
     scrape_interval: 30s
 ```
 
-Point Alertmanager (or Grafana Cloud / Better Stack metrics) at this Prometheus
-and load the rules in §3. Grafana Cloud's free tier is enough for beta volume
-and accepts the same `alert` rule YAML.
+Point Alertmanager (or any Prometheus-compatible backend) at this scrape and
+load the rules in §3. The rules are collector-agnostic — nothing below assumes a
+particular vendor.
+
+> Sizing, if you ever evaluate a hosted backend: the registry declares 10 metrics,
+> each hard-capped at `MAX_LABEL_CARDINALITY = 1000` (`src/services/metrics.ts:29`),
+> so the absolute worst case is 10,000 active series. In practice
+> `http_request_duration_ms` dominates (~32 route modules × 3 status families ×
+> 12 series each) and the total lands around 2–3K. See the status note at the top
+> of this file for why no vendor was chosen.
 
 ---
 
@@ -301,7 +313,7 @@ or a Slack/Discord channel reviewed daily. Don't send everything to one firehose
 ## 6. Apply checklist
 
 - [ ] `METRICS_TOKEN` set on Railway backend — **DONE** (verified 2026-06-29).
-- [ ] Stand up a scraper (Prometheus / Grafana Cloud) per §2, **or** set `BETTER_STACK_TOKEN` + use §4 log alerts.
+- [ ] _(No destination planned — see the status note at the top.)_ If one is ever chosen: stand up a scraper per §2, **or** set `BETTER_STACK_TOKEN` + use §4 log alerts. For the single high-value signal without any vendor, see the zero-vendor GitHub Actions option in `docs/TODO.md` P2.
 - [ ] Load the §3 rules (or §4 log queries).
 - [ ] Configure §5 routing to a watched channel.
 - [ ] Fire a test alert (e.g. temporarily lower a threshold) → confirm it reaches your phone → restore.
