@@ -344,3 +344,24 @@ export const messageDeliveryReceiptsTotal = registry.counter(
   'message_delivery_receipts_total',
   'the SMS provider SMS delivery-status callbacks received, partitioned by status (queued|sending|sent|delivered|undelivered|failed|received)'
 );
+
+// Every SMS send ATTEMPT at the service layer — the single chokepoint that
+// `reminders_sent_total` does not cover. That counter lives in the reminder
+// worker, so before 2026-07-09 the agent's booking-confirmation SMS
+// (agentTools.ts), POST /communications/sms, and every sendSystemSMS opt-out
+// confirmation had NO metric at all: a failure wrote a `status='failed'` row
+// (or, for sendSystemSMS, nothing) and a raw console.error that reached no sink.
+//
+// That blind spot is exactly how a dead `TELNYX_PHONE_NUMBER` (+16308661960,
+// order deleted) sent every fallback-tenant confirmation into a provider
+// rejection for weeks without anyone noticing. Plot
+// `rate(sms_sends_total{outcome="failed"}[5m]) / rate(sms_sends_total[5m])`
+// and alert above a few percent — a bad `from` number pins it to 1.0 instantly.
+//
+// Distinct from message_delivery_receipts_total (carrier-confirmed outcome) and
+// from reminders_sent_total (reminder-channel outcome, one layer up). This one
+// answers "did the provider accept the request?"
+export const smsSendsTotal = registry.counter(
+  'sms_sends_total',
+  'SMS send attempts at the service layer, partitioned by provider and outcome (sent, failed, rate_limited)'
+);
