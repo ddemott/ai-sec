@@ -155,7 +155,7 @@ Durable rules-of-engagement that override "build for the future":
 
 ## Project Status
 
-**Phase 13 (Production Readiness) in progress.** ~2,333 backend + ~1,017 dashboard + ~496 agent tests passing (verified 2026-07-09 against real test_db / vitest). 29 route modules under `src/routes/`. 35 Playwright e2e spec files run on every PR. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + observability setup in `docs/DEPLOYMENT.md`. Per-session shipped history lives in `docs/RESOLVED.md`.
+**Phase 13 (Production Readiness) in progress.** ~2,340 backend + ~1,017 dashboard + ~496 agent tests passing (verified 2026-07-09 against real test_db / vitest). 29 route modules under `src/routes/`. 35 Playwright e2e spec files run on every PR. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + observability setup in `docs/DEPLOYMENT.md`. Per-session shipped history lives in `docs/RESOLVED.md`.
 
 **Legal-hold — do NOT merge/enable without owner + legal sign-off:** PR #68 (`POST /customers/:id/purge`, single-customer GDPR/CCPA erasure, kill-switch `ENABLE_CUSTOMER_PURGE`) and PR #69 (automated data-retention worker, `ENABLE_RETENTION_WORKER` + explicit `RETENTION_DAYS`). Both erase PII irreversibly and are inert until enabled. Branches deleted 2026-06-23; restorable from the PR pages. See `docs/TODO.md` → Legal-hold.
 

@@ -4,6 +4,48 @@ import type { SMSMessage, CommunicationResult } from './types.js';
 import { providerRegistry } from './ProviderRegistry.js';
 import { smsRateLimiter, RateLimitedError } from './smsRateLimit.js';
 import { recordCommunicationHistory } from './communicationHistory.js';
+import { smsSendsTotal, errorsTotal } from '../metrics.js';
+import { buildLogger } from '../logger.js';
+
+/**
+ * Pino logger for the SMS service, built lazily on first use.
+ *
+ * Lazy because `buildLogger` spins up a Better Stack transport (a worker
+ * thread) when BETTER_STACK_TOKEN is set. Building it at module scope would
+ * create a second shipper alongside the one in index.ts for every process that
+ * merely imports this file — including the unit-test runner.
+ *
+ * `service` stays `ai-sec-backend`: logger.ts documents it as the top-level
+ * discriminator (`ai-sec-backend` | `ai-sec-agent`) that Better Stack filters on.
+ * A third value would fragment backend logs. The subsystem goes in `component`.
+ */
+let smsLogger: ReturnType<typeof buildLogger> | null = null;
+function log() {
+  smsLogger ??= buildLogger({ service: 'ai-sec-backend' }).child({ component: 'sms' });
+  return smsLogger;
+}
+
+/**
+ * Strip phone numbers out of a provider error string before it reaches a log sink.
+ *
+ * `TelnyxSmsAdapter` throws `Telnyx SMS failed <status>: <body>`, and Telnyx
+ * error bodies echo the `to`/`from` numbers. Logging that raw would put full
+ * phone numbers in Better Stack — defeating the `recipient_last4` care taken
+ * everywhere else in this file. Matches 7+ digit runs with the usual separators;
+ * an HTTP status (3 digits) is left alone.
+ */
+export function redactPhoneNumbers(text: string): string {
+  return text.replace(/\+?\d[\d\s().-]{5,}\d/g, '[redacted-phone]');
+}
+
+/** Provider name for metric labels; bounded enum ('telnyx' | 'mock'), safe cardinality. */
+function providerName(): string {
+  try {
+    return providerRegistry.getDefaultProvider().getName();
+  } catch {
+    return 'unknown';
+  }
+}
 
 export class SMSService {
   private static simulationNoticeLogged = false;
@@ -86,6 +128,7 @@ export class SMSService {
         tenantId: tenantId,
       });
 
+      smsSendsTotal.inc({ provider: provider.getName(), outcome: 'sent' });
       console.log(
         `✅ SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`
       );
@@ -111,10 +154,37 @@ export class SMSService {
       // error; the catch in the worker converts to the per-row
       // status='scheduled' + retry_count++ disposition.
       if (error instanceof RateLimitedError) {
+        // Not a failure: the worker retries after the bucket refills. Counted
+        // separately so a throttled tenant can't inflate the failure ratio.
+        smsSendsTotal.inc({ provider: providerName(), outcome: 'rate_limited' });
         throw error;
       }
-      console.error('❌ Error sending SMS:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      // WHO: any caller of sendSMS (agent booking confirmation, POST
+      //      /communications/sms, reminder worker)
+      // WHAT: the provider rejected the send, or validation threw before it
+      // WHEN: bad `from` number, revoked API key, invalid recipient, provider outage
+      // WHERE: SMSService.sendSMS provider.sendSMS() call
+      // WHY: pre-2026-07-09 this was a raw console.error — no metric, no sink.
+      //      A dead TELNYX_PHONE_NUMBER failed every fallback-tenant send for
+      //      weeks and the only trace was a status='failed' row nobody queried.
+      smsSendsTotal.inc({ provider: providerName(), outcome: 'failed' });
+      errorsTotal.inc({ event: 'sms_send_failed' });
+      log().error(
+        {
+          event: 'sms_send_failed',
+          tenant_id: tenantId,
+          provider: providerName(),
+          recipient_last4: message.to.slice(-4),
+          // Redacted: Telnyx error bodies echo the to/from numbers (adapter
+          // interpolates the raw body into the message). The DB row keeps the
+          // original — communications_history.recipient already holds the number.
+          error_message: redactPhoneNumbers(errorMessage),
+        },
+        'SMS send failed'
+      );
+
       // Record the FAILED delivery so the dashboard failed-delivery drill-down
       // (?status=failed) has real rows. Best-effort — the recorder never throws,
       // but we still guard so a history-write hiccup can't mask the send error.
@@ -158,6 +228,7 @@ export class SMSService {
         tenantId: tenantId,
       });
 
+      smsSendsTotal.inc({ provider: provider.getName(), outcome: 'sent' });
       console.log(
         `✅ System SMS sent to ${message.to} for tenant ${tenantId} via ${provider.getName()} (SID: ${result.messageSid})`
       );
@@ -167,10 +238,37 @@ export class SMSService {
         messageId: result.messageSid,
       };
     } catch (error) {
-      console.error('❌ Error sending system SMS:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      // WHO: the opt-out handler confirming a customer's STOP/UNSUBSCRIBE
+      // WHAT: the confirmation SMS never left; the caller only sees success:false
+      // WHEN: bad `from` number, revoked key, provider outage
+      // WHERE: SMSService.sendSystemSMS
+      // WHY: this path is COMPLIANCE-sensitive and was the darkest of the two —
+      //      it wrote no communications_history row at all (success or failure)
+      //      and swallowed the error into a console.error. A customer whose
+      //      opt-out confirmation silently failed has no record anywhere.
+      //      The metric + log are the floor; persisting these sends is a
+      //      follow-up (a behavior change, deliberately not bundled here).
+      smsSendsTotal.inc({ provider: providerName(), outcome: 'failed' });
+      errorsTotal.inc({ event: 'system_sms_send_failed' });
+      log().error(
+        {
+          event: 'system_sms_send_failed',
+          tenant_id: tenantId,
+          provider: providerName(),
+          recipient_last4: message.to.slice(-4),
+          // Redacted: Telnyx error bodies echo the to/from numbers (adapter
+          // interpolates the raw body into the message). The DB row keeps the
+          // original — communications_history.recipient already holds the number.
+          error_message: redactPhoneNumbers(errorMessage),
+        },
+        'System SMS send failed (opt-out confirmation may not have been delivered)'
+      );
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   }
