@@ -285,12 +285,18 @@ it('should reject country-code-only "+1" (BUG-060 root cause)', () => {
 
 ## Deployment
 
-Backend and dashboard are both live on Railway.
+All three Railway services (`ai-sec` backend, `ai-sec-agent`, `dashboard`) deploy
+from `main`. **Shipping means merging to `main` via PR** — a push to a feature
+branch deploys nothing. Branch protection gates the merge behind green CI.
 
 ```bash
-cp .env.production.example .env.production   # Fill in env vars
-./scripts/deploy-production.sh .env.production
+npm run ci:status   # wait for all 4 CI jobs green
+gh pr merge --squash
 ```
+
+Apply production DB migrations **before** the merge. Environment variables are set
+on the Railway services themselves; `.env.production.example` lists what each one
+needs.
 
 See `docs/DEPLOYMENT.md` for the step-by-step guide.
 

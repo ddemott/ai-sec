@@ -175,11 +175,11 @@ elif [ "$WARN" -gt 0 ]; then
   echo "Review the WARN items above. You may proceed, but address warnings for a clean deployment."
   echo ""
   echo "Ready to migrate? Run:"
-  echo "  ./scripts/setup-db.sh '$DB_URL'"
+  echo "  ./scripts/setup-db.sh \"\$DATABASE_URL\""
   exit 0
 else
   echo ""
   echo "All checks passed! Run:"
-  echo "  ./scripts/setup-db.sh '$DB_URL'"
+  echo "  ./scripts/setup-db.sh \"\$DATABASE_URL\""
   exit 0
 fi
