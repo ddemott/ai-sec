@@ -42,7 +42,9 @@ fi
 
 # 2. Apply Migrations + Seed (main + test DB)
 for url in "$DB_URL" "$TEST_DB_URL"; do
-  echo "[secretaryhq] Setting up database: ${url%%@*}@***"
+  # Redact the userinfo (user:password) before logging. bootstrap honors an
+  # externally-set DATABASE_URL, so this can be a real credentialed URL.
+  echo "[secretaryhq] Setting up database: $(printf '%s' "$url" | sed -E 's#(://)[^@/]*@#\1***:***@#')"
   bash "$ROOT_DIR/scripts/setup-db.sh" "$url"
   bash "$ROOT_DIR/scripts/seed-db.sh" "$url"
 done
