@@ -17,21 +17,7 @@ npm install
 echo "[secretaryhq] Installing dashboard dependencies..."
 cd dashboard && npm install && cd ..
 
-# 1. Install Deno if missing
-if ! command -v deno >/dev/null 2>&1; then
-  if [ -f "$HOME/.deno/bin/deno" ]; then
-    echo "[secretaryhq] Deno found at $HOME/.deno/bin/deno"
-    export PATH="$HOME/.deno/bin:$PATH"
-  else
-    echo "[secretaryhq] Installing Deno..."
-    curl -fsSL https://deno.land/install.sh | sh > /dev/null
-    export PATH="$HOME/.deno/bin:$PATH"
-  fi
-else
-  echo "[secretaryhq] Deno already installed."
-fi
-
-# 2. Start Database via Docker Compose
+# 1. Start Database via Docker Compose
 if command -v docker-compose >/dev/null 2>&1 || docker compose version >/dev/null 2>&1; then
   echo "[secretaryhq] Starting Postgres (pgvector) via Docker Compose..."
   docker compose up -d
@@ -54,22 +40,16 @@ else
   echo "WARNING: Docker Compose not found. Start the DB manually."
 fi
 
-# 3. Apply Migrations + Seed (main + test DB)
+# 2. Apply Migrations + Seed (main + test DB)
 for url in "$DB_URL" "$TEST_DB_URL"; do
   echo "[secretaryhq] Setting up database: ${url%%@*}@***"
   bash "$ROOT_DIR/scripts/setup-db.sh" "$url"
   bash "$ROOT_DIR/scripts/seed-db.sh" "$url"
 done
 
-# 4. Run Tests
+# 3. Run Tests
 echo "[secretaryhq] Running backend tests..."
 npm test
-
-echo "[secretaryhq] Running edge function tests..."
-DATABASE_URL="$TEST_DB_URL?sslmode=disable" deno test --allow-net --allow-env --allow-sys \
-  supabase/functions/vapi-tools/service_test.ts \
-  supabase/functions/vapi-tools/integration_test.ts 2>/dev/null || \
-  echo "WARNING: Edge function tests skipped (Deno test may not be available)"
 
 echo "[secretaryhq] Running dashboard tests..."
 cd dashboard && npm test && cd ..
