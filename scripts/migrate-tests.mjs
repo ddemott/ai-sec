@@ -276,7 +276,9 @@ function fixImports(content, oldFileAbs, newFileAbs) {
   const newDir = path.dirname(newFileAbs);
 
   // Match: from '...' | static import '...' | dynamic import('...') | require('...') | vi.mock('...')
-  // Only process relative paths (starting with . or ..)
+  // Only processes relative paths (starting with ./ or ../).
+  // Known limitation: bare side-effect imports (`import './module'` without `from`) are not
+  // rewritten. Test files in this project don't use that pattern, so this is safe here.
   return content.replace(
     /(?:from\s+|import\s*\(|require\s*\(|vi\.mock\s*\()(['"])((?:\.\.?\/)[^'"]+)\1/g,
     (match, quote, importPath) => {
@@ -349,27 +351,17 @@ for (const [src, dest] of MOVES) {
 console.log(`\nDone: ${moved} moved, ${skipped} skipped, ${errors} errors.`);
 
 if (!DRY && errors === 0) {
-  // Update vitest.config.ts to add tests/ to coverage.exclude
-  // (the runner already finds tests/ by default — no include change needed)
+  // Update vitest.config.ts — idempotent: only insert if not already present
   const vitestPath = path.resolve(ROOT, 'vitest.config.ts');
   let vitestContent = fs.readFileSync(vitestPath, 'utf8');
-
-  // Add tests/ to coverage exclude so test utility files don't skew coverage
-  vitestContent = vitestContent.replace(
-    `'**/test-utils*.ts',`,
-    `'tests/**',\n        '**/test-utils*.ts',`
-  );
-  fs.writeFileSync(vitestPath, vitestContent, 'utf8');
-  console.log('  ✓     vitest.config.ts coverage.exclude updated');
-
-  // Update tsconfig.json to include tests/ for IDE type-checking
-  const tsconfigPath = path.resolve(ROOT, 'tsconfig.json');
-  let tsconfigContent = fs.readFileSync(tsconfigPath, 'utf8');
-  tsconfigContent = tsconfigContent.replace(
-    '"include": ["src", "shared"]',
-    '"include": ["src", "shared", "tests"]'
-  );
-  // Remove tests from exclude (they were excluded via **/*.test.ts but tests/ is separate)
-  fs.writeFileSync(tsconfigPath, tsconfigContent, 'utf8');
-  console.log('  ✓     tsconfig.json include updated');
+  if (!vitestContent.includes("'tests/**'")) {
+    vitestContent = vitestContent.replace(
+      `'**/test-utils*.ts',`,
+      `'tests/**',\n        '**/test-utils*.ts',`
+    );
+    fs.writeFileSync(vitestPath, vitestContent, 'utf8');
+    console.log('  ✓     vitest.config.ts coverage.exclude updated');
+  } else {
+    console.log('  SKIP  vitest.config.ts already has tests/** exclude');
+  }
 }
