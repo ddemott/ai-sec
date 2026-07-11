@@ -62,15 +62,15 @@ tests/
 
 **Steps:**
 
-- [ ] Create `tests/` directory tree mirroring `src/`
-- [ ] Move all `src/routes/*.test.ts` → `tests/routes/`
-- [ ] Move all `src/routes/*.realdb.test.ts` → `tests/integration/`
-- [ ] Move all `src/services/*.test.ts` → `tests/services/`
-- [ ] Move all `src/services/*.realdb.test.ts` → `tests/integration/`
-- [ ] Move `src/*.test.ts` (middleware, index, etc.) → `tests/`
-- [ ] Update `vitest.config.ts` include patterns to point at `tests/`
-- [ ] Update all relative import paths in moved test files
-- [ ] Verify all tests still pass
+- [x] Create `tests/` directory tree mirroring `src/`
+- [x] Move all `src/routes/*.test.ts` → `tests/routes/`
+- [x] Move all `src/routes/*.realdb.test.ts` → `tests/integration/`
+- [x] Move all `src/services/*.test.ts` → `tests/services/`
+- [x] Move all `src/services/*.realdb.test.ts` → `tests/integration/`
+- [x] Move `src/*.test.ts` (middleware, index, etc.) → `tests/`
+- [x] Update `vitest.config.ts` include patterns to point at `tests/`
+- [x] Update all relative import paths in moved test files
+- [x] Verify all tests still pass (2,345/2,345 ✓)
 
 ---
 
