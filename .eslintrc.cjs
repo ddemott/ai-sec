@@ -105,7 +105,7 @@ module.exports = {
     {
       // Tests can use looser rules — fixtures often need any-shapes
       // to model unhappy paths the production types don't allow.
-      files: ['**/*.test.ts', '**/*.spec.ts', 'src/test-utils*.ts'],
+      files: ['**/*.test.ts', '**/*.spec.ts', 'src/test-utils*.ts', 'tests/utils.ts', 'tests/mock.ts'],
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-unsafe-assignment': 'off',

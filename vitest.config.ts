@@ -25,6 +25,7 @@ export default defineConfig({
       include: ['src/**', 'shared/**'],
       exclude: [
         '**/*.test.ts',
+        'tests/**',
         '**/test-utils*.ts',
         'src/types/**',
         'dist/**',
