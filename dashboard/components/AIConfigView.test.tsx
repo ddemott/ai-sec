@@ -424,3 +424,95 @@ describe('AIConfigView — Customer Preferences', () => {
     expect(prompt.getAttribute('placeholder')).not.toMatch(/dynatire/i);
   });
 });
+
+describe('AIConfigView — Caller Disclosure', () => {
+  test('HAPPY: an untouched disclosure saves as null with no attestation flag', async () => {
+    // WHO: an owner who saves other settings without touching the disclosure.
+    // WHAT: call_disclosure goes out as null (use platform default) and NO
+    //        disclosure_attested flag is sent — so the backend gate stays quiet.
+    // WHEN: Save with the disclosure field left blank (its default state).
+    // WHERE: AIConfigView handleSave disclosure branch.
+    // WHY: the default line must never require attestation; only a custom edit
+    //      does. Sending the flag (or non-null text) on an untouched field would
+    //      wrongly stamp an attestation the owner never made.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG, call_disclosure: null });
+    render(<AIConfigView />);
+
+    // Dirty the form via an unrelated field so Save is enabled.
+    const buffer = await screen.findByTestId('default-buffer-minutes');
+    fireEvent.change(buffer, { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.call_disclosure).toBeNull();
+    expect(payload).not.toHaveProperty('disclosure_attested');
+  });
+
+  test('SAD: editing the disclosure without attesting blocks the save', async () => {
+    // WHO: an owner who rewords the disclosure but ignores the attestation box.
+    // WHAT: Save is refused client-side (a toast) and NO request is made — the
+    //        backend would 400 anyway; this avoids the pointless round-trip.
+    // WHERE: AIConfigView handleSave attestation guard.
+    // WHY: the attestation is the legal gate; a custom disclosure must not reach
+    //      the backend, or a caller, without the owner affirming it.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG, call_disclosure: null });
+    render(<AIConfigView />);
+
+    const disclosure = await screen.findByTestId('call-disclosure');
+    fireEvent.change(disclosure, { target: { value: 'You are speaking with a person.' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(vi.mocked(showToast)).toHaveBeenCalledWith(
+        expect.stringMatching(/attestation/i),
+        'error'
+      )
+    );
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  test('HAPPY: attesting a custom disclosure sends the text + the flag', async () => {
+    // WHO: an owner who rewords the disclosure and ticks the attestation box.
+    // WHAT: the custom text AND disclosure_attested:true reach updateConfig so
+    //        the backend persists it and records the attestation.
+    // WHERE: AIConfigView disclosure section + handleSave.
+    // WHY: proves the full override path — the whole point of the feature.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG, call_disclosure: null });
+    render(<AIConfigView />);
+
+    const disclosure = await screen.findByTestId('call-disclosure');
+    fireEvent.change(disclosure, {
+      target: { value: 'Soy un asistente de IA; esta llamada se transcribe.' },
+    });
+    // The attestation checkbox appears only after a custom edit.
+    const attest = screen.getByTestId('disclosure-attest').querySelector('input')!;
+    fireEvent.click(attest);
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.call_disclosure).toBe('Soy un asistente de IA; esta llamada se transcribe.');
+    expect(payload.disclosure_attested).toBe(true);
+  });
+
+  test('HAPPY: clearing a previously-custom disclosure saves null with no attestation', async () => {
+    // WHO: an owner who had a custom disclosure and empties the box.
+    // WHAT: call_disclosure → null (revert to default) with NO attestation
+    //        required — clearing is always safe.
+    // WHERE: handleSave: blank → null, attestation not needed on a clear.
+    // WHY: reverting to the compliant default must never be gated, and must not
+    //      carry a stale attestation flag.
+    mockGetConfig.mockResolvedValue({ ...BASE_CONFIG, call_disclosure: 'Old custom line.' });
+    render(<AIConfigView />);
+
+    const disclosure = await screen.findByTestId('call-disclosure');
+    fireEvent.change(disclosure, { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalledTimes(1));
+    const [, payload] = mockUpdateConfig.mock.calls[0];
+    expect(payload.call_disclosure).toBeNull();
+    expect(payload).not.toHaveProperty('disclosure_attested');
+  });
+});

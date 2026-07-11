@@ -349,6 +349,8 @@ describe('agentTools /tenant-config', () => {
       forward_phone: null,
       // 2026-06-29 forwarded_from_phone defaults null → no forwarded-line match.
       forwarded_from_phone: null,
+      // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
+      call_disclosure: null,
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -408,6 +410,8 @@ describe('agentTools /tenant-config', () => {
       forward_phone: null,
       // 2026-06-29 forwarded_from_phone defaults null → no forwarded-line match.
       forwarded_from_phone: null,
+      // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
+      call_disclosure: null,
     });
   });
 

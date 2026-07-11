@@ -243,4 +243,165 @@ describe('POST /tenants/:id/update-config → real DB', () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  // The harness stamps call_disclosure_attested_by with this fixed id (see the
+  // preHandler). It FKs users(user_id), so the row must exist before an attested
+  // save; create it against the fresh tenant.
+  const ATTESTER = '55555555-5555-4555-8555-555555555555';
+  async function seedAttester(tenantId: string) {
+    await setup.query(
+      `INSERT INTO users (user_id, tenant_id, email, password_hash, role)
+       VALUES ($1, $2, $3, 'x', 'owner')
+       ON CONFLICT (user_id) DO NOTHING`,
+      [ATTESTER, tenantId, `attester-${tenantId}@example.com`]
+    );
+  }
+
+  describe('caller disclosure + attestation gate', () => {
+    it('REJECTS a custom disclosure without attestation (400, row untouched)', async () => {
+      // WHO: an owner rewording the spoken disclosure | WHAT: setting a non-blank
+      // call_disclosure without disclosure_attested is refused | WHY: the legal
+      // gate — the platform will not speak a tenant-authored disclosure the owner
+      // has not affirmed meets their state's law. The write must not partially land.
+      const id = await freshTenant('Disc Reject');
+      const res = await app.inject({
+        method: 'POST',
+        url: `/tenants/${id}/update-config`,
+        headers: hdr(id),
+        payload: { call_disclosure: 'You are talking to a person.' },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/attest/i);
+
+      const row = await setup.query(
+        'SELECT call_disclosure, call_disclosure_attested_at FROM tenants WHERE tenant_id = $1',
+        [id]
+      );
+      expect(row.rows[0].call_disclosure).toBeNull(); // rollback: nothing written
+      expect(row.rows[0].call_disclosure_attested_at).toBeNull();
+    });
+
+    it('ACCEPTS an attested custom disclosure and STAMPS who/when', async () => {
+      // WHO: an owner who ticks the attestation box | WHAT: the text persists AND
+      // the attestation is recorded (timestamp + user) | WHY: an attestation that
+      // is not recorded is worthless as a defense — the stamp IS the evidence.
+      const id = await freshTenant('Disc Accept');
+      await seedAttester(id);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/tenants/${id}/update-config`,
+        headers: hdr(id),
+        payload: {
+          call_disclosure: 'Soy un asistente de IA; esta llamada se transcribe.',
+          disclosure_attested: true,
+        },
+      });
+      expect(res.statusCode).toBe(200);
+
+      const row = await setup.query(
+        `SELECT call_disclosure, call_disclosure_attested_at, call_disclosure_attested_by
+           FROM tenants WHERE tenant_id = $1`,
+        [id]
+      );
+      expect(row.rows[0].call_disclosure).toBe(
+        'Soy un asistente de IA; esta llamada se transcribe.'
+      );
+      expect(row.rows[0].call_disclosure_attested_at).not.toBeNull();
+      expect(row.rows[0].call_disclosure_attested_by).toBe(ATTESTER);
+    });
+
+    it('CLEARING to blank reverts to default and wipes the attestation, no attest needed', async () => {
+      // WHO: an owner who empties the field | WHAT: call_disclosure → null and the
+      // stamp is wiped, with NO attestation required | WHY: clearing returns to the
+      // compliant platform default (resolveDisclosure falls back), which is always
+      // safe — so it must not be gated, and a stale attestation must not linger on
+      // a row that no longer has custom text.
+      const id = await freshTenant('Disc Clear');
+      await seedAttester(id);
+      await app.inject({
+        method: 'POST',
+        url: `/tenants/${id}/update-config`,
+        headers: hdr(id),
+        payload: { call_disclosure: 'Custom line.', disclosure_attested: true },
+      });
+      const cleared = await app.inject({
+        method: 'POST',
+        url: `/tenants/${id}/update-config`,
+        headers: hdr(id),
+        payload: { call_disclosure: '   ' }, // whitespace = clear, no attestation
+      });
+      expect(cleared.statusCode).toBe(200);
+
+      const row = await setup.query(
+        `SELECT call_disclosure, call_disclosure_attested_at, call_disclosure_attested_by
+           FROM tenants WHERE tenant_id = $1`,
+        [id]
+      );
+      expect(row.rows[0].call_disclosure).toBeNull();
+      expect(row.rows[0].call_disclosure_attested_at).toBeNull();
+      expect(row.rows[0].call_disclosure_attested_by).toBeNull();
+    });
+
+    it('PARTIAL SAVE that omits call_disclosure keeps prior text AND its stamp', async () => {
+      // WHO: an owner saving an unrelated field (e.g. buffer) | WHAT: a body without
+      // call_disclosure must not disturb the stored disclosure or re-prompt attestation
+      // | WHY: the disclosure is set once and attested once; a later unrelated save
+      // must neither wipe it nor demand re-attestation (attestMode 'keep').
+      const id = await freshTenant('Disc Partial');
+      await seedAttester(id);
+      await app.inject({
+        method: 'POST',
+        url: `/tenants/${id}/update-config`,
+        headers: hdr(id),
+        payload: { call_disclosure: 'Kept line.', disclosure_attested: true },
+      });
+      const before = await setup.query(
+        'SELECT call_disclosure_attested_at FROM tenants WHERE tenant_id = $1',
+        [id]
+      );
+      const res = await app.inject({
+        method: 'POST',
+        url: `/tenants/${id}/update-config`,
+        headers: hdr(id),
+        payload: { default_buffer_minutes: 20 }, // unrelated, no disclosure fields
+      });
+      expect(res.statusCode).toBe(200);
+
+      const after = await setup.query(
+        'SELECT call_disclosure, call_disclosure_attested_at FROM tenants WHERE tenant_id = $1',
+        [id]
+      );
+      expect(after.rows[0].call_disclosure).toBe('Kept line.');
+      expect(after.rows[0].call_disclosure_attested_at).toEqual(
+        before.rows[0].call_disclosure_attested_at
+      );
+    });
+
+    it('ROUND-TRIP: GET /config returns a saved disclosure so the UI does not blank+wipe it', async () => {
+      // WHO: an owner who saved a custom disclosure, then reopens Voice Settings.
+      // WHAT: GET /tenants/:id/config must include call_disclosure so AIConfigView
+      //        seeds the field with the saved text. If the read omitted the column
+      //        the field would load blank, and the very next save would write null
+      //        over the custom disclosure — silent data loss (Copilot, PR #234).
+      // WHERE: GET /tenants/:id/config SELECT list.
+      // WHY: this is the regression that would have caught the missing column; the
+      //        write path had it, the read path did not.
+      const id = await freshTenant('Disc RoundTrip');
+      await seedAttester(id);
+      await app.inject({
+        method: 'POST',
+        url: `/tenants/${id}/update-config`,
+        headers: hdr(id),
+        payload: { call_disclosure: 'Round-trip line.', disclosure_attested: true },
+      });
+
+      const read = await app.inject({
+        method: 'GET',
+        url: `/tenants/${id}/config`,
+        headers: hdr(id),
+      });
+      expect(read.statusCode).toBe(200);
+      expect(read.json().call_disclosure).toBe('Round-trip line.');
+    });
+  });
 });

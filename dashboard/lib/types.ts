@@ -93,6 +93,13 @@ export interface Tenant {
   // config). 0 = no buffer (default). Applies to AI/customer-facing bookings
   // only; owner manual dashboard bookings are unrestricted.
   default_buffer_minutes?: number;
+  // Owner-editable spoken caller disclosure (the AI + call-transcription notice).
+  // NULL/blank = the platform speaks its compliant default. Setting a custom
+  // value requires attestation (disclosure_attested on the update payload); the
+  // stamp columns record who/when for the audit trail.
+  call_disclosure?: string | null;
+  call_disclosure_attested_at?: string | null;
+  call_disclosure_attested_by?: string | null;
 }
 
 export interface BusinessTemplate {

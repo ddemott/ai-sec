@@ -74,6 +74,15 @@ const UpdateConfigSchema = z.object({
   // (default). Capped at 120 (2h) — beyond that is almost certainly a typo, not
   // an intent, and a runaway value would starve a day's availability.
   default_buffer_minutes: z.number().int().min(0).max(120).optional(),
+  // Owner-editable spoken caller disclosure (the AI + transcription notice).
+  // NULL/blank = revert to the platform default. Setting a non-blank value
+  // requires disclosure_attested === true (the owner affirms it meets their
+  // state disclosure laws); enforced in the handler, not the schema, because it
+  // is a cross-field rule. Capped at 600 chars — a disclosure longer than that
+  // is a scripting error, and a runaway value would add dead air at pickup.
+  call_disclosure: z.string().max(600).optional().nullable(),
+  // The affirmative attestation that accompanies a call_disclosure change.
+  disclosure_attested: z.boolean().optional(),
 });
 
 const CreateTemplateSchema = z.object({
@@ -177,7 +186,11 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone, default_buffer_minutes FROM tenants WHERE tenant_id = $1',
+          // call_disclosure (+ attestation stamp) MUST be here: AIConfigView loads
+          // this row and seeds its Caller Disclosure field from it. Omitting the
+          // column loads a saved custom disclosure as blank, and the next save then
+          // writes null over it — silent data loss. (Copilot review, PR #234.)
+          'SELECT tenant_id, name, business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone, default_buffer_minutes, call_disclosure, call_disclosure_attested_at, call_disclosure_attested_by FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );
@@ -240,8 +253,9 @@ export function registerTenantRoutes(
             forwarded_from_phone: string | null;
             inbound_phone: string | null;
             default_buffer_minutes: number | null;
+            call_disclosure: string | null;
           }>(
-            'SELECT business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, forwarded_from_phone, inbound_phone, default_buffer_minutes FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            'SELECT business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, forwarded_from_phone, inbound_phone, default_buffer_minutes, call_disclosure FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
           const prior = priorRes.rows[0];
@@ -298,6 +312,42 @@ export function registerTenantRoutes(
               ? body.default_buffer_minutes
               : (prior?.default_buffer_minutes ?? 0);
 
+          // Caller disclosure + its attestation gate.
+          //
+          // Normalize blank → null so a whitespace-only value is treated as
+          // "revert to the platform default" (matches resolveDisclosure() in the
+          // agent). Only compute a new value when the field is present in the body;
+          // otherwise keep what is stored (partial-update safety).
+          const priorDisclosure = prior?.call_disclosure ?? null;
+          const finalCallDisclosure =
+            body.call_disclosure !== undefined
+              ? body.call_disclosure?.trim()
+                ? body.call_disclosure.trim()
+                : null
+              : priorDisclosure;
+          const disclosureChanged = finalCallDisclosure !== priorDisclosure;
+          // Setting (or changing) a NON-blank custom disclosure is the affirmative
+          // legal act and requires attestation. Clearing it back to null returns to
+          // the compliant default and needs none. An unchanged value (idempotent
+          // re-save) does not re-prompt. The attestation that is not RECORDED is
+          // worthless as a defense, so on a valid change we stamp attested_at/by;
+          // on a clear we wipe them (no custom text = nothing attested).
+          const requiresAttestation = disclosureChanged && finalCallDisclosure !== null;
+          if (requiresAttestation && body.disclosure_attested !== true) {
+            await client.query('ROLLBACK');
+            return { disclosureUnattested: true as const };
+          }
+          // Attestation-stamp mode driving the CASE in the UPDATE:
+          //   'stamp' — record NOW() + the attesting user (a valid custom change)
+          //   'clear' — wipe the stamp (disclosure reverted to default)
+          //   'keep'  — leave the existing stamp untouched (no disclosure change)
+          const attestMode: 'stamp' | 'clear' | 'keep' = requiresAttestation
+            ? 'stamp'
+            : disclosureChanged && finalCallDisclosure === null
+              ? 'clear'
+              : 'keep';
+          const attestingUserId = req.auth?.user_id ?? null;
+
           // Loop guard: a transfer target equal to the forwarded-from line or
           // the AI's own DID would forward the call straight back into the AI.
           if (phonesWouldLoop(finalForwardPhone, finalForwardedFromPhone, prior?.inbound_phone)) {
@@ -306,7 +356,10 @@ export function registerTenantRoutes(
           }
 
           const updRes = await client.query(
-            'UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9, tts_cheerful = $10, tts_formal = $11, tts_warm = $12, tts_concise = $13, forward_phone = $14, owner_phone = $15, forwarded_from_phone = $16, persona_name = $17, default_service_id = $18, default_buffer_minutes = $19 WHERE tenant_id = $20 RETURNING tenant_id',
+            `UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9, tts_cheerful = $10, tts_formal = $11, tts_warm = $12, tts_concise = $13, forward_phone = $14, owner_phone = $15, forwarded_from_phone = $16, persona_name = $17, default_service_id = $18, default_buffer_minutes = $19, call_disclosure = $20,
+               call_disclosure_attested_at = CASE $21::text WHEN 'stamp' THEN NOW() WHEN 'clear' THEN NULL ELSE call_disclosure_attested_at END,
+               call_disclosure_attested_by = CASE $21::text WHEN 'stamp' THEN $22::uuid WHEN 'clear' THEN NULL ELSE call_disclosure_attested_by END
+             WHERE tenant_id = $23 RETURNING tenant_id`,
             [
               finalSystemPrompt,
               finalVoiceId,
@@ -327,6 +380,9 @@ export function registerTenantRoutes(
               finalPersonaName,
               finalDefaultServiceId,
               finalDefaultBufferMinutes,
+              finalCallDisclosure,
+              attestMode,
+              attestMode === 'stamp' ? attestingUserId : null,
               id,
             ]
           );
@@ -349,7 +405,13 @@ export function registerTenantRoutes(
           }
 
           await client.query('COMMIT');
-          return { updRes, businessTypeChanged, cleanedServices, cleanedResources };
+          return {
+            updRes,
+            businessTypeChanged,
+            cleanedServices,
+            cleanedResources,
+            disclosureAttested: requiresAttestation,
+          };
         } catch (err) {
           await client.query('ROLLBACK');
           throw err;
@@ -364,12 +426,24 @@ export function registerTenantRoutes(
         });
       }
 
+      if ('disclosureUnattested' in result && result.disclosureUnattested) {
+        return reply.status(400).send({
+          success: false,
+          error:
+            'Changing the caller disclosure requires attestation. Confirm the disclosure meets the laws of the states where you and your callers are located, then resubmit with disclosure_attested set.',
+        });
+      }
+
       if (!assertRowAffected(result.updRes, reply, 'Tenant')) return;
+      const disclosureAttested = result.disclosureAttested;
       logEvent(req, 'tenant_config_updated', {
         tenantId: id,
         businessTypeChanged: result.businessTypeChanged,
         cleanedServices: result.cleanedServices,
         cleanedResources: result.cleanedResources,
+        // Audit trail: record the attestation event distinctly from the generic
+        // column-change audit so a legal review can find "who attested what, when".
+        ...(disclosureAttested ? { disclosureAttestedBy: req.auth?.user_id } : {}),
       });
       return reply.send({ success: true });
     }, 'Failed to update tenant config')

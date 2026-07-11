@@ -74,6 +74,15 @@ export interface TenantDisplayConfig {
    * forwarded-line handling via this field (env list still applies). 2026-06-29.
    */
   forwardedFromPhone: string | null;
+  /**
+   * Owner-editable spoken caller disclosure (the AI + transcription notice).
+   * NULL or blank means "use the platform default" — buildDisclosure() in
+   * greeting.ts composes the compliant fallback. A tenant can reword it (brand
+   * voice, another language, counsel-approved script) but the change is gated
+   * behind an attestation in the dashboard; the agent just speaks whatever the
+   * column holds, or the default when it is empty. 2026-07-11.
+   */
+  callDisclosure: string | null;
 }
 
 export const TENANT_FALLBACK: TenantDisplayConfig = {
@@ -93,6 +102,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   ttsCheerful: null,
   forwardPhone: null,
   forwardedFromPhone: null,
+  callDisclosure: null,
 };
 
 export async function fetchTenantConfig(
@@ -118,6 +128,7 @@ export async function fetchTenantConfig(
     tts_cheerful?: boolean | null;
     forward_phone?: string | null;
     forwarded_from_phone?: string | null;
+    call_disclosure?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {
@@ -137,6 +148,7 @@ export async function fetchTenantConfig(
       ttsCheerful: res.result.tts_cheerful ?? null,
       forwardPhone: res.result.forward_phone ?? null,
       forwardedFromPhone: res.result.forwarded_from_phone ?? null,
+      callDisclosure: res.result.call_disclosure ?? null,
     };
   }
   return TENANT_FALLBACK;
