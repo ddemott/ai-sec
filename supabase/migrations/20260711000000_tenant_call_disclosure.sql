@@ -25,8 +25,12 @@
 -- Forward-only safe: ADD COLUMN IF NOT EXISTS, all nullable, no backfill. NULL
 -- across the board reproduces today's behavior (platform default spoken), so
 -- existing tenants are unaffected.
-
-BEGIN;
+--
+-- NO self-managed BEGIN/COMMIT: scripts/setup-db.sh already applies each file
+-- with `psql --single-transaction`. A file that carries its own BEGIN/COMMIT
+-- collides with that wrapper and, through the Supabase pooler, reports APPLY /
+-- RC=0 while NOTHING durably commits (docs/LESSONS_LEARNED.md, 2026-07-01 buffer
+-- migration). Leaving the transaction to the runner is the safe form.
 
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS call_disclosure TEXT,
@@ -36,5 +40,3 @@ ALTER TABLE tenants
 COMMENT ON COLUMN tenants.call_disclosure IS 'Spoken caller disclosure (AI + transcription notice). NULL/blank = platform default from greeting.ts. Owner-editable, requires attestation to change.';
 COMMENT ON COLUMN tenants.call_disclosure_attested_at IS 'When the owner attested a custom call_disclosure meets their state disclosure laws. NULL = never customized (default in force).';
 COMMENT ON COLUMN tenants.call_disclosure_attested_by IS 'user_id of the owner who attested the custom call_disclosure. FK users(user_id).';
-
-COMMIT;

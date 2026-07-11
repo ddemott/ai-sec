@@ -186,7 +186,11 @@ export function registerTenantRoutes(
       }
       const res = await withPoolClient(pool, (client) =>
         client.query(
-          'SELECT tenant_id, name, business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone, default_buffer_minutes FROM tenants WHERE tenant_id = $1',
+          // call_disclosure (+ attestation stamp) MUST be here: AIConfigView loads
+          // this row and seeds its Caller Disclosure field from it. Omitting the
+          // column loads a saved custom disclosure as blank, and the next save then
+          // writes null over it — silent data loss. (Copilot review, PR #234.)
+          'SELECT tenant_id, name, business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone, default_buffer_minutes, call_disclosure, call_disclosure_attested_at, call_disclosure_attested_by FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );

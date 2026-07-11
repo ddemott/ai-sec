@@ -376,5 +376,32 @@ describe('POST /tenants/:id/update-config → real DB', () => {
         before.rows[0].call_disclosure_attested_at
       );
     });
+
+    it('ROUND-TRIP: GET /config returns a saved disclosure so the UI does not blank+wipe it', async () => {
+      // WHO: an owner who saved a custom disclosure, then reopens Voice Settings.
+      // WHAT: GET /tenants/:id/config must include call_disclosure so AIConfigView
+      //        seeds the field with the saved text. If the read omitted the column
+      //        the field would load blank, and the very next save would write null
+      //        over the custom disclosure — silent data loss (Copilot, PR #234).
+      // WHERE: GET /tenants/:id/config SELECT list.
+      // WHY: this is the regression that would have caught the missing column; the
+      //        write path had it, the read path did not.
+      const id = await freshTenant('Disc RoundTrip');
+      await seedAttester(id);
+      await app.inject({
+        method: 'POST',
+        url: `/tenants/${id}/update-config`,
+        headers: hdr(id),
+        payload: { call_disclosure: 'Round-trip line.', disclosure_attested: true },
+      });
+
+      const read = await app.inject({
+        method: 'GET',
+        url: `/tenants/${id}/config`,
+        headers: hdr(id),
+      });
+      expect(read.statusCode).toBe(200);
+      expect(read.json().call_disclosure).toBe('Round-trip line.');
+    });
   });
 });
