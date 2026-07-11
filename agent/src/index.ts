@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 import { config, untrustedCallerIdTenants } from './config.js';
 import { runFallback } from './fallback.js';
+import { buildGreeting } from './greeting.js';
 import { getLogger } from './logger.js';
 import { summarizeToolCalls } from './redactToolArgs.js';
 import { buildSessionContext, callerIdIsForwardNumber } from './sessionContext.js';
@@ -833,22 +834,13 @@ export default defineAgent({
           session.on(voice.AgentSessionEventTypes.Close, detachThinkingSound);
         }
 
-        // 6. Greeting. The owner-editable "First Message" (dashboard AI Persona)
-        // is spoken verbatim when set; otherwise a short hardcoded fallback —
-        // the LLM warms up from there either way.
-        // Default greeting, in priority order:
-        //  1. the owner's custom "First Message" (spoken verbatim when set);
-        //  2. a persona-aware default that introduces the assistant by name, so
-        //     a tenant who hasn't written a greeting still gets a proper named
-        //     opener AND it stays consistent when the name changes (no stale
-        //     name baked into a saved greeting);
-        //  3. a plain fallback when neither is set.
-        const personaName = tenantConfig.personaName?.trim();
-        const greeting =
-          tenantConfig.firstMessage?.trim() ||
-          (personaName
-            ? `Hi, this is ${personaName} at ${tenantConfig.name}. How can I help you today?`
-            : `Thanks for calling ${tenantConfig.name}. How can I help you today?`);
+        // 6. Greeting = tenant opener + fixed disclosure + fixed closer.
+        // The owner's "First Message" is the OPENER only; it is no longer spoken
+        // verbatim as the whole greeting. The AI-identity + transcription
+        // disclosure is appended by the platform on every call for every tenant
+        // and cannot be edited or removed from the dashboard. See greeting.ts for
+        // the wording rules and why each clause is worded the way it is.
+        const greeting = buildGreeting(tenantConfig);
         // Greeting. Pipeline mode plays it via say() uninterrupted (a caller's
         // "hi?"/line noise at pickup shouldn't truncate the opening line); Realtime
         // mode speaks it via generateReply with server-side turn-taking (it rejects

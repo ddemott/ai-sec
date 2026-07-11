@@ -595,8 +595,9 @@ export function registerAgentToolRoutes(
           tts_concise: boolean | null;
           forward_phone: string | null;
           forwarded_from_phone: string | null;
+          call_disclosure: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, call_disclosure FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         return res.rows[0] ?? null;
@@ -643,6 +644,10 @@ export function registerAgentToolRoutes(
         // The line the tenant forwards INTO the assistant — caller-ID match
         // tells the agent to collect the caller's real number by voice.
         forwarded_from_phone: row.forwarded_from_phone ?? null,
+        // 2026-07-11: owner-editable spoken caller disclosure (AI + transcription
+        // notice). NULL/blank means the agent speaks the platform default from
+        // greeting.ts; a set value is spoken verbatim (attestation-gated on write).
+        call_disclosure: row.call_disclosure ?? null,
       });
     },
     'Failed to fetch tenant config'

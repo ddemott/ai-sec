@@ -65,6 +65,7 @@ describe('fetchTenantConfig', () => {
       ttsCheerful: null,
       forwardPhone: null,
       forwardedFromPhone: null,
+      callDisclosure: null,
     });
   });
 

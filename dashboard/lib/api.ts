@@ -734,7 +734,10 @@ export const Api = {
     getConfig: (tenantId: string | null) => apiFetch<Tenant>(`/tenants/${tenantId}/config`),
     update: (id: string, data: Partial<TenantFull>) =>
       apiMutate(`/tenants/${id}/update-attributes`, 'POST', data as Record<string, unknown>),
-    updateConfig: (id: string, data: Partial<Tenant>) =>
+    // `disclosure_attested` is a per-request affirmation, not a stored Tenant
+    // column — the backend requires it only when call_disclosure changes to a
+    // custom value. It rides alongside the Partial<Tenant> fields.
+    updateConfig: (id: string, data: Partial<Tenant> & { disclosure_attested?: boolean }) =>
       apiMutate(`/tenants/${id}/update-config`, 'POST', data as Record<string, unknown>),
     delete: (id: string) => apiMutate(`/tenants/${id}`, 'DELETE'),
     create: (data: Record<string, unknown>) =>

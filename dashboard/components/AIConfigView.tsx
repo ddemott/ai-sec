@@ -17,6 +17,7 @@ import { ForwardCallsSection } from './aiconfig/ForwardCallsSection';
 import { VoiceIdentitySection } from './aiconfig/VoiceIdentitySection';
 import { CustomerPreferencesSection } from './aiconfig/CustomerPreferencesSection';
 import { BufferSection } from './aiconfig/BufferSection';
+import { CallDisclosureSection } from './aiconfig/CallDisclosureSection';
 
 // Business-type / template browsing lives in BusinessSettingsView now
 // (BusinessTypeSection.tsx). Owners pick the template once during the
@@ -31,6 +32,11 @@ export default function AIConfigView() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // The disclosure text as loaded from the server — used to detect an unsaved
+  // change so the attestation checkbox appears only on a real edit, and so an
+  // untouched save never trips the backend's attestation gate.
+  const [initialDisclosure, setInitialDisclosure] = useState<string>('');
+  const [disclosureAttested, setDisclosureAttested] = useState(false);
 
   useEffect(() => {
     if (tenantId) {
@@ -53,6 +59,8 @@ export default function AIConfigView() {
       } else {
         setConfig(data);
         setLoadError(false);
+        setInitialDisclosure(data.call_disclosure ?? '');
+        setDisclosureAttested(false);
       }
     } catch {
       setConfig(null);
@@ -62,12 +70,31 @@ export default function AIConfigView() {
     setDirty(false);
   }
 
+  // Disclosure change detection, mirroring the backend gate: a custom (non-blank)
+  // value that differs from what was loaded requires attestation; blank means
+  // "revert to the platform default" and needs none.
+  const disclosureNow = (config?.call_disclosure ?? '').trim();
+  const disclosureChanged = disclosureNow !== initialDisclosure.trim();
+  const disclosureNeedsAttestation = disclosureChanged && disclosureNow.length > 0;
+
   async function handleSave() {
     if (!config) return;
+
+    // Guard client-side so an unattested custom disclosure never makes a
+    // pointless round-trip the backend would 400. The backend still enforces
+    // this — the checkbox is convenience, not the security boundary.
+    if (disclosureNeedsAttestation && !disclosureAttested) {
+      showToast('Confirm the disclosure attestation before saving', 'error');
+      return;
+    }
     setSaving(true);
 
     try {
       const res = await Api.tenants.updateConfig(config.tenant_id, {
+        // Blank → null reverts to the platform default. Only send the
+        // attestation flag when a custom change actually requires it.
+        call_disclosure: disclosureNow.length > 0 ? disclosureNow : null,
+        ...(disclosureNeedsAttestation ? { disclosure_attested: true } : {}),
         system_prompt: config.system_prompt,
         voice_id: config.voice_id,
         business_type: config.business_type,
@@ -94,6 +121,10 @@ export default function AIConfigView() {
       setSuccess(res.success);
       if (res.success) {
         setDirty(false);
+        // The saved text is the new baseline; a later unrelated save must not
+        // re-prompt attestation, and the checkbox resets for the next edit.
+        setInitialDisclosure(disclosureNow);
+        setDisclosureAttested(false);
         showToast('AI persona saved');
         setTimeout(() => setSuccess(false), 3000);
       } else {
@@ -197,6 +228,15 @@ export default function AIConfigView() {
             placeholder="Ex: Thanks for calling! How can I help you today?"
           />
         </section>
+
+        <CallDisclosureSection
+          value={config.call_disclosure || ''}
+          businessName={config.name || ''}
+          changed={disclosureChanged}
+          attested={disclosureAttested}
+          onChange={(val) => handleUpdate({ call_disclosure: val })}
+          onAttestChange={setDisclosureAttested}
+        />
 
         {/* Go Live — provisioning, test-call verification, and the
             forwarding/porting fork. Owns forwarded_from_phone end-to-end

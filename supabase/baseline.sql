@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 3rj4fJbSc5uUNDY8TwV84iEVafcDLxhQadQigT2ttrEa1F7b5khxA7WutB2Pyle
+\restrict pupLHRUNXp34eSsJbn5CH1YRNuo5bl5lABuKPFaQ1zOOfXPPxtdx0tv6JSyXzqQ
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3316,7 +3316,10 @@ CREATE TABLE public.tenants (
     job_inquiry_email text,
     forwarded_from_phone text,
     default_service_id uuid,
-    persona_name text
+    persona_name text,
+    call_disclosure text,
+    call_disclosure_attested_at timestamp with time zone,
+    call_disclosure_attested_by uuid
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3404,6 +3407,27 @@ COMMENT ON COLUMN public.tenants.forward_phone IS 'E.164 PSTN number the agent c
 --
 
 COMMENT ON COLUMN public.tenants.forwarded_from_phone IS 'E.164 line that forwards calls into the assistant. When the SIP caller-ID matches this, the agent nulls callerPhone and collects the caller''s real number verbally. Distinct from forward_phone (transfer target).';
+
+
+--
+-- Name: COLUMN tenants.call_disclosure; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.call_disclosure IS 'Spoken caller disclosure (AI + transcription notice). NULL/blank = platform default from greeting.ts. Owner-editable, requires attestation to change.';
+
+
+--
+-- Name: COLUMN tenants.call_disclosure_attested_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.call_disclosure_attested_at IS 'When the owner attested a custom call_disclosure meets their state disclosure laws. NULL = never customized (default in force).';
+
+
+--
+-- Name: COLUMN tenants.call_disclosure_attested_by; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.call_disclosure_attested_by IS 'user_id of the owner who attested the custom call_disclosure. FK users(user_id).';
 
 
 --
@@ -4918,6 +4942,14 @@ ALTER TABLE ONLY public.tenant_skills
 
 
 --
+-- Name: tenants tenants_call_disclosure_attested_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenants
+    ADD CONSTRAINT tenants_call_disclosure_attested_by_fkey FOREIGN KEY (call_disclosure_attested_by) REFERENCES public.users(user_id);
+
+
+--
 -- Name: tenants tenants_default_service_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5548,5 +5580,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 3rj4fJbSc5uUNDY8TwV84iEVafcDLxhQadQigT2ttrEa1F7b5khxA7WutB2Pyle
+\unrestrict pupLHRUNXp34eSsJbn5CH1YRNuo5bl5lABuKPFaQ1zOOfXPPxtdx0tv6JSyXzqQ
 
