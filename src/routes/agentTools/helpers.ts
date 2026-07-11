@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
+ * These are the remaining dynamic/any-heavy areas after previous tranches.
+ */
+/**
  * Shared helper functions for /agent-tools/* routes.
  * Extracted from agentTools.ts to keep each concern in its own file.
  *
@@ -71,7 +75,7 @@ export function parseOrFail<T>(schema: z.ZodType<T>, body: unknown, reply: Fasti
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     const msg = parsed.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ');
-    void fail(reply, `Validation failed: ${msg}`);
+    void fail(reply, `Validation failed: ${msg}`); // reply.send() returns Promise; void satisfies no-floating-promises
     return null;
   }
   return parsed.data;

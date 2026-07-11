@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
+ * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
+ * These are the remaining dynamic/any-heavy areas after previous tranches.
+ */
+/**
  * Zod schemas and related constants for /agent-tools/* routes.
  * Extracted from agentTools.ts to keep each concern in its own file.
  */
@@ -155,7 +159,7 @@ export const SendVerificationCodeSchema = z.object({
 export const VerifyPhoneCodeSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
-  code: z.string().regex(/^\d+$/, 'Code must be numeric'),
+  code: z.string().regex(/^\d+$/, 'Code must be numeric').length(CODE_DIGITS),
 });
 
 // take-message — record a caller message + SMS-notify the owner.
