@@ -18,12 +18,60 @@
  * the LLM can relay the error conversationally rather than having the HTTP
  * client bubble an exception.
  */
-import type { FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { timingSafeEqual } from 'crypto';
-import { z } from 'zod';
-import { withHandler, type AppRequest } from '../middleware';
+import type { AppRequest } from '../middleware';
+import {
+  CODE_DIGITS,
+  CODE_TTL_MINUTES,
+  MAX_VERIFY_ATTEMPTS,
+  RATE_LIMIT_PER_PHONE_PER_HOUR,
+  RATE_LIMIT_PER_TENANT_PER_DAY,
+  COST_PER_INPUT_TOKEN,
+  COST_PER_OUTPUT_TOKEN,
+  DEEPGRAM_COST_PER_MS,
+  RecordAiCostSchema,
+  BookAppointmentSchema,
+  BookWithSchedulingSchema,
+  CancelAppointmentSchema,
+  CaptureJobInquirySchema,
+  CheckAvailabilitySchema,
+  CustomerHistorySchema,
+  FindByNameSchema,
+  GetAvailableSlotsSchema,
+  GetContextSchema,
+  GetPolicyAnswerSchema,
+  GetSchedulingOptionsSchema,
+  GetServiceCatalogSchema,
+  GetTenantConfigSchema,
+  IdentifyCallerSchema,
+  MyAppointmentsSchema,
+  PageOwnerSchema,
+  RecordSmsConsentSchema,
+  RescheduleAppointmentSchema,
+  SaveCustomerPreferenceSchema,
+  SendSelfServiceLinkSchema,
+  SendVerificationCodeSchema,
+  TakeMessageSchema,
+  VerifyPhoneCodeSchema,
+  VoiceSessionEndSchema,
+  VoiceSessionStartSchema,
+  VoiceSessionTranscriptSchema,
+} from './agentTools/schemas';
+import {
+  ok,
+  fail,
+  toolRoute,
+  pgErrorFields,
+  captureRequestedService,
+  bookingOutcomeFromAgentError,
+  timeToMinutes,
+  dateTimeToMinutes,
+  minutesToTime,
+  mergeIntervals,
+  subtractIntervals,
+} from './agentTools/helpers';
 import { applyTimezone, toLocalWallClock } from '../services/timezoneUtils';
 import { validateAppointmentTimeRange } from '../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../services/phoneUtils';
@@ -43,7 +91,7 @@ import {
   clearSyncRecorder,
   syncAppointmentToAll,
 } from '../services/syncOrchestrator';
-import { toolCallsTotal, bookingAttemptsTotal, errorsTotal } from '../services/metrics';
+import { bookingAttemptsTotal, errorsTotal } from '../services/metrics';
 import { sendJobInquiryEmail } from '../services/communications/systemEmail';
 import { SMSService } from '../services/communications/smsService';
 import { ConsentService } from '../services/consentService';
@@ -65,445 +113,6 @@ import {
   scheduleRemindersForAppointment,
   rescheduleRemindersForAppointment,
 } from '../services/reminders/scheduleForAppointment';
-
-// ── SMS OTP config — decided 2026-04-23 ────────────────────────────────
-// 6-digit code (industry-standard), 10-min TTL (don't rush callers who are
-// slow with their phones), max 5 verify attempts per code, rate-limit 3
-// sends per phone per hour + 100 per tenant per day to prevent spam.
-const CODE_DIGITS = 6;
-const CODE_TTL_MINUTES = 10;
-const MAX_VERIFY_ATTEMPTS = 5;
-const RATE_LIMIT_PER_PHONE_PER_HOUR = 3;
-const RATE_LIMIT_PER_TENANT_PER_DAY = 100;
-
-// ── Zod schemas (ported from supabase/functions/vapi-tools/index.ts) ──
-
-const GetContextSchema = z.object({
-  phone: z.string().min(5),
-  tenant_id: z.string().uuid(),
-});
-
-const FindByNameSchema = z.object({
-  name: z.string().min(1),
-  tenant_id: z.string().uuid(),
-});
-
-const CheckAvailabilitySchema = z.object({
-  tenant_id: z.string().uuid(),
-  resource_id: z.string().uuid(),
-  start_time: z.string(),
-  end_time: z.string(),
-});
-
-const BookAppointmentSchema = z.object({
-  tenant_id: z.string().uuid(),
-  resource_id: z.string().uuid(),
-  phone: z.string().default(''),
-  name: z.string().optional(),
-  start_time: z.string(),
-  end_time: z.string(),
-  description: z.string().default('Booking via SecretaryHQ'),
-  call_id: z.string().default(''),
-  location: z.string().optional(),
-  employee_id: z
-    .string()
-    .or(z.number())
-    .optional()
-    .transform((v) => v?.toString()),
-});
-
-const GetPolicyAnswerSchema = z.object({
-  tenant_id: z.string().uuid(),
-  question: z.string().min(1),
-});
-
-const GetSchedulingOptionsSchema = z.object({
-  tenant_id: z.string().uuid(),
-  requirements: z.object({
-    serviceType: z.string().min(1),
-    requiredResourceCapabilities: z.array(z.string()).optional(),
-    requiredEmployeeSkills: z.array(z.string()).optional(),
-  }),
-  window: z.object({ from: z.string(), to: z.string() }),
-  // Optional — lets a pure availability inquiry (no booking attempt) still be
-  // attributed to its voice_session for abandonment-by-service analytics.
-  call_id: z.string().min(1).optional(),
-});
-
-const BookWithSchedulingSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().default(''),
-  name: z.string().optional(),
-  description: z.string().default('Booking via SecretaryHQ'),
-  call_id: z.string().default(''),
-  location: z.string().optional(),
-  requirements: z.object({
-    serviceType: z.string().min(1),
-    requiredResourceCapabilities: z.array(z.string()).optional(),
-    requiredEmployeeSkills: z.array(z.string()).optional(),
-    preferredResourceId: z.string().optional(),
-  }),
-  window: z.object({ from: z.string(), to: z.string() }),
-});
-
-const GetServiceCatalogSchema = z.object({
-  tenant_id: z.string().uuid(),
-});
-
-const GetTenantConfigSchema = z.object({
-  tenant_id: z.string().uuid(),
-});
-
-// save_customer_preference — the AI persists a durable fact about the caller
-// (preferred stylist, last service, likes/dislikes, upsell flags) as a
-// key/value pair into customers.metadata.preferences. Read back on the next
-// call by get_customer_context_for_call. Key is normalized to a short stable
-// slug; value is free text the AI heard. Only writes for an existing customer
-// (a phone the CRM already knows) — we don't conjure a customer row just to
-// hang a preference on, and the agent should have already called
-// get_customer_context (or booked) before it has anything worth saving.
-const SaveCustomerPreferenceSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-  key: z.string().min(1).max(60),
-  value: z.string().min(1).max(500),
-});
-
-const IdentifyCallerSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-  name: z.string().min(1).max(200).optional(),
-  // When present, link the captured number + customer onto this call's
-  // voice_sessions row so the Calls tab shows the verbally-collected number
-  // (forwarded-line calls start with caller_phone null).
-  call_id: z.string().min(1).optional(),
-});
-
-const GetAvailableSlotsSchema = z.object({
-  tenant_id: z.string().uuid(),
-  service_type: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
-  // Optional — see GetSchedulingOptionsSchema.call_id (pure-inquiry attribution).
-  call_id: z.string().min(1).optional(),
-});
-
-// Verbal SMS-consent capture — the caller said yes to appointment reminders on
-// the call. Informational/transactional only (never marketing).
-const RecordSmsConsentSchema = z.object({
-  tenant_id: z.string().uuid(),
-  // min(1) only — completeness is judged by normalizePhone/isValidPhone in the
-  // handler so an incomplete number gets the friendly soft-failure, not a
-  // generic schema "Validation failed".
-  phone: z.string().min(1),
-  call_id: z.string().min(1).optional(),
-});
-
-const SendVerificationCodeSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-});
-
-const VerifyPhoneCodeSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-  code: z.string().regex(/^\d+$/, 'Code must be numeric'),
-});
-
-// take-message — record a caller message + SMS-notify the owner.
-// "Take a message" was previously pure LLM theater — the agent would say it
-// but nothing was stored. Now it lands in customer_messages and the owner's
-// forward_phone gets a text so no message is silently lost.
-const TakeMessageSchema = z.object({
-  tenant_id: z.string().uuid(),
-  caller_name: z.string().min(1).max(200),
-  callback_phone: z.string().optional(),
-  caller_phone: z.string().optional(),
-  message: z.string().min(1).max(2000),
-  call_id: z.string().optional(),
-});
-
-// page-owner — urgent mid-call SMS page to the business owner. Distinct from
-// take-message (no full message intake needed): the agent fires it the moment
-// a caller reports something escalation-worthy. Persists a customer_messages
-// row (message prefixed "[URGENT PAGE]" — no new table/migration needed) ONLY
-// when the owner is actually pageable, so a failed page cleanly falls back to
-// take_message without double-recording.
-const PageOwnerSchema = z.object({
-  tenant_id: z.string().uuid(),
-  caller_name: z.string().min(1).max(200),
-  callback_phone: z.string().max(50).optional(),
-  caller_phone: z.string().optional(),
-  reason: z.string().min(1).max(500),
-  call_id: z.string().min(1).optional(),
-});
-
-// customer-history — deeper caller history than customer-context: last ~10
-// appointments (any status, with service/employee/date/status), saved
-// preferences, and the last ~3 post-call summaries from voice_sessions.
-// Phone is server-injected by the agent from session context (same trust
-// model as my-appointments) — the LLM never supplies it.
-const CustomerHistorySchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-});
-
-// send-self-service-link — text the caller a secure cancel/reschedule link for
-// one of their own upcoming appointments (default: the next one). Reuses the
-// selfServiceToken machinery via appointmentService's exported link builders.
-// Ownership is phone-gated exactly like cancel/reschedule; the SMS goes through
-// the consent-gated SMSService (opt-outs respected).
-const SendSelfServiceLinkSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-  appointment_id: z.string().uuid().optional(),
-});
-
-// capture-job-inquiry — structured intake when a recruiter asks whether the
-// owner is available for work. Persists a job_inquiries row + emails the owner.
-// All position fields optional: the contract vs full-time branches collect
-// different subsets and a caller may bail mid-intake — a partial inquiry is
-// still worth saving + notifying on. caller_name is the only required field.
-const CaptureJobInquirySchema = z.object({
-  tenant_id: z.string().uuid(),
-  caller_name: z.string().min(1).max(200),
-  callback_phone: z.string().max(50).optional(),
-  company: z.string().max(300).optional(),
-  represents_company: z.boolean().optional(),
-  employment_type: z.enum(['contract', 'full_time']).optional(),
-  rate_range: z.string().max(200).optional(),
-  duration: z.string().max(200).optional(),
-  location_type: z.enum(['onsite', 'remote', 'hybrid']).optional(),
-  address: z.string().max(500).optional(),
-  timezone: z.string().max(100).optional(),
-  call_id: z.string().min(1).optional(),
-});
-
-// voice-session-start / -end — the LiveKit agent logs a call so the dashboard
-// Calls tab + customer call history populate. These mirror the JWT-gated
-// /voice/session/{start,end} routes but use the agent-secret + body-tenant_id
-// auth model every other agent-tools call uses (the agent has no JWT). Both
-// reuse the existing start_voice_session / end_voice_session DB functions.
-const VoiceSessionStartSchema = z.object({
-  tenant_id: z.string().uuid(),
-  call_id: z.string().min(1),
-  caller_phone: z.string().min(1).nullable().optional(),
-});
-
-const VoiceSessionEndSchema = z.object({
-  tenant_id: z.string().uuid(),
-  call_id: z.string().min(1),
-  duration_seconds: z.number().int().nonnegative().nullable().optional(),
-  outcome: z.string().max(50).nullable().optional(),
-  // Rendered plain-text transcript (Caller:/Assistant: lines). Bound mirrors the
-  // agent's MAX_TRANSCRIPT_CHARS so a pathological call can't write a huge row.
-  transcript: z.string().max(100_000).nullable().optional(),
-  // Post-call LLM summary (1–2 sentences). Bounded so a model can't write a huge row.
-  summary: z.string().max(2000).nullable().optional(),
-  // The appointment booked during the call, if any. UUID-validated so a malformed
-  // id can't reach (and 500) the RPC's ::uuid cast — it just stays null.
-  appointment_id: z.string().uuid().nullable().optional(),
-});
-
-// Incremental transcript save — the agent posts the transcript-so-far after each
-// turn so a call that hangs/never finalizes still has its conversation persisted.
-const VoiceSessionTranscriptSchema = z.object({
-  tenant_id: z.string().uuid(),
-  call_id: z.string().min(1),
-  // min(1): never accept an empty transcript — it would blank an active row's
-  // existing transcript (accidental data loss). The agent only ever sends a
-  // non-empty render(), so this is a boundary guard.
-  transcript: z.string().min(1).max(100_000),
-});
-
-const MyAppointmentsSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-});
-
-const CancelAppointmentSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-  appointment_id: z.string().uuid(),
-});
-
-const RescheduleAppointmentSchema = z.object({
-  tenant_id: z.string().uuid(),
-  phone: z.string().min(5),
-  appointment_id: z.string().uuid(),
-  new_start_time: z.string().min(1),
-  new_end_time: z.string().min(1),
-});
-
-// ── Helpers ───────────────────────────────────────────────────────────
-
-function ok(reply: FastifyReply, result: unknown) {
-  // _toolOutcome is read by toolRoute() after the handler returns to bump
-  // tool_calls_total{outcome=...}. Both ok() and fail() send 200 (the
-  // agent expects to relay both shapes naturally), so we can't distinguish
-  // success vs failure from status alone.
-  (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'success';
-  return reply.status(200).send({ success: true, result });
-}
-
-function fail(reply: FastifyReply, message: string, status = 200) {
-  (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'error';
-  return reply.status(status).send({ success: false, error: message });
-}
-
-/**
- * Map a booking RPC result back to the canonical outcome label used in
- * booking_attempts_total. Prefers the explicit error_code (book-with-
- * scheduling RPC sets one); falls back to keyword-matching the message
- * (book-appointment RPC returns prose only).
- */
-function bookingOutcomeFromAgentError(
-  errMessage: string | null | undefined,
-  errCode?: string | null
-): string {
-  if (errCode) {
-    const c = errCode.toLowerCase();
-    if (c === 'timeslot_occupied') return 'timeslot_occupied';
-    if (c === 'employee_not_scheduled') return 'employee_not_scheduled';
-    if (c === 'no_skilled_employee') return 'no_skilled_employee';
-    if (c === 'no_availability') return 'no_availability';
-    if (c === 'invalid_params') return 'validation_error';
-  }
-  if (!errMessage) return 'other_error';
-  const m = errMessage.toLowerCase();
-  if (m.includes('timeslot') || m.includes('overlap')) return 'timeslot_occupied';
-  if (m.includes('not on shift') || m.includes('not_scheduled')) return 'employee_not_scheduled';
-  if (m.includes('skill')) return 'no_skilled_employee';
-  if (m.includes('availability')) return 'no_availability';
-  if (m.includes('past')) return 'past_time';
-  return 'other_error';
-}
-
-function parseOrFail<T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply): T | null {
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    const msg = parsed.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ');
-    void fail(reply, `Validation failed: ${msg}`);
-    return null;
-  }
-  return parsed.data;
-}
-
-/**
- * Pull the diagnostic fields off a node-postgres error so a call-logging
- * failure names its own cause in ONE structured log line — no guessing from
- * a generic 500. `code` is the Postgres SQLSTATE (e.g. 23502 = not_null_violation,
- * 23503 = foreign_key_violation, 23505 = unique_violation); `constraint`,
- * `column`, `table`, and `detail` pinpoint exactly what the RPC rejected.
- * Origin: 2026-06-24 — the first real __PERSONA_NAME__ call never logged because
- * start_voice_session() threw on a NULL caller_phone, but the fire-and-forget
- * failure left no diagnosable trace (see feedback_sad_path_instrumentation).
- */
-function pgErrorFields(err: unknown): {
-  error_message: string;
-  sqlstate: string | null;
-  constraint: string | null;
-  column: string | null;
-  table: string | null;
-  detail: string | null;
-} {
-  const e = (err ?? {}) as {
-    message?: unknown;
-    code?: unknown;
-    constraint?: unknown;
-    column?: unknown;
-    table?: unknown;
-    detail?: unknown;
-  };
-  const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
-  // Prefer a string `message` field even when the throw isn't an Error instance
-  // (some pg/driver layers throw plain objects) — otherwise String(err) yields
-  // "[object Object]" and defeats the one-line-diagnosable goal.
-  const error_message = err instanceof Error ? err.message : (str(e.message) ?? String(err));
-  return {
-    error_message,
-    sqlstate: str(e.code),
-    constraint: str(e.constraint),
-    column: str(e.column),
-    table: str(e.table),
-    detail: str(e.detail),
-  };
-}
-
-/**
- * Register a POST /agent-tools/* route with schema validation.
- * Collapses the repeated `app.post + withHandler + parseOrFail` boilerplate.
- * Handler receives already-parsed args; return value is ignored (respond
- * via `ok()` / `fail()`).
- */
-function toolRoute<T>(
-  app: AppFastifyInstance,
-  path: string,
-  schema: z.ZodType<T>,
-  handler: (args: T, reply: FastifyReply) => Promise<unknown>,
-  errorMessage: string
-): void {
-  // Strip the "/agent-tools/" prefix to derive the metric label — the
-  // kebab-case ROUTE name (e.g. "book-with-scheduling"), not the snake_case
-  // LLM tool name. Cardinality is bounded by the number of registered
-  // agent-tools routes.
-  const toolName = path.replace(/^\/agent-tools\//, '');
-  app.post(
-    path,
-    withHandler(async (req: AppRequest, reply) => {
-      const args = parseOrFail(schema, req.body, reply);
-      if (!args) {
-        toolCallsTotal.inc({ tool: toolName, outcome: 'validation_error' });
-        return;
-      }
-      const result = await handler(args, reply);
-      const outcome = (reply as unknown as { _toolOutcome?: string })._toolOutcome ?? 'success';
-      toolCallsTotal.inc({ tool: toolName, outcome });
-      return result;
-    }, errorMessage)
-  );
-}
-
-/**
- * Best-effort, fire-and-forget: stamp the service the caller asked about onto
- * this call's `voice_session` (`requested_service_id`). Used by the booking
- * path AND the pure-availability tools, so a call that only inquired about
- * availability — never attempting a booking — still shows which service they
- * came for (powers abandonment-by-service analytics; the reaper/close finalizes
- * the session as abandoned when no appointment was booked).
- *
- * The agent passes a fuzzy service name; map it to a service_id (shortest ILIKE
- * match). COALESCE keeps any already-captured service so a later, differently-
- * worded mention can't erase the signal with NULL. Never blocks or fails the
- * call — a missing voice_session row (call_id not yet started) is a silent no-op.
- */
-function captureRequestedService(
-  withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
-  tenantId: string,
-  callId: string | undefined,
-  serviceType: string | undefined
-): void {
-  // Trim first (like resolveServiceForBooking) — a whitespace-only serviceType
-  // would otherwise issue a useless ILIKE '%   %' write.
-  const service = serviceType?.trim();
-  if (!callId || !service) return;
-  void withTenantClient(tenantId, (client) =>
-    client.query(
-      `UPDATE voice_sessions
-          SET requested_service_id = COALESCE(
-            (
-              SELECT service_id FROM services
-               WHERE tenant_id = $1 AND name ILIKE '%' || $2 || '%'
-                 AND (is_deleted IS NULL OR is_deleted = false)
-               ORDER BY length(name) ASC
-               LIMIT 1
-            ),
-            requested_service_id
-          )
-        WHERE tenant_id = $1 AND call_id = $3`,
-      [tenantId, service, callId]
-    )
-  ).catch(() => undefined);
-}
 
 // ── Route registration ────────────────────────────────────────────────
 
@@ -2835,32 +2444,6 @@ export function registerAgentToolRoutes(
   // Computes estimated_cost_usd using known published rates; TTS (historical xAI rows may exist)
   // pricing is not public so that row gets 0 (chars stored for later).
 
-  const COST_PER_INPUT_TOKEN: Record<string, number> = {
-    'gpt-4o-mini': 0.15e-6,
-    'text-embedding-3-small': 0.02e-6,
-  };
-  const COST_PER_OUTPUT_TOKEN: Record<string, number> = {
-    'gpt-4o-mini': 0.6e-6,
-  };
-  const DEEPGRAM_COST_PER_MS = 0.0043 / 60000; // $0.0043/min
-
-  const ModelUsageItemSchema = z.object({
-    type: z.enum(['llm_usage', 'tts_usage', 'stt_usage', 'interruption_usage']),
-    provider: z.string(),
-    model: z.string(),
-    inputTokens: z.number().int().default(0),
-    outputTokens: z.number().int().default(0),
-    charactersCount: z.number().int().default(0),
-    audioDurationMs: z.number().default(0),
-  });
-
-  const RecordAiCostSchema = z.object({
-    tenant_id: z.string().uuid(),
-    call_id: z.string().optional(),
-    source: z.enum(['voice_call', 'kb_ingestion', 'kb_query', 'call_summary']),
-    model_usage: z.array(ModelUsageItemSchema),
-  });
-
   toolRoute(
     app,
     '/agent-tools/record-ai-cost',
@@ -2931,68 +2514,4 @@ export function registerAgentToolRoutes(
     clearSyncRecorder();
     return reply.send({ success: true, result: { cleared: true } });
   });
-}
-
-// ── Interval math helpers for /available-slots ────────────────────────
-// Ported from supabase/functions/vapi-tools/core/service.ts so the voice
-// AI flow doesn't change shape when the edge function is retired.
-
-interface Interval {
-  start: number;
-  end: number;
-}
-
-/** "HH:MM" or "HH:MM:SS" → minutes since midnight */
-function timeToMinutes(t: string): number {
-  const parts = t.split(':');
-  return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-}
-
-/** ISO datetime → minutes since midnight (local-date sense) */
-function dateTimeToMinutes(dt: string): number {
-  const d = new Date(dt);
-  return d.getHours() * 60 + d.getMinutes();
-}
-
-/** minutes since midnight → spoken time ("1:00 PM") */
-function minutesToTime(m: number): string {
-  const h = Math.floor(m / 60);
-  const min = m % 60;
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return min === 0 ? `${hour12} ${period}` : `${hour12}:${String(min).padStart(2, '0')} ${period}`;
-}
-
-/** Merge overlapping/adjacent intervals into non-overlapping coverage. */
-function mergeIntervals(intervals: Interval[]): Interval[] {
-  if (intervals.length === 0) return [];
-  const sorted = [...intervals].sort((a, b) => a.start - b.start);
-  const merged: Interval[] = [{ ...sorted[0] }];
-  for (let i = 1; i < sorted.length; i++) {
-    const last = merged[merged.length - 1];
-    if (sorted[i].start <= last.end) {
-      last.end = Math.max(last.end, sorted[i].end);
-    } else {
-      merged.push({ ...sorted[i] });
-    }
-  }
-  return merged;
-}
-
-/** Subtract booked intervals from coverage. */
-function subtractIntervals(coverage: Interval[], booked: Interval[]): Interval[] {
-  let open = coverage.map((c) => ({ ...c }));
-  for (const b of booked) {
-    const next: Interval[] = [];
-    for (const o of open) {
-      if (b.end <= o.start || b.start >= o.end) {
-        next.push(o);
-      } else {
-        if (b.start > o.start) next.push({ start: o.start, end: b.start });
-        if (b.end < o.end) next.push({ start: b.end, end: o.end });
-      }
-    }
-    open = next;
-  }
-  return open;
 }
