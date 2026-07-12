@@ -345,6 +345,22 @@ export const messageDeliveryReceiptsTotal = registry.counter(
   'the SMS provider SMS delivery-status callbacks received, partitioned by status (queued|sending|sent|delivered|undelivered|failed|received)'
 );
 
+// Inbound SMS (customer → us) on POST /communications/telnyx/inbound, by outcome:
+//   opted_out        — a STOP/UNSUBSCRIBE was honored
+//   opted_in         — a START/UNSTOP resumed messaging
+//   ignored          — a message we take no action on (phase 1 handles keywords only)
+//   unknown_tenant   — the `to` number matched no tenant's inbound_phone
+//   rejected         — FAILED SIGNATURE, i.e. a forged/unsigned POST
+//
+// Watch `rejected`: in normal operation it should be ~0, because only Telnyx can
+// sign a payload. A sustained nonzero rate means someone is POSTing directly at
+// the endpoint — which is precisely the attack this route's signature check
+// exists to stop, and the only way you'd ever find out it was happening.
+export const inboundSmsTotal = registry.counter(
+  'inbound_sms_total',
+  'inbound SMS webhook deliveries, partitioned by outcome (opted_out|opted_in|ignored|unknown_tenant|rejected)'
+);
+
 // Every SMS send ATTEMPT at the service layer — the single chokepoint that
 // `reminders_sent_total` does not cover. That counter lives in the reminder
 // worker, so before 2026-07-09 the agent's booking-confirmation SMS
