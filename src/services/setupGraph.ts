@@ -461,8 +461,16 @@ export async function insertDraftGraph(
  * nothing to flag them). Only 'scheduled' appointments in the future matter — a
  * past or canceled booking referencing a retired service is just history.
  */
+export interface RemovedEntityImpact {
+  kind: 'service' | 'employee' | 'resource';
+  name: string;
+  upcomingAppointments: number;
+}
+
 export interface RemovalImpact {
   upcomingAppointments: number;
+  /** Only entities that actually strand a booking — see the query comment. */
+  removed: RemovedEntityImpact[];
 }
 
 export async function findRemovalImpact(
@@ -488,5 +496,53 @@ export async function findRemovalImpact(
         )`,
     [tenantId, keptServices, keptEmployees, keptResources]
   );
-  return { upcomingAppointments: Number(res.rows[0]?.count ?? 0) };
+
+  // Name WHAT is being removed and how many bookings each one strands. A bare
+  // count ("3 appointments affected") isn't actionable — the owner can't tell
+  // whether they're retiring a dead service or the one their whole book is on.
+  // Only entities that actually hold an upcoming booking are listed: removing an
+  // unbooked service is unremarkable and must not nag.
+  const removed = await client.query<{
+    kind: 'service' | 'employee' | 'resource';
+    name: string;
+    upcoming: string;
+  }>(
+    `SELECT 'service' AS kind, s.name AS name, count(a.appointment_id)::text AS upcoming
+       FROM services s
+       JOIN appointments a
+         ON a.service_id = s.service_id
+        AND a.status = 'scheduled' AND a.start_time > NOW()
+        AND (a.is_deleted IS NULL OR a.is_deleted = false)
+      WHERE s.tenant_id = $1 AND s.is_deleted = false AND s.service_id <> ALL($2::uuid[])
+      GROUP BY s.name
+     UNION ALL
+     SELECT 'employee', e.name, count(a.appointment_id)::text
+       FROM employees e
+       JOIN appointments a
+         ON a.employee_id = e.employee_id
+        AND a.status = 'scheduled' AND a.start_time > NOW()
+        AND (a.is_deleted IS NULL OR a.is_deleted = false)
+      WHERE e.tenant_id = $1 AND e.is_deleted = false AND e.employee_id <> ALL($3::uuid[])
+      GROUP BY e.name
+     UNION ALL
+     SELECT 'resource', r.name, count(a.appointment_id)::text
+       FROM resources r
+       JOIN appointments a
+         ON a.resource_id = r.resource_id
+        AND a.status = 'scheduled' AND a.start_time > NOW()
+        AND (a.is_deleted IS NULL OR a.is_deleted = false)
+      WHERE r.tenant_id = $1 AND r.is_deleted = false AND r.resource_id <> ALL($4::uuid[])
+      GROUP BY r.name
+      ORDER BY 3 DESC, 2 ASC`,
+    [tenantId, keptServices, keptEmployees, keptResources]
+  );
+
+  return {
+    upcomingAppointments: Number(res.rows[0]?.count ?? 0),
+    removed: removed.rows.map((r) => ({
+      kind: r.kind,
+      name: r.name,
+      upcomingAppointments: Number(r.upcoming),
+    })),
+  };
 }
