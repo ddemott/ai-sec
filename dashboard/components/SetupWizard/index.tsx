@@ -133,10 +133,17 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
   // re-evaluates on every render, but seedingRef.current makes every
   // re-evaluation past the first a no-op — the intended behavior, not a
   // missing dependency.
+  //
+  // Two extra gates for the re-run case: wait until hydration settles (seeding
+  // into a draft that's about to be replaced by the tenant's real graph is
+  // wasted work), and never seed at all once we know this is an existing
+  // business (crud.isSync) — template starter services must not be injected
+  // into a catalog the owner already curated.
   useEffect(() => {
     if (!isOpen || !tenantId || seedingRef.current) return;
+    if (crud.hydrating || crud.isSync) return;
     void runSeed();
-  }, [isOpen, tenantId, runSeed]);
+  }, [isOpen, tenantId, runSeed, crud.hydrating, crud.isSync]);
 
   const canAdvanceTo = (target: WizardStep): boolean => {
     if (target <= step) return true; // backward always allowed
@@ -156,16 +163,22 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
 
     // Commit the entity graph on the transition into step 9 — see the
     // hasCommitted doc comment above. Once committed in this session, going
-    // back and forward again just re-enters step 9 without re-committing:
-    // the graph is already real, and a second commit would 409 (the backend's
-    // idempotency guard) — editing a committed catalog belongs in My Business,
-    // not a second wizard commit (docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md
-    // §3 "Open risks" #3).
+    // back and forward again just re-enters step 9 without re-committing.
+    //
+    // Mode: 'sync' when the wizard hydrated an existing business (rows carry
+    // existing_id → update in place, omitted rows → soft-delete), 'create' for
+    // a fresh tenant (insert-only). Before this, EVERY commit was create-mode,
+    // so re-running setup on a set-up tenant hit the backend's idempotency 409
+    // ("Setup already completed") and there was no way to redo it at all.
     if (next === 9 && tenantId && !hasCommitted) {
       setCommitting(true);
       setCommitError(null);
       try {
-        const res = await Api.setup.commit(tenantId, crud.buildDraftGraph());
+        const res = await Api.setup.commit(
+          tenantId,
+          crud.buildDraftGraph(),
+          crud.isSync ? 'sync' : 'create'
+        );
         if (!res.success) {
           setCommitError(res.error || 'Failed to complete setup');
           return; // stay on the current step — draft intact, nothing advanced

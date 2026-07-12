@@ -88,17 +88,20 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
     return {
       services: draftServices.map((s) => ({
         tmp_id: s.service_id,
+        existing_id: s.existing_id,
         name: s.name,
         description: s.description || undefined,
         duration_minutes: s.duration_minutes,
       })),
       resources: draftResources.map((r) => ({
         tmp_id: r.resource_id,
+        existing_id: r.existing_id,
         name: r.name,
         description: r.description || undefined,
       })),
       employees: draftEmployees.map((e) => ({
         tmp_id: e.employee_id,
+        existing_id: e.existing_id,
         name: e.name,
         first_name: e.first_name || undefined,
         last_name: e.last_name || undefined,
@@ -129,6 +132,113 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
     serviceResourceMappings,
   ]);
 
+  /**
+   * Hydrate the draft from the tenant's existing setup, once, when the wizard
+   * mounts. This is what turns a re-run into an EDIT: preloaded rows carry
+   * their real uuid in `existing_id`, so commit updates them in place instead
+   * of inserting a second copy (which is what used to happen — and why the
+   * backend had to hard-409 any re-run to stop the catalog doubling).
+   *
+   * `isSync` is the switch the commit reads. It's true only once we've actually
+   * loaded a non-empty graph — a brand-new tenant stays in create mode. That
+   * matters: sync mode PRUNES anything the draft omits, so claiming sync on a
+   * draft we never hydrated would soft-delete the whole business.
+   *
+   * All five collections load together for the same reason (see GET
+   * /setup/graph): a draft missing its shifts or mappings looks, to the prune,
+   * exactly like an owner who deleted them.
+   */
+  const [isSync, setIsSync] = useState(false);
+  const [hydrating, setHydrating] = useState(true);
+  // Bumped by resetAll (which the wizard calls on every open). Re-hydrating on
+  // reopen is a SAFETY requirement, not a nicety: resetAll empties the draft, so
+  // if a stale isSync=true survived alongside an empty draft, the next commit
+  // would read as "the owner deleted everything" and prune the whole business.
+  // isSync is cleared on reset and only set again once a real graph is loaded.
+  const [hydrationNonce, setHydrationNonce] = useState(0);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const graph = await Api.setup.graph(tenantId);
+        if (cancelled || !graph) return;
+
+        const hasExisting =
+          (graph.services?.length ?? 0) > 0 ||
+          (graph.resources?.length ?? 0) > 0 ||
+          (graph.employees?.length ?? 0) > 0;
+        if (!hasExisting) return; // fresh tenant — stay in create mode, empty draft
+
+        setDraftServices(
+          graph.services.map((s) => ({
+            service_id: s.service_id,
+            existing_id: s.service_id,
+            name: s.name,
+            description: s.description || '',
+            duration_minutes: s.duration_minutes,
+            price: s.price ?? undefined,
+          }))
+        );
+        setDraftResources(
+          graph.resources.map((r) => ({
+            resource_id: r.resource_id,
+            existing_id: r.resource_id,
+            name: r.name,
+            description: r.description || '',
+          }))
+        );
+        setDraftEmployees(
+          graph.employees.map((e) => ({
+            employee_id: e.employee_id,
+            existing_id: e.employee_id,
+            name: e.name,
+            first_name: e.first_name || '',
+            last_name: e.last_name || '',
+            email: e.email || '',
+            phone: e.phone || '',
+          }))
+        );
+        setShifts(
+          graph.shifts.map((s) => ({
+            // Same composite key the grid's toggleShift builds, so an existing
+            // shift toggles off correctly instead of being treated as a new one.
+            id: `${s.employee_id}-${s.day_of_week}`,
+            employee_id: s.employee_id,
+            day_of_week: s.day_of_week,
+            start_time: s.start_time,
+            end_time: s.end_time,
+          }))
+        );
+        setServiceEmployeeMappings(
+          graph.service_employee.map((m) => ({
+            service_id: m.service_id,
+            employee_id: m.employee_id,
+          }))
+        );
+        setServiceResourceMappings(
+          graph.service_resource.map((m) => ({
+            service_id: m.service_id,
+            resource_id: m.resource_id,
+          }))
+        );
+        setIsSync(true);
+      } catch {
+        // Non-fatal: fall back to an empty create-mode draft rather than
+        // blocking setup entirely. Staying in create mode is the SAFE failure —
+        // it can only 409 on an already-set-up tenant, never prune one.
+      } finally {
+        if (!cancelled) setHydrating(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, hydrationNonce]);
+
   // Coverage preview: reruns whenever step 6 is active or the draft graph it
   // depends on changes shape, so the coverage view reflects the live draft.
   // buildDraftGraph is a real dependency (not suppressed) — its own deps are
@@ -146,6 +256,12 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
   }, [step, tenantId, buildDraftGraph]);
 
   const resetAll = useCallback(() => {
+    // Clear the sync flag BEFORE emptying the draft, and re-run hydration — see
+    // the hydrationNonce comment. An empty draft still marked sync is the one
+    // state that could soft-delete a live business.
+    setIsSync(false);
+    setHydrating(true);
+    setHydrationNonce((n) => n + 1);
     setDraftServices([]);
     setDraftResources([]);
     setDraftEmployees([]);
@@ -456,6 +572,11 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
     saving,
     error,
     resetAll,
+    // Commit mode: 'sync' once we've hydrated a real business (→ update+prune),
+    // 'create' otherwise (→ insert-only). `hydrating` lets the wizard hold off
+    // rendering an empty draft that's about to be replaced by the real one.
+    isSync,
+    hydrating,
     // Draft entities (replace what index.tsx used to derive from useStaticData)
     draftServices,
     draftResources,

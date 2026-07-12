@@ -161,6 +161,23 @@ export default function SetupView() {
     notifySetupProgressChanged();
   }, [transitions]);
 
+  // The tenant's current business type, loaded so the picker can show which one
+  // they're already on ("Current") when they re-run setup.
+  const [currentBusinessType, setCurrentBusinessType] = useState<string | null>(null);
+  useEffect(() => {
+    if (!tenantId) return;
+    let cancelled = false;
+    void Api.tenants
+      .getConfig(tenantId)
+      .then((cfg) => {
+        if (!cancelled) setCurrentBusinessType(cfg?.business_type ?? null);
+      })
+      .catch(() => undefined); // non-fatal — picker just won't badge a current type
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId]);
+
   const handleBusinessTypeSelected = useCallback(
     async (businessType: string) => {
       if (!tenantId) {
@@ -168,21 +185,27 @@ export default function SetupView() {
         return;
       }
       try {
-        const templates = await Api.templates.listFull();
+        // Only stamp the template's persona defaults when the type actually
+        // CHANGED. Re-picking the same type on a re-run must not clobber the
+        // system prompt / greeting / voice the owner has since customized on the
+        // AI Persona page — that's their work, not a default to be reset.
+        const isChange = businessType !== currentBusinessType;
+        const templates = isChange ? await Api.templates.listFull() : [];
         const tpl = (templates || []).find((t) => t.business_type === businessType);
         await Api.tenants.updateConfig(tenantId, {
           business_type: businessType,
-          system_prompt: tpl?.system_prompt_template || undefined,
-          voice_id: tpl?.voice_id || undefined,
-          first_message: tpl?.first_message || undefined,
+          system_prompt: isChange ? tpl?.system_prompt_template || undefined : undefined,
+          voice_id: isChange ? tpl?.voice_id || undefined : undefined,
+          first_message: isChange ? tpl?.first_message || undefined : undefined,
         });
+        setCurrentBusinessType(businessType);
         refreshVocabulary();
       } catch {
         // Still proceed — worst case default vocabulary
       }
       transitions.enterWizard();
     },
-    [tenantId, refreshVocabulary, transitions]
+    [tenantId, currentBusinessType, refreshVocabulary, transitions]
   );
 
   return (
@@ -239,6 +262,7 @@ export default function SetupView() {
           onSelect={handleBusinessTypeSelected}
           onBack={transitions.backToChooser}
           onClose={handleCloseWizard}
+          currentType={currentBusinessType}
         />
       )}
       {stage === 'wizard' && mode === 'solo' && (

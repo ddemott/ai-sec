@@ -375,17 +375,29 @@ export interface CoverageItem {
  * *_id field — WizardService/WizardResource/WizardEmployee need no changes.
  */
 export interface WizardDraftGraph {
+  // `existing_id` carries the real UUID of a row the wizard PRELOADED from an
+  // already-set-up tenant. Present → the backend UPDATEs that row; absent →
+  // it INSERTs a new one. Rows the owner deleted simply stop appearing in the
+  // draft, and a `mode: 'sync'` commit soft-deletes them. See
+  // src/services/setupGraph.ts.
   services: Array<{
     tmp_id: string;
+    existing_id?: string;
     name: string;
     duration_minutes: number;
     subtitle?: string;
     description?: string;
     price?: number;
   }>;
-  resources: Array<{ tmp_id: string; name: string; description?: string }>;
+  resources: Array<{
+    tmp_id: string;
+    existing_id?: string;
+    name: string;
+    description?: string;
+  }>;
   employees: Array<{
     tmp_id: string;
+    existing_id?: string;
     name: string;
     first_name?: string;
     last_name?: string;

@@ -174,12 +174,20 @@ describe('POST /setup/commit', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
+    // `updated`/`pruned` are 0 on a create-mode commit by definition: it only
+    // ever INSERTs, and it never touches rows the draft didn't mention. Asserted
+    // explicitly (rather than loosened to toMatchObject) so a create-mode commit
+    // that silently starts updating or soft-deleting a tenant's rows FAILS here.
+    // `upcoming_appointments_affected` is likewise 0 — nothing was removed.
     expect(body.counts).toEqual({
       services: 1,
       resources: 1,
       employees: 1,
       serviceEmployee: 1,
       serviceResource: 1,
+      updated: 0,
+      pruned: 0,
+      upcoming_appointments_affected: 0,
     });
 
     // The decisive check: description/price/subtitle and employee contact

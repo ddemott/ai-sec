@@ -63,6 +63,14 @@ const ExpandWeeklySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
+  // Opt-in: clear this employee's FUTURE schedule before expanding, so the
+  // supplied pattern becomes the complete truth rather than being merged into
+  // whatever is already there. The default (additive, ON CONFLICT DO NOTHING)
+  // can only ever ADD days — which means a wizard re-run where the owner
+  // UNCHECKED a day would silently leave that day on the schedule. Callers pass
+  // replace only when their pattern is a full picture (i.e. they preloaded it);
+  // sending it with a half-filled grid would erase the rest.
+  replace: z.boolean().optional(),
 });
 
 export function registerShiftRoutes(
@@ -295,20 +303,29 @@ export function registerShiftRoutes(
           .status(400)
           .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
       }
-      const { tenant_id, employee_id, pattern, weeks_ahead, start_date } = parsed.data;
+      const { tenant_id, employee_id, pattern, weeks_ahead, start_date, replace } = parsed.data;
 
       // Parse optional start_date (YYYY-MM-DD) into a Date (UTC midnight).
       const startDate = start_date ? new Date(`${start_date}T00:00:00Z`) : undefined;
 
-      const result = await withTenantClient(tenant_id, (client) =>
-        expandWeeklyToSchedule(client, {
+      const result = await withTenantClient(tenant_id, async (client) => {
+        if (replace) {
+          // Future only — past shifts are history and must survive a re-run.
+          await client.query(
+            `DELETE FROM employee_schedule
+              WHERE tenant_id = $1 AND employee_id = $2
+                AND shift_date >= COALESCE($3::date, CURRENT_DATE)`,
+            [tenant_id, employee_id, startDate ?? null]
+          );
+        }
+        return expandWeeklyToSchedule(client, {
           tenantId: tenant_id,
           employeeId: employee_id,
           pattern,
           weeksAhead: weeks_ahead,
           startDate,
-        })
-      );
+        });
+      });
 
       logEvent(req, 'shifts_expanded_weekly', {
         employeeId: employee_id,
