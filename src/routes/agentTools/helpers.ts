@@ -18,10 +18,31 @@
  */
 import type { FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../../types/fastify';
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { type z } from 'zod';
 import { withHandler, type AppRequest } from '../../middleware';
 import { toolCallsTotal } from '../../services/metrics';
+
+// ── Shared route-module dependencies ──────────────────────────────────
+
+/** RLS-scoped per-request client helper handed down from src/database/index.ts. */
+export type WithTenantClient = <T>(
+  tenantId: string,
+  fn: (client: PoolClient) => Promise<T>
+) => Promise<T>;
+
+/**
+ * The plumbing every /agent-tools/* route module needs. registerAgentToolRoutes
+ * builds this once and passes it to each register*Routes() function, so a module
+ * destructures only the pieces it actually uses.
+ */
+export interface AgentToolDeps {
+  app: AppFastifyInstance;
+  pool: Pool;
+  withTenantClient: WithTenantClient;
+  getEmbedding: (text: string) => Promise<number[]>;
+  expandQueryForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>;
+}
 
 // ── Response helpers ──────────────────────────────────────────────────
 

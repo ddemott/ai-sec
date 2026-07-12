@@ -42,7 +42,7 @@ import { registerVocabularyRoutes } from './routes/vocabulary';
 import { registerBillingRoutes, subscriptionGate } from './routes/billing';
 import { registerProvisioningRoutes } from './routes/provisioning';
 import { registerSquareRoutes } from './routes/square';
-import { registerAgentToolRoutes } from './routes/agentTools';
+import { registerAgentToolRoutes } from './routes/agentTools/index';
 import { registerDemoRoutes } from './routes/demo';
 import { registerVoiceRoutes } from './routes/voice';
 import { registerVersionHistoryRoutes } from './routes/versionHistory';

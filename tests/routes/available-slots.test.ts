@@ -246,10 +246,10 @@ describe('get_available_slots wiring', () => {
     // WHO: LiveKit agent calling the tool layer
     // WHAT: the route handler must exist and accept a service_type + date
     // WHEN: agent runs the get_available_slots tool during a call
-    // WHERE: src/routes/agentTools.ts
+    // WHERE: src/routes/agentTools/scheduling.ts
     // WHY: with Vapi removed this is the only available-slots surface; if the
     //      route is renamed or deleted the agent silently loses the tool
-    const src = fs.readFileSync('src/routes/agentTools.ts', 'utf8');
+    const src = fs.readFileSync('src/routes/agentTools/scheduling.ts', 'utf8');
     expect(src).toContain('/agent-tools/available-slots');
   });
 
