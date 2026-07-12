@@ -502,37 +502,49 @@ export async function findRemovalImpact(
   // whether they're retiring a dead service or the one their whole book is on.
   // Only entities that actually hold an upcoming booking are listed: removing an
   // unbooked service is unremarkable and must not nag.
+  //
+  // GROUP BY the PRIMARY KEY, not the name. Nothing enforces name uniqueness
+  // within a tenant — two stylists really can both be "Alex" (the employees
+  // duplicate-name guard is a soft 409 that deliberately allows namesakes).
+  // Grouping by name would MERGE those distinct rows into one line and misstate
+  // the counts: an owner removing only one Alex would be told both Alexes'
+  // bookings were at risk.
+  //
+  // `upcoming` is ::int, not ::text, so `ORDER BY 3 DESC` sorts NUMERICALLY. As
+  // text it sorted lexicographically — "10" before "2" — burying the
+  // most-affected entity below a trivial one and inverting the whole point of
+  // the ordering.
   const removed = await client.query<{
     kind: 'service' | 'employee' | 'resource';
     name: string;
-    upcoming: string;
+    upcoming: number;
   }>(
-    `SELECT 'service' AS kind, s.name AS name, count(a.appointment_id)::text AS upcoming
+    `SELECT 'service' AS kind, s.name AS name, count(a.appointment_id)::int AS upcoming
        FROM services s
        JOIN appointments a
          ON a.service_id = s.service_id
         AND a.status = 'scheduled' AND a.start_time > NOW()
         AND (a.is_deleted IS NULL OR a.is_deleted = false)
       WHERE s.tenant_id = $1 AND s.is_deleted = false AND s.service_id <> ALL($2::uuid[])
-      GROUP BY s.name
+      GROUP BY s.service_id, s.name
      UNION ALL
-     SELECT 'employee', e.name, count(a.appointment_id)::text
+     SELECT 'employee', e.name, count(a.appointment_id)::int
        FROM employees e
        JOIN appointments a
          ON a.employee_id = e.employee_id
         AND a.status = 'scheduled' AND a.start_time > NOW()
         AND (a.is_deleted IS NULL OR a.is_deleted = false)
       WHERE e.tenant_id = $1 AND e.is_deleted = false AND e.employee_id <> ALL($3::uuid[])
-      GROUP BY e.name
+      GROUP BY e.employee_id, e.name
      UNION ALL
-     SELECT 'resource', r.name, count(a.appointment_id)::text
+     SELECT 'resource', r.name, count(a.appointment_id)::int
        FROM resources r
        JOIN appointments a
          ON a.resource_id = r.resource_id
         AND a.status = 'scheduled' AND a.start_time > NOW()
         AND (a.is_deleted IS NULL OR a.is_deleted = false)
       WHERE r.tenant_id = $1 AND r.is_deleted = false AND r.resource_id <> ALL($4::uuid[])
-      GROUP BY r.name
+      GROUP BY r.resource_id, r.name
       ORDER BY 3 DESC, 2 ASC`,
     [tenantId, keptServices, keptEmployees, keptResources]
   );

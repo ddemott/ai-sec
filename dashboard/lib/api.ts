@@ -282,7 +282,11 @@ async function apiUpload<T>(endpoint: string, file: File, tenantId?: string | nu
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'POST', headers, body: formData });
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
   } catch (err) {
     handleFetchError(err);
     throw err;
@@ -337,8 +341,7 @@ async function apiMutate<T>(
 export const Api = {
   // --- CUSTOMERS ---
   customers: {
-    list: (tenantId: string | null) =>
-      apiFetch<Customer[]>(`/customers`, tenantParam(tenantId)),
+    list: (tenantId: string | null) => apiFetch<Customer[]>(`/customers`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Customer>) =>
       apiMutate<{ customer: Customer }>(`/customers/create`, 'POST', {
@@ -357,10 +360,7 @@ export const Api = {
     delete: (id: string) => apiMutate(`/customers/${id}`, 'DELETE'),
 
     appointments: (customerId: string, tenantId: string | null) =>
-      apiFetch<Appointment[]>(
-        `/customers/${customerId}/appointments`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<Appointment[]>(`/customers/${customerId}/appointments`, tenantParam(tenantId)),
 
     // Bulk CSV onboarding — the caller reads the file client-side (FileReader)
     // and POSTs the raw text; the backend parses/validates/dedupes per row.
@@ -462,8 +462,7 @@ export const Api = {
 
   // --- RESOURCES ---
   resources: {
-    list: (tenantId: string | null) =>
-      apiFetch<Resource[]>(`/resources`, tenantParam(tenantId)),
+    list: (tenantId: string | null) => apiFetch<Resource[]>(`/resources`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Resource>) =>
       apiMutate<{ resource: Resource }>(`/resources/create`, 'POST', {
@@ -480,8 +479,7 @@ export const Api = {
 
   // --- EMPLOYEES ---
   employees: {
-    list: (tenantId: string | null) =>
-      apiFetch<Employee[]>(`/employees`, tenantParam(tenantId)),
+    list: (tenantId: string | null) => apiFetch<Employee[]>(`/employees`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Employee>) =>
       apiMutate<{ employee: Employee }>(`/employees/create`, 'POST', {
@@ -499,10 +497,7 @@ export const Api = {
   // --- USERS (login + role management) ---
   users: {
     list: (tenantId: string | null) =>
-      apiFetch<{ success: true; users: TeamUser[] }>(
-        `/users`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<{ success: true; users: TeamUser[] }>(`/users`, tenantParam(tenantId)),
 
     invite: (
       tenantId: string | null,
@@ -528,10 +523,7 @@ export const Api = {
   // --- MAPPINGS ---
   mappings: {
     listServiceResource: (tenantId: string | null) =>
-      apiFetch<ServiceMapping[]>(
-        `/mappings/service-resource`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<ServiceMapping[]>(`/mappings/service-resource`, tenantParam(tenantId)),
 
     assignServiceResource: (serviceId: string, resourceId: string, tenantId: string | null) =>
       apiMutate(`/services/${serviceId}/resources/${resourceId}/assign`, 'POST', {
@@ -554,16 +546,12 @@ export const Api = {
       }),
 
     listServiceEmployee: (tenantId: string | null) =>
-      apiFetch<ServiceMapping[]>(
-        `/mappings/service-employee`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<ServiceMapping[]>(`/mappings/service-employee`, tenantParam(tenantId)),
   },
 
   // --- SERVICES ---
   services: {
-    list: (tenantId: string | null) =>
-      apiFetch<Service[]>(`/services`, tenantParam(tenantId)),
+    list: (tenantId: string | null) => apiFetch<Service[]>(`/services`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Service>) =>
       apiMutate<{ service: Service }>(`/services/create`, 'POST', { tenant_id: tenantId, ...data }),
@@ -586,10 +574,7 @@ export const Api = {
   shifts: {
     schedule: {
       list: (tenantId: string | null) =>
-        apiFetch<ScheduleEntry[]>(
-          `/shifts/overrides`,
-          tenantParam(tenantId)
-        ),
+        apiFetch<ScheduleEntry[]>(`/shifts/overrides`, tenantParam(tenantId)),
 
       forDate: (tenantId: string | null, employeeId: string, startDate: string, endDate: string) =>
         apiFetch<EffectiveShift[]>(`/shifts/overrides`, {
@@ -671,16 +656,10 @@ export const Api = {
   // --- CALENDAR SYNC ---
   calendar: {
     getSettings: (tenantId: string | null) =>
-      apiFetch<CalendarSettings | null>(
-        `/calendar/settings`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<CalendarSettings | null>(`/calendar/settings`, tenantParam(tenantId)),
 
     getAuthUrl: (tenantId: string | null, provider: 'google' | 'outlook' = 'google') =>
-      apiFetch<{ url: string }>(
-        `/calendar/auth/${provider}`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<{ url: string }>(`/calendar/auth/${provider}`, tenantParam(tenantId)),
 
     updateSettings: (tenantId: string | null, data: Partial<CalendarSettings>) =>
       apiMutate<{ settings: CalendarSettings }>(`/calendar/settings`, 'POST', {
@@ -713,16 +692,12 @@ export const Api = {
   // --- REMINDERS (delivery monitoring) ---
   reminders: {
     deliveryStats: (tenantId: string | null) =>
-      apiFetch<ReminderDeliveryStats>(
-        `/reminders/delivery-stats`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<ReminderDeliveryStats>(`/reminders/delivery-stats`, tenantParam(tenantId)),
   },
 
   // --- MASTER SKILLS ---
   skills: {
-    list: (tenantId: string | null) =>
-      apiFetch<Skill[]>(`/skills`, tenantParam(tenantId)),
+    list: (tenantId: string | null) => apiFetch<Skill[]>(`/skills`, tenantParam(tenantId)),
 
     create: (tenantId: string | null, data: Partial<Skill>) =>
       apiMutate<{ skill: Skill }>(`/skills/create`, 'POST', { tenant_id: tenantId, ...data }),
@@ -731,11 +706,7 @@ export const Api = {
     // tenant_skill_id was dropped; the route now keys on the slug name.
     // Argument renamed so a wrong-type caller fails at type-check time.
     delete: (name: string, tenantId: string | null) =>
-      apiMutate(
-        `/skills/${encodeURIComponent(name)}`,
-        'DELETE',
-        tenantParam(tenantId)
-      ),
+      apiMutate(`/skills/${encodeURIComponent(name)}`, 'DELETE', tenantParam(tenantId)),
   },
 
   // --- TENANTS & TEMPLATES ---
@@ -788,8 +759,7 @@ export const Api = {
 
   // --- VOCABULARY ---
   vocabulary: {
-    get: (tenantId: string | null) =>
-      apiFetch<Vocabulary>(`/vocabulary`, tenantParam(tenantId)),
+    get: (tenantId: string | null) => apiFetch<Vocabulary>(`/vocabulary`, tenantParam(tenantId)),
   },
 
   // --- COVERAGE ---
@@ -849,7 +819,6 @@ export const Api = {
         service_employee: Array<{ service_id: string; employee_id: string }>;
         service_resource: Array<{ service_id: string; resource_id: string }>;
       }>(`/setup/graph`, tenantParam(tenantId)),
-    // Commits the wizard's draft entity graph — same shape as coverage.dryRun,
     // What a SYNC commit of this draft would destroy: upcoming appointments booked
     // against services/staff/resources the owner removed in the wizard. Called
     // BEFORE commit so they can still back out — the commit reports the same
@@ -866,13 +835,18 @@ export const Api = {
         };
       }>(`/setup/impact`, 'POST', { tenant_id: tenantId, ...draft }),
 
-    // but persists. See docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md.
+    // Commits the wizard's draft entity graph — same shape as coverage.dryRun, but
+    // persists. See docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md.
     // tenant_id explicit for the same reason as coverage.dryRun above.
     // `mode` defaults to 'create' (INSERT-only, and 409s if the tenant already
     // has services). Pass 'sync' when the wizard preloaded the tenant's real
     // graph: the draft is then the complete desired state, so rows carrying an
     // existing_id are updated, new rows inserted, and omitted rows soft-deleted.
-    commit: (tenantId: string | null, draft: WizardDraftGraph, mode: 'create' | 'sync' = 'create') =>
+    commit: (
+      tenantId: string | null,
+      draft: WizardDraftGraph,
+      mode: 'create' | 'sync' = 'create'
+    ) =>
       apiMutate<{
         counts: {
           services: number;
@@ -1048,10 +1022,7 @@ export const Api = {
   // --- DATA EXPORT (owner-only data portability) ---
   exportData: {
     tenantData: (tenantId: string | null) =>
-      apiFetch<TenantDataExportResponse>(
-        `/export/tenant-data`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<TenantDataExportResponse>(`/export/tenant-data`, tenantParam(tenantId)),
 
     // CSV exports return text/csv, not JSON, so apiFetch (which json()s the
     // body) can't be used — this is the one plain-text fetch in the client.
@@ -1142,16 +1113,10 @@ export const Api = {
   // --- SQUARE CRM ---
   square: {
     getSettings: (tenantId: string | null) =>
-      apiFetch<SquareSettings | null>(
-        `/square/settings`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<SquareSettings | null>(`/square/settings`, tenantParam(tenantId)),
 
     getAuthUrl: (tenantId: string | null) =>
-      apiFetch<{ success: boolean; authUrl: string }>(
-        `/square/auth`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<{ success: boolean; authUrl: string }>(`/square/auth`, tenantParam(tenantId)),
 
     disconnect: (tenantId: string | null) =>
       apiMutate(`/square/settings/disconnect`, 'POST', { tenant_id: tenantId }),
@@ -1164,10 +1129,7 @@ export const Api = {
       ),
 
     getSyncStatus: (tenantId: string | null) =>
-      apiFetch<CrmSyncStatus>(
-        `/square/sync/status`,
-        tenantParam(tenantId)
-      ),
+      apiFetch<CrmSyncStatus>(`/square/sync/status`, tenantParam(tenantId)),
   },
 
   // --- VOICE CRM (Call Context) ---
@@ -1287,10 +1249,7 @@ export const Api = {
         version_a: number;
         version_b: number;
         differences: VersionComparison[];
-      }>(
-        `/records/${table}/${recordId}/compare/${versionA}/${versionB}`,
-        tenantParam(tenantId)
-      ),
+      }>(`/records/${table}/${recordId}/compare/${versionA}/${versionB}`, tenantParam(tenantId)),
 
     getRestorePreview: (tenantId: string | null, table: VersionedTable, recordId: string) =>
       apiFetch<RecordRestorePreview>(

@@ -43,7 +43,11 @@ export function ConfirmModal({
     >
       <div className="flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--danger)' }} />
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+        {/* whitespace-pre-line: a <p> collapses newlines, so a message built as a
+            list (e.g. the setup removal warning's one-bullet-per-entity summary)
+            would otherwise render as a single run-on line. Callers whose messages
+            contain no newlines are unaffected. */}
+        <p className="text-sm whitespace-pre-line" style={{ color: 'var(--text-secondary)' }}>
           {message}
         </p>
       </div>
