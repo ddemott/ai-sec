@@ -83,40 +83,14 @@ export function verifyTelnyxSignature(params: {
   return { valid: true };
 }
 
-/** Inbound-SMS keyword classes. */
-export type SmsKeyword = 'opt_out' | 'opt_in' | 'other';
-
-// The CTIA-standard opt-out set. CANCEL is genuinely one of them.
-const OPT_OUT_WORDS = new Set(['stop', 'stopall', 'unsubscribe', 'end', 'quit', 'cancel']);
-// Standard opt-in keywords ONLY. Deliberately does NOT include "yes": the design
-// reserves Y/YES/YEAH/CONFIRM for appointment confirmation (phase 3), so treating
-// YES as a carrier opt-in here would swallow the reply and the customer's booking
-// would never get confirmed.
-const OPT_IN_WORDS = new Set(['start', 'unstop']);
-
-/**
- * Classify an inbound SMS body into a carrier-standard keyword class.
- *
- * Deliberately conservative: the body is trimmed, lowercased, and stripped of
- * surrounding punctuation, but we match only when the message IS the keyword —
- * not when it merely contains it. "Please don't stop texting me" is not an
- * opt-out, and "cancel my 3pm" must not be silently swallowed as one either.
- *
- * NOTE on 'cancel': it lives in OPT_OUT_WORDS because the carrier standard
- * treats a bare CANCEL as an opt-out. When the Y/N appointment-confirmation
- * flow lands (phase 3), a bare CANCEL from a number with a PENDING confirmation
- * should be read as "cancel my appointment" instead — that branch must be
- * evaluated before this one. Until then, a bare CANCEL opts them out, which is
- * the safe, standards-compliant reading.
- */
-export function classifySmsKeyword(body: string | undefined | null): SmsKeyword {
-  const normalized = (body ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[.!?,;:'"]+$/g, '')
-    .trim();
-  if (!normalized) return 'other';
-  if (OPT_OUT_WORDS.has(normalized)) return 'opt_out';
-  if (OPT_IN_WORDS.has(normalized)) return 'opt_in';
-  return 'other';
-}
+// Keyword classification lives in ./smsKeywords — the ONE source of truth shared
+// with ConsentService. Re-exported here so existing importers of this module keep
+// working. Duplicating the word lists is exactly how the webhook and the consent
+// service came to disagree about what START means (see PR #238).
+export {
+  classifySmsKeyword,
+  OPT_OUT_WORDS,
+  OPT_IN_WORDS,
+  isOptOutKeyword,
+  type SmsKeyword,
+} from './smsKeywords';

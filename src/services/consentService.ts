@@ -4,6 +4,7 @@
  * These are the remaining dynamic/any-heavy areas after previous tranches.
  */
 
+import { isOptOutKeyword, normalizeKeyword, NotAnOptOutCommandError } from './smsKeywords';
 import type { DatabaseService } from '../database/index.js';
 import type { ConsentRecord, OptOutRecord } from '../types/index.js';
 
@@ -190,15 +191,26 @@ export class ConsentService {
     customerEmail?: string,
     messageBody?: string
   ): Promise<OptOutRecord | null> {
-    const commandLower = command.toLowerCase().trim();
+    const commandLower = normalizeKeyword(command);
 
-    let optOutType: 'email' | 'sms' | 'both' = 'both';
-
-    if (commandLower === 'stop') {
-      optOutType = 'sms';
-    } else if (commandLower === 'unsubscribe') {
-      optOutType = 'email';
+    // REFUSE anything that isn't actually an opt-out.
+    //
+    // This method used to record an opt-out for WHATEVER command it was handed:
+    // the old if/else only special-cased 'stop' and 'unsubscribe', and everything
+    // else fell through to the default opt_out_type of 'both'. So passing it
+    // 'START' — the keyword a customer texts to RESUME messages — opted them out
+    // of everything instead. A method named processOptOutCommand must refuse to
+    // do anything but process an opt-out; opt-IN belongs in recordConsent().
+    // (Shipped and caught in review on PR #238.)
+    if (!isOptOutKeyword(commandLower)) {
+      throw new NotAnOptOutCommandError(command);
     }
+
+    // 'unsubscribe' is the email keyword; every other CTIA keyword arrives over
+    // SMS. Previously only 'stop' mapped to 'sms' and the rest (STOPALL/END/QUIT/
+    // CANCEL) fell through to 'both' — silently killing the customer's EMAIL too,
+    // which they never asked for and which no carrier keyword implies.
+    const optOutType: 'email' | 'sms' | 'both' = commandLower === 'unsubscribe' ? 'email' : 'sms';
 
     return this.recordOptOut({
       tenant_id: tenantId,

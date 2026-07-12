@@ -21,7 +21,8 @@ import { ConsentService } from '../services/consentService.js';
 import { createDatabaseService } from '../database/index.js';
 import { createTenantConfigService } from '../services/tenants/index.js';
 import { messageDeliveryReceiptsTotal, inboundSmsTotal, errorsTotal } from '../services/metrics.js';
-import { verifyTelnyxSignature, classifySmsKeyword } from '../services/telnyxWebhookAuth.js';
+import { verifyTelnyxSignature } from '../services/telnyxWebhookAuth.js';
+import { classifySmsKeyword, NotAnOptOutCommandError } from '../services/smsKeywords.js';
 import { normalizePhone } from '../services/phoneUtils.js';
 
 /**
@@ -352,13 +353,26 @@ export function registerCommunicationRoutes(
         });
       }
 
-      const optOut = await consentService.processOptOutCommand(
-        tenantId,
-        parsed.data.command,
-        parsed.data.customer_phone,
-        parsed.data.customer_email,
-        parsed.data.message_body
-      );
+      // `command` is a free-text string from the caller, so a non-opt-out word can
+      // reach here. ConsentService now REFUSES those rather than quietly recording
+      // an opt-out anyway (which is how 'START' used to opt people out of
+      // everything). Translate that refusal into a 400 — it's a bad request, not a
+      // server fault, and a 500 would tell the caller nothing about what to fix.
+      let optOut: Awaited<ReturnType<typeof consentService.processOptOutCommand>>;
+      try {
+        optOut = await consentService.processOptOutCommand(
+          tenantId,
+          parsed.data.command,
+          parsed.data.customer_phone,
+          parsed.data.customer_email,
+          parsed.data.message_body
+        );
+      } catch (err) {
+        if (err instanceof NotAnOptOutCommandError) {
+          return reply.status(400).send({ success: false, error: err.message });
+        }
+        throw err;
+      }
 
       if (optOut) {
         return reply.send({
