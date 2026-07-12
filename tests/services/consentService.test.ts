@@ -272,6 +272,56 @@ describe('ConsentService', () => {
   });
 
   describe('processOptOutCommand', () => {
+    it('REFUSES a non-opt-out command instead of silently opting the customer OUT', async () => {
+      // THE regression. processOptOutCommand used to record an opt-out for
+      // WHATEVER command it was handed: only 'stop' and 'unsubscribe' were
+      // special-cased, and everything else fell through to opt_out_type 'both'.
+      // So 'START' — the keyword a customer texts to RESUME messages — opted them
+      // out of everything. A method named processOptOutCommand must refuse to do
+      // anything but process an opt-out. Opt-IN belongs in recordConsent().
+      const { ConsentService } = await import('../../src/services/consentService');
+      const { NotAnOptOutCommandError } = await import('../../src/services/smsKeywords');
+      const mockDb = createMockDb();
+      mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
+
+      await expect(service.processOptOutCommand(1, 'START', '+15551234567')).rejects.toBeInstanceOf(
+        NotAnOptOutCommandError
+      );
+
+      // The decisive assertion: NOTHING was written. Under the bug, this customer
+      // now had an opt_out_type='both' record and was silenced on every channel.
+      expect(mockDb.createOptOutRecord).not.toHaveBeenCalled();
+    });
+
+    it('REFUSES arbitrary free text (the /communications/opt-out route passes it straight through)', async () => {
+      const { ConsentService } = await import('../../src/services/consentService');
+      const mockDb = createMockDb();
+      mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
+      const service = new ConsentService(mockDb as unknown as DatabaseService);
+
+      await expect(service.processOptOutCommand(1, 'hello there', '+15551234567')).rejects.toThrow(
+        /not an opt-out keyword/i
+      );
+      expect(mockDb.createOptOutRecord).not.toHaveBeenCalled();
+    });
+
+    it("CANCEL/END/QUIT opt out of SMS only — not the customer's email too", async () => {
+      // These fell through to opt_out_type 'both', silently killing an email
+      // channel the customer never asked to leave. No carrier keyword implies that.
+      const { ConsentService } = await import('../../src/services/consentService');
+      for (const cmd of ['CANCEL', 'END', 'QUIT', 'STOPALL']) {
+        const mockDb = createMockDb();
+        mockDb.getConsentRecordsByCustomer.mockResolvedValue([]);
+        const service = new ConsentService(mockDb as unknown as DatabaseService);
+
+        await service.processOptOutCommand(1, cmd, '+15551234567');
+
+        const call = mockDb.createOptOutRecord.mock.calls[0][0];
+        expect(call.opt_out_type, `${cmd} must be an SMS-only opt-out`).toBe('sms');
+      }
+    });
+
     it('should process STOP command for SMS', async () => {
       const { ConsentService } = await import('../../src/services/consentService');
       const mockDb = createMockDb();
