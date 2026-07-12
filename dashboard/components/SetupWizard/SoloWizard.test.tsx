@@ -256,3 +256,155 @@ describe('SoloWizard — finalize fans weekly availability', () => {
     expect(screen.queryByText("You're all set!")).not.toBeInTheDocument();
   });
 });
+
+describe('SoloWizard — re-running setup on a tenant that already has data', () => {
+  test('reuses the existing owner employee instead of creating a duplicate', async () => {
+    // WHO: a solo owner (Dale) who already completed setup once and reopens
+    //      the Setup Assistant to change something.
+    // WHAT: stepping onto step 2 must REUSE the existing staff row whose name
+    //       matches the owner, and must NOT POST /employees/create.
+    // WHERE: SoloWizard.ensureOwnerEmployee.
+    // WHEN: every re-run — `ownerEmployeeId` is null on each open, so the
+    //       pre-fix code unconditionally re-created the owner.
+    // WHY: regression. The backend duplicate-name guard (src/routes/employees.ts)
+    //      answered 409 "An active employee named 'Solo Owner' already exists",
+    //      which surfaced as an error and dead-ended the wizard at step 2 —
+    //      making setup impossible to redo for exactly the tenants who had
+    //      already run it once.
+    const EXISTING_ID = '99999999-8888-4777-8666-555555555555';
+    const baseFetch = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    const originalImpl = baseFetch.getMockImplementation();
+    baseFetch.mockImplementation((url: string, init?: RequestInit) => {
+      const path = typeof url === 'string' ? url : '';
+      // The roster already contains the owner — this is the "already have
+      // data" precondition the pre-fix code ignored.
+      if (
+        path.includes('/employees') &&
+        (!init || init.method === 'GET' || init.method === undefined)
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { employee_id: EXISTING_ID, name: 'Solo Owner', is_active: true, skills: [] },
+          ],
+        });
+      }
+      return (originalImpl as (u: string, i?: RequestInit) => Promise<unknown>)(url, init);
+    });
+
+    render(<SoloWizard isOpen={true} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Oil Change')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Next'));
+    await waitFor(() => expect(screen.getByText('When are you available?')).toBeInTheDocument());
+
+    // The duplicate-creating call must never have been made.
+    const createCalls = baseFetch.mock.calls.filter(
+      ([u, i]) =>
+        typeof u === 'string' &&
+        u.includes('/employees/create') &&
+        (i as RequestInit | undefined)?.method === 'POST'
+    );
+    expect(createCalls).toHaveLength(0);
+
+    // And the reused id must be the one finalize writes the hours against —
+    // otherwise the owner's schedule would be fanned onto a phantom employee.
+    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByText('Next'));
+    await waitFor(() => expect(screen.getByText('Complete Setup')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Complete Setup'));
+
+    await waitFor(() => {
+      const expand = baseFetch.mock.calls.find(
+        ([u]) => typeof u === 'string' && u.includes('/shifts/expand-weekly')
+      );
+      expect(expand).toBeTruthy();
+      const body = JSON.parse((expand![1] as RequestInit).body as string);
+      expect(body.employee_id).toBe(EXISTING_ID);
+    });
+  });
+});
+
+describe('SoloWizard — re-answering "when do you work"', () => {
+  test('preloads the existing hours and finalizes with replace, so an unchecked day is dropped', async () => {
+    // WHO: a solo owner reopening Setup to change their working days.
+    // WHAT: step 2 must show the hours ALREADY on their schedule (not a blank
+    //       week), and finalize must send replace=true so a day they uncheck is
+    //       actually removed.
+    // WHERE: SoloWizard hours-preload effect + handleFinalize.
+    // WHY: expand-weekly is ON CONFLICT DO NOTHING — additive only. Pre-fix, the
+    //      grid started empty and finalize merged, so re-answering this question
+    //      could add days but never remove one. Preload and replace are only safe
+    //      TOGETHER: replacing from a grid we never populated would erase the
+    //      owner's real hours, which is why replace rides on the preload landing.
+    const EXISTING_ID = '99999999-8888-4777-8666-555555555555';
+    const baseFetch = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    const originalImpl = baseFetch.getMockImplementation();
+    baseFetch.mockImplementation((url: string, init?: RequestInit) => {
+      const path = typeof url === 'string' ? url : '';
+      if (
+        path.includes('/employees') &&
+        (!init || init.method === 'GET' || init.method === undefined)
+      ) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => [
+            { employee_id: EXISTING_ID, name: 'Solo Owner', is_active: true, skills: [] },
+          ],
+        });
+      }
+      // The owner already works Mondays — this is what the grid must show.
+      if (path.includes('/setup/graph')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            services: [],
+            resources: [],
+            employees: [],
+            shifts: [
+              {
+                employee_id: EXISTING_ID,
+                day_of_week: 1,
+                start_time: '09:00',
+                end_time: '17:00',
+              },
+            ],
+            service_employee: [],
+            service_resource: [],
+          }),
+        });
+      }
+      return (originalImpl as (u: string, i?: RequestInit) => Promise<unknown>)(url, init);
+    });
+
+    render(<SoloWizard isOpen={true} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Oil Change')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Next'));
+    await waitFor(() => expect(screen.getByText('When are you available?')).toBeInTheDocument());
+
+    // The preload must have landed before finalize can claim replace.
+    await waitFor(() => {
+      expect(
+        baseFetch.mock.calls.some(([u]) => typeof u === 'string' && u.includes('/setup/graph'))
+      ).toBe(true);
+    });
+
+    fireEvent.click(screen.getByText('Next'));
+    fireEvent.click(screen.getByText('Next'));
+    await waitFor(() => expect(screen.getByText('Complete Setup')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Complete Setup'));
+
+    await waitFor(() => {
+      const expand = baseFetch.mock.calls.find(
+        ([u]) => typeof u === 'string' && u.includes('/shifts/expand-weekly')
+      );
+      expect(expand).toBeTruthy();
+      const body = JSON.parse((expand![1] as RequestInit).body as string);
+      // replace=true is what makes an unchecked day actually disappear.
+      expect(body.replace).toBe(true);
+      // And the preloaded Monday is still in the pattern — preloading must not
+      // silently drop the hours it just loaded.
+      expect(body.pattern).toEqual([{ day_of_week: 1, start_time: '09:00', end_time: '17:00' }]);
+    });
+  });
+});

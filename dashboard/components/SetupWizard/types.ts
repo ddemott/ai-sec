@@ -54,8 +54,16 @@ export interface CoverageItem {
   details?: Record<string, unknown>;
 }
 
+/**
+ * `existing_id` is set only on rows PRELOADED from an already-set-up tenant —
+ * it's that row's real DB uuid. The wizard keeps using `*_id` as its graph key
+ * (tmp id for new rows, the real uuid for preloaded ones) so every Step*.tsx
+ * renders unchanged; `existing_id` is what tells the commit to UPDATE this row
+ * rather than INSERT a second copy of it.
+ */
 export interface WizardService {
   service_id: string;
+  existing_id?: string;
   name: string;
   description?: string;
   duration_minutes: number;
@@ -65,6 +73,7 @@ export interface WizardService {
 
 export interface WizardResource {
   resource_id: string;
+  existing_id?: string;
   name: string;
   description?: string;
   is_deleted?: boolean;
@@ -73,6 +82,7 @@ export interface WizardResource {
 
 export interface WizardEmployee {
   employee_id: string;
+  existing_id?: string;
   name: string;
   first_name?: string;
   last_name?: string;

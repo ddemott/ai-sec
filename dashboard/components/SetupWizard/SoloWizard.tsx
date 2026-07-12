@@ -29,7 +29,7 @@ const STEP_LABELS: Record<SoloStep, string> = {
 export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWizardProps) {
   const tenantId = useActiveTenantId();
   const { userName } = useSessionContext();
-  const { services, loading, refresh } = useStaticData(tenantId);
+  const { services, employees, loading, refresh } = useStaticData(tenantId);
   const vocab = useVocabulary();
   const [step, setStep] = useState<SoloStep>(1);
 
@@ -43,6 +43,10 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
   // employee_schedule on finalize via Api.shifts.expandWeekly)
   const [shifts, setShifts] = useState<WizardShift[]>([]);
   const [ownerEmployeeId, setOwnerEmployeeId] = useState<string | null>(null);
+  // True once the grid holds the owner's REAL current hours — the precondition
+  // for finalize replacing the schedule instead of merely adding to it.
+  const [hoursHydrated, setHoursHydrated] = useState(false);
+  const hoursHydratedRef = useRef(false);
 
   // Step 3 — Finalization
   const [finalizing, setFinalizing] = useState(false);
@@ -70,6 +74,8 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
       setCoverageData([]);
       setOwnerEmployeeId(null);
       setShifts([]);
+      setHoursHydrated(false);
+      hoursHydratedRef.current = false;
       seedingRef.current = false;
       autoSeededServiceIdsRef.current = new Set();
     }
@@ -126,15 +132,46 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
 
   // When moving to Step 2, ensure owner employee exists. The hours
   // grid is ephemeral form state — it persists only at finalize.
+  //
+  // Waits for `loading` to clear: ensureOwnerEmployee decides create-vs-reuse
+  // by looking at `employees`, so running while the roster is still in flight
+  // would see an empty list and create the duplicate this guard exists to
+  // prevent. `loading` is in the deps so we re-run once the fetch settles.
   useEffect(() => {
-    if (step === 2 && tenantId) {
+    if (step === 2 && tenantId && !loading) {
       void ensureOwnerEmployee();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, tenantId]);
+  }, [step, tenantId, loading]);
 
+  /**
+   * Resolve the owner's staff profile, reusing the existing one on a re-run.
+   *
+   * This used to create unconditionally, which made the wizard un-rerunnable:
+   * `ownerEmployeeId` resets to null every time the wizard opens, so a second
+   * run POSTed the owner's name again and the backend's duplicate-name guard
+   * (src/routes/employees.ts) answered 409 — "An active employee named 'Dale
+   * DeMott' already exists" — dead-ending setup at step 2 for exactly the
+   * tenants who had completed setup once. Look before creating so re-running
+   * edits the existing business rather than colliding with it.
+   *
+   * Match by normalized name (same LOWER(TRIM(...)) comparison the backend
+   * guard uses, so anything we'd collide with is something we find first). The
+   * sole-employee fallback covers a renamed owner: in solo mode the one staff
+   * row IS the owner, even if the display name has since drifted from the
+   * account name.
+   */
   async function ensureOwnerEmployee() {
     if (ownerEmployeeId) return;
+
+    const norm = (s: string) => s.trim().toLowerCase();
+    const existing =
+      employees.find((e) => norm(String(e.name ?? '')) === norm(ownerName)) ??
+      (employees.length === 1 ? employees[0] : undefined);
+    if (existing) {
+      setOwnerEmployeeId(String(existing.employee_id));
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -199,6 +236,50 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
       setSaving(false);
     }
   }
+
+  /**
+   * Preload the owner's CURRENT working days into the hours grid, so re-running
+   * setup shows the hours they already set instead of a blank week. Runs once
+   * per open, as soon as the owner's staff row is known.
+   *
+   * `hoursHydrated` then licenses finalize to REPLACE the schedule rather than
+   * merge into it. That pairing matters: expand-weekly is additive by default
+   * (ON CONFLICT DO NOTHING), so without a preload an unchecked day would linger
+   * on the schedule — but replacing from a grid we never populated would erase
+   * the owner's real hours. Preload and replace are only ever safe together.
+   */
+  useEffect(() => {
+    if (!isOpen || !tenantId || !ownerEmployeeId || hoursHydratedRef.current) return;
+    hoursHydratedRef.current = true;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const graph = await Api.setup.graph(tenantId);
+        if (cancelled || !graph?.shifts) return;
+        const mine = graph.shifts.filter((s) => s.employee_id === ownerEmployeeId);
+        if (mine.length === 0) return; // no hours set yet — leave the grid blank
+        setShifts(
+          // id === String(day_of_week): the shape upsertLocalShift builds, so an
+          // existing day edits/toggles in place instead of being treated as new.
+          mine.map((s) => ({
+            id: String(s.day_of_week),
+            day_of_week: s.day_of_week,
+            start_time: s.start_time,
+            end_time: s.end_time,
+          }))
+        );
+        setHoursHydrated(true);
+      } catch {
+        // Non-fatal: a blank grid + additive finalize is the SAFE failure — it
+        // can only add hours, never erase the ones already on the schedule.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, tenantId, ownerEmployeeId]);
 
   // --- Shift handlers (mutate local React state only). The whole
   //     pattern is sent to Api.shifts.expandWeekly at finalize. ---
@@ -300,7 +381,10 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
           start_time: s.start_time.slice(0, 5),
           end_time: s.end_time.slice(0, 5),
         }));
-      await Api.shifts.expandWeekly(tenantId, ownerEmployeeId, pattern);
+      // replace only when the grid was preloaded from the real schedule — see
+      // the hours-preload effect. Otherwise stay additive so a failed preload
+      // can never wipe the owner's existing hours.
+      await Api.shifts.expandWeekly(tenantId, ownerEmployeeId, pattern, undefined, hoursHydrated);
 
       // 4. Fetch coverage
       const coverage = await Api.coverage.check(tenantId);

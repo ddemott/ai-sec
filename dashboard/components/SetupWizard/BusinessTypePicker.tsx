@@ -9,9 +9,18 @@ interface BusinessTypePickerProps {
   onSelect: (businessType: string) => void;
   onClose: () => void;
   onBack: () => void;
+  /** The tenant's current business type, if they've already been set up. Shown
+   *  as "Current" so a re-running owner can see what they picked last time and
+   *  keep it or change it — rather than guessing which one they were on. */
+  currentType?: string | null;
 }
 
-export function BusinessTypePicker({ onSelect, onClose, onBack }: BusinessTypePickerProps) {
+export function BusinessTypePicker({
+  onSelect,
+  onClose,
+  onBack,
+  currentType,
+}: BusinessTypePickerProps) {
   const [templates, setTemplates] = useState<BusinessTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -146,6 +155,17 @@ export function BusinessTypePicker({ onSelect, onClose, onBack }: BusinessTypePi
                             }}
                           >
                             <span className="flex-1 text-left">{t.display_name}</span>
+                            {t.business_type === currentType && (
+                              <span
+                                className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                                style={{
+                                  backgroundColor: 'var(--accent-muted)',
+                                  color: 'var(--accent-soft)',
+                                }}
+                              >
+                                Current
+                              </span>
+                            )}
                             <ChevronRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </button>
                         ))}

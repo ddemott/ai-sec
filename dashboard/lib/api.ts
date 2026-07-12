@@ -645,16 +645,26 @@ export const Api = {
      * collects it in form state and posts it here at finalize; there
      * is no separate weekly-pattern table anymore.
      */
+    // `replace` clears the employee's future schedule first, making `pattern` the
+    // complete truth. Only pass it when the pattern was PRELOADED from the real
+    // schedule — with a half-filled grid it would erase the days you left out.
     expandWeekly: (
       tenantId: string | null,
       employeeId: string,
       pattern: Array<{ day_of_week: number; start_time: string; end_time: string }>,
-      weeksAhead?: number
+      weeksAhead?: number,
+      replace?: boolean
     ) =>
       apiMutate<{ inserted: number; rangeStart: string; rangeEnd: string }>(
         `/shifts/expand-weekly`,
         'POST',
-        { tenant_id: tenantId, employee_id: employeeId, pattern, weeks_ahead: weeksAhead }
+        {
+          tenant_id: tenantId,
+          employee_id: employeeId,
+          pattern,
+          weeks_ahead: weeksAhead,
+          replace,
+        }
       ),
   },
 
@@ -808,10 +818,45 @@ export const Api = {
 
   // --- SETUP (Wizard Phase B) ---
   setup: {
+    // The tenant's CURRENT graph, in draft shape. The wizard loads this as its
+    // starting draft so a re-run edits the real business instead of duplicating
+    // it. Required before a 'sync' commit — see the route's doc comment.
+    graph: (tenantId: string | null) =>
+      apiFetch<{
+        services: Array<{
+          service_id: string;
+          name: string;
+          subtitle: string | null;
+          description: string | null;
+          duration_minutes: number;
+          price: number | null;
+        }>;
+        resources: Array<{ resource_id: string; name: string; description: string | null }>;
+        employees: Array<{
+          employee_id: string;
+          name: string;
+          first_name: string | null;
+          last_name: string | null;
+          email: string | null;
+          phone: string | null;
+        }>;
+        shifts: Array<{
+          employee_id: string;
+          day_of_week: number;
+          start_time: string;
+          end_time: string;
+        }>;
+        service_employee: Array<{ service_id: string; employee_id: string }>;
+        service_resource: Array<{ service_id: string; resource_id: string }>;
+      }>(`/setup/graph`, tenantParam(tenantId)),
     // Commits the wizard's draft entity graph — same shape as coverage.dryRun,
     // but persists. See docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md.
     // tenant_id explicit for the same reason as coverage.dryRun above.
-    commit: (tenantId: string | null, draft: WizardDraftGraph) =>
+    // `mode` defaults to 'create' (INSERT-only, and 409s if the tenant already
+    // has services). Pass 'sync' when the wizard preloaded the tenant's real
+    // graph: the draft is then the complete desired state, so rows carrying an
+    // existing_id are updated, new rows inserted, and omitted rows soft-deleted.
+    commit: (tenantId: string | null, draft: WizardDraftGraph, mode: 'create' | 'sync' = 'create') =>
       apiMutate<{
         counts: {
           services: number;
@@ -819,9 +864,13 @@ export const Api = {
           employees: number;
           serviceEmployee: number;
           serviceResource: number;
+          updated: number;
+          pruned: number;
+          upcoming_appointments_affected: number;
         };
       }>(`/setup/commit`, 'POST', {
         tenant_id: tenantId,
+        mode,
         ...draft,
       }),
   },

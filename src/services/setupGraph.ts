@@ -22,11 +22,24 @@ import { expandWeeklyToSchedule, type WeeklyShiftRow } from './expandWeeklyToSch
 
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+/**
+ * `existing_id` is what makes a re-run an EDIT rather than a duplicate.
+ *
+ * When the wizard preloads a tenant that has already been set up, each
+ * preloaded row carries its real UUID here (its `tmp_id` stays the graph key,
+ * so shifts/mappings reference it exactly as they do a brand-new row). Rows
+ * with an existing_id are UPDATEd in place; rows without one are INSERTed. The
+ * client never has to reshape its draft — the only difference between "create"
+ * and "edit" is the presence of this field.
+ */
+const ExistingId = z.string().uuid().optional();
+
 export const DraftGraphSchema = z.object({
   services: z
     .array(
       z.object({
         tmp_id: z.string().min(1),
+        existing_id: ExistingId,
         name: z.string().min(1),
         duration_minutes: z.number().int().positive().max(1440),
         subtitle: z.string().max(200).optional(),
@@ -39,6 +52,7 @@ export const DraftGraphSchema = z.object({
     .array(
       z.object({
         tmp_id: z.string().min(1),
+        existing_id: ExistingId,
         name: z.string().min(1),
         description: z.string().max(2000).optional(),
       })
@@ -49,6 +63,7 @@ export const DraftGraphSchema = z.object({
     .array(
       z.object({
         tmp_id: z.string().min(1),
+        existing_id: ExistingId,
         name: z.string().min(1),
         first_name: z.string().max(100).optional(),
         last_name: z.string().max(100).optional(),
@@ -145,6 +160,10 @@ export interface InsertDraftGraphCounts {
   employees: number;
   serviceEmployee: number;
   serviceResource: number;
+  /** Rows UPDATEd in place because the draft carried their existing_id. */
+  updated: number;
+  /** Rows soft-deleted by the prune pass (sync mode only). */
+  pruned: number;
 }
 
 export interface InsertDraftGraphResult {
@@ -152,6 +171,15 @@ export interface InsertDraftGraphResult {
   resourceId: Map<string, string>;
   employeeId: Map<string, string>;
   counts: InsertDraftGraphCounts;
+}
+
+/** Thrown when a draft's existing_id doesn't name a live row of this tenant. */
+export class UnknownExistingIdError extends Error {
+  statusCode = 400;
+  constructor(entity: string, id: string) {
+    super(`Draft references a ${entity} that no longer exists for this business: ${id}`);
+    this.name = 'UnknownExistingIdError';
+  }
 }
 
 /**
@@ -165,10 +193,29 @@ export async function insertDraftGraph(
   client: PoolClient,
   tenantId: string,
   draft: DraftGraph,
-  opts: { weeksAhead: number; startDate: Date }
+  opts: { weeksAhead: number; startDate: Date; prune?: boolean }
 ): Promise<InsertDraftGraphResult> {
+  const prune = opts.prune === true;
+  let updated = 0;
+
   const resourceId = new Map<string, string>();
   for (const r of draft.resources) {
+    if (r.existing_id) {
+      const res = await client.query(
+        // No updated_at column on resources (unlike services/employees) — don't
+        // add one to the SET list or this UPDATE fails at runtime.
+        `UPDATE resources SET name = $1, description = $2
+          WHERE resource_id = $3 AND tenant_id = $4 AND is_deleted = false`,
+        [r.name, r.description ?? null, r.existing_id, tenantId]
+      );
+      // Zero rows means the id is bogus, belongs to another tenant, or was
+      // deleted while the wizard was open. Failing loudly beats silently
+      // INSERTing a duplicate of the row the owner thought they were editing.
+      if ((res.rowCount ?? 0) === 0) throw new UnknownExistingIdError('resource', r.existing_id);
+      resourceId.set(r.tmp_id, r.existing_id);
+      updated++;
+      continue;
+    }
     const { rows: rr } = await client.query<{ resource_id: string }>(
       `INSERT INTO resources (tenant_id, name, description, is_auto_seeded)
        VALUES ($1, $2, $3, false) RETURNING resource_id`,
@@ -179,6 +226,30 @@ export async function insertDraftGraph(
 
   const serviceId = new Map<string, string>();
   for (const s of draft.services) {
+    if (s.existing_id) {
+      const res = await client.query(
+        // is_auto_seeded = false: an owner who reviewed this row in the wizard
+        // now owns it, so a later business-type change must not wipe it (same
+        // promotion rule as POST /services/:id/update).
+        `UPDATE services
+            SET name = $1, subtitle = $2, description = $3, duration_minutes = $4,
+                price = $5, is_auto_seeded = false, updated_at = NOW()
+          WHERE service_id = $6 AND tenant_id = $7 AND is_deleted = false`,
+        [
+          s.name,
+          s.subtitle ?? null,
+          s.description ?? null,
+          s.duration_minutes,
+          s.price ?? null,
+          s.existing_id,
+          tenantId,
+        ]
+      );
+      if ((res.rowCount ?? 0) === 0) throw new UnknownExistingIdError('service', s.existing_id);
+      serviceId.set(s.tmp_id, s.existing_id);
+      updated++;
+      continue;
+    }
     const { rows: sr } = await client.query<{ service_id: string }>(
       `INSERT INTO services
          (tenant_id, name, subtitle, description, duration_minutes, price,
@@ -198,6 +269,27 @@ export async function insertDraftGraph(
 
   const employeeId = new Map<string, string>();
   for (const e of draft.employees) {
+    if (e.existing_id) {
+      const res = await client.query(
+        `UPDATE employees
+            SET name = $1, first_name = $2, last_name = $3, email = $4, phone = $5,
+                updated_at = NOW()
+          WHERE employee_id = $6 AND tenant_id = $7 AND is_deleted = false`,
+        [
+          e.name,
+          e.first_name ?? null,
+          e.last_name ?? null,
+          e.email ?? null,
+          e.phone ?? null,
+          e.existing_id,
+          tenantId,
+        ]
+      );
+      if ((res.rowCount ?? 0) === 0) throw new UnknownExistingIdError('employee', e.existing_id);
+      employeeId.set(e.tmp_id, e.existing_id);
+      updated++;
+      continue;
+    }
     const { rows: er } = await client.query<{ employee_id: string }>(
       `INSERT INTO employees (tenant_id, name, first_name, last_name, email, phone, skills)
        VALUES ($1, $2, $3, $4, $5, $6, '{}') RETURNING employee_id`,
@@ -211,6 +303,23 @@ export async function insertDraftGraph(
       ]
     );
     employeeId.set(e.tmp_id, er[0].employee_id);
+  }
+
+  // Sync mode: an employee whose hours the owner just re-set must not keep the
+  // OLD pattern alongside the new one. expandWeeklyToSchedule is ON CONFLICT DO
+  // NOTHING (idempotent, never overwrites), so without clearing first, removing
+  // a Wednesday shift in the wizard would leave the original Wednesday row in
+  // employee_schedule and the change would appear to do nothing. Only future
+  // rows are cleared — past shifts are history and stay put.
+  if (prune) {
+    const editedEmployeeIds = [...employeeId.values()];
+    if (editedEmployeeIds.length > 0) {
+      await client.query(
+        `DELETE FROM employee_schedule
+          WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[]) AND shift_date >= $3::date`,
+        [tenantId, editedEmployeeIds, opts.startDate]
+      );
+    }
   }
 
   // Fan each employee's weekly pattern into date-specific employee_schedule
@@ -236,6 +345,24 @@ export async function insertDraftGraph(
       weeksAhead: opts.weeksAhead,
       startDate: opts.startDate,
     });
+  }
+
+  // Sync mode: mappings are declarative — the draft IS the desired set. Clear
+  // the existing rows for the services in this draft so an assignment the owner
+  // UNCHECKED in the wizard actually goes away (the inserts below are ON
+  // CONFLICT DO NOTHING, so they can only ever add, never remove).
+  if (prune) {
+    const keptServiceIds = [...serviceId.values()];
+    if (keptServiceIds.length > 0) {
+      await client.query(
+        `DELETE FROM service_employee WHERE tenant_id = $1 AND service_id = ANY($2::uuid[])`,
+        [tenantId, keptServiceIds]
+      );
+      await client.query(
+        `DELETE FROM service_resource WHERE tenant_id = $1 AND service_id = ANY($2::uuid[])`,
+        [tenantId, keptServiceIds]
+      );
+    }
   }
 
   let serviceEmployeeCount = 0;
@@ -268,6 +395,46 @@ export async function insertDraftGraph(
     }
   }
 
+  // Prune: anything live for this tenant that the draft no longer mentions was
+  // REMOVED by the owner in the wizard. Soft-delete only (is_deleted = true) —
+  // appointments still reference these rows by FK, and the booking RPCs already
+  // filter on is_deleted, so history stays intact and readable while the entity
+  // stops being bookable. A hard DELETE here would break existing appointments.
+  //
+  // Guarded on `prune` because it is only correct when the draft is a FULL
+  // picture of the business (i.e. the wizard preloaded it). A create-mode draft
+  // is a partial graph, and pruning against it would soft-delete every entity
+  // the wizard didn't happen to carry.
+  let pruned = 0;
+  if (prune) {
+    // `<> ALL(...)` with an empty array is TRUE for every row, which is exactly
+    // right: a draft with zero services means the owner removed them all.
+    const keptServices = [...serviceId.values()];
+    const keptResources = [...resourceId.values()];
+    const keptEmployees = [...employeeId.values()];
+
+    const prunedServices = await client.query(
+      `UPDATE services SET is_deleted = true, deleted_at = NOW(), updated_at = NOW()
+        WHERE tenant_id = $1 AND is_deleted = false AND service_id <> ALL($2::uuid[])`,
+      [tenantId, keptServices]
+    );
+    const prunedResources = await client.query(
+      `UPDATE resources SET is_deleted = true, deleted_at = NOW(), is_active = false
+        WHERE tenant_id = $1 AND is_deleted = false AND resource_id <> ALL($2::uuid[])`,
+      [tenantId, keptResources]
+    );
+    const prunedEmployees = await client.query(
+      `UPDATE employees SET is_deleted = true, deleted_at = NOW(), is_active = false,
+              updated_at = NOW()
+        WHERE tenant_id = $1 AND is_deleted = false AND employee_id <> ALL($2::uuid[])`,
+      [tenantId, keptEmployees]
+    );
+    pruned =
+      (prunedServices.rowCount ?? 0) +
+      (prunedResources.rowCount ?? 0) +
+      (prunedEmployees.rowCount ?? 0);
+  }
+
   return {
     serviceId,
     resourceId,
@@ -278,6 +445,48 @@ export async function insertDraftGraph(
       employees: employeeId.size,
       serviceEmployee: serviceEmployeeCount,
       serviceResource: serviceResourceCount,
+      updated,
+      pruned,
     },
   };
+}
+
+/**
+ * Which upcoming appointments would be orphaned by committing this draft in
+ * sync mode — i.e. are booked against a service/employee/resource the owner
+ * removed in the wizard. Read-only: the caller decides whether to warn or block.
+ *
+ * Counted BEFORE the prune runs (the soft-delete doesn't touch appointments, so
+ * after the fact these bookings would still point at now-invisible entities with
+ * nothing to flag them). Only 'scheduled' appointments in the future matter — a
+ * past or canceled booking referencing a retired service is just history.
+ */
+export interface RemovalImpact {
+  upcomingAppointments: number;
+}
+
+export async function findRemovalImpact(
+  client: PoolClient,
+  tenantId: string,
+  draft: DraftGraph
+): Promise<RemovalImpact> {
+  const keptServices = draft.services.map((s) => s.existing_id).filter(Boolean) as string[];
+  const keptEmployees = draft.employees.map((e) => e.existing_id).filter(Boolean) as string[];
+  const keptResources = draft.resources.map((r) => r.existing_id).filter(Boolean) as string[];
+
+  const res = await client.query<{ count: string }>(
+    `SELECT count(*)::text AS count
+       FROM appointments a
+      WHERE a.tenant_id = $1
+        AND a.status = 'scheduled'
+        AND a.start_time > NOW()
+        AND (a.is_deleted IS NULL OR a.is_deleted = false)
+        AND (
+          (a.service_id  IS NOT NULL AND a.service_id  <> ALL($2::uuid[])) OR
+          (a.employee_id IS NOT NULL AND a.employee_id <> ALL($3::uuid[])) OR
+          (a.resource_id IS NOT NULL AND a.resource_id <> ALL($4::uuid[]))
+        )`,
+    [tenantId, keptServices, keptEmployees, keptResources]
+  );
+  return { upcomingAppointments: Number(res.rows[0]?.count ?? 0) };
 }
