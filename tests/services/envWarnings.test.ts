@@ -26,6 +26,7 @@ function baseCtx(
       EMAIL_PASS: 'app-password',
       CORS_ORIGIN: 'https://app.secretaryhq.com',
       DASHBOARD_URL: 'https://app.secretaryhq.com',
+      TELNYX_PUBLIC_KEY: '9xjFfLcMgNjd22BM2J0J2wsHmWFsLMfGSBlGviIarp8=',
       STRIPE_SECRET_KEY: 'sk_test_fake',
       STRIPE_WEBHOOK_SECRET: 'whsec_fake',
       ...(overrides.env ?? {}),

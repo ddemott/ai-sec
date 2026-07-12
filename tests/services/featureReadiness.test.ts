@@ -49,6 +49,7 @@ function fullCtx(
       STRIPE_SECRET_KEY: 'sk_test_fake',
       STRIPE_WEBHOOK_SECRET: 'whsec_fake',
       METRICS_TOKEN: 'metrics-token',
+      TELNYX_PUBLIC_KEY: '9xjFfLcMgNjd22BM2J0J2wsHmWFsLMfGSBlGviIarp8=',
       SENTRY_DSN: 'https://fake@sentry.io/12345',
       ...(overrides.env ?? {}),
     } as NodeJS.ProcessEnv,
@@ -64,7 +65,7 @@ function statusOf(rows: ReturnType<typeof collectFeatureReadiness>, feature: str
 }
 
 describe('collectFeatureReadiness — fully configured environment', () => {
-  it('HAPPY: every capability reports ready and the report covers all 12 features', () => {
+  it('HAPPY: every capability reports ready and the report covers all 13 features', () => {
     // WHY: the "everything configured" baseline pins the full feature list —
     // if someone adds a capability without updating this test, drift shows here
     const rows = collectFeatureReadiness(fullCtx());
@@ -74,6 +75,7 @@ describe('collectFeatureReadiness — fully configured environment', () => {
         'cors',
         'email',
         'google_calendar',
+        'inbound_sms',
         'metrics_endpoint',
         'observability',
         'outlook_calendar',
@@ -192,6 +194,22 @@ describe('shared source of truth with the startup warnings', () => {
     const warnings = collectStartupWarnings(ctx);
     expect(warnings.some((w) => w.includes('STRIPE_SECRET_KEY'))).toBe(true);
     expect(statusOf(collectFeatureReadiness(ctx), 'stripe_billing')).toBe('disabled');
+  });
+
+  it('SAD: a missing TELNYX_PUBLIC_KEY reports inbound_sms as missing_config + warns at boot', () => {
+    // WHO: an operator who deployed the inbound-SMS webhook but never set the key.
+    // WHAT: the route fails CLOSED (503 on every request), so a customer who
+    //        replies STOP is never recorded in opt_out_records — we keep texting
+    //        someone who asked us to stop. That is a compliance exposure, not a
+    //        disabled nice-to-have, which is why it WARNS at boot rather than
+    //        sitting silently in the readiness report like metrics/outlook/square.
+    // WHY (2026-07-12): the only signal for this was a bare 503 from a public
+    //        endpoint — indistinguishable from "the service is down". It cost a
+    //        live debugging session. The readiness report now answers it flatly.
+    const ctx = fullCtx({ env: { TELNYX_PUBLIC_KEY: undefined } });
+
+    expect(statusOf(collectFeatureReadiness(ctx), 'inbound_sms')).toBe('missing_config');
+    expect(collectStartupWarnings(ctx).join(' ')).toMatch(/TELNYX_PUBLIC_KEY/);
   });
 
   it('HAPPY: readiness-only capabilities contribute NO startup warnings', () => {

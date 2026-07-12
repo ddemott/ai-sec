@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict pupLHRUNXp34eSsJbn5CH1YRNuo5bl5lABuKPFaQ1zOOfXPPxtdx0tv6JSyXzqQ
+\restrict SICCfGt5PwVTJhUPgVicpuRcxcyl95MZ6Y7gYmBZvAs2PPAyLK4jc78gigtexwB
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -1221,6 +1221,7 @@ DECLARE
     v_context JSONB;
     v_appointments JSONB;
     v_stats RECORD;
+    v_preferences JSONB;
 BEGIN
     SELECT * INTO v_customer
     FROM customers
@@ -1275,6 +1276,16 @@ BEGIN
     AND a.status = 'scheduled'
     LIMIT 5;
 
+    -- Preferences now live in their own table. Aggregated back into the same
+    -- {key: value} jsonb the callers already expect. SECURITY DEFINER bypasses
+    -- RLS here exactly as it does for the customer/appointment reads above; the
+    -- p_tenant_id predicate is what scopes the row set.
+    SELECT COALESCE(jsonb_object_agg(cp.pref_key, cp.pref_value), '{}'::jsonb)
+    INTO v_preferences
+    FROM customer_preferences cp
+    WHERE cp.customer_id = v_customer.customer_id
+    AND cp.tenant_id = p_tenant_id;
+
     v_context := jsonb_build_object(
         'is_known_customer', true,
         'customer', jsonb_build_object(
@@ -1292,7 +1303,7 @@ BEGIN
             'upcoming_appointments', v_appointments
         ),
         'notes', COALESCE(v_customer.metadata->'notes', '[]'::jsonb),
-        'preferences', COALESCE(v_customer.metadata->'preferences', '{}'::jsonb),
+        'preferences', v_preferences,
         'tags', COALESCE(v_customer.metadata->'tags', '[]'::jsonb),
         'member_since', v_customer.created_at
     );
@@ -2632,6 +2643,29 @@ ALTER TABLE ONLY public.customer_messages FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: customer_preferences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.customer_preferences (
+    tenant_id uuid NOT NULL,
+    customer_id uuid NOT NULL,
+    pref_key text NOT NULL,
+    pref_value text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.customer_preferences FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE customer_preferences; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.customer_preferences IS 'Durable per-customer preferences captured by the voice agent (save_customer_preference) — preferred staff, last service, likes/dislikes, standing requests. One row per (customer, key); re-saving a key updates it. Replaced the customers.metadata->preferences jsonb blob 2026-07-12.';
+
+
+--
 -- Name: customers; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2665,7 +2699,7 @@ ALTER TABLE ONLY public.customers FORCE ROW LEVEL SECURITY;
 -- Name: COLUMN customers.metadata; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.customers.metadata IS 'Customer metadata including notes array, preferences, tags, etc.';
+COMMENT ON COLUMN public.customers.metadata IS 'Customer metadata: notes array, tags, etc. NOTE: preferences moved OUT to the customer_preferences table 2026-07-12 — do not re-add a preferences key here.';
 
 
 --
@@ -3037,7 +3071,9 @@ CREATE TABLE public.reminder_schedules (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     retry_count integer DEFAULT 0 NOT NULL,
     next_retry_at timestamp with time zone,
-    CONSTRAINT reminder_schedules_reminder_type_check CHECK (((reminder_type)::text = ANY ((ARRAY['confirmation'::character varying, '72h'::character varying, '24h'::character varying, '2h'::character varying])::text[]))),
+    lead_minutes integer NOT NULL,
+    CONSTRAINT reminder_schedules_lead_minutes_sane CHECK (((lead_minutes >= 0) AND (lead_minutes <= 129600))),
+    CONSTRAINT reminder_schedules_reminder_type_check CHECK (((reminder_type)::text = ANY ((ARRAY['confirmation'::character varying, '72h'::character varying, '24h'::character varying, '2h'::character varying, 'custom'::character varying])::text[]))),
     CONSTRAINT reminder_schedules_status_check CHECK (((status)::text = ANY ((ARRAY['scheduled'::character varying, 'sent'::character varying, 'failed'::character varying, 'cancelled'::character varying])::text[])))
 );
 
@@ -3063,6 +3099,13 @@ COMMENT ON COLUMN public.reminder_schedules.reminder_type IS 'Type: confirmation
 --
 
 COMMENT ON COLUMN public.reminder_schedules.status IS 'Status: scheduled (pending), sent, failed, or cancelled';
+
+
+--
+-- Name: COLUMN reminder_schedules.lead_minutes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.reminder_schedules.lead_minutes IS 'How far before the appointment this reminder fires, in minutes. Source of truth for the lead (0 = confirmation, sent at booking). scheduled_for = appointment start_time - lead_minutes. Added 2026-07-12 so a caller can ask for any lead ("30 minutes before") instead of the four hardcoded types.';
 
 
 --
@@ -3674,6 +3717,14 @@ ALTER TABLE ONLY public.customer_messages
 
 
 --
+-- Name: customer_preferences customer_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_preferences
+    ADD CONSTRAINT customer_preferences_pkey PRIMARY KEY (customer_id, pref_key);
+
+
+--
 -- Name: customers customers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3966,6 +4017,13 @@ ALTER TABLE ONLY public.voice_sessions
 --
 
 CREATE INDEX ai_cost_events_tenant_month ON public.ai_cost_events USING btree (tenant_id, created_at);
+
+
+--
+-- Name: customer_preferences_tenant_key_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX customer_preferences_tenant_key_idx ON public.customer_preferences USING btree (tenant_id, pref_key);
 
 
 --
@@ -4702,6 +4760,22 @@ ALTER TABLE ONLY public.customer_messages
 
 
 --
+-- Name: customer_preferences customer_preferences_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_preferences
+    ADD CONSTRAINT customer_preferences_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(customer_id) ON DELETE CASCADE;
+
+
+--
+-- Name: customer_preferences customer_preferences_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_preferences
+    ADD CONSTRAINT customer_preferences_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
 -- Name: customers customers_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5231,6 +5305,26 @@ CREATE POLICY customer_messages_tenant_isolation ON public.customer_messages USI
 
 
 --
+-- Name: customer_preferences; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.customer_preferences ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: customer_preferences customer_preferences_admin_bypass; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY customer_preferences_admin_bypass ON public.customer_preferences USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+
+
+--
+-- Name: customer_preferences customer_preferences_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY customer_preferences_tenant_isolation ON public.customer_preferences USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+
+
+--
 -- Name: customers; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -5580,5 +5674,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict pupLHRUNXp34eSsJbn5CH1YRNuo5bl5lABuKPFaQ1zOOfXPPxtdx0tv6JSyXzqQ
+\unrestrict SICCfGt5PwVTJhUPgVicpuRcxcyl95MZ6Y7gYmBZvAs2PPAyLK4jc78gigtexwB
 
