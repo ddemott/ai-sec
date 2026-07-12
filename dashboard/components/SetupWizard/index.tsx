@@ -8,6 +8,7 @@ import { useActiveTenantId } from '../../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { Button } from '../ui/Button';
 import { showToast } from '../ui/Toast';
+import { ConfirmModal } from '../ui/ConfirmModal';
 import { WizardStepContent } from './WizardStepContent';
 import { useWizardCrud } from './useWizardCrud';
 import { markFirstRunTourPending } from '../FirstRunTour';
@@ -62,6 +63,16 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
 
+  // Removal impact — set when a SYNC commit is about to strand upcoming
+  // appointments, which holds the commit until the owner confirms. `impactUnknown`
+  // is the honest fallback for when the preview itself failed: we still refuse to
+  // silently destroy something we couldn't describe.
+  const [pendingImpact, setPendingImpact] = useState<{
+    upcomingAppointments: number;
+    removed: Array<{ kind: string; name: string; upcomingAppointments: number }>;
+  } | null>(null);
+  const [impactUnknown, setImpactUnknown] = useState(false);
+
   // Lock body scroll when open
   useEffect(() => {
     if (isOpen) {
@@ -86,6 +97,8 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       setSeedError(null);
       setHasCommitted(false);
       setCommitError(null);
+      setPendingImpact(null);
+      setImpactUnknown(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -171,27 +184,64 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
     // so re-running setup on a set-up tenant hit the backend's idempotency 409
     // ("Setup already completed") and there was no way to redo it at all.
     if (next === 9 && tenantId && !hasCommitted) {
-      setCommitting(true);
-      setCommitError(null);
-      try {
-        const res = await Api.setup.commit(
-          tenantId,
-          crud.buildDraftGraph(),
-          crud.isSync ? 'sync' : 'create'
-        );
-        if (!res.success) {
-          setCommitError(res.error || 'Failed to complete setup');
-          return; // stay on the current step — draft intact, nothing advanced
+      // A sync commit SOFT-DELETES whatever the owner removed from the draft —
+      // which can include a service, staff member, or resource that upcoming
+      // appointments are already booked against. Ask BEFORE doing it. (The commit
+      // response reports the same number, but by then it has already happened,
+      // which is no use to someone deciding whether to go through with it.)
+      if (crud.isSync) {
+        try {
+          const res = await Api.setup.impact(tenantId, crud.buildDraftGraph());
+          if (res.success && res.impact && res.impact.upcomingAppointments > 0) {
+            setPendingImpact(res.impact); // hold — the modal drives the commit
+            return;
+          }
+        } catch {
+          // The preview failed. Do NOT silently commit a destructive change we
+          // could not describe — that is the exact failure this guard exists to
+          // prevent. But don't hard-block setup on a transient error either:
+          // confirm with an honest "we couldn't check what this affects".
+          setImpactUnknown(true);
+          return;
         }
-        setHasCommitted(true);
-      } catch (err) {
-        setCommitError(err instanceof Error ? err.message : 'Failed to complete setup');
-        return;
-      } finally {
-        setCommitting(false);
       }
+      const committed = await runCommit();
+      if (!committed) return; // stay put — draft intact, nothing advanced
     }
     setStep(next);
+  };
+
+  /** The commit itself. Returns false on failure so callers can stay on the step. */
+  const runCommit = async (): Promise<boolean> => {
+    if (!tenantId) return false;
+    setCommitting(true);
+    setCommitError(null);
+    try {
+      const res = await Api.setup.commit(
+        tenantId,
+        crud.buildDraftGraph(),
+        crud.isSync ? 'sync' : 'create'
+      );
+      if (!res.success) {
+        setCommitError(res.error || 'Failed to complete setup');
+        return false;
+      }
+      setHasCommitted(true);
+      return true;
+    } catch (err) {
+      setCommitError(err instanceof Error ? err.message : 'Failed to complete setup');
+      return false;
+    } finally {
+      setCommitting(false);
+    }
+  };
+
+  /** Owner accepted the removals (or the un-checkable risk) — commit and advance. */
+  const confirmImpactAndCommit = async () => {
+    setPendingImpact(null);
+    setImpactUnknown(false);
+    const committed = await runCommit();
+    if (committed) setStep(9);
   };
   const goBack = () => setStep((s) => Math.max(s - 1, 1) as WizardStep);
 
@@ -431,6 +481,44 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
           </div>
         </footer>
       </div>
+
+      {/* Removal confirmation. Named + counted, because "3 appointments affected"
+          doesn't tell an owner whether they're retiring a dead service or the one
+          their whole book is on. */}
+      <ConfirmModal
+        isOpen={pendingImpact !== null || impactUnknown}
+        onClose={() => {
+          setPendingImpact(null);
+          setImpactUnknown(false);
+        }}
+        onConfirm={() => void confirmImpactAndCommit()}
+        title={impactUnknown ? "Couldn't check what this affects" : 'This will affect booked appointments'}
+        message={
+          impactUnknown
+            ? "We couldn't check whether anything you removed has upcoming appointments booked against it. Those bookings would be kept, but the service or staff member they're booked with would no longer be available. Go back and re-check, or continue anyway."
+            : `${impactLines(pendingImpact)}\n\nThose appointments stay on your calendar and won't be canceled, but what they're booked with will no longer be bookable. Go back to keep them, or continue.`
+        }
+        confirmLabel={impactUnknown ? 'Continue anyway' : 'Remove and finish setup'}
+        confirmVariant="danger"
+        loading={committing}
+      />
     </div>
   );
+}
+
+/** Human-readable summary of what the owner is about to remove. */
+function impactLines(
+  impact: {
+    upcomingAppointments: number;
+    removed: Array<{ kind: string; name: string; upcomingAppointments: number }>;
+  } | null
+): string {
+  if (!impact) return '';
+  const appts = impact.upcomingAppointments;
+  const head = `You removed ${impact.removed.length === 1 ? 'something' : 'things'} that ${appts === 1 ? 'has 1 upcoming appointment' : `have ${appts} upcoming appointments`} booked against ${appts === 1 ? 'it' : 'them'}:`;
+  const lines = impact.removed.map(
+    (r) =>
+      `  • ${r.name} (${r.kind}) — ${r.upcomingAppointments} ${r.upcomingAppointments === 1 ? 'appointment' : 'appointments'}`
+  );
+  return [head, ...lines].join('\n');
 }

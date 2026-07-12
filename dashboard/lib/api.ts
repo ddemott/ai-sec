@@ -850,6 +850,22 @@ export const Api = {
         service_resource: Array<{ service_id: string; resource_id: string }>;
       }>(`/setup/graph`, tenantParam(tenantId)),
     // Commits the wizard's draft entity graph — same shape as coverage.dryRun,
+    // What a SYNC commit of this draft would destroy: upcoming appointments booked
+    // against services/staff/resources the owner removed in the wizard. Called
+    // BEFORE commit so they can still back out — the commit reports the same
+    // number, but by then the soft-delete has already happened.
+    impact: (tenantId: string | null, draft: WizardDraftGraph) =>
+      apiMutate<{
+        impact: {
+          upcomingAppointments: number;
+          removed: Array<{
+            kind: 'service' | 'employee' | 'resource';
+            name: string;
+            upcomingAppointments: number;
+          }>;
+        };
+      }>(`/setup/impact`, 'POST', { tenant_id: tenantId, ...draft }),
+
     // but persists. See docs/superpowers/specs/2026-07-05-wizard-phase-b-design.md.
     // tenant_id explicit for the same reason as coverage.dryRun above.
     // `mode` defaults to 'create' (INSERT-only, and 409s if the tenant already

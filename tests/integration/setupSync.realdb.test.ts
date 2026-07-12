@@ -453,3 +453,132 @@ describe('POST /shifts/expand-weekly — re-answering "when do you work" (solo w
     expect(await reloadShifts()).toEqual([1, 4]);
   });
 });
+
+describe('POST /setup/impact — warn BEFORE destroying, not after', () => {
+  /** Book `n` upcoming appointments against the given service. */
+  async function bookUpcoming(serviceId: string, g: LiveGraph, n: number) {
+    const { rows: cust } = await setup.query(
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, 'Booked Client', '+16305550188')
+       RETURNING customer_id`,
+      [tenantId]
+    );
+    for (let i = 0; i < n; i++) {
+      await setup.query(
+        `INSERT INTO appointments
+           (tenant_id, customer_id, service_id, resource_id, employee_id,
+            start_time, end_time, status, description)
+         VALUES ($1, $2, $3, $4, $5,
+                 date_trunc('hour', NOW()) + ($6 || ' days')::interval,
+                 date_trunc('hour', NOW()) + ($6 || ' days')::interval + interval '30 minutes',
+                 'scheduled', 'booked')`,
+        [
+          tenantId,
+          cust[0].customer_id,
+          serviceId,
+          g.resources[0].resource_id,
+          g.employees[0].employee_id,
+          String(i + 2),
+        ]
+      );
+    }
+  }
+
+  it('HAPPY: names WHAT is being removed and how many bookings each one strands', async () => {
+    // WHY: the whole point. A bare "3 appointments affected" doesn't tell an owner
+    //      whether they're retiring a dead service or the one their book is on —
+    //      so the warning has to name it. And this runs BEFORE the commit, because
+    //      a report delivered after the soft-delete is no use to someone deciding
+    //      whether to go through with it.
+    const g = await seedBusiness();
+    const colorId = g.services.find((s) => s.name === 'Color')!.service_id;
+    await bookUpcoming(colorId, g, 2);
+
+    const draft = toSyncDraft(g);
+    draft.services = draft.services.filter((s) => s.existing_id !== colorId);
+    draft.service_employee = draft.service_employee.filter((m) => m.service_tmp_id !== colorId);
+    draft.service_resource = draft.service_resource.filter((m) => m.service_tmp_id !== colorId);
+
+    const res = await post('/setup/impact', draft);
+    expect(res.statusCode).toBe(200);
+
+    const impact = res.json().impact;
+    expect(impact.upcomingAppointments).toBe(2);
+    expect(impact.removed).toContainEqual({
+      kind: 'service',
+      name: 'Color',
+      upcomingAppointments: 2,
+    });
+
+    // Decisive: /setup/impact is READ-ONLY. Asking what a removal would cost must
+    // not perform the removal — otherwise the "cancel" button in the warning would
+    // be a lie.
+    expect(await liveServices(tenantId)).toEqual(['Color', 'Haircut']);
+  });
+
+  it('HAPPY: an unchanged draft reports no impact (the warning must not nag)', async () => {
+    const g = await seedBusiness();
+    const res = await post('/setup/impact', toSyncDraft(g));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().impact.upcomingAppointments).toBe(0);
+    expect(res.json().impact.removed).toEqual([]);
+  });
+
+  it('HAPPY: removing an UNBOOKED service reports nothing — no false alarm', async () => {
+    // Removing a service nobody is booked for is unremarkable. If this nagged, the
+    // real warning would be trained away.
+    const g = await seedBusiness();
+    const colorId = g.services.find((s) => s.name === 'Color')!.service_id;
+
+    const draft = toSyncDraft(g);
+    draft.services = draft.services.filter((s) => s.existing_id !== colorId);
+    draft.service_employee = draft.service_employee.filter((m) => m.service_tmp_id !== colorId);
+    draft.service_resource = draft.service_resource.filter((m) => m.service_tmp_id !== colorId);
+
+    const res = await post('/setup/impact', draft);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().impact.upcomingAppointments).toBe(0);
+    expect(res.json().impact.removed).toEqual([]);
+  });
+
+  it('SAD: a PAST booking against a removed service is not counted', async () => {
+    // History is not at risk — only future bookings can be stranded.
+    const g = await seedBusiness();
+    const colorId = g.services.find((s) => s.name === 'Color')!.service_id;
+    const { rows: cust } = await setup.query(
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1, 'Old Client', '+16305550177')
+       RETURNING customer_id`,
+      [tenantId]
+    );
+    await setup.query(
+      `INSERT INTO appointments
+         (tenant_id, customer_id, service_id, resource_id, employee_id,
+          start_time, end_time, status, description)
+       VALUES ($1, $2, $3, $4, $5,
+               date_trunc('hour', NOW()) - interval '10 days',
+               date_trunc('hour', NOW()) - interval '10 days' + interval '30 minutes',
+               'scheduled', 'past')`,
+      [
+        tenantId,
+        cust[0].customer_id,
+        colorId,
+        g.resources[0].resource_id,
+        g.employees[0].employee_id,
+      ]
+    );
+
+    const draft = toSyncDraft(g);
+    draft.services = draft.services.filter((s) => s.existing_id !== colorId);
+    draft.service_employee = draft.service_employee.filter((m) => m.service_tmp_id !== colorId);
+    draft.service_resource = draft.service_resource.filter((m) => m.service_tmp_id !== colorId);
+
+    const res = await post('/setup/impact', draft);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().impact.upcomingAppointments).toBe(0);
+  });
+
+  it('SAD: no tenant header → 401 (never previews another business)', async () => {
+    const res = await post('/setup/impact', { services: [] }, false);
+    expect(res.statusCode).toBe(401);
+  });
+});
