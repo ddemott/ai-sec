@@ -577,6 +577,65 @@ describe('POST /setup/impact — warn BEFORE destroying, not after', () => {
     expect(res.json().impact.upcomingAppointments).toBe(0);
   });
 
+  it('GUARD: two staff with the SAME NAME produce TWO lines, not one merged line', async () => {
+    // REGRESSION (caught by review on PR #240). The impact query GROUPed BY name.
+    // Nothing enforces name uniqueness within a tenant — two stylists really can
+    // both be "Alex" (the employees duplicate-name guard is a soft 409 that
+    // deliberately allows namesakes).
+    //
+    // NOTE the shape of this test: an earlier cut removed only ONE Alex and was
+    // VACUOUS — the WHERE clause filters the kept Alex out BEFORE the GROUP BY, so
+    // only one row was left to group and the bug never showed. The merge only
+    // misbehaves when BOTH namesakes are removed: grouping by name collapses them
+    // into a single "Alex — 2 appointments" line, hiding the fact that TWO
+    // separate people are being removed. Group by the PK and you get two lines.
+    const g = await seedBusiness();
+    const { rows: alexes } = await setup.query(
+      `INSERT INTO employees (tenant_id, name, is_active) VALUES ($1,'Alex',true),($1,'Alex',true)
+       RETURNING employee_id`,
+      [tenantId]
+    );
+    const { rows: cust } = await setup.query(
+      `INSERT INTO customers (tenant_id, name, phone) VALUES ($1,'C','+16305550155') RETURNING customer_id`,
+      [tenantId]
+    );
+    // One booking on EACH Alex.
+    for (const [i, row] of alexes.entries()) {
+      await setup.query(
+        `INSERT INTO appointments
+           (tenant_id, customer_id, service_id, resource_id, employee_id,
+            start_time, end_time, status, description)
+         VALUES ($1,$2,$3,$4,$5,
+                 date_trunc('hour', NOW()) + ($6 || ' days')::interval,
+                 date_trunc('hour', NOW()) + ($6 || ' days')::interval + interval '30 minutes',
+                 'scheduled','x')`,
+        [
+          tenantId,
+          cust[0].customer_id,
+          g.services[0].service_id,
+          g.resources[0].resource_id,
+          (row as { employee_id: string }).employee_id,
+          String(i + 2),
+        ]
+      );
+    }
+
+    // Remove BOTH Alexes (the draft simply never mentions them).
+    const res = await post('/setup/impact', toSyncDraft(g));
+    expect(res.statusCode).toBe(200);
+
+    const alexLines = res
+      .json()
+      .impact.removed.filter((r: { kind: string; name: string }) => r.name === 'Alex');
+
+    // TWO distinct people, one booking each. Under GROUP BY name this was a single
+    // line reading "Alex — 2 appointments", concealing the second person entirely.
+    expect(alexLines).toHaveLength(2);
+    expect(alexLines.map((r: { upcomingAppointments: number }) => r.upcomingAppointments)).toEqual([
+      1, 1,
+    ]);
+  });
+
   it('SAD: no tenant header → 401 (never previews another business)', async () => {
     const res = await post('/setup/impact', { services: [] }, false);
     expect(res.statusCode).toBe(401);

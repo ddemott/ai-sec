@@ -190,18 +190,26 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
       // response reports the same number, but by then it has already happened,
       // which is no use to someone deciding whether to go through with it.)
       if (crud.isSync) {
+        let impact: Awaited<ReturnType<typeof Api.setup.impact>> | null = null;
         try {
-          const res = await Api.setup.impact(tenantId, crud.buildDraftGraph());
-          if (res.success && res.impact && res.impact.upcomingAppointments > 0) {
-            setPendingImpact(res.impact); // hold — the modal drives the commit
-            return;
-          }
+          impact = await Api.setup.impact(tenantId, crud.buildDraftGraph());
         } catch {
-          // The preview failed. Do NOT silently commit a destructive change we
-          // could not describe — that is the exact failure this guard exists to
-          // prevent. But don't hard-block setup on a transient error either:
-          // confirm with an honest "we couldn't check what this affects".
+          impact = null; // network/transport failure
+        }
+
+        // A FAILED preview must block, not fall through.
+        //
+        // apiMutate does NOT throw on a 4xx/5xx — it RESOLVES with
+        // {success:false} (see lib/api.ts). So catching only exceptions would have
+        // let a 500 from /setup/impact slip past this gate and commit the
+        // destructive change silently, which is the entire thing this gate exists
+        // to prevent. Treat "no usable answer", however it arrives, as unknown.
+        if (!impact?.success || !impact.impact) {
           setImpactUnknown(true);
+          return;
+        }
+        if (impact.impact.upcomingAppointments > 0) {
+          setPendingImpact(impact.impact); // hold — the modal drives the commit
           return;
         }
       }
@@ -492,7 +500,11 @@ export default function SetupWizard({ isOpen, onClose, onBackToPicker }: SetupWi
           setImpactUnknown(false);
         }}
         onConfirm={() => void confirmImpactAndCommit()}
-        title={impactUnknown ? "Couldn't check what this affects" : 'This will affect booked appointments'}
+        title={
+          impactUnknown
+            ? "Couldn't check what this affects"
+            : 'This will affect booked appointments'
+        }
         message={
           impactUnknown
             ? "We couldn't check whether anything you removed has upcoming appointments booked against it. Those bookings would be kept, but the service or staff member they're booked with would no longer be available. Go back and re-check, or continue anyway."

@@ -83,6 +83,7 @@ const EXISTING_GRAPH = {
 };
 
 let impactFails = false;
+let impactReturns500 = false;
 
 function setupFetch() {
   (global.fetch as unknown as ReturnType<typeof vi.fn>) = vi
@@ -95,6 +96,14 @@ function setupFetch() {
       }
       if (path.includes('/setup/impact') && init?.method === 'POST') {
         if (impactFails) return Promise.reject(new Error('network'));
+        // A 500 does NOT reject — apiMutate resolves it as {success:false}.
+        if (impactReturns500) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: async () => ({ success: false, error: 'boom' }),
+          });
+        }
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -124,6 +133,7 @@ const commitCalls = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   impactFails = false;
+  impactReturns500 = false;
   localStorage.setItem('tenantId', 'f234e471-0e60-4163-86c9-93cfd9338e3a');
   setupFetch();
 });
@@ -200,5 +210,21 @@ describe('SetupWizard — removal-impact gate', () => {
 
     fireEvent.click(screen.getByText('Continue anyway'));
     await waitFor(() => expect(commitCalls()).toHaveLength(1));
+  });
+
+  test('a 500 from /setup/impact BLOCKS — apiMutate resolves {success:false}, it does not throw', async () => {
+    // REGRESSION (caught by review on PR #240). The gate originally only caught
+    // THROWN errors. But apiMutate does not throw on a 4xx/5xx — it RESOLVES with
+    // {success:false} (lib/api.ts). So a 500 from /setup/impact sailed straight
+    // past the guard and committed the destructive change silently: precisely the
+    // failure the whole gate exists to prevent, reachable by a plain server error.
+    impactReturns500 = true;
+    await goLive();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Couldn't check what this affects/i)).toBeInTheDocument()
+    );
+    // The decisive assertion: nothing committed.
+    expect(commitCalls()).toHaveLength(0);
   });
 });
