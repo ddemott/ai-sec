@@ -4,45 +4,63 @@ Derived from the 50,000-foot architectural review. Items are ordered by impact-t
 
 ---
 
-## 1. Split `src/routes/agentTools.ts` into a domain-grouped module (Priority: HIGH)
+## 1. Split `src/routes/agentTools.ts` into a domain-grouped module (Priority: HIGH) — ✅ DONE 2026-07-11
 
-**Problem:** 2,998-line god file containing 27 tool routes, all Zod schemas, all business logic, utility functions, and test-mode infrastructure.
+**Problem:** god file containing 27 tool routes, all Zod schemas, all business logic, utility functions, and test-mode infrastructure. (Stated as 2,998 lines at review time; it was 2,517 by the time the routes were split, because `schemas.ts` + `helpers.ts` had already been extracted.)
 
-**Target structure:**
+**Structure as shipped** (commit `7345943`):
 
 ```
 src/routes/agentTools/
-  index.ts           ← registerAgentToolRoutes() + auth middleware only
-  schemas.ts         ← all Zod schemas
-  helpers.ts         ← ok(), fail(), toolRoute(), pgErrorFields(), interval math utilities
-  session.ts         ← voice-session-start, voice-session-end, voice-session-transcript, tenant-config
-  scheduling.ts      ← check-availability, available-slots, scheduling-options, book-appointment,
-                        book-with-scheduling, cancel-appointment, reschedule-appointment, my-appointments,
-                        send-self-service-link, record-sms-consent
-  identity.ts        ← identify-caller, customer-context, find-customer-by-name, customer-history,
-                        save-customer-preference
-  knowledge.ts       ← policy-answer, service-catalog
+  index.ts           ← registerAgentToolRoutes() + auth middleware only     (107)
+  schemas.ts         ← all Zod schemas                                      (306)
+  helpers.ts         ← ok(), fail(), toolRoute(), pgErrorFields(), interval math,
+                       + AgentToolDeps (the shared plumbing interface)      (290)
+  session.ts         ← tenant-config, voice-session-{start,end,transcript}  (276)
+  scheduling.ts      ← service-catalog, check-availability, scheduling-options,
+                       available-slots, book-appointment, book-with-scheduling,
+                       my-appointments, cancel-appointment, reschedule-appointment  (899)
+  identity.ts        ← identify-caller, customer-context, find-customer-by-name,
+                       customer-history, save-customer-preference, record-consent,
+                       send-verification-code, verify-phone-code            (582)
+  knowledge.ts       ← policy-answer                                        (149)
   messaging.ts       ← take-message, page-owner, capture-job-inquiry,
-                        send-verification-code, verify-phone-code
-  aiCost.ts          ← record-ai-cost
-  _testRoutes.ts     ← /agent-tools/_test/sync-events GET+DELETE (SYNC_TEST_RECORDER-gated)
+                       send-self-service-link                               (539)
+  aiCost.ts          ← record-ai-cost                                       (74)
+  _testRoutes.ts     ← /agent-tools/_test/sync-events GET+DELETE            (34)
 ```
+
+**Deviations from the structure proposed above, and why.** Four routes landed in a different module than this doc planned. The grouping principle used was _"what is this route about?"_ rather than _"what mechanism does it use?"_:
+
+- **`service-catalog` → `scheduling.ts`, not `knowledge.ts`.** It reads the `services` table and exists to answer "what can I book?" — it's the front half of the booking flow, not a RAG surface. `knowledge.ts` is now purely the pgvector/embedding path, which is a genuinely different dependency set (it's the only module needing `getEmbedding` / `expandQueryForEmbedding`).
+- **`send-verification-code` + `verify-phone-code` → `identity.ts`, not `messaging.ts`.** The OTP pair sends an SMS, but its _purpose_ is establishing who the caller is and that the number is really theirs. Grouping it with take-message/page-owner would have grouped by transport.
+- **`record-consent` → `identity.ts`, not `scheduling.ts`.** It's a fact about the caller, not about a booking.
+- **`send-self-service-link` → `messaging.ts`, not `scheduling.ts`.** It doesn't mutate a booking; it's an outbound, consent-gated contact — the same shape as the other three in `messaging.ts`, and the only other consumer of `ConsentService`/`SMSService`.
+
+Net effect on the module boundaries: each file's import list is now tight (`knowledge.ts` is the only one touching embeddings; `messaging.ts` is the only one touching the SMS/consent services), which was the point of the split.
 
 **Steps:**
 
 - [x] Create `src/routes/agentTools/` directory
 - [x] Extract schemas block into `schemas.ts`
 - [x] Extract helper functions into `helpers.ts` (ok, fail, toolRoute, pgErrorFields, timeToMinutes, dateTimeToMinutes, minutesToTime, mergeIntervals, subtractIntervals, bookingOutcomeFromAgentError, parseOrFail, captureRequestedService)
-- [ ] Move session routes into `session.ts`
-- [ ] Move scheduling routes into `scheduling.ts`
-- [ ] Move identity routes into `identity.ts`
-- [ ] Move knowledge routes into `knowledge.ts`
-- [ ] Move messaging routes into `messaging.ts`
-- [ ] Move aiCost route into `aiCost.ts`
-- [ ] Move test routes into `_testRoutes.ts`
-- [ ] Rewrite `index.ts` to import and register all sub-modules
-- [ ] Update `src/index.ts` import path (`./routes/agentTools` → `./routes/agentTools/index`)
-- [ ] Verify all tests still pass (`npm test`)
+- [x] Move session routes into `session.ts`
+- [x] Move scheduling routes into `scheduling.ts`
+- [x] Move identity routes into `identity.ts`
+- [x] Move knowledge routes into `knowledge.ts`
+- [x] Move messaging routes into `messaging.ts`
+- [x] Move aiCost route into `aiCost.ts`
+- [x] Move test routes into `_testRoutes.ts`
+- [x] Rewrite `index.ts` to import and register all sub-modules
+- [x] Update `src/index.ts` import path (`./routes/agentTools` → `./routes/agentTools/index`)
+- [x] Verify all tests still pass — 2,345/2,345 ✓, `npm run checks` clean
+- [x] Update `CLAUDE.md` "Key Directories" for the new module path (per the note at the bottom of this doc)
+
+**Notes for the next reader:**
+
+- All 27 tool routes + the 2 test routes moved **verbatim** — no behavior change.
+- `AgentToolDeps` (in `helpers.ts`) replaced threading five positional args through every module; `index.ts` builds it once and each module destructures only what it needs.
+- Test imports needed no changes: they import the directory path (`src/routes/agentTools`), which resolves to `index.ts` under this repo's CommonJS setup. The one exception was `tests/routes/available-slots.test.ts`, which reads the route file **off disk** to assert the route still exists — it now points at `scheduling.ts`. Watch for that pattern if you split another route file.
 
 ---
 
@@ -137,11 +155,11 @@ agent/src/tools/
 
 **Steps:**
 
-- [ ] Audit `src/services/phoneUtils.ts` — identify any backend-only logic (not in `shared/phone.ts`)
-- [ ] If no backend-only logic: replace `phoneUtils.ts` body with re-exports from `shared/phone.ts`; update all imports
-- [ ] Audit `src/services/nameUtils.ts` vs `shared/name.ts`
-- [ ] If no backend-only logic: replace `nameUtils.ts` body with re-exports from `shared/name.ts`; update all imports
-- [ ] Run `npm run checks` to confirm zero TS errors
+- [x] Audit `src/services/phoneUtils.ts` — identify any backend-only logic (not in `shared/phone.ts`)
+- [x] If no backend-only logic: replace `phoneUtils.ts` body with re-exports from `shared/phone.ts`; update all imports
+- [x] Audit `src/services/nameUtils.ts` vs `shared/name.ts`
+- [x] If no backend-only logic: replace `nameUtils.ts` body with re-exports from `shared/name.ts`; update all imports
+- [x] Run `npm run checks` to confirm zero TS errors (`tsc --noEmit` clean ✓)
 
 ---
 

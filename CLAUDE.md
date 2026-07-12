@@ -11,7 +11,7 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 ## Architecture
 
 - **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + OpenAI (TTS) → Fastify `/agent-tools/*`
-- **Backend**: Fastify (29 route modules under `src/routes/`) → Postgres (Railway)
+- **Backend**: Fastify (28 flat route modules under `src/routes/` + the `agentTools/` module dir) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `ai-sec-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind + TS
 - **Database**: Postgres + pgvector, RLS multi-tenancy, atomic booking RPCs
@@ -31,8 +31,9 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 
 Items below capture hidden context — things you can't grep for. Everything else (flat service files, type definitions, doc tree) is derivable from the filesystem.
 
-- `/src` — Fastify backend (slim `index.ts` + 29 route modules)
+- `/src` — Fastify backend (slim `index.ts` + 28 flat route modules + `routes/agentTools/`)
 - `/src/routes/routeHelpers.ts` — `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`
+- `/src/routes/agentTools/` — the 27 `/agent-tools/*` routes the voice agent calls, split by concern 2026-07-11 (was a single 2,517-line `agentTools.ts`). `index.ts` owns ONLY the shared `x-agent-secret` auth hook + registration order; `schemas.ts` (Zod) and `helpers.ts` (`ok`/`fail`/`toolRoute`/`pgErrorFields`/interval math + the `AgentToolDeps` plumbing interface every module destructures) are shared. Route modules: `session` (tenant-config + voice-session lifecycle), `identity` (identify/lookup/history, preferences, consent, OTP verification), `scheduling` (service-catalog, availability, both booking RPCs, cancel/reschedule), `knowledge` (RAG policy-answer — the only module touching embeddings), `messaging` (take-message, page-owner, job inquiry, self-service link — the only module touching ConsentService/SMSService), `aiCost`, `_testRoutes` (SYNC_TEST_RECORDER readout). Grouped by what a route is ABOUT, not the mechanism it uses — so the OTP pair lives in `identity` (it establishes who the caller is) and `send-self-service-link` in `messaging` (an outbound contact), not with their transport. Importers use the directory path (`./routes/agentTools`), which resolves to `index.ts`. Note `tests/routes/available-slots.test.ts` reads the route file OFF DISK to assert the route exists — it points at `scheduling.ts`; a future split must update it.
 - `/src/services/communications/` — CommunicationService + email/sms/appointment services + Handlebars templates + ProviderRegistry (Telnyx + Mock). Consent-gated.
 - `/src/services/reminders/` — ReminderService schedules; reminderProcessor delivers via CommunicationService; reminderRepository handles DB.
 - `/src/database/index.ts` — Canonical pool (lazy singleton w/ deadlock-prevention timeouts: `statement_timeout=30000`, `lock_timeout=10000`, `idle_in_transaction_session_timeout=60000`, `max=10`, `connectionTimeoutMillis=5000`). The first three are Postgres server-side GUCs (`options` string); `connectionTimeoutMillis` is the client-side checkout cap — added 2026-05-21 so a request that can't get a pool slot under load fails fast (→ error → `errors_total`) instead of hanging forever. `createWithTenantClient(pool)` returns the per-request RLS-scoped helper injected into routes.
@@ -126,7 +127,7 @@ Durable rules-of-engagement that override "build for the future":
 
 **Backend**
 
-- Slim `index.ts` registers 29 route modules. Tenant-scoped routes use `withTenantClient()` for RLS.
+- Slim `index.ts` registers 28 flat route modules + `routes/agentTools/` (a directory since 2026-07-11). Tenant-scoped routes use `withTenantClient()` for RLS.
 - All mutations: Zod-validated, response shape `{ success, error?, details? }`, `assertRowAffected()` returns 404 on zero-row UPDATE/DELETE (never silent success).
 - Production env validation: refuses to start without `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`.
 - Graceful shutdown on SIGTERM/SIGINT (closes Fastify + drains pool — required for Railway).
@@ -155,7 +156,7 @@ Durable rules-of-engagement that override "build for the future":
 
 ## Project Status
 
-**Phase 13 (Production Readiness) in progress.** ~2,340 backend + ~1,017 dashboard + ~496 agent tests passing (verified 2026-07-09 against real test_db / vitest). 29 route modules under `src/routes/`. 35 Playwright e2e spec files run on every PR. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + observability setup in `docs/DEPLOYMENT.md`. Per-session shipped history lives in `docs/RESOLVED.md`.
+**Phase 13 (Production Readiness) in progress.** ~2,340 backend + ~1,017 dashboard + ~496 agent tests passing (verified 2026-07-09 against real test_db / vitest). 28 flat route modules under `src/routes/` (+ the `agentTools/` module dir). 36 Playwright e2e spec files run on every PR. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + observability setup in `docs/DEPLOYMENT.md`. Per-session shipped history lives in `docs/RESOLVED.md`.
 
 **Legal-hold — do NOT merge/enable without owner + legal sign-off:** PR #68 (`POST /customers/:id/purge`, single-customer GDPR/CCPA erasure, kill-switch `ENABLE_CUSTOMER_PURGE`) and PR #69 (automated data-retention worker, `ENABLE_RETENTION_WORKER` + explicit `RETENTION_DAYS`). Both erase PII irreversibly and are inert until enabled. Branches deleted 2026-06-23; restorable from the PR pages. See `docs/TODO.md` → Legal-hold.
 
