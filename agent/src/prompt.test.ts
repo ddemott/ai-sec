@@ -883,3 +883,72 @@ describe('formatDateForPrompt', () => {
     expect(formatDateForPrompt(lateUTC, 'America/New_York')).toContain('April 24');
   });
 });
+
+describe('buildSystemPrompt — prefetched caller context', () => {
+  const KNOWN = {
+    name: 'Dale',
+    history: 'Booked a cut on May 2',
+    preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
+  };
+
+  it('HAPPY: bakes the returning caller name, preferences, and history into the prompt', () => {
+    // WHO: a returning customer whose record was prefetched at session start.
+    // WHAT: name + every saved preference + recent-call summary must appear in
+    //        the instructions the LLM sees on turn one.
+    // WHEN: every call where caller ID resolves to a known customer.
+    // WHY: this is the read-back half of the preference loop. Before 2026-07-12
+    //        preferences were written by save_customer_preference and then
+    //        almost never read — nothing put them in front of the model.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, knownCustomer: KNOWN });
+
+    expect(prompt).toContain("# Who you're speaking to");
+    expect(prompt).toContain('Dale');
+    expect(prompt).toContain('preferred_stylist: Maria');
+    expect(prompt).toContain('last_service: balayage');
+    expect(prompt).toContain('Booked a cut on May 2');
+  });
+
+  it('HAPPY: tells the model the context is already loaded, so it does not re-fetch', () => {
+    // WHY: the old prompt claimed context was already present when it was NOT.
+    //       Now that the claim is true, it must be paired with an explicit
+    //       "don't call get_customer_context for it" so the model doesn't burn
+    //       a round-trip (and a silent pause) re-fetching what it already has.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, knownCustomer: KNOWN });
+    expect(prompt).toContain('do NOT call get_customer_context');
+  });
+
+  it('SAD: with no prefetched context, the prompt tells the model to FETCH rather than claiming it has it', () => {
+    // WHO: a new caller, a blocked caller ID, or a backend that missed the 1.5s
+    //       prefetch deadline.
+    // WHAT: the preferences guidance must NOT assert "you already have this
+    //        caller's preferences" — it must direct the model to call
+    //        get_customer_context(phone) itself.
+    // WHY: THE ORIGINAL BUG. The prompt asserted context it never received, so
+    //        the model had no reason to fetch — and saved preferences went unread
+    //        on every call. Asserting absent context is worse than saying nothing.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, knownCustomer: null });
+
+    expect(prompt).not.toContain("# Who you're speaking to");
+    expect(prompt).toContain('You do NOT have this caller');
+    expect(prompt).toContain('call get_customer_context(phone)');
+  });
+
+  it('SAD: an owner who turned preference capture OFF gets no saved preferences in the prompt', () => {
+    // WHO: a tenant with save_preferences_enabled = false on the AI Persona page.
+    // WHAT: the caller's name/history may still be used (that's plain CRM), but
+    //        saved preferences must not be surfaced to the model.
+    // WHY: the toggle means "don't do preferences on my calls" — honoring it on
+    //        the write path while replaying preferences on the read path would
+    //        leak exactly what the owner opted out of.
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      knownCustomer: KNOWN,
+      savePreferencesEnabled: false,
+    });
+
+    expect(prompt).toContain('Dale'); // name still available
+    expect(prompt).not.toContain('preferred_stylist: Maria');
+    expect(prompt).not.toContain('balayage');
+    expect(prompt).not.toContain('# Customer preferences');
+  });
+});

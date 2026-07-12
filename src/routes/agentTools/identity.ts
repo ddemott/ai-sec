@@ -67,12 +67,13 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
     'Failed to record consent'
   );
 
-  // save_customer_preference — persist a durable fact about a known caller
-  // into customers.metadata.preferences. The same JSON surface
-  // get_customer_context_for_call reads back on the next call, so this closes
-  // the write half of the preference round-trip. No-ops gracefully (success
-  // shape with saved=false) when the phone isn't a known customer yet, so the
-  // LLM relays "noted" without a scary error mid-call.
+  // save_customer_preference — persist a durable fact about a known caller into
+  // the customer_preferences table (one row per customer+key; was a jsonb blob
+  // on customers.metadata until 2026-07-12). The same rows get_customer_context_
+  // for_call reads back on the next call, so this closes the write half of the
+  // preference round-trip. No-ops gracefully (success shape with saved=false)
+  // when the phone isn't a known customer yet, so the LLM relays "noted" without
+  // a scary error mid-call.
   toolRoute(
     app,
     '/agent-tools/save-customer-preference',
@@ -87,7 +88,8 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
       }
       // Normalize the key to a short stable slug so repeat saves of the same
       // concept ("preferred stylist" / "Preferred Stylist") collapse onto one
-      // JSON key instead of accreting near-duplicates.
+      // row (the PK is (customer_id, pref_key)) instead of accreting
+      // near-duplicates.
       const key = args.key
         .trim()
         .toLowerCase()
@@ -98,18 +100,22 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
       }
 
       const saved = await withTenantClient(args.tenant_id, async (client) => {
-        // jsonb merge: metadata || { preferences: (metadata.preferences || {}) || { key: value } }
-        // Updates only a live (non-deleted) customer the CRM already knows.
+        // INSERT ... ON CONFLICT: re-saving a key UPDATES it in place and bumps
+        // updated_at, so a preference carries how recently it was confirmed
+        // (a 2-year-old "preferred stylist" is worth re-asking, not asserting).
+        // The SELECT sub-query is the "known customer" gate — it yields no row
+        // for an unknown or soft-deleted phone, so the INSERT writes nothing and
+        // rowCount stays 0, which the caller reports as saved:false.
         const res = await client.query<{ customer_id: string }>(
-          `UPDATE customers
-             SET metadata = COALESCE(metadata, '{}'::jsonb)
-               || jsonb_build_object(
-                    'preferences',
-                    COALESCE(metadata->'preferences', '{}'::jsonb)
-                      || jsonb_build_object($3::text, $4::text)
-                  )
-           WHERE tenant_id = $1 AND phone = $2
-             AND (is_deleted IS NULL OR is_deleted = false)
+          `INSERT INTO customer_preferences
+                 (tenant_id, customer_id, pref_key, pref_value)
+           SELECT c.tenant_id, c.customer_id, $3::text, $4::text
+             FROM customers c
+            WHERE c.tenant_id = $1 AND c.phone = $2
+              AND (c.is_deleted IS NULL OR c.is_deleted = false)
+           ON CONFLICT (customer_id, pref_key) DO UPDATE
+                  SET pref_value = EXCLUDED.pref_value,
+                      updated_at = now()
            RETURNING customer_id`,
           [args.tenant_id, normalized, key, args.value.trim()]
         );
@@ -133,6 +139,19 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
   // if unknown; updates name when the stored name is blank or "Valued Customer".
   // Called by the agent as soon as the caller gives their name, even without booking,
   // so every call leaves a contact record behind.
+  //
+  // THIS IS THE FORWARDED-LINE PREFERENCE LOAD. On a forwarded line (or a blocked
+  // caller ID) the agent starts the call with callerPhone = null — both guards in
+  // agent/src/index.ts null it, because the SIP caller-ID is the FORWARDING line,
+  // not the customer. So the session-start prefetch (agent/src/customerContext.ts)
+  // has nothing to key on and skips. The caller's real number only becomes known
+  // when they say it out loud — which is exactly this call. So when the number
+  // they gave MATCHES a customer we already have, this route hands back their
+  // name, saved preferences, and recent history in the tool result, exactly as
+  // the prefetch would have. The alternative — a prompt line asking the model to
+  // please call get_customer_context afterwards — is the same "hope the LLM
+  // fetches" weakness that made preferences write-only in the first place.
+  // (2026-07-12)
   toolRoute(
     app,
     '/agent-tools/identify-caller',
@@ -142,8 +161,12 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
       if (!isValidPhone(normalized)) {
         return fail(reply, 'Invalid phone number — cannot create contact.');
       }
-      await withTenantClient(args.tenant_id, async (client) => {
-        const cust = await client.query<{ customer_id: string }>(
+      const context = await withTenantClient(args.tenant_id, async (client) => {
+        // xmax = 0 is Postgres's "this tuple was INSERTed, not UPDATEd by the
+        // ON CONFLICT branch" tell. It's how we know whether the number they just
+        // gave us was already ours (a returning caller whose preferences we should
+        // load) or brand new (nothing to load).
+        const cust = await client.query<{ customer_id: string; is_new: boolean; name: string }>(
           `INSERT INTO customers (tenant_id, phone, name)
            VALUES ($1, $2, $3)
            ON CONFLICT (tenant_id, phone) DO UPDATE
@@ -152,7 +175,7 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
                THEN EXCLUDED.name
                ELSE customers.name
              END
-           RETURNING customer_id`,
+           RETURNING customer_id, (xmax = 0) AS is_new, name`,
           [args.tenant_id, normalized, args.name ?? null]
         );
         // Backfill the verbally-captured number + customer onto the live call row
@@ -179,8 +202,48 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
             );
           }
         }
+
+        const row = cust.rows[0];
+        // Brand-new contact: nothing to recall, and saying "welcome back" to a
+        // first-time caller is worse than saying nothing.
+        if (!row || row.is_new) return null;
+
+        const prefs = await client.query<{ preferences: Record<string, unknown> }>(
+          `SELECT COALESCE(
+                    (SELECT jsonb_object_agg(cp.pref_key, cp.pref_value)
+                       FROM customer_preferences cp
+                      WHERE cp.customer_id = $1 AND cp.tenant_id = $2),
+                    '{}'::jsonb
+                  ) AS preferences`,
+          [row.customer_id, args.tenant_id]
+        );
+        const sums = await client.query<{ summary: string }>(
+          `SELECT summary FROM voice_sessions
+            WHERE tenant_id = $1 AND customer_id = $2
+              AND summary IS NOT NULL
+              AND (is_deleted IS NULL OR is_deleted = false)
+            ORDER BY started_at DESC
+            LIMIT 3`,
+          [args.tenant_id, row.customer_id]
+        );
+
+        const preferences = prefs.rows[0]?.preferences ?? {};
+        const history = sums.rows.map((s) => s.summary).join('; ');
+        // A returning row with nothing on it is, to the caller, indistinguishable
+        // from a new one — don't announce familiarity we can't back up.
+        if (Object.keys(preferences).length === 0 && !history) return null;
+
+        return { name: row.name || 'Unknown', preferences, history };
       });
-      return ok(reply, { saved: true });
+
+      if (!context) return ok(reply, { saved: true, returning_customer: false });
+      return ok(reply, {
+        saved: true,
+        returning_customer: true,
+        name: context.name,
+        preferences: context.preferences,
+        history: context.history || 'No history',
+      });
     },
     'Failed to identify caller'
   );
@@ -203,11 +266,21 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
           name: string;
           preferences: Record<string, unknown> | null;
         }>(
-          `SELECT customer_id, name,
-                  COALESCE(metadata->'preferences', '{}'::jsonb) AS preferences
-          FROM customers
-          WHERE tenant_id = $1 AND phone = $2
-            AND (is_deleted IS NULL OR is_deleted = false)`,
+          // Preferences are aggregated back into the same {key: value} object
+          // the LLM has always seen — the storage moved to customer_preferences
+          // (2026-07-12) but the wire shape did not, so the agent, the prompt
+          // prefetch, and the dashboard are all unaffected.
+          `SELECT c.customer_id, c.name,
+                  COALESCE(
+                    (SELECT jsonb_object_agg(cp.pref_key, cp.pref_value)
+                       FROM customer_preferences cp
+                      WHERE cp.customer_id = c.customer_id
+                        AND cp.tenant_id = c.tenant_id),
+                    '{}'::jsonb
+                  ) AS preferences
+          FROM customers c
+          WHERE c.tenant_id = $1 AND c.phone = $2
+            AND (c.is_deleted IS NULL OR c.is_deleted = false)`,
           [args.tenant_id, normalized]
         );
         if (cust.rows.length === 0) return null;
@@ -319,11 +392,18 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
           name: string;
           preferences: Record<string, unknown> | null;
         }>(
-          `SELECT customer_id, name,
-                  COALESCE(metadata->'preferences', '{}'::jsonb) AS preferences
-           FROM customers
-           WHERE tenant_id = $1 AND phone = $2
-             AND (is_deleted IS NULL OR is_deleted = false)`,
+          // Same {key: value} aggregation as customer-context — see the note there.
+          `SELECT c.customer_id, c.name,
+                  COALESCE(
+                    (SELECT jsonb_object_agg(cp.pref_key, cp.pref_value)
+                       FROM customer_preferences cp
+                      WHERE cp.customer_id = c.customer_id
+                        AND cp.tenant_id = c.tenant_id),
+                    '{}'::jsonb
+                  ) AS preferences
+           FROM customers c
+           WHERE c.tenant_id = $1 AND c.phone = $2
+             AND (c.is_deleted IS NULL OR c.is_deleted = false)`,
           [args.tenant_id, normalized]
         );
         if (cust.rows.length === 0) return null;

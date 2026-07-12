@@ -622,7 +622,8 @@ describe('agentTools /identify-caller', () => {
     //       still showed "new caller / no number" (Dale's observation).
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [{ customer_id: 'cust-1' }] }, // INSERT ... RETURNING customer_id
+        // is_new:true — a first-time caller, so no preference load follows.
+        { rows: [{ customer_id: 'cust-1', is_new: true, name: 'Bob Jones' }] },
         { rows: [], rowCount: 1 }, // UPDATE voice_sessions
       ],
     });
@@ -634,9 +635,78 @@ describe('agentTools /identify-caller', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true });
+    expect(res.json().result).toMatchObject({ returning_customer: false });
     expect(queries).toHaveLength(2);
     expect(queries[1].text).toContain('UPDATE voice_sessions');
     expect(queries[1].params).toEqual([TENANT_ID, 'SCL_abc', '+13128651186', 'cust-1']);
+  });
+
+  it('HAPPY: a forwarded-line caller whose spoken number is ALREADY ours gets their preferences back in the same call', async () => {
+    // WHO: a regular calling the shop's published line, which forwards into the
+    //       assistant. The SIP caller-ID is the FORWARDING number, so both guards
+    //       in agent/src/index.ts null it — the agent has NO caller ID.
+    // WHAT: the session-start prefetch (agent/src/customerContext.ts) therefore
+    //        skipped, and the caller's real number only exists once they say it.
+    //        identify_caller is that moment — so when the number matches a
+    //        customer we already have, this route returns their saved preferences
+    //        and history right here, in the same round-trip.
+    // WHEN: mid-call, as soon as the caller reads out their number.
+    // WHY: without this, a forwarded-line regular is a stranger for the whole
+    //       call. The only other route to their preferences is hoping the model
+    //       independently calls get_customer_context afterwards — the exact
+    //       "hope the LLM fetches" weakness that made preferences write-only in
+    //       the first place. Forwarded lines are the DEFAULT for small businesses
+    //       that keep their published number, so this is the common case, not an
+    //       edge case.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        // is_new:false → the ON CONFLICT branch fired: we already had this number.
+        { rows: [{ customer_id: 'cust-9', is_new: false, name: 'Reba' }] },
+        { rows: [], rowCount: 1 }, // UPDATE voice_sessions backfill
+        { rows: [{ preferences: { preferred_stylist: 'Maria', last_service: 'balayage' } }] },
+        { rows: [{ summary: 'Booked a cut, asked about color pricing' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '3128651186',
+      name: 'Reba',
+      call_id: 'SCL_fwd',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({
+      saved: true,
+      returning_customer: true,
+      name: 'Reba',
+      preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
+      history: 'Booked a cut, asked about color pricing',
+    });
+    expect(queries).toHaveLength(4);
+    expect(queries[2].text).toContain('customer_preferences');
+  });
+
+  it('SAD: a returning row with NOTHING saved on it reports returning_customer:false', async () => {
+    // WHY: a customer row that exists but carries no preferences and no call
+    //       history is, to the caller, indistinguishable from a new one. Claiming
+    //       "welcome back" with nothing to back it up is worse than saying nothing
+    //       — the agent would sound like it remembers them and then have zero to
+    //       show for it.
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-9', is_new: false, name: 'Ghost' }] },
+        { rows: [{ preferences: {} }] },
+        { rows: [] }, // no call summaries
+      ],
+    });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '3128651186',
+      name: 'Ghost',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({ saved: true, returning_customer: false });
   });
 
   it('HAPPY: existing customer with placeholder name gets name updated', async () => {
