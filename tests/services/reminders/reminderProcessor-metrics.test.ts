@@ -22,7 +22,11 @@ import type { CommunicationService } from '../../../src/services/communications/
 import type { ConsentService } from '../../../src/services/consentService.js';
 import type { ReminderSchedule } from '../../../src/services/reminders/types.js';
 import type { Appointment } from '../../../src/types/index.js';
-import { registry, remindersSentTotal, remindersSkippedTotal } from '../../../src/services/metrics.js';
+import {
+  registry,
+  remindersSentTotal,
+  remindersSkippedTotal,
+} from '../../../src/services/metrics.js';
 
 // ── Test helpers ─────────────────────────────────────────────────────
 

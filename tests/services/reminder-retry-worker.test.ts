@@ -138,8 +138,8 @@ describe('reminder retry worker — real-DB integration', () => {
     const ins = await client.query(
       `INSERT INTO reminder_schedules
          (tenant_id, appointment_id, customer_email, customer_phone, reminder_type,
-          scheduled_for, status)
-       VALUES ($1, $2, 'a@b.com', '+15550000001', '2h', NOW() - INTERVAL '1 minute', 'scheduled')
+          scheduled_for, lead_minutes, status)
+       VALUES ($1, $2, 'a@b.com', '+15550000001', '2h', NOW() - INTERVAL '1 minute', 120, 'scheduled')
        RETURNING reminder_schedule_id`,
       [tenantId, appointmentId]
     );
@@ -168,9 +168,9 @@ describe('reminder retry worker — real-DB integration', () => {
     const ins = await client.query(
       `INSERT INTO reminder_schedules
          (tenant_id, appointment_id, customer_email, reminder_type,
-          scheduled_for, status, retry_count, next_retry_at)
+          scheduled_for, lead_minutes, status, retry_count, next_retry_at)
        VALUES ($1, $2, 'b@c.com', '24h', NOW() - INTERVAL '10 minutes',
-               'scheduled', 1, NOW() + INTERVAL '5 minutes')
+               1440, 'scheduled', 1, NOW() + INTERVAL '5 minutes')
        RETURNING reminder_schedule_id`,
       [tenantId, appointmentId]
     );
@@ -196,9 +196,9 @@ describe('reminder retry worker — real-DB integration', () => {
     const ins = await client.query(
       `INSERT INTO reminder_schedules
          (tenant_id, appointment_id, customer_email, reminder_type,
-          scheduled_for, status, retry_count, next_retry_at)
+          scheduled_for, lead_minutes, status, retry_count, next_retry_at)
        VALUES ($1, $2, 'c@d.com', '72h', NOW() - INTERVAL '1 hour',
-               'scheduled', 1, NOW() - INTERVAL '1 minute')
+               4320, 'scheduled', 1, NOW() - INTERVAL '1 minute')
        RETURNING reminder_schedule_id`,
       [tenantId, appointmentId]
     );
@@ -233,8 +233,8 @@ describe('reminder retry worker — real-DB integration', () => {
     const ins = await client.query(
       `INSERT INTO reminder_schedules
          (tenant_id, appointment_id, customer_email, reminder_type,
-          scheduled_for, status)
-       VALUES ($1, $2, 'd@e.com', 'confirmation', NOW(), 'scheduled')
+          scheduled_for, lead_minutes, status)
+       VALUES ($1, $2, 'd@e.com', 'confirmation', NOW(), 0, 'scheduled')
        RETURNING reminder_schedule_id, retry_count`,
       [tenantId, appointmentId]
     );
@@ -280,8 +280,8 @@ describe('reminder retry worker — real-DB integration', () => {
     const ins = await client.query(
       `INSERT INTO reminder_schedules
          (tenant_id, appointment_id, customer_email, reminder_type,
-          scheduled_for, status)
-       VALUES ($1, $2, 'e@f.com', '24h', NOW(), 'scheduled')
+          scheduled_for, lead_minutes, status)
+       VALUES ($1, $2, 'e@f.com', '24h', NOW(), 1440, 'scheduled')
        RETURNING reminder_schedule_id`,
       [tenantId, appointmentId]
     );
@@ -320,8 +320,8 @@ describe('reminder retry worker — real-DB integration', () => {
     const ins = await client.query(
       `INSERT INTO reminder_schedules
          (tenant_id, appointment_id, customer_email, reminder_type,
-          scheduled_for, status, retry_count, next_retry_at)
-       VALUES ($1, $2, 'f@g.com', '2h', NOW(), 'scheduled', $3, NOW() - INTERVAL '1 second')
+          scheduled_for, lead_minutes, status, retry_count, next_retry_at)
+       VALUES ($1, $2, 'f@g.com', '2h', NOW(), 120, 'scheduled', $3, NOW() - INTERVAL '1 second')
        RETURNING reminder_schedule_id`,
       [tenantId, appointmentId, MAX_RETRIES]
     );

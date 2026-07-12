@@ -234,12 +234,23 @@ export class PostgresDatabaseService implements DatabaseService {
 
   // ── Reminder Operations ────────────────────────────────────────────
 
+  /**
+   * Lead time for the four legacy reminder types, for writers that don't pass
+   * lead_minutes explicitly. Confirmation fires at booking, so its lead is 0.
+   */
+  private static readonly LEGACY_LEAD_MINUTES_BY_TYPE: Record<string, number> = {
+    confirmation: 0,
+    '72h': 4320,
+    '24h': 1440,
+    '2h': 120,
+  };
+
   async createReminderSchedule(data: ReminderData): Promise<ReminderSchedule> {
     return this.withTenantClient(data.tenant_id, async (client) => {
       const result = await client.query(
         `INSERT INTO reminder_schedules
-         (appointment_id, tenant_id, customer_email, customer_phone, reminder_type, scheduled_for, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (appointment_id, tenant_id, customer_email, customer_phone, reminder_type, scheduled_for, lead_minutes, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
         [
           data.appointment_id,
@@ -248,6 +259,14 @@ export class PostgresDatabaseService implements DatabaseService {
           data.customer_phone || null,
           data.reminder_type,
           data.scheduled_for,
+          // lead_minutes is NOT NULL (migration 20260712010000) — the lead is
+          // data now, not something you infer from the type name. Callers that
+          // predate the column fall back to the legacy mapping so their rows
+          // still carry a truthful lead; 'custom' has no legacy mapping, which
+          // is the point: it MUST supply one.
+          data.lead_minutes ??
+            PostgresDatabaseService.LEGACY_LEAD_MINUTES_BY_TYPE[data.reminder_type as string] ??
+            0,
           data.status || 'scheduled',
         ]
       );

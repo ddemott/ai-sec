@@ -7,7 +7,13 @@
  * write path against an actual Postgres instance.
  */
 import { describe, it, expect } from 'vitest';
-import { BACKOFF_MIN, MAX_RETRIES, decideRetry, isRetryable, nextRetryAt } from '../../../src/services/reminders/retryPolicy';
+import {
+  BACKOFF_MIN,
+  MAX_RETRIES,
+  decideRetry,
+  isRetryable,
+  nextRetryAt,
+} from '../../../src/services/reminders/retryPolicy';
 
 describe('isRetryable', () => {
   it('HAPPY: returns true for a 5xx error (transient provider issue)', () => {

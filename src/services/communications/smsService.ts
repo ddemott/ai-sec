@@ -4,6 +4,7 @@ import type { SMSMessage, CommunicationResult } from './types.js';
 import { providerRegistry } from './ProviderRegistry.js';
 import { smsRateLimiter, RateLimitedError } from './smsRateLimit.js';
 import { recordCommunicationHistory } from './communicationHistory.js';
+import { formatLeadTime } from './formatLead.js';
 import { smsSendsTotal, errorsTotal } from '../metrics.js';
 import { buildLogger } from '../logger.js';
 
@@ -310,11 +311,16 @@ export class SMSService {
       staffName?: string;
       dateTime?: string;
       hoursUntil?: number;
+      /** Exact lead in minutes. Preferred over hoursUntil — sub-hour leads (the
+       *  voice flow's 30-minute default) can't be said in whole hours. */
+      leadMinutes?: number;
       availableTime?: string;
       message?: string;
       cancelLink?: string | null;
       rescheduleLink?: string | null;
     };
+    // Fall back to hoursUntil for any caller that hasn't moved to leadMinutes.
+    const lead = formatLeadTime(d.leadMinutes ?? (d.hoursUntil ?? 0) * 60);
     switch (template) {
       case 'appointment-confirmation':
         return (
@@ -326,7 +332,7 @@ export class SMSService {
 
       case 'appointment-reminder':
         return (
-          `🔔 Reminder: ${d.serviceName} with ${d.staffName} in ${d.hoursUntil}h at ${d.dateTime}.` +
+          `🔔 Reminder: ${d.serviceName} with ${d.staffName} in ${lead} at ${d.dateTime}.` +
           (d.cancelLink ? ` Cancel: ${d.cancelLink}` : '') +
           (d.rescheduleLink ? ` Reschedule: ${d.rescheduleLink}` : '') +
           ' Reply STOP to opt out.'

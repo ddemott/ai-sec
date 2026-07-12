@@ -332,8 +332,8 @@ describe('PK rename coverage — real-DB integration', () => {
 
       const ins = await client.query(
         `INSERT INTO reminder_schedules
-           (appointment_id, tenant_id, customer_email, reminder_type, scheduled_for)
-         VALUES ($1, $2, 'cust@test.com', '24h', '2026-06-30 10:00:00+00')
+           (appointment_id, tenant_id, customer_email, reminder_type, scheduled_for, lead_minutes)
+         VALUES ($1, $2, 'cust@test.com', '24h', '2026-06-30 10:00:00+00', 1440)
          RETURNING reminder_schedule_id, status`,
         [aptId, tenantId]
       );

@@ -249,6 +249,9 @@ export class AppointmentCommunicationService {
       serviceName: appointmentDetails.serviceName,
       staffName: appointmentDetails.staffName,
       hoursUntil: hoursUntilAppointment,
+      // Exact lead so the SMS can say "30 minutes" instead of "0.5h". The
+      // hours param stays fractional-capable for the same reason.
+      leadMinutes: Math.round(hoursUntilAppointment * 60),
       dateTime:
         dateTime.toLocaleDateString() +
         ' at ' +

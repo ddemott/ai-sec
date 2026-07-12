@@ -16,6 +16,47 @@ import type { ReminderSchedule } from './types.js';
 
 export type { ReminderSchedule } from './types.js';
 
+/**
+ * Did the reminder actually reach the customer on ANY channel?
+ *
+ * CommunicationService returns `{ email?: {success}, sms?: {success} }` — a key
+ * is present only for a channel it attempted. This used to read
+ * `result?.email?.success === true`, which meant an SMS-only customer (no email
+ * on file, or email not consented) sent their text successfully and was still
+ * reported as a failure. processReminder then marked the row 'failed', and
+ * retryPolicy re-sent it at 5m/30m/2h — so the customer got the SAME reminder
+ * up to four times. Any SMS-only reminder flow is a text-spam flow until this
+ * reads both channels. (2026-07-12)
+ */
+function anyChannelSucceeded(result?: {
+  email?: { success?: boolean };
+  sms?: { success?: boolean };
+}): boolean {
+  return result?.email?.success === true || result?.sms?.success === true;
+}
+
+/** Legacy lead, recoverable from the type name. Only used when lead_minutes is absent. */
+const LEAD_BY_TYPE: Record<string, number> = { '72h': 4320, '24h': 1440, '2h': 120 };
+
+/**
+ * How far before the appointment does this reminder fire?
+ *
+ * `lead_minutes` (migration 20260712010000) is the source of truth. The
+ * type-name fallback exists only for rows written before that column and for
+ * hand-built test fixtures. A 'custom' reminder has no name to parse — its lead
+ * lives only in the column — so a missing lead_minutes there means the row is
+ * unsendable rather than silently mis-timed.
+ */
+function resolveLeadMinutes(reminder: {
+  reminderType?: string;
+  leadMinutes?: number | null;
+  lead_minutes?: number | null;
+}): number | null {
+  const stored = reminder.leadMinutes ?? reminder.lead_minutes;
+  if (typeof stored === 'number' && Number.isFinite(stored) && stored > 0) return stored;
+  return LEAD_BY_TYPE[reminder.reminderType ?? ''] ?? null;
+}
+
 export class ReminderService {
   // Use injected mocks directly for all testable methods
   public db: DatabaseService;
@@ -157,6 +198,9 @@ export class ReminderService {
         customerEmail: reminder.customer_email,
         customerPhone: reminder.customer_phone,
         scheduledFor: reminder.scheduled_for,
+        // The lead the caller chose. Without this, a 'custom' reminder reaches
+        // sendReminder with no way to know how far ahead it is.
+        leadMinutes: reminder.lead_minutes,
       };
 
       const appointment = await this.db.getAppointmentById(normalizedReminder.appointmentId);
@@ -307,7 +351,14 @@ export class ReminderService {
         normalizedAppointment.customerPhone,
         'sms'
       );
-      return emailConsent && smsConsent;
+      // OR, not AND. This gate answers "can we reach them on ANY channel?" — it
+      // is not the per-channel authority. EmailService and SMSService each
+      // re-check consent at the wire (emailService.ts:78, smsService.ts:88) and
+      // refuse their own send, so a customer who consented to SMS but not email
+      // gets the text and no email. The old AND meant a caller who verbally said
+      // "yes, text me" got NOTHING the moment they had an email address on file
+      // — the email channel they never opted into vetoed the SMS they did.
+      return emailConsent || smsConsent;
     } else if (normalizedAppointment.customerEmail) {
       return await this.consentService.checkConsent(
         normalizedAppointment.tenantId,
@@ -364,12 +415,19 @@ export class ReminderService {
           appointmentId: reminder.appointment_id?.toString() || reminder.appointmentId?.toString(),
         }
       );
-      return result?.email?.success === true;
+      return anyChannelSucceeded(result);
     }
 
-    // 72h, 24h, 2h reminders
-    if (['72h', '24h', '2h'].includes(reminder.reminderType)) {
-      const hours = reminder.reminderType === '72h' ? 72 : reminder.reminderType === '24h' ? 24 : 2;
+    // Advance reminders: the legacy fixed types plus 'custom', the caller-chosen
+    // lead the voice agent offers at booking ("text me 30 minutes before").
+    if (['72h', '24h', '2h', 'custom'].includes(reminder.reminderType)) {
+      // lead_minutes is the source of truth (migration 20260712010000). The
+      // type-name fallback is only for rows written before that column existed
+      // (and for unit tests that construct a reminder by hand) — 'custom' has no
+      // fallback by definition, which is exactly why the column had to exist.
+      const leadMinutes = resolveLeadMinutes(reminder);
+      if (leadMinutes === null) return false;
+      const hours = leadMinutes / 60;
       const result = await this.communicationService.sendAppointmentReminder(
         normalizedAppointment.tenantId.toString(),
         normalizedAppointment.customerEmail,
@@ -384,7 +442,7 @@ export class ReminderService {
         },
         hours
       );
-      return result?.email?.success === true;
+      return anyChannelSucceeded(result);
     }
 
     // Unknown reminder type

@@ -58,6 +58,7 @@ import {
 import {
   scheduleRemindersForAppointment,
   rescheduleRemindersForAppointment,
+  saveReminderLeadPreference,
 } from '../../services/reminders/scheduleForAppointment';
 
 export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {
@@ -568,12 +569,32 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
 
       bookingAttemptsTotal.inc({ outcome: 'success', source: 'agent' });
       if (result.appointment_id) {
+        // reminder_lead_minutes is the caller's answer to "would you like a text
+        // reminder, and how far ahead?" — passed explicitly rather than read back
+        // from their preferences, because seeding is fire-and-forget and racing a
+        // just-written preference on a live call is not a thing worth debugging.
+        // Absent → the seeder falls back to their stored preference, then to the
+        // standard bundle. See scheduleForAppointment.ts.
         void scheduleRemindersForAppointment(
           withTenantClient,
           args.tenant_id,
           result.appointment_id,
-          app.log
+          app.log,
+          { reminderLeadMinutes: args.reminder_lead_minutes ?? null }
         );
+        // Remember the lead for next time, so a returning caller doesn't have to
+        // ask twice (and so a reschedule rebuilds the row at the same lead).
+        // Fire-and-forget for the same reason the seeding is: a preference write
+        // must never fail a confirmed booking.
+        if (args.reminder_lead_minutes != null) {
+          void saveReminderLeadPreference(
+            withTenantClient,
+            args.tenant_id,
+            args.phone,
+            args.reminder_lead_minutes,
+            app.log
+          );
+        }
       }
       return ok(reply, {
         success: true,
