@@ -39,13 +39,27 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { Pool, type Client } from 'pg';
-import { createHmac } from 'crypto';
+import { generateKeyPairSync, sign as edSign, type KeyObject } from 'crypto';
 import { API_DB_URL, getRootClient, createTenant, skipIfDbDown } from '../utils';
 import { createWithTenantClient } from '../../src/database';
 import { registerCommunicationRoutes } from '../../src/routes/communications';
 import { jsonContentTypeParser } from '../../src/jsonContentTypeParser';
 
-const SECRET = 'test-telnyx-webhook-secret';
+// A REAL Ed25519 keypair. The tests sign with the private half and the app
+// verifies with the public half — genuinely asymmetric, exactly as Telnyx does it.
+//
+// This matters more than it looks. The previous suite signed with the same
+// HMAC-SHA256 scheme the verifier checked, so it was self-consistent and PASSED
+// while the implementation was verifying an algorithm Telnyx does not use. A test
+// that mirrors the implementation's mistake proves nothing. Here the signature is
+// produced by Node's Ed25519 primitive, so if the verifier's algorithm, header
+// names, or signed-string format are wrong, these tests FAIL.
+const { publicKey: ED_PUBLIC, privateKey: ED_PRIVATE } = generateKeyPairSync('ed25519');
+// Telnyx's portal hands you bare base64 of the raw 32-byte key (no PEM armor).
+const PUBLIC_KEY_B64 = ED_PUBLIC.export({ format: 'der', type: 'spki' })
+  .subarray(12)
+  .toString('base64');
+const OTHER_KEY = generateKeyPairSync('ed25519').privateKey;
 const CUSTOMER = '+16305550142';
 
 // tenants.inbound_phone is UNIQUE (a number belongs to exactly one tenant), so
@@ -82,18 +96,24 @@ function inboundPayload(text: string, from = CUSTOMER, to?: string) {
  */
 function postInbound(
   payload: unknown,
-  opts: { sign?: boolean; badSignature?: boolean; secret?: string } = {}
+  opts: {
+    sign?: boolean;
+    badSignature?: boolean;
+    key?: KeyObject;
+    timestamp?: number;
+  } = {}
 ) {
   const raw = JSON.stringify(payload);
   const headers: Record<string, string> = { 'content-type': 'application/json' };
 
   if (opts.sign) {
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const sig = createHmac('sha256', opts.secret ?? SECRET)
-      .update(`${timestamp}|${raw}`)
-      .digest('hex');
-    headers['telnyx-signature'] =
-      `t=${timestamp},v1=${opts.badSignature ? 'deadbeef'.repeat(8) : sig}`;
+    const ts = String(opts.timestamp ?? Math.floor(Date.now() / 1000));
+    // The exact string Telnyx signs: `${timestamp}|${rawBody}`.
+    const sig = edSign(null, Buffer.from(`${ts}|${raw}`, 'utf8'), opts.key ?? ED_PRIVATE);
+    headers['telnyx-timestamp'] = ts;
+    headers['telnyx-signature-ed25519'] = opts.badSignature
+      ? Buffer.alloc(64, 1).toString('base64') // well-formed length, wrong bytes
+      : sig.toString('base64');
   }
 
   return app.inject({
@@ -135,13 +155,13 @@ afterAll(async () => {
   await app?.close();
   await pool?.end();
   await setup?.end();
-  delete process.env.TELNYX_WEBHOOK_SECRET;
+  delete process.env.TELNYX_PUBLIC_KEY;
 });
 
 beforeEach(async (ctx) => {
   skipIfDbDown(ctx, () => dbAvailable);
   if (!dbAvailable) return;
-  process.env.TELNYX_WEBHOOK_SECRET = SECRET;
+  process.env.TELNYX_PUBLIC_KEY = PUBLIC_KEY_B64;
   seq += 1;
   OUR_NUMBER = `+1630822${String(9000 + seq).padStart(4, '0')}`;
   tenantId = await createTenant(setup, 'Inbound SMS Tenant', 'salon', 'Etc/UTC');
@@ -174,36 +194,39 @@ describe('POST /communications/telnyx/inbound — signature guard', () => {
     expect(await optOutRows(tenantId)).toHaveLength(0);
   });
 
-  it('SECURITY: a signature from the WRONG secret is rejected 403', async () => {
-    // Correctly-formed HMAC, wrong key — i.e. the guard actually checks the key
-    // rather than merely checking that a v1= field parses.
+  it('SECURITY: a signature from the WRONG KEY is rejected 403', async () => {
+    // A REAL, correctly-formed Ed25519 signature — from a different keypair. The
+    // guard must check WHO signed, not merely that a signature parses.
     const res = await postInbound(inboundPayload('STOP'), {
       sign: true,
-      secret: 'not-the-real-secret',
+      key: OTHER_KEY,
     });
     expect(res.statusCode).toBe(403);
     expect(await optOutRows(tenantId)).toHaveLength(0);
   });
 
-  it('SECURITY: a tampered body fails even with a signature valid for the ORIGINAL body', async () => {
-    // Proves the signature covers the PAYLOAD, not just the timestamp — i.e. an
-    // attacker can't replay a legitimately-signed message with the victim's
-    // number swapped in.
-    const original = inboundPayload('hello', '+16305559999');
-    const rawOriginal = JSON.stringify(original);
+  it('SECURITY: a tampered body fails even with a REAL signature valid for the ORIGINAL body', async () => {
+    // Proves the signature covers the PAYLOAD, not just the timestamp — an
+    // attacker who captures a legitimately-signed webhook can't replay it with
+    // the victim's number swapped in.
+    const rawOriginal = JSON.stringify(inboundPayload('hello', '+16305559999'));
     const timestamp = String(Math.floor(Date.now() / 1000));
-    const sigForOriginal = createHmac('sha256', SECRET)
-      .update(`${timestamp}|${rawOriginal}`)
-      .digest('hex');
+    // A genuine Ed25519 signature — over the ORIGINAL body.
+    const sigForOriginal = edSign(
+      null,
+      Buffer.from(`${timestamp}|${rawOriginal}`, 'utf8'),
+      ED_PRIVATE
+    ).toString('base64');
 
-    // Same (valid) signature, different body: now a STOP from the victim.
+    // Same (genuinely valid) signature, different body: now a STOP from the victim.
     const tampered = JSON.stringify(inboundPayload('STOP', CUSTOMER));
     const res = await app.inject({
       method: 'POST',
       url: '/communications/telnyx/inbound',
       headers: {
         'content-type': 'application/json',
-        'telnyx-signature': `t=${timestamp},v1=${sigForOriginal}`,
+        'telnyx-timestamp': timestamp,
+        'telnyx-signature-ed25519': sigForOriginal,
       },
       payload: tampered,
     });
@@ -212,11 +235,36 @@ describe('POST /communications/telnyx/inbound — signature guard', () => {
     expect(await optOutRows(tenantId)).toHaveLength(0);
   });
 
-  it('SECURITY: fails CLOSED when TELNYX_WEBHOOK_SECRET is unset (503, never unguarded)', async () => {
+  it('SECURITY: a STALE timestamp is rejected (bounds replay of a captured webhook)', async () => {
+    // The signature is genuine and the body is untouched — but it was signed an
+    // hour ago. Without a freshness bound, anyone who captured one valid webhook
+    // could replay it forever. The signature covers the timestamp, so an attacker
+    // cannot simply rewrite it to something current.
+    const res = await postInbound(inboundPayload('STOP'), {
+      sign: true,
+      timestamp: Math.floor(Date.now() / 1000) - 3600,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(await optOutRows(tenantId)).toHaveLength(0);
+  });
+
+  it('SECURITY: a malformed TELNYX_PUBLIC_KEY rejects rather than silently never matching', async () => {
+    // An operator pasting the wrong value (an API key, a truncated key) must get a
+    // hard failure, not a webhook that quietly 403s everything forever and looks
+    // like "Telnyx is broken".
+    process.env.TELNYX_PUBLIC_KEY = 'not-a-real-key';
+
+    const res = await postInbound(inboundPayload('STOP'), { sign: true });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toMatch(/signature/i);
+  });
+
+  it('SECURITY: fails CLOSED when TELNYX_PUBLIC_KEY is unset (503, never unguarded)', async () => {
     // An unset secret must not silently degrade a MUTATING endpoint into an open
     // one. Contrast /telnyx/status, a read-only receipt sink, which accepts
     // unsigned callbacks in dev — the asymmetry is deliberate.
-    delete process.env.TELNYX_WEBHOOK_SECRET;
+    delete process.env.TELNYX_PUBLIC_KEY;
 
     const res = await postInbound(inboundPayload('STOP'), { sign: false });
     expect(res.statusCode).toBe(503);
@@ -255,6 +303,63 @@ describe('POST /communications/telnyx/inbound — STOP handling (the compliance 
 
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toMatchObject({ handled: false, reason: 'no_keyword' });
+    expect(await optOutRows(tenantId)).toHaveLength(0);
+  });
+
+  it('SAD: a DELIVERY RECEIPT for our own reminder does NOT opt the customer out', async () => {
+    // WHO: Telnyx, reporting that the reminder text WE sent was delivered.
+    // WHAT: a messaging profile has ONE webhook URL and Telnyx sends every event
+    //        to it — message.received AND message.sent/message.finalized. So this
+    //        route receives delivery receipts for our own outbound messages.
+    // WHERE: the event_type guard at the top of /communications/telnyx/inbound.
+    // WHY: THE TRAP. On a DLR, payload.text is OUR OWN message body — and every
+    //       message we send ends with the compliance line "Reply STOP to opt out."
+    //       Without the event_type check, classifySmsKeyword() reads our own
+    //       reminder as the customer saying STOP, and we opt them out of the very
+    //       reminders they asked for. The route survived only because a DLR's `to`
+    //       is the customer's number (matching no tenant), so the tenant lookup
+    //       bailed first — safe by luck, not by design. This pins the intent.
+    const dlr = {
+      data: {
+        event_type: 'message.finalized',
+        payload: {
+          // On a DLR the direction is INVERTED: from = us, to = the customer.
+          from: { phone_number: OUR_NUMBER },
+          to: [{ phone_number: CUSTOMER, status: 'delivered' }],
+          // Our real reminder copy — note the trailing compliance line.
+          text: '🔔 Reminder: Haircut with Maria in 30 minutes. Reply STOP to opt out.',
+        },
+      },
+    };
+
+    const res = await postInbound(dlr, { sign: true });
+
+    expect(res.statusCode).toBe(200); // 200: a DLR is legitimate, and Telnyx retries non-2xx
+    expect(res.json().result).toMatchObject({
+      handled: false,
+      reason: 'not_an_inbound_message',
+    });
+    // The whole point: nobody got opted out by their own appointment reminder.
+    expect(await optOutRows(tenantId)).toHaveLength(0);
+  });
+
+  it('SAD: a message.sent event is likewise ignored', async () => {
+    // The other outbound event type Telnyx delivers to the same URL.
+    const sent = {
+      data: {
+        event_type: 'message.sent',
+        payload: {
+          from: { phone_number: OUR_NUMBER },
+          to: [{ phone_number: CUSTOMER, status: 'sent' }],
+          text: 'Confirmed: Haircut on Friday. Reply STOP to opt out.',
+        },
+      },
+    };
+
+    const res = await postInbound(sent, { sign: true });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toMatchObject({ reason: 'not_an_inbound_message' });
     expect(await optOutRows(tenantId)).toHaveLength(0);
   });
 

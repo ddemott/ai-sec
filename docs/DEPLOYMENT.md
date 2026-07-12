@@ -152,37 +152,89 @@ The backend exits on startup if any of these are missing in production (see `src
 
 The backend boots without these but specific features fail or warn loudly.
 
-| Variable                   | Required for                      | Description                                                                                                                   |
-| -------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `AGENT_SECRET`             | Voice AI tools                    | Shared secret the LiveKit agent presents on every `/agent-tools/*` call. Must match the agent's `AGENT_SECRET`. Min 32 chars. |
-| `TELNYX_API_KEY`           | Phone provisioning + SMS OTP      | Carrier API key. Boot warns if missing.                                                                                       |
-| `TELNYX_SIP_CONNECTION_ID` | Phone provisioning                | SIP Connection ID purchased numbers are routed to (e.g. `2945038451784812111`).                                               |
-| `STRIPE_WEBHOOK_SECRET`    | Stripe webhook                    | Signing secret created after deploy. Webhook handler rejects unsigned requests.                                               |
-| `STRIPE_SOLO_PRICE_ID`     | Billing checkout                  | Stripe price ID for Solo plan ($129/mo).                                                                                      |
-| `STRIPE_GROWTH_PRICE_ID`   | Billing checkout                  | Stripe price ID for Growth plan ($279/mo).                                                                                    |
-| `STRIPE_PRO_PRICE_ID`      | Billing checkout                  | Stripe price ID for Professional plan ($449/mo, backlog tier).                                                                |
-| `DASHBOARD_URL`            | Stripe checkout + OAuth redirects | Public URL of the dashboard. Default `https://localhost:4000`. **Phase 13 blocker if not set in prod.**                       |
+| Variable                   | Required for                      | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_SECRET`             | Voice AI tools                    | Shared secret the LiveKit agent presents on every `/agent-tools/*` call. Must match the agent's `AGENT_SECRET`. Min 32 chars.                                                                                                                                                                                                                                                                                                                                                                                              |
+| `TELNYX_API_KEY`           | Phone provisioning + SMS OTP      | Carrier API key. Boot warns if missing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `TELNYX_SIP_CONNECTION_ID` | Phone provisioning                | SIP Connection ID purchased numbers are routed to (e.g. `2945038451784812111`).                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `TELNYX_PUBLIC_KEY`        | Inbound SMS (STOP/START) webhook  | Telnyx's **Ed25519 public key** — see "Retrieving `TELNYX_PUBLIC_KEY`" below (the portal no longer shows it; fetch it from the API). NOT a secret we generate; there is nothing to create. `POST /communications/telnyx/inbound` **fails closed with 503 until this is set** (it mutates consent state, so it never runs unverified); `/communications/telnyx/status` accepts unverified receipts without it and logs. Replaced `TELNYX_WEBHOOK_SECRET` on 2026-07-12 — that variable is dead and setting it does nothing. |
+| `STRIPE_WEBHOOK_SECRET`    | Stripe webhook                    | Signing secret created after deploy. Webhook handler rejects unsigned requests.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `STRIPE_SOLO_PRICE_ID`     | Billing checkout                  | Stripe price ID for Solo plan ($129/mo).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `STRIPE_GROWTH_PRICE_ID`   | Billing checkout                  | Stripe price ID for Growth plan ($279/mo).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `STRIPE_PRO_PRICE_ID`      | Billing checkout                  | Stripe price ID for Professional plan ($449/mo, backlog tier).                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `DASHBOARD_URL`            | Stripe checkout + OAuth redirects | Public URL of the dashboard. Default `https://localhost:4000`. **Phase 13 blocker if not set in prod.**                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+#### Retrieving `TELNYX_PUBLIC_KEY`
+
+**Don't hunt for this in the portal.** Telnyx's docs say it lives under Mission Control →
+Keys & Credentials → Public Key, but the redesigned portal (as of 2026-07-12) does not
+surface that page anywhere — there is no such tab, and Search doesn't find it. Fetch it
+from the API instead, using the `TELNYX_API_KEY` you already have:
+
+```bash
+curl -s -H "Authorization: Bearer $TELNYX_API_KEY" https://api.telnyx.com/v2/public_key
+# → {"data":{"public":"9xjFf…arp8=","record_type":"public_key","organization_id":"…"}}
+```
+
+The `data.public` value IS `TELNYX_PUBLIC_KEY`. Paste it verbatim into the **`ai-sec`**
+(backend) service's Railway variables. Bare base64, ~44 chars ending in `=` — that's
+32 raw Ed25519 key bytes; the loader also accepts a PEM-armored form.
+
+**Nothing is generated, uploaded, or rotated by us.** Telnyx generated the keypair, keeps
+the private half forever, and signs every webhook with it. The public half only _verifies_
+those signatures — it cannot produce one, so it is not a secret. Publishing it is harmless.
+This is the whole reason the variable is not called a "secret", and the reason a
+symmetric-secret mental model (Stripe's) sends you looking for a "create key" button that
+does not and should not exist.
+
+Three Telnyx credentials, easily confused — they are not interchangeable:
+
+| Variable                   | Kind                         | Direction       |
+| -------------------------- | ---------------------------- | --------------- |
+| `TELNYX_API_KEY`           | **secret** (`KEY0…`)         | we call Telnyx  |
+| `TELNYX_PUBLIC_KEY`        | **public** key, not a secret | Telnyx calls us |
+| `TELNYX_SIP_CONNECTION_ID` | identifier, not a credential | voice routing   |
+
+Setting the key is only half of enabling inbound SMS: the Telnyx number's messaging
+profile must also point its **inbound webhook URL** at
+`https://ai-sec-production.up.railway.app/communications/telnyx/inbound`, or Telnyx never
+sends us anything to verify.
+
+Verify it took, once Railway has redeployed:
+
+```bash
+curl -i -X POST https://ai-sec-production.up.railway.app/communications/telnyx/inbound \
+  -H 'content-type: application/json' -d '{}'
+```
+
+- **503 `Webhook not configured`** → the key is not set (or the deploy hasn't finished).
+- **403 `Invalid Telnyx signature`** → **correct.** The key is loaded and verifying; an
+  unsigned request is supposed to be rejected.
+
+Then the real end-to-end check, which no test in the repo can cover (our tests sign with a
+keypair we generate, not Telnyx's): text **STOP** to the live number and confirm a row
+lands in `opt_out_records`.
 
 #### Backend — optional / tuning
 
-| Variable                                                              | Default                       | Description                                                                                                                                                                                                                |
-| --------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JWT_EXPIRY`                                                          | `8h`                          | Token expiry duration                                                                                                                                                                                                      |
-| `PORT`                                                                | `4001`                        | Server port                                                                                                                                                                                                                |
-| `CORS_ORIGIN`                                                         | (none)                        | Permitted CORS origin for cross-domain dashboard requests                                                                                                                                                                  |
-| `STRIPE_ENTERPRISE_PRICE_ID`                                          | (none)                        | Stripe price ID for Enterprise plan (not yet shipped)                                                                                                                                                                      |
-| `ENABLE_REMINDER_SCHEDULER`                                           | `false` outside prod          | Forces the appointment-reminder background worker on in dev                                                                                                                                                                |
-| `TELEPHONY_PROVIDER`                                                  | `telnyx`                      | (Optional) Override default SMS provider (Telnyx is the only supported provider; legacy support removed)                                                                                                                   |
-| `TELEPHONY_SIMULATION_MODE`                                           | `false`                       | If `true`, voice/SMS providers no-op (test/dev)                                                                                                                                                                            |
-| `SMS_SIMULATION_MODE`                                                 | `false`                       | If `true`, SMS service no-ops (test/dev)                                                                                                                                                                                   |
-| `EMAIL_USER`, `EMAIL_PASS`                                            | (none)                        | nodemailer SMTP creds for transactional email                                                                                                                                                                              |
-| `PLATFORM_ADMIN_EMAIL`                                                | falls back to `EMAIL_USER`    | Recipient for platform-internal notifications with no per-tenant owner (currently: `POST /provisioning/port-inquiry`'s "owner wants to port their number" email). Not tenant-facing.                                       |
-| `TELNYX_*` (API_KEY, SIP_CONNECTION_ID, PHONE_NUMBER, WEBHOOK_SECRET) | (required for prod)           | Telnyx for numbers, SIP, SMS, OTP                                                                                                                                                                                          |
-| `BETTER_STACK_TOKEN`                                                  | (none)                        | Source token for Better Stack (Logtail) log aggregation. When set, backend + agent forward Pino logs in addition to writing to stdout. Unset = stdout only (local dev / no aggregation). See "Observability" below.        |
-| `LOG_LEVEL`                                                           | `info` (prod) / `debug` (dev) | Pino log level (`trace` `debug` `info` `warn` `error` `fatal`). Env knob for dialing back verbosity if free-tier ingest is approached without redeploy.                                                                    |
-| `SENTRY_DSN`                                                          | (none)                        | DSN for Sentry error monitoring. When set, backend + agent send unhandled exceptions and `logError` calls to Sentry for grouping + alert-on-spike. Unset = no Sentry calls (local dev / tests). See "Observability" below. |
-| `SENTRY_ENVIRONMENT`                                                  | `$NODE_ENV`                   | Override the Sentry environment tag (`production` / `staging` / `development`). Defaults to `NODE_ENV` when unset.                                                                                                         |
-| `SENTRY_RELEASE`                                                      | (none)                        | Optional release tag (e.g. git SHA) so Sentry can group events by build. Set to `$RAILWAY_GIT_COMMIT_SHA` on Railway.                                                                                                      |
+| Variable                                                          | Default                       | Description                                                                                                                                                                                                                |
+| ----------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JWT_EXPIRY`                                                      | `8h`                          | Token expiry duration                                                                                                                                                                                                      |
+| `PORT`                                                            | `4001`                        | Server port                                                                                                                                                                                                                |
+| `CORS_ORIGIN`                                                     | (none)                        | Permitted CORS origin for cross-domain dashboard requests                                                                                                                                                                  |
+| `STRIPE_ENTERPRISE_PRICE_ID`                                      | (none)                        | Stripe price ID for Enterprise plan (not yet shipped)                                                                                                                                                                      |
+| `ENABLE_REMINDER_SCHEDULER`                                       | `false` outside prod          | Forces the appointment-reminder background worker on in dev                                                                                                                                                                |
+| `TELEPHONY_PROVIDER`                                              | `telnyx`                      | (Optional) Override default SMS provider (Telnyx is the only supported provider; legacy support removed)                                                                                                                   |
+| `TELEPHONY_SIMULATION_MODE`                                       | `false`                       | If `true`, voice/SMS providers no-op (test/dev)                                                                                                                                                                            |
+| `SMS_SIMULATION_MODE`                                             | `false`                       | If `true`, SMS service no-ops (test/dev)                                                                                                                                                                                   |
+| `EMAIL_USER`, `EMAIL_PASS`                                        | (none)                        | nodemailer SMTP creds for transactional email                                                                                                                                                                              |
+| `PLATFORM_ADMIN_EMAIL`                                            | falls back to `EMAIL_USER`    | Recipient for platform-internal notifications with no per-tenant owner (currently: `POST /provisioning/port-inquiry`'s "owner wants to port their number" email). Not tenant-facing.                                       |
+| `TELNYX_*` (API_KEY, SIP_CONNECTION_ID, PHONE_NUMBER, PUBLIC_KEY) | (required for prod)           | Telnyx for numbers, SIP, SMS, OTP. `PUBLIC_KEY` gates the inbound-SMS webhook — see the table above. (`TELNYX_WEBHOOK_SECRET` is dead as of 2026-07-12; nothing reads it.)                                                 |
+| `BETTER_STACK_TOKEN`                                              | (none)                        | Source token for Better Stack (Logtail) log aggregation. When set, backend + agent forward Pino logs in addition to writing to stdout. Unset = stdout only (local dev / no aggregation). See "Observability" below.        |
+| `LOG_LEVEL`                                                       | `info` (prod) / `debug` (dev) | Pino log level (`trace` `debug` `info` `warn` `error` `fatal`). Env knob for dialing back verbosity if free-tier ingest is approached without redeploy.                                                                    |
+| `SENTRY_DSN`                                                      | (none)                        | DSN for Sentry error monitoring. When set, backend + agent send unhandled exceptions and `logError` calls to Sentry for grouping + alert-on-spike. Unset = no Sentry calls (local dev / tests). See "Observability" below. |
+| `SENTRY_ENVIRONMENT`                                              | `$NODE_ENV`                   | Override the Sentry environment tag (`production` / `staging` / `development`). Defaults to `NODE_ENV` when unset.                                                                                                         |
+| `SENTRY_RELEASE`                                                  | (none)                        | Optional release tag (e.g. git SHA) so Sentry can group events by build. Set to `$RAILWAY_GIT_COMMIT_SHA` on Railway.                                                                                                      |
 
 #### Backend — Calendar OAuth (set per integration you use)
 

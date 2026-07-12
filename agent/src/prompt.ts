@@ -11,6 +11,7 @@
  */
 
 import type { Capability } from './tools.js';
+import type { KnownCustomer } from './customerContext.js';
 
 export interface PromptContext {
   /** Display name of the tenant business, e.g., "DynaTire". */
@@ -65,6 +66,22 @@ export interface PromptContext {
    * back to a sensible built-in default so the toggle is useful immediately.
    */
   preferencesInstructions?: string | null;
+  /**
+   * The caller's CRM record, prefetched at session start (customerContext.ts)
+   * when caller ID is available and they're a known customer. Baked into a
+   * "# Who you're speaking to" section so the model has their name, saved
+   * preferences, and recent history on turn one — before it has spoken.
+   *
+   * Null means "unknown caller, blocked ID, or the lookup didn't land in time".
+   * In that case the prompt tells the model to call get_customer_context itself
+   * rather than asserting context it doesn't have.
+   *
+   * Origin (2026-07-12): the preferences guidance claimed "at the start of a
+   * call you already receive this customer's saved preferences" — but nothing
+   * prefetched them. The claim discouraged the model from fetching, so saved
+   * preferences were written and then rarely read back on the next call.
+   */
+  knownCustomer?: KnownCustomer | null;
   /** When true, inject formal-language style instructions (no contractions, precise sentences). */
   ttsFormal?: boolean | null;
   /** When true, inject warm/empathetic style instructions. */
@@ -149,6 +166,31 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   // instructs the agent to save durable facts about returning callers.
   const ownerPrefGuidance = ctx.preferencesInstructions?.trim();
   const preferencesEnabled = ctx.savePreferencesEnabled !== false;
+
+  // Known-caller context, prefetched before the greeting (customerContext.ts).
+  // Rendered ABOVE the preferences section so "the preferences you already
+  // have" refers to something the model can actually see. Saved preferences are
+  // withheld when the owner turned preference capture off — the toggle means
+  // "don't do preferences on my calls", so we neither write nor read them.
+  const known = ctx.knownCustomer;
+  const knownPrefEntries =
+    preferencesEnabled && known ? Object.entries(known.preferences ?? {}) : [];
+  const knownCustomerSection = known
+    ? `
+
+# Who you're speaking to
+This is a RETURNING customer. Their record is already loaded — do NOT call get_customer_context for it.
+- Name: ${known.name}
+${
+  knownPrefEntries.length > 0
+    ? `- Saved preferences: ${knownPrefEntries.map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}`
+    : '- Saved preferences: none on file yet'
+}
+${known.history ? `- Recent calls: ${known.history}` : '- Recent calls: none on file'}
+
+Greet them by name. Use what you know — offer their usual, reference their last visit naturally. Never read this section aloud as a list, and never say "according to my records"; just sound like someone who remembers them. If they ask about past visits in detail, call get_detailed_customer_history().`
+    : '';
+
   const preferencesSection = preferencesEnabled
     ? `
 
@@ -159,7 +201,11 @@ ${
 }
 
 How to apply this:
-- At the start of a call you already receive this customer's saved preferences (from get_customer_context). USE them: greet them by what you know, offer their usual, and make relevant suggestions ("Would you like your nails done as well this time?").
+${
+  known
+    ? `- This caller's saved preferences are in the "# Who you're speaking to" section above. USE them: greet them by what you know, offer their usual, and make relevant suggestions ("Would you like your nails done as well this time?").`
+    : `- You do NOT have this caller's saved preferences yet — there was no caller ID to look them up with (blocked, or the call came in through a forwarded line). The moment they give you their number, call identify_caller(name, phone) with it. If that number is one we already have, the response comes back with returning_customer:true and their saved preferences and history — USE them: greet them by name, offer their usual, make relevant suggestions ("Would you like your nails done as well this time?"). If you need more than that comes back, call get_customer_context(phone).`
+}
 - When you learn something durable and useful for next time — preferred staff member, the service they just had, a like/dislike, an allergy, a standing request — call save_customer_preference(phone, key, value) to remember it. Use a short, stable key (e.g. "preferred_stylist", "last_service", "dislikes") and a plain-text value.
 - Only save things that will still matter on a future call. Don't save one-off scheduling details or anything the caller asks you to keep private.
 - Saving is silent — don't announce "I'm saving that." Just weave it naturally into the conversation.`
@@ -245,7 +291,7 @@ For questions about hours, pricing beyond what's in the catalog, return policies
 
 # Today's context
 - Today is ${ctx.currentDate} (${ctx.timezone}).
-- ${callerLine}
+- ${callerLine}${knownCustomerSection}
 
 # Available tools
 - get_customer_context(phone) — look up a caller's history and preferences by the phone number they gave you; greets returning customers by name.
@@ -257,7 +303,7 @@ For questions about hours, pricing beyond what's in the catalog, return policies
 - get_scheduling_options(requirements, window) — returns valid (resource, employee) combinations for a service within a time window. Use when the caller hasn't specified a day yet.
 - check_availability(resource_id, start_time, end_time) — boolean availability for a specific resource + time. Needs a real resource_id from get_scheduling_options; do NOT use after get_available_slots.
 - book_appointment(resource_id, start_time, end_time, phone, name?, employee_id?) — direct booking to a SPECIFIC resource_id (only from get_scheduling_options). Do NOT use after get_available_slots — it has no resource_id to give you and the booking will fail.
-- book_with_scheduling(requirements, window, phone, name?) — **the default booking tool.** Single call that finds the slot, picks the resource, AND assigns a staff member — no resource_id needed. Use this to book after get_available_slots.${knowledgeToolLine}${verificationToolLines}
+- book_with_scheduling(requirements, window, phone, name?, reminder_lead_minutes?) — **the default booking tool.** Single call that finds the slot, picks the resource, AND assigns a staff member — no resource_id needed. Use this to book after get_available_slots. Pass reminder_lead_minutes ONLY when the caller agreed to a text reminder (see "Text reminders").${knowledgeToolLine}${verificationToolLines}
 - record_sms_consent(phone) — record that the caller VERBALLY agreed to receive SMS appointment confirmations/reminders. Use ONLY after you asked permission with the required disclosures (see "Text reminders" below) and they clearly said yes. NEVER for marketing.
 - get_my_appointments() — fetch the caller's upcoming scheduled appointments by caller-ID. Call before canceling or rescheduling.
 - cancel_appointment(appointment_id) — cancel one of the caller's appointments. Always confirm with the caller first. For rescheduling use reschedule_appointment instead.
@@ -304,7 +350,14 @@ The ONE exception to "give a single confirmation and move on": if the booking re
 
 **Which booking tool:** ALWAYS use **book_with_scheduling** after get_available_slots — it is self-contained. **Do NOT call book_appointment or check_availability after get_available_slots** — both REQUIRE a resource_id that get_available_slots does not give you, so the call fails validation and the booking silently breaks. Only use book_appointment/check_availability when you got a concrete resource_id from get_scheduling_options.
 
-**Text reminders (SMS consent).** After a booking is confirmed, you may offer text reminders — but ONLY with the caller's clear permission, and ONLY for appointment confirmations/reminders (never promotions or marketing). Ask once, naturally, including all four required points: "Would it be okay if we text you a confirmation and reminders about your appointment? You'll only get messages about your appointments — message and data rates may apply, and you can reply STOP anytime to opt out." If they say yes, confirm the mobile number to use, then call **record_sms_consent(phone)** with that number. If they decline or are unsure, don't push and don't record anything — just move on. Never text or record consent for anything beyond appointment reminders.
+**Text reminders (SMS consent + how far ahead).** Once the caller has settled on a time, and BEFORE you call the booking tool, offer a text reminder — but ONLY with their clear permission, and ONLY for appointment confirmations/reminders (never promotions or marketing). Ask once, naturally, including all four required points AND the lead time: "Would it be okay if we text you a confirmation and a reminder about your appointment? I'd send the reminder 30 minutes before — or another time if you'd rather. You'll only get messages about your appointments — message and data rates may apply, and you can reply STOP anytime to opt out."
+
+Then:
+- **They say yes** → call **record_sms_consent(phone)** with the mobile number they confirmed, and pass **reminder_lead_minutes** to book_with_scheduling: 30 when they didn't name a time, or their number when they did ("an hour before" → 60, "the day before" → 1440, "two hours" → 120). They get exactly ONE reminder, at the lead they chose, plus the booking confirmation — that is what they consented to, so don't offer or imply more.
+- **They decline, hedge, or don't answer** → don't push, don't record consent, and OMIT reminder_lead_minutes entirely. Book normally.
+- **The appointment starts sooner than the lead they asked for** (they want a 30-minute heads-up for something 20 minutes from now) → the reminder would arrive after they should have left, so it isn't sent. Say so plainly: "That's less than 30 minutes out, so I won't send a reminder — but I'll text you the confirmation now."
+
+Never text or record consent for anything beyond appointment reminders.
 
 Skipping step 2 produces awkward "actually that's taken" exchanges and burns the caller's trust. Don't rely on the backend to catch you — by the time it rejects, the caller has already heard you propose a time you can't deliver.
 

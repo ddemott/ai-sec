@@ -31,6 +31,7 @@ import { buildGreeting } from './greeting.js';
 import { getLogger } from './logger.js';
 import { summarizeToolCalls } from './redactToolArgs.js';
 import { buildSessionContext, callerIdIsForwardNumber } from './sessionContext.js';
+import { fetchCustomerContext } from './customerContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
@@ -490,6 +491,29 @@ export default defineAgent({
         ? (['identity', 'scheduling', 'messaging'] as const)
         : undefined;
 
+      // 3b. Prefetch the caller's CRM record so the prompt can carry their name,
+      //     saved preferences, and recent history into turn one. Runs AFTER both
+      //     forwarded-line guards above, so it never keys off a forwarding number.
+      //     Bounded (1.5s) and soft-failing: on timeout/5xx/unknown caller it
+      //     returns null and the prompt tells the model to call
+      //     get_customer_context itself. Adds one round-trip before the greeting —
+      //     the deadline is what keeps that from becoming dead air.
+      const knownCustomer = await fetchCustomerContext(
+        client,
+        sessionCtx.tenantId,
+        sessionCtx.callerPhone
+      );
+      callLog.info(
+        {
+          event: 'customer_context_prefetched',
+          known_customer: knownCustomer !== null,
+          preference_count: knownCustomer ? Object.keys(knownCustomer.preferences).length : 0,
+        },
+        knownCustomer
+          ? 'returning caller — name/preferences/history baked into the prompt'
+          : 'no prefetched context (new caller, blocked ID, or lookup missed the deadline)'
+      );
+
       // 4. Build prompt with runtime context
       const instructions = buildSystemPrompt({
         tenantName: tenantConfig.name,
@@ -510,6 +534,10 @@ export default defineAgent({
         // prompt gains a "Customer preferences" section + save tool guidance.
         savePreferencesEnabled: tenantConfig.savePreferencesEnabled,
         preferencesInstructions: tenantConfig.preferencesInstructions,
+        // 2026-07-12: the caller's prefetched CRM record (name + saved
+        // preferences + recent calls). NULL = unknown/blocked caller, or the
+        // lookup missed its deadline — the prompt then tells the model to fetch.
+        knownCustomer,
         ttsFormal: tenantConfig.ttsFormal,
         ttsWarm: tenantConfig.ttsWarm,
         ttsConcise: tenantConfig.ttsConcise,

@@ -2,34 +2,33 @@
  * Real-DB round-trip tests for /agent-tools/save-customer-preference.
  *
  * This is the WRITE half of the customer-preference loop. The READ half
- * (get_customer_context_for_call surfacing metadata.preferences) already
+ * (get_customer_context_for_call surfacing the caller's preferences) already
  * shipped; these tests prove a preference saved by the agent comes back out
  * the read path on the next call — the whole point of the feature.
  *
  * Strategy mirrors knowledge-policy-answer.test.ts: a real Postgres pool +
- * createWithTenantClient + the actual route, so the jsonb merge SQL and the
- * read function are exercised for real (not mocked). Skips when the test DB
- * isn't up (CI without a DB), same as the other real-DB suites.
+ * createWithTenantClient + the actual route, so the upsert SQL and the read
+ * function are exercised for real (not mocked). Skips when the test DB isn't up
+ * (CI without a DB), same as the other real-DB suites.
+ *
+ * 2026-07-12: storage moved from a jsonb blob (customers.metadata.preferences)
+ * to the customer_preferences table — one row per (customer_id, pref_key),
+ * unbounded TEXT value, updated_at on re-save. The wire shape the LLM sees is
+ * unchanged ({key: value}), which is exactly what these tests pin down.
  *
  * 5W for sad-path failures:
  *   WHO  — the LiveKit voice agent calling save_customer_preference mid-call
  *   WHAT — POST /agent-tools/save-customer-preference {tenant_id, phone, key, value}
  *   WHEN — after it learns a durable fact (preferred stylist, last service)
- *   WHERE — agentTools.ts route → customers.metadata.preferences jsonb merge
- *   WHY  — a broken merge or wrong phone lookup means the AI "remembers"
+ *   WHERE — agentTools/identity.ts route → customer_preferences upsert
+ *   WHY  — a broken upsert or wrong phone lookup means the AI "remembers"
  *          nothing and every returning caller is treated as a stranger
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { type Client, Pool } from 'pg';
-import {
-  API_DB_URL,
-  getRootClient,
-  createTenant,
-  createCustomer,
-  skipIfDbDown,
-} from '../../utils';
+import { API_DB_URL, getRootClient, createTenant, createCustomer, skipIfDbDown } from '../../utils';
 import { createWithTenantClient } from '../../../src/database';
 import { registerAgentToolRoutes } from '../../../src/routes/agentTools';
 
@@ -107,10 +106,7 @@ beforeEach(async (ctx) => {
   skipIfDbDown(ctx, () => dbAvailable);
   if (!dbAvailable) return;
   // Reset the customer's preferences between tests so each owns its state.
-  await setup.query(
-    `UPDATE customers SET metadata = metadata - 'preferences' WHERE customer_id = $1`,
-    [customerId]
-  );
+  await setup.query(`DELETE FROM customer_preferences WHERE customer_id = $1`, [customerId]);
 });
 
 describe('save-customer-preference → get_customer_context round-trip (real DB)', () => {
@@ -244,6 +240,127 @@ describe('save-customer-preference → get_customer_context round-trip (real DB)
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(false);
+  });
+
+  it('HAPPY: a value well past the old 500-char cap is stored whole, not truncated', async () => {
+    // WHO: a caller with a long standing request ("for my color, use the ammonia-
+    //      free line, I'm allergic to lavender, and…").
+    // WHAT: pref_value is unbounded TEXT; the API guard is 4000, up from 500.
+    // WHEN: 2026-07-12 — the jsonb blob became the customer_preferences table.
+    // WHY: the old 500 cap silently rejected long values at the schema layer, so
+    //      the agent got a failure it could only relay as "I couldn't save that."
+    //      Storage must not be the thing that decides what a preference can say.
+    const longValue = 'no fragrance, allergic to lavender. '.repeat(50); // ~1,800 chars
+    expect(longValue.length).toBeGreaterThan(500);
+
+    const res = await post('/agent-tools/save-customer-preference', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      key: 'standing_request',
+      value: longValue,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+
+    // Round-trips through the read path the agent actually uses, whole.
+    const prefs = await readPreferences();
+    expect(prefs.standing_request).toBe(longValue.trim());
+  });
+
+  it("HAPPY: identify-caller on a KNOWN number returns that caller's preferences (the forwarded-line path)", async () => {
+    // WHO: a regular whose call arrives via the shop's forwarded published line,
+    //       so the agent has NO caller ID and the session-start prefetch skipped.
+    // WHAT: they say their number out loud → identify_caller → the number matches
+    //        an existing customer → their saved preferences come back in the SAME
+    //        response, no second tool call needed.
+    // WHERE: /agent-tools/identify-caller, the (xmax = 0) "was this an INSERT or
+    //        an ON CONFLICT UPDATE" branch — which is exactly the kind of thing a
+    //        mock cannot prove, hence this real-DB test.
+    // WHY: forwarded lines are the DEFAULT for small businesses keeping their
+    //       published number. Without this, every one of their regulars is a
+    //       stranger for the entire call.
+    await post('/agent-tools/save-customer-preference', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      key: 'preferred_stylist',
+      value: 'Maria',
+    });
+
+    const res = await post('/agent-tools/identify-caller', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW, // the number they just read out — already ours
+      name: 'Returning Reba',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const result = res.json().result;
+    expect(result.saved).toBe(true);
+    expect(result.returning_customer).toBe(true);
+    expect(result.preferences).toEqual({ preferred_stylist: 'Maria' });
+  });
+
+  it('SAD: identify-caller on a NEW number reports returning_customer:false (no false familiarity)', async () => {
+    // WHY: the xmax=0 branch must actually distinguish INSERT from UPDATE against
+    //      real Postgres. If it got this backwards, the agent would greet every
+    //      first-time caller with "welcome back" and no preferences to show.
+    const freshPhone = '5559990002';
+    const res = await post('/agent-tools/identify-caller', {
+      tenant_id: tenantId,
+      phone: freshPhone,
+      name: 'Brand New Nina',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({ saved: true, returning_customer: false });
+
+    // Own our data: this test created a customer, so this test removes it.
+    await setup.query(`DELETE FROM customers WHERE tenant_id = $1 AND phone = $2`, [
+      tenantId,
+      '+15559990002',
+    ]);
+  });
+
+  it('HAPPY: re-saving a key UPDATES it in place and bumps updated_at (one row, not two)', async () => {
+    // WHO: a caller who changes stylists — "actually, I see Jordan now."
+    // WHAT: the (customer_id, pref_key) PK means the second save is an upsert:
+    //        the value is replaced and updated_at moves forward.
+    // WHY: staleness is a real signal — a "preferred stylist" confirmed 2 years
+    //       ago deserves a re-ask, not a confident assertion. That's only
+    //       possible if re-saves bump the timestamp instead of inserting a
+    //       duplicate row (which the blob couldn't express at all).
+    await post('/agent-tools/save-customer-preference', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      key: 'preferred_stylist',
+      value: 'Maria',
+    });
+    const first = await setup.query<{ updated_at: Date }>(
+      `SELECT updated_at FROM customer_preferences
+        WHERE customer_id = $1 AND pref_key = 'preferred_stylist'`,
+      [customerId]
+    );
+
+    await post('/agent-tools/save-customer-preference', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      key: 'preferred_stylist',
+      value: 'Jordan',
+    });
+
+    const rows = await setup.query<{ pref_value: string; updated_at: Date }>(
+      `SELECT pref_value, updated_at FROM customer_preferences
+        WHERE customer_id = $1 AND pref_key = 'preferred_stylist'`,
+      [customerId]
+    );
+    expect(rows.rowCount).toBe(1); // upserted, not duplicated
+    expect(rows.rows[0].pref_value).toBe('Jordan');
+    expect(rows.rows[0].updated_at.getTime()).toBeGreaterThanOrEqual(
+      first.rows[0].updated_at.getTime()
+    );
+
+    // And the LLM-facing read path shows the NEW value, not the old one.
+    const prefs = await readPreferences();
+    expect(prefs.preferred_stylist).toBe('Jordan');
   });
 });
 

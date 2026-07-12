@@ -518,6 +518,11 @@ export function buildTools(
           phone: { type: 'string' },
           name: { type: 'string' },
           description: { type: 'string' },
+          reminder_lead_minutes: {
+            type: 'number',
+            description:
+              'How many minutes BEFORE the appointment to text a reminder. Set ONLY when the caller agreed to a text reminder (after the SMS-consent disclosures — see "Text reminders"). Use 30 when they say yes without naming a time; use their number when they name one ("an hour before" → 60, "the day before" → 1440). OMIT entirely if they declined or were not asked.',
+          },
         },
         required: ['service_type', 'window_from', 'window_to', 'phone'],
         additionalProperties: false,
@@ -533,6 +538,7 @@ export function buildTools(
         phone: string;
         name?: string;
         description?: string;
+        reminder_lead_minutes?: number;
       }) => {
         speakFiller?.('One moment while I find and book a slot...');
         const res = await client.call('/agent-tools/book-with-scheduling', {
@@ -548,6 +554,9 @@ export function buildTools(
             preferredResourceId: args.preferred_resource_id,
           },
           window: { from: args.window_from, to: args.window_to },
+          // Absent → backend falls back to the caller's stored lead preference,
+          // then to the standard bundle. Never invent a value here.
+          reminder_lead_minutes: args.reminder_lead_minutes ?? null,
         });
         const bookedId = extractAppointmentId(res);
         if (bookedId) outcome?.recordBooking(bookedId);
@@ -638,7 +647,7 @@ export function buildTools(
 
     identify_caller: llm.tool({
       description:
-        "Save or update the caller's contact record (phone + name). Call this as soon as the caller gives you their name and number — even if they're not booking. Pass the phone number the caller gave you verbally; it falls back to the caller-ID phone only when you have not collected one. Keeps the address book current without duplicating records.",
+        "Save or update the caller's contact record (phone + name). Call this as soon as the caller gives you their name and number — even if they're not booking. Pass the phone number the caller gave you verbally; it falls back to the caller-ID phone only when you have not collected one. Keeps the address book current without duplicating records. IMPORTANT: if that number turns out to be one we already have, the response comes back with returning_customer:true plus their saved preferences and recent history — USE it (greet them by name, offer their usual). That is how you recognize a regular on a forwarded or blocked-ID call, where you had no caller ID to look them up with at the start.",
       parameters: {
         type: 'object',
         properties: {
@@ -919,7 +928,7 @@ export function buildTools(
         if (!ctx.callerPhone) {
           return JSON.stringify({
             error:
-              "No verified caller phone yet — identify the caller first (confirm their name and number, e.g. via find_caller_by_name or identify_caller), then I can pull their history.",
+              'No verified caller phone yet — identify the caller first (confirm their name and number, e.g. via find_caller_by_name or identify_caller), then I can pull their history.',
           });
         }
         const res = await client.call(
@@ -974,8 +983,7 @@ export function buildTools(
       execute: async () => {
         if (!ctx.callerPhone) {
           return JSON.stringify({
-            error:
-              `I can't look up appointments without caller-ID. If you'd like help canceling or rescheduling, I can ${transferOrMessage}.`,
+            error: `I can't look up appointments without caller-ID. If you'd like help canceling or rescheduling, I can ${transferOrMessage}.`,
           });
         }
         const res = await client.call(
@@ -1005,8 +1013,7 @@ export function buildTools(
       execute: async (args: { appointment_id: string }) => {
         if (!ctx.callerPhone) {
           return JSON.stringify({
-            error:
-              `I can't cancel without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
+            error: `I can't cancel without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
           });
         }
         const res = await client.call('/agent-tools/cancel-appointment', {
@@ -1048,8 +1055,7 @@ export function buildTools(
       }) => {
         if (!ctx.callerPhone) {
           return JSON.stringify({
-            error:
-              `I can't reschedule without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
+            error: `I can't reschedule without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
           });
         }
         speakFiller?.('One moment while I move that for you...');

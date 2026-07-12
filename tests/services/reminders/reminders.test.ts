@@ -727,3 +727,127 @@ describe('Reminder Status Transitions', () => {
     expect(validTransitions.cancelled).toHaveLength(0);
   });
 });
+
+/**
+ * Regression suite for the two bugs that made an SMS-only reminder impossible
+ * (found 2026-07-12 while designing the "text me 30 minutes before" flow).
+ *
+ * Both are silent in a world where every customer has an email AND consents to
+ * both channels — which is why they survived. The voice agent's callers are
+ * phone-only, so they hit both bugs on the very first opted-in reminder.
+ */
+describe('SMS-only reminders (regression: 2026-07-12)', () => {
+  let mockDb: DatabaseService;
+  let reminderService: ReminderService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDb = createMockDb();
+    reminderService = new ReminderService(mockDb, createMockConfigService());
+  });
+
+  afterEach(() => reminderService.cleanup());
+
+  const phoneOnlyAppointment = {
+    id: 'apt-sms-1',
+    tenantId: 'test-tenant-123',
+    customerEmail: undefined, // phone-only — the voice agent's normal caller
+    customerPhone: '+15559876543',
+    customerName: 'Reba',
+    serviceName: 'Haircut',
+    staffName: 'Maria',
+    dateTime: new Date(Date.now() + 3600_000).toISOString(),
+    duration: 30,
+    status: 'scheduled',
+  };
+
+  it('BUG 1 — a successful SMS-only send reports SUCCESS (was: reported failure → retried → duplicate texts)', async () => {
+    // WHO: a phone-only caller who verbally consented to a text reminder.
+    // WHAT: CommunicationService returns { sms: {success:true} } and NO email
+    //        key (no email was attempted).
+    // WHERE: ReminderService.sendReminder, which used to return
+    //        `result?.email?.success === true` — undefined?.success → false.
+    // WHY: false → processReminder marks the row 'failed' → retryPolicy re-sends
+    //       at 5m/30m/2h → the customer receives the SAME reminder up to 4 times.
+    //       An SMS reminder feature built on this is a text-spam feature.
+    reminderService.consentService.checkConsent = vi.fn().mockResolvedValue(true);
+    reminderService.communicationService.sendAppointmentReminder = vi
+      .fn()
+      .mockResolvedValue({ sms: { success: true } });
+
+    const sent = await reminderService.sendReminder(
+      { reminderType: '2h', appointmentId: 'apt-sms-1' },
+      phoneOnlyAppointment
+    );
+
+    expect(sent).toBe(true);
+  });
+
+  it('BUG 1 — the row is marked sent, not failed, so the retry policy never re-sends it', async () => {
+    // The end-to-end consequence of the above, at the layer that actually
+    // decides whether a duplicate goes out. This is the assertion that would
+    // have caught the spam in production.
+    vi.mocked(mockDb.getReminderSchedule).mockResolvedValue({
+      reminder_schedule_id: 7,
+      status: 'scheduled',
+      reminder_type: '2h',
+      tenant_id: 'test-tenant-123',
+      appointment_id: 'apt-sms-1',
+      customer_phone: '+15559876543',
+      customer_email: null,
+      scheduled_for: new Date().toISOString(),
+    } as unknown as ReminderSchedule);
+    vi.mocked(mockDb.getAppointmentById).mockResolvedValue(phoneOnlyAppointment as never);
+    reminderService.consentService.checkConsent = vi.fn().mockResolvedValue(true);
+    reminderService.communicationService.sendAppointmentReminder = vi
+      .fn()
+      .mockResolvedValue({ sms: { success: true } });
+
+    await reminderService.processReminder('7');
+
+    expect(mockDb.updateReminderSchedule).toHaveBeenCalledWith(
+      '7',
+      expect.objectContaining({ status: 'sent' })
+    );
+    expect(mockDb.updateReminderSchedule).not.toHaveBeenCalledWith(
+      '7',
+      expect.objectContaining({ status: 'failed' })
+    );
+  });
+
+  it('BUG 2 — SMS consent alone is enough when the customer also has an email on file (was: AND-ed, so email vetoed the text)', async () => {
+    // WHO: a caller with an email address in the CRM (from a past web booking)
+    //       who says "yes, text me" on the phone but never opted into email.
+    // WHAT: checkCommunicationConsent used to return emailConsent && smsConsent
+    //        when BOTH contact fields were present → false → the reminder was
+    //        'cancelled' with "No consent for communication" and NO text went out.
+    // WHY: the caller explicitly consented to the exact thing we then refused to
+    //       send. EmailService/SMSService each re-check consent at the wire, so
+    //       the OR is safe: the email is still suppressed, the text still sends.
+    reminderService.consentService.checkConsent = vi
+      .fn()
+      .mockImplementation((_tenant, _email, _phone, type: string) =>
+        Promise.resolve(type === 'sms')
+      );
+
+    const hasConsent = await reminderService.checkCommunicationConsent(
+      { reminderType: '2h' },
+      { ...phoneOnlyAppointment, customerEmail: 'reba@example.com' }
+    );
+
+    expect(hasConsent).toBe(true);
+  });
+
+  it('SAD: no consent on ANY channel still blocks the send', async () => {
+    // The OR must not become a rubber stamp — a customer who opted out of
+    // everything (or replied STOP) is still unreachable. TCPA teeth.
+    reminderService.consentService.checkConsent = vi.fn().mockResolvedValue(false);
+
+    const hasConsent = await reminderService.checkCommunicationConsent(
+      { reminderType: '2h' },
+      { ...phoneOnlyAppointment, customerEmail: 'reba@example.com' }
+    );
+
+    expect(hasConsent).toBe(false);
+  });
+});

@@ -1,4 +1,5 @@
 import type { TenantConfigService } from '../tenants/index.js';
+import { formatLeadTime } from './formatLead.js';
 
 export interface EmailTemplateData {
   customerName: string;
@@ -322,8 +323,10 @@ ${data.businessAddress ? `Address: ${data.businessAddress}` : ''}
     text: string;
   } {
     const urgencyEmoji = data.hoursUntil <= 2 ? '🚨' : data.hoursUntil <= 24 ? '🔔' : '📅';
-    const urgencyText =
-      data.hoursUntil <= 2 ? 'in just a few hours' : `in ${data.hoursUntil} hours`;
+    // Say the real lead. A sub-hour lead (the voice flow's 30-minute default)
+    // used to fall into the "in just a few hours" bucket, which is both vague
+    // and wrong — the appointment is in 30 minutes, not a few hours.
+    const urgencyText = `in ${formatLeadTime(data.hoursUntil * 60)}`;
 
     const content = `
       <h2 class="greeting">Hi ${data.customerName},</h2>

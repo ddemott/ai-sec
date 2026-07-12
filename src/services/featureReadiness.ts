@@ -203,6 +203,32 @@ export function evaluateCapabilities(ctx: FeatureReadinessContext): CapabilityEv
     });
   }
 
+  // ── inbound_sms (TELNYX_PUBLIC_KEY) ──────────────────────────────────
+  // Mirrors the fail-closed guard in routes/communications.ts: no key → the
+  // inbound webhook 503s every request, so a customer texting STOP is never
+  // recorded. Reported here because the ONLY other signal is a 503 from a public
+  // endpoint, which is indistinguishable from "the service is down" — and that
+  // ambiguity cost a live debugging session on 2026-07-12.
+  //
+  // The key is Telnyx's Ed25519 PUBLIC key, not a secret we generate; the portal
+  // no longer exposes it, so fetch it from the API:
+  //   curl -H "Authorization: Bearer $TELNYX_API_KEY" https://api.telnyx.com/v2/public_key
+  {
+    const missing = !env.TELNYX_PUBLIC_KEY;
+    evaluations.push({
+      feature: 'inbound_sms',
+      status: missing ? 'missing_config' : 'ready',
+      detail: missing
+        ? 'TELNYX_PUBLIC_KEY not set — POST /communications/telnyx/inbound fails closed (503); inbound STOP/START replies are NOT processed'
+        : 'Telnyx Ed25519 public key configured — inbound webhook verifies signatures',
+      warnings: missing
+        ? [
+            'TELNYX_PUBLIC_KEY not set — inbound SMS webhook returns 503. A customer who replies STOP is NOT recorded in opt_out_records, and we keep texting them. This is a compliance exposure, not just a missing feature.',
+          ]
+        : [],
+    });
+  }
+
   // ── outlook_calendar (readiness-only; no legacy startup warning) ─────
   // Condition mirrors calendar.ts's Outlook OAuth start (OUTLOOK_CLIENT_ID).
   {

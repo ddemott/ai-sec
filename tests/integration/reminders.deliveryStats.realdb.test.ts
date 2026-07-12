@@ -75,8 +75,8 @@ async function seedReminder(opts: {
       : new Date().toISOString();
   await setup.query(
     `INSERT INTO reminder_schedules
-       (appointment_id, tenant_id, reminder_type, scheduled_for, sent_at, status, updated_at)
-     VALUES ($1, $2, $3, now(), $4, $5, $6)`,
+       (appointment_id, tenant_id, reminder_type, scheduled_for, lead_minutes, sent_at, status, updated_at)
+     VALUES ($1, $2, $3, now(), 1440, $4, $5, $6)`,
     [appointmentId, tenantId, opts.type, sentAt, opts.status, updatedAt]
   );
 }

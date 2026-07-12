@@ -97,6 +97,13 @@ export const BookWithSchedulingSchema = z.object({
     preferredResourceId: z.string().optional(),
   }),
   window: z.object({ from: z.string(), to: z.string() }),
+  // The caller's answer to "would you like a text reminder, and how far ahead?"
+  // Absent/null = they weren't asked or declined → no custom reminder is seeded
+  // (the seeder falls back to their stored preference, then to the standard
+  // bundle). Bounded to match the DB CHECK (0 < lead <= 90 days); an int, since
+  // "remind me in 22.5 minutes" is not a thing a person says.
+  // 2026-07-12.
+  reminder_lead_minutes: z.number().int().positive().max(129600).optional().nullable(),
 });
 
 export const GetServiceCatalogSchema = z.object({
@@ -109,17 +116,23 @@ export const GetTenantConfigSchema = z.object({
 
 // save_customer_preference — the AI persists a durable fact about the caller
 // (preferred stylist, last service, likes/dislikes, upsell flags) as a
-// key/value pair into customers.metadata.preferences. Read back on the next
-// call by get_customer_context_for_call. Key is normalized to a short stable
-// slug; value is free text the AI heard. Only writes for an existing customer
-// (a phone the CRM already knows) — we don't conjure a customer row just to
-// hang a preference on, and the agent should have already called
+// key/value pair into the customer_preferences table (one row per customer+key;
+// was a jsonb blob on customers.metadata until 2026-07-12). Read back on the
+// next call by get_customer_context_for_call. Key is normalized to a short
+// stable slug; value is free text the AI heard. Only writes for an existing
+// customer (a phone the CRM already knows) — we don't conjure a customer row
+// just to hang a preference on, and the agent should have already called
 // get_customer_context (or booked) before it has anything worth saving.
 export const SaveCustomerPreferenceSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
   key: z.string().min(1).max(60),
-  value: z.string().min(1).max(500),
+  // The column is unbounded TEXT; this cap is a guard, not a storage limit. The
+  // value is LLM-authored, so an unbounded field lets a looping/rambling model
+  // write arbitrary text into the DB mid-call. 4000 is far past any real
+  // preference ("Maria", "no fragrance, allergic to lavender") while still
+  // bounding the blast radius. Raised from 500 on 2026-07-12.
+  value: z.string().min(1).max(4000),
 });
 
 export const IdentifyCallerSchema = z.object({

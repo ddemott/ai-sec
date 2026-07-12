@@ -3,7 +3,7 @@
 **Status:** phase 1 BUILT (inbound webhook + signature guard + STOP wiring); phases 2–3
 not started. **Date:** 2026-07-11. **Owner:** Dale.
 
-**Phase 1 is inert in prod until `TELNYX_WEBHOOK_SECRET` is set on Railway** — the route
+**Phase 1 is inert in prod until `TELNYX_PUBLIC_KEY` is set on Railway** — the route
 fails closed (503) without it, so merging this changes nothing until you deliberately
 enable it and point the Telnyx number's inbound-message webhook at
 `/communications/telnyx/inbound`.
@@ -35,9 +35,14 @@ owner is notified.
 Reusable, verified by reading the code:
 
 - `POST /communications/telnyx/status` — an existing **signature-verified Telnyx
-  webhook** (`TELNYX_WEBHOOK_SECRET`, `telnyx-signature` = HMAC-SHA256 of
-  `timestamp|rawBody`, raw-body preserved, bad signature → 403). The inbound
-  webhook mirrors this exactly. **This is the security backbone of the feature** —
+  webhook** (`TELNYX_PUBLIC_KEY`, `telnyx-signature-ed25519` + `telnyx-timestamp`,
+  Ed25519 over `timestamp|rawBody`, raw-body preserved, bad signature → 403). The
+  inbound webhook mirrors this exactly. **This is the security backbone of the feature** —
+  NOTE (2026-07-12): as originally written this spec — and the /status route it
+  described — specified HMAC-SHA256, which is Stripe's scheme. Telnyx does not offer
+  HMAC. Both routes now verify the real Ed25519 signature against the PUBLIC key from
+  Mission Control → Keys & Credentials. Setting the old `TELNYX_WEBHOOK_SECRET` would
+  have 403'd every genuine webhook. See src/services/telnyxWebhookAuth.ts.
   it is what stops a spoofed "N" from cancelling a stranger's booking.
 - `SMSService` (consent-gated; opt-outs revoke consent; re-checks on every send) and
   the lower-level `sendSms`.
@@ -138,8 +143,8 @@ These are the ones I'd hold the line on:
 - **Expire pending rows** (cron/reaper, or lazily at match time) at appointment start.
   A stray "N" three days later must not cancel next month's booking.
 - **Signature verification is load-bearing.** Without it, anyone who can POST to the
-  endpoint can cancel any booking by spoofing a `from` number. `TELNYX_WEBHOOK_SECRET`
-  must be set in prod before this route is enabled — treat an unset secret as
+  endpoint can cancel any booking by spoofing a `from` number. `TELNYX_PUBLIC_KEY`
+  must be set in prod before this route is enabled — treat an unset key as
   _reject all_, matching the `AGENT_SECRET` precedent (never "unlocked by default").
 - **Idempotency.** Telnyx retries. Keying on the pending row's status (only `pending`
   transitions) makes a redelivered "N" a no-op rather than a double-cancel.
@@ -187,5 +192,6 @@ and a real signed payload:
 ## Rough effort
 
 Phase 1 ~half a day; phase 2 ~half a day (migration + send + Y); phase 3 ~a day
-(cancel path + the guards + real-DB tests). Prod needs `TELNYX_WEBHOOK_SECRET` set
-and the Telnyx number's inbound-message webhook pointed at the new route.
+(cancel path + the guards + real-DB tests). Prod needs `TELNYX_PUBLIC_KEY` set (copy it
+from Mission Control → Keys & Credentials → Public Key) and the Telnyx number's
+inbound-message webhook pointed at the new route.

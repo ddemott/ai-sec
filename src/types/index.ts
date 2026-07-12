@@ -30,6 +30,13 @@ export interface ReminderSchedule {
   appointment_id: string;
   reminder_type: string;
   scheduled_for: string;
+  /**
+   * Minutes before the appointment this reminder fires (0 = confirmation).
+   * Source of truth for the lead — do NOT re-derive it from reminder_type.
+   * NOT NULL in the DB (migration 20260712010000); optional here only because
+   * hand-built test fixtures predate it.
+   */
+  lead_minutes?: number;
   status: string;
   [key: string]: any;
 }

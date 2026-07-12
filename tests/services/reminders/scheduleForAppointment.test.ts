@@ -68,13 +68,13 @@ function buildWithTenantClient(client: PoolClient): WithTenantClient {
 }
 
 /**
- * The helper writes one multi-row INSERT (4 reminder_schedules rows in
- * one statement, 6 params per row → 24 params total). This unpacks the
- * single query's flat params back into row-shaped objects so the test
- * bodies can keep using "find the 24h row, check its scheduled_for"
- * patterns without caring about whether the underlying SQL is 1 or 4
- * INSERTs. If the row shape ever changes (added a column, removed
- * one), this is the only place that needs to update.
+ * The helper writes one multi-row INSERT (7 params per row since 2026-07-12,
+ * when lead_minutes joined the row). Row COUNT is no longer fixed at 4: a caller
+ * who opted into a reminder lead gets 2 rows (confirmation + custom), everyone
+ * else gets the standard 4. This unpacks the single query's flat params back into
+ * row-shaped objects so the test bodies can keep using "find the 24h row, check
+ * its scheduled_for" patterns without caring about the underlying SQL. If the row
+ * shape changes again, this is the only place that needs to update.
  */
 interface ReminderInsertRow {
   appointmentId: string;
@@ -83,9 +83,11 @@ interface ReminderInsertRow {
   phone: string | null;
   type: string;
   scheduledFor: string;
+  /** Added 2026-07-12 — the lead is now stored, not parsed back out of `type`. */
+  leadMinutes: number;
 }
 function unpackReminderInserts(q: LoggedQuery): ReminderInsertRow[] {
-  const COLS_PER_ROW = 6;
+  const COLS_PER_ROW = 7;
   const rows: ReminderInsertRow[] = [];
   for (let i = 0; i < q.params.length; i += COLS_PER_ROW) {
     rows.push({
@@ -95,6 +97,7 @@ function unpackReminderInserts(q: LoggedQuery): ReminderInsertRow[] {
       phone: q.params[i + 3] as string | null,
       type: q.params[i + 4] as string,
       scheduledFor: q.params[i + 5] as string,
+      leadMinutes: q.params[i + 6] as number,
     });
   }
   return rows;
@@ -455,5 +458,167 @@ describe('rescheduleRemindersForAppointment', () => {
     await expect(
       rescheduleRemindersForAppointment(buildWithTenantClient(client), TENANT_ID, APPOINTMENT_ID)
     ).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * The opt-in reminder path (2026-07-12). A caller who says "text me 30 minutes
+ * before" gets a confirmation and ONE reminder at that lead — not the standard
+ * 72h/24h/2h bundle on top. Spending a caller's SMS consent on four texts about
+ * one haircut is how you earn a STOP reply, which revokes consent for everything.
+ */
+describe('scheduleRemindersForAppointment — caller-chosen reminder lead', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  const futureAppointment = (startISO: string, prefLead: string | null = null) => ({
+    start_time: startISO,
+    customer_id: 'cust-1',
+    customer_email: null,
+    customer_phone: '+15559876543',
+    pref_lead: prefLead,
+  });
+
+  it('HAPPY: an explicit lead seeds confirmation + ONE custom reminder at exactly that offset', async () => {
+    // WHO: a caller who agreed to a text reminder 30 minutes ahead.
+    // WHAT: two rows — confirmation (now) + custom (start - 30m) — and NOT the
+    //        72h/24h/2h bundle.
+    // WHY: they consented to a reminder, not to five texts. lead_minutes is
+    //       stored so the send path never re-derives it from the type name.
+    const now = new Date('2026-05-11T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const start = '2026-05-12T15:00:00.000Z';
+    const { client, queries } = buildMockClient({
+      appointmentRow: futureAppointment(start),
+    });
+
+    await scheduleRemindersForAppointment(
+      buildWithTenantClient(client),
+      TENANT_ID,
+      APPOINTMENT_ID,
+      undefined,
+      { reminderLeadMinutes: 30 }
+    );
+
+    const insert = queries.find((q) => q.text.includes('INSERT INTO reminder_schedules'));
+    const rows = unpackReminderInserts(insert!);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.type).sort()).toEqual(['confirmation', 'custom']);
+
+    const custom = rows.find((r) => r.type === 'custom')!;
+    expect(custom.leadMinutes).toBe(30);
+    expect(new Date(custom.scheduledFor).toISOString()).toBe('2026-05-12T14:30:00.000Z');
+
+    // No 72h/24h/2h rows — the whole point.
+    expect(rows.some((r) => ['72h', '24h', '2h'].includes(r.type))).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("HAPPY: with no explicit lead, a STORED preference is used (so a reschedule keeps the caller's choice)", async () => {
+    // WHO: the same caller, whose appointment is being rescheduled. Reschedule
+    //       cancels and reseeds with NO opts — the lead has to come from
+    //       somewhere or it silently reverts to the standard bundle.
+    // WHY: their preference is the somewhere. This is what makes the choice
+    //       durable across reschedules AND across future bookings.
+    const now = new Date('2026-05-11T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const { client, queries } = buildMockClient({
+      appointmentRow: futureAppointment('2026-05-12T15:00:00.000Z', '60'),
+    });
+
+    await scheduleRemindersForAppointment(buildWithTenantClient(client), TENANT_ID, APPOINTMENT_ID);
+
+    const rows = unpackReminderInserts(
+      queries.find((q) => q.text.includes('INSERT INTO reminder_schedules'))!
+    );
+    const custom = rows.find((r) => r.type === 'custom')!;
+    expect(custom.leadMinutes).toBe(60);
+    expect(new Date(custom.scheduledFor).toISOString()).toBe('2026-05-12T14:00:00.000Z');
+    vi.useRealTimers();
+  });
+
+  it('HAPPY: an explicit lead OVERRIDES the stored preference ("make it an hour this time")', async () => {
+    const now = new Date('2026-05-11T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const { client, queries } = buildMockClient({
+      appointmentRow: futureAppointment('2026-05-12T15:00:00.000Z', '30'),
+    });
+
+    await scheduleRemindersForAppointment(
+      buildWithTenantClient(client),
+      TENANT_ID,
+      APPOINTMENT_ID,
+      undefined,
+      { reminderLeadMinutes: 120 }
+    );
+
+    const rows = unpackReminderInserts(
+      queries.find((q) => q.text.includes('INSERT INTO reminder_schedules'))!
+    );
+    expect(rows.find((r) => r.type === 'custom')!.leadMinutes).toBe(120);
+    vi.useRealTimers();
+  });
+
+  it('SAD: booking INSIDE the lead window drops the reminder but still confirms', async () => {
+    // WHO: someone booking a 30-minutes-out appointment who wants a 30-minute
+    //       reminder. The reminder time is already in the past.
+    // WHAT: seeding it would make the worker fire on its next 60s tick — a
+    //        "reminder" landing AFTER they should already have left.
+    // WHY: a late reminder is worse than none; the confirmation still goes out.
+    const now = new Date('2026-05-11T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const { client, queries } = buildMockClient({
+      appointmentRow: futureAppointment('2026-05-11T10:20:00.000Z'), // 20 min away
+    });
+
+    await scheduleRemindersForAppointment(
+      buildWithTenantClient(client),
+      TENANT_ID,
+      APPOINTMENT_ID,
+      undefined,
+      { reminderLeadMinutes: 30 } // would land at 09:50 — already past
+    );
+
+    const rows = unpackReminderInserts(
+      queries.find((q) => q.text.includes('INSERT INTO reminder_schedules'))!
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].type).toBe('confirmation');
+    vi.useRealTimers();
+  });
+
+  it('SAD: a nonsense lead is ignored and falls back to the standard bundle', async () => {
+    // WHO: a mis-parsed number from the LLM (negative, zero, or a year of minutes).
+    // WHY: the DB CHECK would reject it and the whole fire-and-forget seed would
+    //       throw into the void, leaving the appointment with NO reminders at all.
+    //       Clamping in app code means a bad value degrades to the default, loudly
+    //       in the data (standard bundle) rather than silently to nothing.
+    const now = new Date('2026-05-11T10:00:00Z');
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const { client, queries } = buildMockClient({
+      appointmentRow: futureAppointment('2026-05-12T15:00:00.000Z'),
+    });
+
+    await scheduleRemindersForAppointment(
+      buildWithTenantClient(client),
+      TENANT_ID,
+      APPOINTMENT_ID,
+      undefined,
+      { reminderLeadMinutes: -5 }
+    );
+
+    const rows = unpackReminderInserts(
+      queries.find((q) => q.text.includes('INSERT INTO reminder_schedules'))!
+    );
+    expect(rows).toHaveLength(4);
+    expect(rows.map((r) => r.type).sort()).toEqual(['24h', '2h', '72h', 'confirmation']);
+    vi.useRealTimers();
   });
 });

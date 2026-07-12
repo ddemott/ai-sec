@@ -496,10 +496,11 @@ test('conversation: a saved preference is recalled by customer-context on the ne
   request,
 }) => {
   // WHO: a returning caller the AI is told to remember things about.
-  // WHAT: save_customer_preference writes a durable fact to
-  //        customers.metadata.preferences; on a later call the agent's
-  //        get_customer_context tool (→ /agent-tools/customer-context) hands
-  //        that preference back so the LLM can personalize + upsell.
+  // WHAT: save_customer_preference writes a durable fact to the
+  //        customer_preferences table (one row per customer+key — it was a jsonb
+  //        blob on customers.metadata until 2026-07-12); on a later call the
+  //        agent's get_customer_context tool (→ /agent-tools/customer-context)
+  //        hands that preference back so the LLM can personalize + upsell.
   // WHEN: every returning caller once the tenant enabled preference capture.
   // WHERE: /agent-tools/save-customer-preference (write) +
   //        /agent-tools/customer-context (recall) — the SAME route the agent
@@ -538,9 +539,12 @@ test('conversation: a saved preference is recalled by customer-context on the ne
       value: 'balayage',
     });
 
-    // Side-effect check: both preferences merged into metadata.preferences.
+    // Side-effect check: both preferences landed as their own rows, keyed by
+    // (customer_id, pref_key). Aggregated back to an object here so the
+    // assertion still reads as "what the agent will see".
     const row = await pool.query(
-      `SELECT metadata->'preferences' AS prefs FROM customers WHERE customer_id = $1`,
+      `SELECT jsonb_object_agg(pref_key, pref_value) AS prefs
+         FROM customer_preferences WHERE customer_id = $1`,
       [customerId]
     );
     expect(row.rows[0].prefs).toEqual({ preferred_stylist: 'Maria', last_service: 'balayage' });
