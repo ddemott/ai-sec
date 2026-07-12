@@ -533,9 +533,9 @@ export function registerCommunicationRoutes(
       // Fail closed. An unconfigured key must not silently degrade a mutating
       // endpoint into an open one — that is the exact failure mode this guard
       // exists to prevent, and it would be invisible in prod.
-      errorsTotal.inc({ event: 'telnyx_inbound_secret_unset' });
+      errorsTotal.inc({ event: 'telnyx_inbound_public_key_unset' });
       req.log.error(
-        { event: 'telnyx_inbound_secret_unset' },
+        { event: 'telnyx_inbound_public_key_unset' },
         'TELNYX_PUBLIC_KEY unset — refusing inbound SMS webhook (fail closed; set the key to enable)'
       );
       return reply.status(503).send({ success: false, error: 'Webhook not configured' });

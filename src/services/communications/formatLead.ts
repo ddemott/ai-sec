@@ -24,8 +24,12 @@ export function formatLeadTime(minutes: number): string {
     return rem === 0 ? hourPart : `${hourPart} ${rem} minute${rem === 1 ? '' : 's'}`;
   }
 
-  const days = Math.floor(mins / (60 * 24));
-  const remHours = Math.round((mins % (60 * 24)) / 60);
+  // Round FIRST, then carry: rounding the remainder independently can push it to
+  // 24 hours and print "1 day 24 hours" (e.g. 2879 minutes = 2 days minus 1 min).
+  // Work in whole rounded hours so the carry is arithmetic, not a special case.
+  const totalHours = Math.round(mins / 60);
+  const days = Math.floor(totalHours / 24);
+  const remHours = totalHours % 24;
   const dayPart = `${days} day${days === 1 ? '' : 's'}`;
   return remHours === 0 ? dayPart : `${dayPart} ${remHours} hour${remHours === 1 ? '' : 's'}`;
 }

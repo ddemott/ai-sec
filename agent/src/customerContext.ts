@@ -25,7 +25,10 @@ import type { ToolsClient } from './toolsClient.js';
 
 /**
  * The subset of /agent-tools/customer-context we bake into the prompt.
- * `preferences` is the flat `{key: value}` map from customers.metadata.
+ * `preferences` is the flat `{key: value}` map the route aggregates out of the
+ * customer_preferences table (one row per customer+key). It lived in a
+ * customers.metadata jsonb blob until 2026-07-12; the WIRE shape is unchanged,
+ * which is why nothing on this side had to move.
  */
 export interface KnownCustomer {
   name: string;

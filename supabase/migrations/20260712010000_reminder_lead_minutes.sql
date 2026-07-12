@@ -12,7 +12,12 @@
 -- lets the SMS say "in 30 minutes" instead of "in 0.5h", and what lets a
 -- reschedule rebuild the row at the lead the caller actually asked for.
 
-BEGIN;
+-- NOTE: no explicit BEGIN/COMMIT. scripts/setup-db.sh applies migrations with
+-- `psql --single-transaction`, so this file already runs inside a transaction.
+-- A nested BEGIN warns and no-ops, and a COMMIT here would close the runner's
+-- transaction EARLY — silently dropping the atomicity guarantee for whatever the
+-- runner does next (including its own INSERT INTO schema_migrations). Flagged by
+-- review on PR #241.
 
 ALTER TABLE reminder_schedules
     ADD COLUMN IF NOT EXISTS lead_minutes INTEGER;
@@ -53,5 +58,3 @@ ALTER TABLE reminder_schedules
 
 COMMENT ON COLUMN reminder_schedules.lead_minutes IS
     'How far before the appointment this reminder fires, in minutes. Source of truth for the lead (0 = confirmation, sent at booking). scheduled_for = appointment start_time - lead_minutes. Added 2026-07-12 so a caller can ask for any lead ("30 minutes before") instead of the four hardcoded types.';
-
-COMMIT;

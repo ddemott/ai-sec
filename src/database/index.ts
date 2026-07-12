@@ -155,6 +155,41 @@ export function createWithTenantClient(pool: Pool): WithTenantClient {
   };
 }
 
+/**
+ * Lead time for the four legacy reminder types, for writers that predate the
+ * lead_minutes column. Confirmation fires at booking, so its lead is 0.
+ */
+const LEGACY_LEAD_MINUTES_BY_TYPE: Record<string, number> = {
+  confirmation: 0,
+  '72h': 4320,
+  '24h': 1440,
+  '2h': 120,
+};
+
+/**
+ * The lead to write for a reminder row. Explicit value wins; a legacy type falls
+ * back to its known lead.
+ *
+ * THROWS for anything else — notably a 'custom' reminder with no lead_minutes.
+ * Defaulting that to 0 would write a reminder scheduled AT the appointment time
+ * that the send path then describes as firing "shortly": a row that is silently,
+ * unfixably wrong and only surfaces when a customer complains their reminder came
+ * as they walked in. A caller that reaches here without a lead has a bug, and a
+ * loud failure at write time is worth more than a plausible-looking bad row.
+ */
+function resolveLeadMinutesForInsert(data: ReminderData): number {
+  const explicit = data.lead_minutes;
+  if (typeof explicit === 'number' && Number.isFinite(explicit) && explicit >= 0) return explicit;
+
+  const legacy = LEGACY_LEAD_MINUTES_BY_TYPE[data.reminder_type as string];
+  if (typeof legacy === 'number') return legacy;
+
+  throw new Error(
+    `createReminderSchedule: reminder_type '${String(data.reminder_type)}' has no legacy lead and no lead_minutes was supplied. ` +
+      `A 'custom' reminder MUST carry the caller's chosen lead — refusing to default it to 0.`
+  );
+}
+
 // ── DatabaseService Interface ────────────────────────────────────────
 
 /**
@@ -234,17 +269,6 @@ export class PostgresDatabaseService implements DatabaseService {
 
   // ── Reminder Operations ────────────────────────────────────────────
 
-  /**
-   * Lead time for the four legacy reminder types, for writers that don't pass
-   * lead_minutes explicitly. Confirmation fires at booking, so its lead is 0.
-   */
-  private static readonly LEGACY_LEAD_MINUTES_BY_TYPE: Record<string, number> = {
-    confirmation: 0,
-    '72h': 4320,
-    '24h': 1440,
-    '2h': 120,
-  };
-
   async createReminderSchedule(data: ReminderData): Promise<ReminderSchedule> {
     return this.withTenantClient(data.tenant_id, async (client) => {
       const result = await client.query(
@@ -259,14 +283,14 @@ export class PostgresDatabaseService implements DatabaseService {
           data.customer_phone || null,
           data.reminder_type,
           data.scheduled_for,
-          // lead_minutes is NOT NULL (migration 20260712010000) — the lead is
-          // data now, not something you infer from the type name. Callers that
-          // predate the column fall back to the legacy mapping so their rows
-          // still carry a truthful lead; 'custom' has no legacy mapping, which
-          // is the point: it MUST supply one.
-          data.lead_minutes ??
-            PostgresDatabaseService.LEGACY_LEAD_MINUTES_BY_TYPE[data.reminder_type as string] ??
-            0,
+          // lead_minutes is NOT NULL (migration 20260712010000) — the lead is data
+          // now, not something you infer from the type name. Legacy types fall
+          // back to their known lead so old callers still write truthful rows.
+          // 'custom' has NO legacy mapping by definition, so a missing lead there
+          // is a caller bug: defaulting it to 0 would write a reminder that fires
+          // at the appointment time and reads as "shortly" — silently wrong, and
+          // invisible until a customer complains. Fail loudly instead.
+          resolveLeadMinutesForInsert(data),
           data.status || 'scheduled',
         ]
       );

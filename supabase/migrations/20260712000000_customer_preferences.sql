@@ -16,7 +16,12 @@
 -- after this migration reads {} — the read paths move in the same commit
 -- (agentTools/identity.ts + get_customer_context_for_call, redefined below).
 
-BEGIN;
+-- NOTE: no explicit BEGIN/COMMIT. scripts/setup-db.sh applies migrations with
+-- `psql --single-transaction`, so this file already runs inside a transaction.
+-- A nested BEGIN warns and no-ops, and a COMMIT here would close the runner's
+-- transaction EARLY — silently dropping the atomicity guarantee for whatever the
+-- runner does next (including its own INSERT INTO schema_migrations). Flagged by
+-- review on PR #241.
 
 CREATE TABLE IF NOT EXISTS customer_preferences (
     tenant_id   UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
@@ -197,5 +202,3 @@ BEGIN
     RETURN v_context;
 END;
 $$;
-
-COMMIT;
