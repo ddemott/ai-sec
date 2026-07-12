@@ -235,7 +235,28 @@ export default function SetupView() {
           />
         ))}
       </FolderTabBar>
-      <div className="flex-1 overflow-hidden">
+      {/*
+        Sub-tab panel. Two things have to be true at once, which is why this is a
+        scrolling FLEX column rather than the plain `overflow-hidden` block it
+        used to be:
+
+        1. `flex flex-col` + `min-h-0` — most of the leaf views are written as
+           `flex-1 … overflow-y-auto` and manage their own scrolling. `flex-1`
+           only does anything inside a flex container, so under the old block
+           wrapper it was inert: those views sized to their content, their
+           overflow-y-auto never had a bounded height to scroll within, and the
+           wrapper's overflow-hidden simply CLIPPED the overspill. `min-h-0` lets
+           this flex item shrink below its content (without it, the default
+           `min-height:auto` re-inflates the box and the clipping comes back).
+
+        2. `overflow-y-auto` — the remaining views (Billing, Audit Log, Answer
+           Debugger) are plain `<div>`s with no scroll container of their own, so
+           the panel itself has to be the thing that scrolls for them.
+
+        Views of the first kind fill the panel exactly and scroll internally, so
+        this outer scrollbar stays dormant for them — no double scrollbar.
+      */}
+      <div data-testid="setup-panel" className="flex-1 flex flex-col min-h-0 overflow-y-auto">
         {activeSubTab === 'services' && <ServiceAssignmentView />}
         {activeSubTab === 'resources' && <ResourceManagerView />}
         {activeSubTab === 'employees' && <EmployeeManagementView />}
