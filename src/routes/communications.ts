@@ -600,19 +600,43 @@ export function registerCommunicationRoutes(
     // Y/N flow lands, its branches go AFTER this one for the same reason.)
     if (keyword === 'opt_out' || keyword === 'opt_in') {
       try {
-        await consentService.processOptOutCommand(
-          tenantId,
-          keyword === 'opt_out' ? 'STOP' : 'START',
-          fromPhone ?? undefined,
-          undefined,
-          text
-        );
+        if (keyword === 'opt_out') {
+          await consentService.processOptOutCommand(
+            tenantId,
+            'STOP',
+            fromPhone ?? undefined,
+            undefined,
+            text
+          );
+        } else {
+          // START/UNSTOP must RESTORE consent, not record an opt-out.
+          //
+          // These deliberately do NOT share processOptOutCommand: that method
+          // unconditionally calls recordOptOut() regardless of the command it's
+          // handed, so passing it 'START' would have opted the customer OUT of
+          // everything ('both', since 'start' matches neither its 'stop' nor
+          // 'unsubscribe' branch) — the exact inverse of what they asked for.
+          // Caught in review on PR #238.
+          //
+          // checkConsent() reads the LATEST consent record for the phone, so
+          // writing a fresh consent_given=true row is what actually re-enables
+          // messaging after a previous STOP revoked it.
+          await consentService.recordConsent({
+            tenant_id: tenantId,
+            customer_phone: fromPhone ?? undefined,
+            consent_type: 'sms',
+            consent_given: true,
+            consent_date: new Date().toISOString(),
+            consent_method: 'sms_reply',
+            consent_source: 'inbound_sms:start',
+          });
+        }
       } catch (err) {
         // Instrumented, not swallowed: a failing opt-out is a COMPLIANCE failure,
         // and it is invisible without this (the customer just keeps getting texts).
         errorsTotal.inc({ event: 'telnyx_inbound_optout_failed' });
         req.log.error(
-          { event: 'telnyx_inbound_optout_failed', tenant_id: tenantId, err },
+          { event: 'telnyx_inbound_optout_failed', tenant_id: tenantId, keyword, err },
           'Inbound SMS opt-out/opt-in FAILED to record — customer may keep receiving messages'
         );
         // Non-2xx so Telnyx retries: unlike an unknown tenant, this IS fixable

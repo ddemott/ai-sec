@@ -282,6 +282,56 @@ describe('POST /communications/telnyx/inbound — STOP handling (the compliance 
     expect(await optOutRows(tenantId)).toHaveLength(0);
   });
 
+  it('HAPPY: START RESTORES consent — it must never record an opt-out', async () => {
+    // REGRESSION (caught by review on PR #238). Both keywords used to be routed
+    // through ConsentService.processOptOutCommand(), which calls recordOptOut()
+    // UNCONDITIONALLY regardless of the command handed to it. So a customer who
+    // texted START to resume messages was opted OUT of everything instead — the
+    // exact inverse of what they asked for. The original tests only covered STOP,
+    // which is precisely why this got through.
+    const res = await postInbound(inboundPayload('START'), { sign: true });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      success: true,
+      result: { handled: true, keyword: 'opt_in' },
+    });
+
+    // The decisive assertion: NO opt-out row. Under the bug there would be one.
+    expect(await optOutRows(tenantId)).toHaveLength(0);
+
+    // And a positive consent record exists, since checkConsent() reads the LATEST
+    // consent row — writing one is what actually re-enables messaging after a
+    // prior STOP revoked it. Recording nothing would leave them silently blocked.
+    const { rows } = await setup.query(
+      `SELECT consent_given, consent_type FROM consent_records
+        WHERE tenant_id = $1 AND customer_phone = $2
+        ORDER BY consent_date DESC LIMIT 1`,
+      [tenantId, CUSTOMER]
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].consent_given).toBe(true);
+    expect(rows[0].consent_type).toBe('sms');
+  });
+
+  it('HAPPY: STOP then START leaves the customer re-enabled (the full round trip)', async () => {
+    // The sequence that actually matters in the wild.
+    await postInbound(inboundPayload('STOP'), { sign: true });
+    expect(await optOutRows(tenantId)).toHaveLength(1);
+
+    await postInbound(inboundPayload('START'), { sign: true });
+
+    // START adds consent; it does not add a second opt-out.
+    expect(await optOutRows(tenantId)).toHaveLength(1);
+    const { rows } = await setup.query(
+      `SELECT consent_given FROM consent_records
+        WHERE tenant_id = $1 AND customer_phone = $2
+        ORDER BY consent_date DESC LIMIT 1`,
+      [tenantId, CUSTOMER]
+    );
+    expect(rows[0]?.consent_given).toBe(true);
+  });
+
   it('GUARD: "YES" is NOT a carrier keyword — it is reserved for appointment confirmation', async () => {
     // Regression guard on a bug caught in review: 'yes' had been lumped into the
     // opt-in keyword set. YES is not a standard opt-in word (START/UNSTOP are),
