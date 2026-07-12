@@ -239,6 +239,9 @@ const TENANT_EXEMPT_ROUTES = [
   // SMS delivery-status callbacks (verified via provider signature, not JWT;
   // tenant_id rides on the query string, not the body)
   '/communications/telnyx/status',
+  // Inbound SMS — the tenant is resolved from the message's destination number
+  // (tenants.inbound_phone), so there is no tenant context on the request.
+  '/communications/telnyx/inbound',
   '/tenants',
   '/templates',
   '/templates/full',
@@ -534,6 +537,11 @@ const PUBLIC_ROUTES = [
   '/square/webhook',
   // SMS delivery-status callbacks (verified via provider signature, not JWT)
   '/communications/telnyx/status',
+  // Inbound SMS (customer replies: STOP/START, and later Y/N appointment
+  // confirmation). Public because Telnyx cannot present a JWT — which is exactly
+  // why the route FAILS CLOSED without TELNYX_WEBHOOK_SECRET and verifies the
+  // signature before reading a single field of the payload.
+  '/communications/telnyx/inbound',
   // Self-service appointment actions — token-gated, no session JWT
   '/self/cancel',
   '/self/reschedule',

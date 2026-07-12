@@ -20,7 +20,9 @@ import { CommunicationService } from '../services/communications/index.js';
 import { ConsentService } from '../services/consentService.js';
 import { createDatabaseService } from '../database/index.js';
 import { createTenantConfigService } from '../services/tenants/index.js';
-import { messageDeliveryReceiptsTotal } from '../services/metrics.js';
+import { messageDeliveryReceiptsTotal, inboundSmsTotal, errorsTotal } from '../services/metrics.js';
+import { verifyTelnyxSignature, classifySmsKeyword } from '../services/telnyxWebhookAuth.js';
+import { normalizePhone } from '../services/phoneUtils.js';
 
 /**
  * Record an SMS delivery-status callback (from any provider webhook).
@@ -489,5 +491,146 @@ export function registerCommunicationRoutes(
     messageDeliveryReceiptsTotal.inc({ status: messageStatus });
 
     return reply.send({ success: true });
+  });
+
+  /**
+   * POST /communications/telnyx/inbound — inbound SMS (customer → us).
+   *
+   * Phase 1 of the SMS-confirmation design (docs/superpowers/specs/
+   * 2026-07-11-sms-appointment-confirmation-design.md). It handles the carrier
+   * keywords ONLY — STOP/UNSUBSCRIBE and START — and takes no action on anything
+   * else. The Y/N appointment-confirmation branches land in phases 2–3.
+   *
+   * Shipping this alone closes a live compliance gap: until now NOTHING in the
+   * app received an inbound text, so a customer who replied STOP to one of our
+   * messages was never recorded in `opt_out_records`. The opt-out machinery
+   * (ConsentService.processOptOutCommand) already existed — it just had no
+   * inbound path to reach it.
+   *
+   * SECURITY — fail CLOSED. Unlike /telnyx/status (a read-only receipt sink that
+   * accepts unsigned callbacks in dev), this route MUTATES consent state, and
+   * later cancels appointments. It is a public endpoint, so without a signature
+   * check the `from` number is just an attacker-supplied string and this becomes
+   * an unauthenticated "opt any number out / cancel any booking" API. So:
+   * TELNYX_WEBHOOK_SECRET unset → reject everything (503), never run unguarded.
+   * Same "never unlocked by default" rule as AGENT_SECRET.
+   *
+   * Payload shape (Telnyx v2 message.received):
+   *   data.payload.from.phone_number  — the customer
+   *   data.payload.to[0].phone_number — OUR number (→ resolves the tenant)
+   *   data.payload.text               — the body
+   */
+  app.post('/communications/telnyx/inbound', async (req: AppRequest, reply) => {
+    const webhookSecret = process.env.TELNYX_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      // Fail closed. An unconfigured secret must not silently degrade a mutating
+      // endpoint into an open one — that is the exact failure mode this guard
+      // exists to prevent, and it would be invisible in prod.
+      errorsTotal.inc({ event: 'telnyx_inbound_secret_unset' });
+      req.log.error(
+        { event: 'telnyx_inbound_secret_unset' },
+        'TELNYX_WEBHOOK_SECRET unset — refusing inbound SMS webhook (fail closed; set the secret to enable)'
+      );
+      return reply.status(503).send({ success: false, error: 'Webhook not configured' });
+    }
+
+    // Verify BEFORE touching the payload: an unsigned caller must never reach
+    // the parse/DB path. Verified against the exact received bytes (req.rawBody,
+    // preserved by jsonContentTypeParser), never a re-stringified req.body.
+    const verdict = verifyTelnyxSignature({
+      rawBody: (req as { rawBody?: Buffer | string }).rawBody,
+      signatureHeader: req.headers['telnyx-signature'] as string | undefined,
+      secret: webhookSecret,
+    });
+    if (!verdict.valid) {
+      inboundSmsTotal.inc({ outcome: 'rejected' });
+      errorsTotal.inc({ event: 'telnyx_inbound_invalid_signature' });
+      // 5W: WHAT a forged/unsigned inbound webhook, WHY the specific failure.
+      // This is the line that tells you someone is POSTing at the endpoint
+      // directly — the attack the signature check exists to stop.
+      req.log.warn(
+        { event: 'telnyx_inbound_invalid_signature', reason: verdict.reason },
+        'Inbound SMS webhook REJECTED — signature invalid (forged or unsigned request)'
+      );
+      const status = verdict.reason === 'missing_raw_body' ? 400 : 403;
+      return reply.status(status).send({ success: false, error: 'Invalid Telnyx signature' });
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const data = body.data as Record<string, unknown> | undefined;
+    const payload = data?.payload as Record<string, unknown> | undefined;
+    const from = (payload?.from as { phone_number?: string } | undefined)?.phone_number;
+    const toArr = payload?.to as Array<{ phone_number?: string }> | undefined;
+    const ourNumber = toArr?.[0]?.phone_number;
+    const text = payload?.text as string | undefined;
+
+    if (!from || !ourNumber) {
+      req.log.warn(
+        { event: 'telnyx_inbound_malformed' },
+        'Inbound SMS webhook missing from/to phone number'
+      );
+      return reply.status(400).send({ success: false, error: 'Missing from/to in Telnyx payload' });
+    }
+
+    const fromPhone = normalizePhone(from);
+    const toPhone = normalizePhone(ourNumber);
+
+    // Resolve the tenant from OUR number (the message's destination). Cross-tenant
+    // by nature — the sender isn't authenticated and no tenant context exists yet —
+    // so this reads `tenants` on the raw pool, relying on the admin-bypass policy.
+    const tenantRes = await pool.query<{ tenant_id: string }>(
+      `SELECT tenant_id FROM tenants WHERE inbound_phone = $1 LIMIT 1`,
+      [toPhone]
+    );
+    const tenantId = tenantRes.rows[0]?.tenant_id ?? null;
+    if (!tenantId) {
+      // 200, not an error: Telnyx RETRIES non-2xx, and a text to a number we
+      // don't own is not a failure we can fix by being retried.
+      inboundSmsTotal.inc({ outcome: 'unknown_tenant' });
+      req.log.warn(
+        { event: 'telnyx_inbound_unknown_tenant', to_last4: toPhone?.slice(-4) },
+        'Inbound SMS for a number matching no tenant — ignored'
+      );
+      return reply.send({ success: true, result: { handled: false, reason: 'unknown_tenant' } });
+    }
+
+    const keyword = classifySmsKeyword(text);
+
+    // Opt-out FIRST: a STOP must never be interpreted as anything else. (When the
+    // Y/N flow lands, its branches go AFTER this one for the same reason.)
+    if (keyword === 'opt_out' || keyword === 'opt_in') {
+      try {
+        await consentService.processOptOutCommand(
+          tenantId,
+          keyword === 'opt_out' ? 'STOP' : 'START',
+          fromPhone ?? undefined,
+          undefined,
+          text
+        );
+      } catch (err) {
+        // Instrumented, not swallowed: a failing opt-out is a COMPLIANCE failure,
+        // and it is invisible without this (the customer just keeps getting texts).
+        errorsTotal.inc({ event: 'telnyx_inbound_optout_failed' });
+        req.log.error(
+          { event: 'telnyx_inbound_optout_failed', tenant_id: tenantId, err },
+          'Inbound SMS opt-out/opt-in FAILED to record — customer may keep receiving messages'
+        );
+        // Non-2xx so Telnyx retries: unlike an unknown tenant, this IS fixable
+        // by being retried, and silently dropping an opt-out is not acceptable.
+        return reply.status(500).send({ success: false, error: 'Failed to process opt-out' });
+      }
+
+      inboundSmsTotal.inc({ outcome: keyword === 'opt_out' ? 'opted_out' : 'opted_in' });
+      req.log.info(
+        { event: 'telnyx_inbound_keyword', tenant_id: tenantId, keyword },
+        `Inbound SMS keyword handled: ${keyword}`
+      );
+      return reply.send({ success: true, result: { handled: true, keyword } });
+    }
+
+    // Phase 1 takes no action on anything else. The Y/N appointment-confirmation
+    // branches attach here (phases 2–3). Acked so Telnyx doesn't retry.
+    inboundSmsTotal.inc({ outcome: 'ignored' });
+    return reply.send({ success: true, result: { handled: false, reason: 'no_keyword' } });
   });
 }
