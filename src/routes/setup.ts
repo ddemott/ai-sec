@@ -111,6 +111,37 @@ export function registerSetupRoutes(
     }, 'Failed to load setup graph')
   );
 
+  /**
+   * POST /setup/impact — what a sync commit of THIS draft would destroy.
+   *
+   * A read-only dry-run of the prune. The wizard calls it BEFORE committing, so
+   * the owner is warned while they can still back out. /setup/commit reports the
+   * same number, but by then the soft-delete has already happened — which is no
+   * use at all to someone deciding whether to go through with it.
+   *
+   * Only meaningful for a sync (preloaded) draft: a create-mode draft prunes
+   * nothing, so it can strand nothing.
+   */
+  app.post(
+    '/setup/impact',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+
+      const parsed = DraftGraphSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+      }
+
+      const impact = await withTenantClient(tenantId, (client) =>
+        findRemovalImpact(client, tenantId, parsed.data)
+      );
+      return reply.send({ success: true, impact });
+    }, 'Failed to compute setup impact')
+  );
+
   app.post(
     '/setup/commit',
     withHandler(async (req: AppRequest, reply) => {
