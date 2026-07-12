@@ -14,7 +14,6 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { createHmac, timingSafeEqual } from 'crypto';
 import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
 import { CommunicationService } from '../services/communications/index.js';
 import { ConsentService } from '../services/consentService.js';
@@ -414,11 +413,17 @@ export function registerCommunicationRoutes(
    * TelnyxSmsAdapter.sendSMS). PUBLIC + tenant-exempt: no JWT; tenant_id
    * is read from ?tenant_id= on the URL the adapter appended.
    *
-   * Verification: if TELNYX_WEBHOOK_SECRET is set we validate the
-   * telnyx-signature header (HMAC-SHA256 of `timestamp|rawBody`) against the
-   * exact bytes received — never a re-stringified `req.body`, whose key order
-   * and whitespace need not match what Telnyx signed. A bad signature → 403.
-   * Without the secret configured we accept + log (dev/staging).
+   * Verification: if TELNYX_PUBLIC_KEY is set we validate the Ed25519 signature
+   * (telnyx-signature-ed25519 over `timestamp|rawBody`) against the exact bytes
+   * received — never a re-stringified `req.body`, whose key order and whitespace
+   * need not match what Telnyx signed. A bad signature → 403. Without the key
+   * configured we accept + log (dev/staging) — this route is a read-only receipt
+   * sink, so unlike /inbound it does not fail closed.
+   *
+   * This route was the ORIGIN of the wrong-algorithm bug: it verified an
+   * HMAC-SHA256 `telnyx-signature: t=…,v1=…` header, which is Stripe's scheme.
+   * Telnyx does not offer HMAC. It never fired because the secret was never set,
+   * and /inbound was copied from it. Both now use the real Ed25519 path.
    *
    * Payload shape (Telnyx v2):
    *   data.event_type  — "message.finalized" | "message.sent" | "message.failed"
@@ -429,40 +434,24 @@ export function registerCommunicationRoutes(
   app.post('/communications/telnyx/status', async (req: AppRequest, reply) => {
     // Signature verification runs BEFORE the payload is read: an unsigned
     // caller must never reach the parsing/DB path.
-    const webhookSecret = process.env.TELNYX_WEBHOOK_SECRET;
-    if (webhookSecret) {
-      const rawBuffer = (req as { rawBody?: Buffer | string }).rawBody;
-      const rawBody =
-        typeof rawBuffer === 'string'
-          ? rawBuffer
-          : rawBuffer instanceof Buffer
-            ? rawBuffer.toString('utf8')
-            : null;
-
-      if (rawBody === null) {
-        req.log.error(
-          { event: 'telnyx_status_callback_missing_raw_body' },
-          'Raw body missing for Telnyx status callback — verification cannot proceed'
-        );
-        return reply.status(400).send({ success: false, error: 'Raw body unavailable' });
-      }
-
-      const sigHeader = (req.headers['telnyx-signature'] as string) || '';
-      const parts = Object.fromEntries(
-        sigHeader.split(',').map((p) => p.split('=') as [string, string])
-      );
-      const timestamp = parts['t'] ?? '';
-      const receivedSig = parts['v1'] ?? '';
-      const expected = createHmac('sha256', webhookSecret)
-        .update(`${timestamp}|${rawBody}`)
-        .digest('hex');
-      const received = Buffer.from(receivedSig, 'hex');
-      const expectedBuf = Buffer.from(expected, 'hex');
-      const signatureValid =
-        received.length === expectedBuf.length && timingSafeEqual(received, expectedBuf);
-      if (!signatureValid) {
+    const publicKey = process.env.TELNYX_PUBLIC_KEY;
+    if (publicKey) {
+      const verdict = verifyTelnyxSignature({
+        rawBody: (req as { rawBody?: Buffer | string }).rawBody,
+        signatureHeader: req.headers['telnyx-signature-ed25519'] as string | undefined,
+        timestampHeader: req.headers['telnyx-timestamp'] as string | undefined,
+        publicKey,
+      });
+      if (!verdict.valid) {
+        if (verdict.reason === 'missing_raw_body') {
+          req.log.error(
+            { event: 'telnyx_status_callback_missing_raw_body' },
+            'Raw body missing for Telnyx status callback — verification cannot proceed'
+          );
+          return reply.status(400).send({ success: false, error: 'Raw body unavailable' });
+        }
         req.log.warn(
-          { event: 'telnyx_status_callback_invalid_signature' },
+          { event: 'telnyx_status_callback_invalid_signature', reason: verdict.reason },
           'Telnyx status callback signature mismatch'
         );
         return reply.status(403).send({ success: false, error: 'Invalid Telnyx signature' });
@@ -470,7 +459,7 @@ export function registerCommunicationRoutes(
     } else {
       req.log.info(
         { event: 'telnyx_status_callback_unverified' },
-        'TELNYX_WEBHOOK_SECRET unset — accepting Telnyx status callback without signature verification'
+        'TELNYX_PUBLIC_KEY unset — accepting Telnyx status callback without signature verification'
       );
     }
 
@@ -526,8 +515,12 @@ export function registerCommunicationRoutes(
    * later cancels appointments. It is a public endpoint, so without a signature
    * check the `from` number is just an attacker-supplied string and this becomes
    * an unauthenticated "opt any number out / cancel any booking" API. So:
-   * TELNYX_WEBHOOK_SECRET unset → reject everything (503), never run unguarded.
+   * TELNYX_PUBLIC_KEY unset → reject everything (503), never run unguarded.
    * Same "never unlocked by default" rule as AGENT_SECRET.
+   *
+   * The key is Telnyx's Ed25519 PUBLIC key (Mission Control → Keys &
+   * Credentials), not a shared secret we generate — see telnyxWebhookAuth.ts for
+   * why the original HMAC implementation was verifying the wrong algorithm.
    *
    * Payload shape (Telnyx v2 message.received):
    *   data.payload.from.phone_number  — the customer
@@ -535,26 +528,29 @@ export function registerCommunicationRoutes(
    *   data.payload.text               — the body
    */
   app.post('/communications/telnyx/inbound', async (req: AppRequest, reply) => {
-    const webhookSecret = process.env.TELNYX_WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      // Fail closed. An unconfigured secret must not silently degrade a mutating
+    const publicKey = process.env.TELNYX_PUBLIC_KEY;
+    if (!publicKey) {
+      // Fail closed. An unconfigured key must not silently degrade a mutating
       // endpoint into an open one — that is the exact failure mode this guard
       // exists to prevent, and it would be invisible in prod.
       errorsTotal.inc({ event: 'telnyx_inbound_secret_unset' });
       req.log.error(
         { event: 'telnyx_inbound_secret_unset' },
-        'TELNYX_WEBHOOK_SECRET unset — refusing inbound SMS webhook (fail closed; set the secret to enable)'
+        'TELNYX_PUBLIC_KEY unset — refusing inbound SMS webhook (fail closed; set the key to enable)'
       );
       return reply.status(503).send({ success: false, error: 'Webhook not configured' });
     }
 
     // Verify BEFORE touching the payload: an unsigned caller must never reach
     // the parse/DB path. Verified against the exact received bytes (req.rawBody,
-    // preserved by jsonContentTypeParser), never a re-stringified req.body.
+    // preserved by jsonContentTypeParser), never a re-stringified req.body —
+    // Telnyx signed the original bytes, and key order/whitespace need not survive
+    // a parse/serialize round-trip.
     const verdict = verifyTelnyxSignature({
       rawBody: (req as { rawBody?: Buffer | string }).rawBody,
-      signatureHeader: req.headers['telnyx-signature'] as string | undefined,
-      secret: webhookSecret,
+      signatureHeader: req.headers['telnyx-signature-ed25519'] as string | undefined,
+      timestampHeader: req.headers['telnyx-timestamp'] as string | undefined,
+      publicKey,
     });
     if (!verdict.valid) {
       inboundSmsTotal.inc({ outcome: 'rejected' });
@@ -572,6 +568,37 @@ export function registerCommunicationRoutes(
 
     const body = (req.body ?? {}) as Record<string, unknown>;
     const data = body.data as Record<string, unknown> | undefined;
+    const eventType = data?.event_type as string | undefined;
+
+    // A messaging profile has ONE webhook URL, and Telnyx delivers EVERY messaging
+    // event to it — `message.received` (a customer texting us) but also
+    // `message.sent` / `message.finalized` (delivery receipts for messages WE
+    // sent). Only the first is an inbound text; the rest must be ignored here.
+    //
+    // Why this is a guard and not a nicety: on a delivery receipt, `payload.text`
+    // is OUR OWN outbound message body — and every message we send ends with the
+    // compliance line "Reply STOP to opt out." Feed that through
+    // classifySmsKeyword() and it reads as an opt-out command. Today the tenant
+    // lookup below happens to fail first (a DLR's `to` is the CUSTOMER's number,
+    // which matches no tenant.inbound_phone) so we bail before classifying — but
+    // that is luck, not intent: the route would otherwise opt a customer out of
+    // all messaging because we reminded them of their appointment.
+    //
+    // 200, not 4xx: a DLR is a legitimate webhook, not a malformed one, and Telnyx
+    // RETRIES non-2xx. (Delivery receipts are handled by /telnyx/status, which the
+    // adapter targets per-message via webhook_url — that per-message URL takes
+    // priority over the profile URL, so status receipts normally never land here.)
+    if (eventType && eventType !== 'message.received') {
+      req.log.debug(
+        { event: 'telnyx_inbound_ignored_event', event_type: eventType },
+        'Non-inbound Telnyx messaging event on the inbound webhook — ignored'
+      );
+      return reply.send({
+        success: true,
+        result: { handled: false, reason: 'not_an_inbound_message' },
+      });
+    }
+
     const payload = data?.payload as Record<string, unknown> | undefined;
     const from = (payload?.from as { phone_number?: string } | undefined)?.phone_number;
     const toArr = payload?.to as Array<{ phone_number?: string }> | undefined;

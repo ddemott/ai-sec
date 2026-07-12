@@ -539,7 +539,7 @@ const PUBLIC_ROUTES = [
   '/communications/telnyx/status',
   // Inbound SMS (customer replies: STOP/START, and later Y/N appointment
   // confirmation). Public because Telnyx cannot present a JWT — which is exactly
-  // why the route FAILS CLOSED without TELNYX_WEBHOOK_SECRET and verifies the
+  // why the route FAILS CLOSED without TELNYX_PUBLIC_KEY and verifies the Ed25519
   // signature before reading a single field of the payload.
   '/communications/telnyx/inbound',
   // Self-service appointment actions — token-gated, no session JWT
