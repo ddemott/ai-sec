@@ -66,6 +66,8 @@ describe('fetchTenantConfig', () => {
       forwardPhone: null,
       forwardedFromPhone: null,
       callDisclosure: null,
+      businessHours: null,
+      bookableThrough: null,
     });
   });
 

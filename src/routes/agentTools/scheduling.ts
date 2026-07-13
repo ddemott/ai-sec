@@ -33,11 +33,12 @@ import {
   subtractIntervals,
   type AgentToolDeps,
 } from './helpers';
+import type { PoolClient } from 'pg';
 import { applyTimezone, toLocalWallClock } from '../../services/timezoneUtils';
 import { validateAppointmentTimeRange } from '../../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../../services/customerLookup';
-import { findNextAvailableSlots } from '../../services/availabilitySearch';
+import { findNextAvailableSlots, type AvailableSlot } from '../../services/availabilitySearch';
 import { resolveServiceForBooking } from '../../services/serviceResolver';
 import { getTenantBufferMinutes } from '../../services/tenantBuffer';
 import {
@@ -60,6 +61,71 @@ import {
   rescheduleRemindersForAppointment,
   saveReminderLeadPreference,
 } from '../../services/reminders/scheduleForAppointment';
+
+/**
+ * Speak a list of open slots the way a receptionist would: "Monday the 13th at
+ * 1:00 PM with Dale". Times are rendered in the TENANT's timezone — the slots
+ * come back as UTC instants, and reading those aloud would offer a Chicago caller
+ * a 6 PM appointment for a 1 PM shift.
+ */
+function describeSlots(slots: AvailableSlot[], ianaTimezone: string, max = 2): string {
+  return slots
+    .slice(0, max)
+    .map((s) => {
+      const when = new Date(s.start_time).toLocaleString('en-US', {
+        timeZone: ianaTimezone,
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      return s.employee_name ? `${when} with ${s.employee_name}` : when;
+    })
+    .join(', or ');
+}
+
+/**
+ * The SOONEST real openings, searched from NOW — not from whatever date the
+ * caller guessed.
+ *
+ * THIS IS THE FIX FOR THE 2026-07-12 CALL. The alternatives search used to start
+ * at the caller's REQUESTED time and look 24 hours ahead. She asked for Aug 26;
+ * the shop's schedule ended Aug 19; so we searched Aug 26–27 — a stretch of
+ * calendar where nothing exists and nothing ever would — found zero slots, and
+ * handed the agent an empty list. With nothing to offer, all it could say was
+ * "would you like a different day?", so she guessed blind, three times, and gave
+ * up after seven minutes. Meanwhile dozens of open slots sat in the following
+ * week, invisible, because nobody looked backward.
+ *
+ * A caller who names an impossible date needs to be TOLD when we're actually
+ * open. Searching forward from their mistake can only ever find more nothing.
+ */
+async function findSoonestSlots(
+  client: PoolClient,
+  params: {
+    tenantId: string;
+    durationMinutes: number;
+    requiredSkills?: string[];
+    requiredCapabilities?: string[];
+    bufferMinutes: number;
+  }
+): Promise<AvailableSlot[]> {
+  return findNextAvailableSlots(client, {
+    tenantId: params.tenantId,
+    // From NOW. The whole point.
+    fromTime: new Date().toISOString(),
+    durationMinutes: params.durationMinutes,
+    requiredSkills: params.requiredSkills ?? [],
+    requiredCapabilities: params.requiredCapabilities ?? [],
+    count: 3,
+    // 168h (7 days) is the cap findNextAvailableSlots enforces. A week is enough
+    // to find something for any business that works at all; if it isn't, the
+    // honest answer really is "let me take a message."
+    searchHorizonHours: 168,
+    bufferMinutes: params.bufferMinutes,
+  });
+}
 
 export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {
   // get_service_catalog — list public services for the tenant.
@@ -532,24 +598,43 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
       );
 
       if (!result || !result.success) {
-        // Fetch next-available alternatives so the agent can propose them
-        // verbally instead of saying "no availability." Same skill +
-        // capability filters as the booking attempt, searches forward up
-        // to 24h. Failure to find alternatives leaves next_available
-        // empty; the agent prompt handles both shapes.
+        // Fetch next-available alternatives so the agent can propose them verbally
+        // instead of saying "no availability." Same skill + capability filters as
+        // the booking attempt. Two stages — see below. Failure to find anything
+        // leaves next_available empty; the agent prompt handles both shapes.
         const nextAvailable = await withTenantClient(args.tenant_id, async (client) => {
           // Same buffer as the booking attempt, so every suggested alternative
           // is one the agent can actually book under this tenant's buffer.
           const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
-          return findNextAvailableSlots(client, {
+          const searchParams = {
             tenantId: args.tenant_id,
-            fromTime: new Date(args.window.from).toISOString(),
             durationMinutes: 30,
             requiredSkills: args.requirements.requiredEmployeeSkills || [],
             requiredCapabilities: args.requirements.requiredResourceCapabilities || [],
-            count: 5,
             bufferMinutes,
+          };
+
+          // STAGE 1 — look NEAR the time they asked for. Someone who wanted 2pm
+          // Tuesday would rather hear "I have 2:30 Tuesday" than "how about next
+          // Monday?". Now a 7-day horizon rather than the old 24h default, so a
+          // fully-booked Tuesday still surfaces Wednesday and Thursday.
+          const nearRequested = await findNextAvailableSlots(client, {
+            ...searchParams,
+            fromTime: new Date(args.window.from).toISOString(),
+            count: 5,
+            searchHorizonHours: 168,
           });
+          if (nearRequested.length > 0) return nearRequested;
+
+          // STAGE 2 — THE FIX FOR THE 2026-07-12 CALL. Nothing near their time at
+          // all, which almost always means they named a date the shop cannot
+          // reach: past the end of the schedule, or a day nobody works. Searching
+          // FURTHER FORWARD from that date can only ever find more nothing — that
+          // is exactly what happened (asked for Aug 26, schedule ended Aug 19, we
+          // searched Aug 26–27, found zero, and the agent had nothing to say but
+          // "try another day"). Search from NOW so we can tell them when we are
+          // actually open.
+          return findSoonestSlots(client, searchParams);
         }).catch(() => []);
         bookingAttemptsTotal.inc({
           outcome: bookingOutcomeFromAgentError(result?.error_message, result?.error_code),
@@ -702,9 +787,42 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
           : `${serviceName} takes about ${duration_minutes} minutes.`;
 
       if (data.shifts.length === 0) {
+        // Nobody works that day — but DON'T leave the caller guessing. Tell them
+        // when we ARE open.
+        //
+        // This is the line the 2026-07-12 caller heard, three times: "we don't
+        // have anyone scheduled to work on Wednesday. Would you like to try a
+        // different day?" She had no way to know which days WERE open, so she
+        // guessed — twice more, both wrong — and gave up after seven minutes. To
+        // her it sounded like a business with no staff. Offering the soonest real
+        // opening turns a dead end into a booking.
+        const { soonest, ianaTimezone } = await withTenantClient(args.tenant_id, async (client) => {
+          const tzRes = await client.query<{ timezone: string }>(
+            `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE tenant_id = $1`,
+            [args.tenant_id]
+          );
+          const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
+          return {
+            ianaTimezone: tzRes.rows[0]?.timezone || 'America/Chicago',
+            soonest: await findSoonestSlots(client, {
+              tenantId: args.tenant_id,
+              durationMinutes: duration_minutes,
+              bufferMinutes,
+            }),
+          };
+        });
+
+        if (soonest.length > 0) {
+          return ok(
+            reply,
+            `${serviceInfo} We don't have anyone scheduled on ${dayName}, but the soonest I can get you in is ${describeSlots(soonest, ianaTimezone)}. Would either of those work?`
+          );
+        }
+        // Genuinely nothing open for a week — now "try another day" IS the honest
+        // answer, and a message is the right fallback.
         return ok(
           reply,
-          `${serviceInfo} Unfortunately, we don't have anyone scheduled to work on ${dayName}. Would you like to try a different day?`
+          `${serviceInfo} Unfortunately, we don't have anyone scheduled to work on ${dayName}, and I'm not finding anything open in the next week. Would you like me to take a message so someone can call you back?`
         );
       }
 

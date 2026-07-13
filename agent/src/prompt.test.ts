@@ -400,7 +400,9 @@ describe('buildSystemPrompt', () => {
     //      around it, asking politely and offering options to choose from.
     const prompt = buildSystemPrompt(BASE_CTX);
     expect(prompt).toMatch(/caller chooses the time/i);
-    expect(prompt).toMatch(/what day and time work for THEM|what day were you thinking/i);
+    expect(prompt).toMatch(
+      /what day works for you|caller still chooses their time|what day were you thinking/i
+    );
     expect(prompt).toMatch(/never (announce|impose)|don't (assume|impose)/i);
   });
 
@@ -950,5 +952,39 @@ describe('buildSystemPrompt — prefetched caller context', () => {
     expect(prompt).not.toContain('preferred_stylist: Maria');
     expect(prompt).not.toContain('balayage');
     expect(prompt).not.toContain('# Customer preferences');
+  });
+});
+
+describe('buildSystemPrompt — business hours (prevent the impossible guess)', () => {
+  it('HAPPY: states the real hours and forbids the open-ended "what day?" question', () => {
+    // WHO: the 2026-07-12 caller. The agent asked "what day and time were you
+    //       thinking?" — an open question against a calendar she could not see.
+    //       She named May 26 (already past), then Aug 26 (past the end of the
+    //       schedule). Refused both times. Gave up after seven minutes.
+    // WHAT: the prompt now carries the shop's REAL hours, derived from who is
+    //        actually scheduled, and tells the agent to lead with them.
+    // WHY: prevention beats recovery. A receptionist says "we're open weekdays
+    //       one to five — what day works?" and the impossible answer never happens.
+    const prompt = buildSystemPrompt({
+      ...BASE_CTX,
+      businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+      bookableThrough: '2027-01-08',
+    });
+
+    expect(prompt).toContain("# When we're open");
+    expect(prompt).toContain('Monday to Friday, 1:00 PM to 5:00 PM');
+    expect(prompt).toContain('2027-01-08'); // how far out it can book
+    // The behavioral rule, not just the data.
+    expect(prompt).toMatch(/before asking the caller for a day/i);
+    expect(prompt).toMatch(/date in the PAST/i);
+  });
+
+  it('SAD: with NO hours (nobody scheduled) it must NOT claim to be open', () => {
+    // WHY: a shop with an empty schedule has no hours to state. Inventing one
+    //       would have the AI promising a caller a time nobody is there to work —
+    //       strictly worse than admitting we can't say.
+    const prompt = buildSystemPrompt({ ...BASE_CTX, businessHours: null });
+
+    expect(prompt).not.toContain("# When we're open");
   });
 });

@@ -15,6 +15,7 @@ import {
   VoiceSessionTranscriptSchema,
 } from './schemas';
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
+import { getBusinessHours } from '../../services/businessHours';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
@@ -52,12 +53,25 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, call_disclosure FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
-        return res.rows[0] ?? null;
+        if (!res.rows[0]) return null;
+        // The shop's opening hours, derived from who is actually on the schedule
+        // (there is no business-hours config — the open window IS the union of
+        // staff shifts). Handed to the agent so it can LEAD with them instead of
+        // asking "what day and time were you thinking?" against a calendar the
+        // caller cannot see — the open-ended question that made the 2026-07-12
+        // caller name two impossible dates in a row. 2026-07-12.
+        const hours = await getBusinessHours(client, args.tenant_id);
+        return { ...res.rows[0], hours };
       });
       if (!row) {
         return fail(reply, 'Tenant not found');
       }
       return ok(reply, {
+        // Spoken hours ("Monday to Friday, 1:00 PM to 5:00 PM") + how far out we
+        // can actually be booked. Empty string / null when nobody is scheduled —
+        // the agent must then NOT claim to be open.
+        business_hours: row.hours.spoken || null,
+        bookable_through: row.hours.bookableThrough,
         name: row.name,
         timezone: row.timezone || 'America/Chicago',
         // 2026-05-18: surface the tenant's custom prompt template so the agent
