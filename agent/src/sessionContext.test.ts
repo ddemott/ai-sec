@@ -261,3 +261,58 @@ describe('callerIdIsForwardNumber', () => {
     expect(callerIdIsForwardNumber('not-a-number', FORWARD)).toBe(false);
   });
 });
+
+/**
+ * REGRESSION — the carrier's caller-ID must be normalized to E.164 at the boundary.
+ *
+ * On the 2026-07-13 call Telnyx sent "6082175303" — no +1 — and that raw string
+ * went straight into voice_sessions.caller_phone.
+ *
+ * Every phone column in this database holds the E.164 form: customers.phone is
+ * "+16082175303", consent_records.customer_phone is "+1…", phone_verifications.phone
+ * is "+1…". So an un-normalized caller-ID matches NOTHING. A returning customer
+ * looks brand new. Their consent looks absent (so the agent re-asks, or worse, a
+ * confirmation is suppressed). The call never links to their record.
+ *
+ * And nothing errors. It just quietly forgets them — which is the failure mode that
+ * survives longest, because it looks exactly like normal operation.
+ */
+describe('REGRESSION: caller-ID is normalized to E.164 at the boundary', () => {
+  it('SAD: a bare 10-digit carrier value becomes +1XXXXXXXXXX (the 2026-07-13 shape)', () => {
+    // WHO: every Telnyx caller. WHAT: "6082175303" → "+16082175303".
+    // WHY: this exact string reached voice_sessions.caller_phone and matched no
+    //      customer, no consent record, and no verification row.
+    const { callerPhone } = extractCallerInfo({ 'sip.phoneNumber': '6082175303' });
+    expect(callerPhone).toBe('+16082175303');
+  });
+
+  it('HAPPY: an already-E.164 value is unchanged (no double-prefixing)', () => {
+    const { callerPhone } = extractCallerInfo({ 'sip.phoneNumber': '+16082175303' });
+    expect(callerPhone).toBe('+16082175303');
+  });
+
+  it('HAPPY: an 11-digit 1-prefixed value normalizes too', () => {
+    const { callerPhone } = extractCallerInfo({ 'sip.phoneNumber': '16082175303' });
+    expect(callerPhone).toBe('+16082175303');
+  });
+
+  it('HAPPY: carrier formatting is stripped', () => {
+    const { callerPhone } = extractCallerInfo({ 'sip.phoneNumber': '(608) 217-5303' });
+    expect(callerPhone).toBe('+16082175303');
+  });
+
+  it('SAD: an anonymous/blocked marker still yields null, not a mangled number', () => {
+    // WHY: normalization must not resurrect a blocked caller-ID as a fake number.
+    expect(extractCallerInfo({ 'sip.phoneNumber': 'anonymous' }).callerPhone).toBeNull();
+    expect(extractCallerInfo({ 'sip.phoneNumber': '' }).callerPhone).toBeNull();
+  });
+
+  it('the forwarded-line guard still matches across formats (it always did)', () => {
+    // WHY: callerIdIsForwardNumber compares 10-digit reductions, so it matched
+    //      "6082175303" against "+16082175303" correctly even BEFORE this fix.
+    //      Normalizing must not break that — it is the guard that keeps a
+    //      forwarded call from being mis-attributed to the forwarding line.
+    expect(callerIdIsForwardNumber('+16082175303', '+16082175303')).toBe(true);
+    expect(callerIdIsForwardNumber('+16082175303', '+16305550000')).toBe(false);
+  });
+});
