@@ -50,8 +50,22 @@ export function generateSelfServiceToken(
  * Verify and decode a self-service token.
  * Returns the payload when valid, null on bad signature / expiry / wrong action.
  *
- * Empty JWT_SECRET returns null immediately — an empty string is a valid HMAC
- * key so jwt.verify would accept ANY token signed with an empty string.
+ * Empty JWT_SECRET returns null immediately.
+ *
+ * The old reason given here — "an empty string is a valid HMAC key so jwt.verify
+ * would accept ANY token signed with an empty string" — is FALSE, and was
+ * corrected on 2026-07-13 after it resurfaced as a review objection on PR #243.
+ * Measured, not assumed:
+ *
+ *   jwt.sign(payload, '')  → throws "secretOrPrivateKey must have a value"
+ *   jwt.verify(token, '')  → throws "secret or public key must be provided"
+ *
+ * jsonwebtoken rejects a falsy key outright. The guard is still right — we should
+ * not lean on a third-party library's internal falsy check to hold our most
+ * important boundary — but the JUSTIFICATION has to be true, because a comment
+ * that misdescribes a security property is worse than no comment: the next reader
+ * either builds on a false premise or wastes a review cycle re-litigating it, as
+ * happened here.
  */
 export function verifySelfServiceToken(
   token: string,

@@ -477,6 +477,32 @@ const JWT_SECRET =
   (process.env.NODE_ENV === 'production' ? '' : 'dev-jwt-secret-change-in-production');
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 
+/**
+ * No secret → no tokens. Not "tokens signed with an empty key".
+ *
+ * Raised in review on PR #243: with JWT_SECRET unset in production the constant
+ * above resolves to '', and the fear was that jwt.verify('') would accept ANY
+ * token. Measured, not assumed — jsonwebtoken rejects a falsy key outright:
+ *
+ *   jwt.sign(payload, '')  → throws "secretOrPrivateKey must have a value"
+ *   jwt.verify(token, '')  → throws "secret or public key must be provided"
+ *
+ * So it already fails closed, and src/index.ts:77 refuses to BOOT production
+ * without JWT_SECRET, which means '' is unreachable there anyway. The reviewer's
+ * mechanism was wrong.
+ *
+ * The guard stays regardless, for two reasons. Relying on a third-party library's
+ * internal falsy check to enforce our most important security boundary is thin —
+ * a future jsonwebtoken that treats '' as a valid HMAC key would silently turn
+ * every token into a forgeable one. And a comment in selfServiceToken.ts asserted
+ * exactly that behavior as fact (it was wrong, and is now corrected): when the
+ * codebase cannot agree on whether a thing is safe, make it structurally safe and
+ * stop arguing.
+ */
+function assertSecret(): boolean {
+  return typeof JWT_SECRET === 'string' && JWT_SECRET.length > 0;
+}
+
 type JwtPayload = {
   /**
    * Token type. A session token is the ONLY kind that may authenticate a
@@ -531,6 +557,12 @@ export function generateToken(
   // versions but the runtime accepts ms-format strings like "8h".
   // SignOptions['expiresIn'] is the exact slot we're filling — narrower
   // than bare `any` while still accepting the env-derived string.
+  if (!assertSecret()) {
+    // Loud, not silent. A token minted with no key is not a weaker token — it is
+    // a forgery waiting to happen, and issuing one would be worse than failing
+    // the login.
+    throw new Error('JWT_SECRET is not configured — refusing to mint a session token');
+  }
   return jwt.sign({ ...payload, typ: 'session' }, JWT_SECRET, {
     expiresIn: (expiresIn ?? JWT_EXPIRY) as jwt.SignOptions['expiresIn'],
   });
@@ -546,6 +578,9 @@ export function generateToken(
  * some other purpose.
  */
 function verifyToken(token: string): JwtPayload | null {
+  // Fail closed BEFORE consulting jsonwebtoken, so the guarantee is ours rather
+  // than a library implementation detail we happen to depend on.
+  if (!assertSecret()) return null;
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as Partial<JwtPayload>;
     if (decoded.typ !== 'session') return null;

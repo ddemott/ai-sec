@@ -176,6 +176,24 @@ describe('SECURITY: session tokens and self-service tokens are not interchangeab
     expect(res.json().auth.typ).toBe('session');
   });
 
+  it('FACT: jsonwebtoken REJECTS an empty key — it does not treat it as a valid HMAC secret', () => {
+    // WHY THIS TEST EXISTS: a comment in selfServiceToken.ts asserted the
+    // opposite as fact — "an empty string is a valid HMAC key so jwt.verify would
+    // accept ANY token" — and that false claim resurfaced as a review objection on
+    // PR #243, costing a cycle. It is wrong, and now it is wrong in a way CI will
+    // catch rather than a way a human has to re-derive.
+    //
+    // The library fails closed. We ALSO guard explicitly (middleware.assertSecret),
+    // because leaning on a third-party's internal falsy check to hold the most
+    // important boundary in the system is too thin a thread — if a future
+    // jsonwebtoken ever accepted '', every token in the system becomes forgeable
+    // and this test is what tells us.
+    expect(() => jwt.sign({ a: 1 }, '')).toThrow(/secretOrPrivateKey must have a value/);
+
+    const real = jwt.sign({ a: 1 }, 'a-real-secret');
+    expect(() => jwt.verify(real, '')).toThrow(/secret or public key must be provided/);
+  });
+
   it('HAPPY: a self-service token still opens its own door', () => {
     // WHY: the cancel link in the SMS must keep working — the fix scopes the
     //      token, it does not revoke it.
