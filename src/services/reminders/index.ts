@@ -10,11 +10,35 @@
 import type { DatabaseService } from '../../database/index.js';
 import { CommunicationService } from '../communications/index.js';
 import { ConsentService } from '../consentService.js';
+import { remindersSentTotal, remindersSkippedTotal } from '../metrics.js';
 import type { TenantConfigService } from '../tenants/index.js';
 
 import type { ReminderSchedule } from './types.js';
 
 export type { ReminderSchedule } from './types.js';
+
+/**
+ * A send that failed without telling us why.
+ *
+ * `sendReminder` collapses the provider's answer to a boolean, so when it says
+ * `false` we have no HTTP status to classify. retryPolicy's `isRetryable`
+ * treats a status-less error as RETRYABLE on purpose ("better to over-retry
+ * than lose"), which is the behavior we want: a transient Telnyx blip gets the
+ * 5m/30m/2h backoff instead of silently killing the customer's reminder.
+ *
+ * This exists to be THROWN. The whole point of the 2026-07-13 fix is that
+ * processReminder must not decide a reminder's fate itself — the worker owns
+ * retry-vs-fail, and it can only do that if the failure actually reaches it.
+ */
+export class ReminderSendError extends Error {
+  constructor(
+    message: string,
+    public readonly reminderId: string
+  ) {
+    super(message);
+    this.name = 'ReminderSendError';
+  }
+}
 
 /**
  * Did the reminder actually reach the customer on ANY channel?
@@ -214,11 +238,13 @@ export class ReminderService {
       const now = new Date();
 
       if (appointment.status === 'cancelled') {
+        remindersSkippedTotal.inc({ reason: 'appointment_cancelled' });
         await this.updateReminderStatus(reminderId, 'cancelled', 'Appointment cancelled');
         return;
       }
 
       if (appointmentDateTime <= now) {
+        remindersSkippedTotal.inc({ reason: 'appointment_passed' });
         await this.updateReminderStatus(
           reminderId,
           'cancelled',
@@ -230,6 +256,26 @@ export class ReminderService {
       // Check communication consent
       const hasConsent = await this.checkCommunicationConsent(normalizedReminder, appointment);
       if (!hasConsent) {
+        // THE SILENT ONE. This branch cancelled the reminder with no log and no
+        // metric, and it is the likeliest branch to fire: consent_records rows
+        // are written ONLY by the agent's record_sms_consent tool, so if the LLM
+        // ever skips the permission question, EVERY confirmation and reminder is
+        // dropped here, invisibly, forever. The caller was told on a live call
+        // "I'll text you" and nothing was ever sent — and no dashboard, log or
+        // metric would show it. Suppression is legally correct; silence is not.
+        remindersSkippedTotal.inc({ reason: 'no_consent' });
+        console.warn(
+          JSON.stringify({
+            event: 'reminder_skipped_no_consent',
+            reason:
+              'no consent_records row for this customer/channel — the reminder was cancelled, not sent',
+            next: 'agent must call record_sms_consent after asking permission with the SMS disclosures',
+            reminder_schedule_id: reminderId,
+            reminder_type: normalizedReminder.reminderType,
+            tenant_id: normalizedReminder.tenantId,
+            appointment_id: normalizedReminder.appointmentId,
+          })
+        );
         await this.updateReminderStatus(reminderId, 'cancelled', 'No consent for communication');
         return;
       }
@@ -237,16 +283,32 @@ export class ReminderService {
       // Send the reminder
       const sent = await this.sendReminder(normalizedReminder, appointment);
       if (sent) {
+        remindersSentTotal.inc({ type: normalizedReminder.reminderType, outcome: 'success' });
         await this.updateReminderStatus(reminderId, 'sent');
-      } else {
-        await this.updateReminderStatus(reminderId, 'failed', 'Communication failed');
+        return;
       }
+
+      // A send that returned false is a FAILURE, and the caller — the worker —
+      // owns what happens next. See the catch below for why we must not decide
+      // that here.
+      remindersSentTotal.inc({ type: normalizedReminder.reminderType, outcome: 'failure' });
+      throw new ReminderSendError('Communication failed', reminderId);
     } catch (error) {
-      await this.updateReminderStatus(
-        reminderId,
-        'failed',
-        error instanceof Error ? error.message : 'Unknown error'
-      );
+      // THE UNREACHABLE-RETRY BUG. This catch used to mark the row 'failed' and
+      // return normally — so the worker's catch block, which owns decideRetry(),
+      // retry_count, next_retry_at and the 5m/30m/2h backoff, could NEVER
+      // execute. One transient Telnyx 5xx permanently killed a reminder and the
+      // customer simply never heard from us. retryPolicy.ts and its migration
+      // were decoration; prod confirms it — max(retry_count) is NULL, no row has
+      // ever retried.
+      //
+      // So: rethrow. The worker classifies (transient → back off and retry;
+      // terminal → 'failed'). A method that swallows the error its caller is
+      // built to handle is not being defensive, it is lying about what happened.
+      if (!(error instanceof ReminderSendError)) {
+        remindersSentTotal.inc({ type: 'unknown', outcome: 'failure' });
+      }
+      throw error;
     }
   }
 
