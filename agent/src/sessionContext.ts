@@ -93,7 +93,20 @@ export function extractCallerInfo(attributes: Record<string, string> | null | un
   if (!attributes) return { callerPhone: null, callId: null };
 
   const rawPhone = attributes['sip.phoneNumber'] ?? attributes['sip.from'] ?? null;
-  const callerPhone = rawPhone && !isAnonymousMarker(rawPhone) ? rawPhone : null;
+  // NORMALIZE to E.164 at the boundary.
+  //
+  // Telnyx handed us "6082175303" (no +1) on the 2026-07-13 call, and that raw
+  // string went straight into voice_sessions.caller_phone. Every phone lookup in
+  // this system matches on the E.164 form — customers.phone is "+16082175303",
+  // consent_records.customer_phone is "+1...", phone_verifications.phone is "+1..."
+  // — so an un-normalized caller ID matches NOTHING. It would silently fail to
+  // recognise a returning customer, fail to find their consent, and fail to link
+  // the call to their record, while looking perfectly fine in the database.
+  //
+  // Normalize once, here, where the carrier's string enters the system. Every
+  // consumer downstream then gets the one shape it expects.
+  const cleaned = rawPhone && !isAnonymousMarker(rawPhone) ? toE164(rawPhone) : null;
+  const callerPhone = cleaned;
 
   const callId = attributes['sip.callID'] ?? attributes['sip.callId'] ?? null;
 
@@ -118,6 +131,31 @@ function tenDigits(phone: string | null | undefined): string | null {
   let digits = phone.replace(/\D/g, '');
   if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
   return digits.length === 10 ? digits : null;
+}
+
+/**
+ * Carrier caller-ID → E.164, the ONE shape the rest of the system stores.
+ *
+ * Telnyx does not promise a format. On 2026-07-13 it sent "6082175303"; it may
+ * equally send "+16082175303" or "16082175303". Every phone column in this
+ * database holds the "+1…" form, so anything else silently matches nothing —
+ * a returning customer looks brand new, their consent looks absent, and the call
+ * never links to their record. Nothing errors. It just quietly forgets them.
+ *
+ * Mirrors shared/phone.ts normalizePhone for the US case (kept local because the
+ * agent build's rootDir excludes shared/). A number we cannot confidently render
+ * as US E.164 is passed through UNCHANGED rather than mangled — better an odd
+ * value in the log than a wrong one in a lookup. An international caller keeps a
+ * leading '+' if the carrier gave one.
+ */
+function toE164(phone: string): string {
+  const ten = tenDigits(phone);
+  if (ten) return `+1${ten}`;
+  const digits = phone.replace(/\D/g, '');
+  // Already-international, or something we shouldn't guess at: keep the carrier's
+  // '+' if present, otherwise hand back what we were given.
+  if (phone.trim().startsWith('+')) return `+${digits}`;
+  return phone.trim();
 }
 
 /**
