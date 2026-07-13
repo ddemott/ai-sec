@@ -585,17 +585,25 @@ describe('identify-caller — a SPOKEN number must prove itself before we reveal
       value: 'Maria',
     });
 
-    // Simulate a completed OTP: verified within the last 24h.
+    // Simulate a completed OTP — proved ON THIS CALL.
+    //
+    // call_id is load-bearing (2026-07-13). The gate used to accept any row
+    // verified for this number in the last 24 HOURS, with nothing tying it to the
+    // call in progress — so one caller's legitimate verification opened a day-long
+    // window in which ANY caller who spoke that number was handed the account. A
+    // code proves you held the handset at a MOMENT; it does not make the number
+    // yours until tomorrow. A row with no call_id can never open the gate.
     await setup.query(
-      `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, verified_at)
-       VALUES ($1, $2, 'x', now() + interval '10 minutes', now())`,
-      [tenantId, CUSTOMER_PHONE_E164]
+      `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, verified_at, call_id)
+       VALUES ($1, $2, 'x', now() + interval '10 minutes', now(), $3)`,
+      [tenantId, CUSTOMER_PHONE_E164, 'SCL_verified_call']
     );
 
     const res = await post('/agent-tools/identify-caller', {
       tenant_id: tenantId,
       phone: CUSTOMER_PHONE_RAW,
-      phone_source: 'spoken', // still spoken — but now PROVEN
+      phone_source: 'spoken', // still spoken — but now PROVEN, on this call
+      call_id: 'SCL_verified_call',
     });
 
     const result = res.json().result;

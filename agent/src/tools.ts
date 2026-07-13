@@ -619,6 +619,10 @@ export function buildTools(
         const res = await client.call('/agent-tools/send-verification-code', {
           tenant_id: ctx.tenantId,
           phone: args.phone,
+          // Binds the code to THIS call. The server will only accept a
+          // verification whose call_id matches the live call — without this the
+          // code is issued unattributable and can never open the gate.
+          call_id: ctx.callId,
         });
         return formatResponse(res);
       },
@@ -648,7 +652,34 @@ export function buildTools(
           tenant_id: ctx.tenantId,
           phone: args.phone,
           code: args.code,
+          call_id: ctx.callId,
         });
+
+        // ADOPT THE PROVEN NUMBER.
+        //
+        // The caller just read back a code we texted to this handset — that is
+        // strictly stronger evidence than caller-ID, which the carrier asserts
+        // and nobody confirms. Yet ctx.callerPhone was set once at session start
+        // and never reassigned, and on a forwarded line it is null. So every
+        // tool that guards on `if (!ctx.callerPhone)` — get_my_appointments,
+        // send_self_service_link, cancel_appointment, reschedule_appointment —
+        // kept refusing AFTER a successful verification. The caller proved who
+        // they were and the agent still said "I can't do that without caller-ID."
+        //
+        // The OTP flow proved the number and then threw the proof away. This is
+        // the line that keeps it. (Thinking Hammer's live line IS the forwarded
+        // one, so this was every returning customer, every call.)
+        if (res.ok) {
+          const verified = res.result as { verified?: boolean; phone?: string } | undefined;
+          if (verified?.verified) {
+            // Take the SERVER's normalized E.164 form, not the raw string the LLM
+            // transcribed from speech — every downstream tool looks the customer
+            // up by exact phone match, so "(630) 822-9086" and "+16308229086" are
+            // not interchangeable here.
+            ctx.callerPhone = verified.phone ?? args.phone;
+          }
+        }
+
         return formatResponse(res);
       },
     }),

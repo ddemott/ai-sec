@@ -715,6 +715,11 @@ describe('agentTools /identify-caller', () => {
       tenant_id: TENANT_ID,
       phone: '3128651186',
       name: 'Ghost',
+      // Carrier-attested caller-ID: this test is about the EMPTY-RECORD case, not
+      // the disclosure gate. Without this it defaults to 'spoken' and (correctly)
+      // gets requires_verification back instead, which would be testing the gate
+      // twice and this behavior not at all.
+      phone_source: 'caller_id',
     });
 
     expect(res.statusCode).toBe(200);
@@ -2256,8 +2261,10 @@ describe('agentTools /send-verification-code', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [{ inbound_phone: '+15550001000' }] }, // tenant lookup
-        { rows: [{ c: '0' }] }, // per-phone count (0 sends in last hour)
-        { rows: [{ c: '5' }] }, // per-tenant count (well under 100/day)
+        { rows: [{ c: '0' }] }, // per-phone SEND count (0 sends in last hour)
+        { rows: [{ c: '5' }] }, // per-tenant send count (well under 100/day)
+        { rows: [{ total: '0' }] }, // per-phone failed-ATTEMPT count across all codes
+        { rows: [], rowCount: 0 }, // expire any still-live code for this phone
         { rows: [{ phone_verification_id: 'verif-1' }] }, // INSERT phone_verifications
       ],
     });
@@ -2272,10 +2279,26 @@ describe('agentTools /send-verification-code', () => {
     expect(body.result.phone).toBe('+15551234567');
     expect(body.result.message).toContain('read it back');
 
-    // Queries: tenant lookup, rate-limit counts, INSERT. bcrypt call is
-    // not a client.query so it doesn't appear in queries[].
-    expect(queries).toHaveLength(4);
-    expect(queries[3].text).toContain('INSERT INTO phone_verifications');
+    // Queries: tenant lookup, the two SEND rate-limit counts, the per-phone
+    // failed-ATTEMPT count, the expiry of any still-live code, then the INSERT.
+    // bcrypt is not a client.query so it doesn't appear in queries[].
+    //
+    // The last two are the 2026-07-13 brute-force fix and are load-bearing:
+    //   - the attempt count is per (tenant, phone) across EVERY code issued in
+    //     the last hour, because the old per-row cap was reset simply by asking
+    //     for a new code (fresh row → attempt_count 0 → three more guesses,
+    //     forever, with no lockout).
+    //   - expiring the previous code keeps exactly ONE live code per phone. Left
+    //     alone, each resend added another valid answer to guess against, so the
+    //     effective keyspace SHRANK with every resend — the exact inverse of what
+    //     a rate limit is for.
+    expect(queries).toHaveLength(6);
+    expect(queries[3].text).toContain('SUM(attempt_count)');
+    expect(queries[4].text).toContain('SET expires_at = now()');
+    expect(queries[5].text).toContain('INSERT INTO phone_verifications');
+    // The code is bound to THIS call — a verification with no call_id can never
+    // open the disclosure gate (see migration 20260714000000).
+    expect(queries[5].text).toContain('call_id');
 
     // SMS was sent with the correct shape
     const fetchCalls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
