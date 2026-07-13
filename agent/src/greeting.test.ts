@@ -183,13 +183,6 @@ describe('resolveDisclosure — tenant override with safe fallback', () => {
  * the words "curly brace business name", followed by the same question twice.
  */
 describe('REGRESSION: the greeting must not speak template syntax, or repeat itself', () => {
-  const cfg = {
-    name: 'Thinking Hammer LLC',
-    personaName: null,
-    callDisclosure: null,
-    forwardPhone: null,
-  };
-
   test('SAD: an unsubstituted {{business_name}} is NEVER spoken', () => {
     // WHO: every caller to Thinking Hammer.
     // WHAT: the saved First Message was
@@ -200,10 +193,12 @@ describe('REGRESSION: the greeting must not speak template syntax, or repeat its
     //      Handlebars. The spoken greeting does not, and nobody noticed the two
     //      had different contracts. prompt.ts had substitutePlaceholders the
     //      whole time; greeting.ts never got it.
-    const greeting = buildGreeting({
-      ...cfg,
-      firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
-    } as never);
+    const greeting = buildGreeting(
+      tenant({
+        name: 'Thinking Hammer LLC',
+        firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
+      })
+    );
 
     expect(greeting).not.toContain('{{');
     expect(greeting).not.toContain('}}');
@@ -216,10 +211,12 @@ describe('REGRESSION: the greeting must not speak template syntax, or repeat its
     //      and asked again. The module header claims the opener "no longer carries"
     //      that question, but that was only ever true of the DEFAULT opener; a
     //      custom First Message was free to end with it and nothing checked.
-    const greeting = buildGreeting({
-      ...cfg,
-      firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
-    } as never);
+    const greeting = buildGreeting(
+      tenant({
+        name: 'Thinking Hammer LLC',
+        firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
+      })
+    );
 
     const asks = greeting.toLowerCase().split('how can i help you').length - 1;
     expect(asks).toBe(1);
@@ -230,10 +227,12 @@ describe('REGRESSION: the greeting must not speak template syntax, or repeat its
     //      must not reorder the greeting so that the disclosure becomes the last
     //      thing before the caller starts talking — so we strip the question from
     //      the OPENER and keep the closer, not the reverse.
-    const greeting = buildGreeting({
-      ...cfg,
-      firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
-    } as never);
+    const greeting = buildGreeting(
+      tenant({
+        name: 'Thinking Hammer LLC',
+        firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
+      })
+    );
 
     const disclosureAt = greeting.toLowerCase().indexOf('ai assistant');
     const questionAt = greeting.toLowerCase().indexOf('how can i help you');
@@ -244,10 +243,12 @@ describe('REGRESSION: the greeting must not speak template syntax, or repeat its
   test('SAD: an UNKNOWN placeholder is stripped, never spoken', () => {
     // WHY: a missing name is survivable; reading punctuation aloud is not. Fail
     //      silently — the caller hears a slightly plainer sentence, not a bug.
-    const greeting = buildGreeting({
-      ...cfg,
-      firstMessage: 'Welcome to {{nonexistent_thing}}, friend.',
-    } as never);
+    const greeting = buildGreeting(
+      tenant({
+        name: 'Thinking Hammer LLC',
+        firstMessage: 'Welcome to {{nonexistent_thing}}, friend.',
+      })
+    );
 
     expect(greeting).not.toContain('{{');
     expect(greeting).not.toContain('nonexistent_thing');

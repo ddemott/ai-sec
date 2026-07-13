@@ -122,7 +122,7 @@ export const CLOSER_WITH_TRANSFER =
  *      silently is right here: the caller hears a slightly plainer sentence
  *      instead of a bug.
  */
-export function fillPlaceholders(text: string, config: TenantDisplayConfig): string {
+function fillPlaceholders(text: string, config: TenantDisplayConfig): string {
   return (
     text
       .replace(/\{\{\s*business_name\s*\}\}/gi, config.name?.trim() || 'us')
