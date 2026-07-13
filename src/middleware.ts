@@ -478,6 +478,23 @@ const JWT_SECRET =
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 
 type JwtPayload = {
+  /**
+   * Token type. A session token is the ONLY kind that may authenticate a
+   * request; see verifyToken.
+   *
+   * Why this claim exists (found 2026-07-13): self-service cancel/reschedule
+   * tokens (src/services/selfServiceToken.ts) are signed with the SAME
+   * JWT_SECRET, and every appointment confirmation SMS puts one in a link. A
+   * bare `jwt.verify(token, JWT_SECRET)` could not tell the two apart, so that
+   * link's token was accepted as a session — and since it carries no `role`,
+   * the old `role ?? 'owner'` default promoted the bearer to OWNER of the
+   * tenant named in the token. `GET /export/tenant-data` then returned every
+   * customer, appointment, transcript and consent record to anyone holding a
+   * cancel link, for 24h, with no password.
+   *
+   * A shared secret is not an identity. The type claim IS the identity.
+   */
+  typ: 'session';
   tenant_id: string;
   user_id: string;
   email: string;
@@ -503,12 +520,27 @@ export function generateToken(payload: {
   // versions but the runtime accepts ms-format strings like "8h".
   // SignOptions['expiresIn'] is the exact slot we're filling — narrower
   // than bare `any` while still accepting the env-derived string.
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as jwt.SignOptions['expiresIn'] });
+  return jwt.sign({ ...payload, typ: 'session' }, JWT_SECRET, {
+    expiresIn: JWT_EXPIRY as jwt.SignOptions['expiresIn'],
+  });
 }
 
+/**
+ * Verify a SESSION token. Rejects every other JWT this system signs with the
+ * same secret — see the `typ` note on JwtPayload for what that prevented.
+ *
+ * Fails CLOSED on anything unexpected: a token with no `typ`, the wrong `typ`,
+ * no `user_id`, or no `role` is not a session, whatever else it may be. The
+ * caller must never be able to reach a route by presenting a token minted for
+ * some other purpose.
+ */
 function verifyToken(token: string): JwtPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as Partial<JwtPayload>;
+    if (decoded.typ !== 'session') return null;
+    // A session is a USER. No user_id → not a session, regardless of `typ`.
+    if (!decoded.user_id || !decoded.tenant_id || !decoded.role) return null;
+    return decoded as JwtPayload;
   } catch {
     return null;
   }
@@ -599,6 +631,9 @@ export function registerJwtAuthHook(app: AppFastifyInstance, pool: Pool) {
       }
     }
 
-    (request as AppRequest).auth = { ...decoded, role: decoded.role ?? 'owner' };
+    // No `role ?? 'owner'` fallback. A token that fails to say what it is does
+    // not get to be the most privileged thing we have — verifyToken already
+    // rejects a payload with no role, so this is the honest assignment.
+    (request as AppRequest).auth = { ...decoded };
   });
 }

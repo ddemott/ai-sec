@@ -17,6 +17,8 @@ const JWT_SECRET =
 export type SelfServiceAction = 'cancel' | 'reschedule';
 
 export interface SelfServiceTokenPayload {
+  /** Token type — see generateSelfServiceToken. Never 'session'. */
+  typ: 'self_service';
   appointment_id: string;
   tenant_id: string;
   action: SelfServiceAction;
@@ -31,9 +33,17 @@ export function generateSelfServiceToken(
   action: SelfServiceAction
 ): string | null {
   if (!JWT_SECRET) return null;
-  return jwt.sign({ appointment_id: appointmentId, tenant_id: tenantId, action }, JWT_SECRET, {
-    expiresIn: '24h',
-  });
+  // `typ` is load-bearing, not decoration. This token travels to a CUSTOMER, in
+  // a link, in an SMS. It is signed with the same JWT_SECRET as a login
+  // session, so without a type claim the session verifier could not tell the
+  // two apart and accepted this as a logged-in user (see middleware.ts
+  // JwtPayload). It grants exactly one thing: cancel/reschedule ONE
+  // appointment.
+  return jwt.sign(
+    { typ: 'self_service', appointment_id: appointmentId, tenant_id: tenantId, action },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
 }
 
 /**
@@ -50,6 +60,11 @@ export function verifySelfServiceToken(
   if (!JWT_SECRET) return null;
   try {
     const payload = jwt.verify(token, JWT_SECRET) as SelfServiceTokenPayload;
+    // Symmetric to the session verifier: only a self-service token opens a
+    // self-service route. A session JWT presented here must NOT be honoured
+    // either — the confusion has to fail closed in both directions, or we have
+    // only moved it.
+    if (payload.typ !== 'self_service') return null;
     if (payload.action !== expectedAction) return null;
     if (!payload.appointment_id || !payload.tenant_id) return null;
     return payload;
