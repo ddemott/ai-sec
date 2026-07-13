@@ -56,6 +56,7 @@ import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { buildStubTelnyxProvisioning } from './services/telnyxNumbersStub';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { startVoiceSessionReaper, stopVoiceSessionReaper } from './workers/voiceSessionReaper';
+import { startScheduleExtender, stopScheduleExtender } from './workers/scheduleExtender';
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { createQueryExpander } from '../shared/expandQueryForEmbedding';
@@ -301,6 +302,18 @@ if (isProduction || process.env.ENABLE_VOICE_SESSION_REAPER === 'true') {
   startVoiceSessionReaper();
 }
 
+// --- Start Schedule Extender ---
+// Keeps every employee's calendar topped up to a rolling horizon (default 90
+// days). WITHOUT THIS A BUSINESS QUIETLY BECOMES UNBOOKABLE: employee_schedule
+// holds one row per DATE, not a recurring rule, so the window the Setup wizard
+// fanned out shrinks by a day, every day. Thinking Hammer's ran out on
+// 2026-08-19 and a real caller was told "no one is scheduled that day" for a
+// normal Wednesday inside the owner's normal hours (2026-07-12). Same gating as
+// the other two workers.
+if (isProduction || process.env.ENABLE_SCHEDULE_EXTENDER === 'true') {
+  startScheduleExtender();
+}
+
 // --- Feature-readiness boot report ---
 // One structured line (not 12 warns) naming each optional capability's status
 // (ready/mocked/disabled/missing_config). Same conditions as the prod-only
@@ -350,6 +363,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     app.log.info(`Received ${signal}, shutting down...`);
     stopReminderScheduler();
     stopVoiceSessionReaper();
+    stopScheduleExtender();
     await app.close();
     await closePool();
     process.exit(0);
