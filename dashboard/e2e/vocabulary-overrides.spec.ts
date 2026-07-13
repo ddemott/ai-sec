@@ -34,6 +34,7 @@
 import { test, expect } from './helpers/test';
 import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
+import { cleanTenantData } from './helpers/fixtures';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
@@ -123,7 +124,7 @@ test('salon tenant resolves Stylist/Chair from the business-template tier', asyn
     // because the salon template uses the hardcoded 'Appointment' default, which is fine.
     expect(body.booking_label).toBeTruthy();
   } finally {
-    if (tenant) await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenant.tenantId]);
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
@@ -154,7 +155,7 @@ test('mobile-tire tenant resolves Technician/Truck — cross-template guard', as
     expect(body.employee_label).not.toBe('Stylist');
     expect(body.resource_label).not.toBe('Chair');
   } finally {
-    if (tenant) await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenant.tenantId]);
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
@@ -217,7 +218,7 @@ test('per-tenant override wins over the business-template default', async ({ req
     // Sanity: the template default was 'Stylist'; the override must shadow it.
     expect(body.employee_label).not.toBe('Stylist');
   } finally {
-    if (tenant) await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenant.tenantId]);
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
@@ -302,7 +303,7 @@ test('UI: a salon tenant sees Stylist labels in the Employees view', async ({ pa
         .catch(() => {
           /* page may be closed already */
         });
-      await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenant.tenantId]);
+      await cleanTenantData(pool, tenant.tenantId);
     }
   }
 });

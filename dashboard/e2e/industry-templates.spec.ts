@@ -36,6 +36,7 @@
 import { test, expect } from './helpers/test';
 import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
+import { cleanTenantData } from './helpers/fixtures';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
@@ -331,7 +332,7 @@ for (const c of INDUSTRY_CASES) {
           .catch(() => {
             /* ok */
           });
-        await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenant.tenantId]);
+        await cleanTenantData(pool, tenant.tenantId);
       }
     }
   });

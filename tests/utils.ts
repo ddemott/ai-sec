@@ -1,4 +1,4 @@
-import { Client } from 'pg';
+import { Client, type Pool } from 'pg';
 import bcrypt from 'bcrypt';
 
 // Always use test_db for tests — never the main database.
@@ -323,4 +323,42 @@ export async function assignResourceToService(
     'INSERT INTO service_resource (tenant_id, service_id, resource_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
     [tenantId, serviceId, resourceId]
   );
+}
+
+/**
+ * Delete a tenant, retrying through a Postgres deadlock.
+ *
+ * WHY (PR #242, CI run 29220656800): booking routes seed reminders FIRE-AND-FORGET
+ * (`void scheduleRemindersForAppointment(...)`), so the INSERT into
+ * reminder_schedules is still running after the HTTP response returned and the test
+ * has moved on to teardown. That INSERT takes FK locks tenants → appointments; the
+ * cascading DELETE takes them appointments → tenants. Opposite order = AB-BA cycle.
+ * Postgres kills one side AT RANDOM, which is why the teardown failed roughly one
+ * run in two and looked exactly like flake.
+ *
+ * Retry is the correct remedy, not a workaround: a deadlock is a transient
+ * scheduling accident, not a logic error. One transaction is killed precisely so
+ * the other can make progress, and the killed statement is perfectly valid the
+ * instant it is retried. (Postgres's own docs say so: "applications should be
+ * prepared to retry transactions aborted by deadlock".)
+ *
+ * 40P01 = deadlock_detected.
+ */
+export async function deleteTenantWithDeadlockRetry(
+  pool: Pool,
+  tenantId: string,
+  maxAttempts = 5
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenantId]);
+      return true;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code !== '40P01' || attempt === maxAttempts) throw err;
+      // Back off a little so the racing transaction can finish and release.
+      await new Promise((r) => setTimeout(r, 50 * attempt));
+    }
+  }
+  return false;
 }
