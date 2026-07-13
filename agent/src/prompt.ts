@@ -275,7 +275,7 @@ ${
   // anti-hallucination section.
   const verificationHonestyLine = hasVerification
     ? `- **NEVER say "I've sent you a text" / "I just sent the code"** unless \`send_verification_code\` actually RAN and came back successful. On 2026-07-13 you told a caller "I just sent you a text with a verification code" and no code had ever been requested. He waited for a text that was never coming. If it failed, say so plainly and offer another way.`
-    : `- **NEVER say "I've sent you a text"** — you have no way to send one on this call.`;
+    : `- **NEVER say "I've sent you a verification code" or "I've texted you a code"** — you have NO verification tool on this call, so you cannot send one. (You may still have other texting tools, e.g. a self-service link or an owner page — but each of those is only true once ITS tool has actually run and succeeded.)`;
   const transferToolLine = hasTransfer
     ? `\n- transfer_call() — connect the live call to a real person (the owner/staff cell). Use when the caller needs a human: a personal call for the owner, an urgent issue you can't handle, or an explicit request to be connected. Tell the caller you're connecting them BEFORE calling it; if it reports it can't transfer, apologize briefly and offer to take a message.`
     : '';
