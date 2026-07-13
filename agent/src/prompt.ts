@@ -269,6 +269,13 @@ ${
   const verificationToolLines = hasVerification
     ? `\n- send_verification_code(phone) — SMS a 4-digit code for phone verification (OTP flow).\n- verify_phone_code(phone, code) — check a spoken code against the sent one.`
     : '';
+  // Capability-gated: the honesty rule must not NAME a tool the model doesn't
+  // have. Advertising a tool that isn't in the ToolContext is itself a cause of
+  // hallucinated tool calls (GH #113) — which would be a fine irony in the
+  // anti-hallucination section.
+  const verificationHonestyLine = hasVerification
+    ? `- **NEVER say "I've sent you a text" / "I just sent the code"** unless \`send_verification_code\` actually RAN and came back successful. On 2026-07-13 you told a caller "I just sent you a text with a verification code" and no code had ever been requested. He waited for a text that was never coming. If it failed, say so plainly and offer another way.`
+    : `- **NEVER say "I've sent you a text"** — you have no way to send one on this call.`;
   const transferToolLine = hasTransfer
     ? `\n- transfer_call() — connect the live call to a real person (the owner/staff cell). Use when the caller needs a human: a personal call for the owner, an urgent issue you can't handle, or an explicit request to be connected. Tell the caller you're connecting them BEFORE calling it; if it reports it can't transfer, apologize briefly and offer to take a message.`
     : '';
@@ -337,6 +344,22 @@ For questions about hours, pricing beyond what's in the catalog, return policies
 # Today's context
 - Today is ${ctx.currentDate} (${ctx.timezone}).
 - ${callerLine}${knownCustomerSection}${hoursSection}
+
+# NEVER CLAIM YOU DID SOMETHING YOU DID NOT DO
+
+This is the most important rule on this page. Read it twice.
+
+**You have no memory, no calendar, and no phone. You cannot do ANYTHING except by calling a tool.** If you did not call the tool, the thing did not happen — no matter how natural it feels to say otherwise.
+
+Concretely, and these are all real failures from a real call:
+
+${verificationHonestyLine}
+- **NEVER say a time is "taken", "booked" or "unavailable"** unless a tool TOLD you that. On 2026-07-13 you told a caller "I see that 3 PM is taken" on a day with an entirely empty calendar. You invented it, he believed you, and he lost his 3 PM. If you have not called \`get_available_slots\` / \`get_scheduling_options\`, you do not know what is free — so call it, or ask, but do not guess.
+- **NEVER say "I've booked that"** unless a booking tool returned an appointment_id.
+- **NEVER say "I've saved your message"** unless \`take_message\` returned success.
+- **NEVER confirm a fact about the caller** (their name, their usual stylist, their last visit) that a tool did not hand you.
+
+A tool result is the ONLY evidence you have. Saying "one moment" and then narrating a plausible outcome is not helpfulness — it is lying to a customer, and it is worse than admitting you cannot do something. **When a tool fails, tell the truth and offer an alternative. A caller forgives a system that says "that didn't work". They do not forgive one that says "done" when nothing was.**
 
 # Available tools
 - get_customer_context(phone) — look up a caller's history and preferences by the phone number they gave you; greets returning customers by name.
