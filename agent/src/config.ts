@@ -23,14 +23,6 @@ const envSchema = z.object({
   // SPEED/SOFT) were removed 2026-06-25 when the agent went fully OpenAI — they
   // are no longer required for the worker to boot (no XAI_API_KEY needed).
 
-  // Comma-separated tenant IDs whose inbound line is a FORWARDED number (e.g.
-  // the owner's cell forwards to the AI), so the SIP caller ID is the
-  // forwarding line — NOT the caller. For these tenants the agent ignores
-  // caller ID entirely (treats it as absent) and collects the caller's real
-  // number verbally. Runtime toggle set on Railway — no schema change, instantly
-  // reversible. Empty (default) = trust caller ID as before for every tenant.
-  UNTRUSTED_CALLER_ID_TENANTS: z.string().default(''),
-
   // Output watchdog (the "never silent" backstop): when "true", a session-level
   // timer plays a cached holding phrase if no agent audio is produced within the
   // deadline after the caller's turn, then a recovery line. OFF by default — its
@@ -130,14 +122,3 @@ if (!parsed.success) {
 
 export const config = parsed.data;
 export type Config = typeof config;
-
-/**
- * Tenants whose SIP caller ID must NOT be trusted (forwarded inbound lines).
- * Parsed once from UNTRUSTED_CALLER_ID_TENANTS. The agent nulls callerPhone for
- * any tenant in this set so it collects the caller's real number verbally.
- */
-export const untrustedCallerIdTenants = new Set(
-  config.UNTRUSTED_CALLER_ID_TENANTS.split(',')
-    .map((id) => id.trim())
-    .filter(Boolean)
-);

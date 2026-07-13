@@ -25,7 +25,7 @@ import * as openai from '@livekit/agents-plugin-openai';
 import * as silero from '@livekit/agents-plugin-silero';
 import { fileURLToPath } from 'node:url';
 
-import { config, untrustedCallerIdTenants } from './config.js';
+import { config } from './config.js';
 import { runFallback } from './fallback.js';
 import { buildGreeting } from './greeting.js';
 import { getLogger } from './logger.js';
@@ -181,20 +181,6 @@ export default defineAgent({
       });
       await runFallback(ctx, "I'm sorry, we're having a system issue.", config);
       return;
-    }
-
-    // Forwarded-line guard: for tenants whose inbound number is a forwarded
-    // line (env UNTRUSTED_CALLER_ID_TENANTS), the SIP caller ID is the
-    // forwarding cell, NOT the caller. Null it BEFORE anything reads it — the
-    // child logger, the fire-and-forget voice-session-start record, the prompt,
-    // and every tool — so nothing ever keys off the forwarding number. The
-    // agent collects the caller's real number verbally instead.
-    if (untrustedCallerIdTenants.has(sessionCtx.tenantId) && sessionCtx.callerPhone) {
-      log.info(
-        { event: 'caller_id_ignored', tenant_id: sessionCtx.tenantId, room: ctx.room.name },
-        'caller ID ignored for forwarded-line tenant — collecting number verbally'
-      );
-      sessionCtx.callerPhone = null;
     }
 
     // Per-call child logger — every subsequent line on this call carries
@@ -474,25 +460,68 @@ export default defineAgent({
       // Forwarded-line guard (number match): when the SIP caller-ID equals the
       // tenant's forwarded-from line (the published number the carrier forwards
       // INTO the assistant), the call was forwarded — so the caller-ID is the
-      // forwarding line, NOT the customer. Null it so the prompt's blocked-caller
-      // path + tools collect the customer's real number verbally (identify_caller
-      // then saves name+number to the CRM). A different (good) caller-ID is left
-      // intact — the agent only needs the caller's name. This is the precise
-      // complement to the env tenant-list guard above (UNTRUSTED_CALLER_ID_TENANTS),
-      // which nulls EVERY call to a tenant; number-match keeps direct customers'
-      // caller-ID. Keys off forwarded_from_phone (a dedicated field), so it's
-      // independent of forward_phone (the live-transfer target) and the two can
-      // be distinct numbers without looping. Known v1 gap: because this runs
-      // after fetchTenantConfig, the forwarding number already reached the child
-      // logger + voice-session-start record for this call — tracked as a
-      // follow-up (move the match before those once config is fetched earlier).
-      // Origin: Dale's forwarded business line (2026-06-29).
+      // forwarding line, NOT the customer. Null it so the agent collects the real
+      // number verbally instead (identify_caller then saves name + number to the CRM).
+      //
+      // THIS IS THE ONLY CALLER-ID GUARD (2026-07-13). It replaced a per-TENANT env
+      // kill switch (UNTRUSTED_CALLER_ID_TENANTS) that had been a five-day stopgap in
+      // June and then outlived its own replacement by three weeks — still set on
+      // Railway, still running FIRST, and still nulling the caller ID of EVERY call to
+      // the tenant, direct or forwarded, because it keyed off the BUSINESS rather than
+      // the CALL. It had no phone number to compare against; a tenant UUID cannot tell
+      // you how a call arrived. It therefore starved this guard of a number to check,
+      // so this line has never once fired in production.
+      //
+      // The cost was real: a customer who dialed the number DIRECTLY had her caller ID
+      // destroyed, was asked to read out her own phone number, never got a preference
+      // prefetch, and was saved to the CRM as "Caller" (2026-07-12). Deleted, config
+      // and all, so it cannot shadow this again.
+      //
+      // Keys off forwarded_from_phone (a dedicated field), so it's independent of
+      // forward_phone (the live-transfer target) and the two can be distinct numbers
+      // without looping. Known v1 gap: this runs after fetchTenantConfig, so a
+      // forwarding number still reaches the child logger + voice-session-start record
+      // for that call.
       if (callerIdIsForwardNumber(sessionCtx.callerPhone, tenantConfig.forwardedFromPhone)) {
         callLog.info(
-          { event: 'caller_id_is_forward_number', tenant_id: sessionCtx.tenantId },
-          'caller ID equals tenant forward number (forwarded line) — collecting number verbally'
+          {
+            event: 'caller_id_decision',
+            decision: 'DISCARDED_forwarded_line',
+            reason:
+              'caller-ID equals the tenant forwarded_from_phone — this call came IN through the owner line, so the number we see is the OWNER, not the customer',
+            had_caller_id: true,
+            forwarded_from_configured: true,
+            next: 'agent must collect BOTH name and number verbally, then OTP-verify before revealing any account',
+          },
+          'CALLER ID: discarded (forwarded line) — will collect number verbally'
         );
         sessionCtx.callerPhone = null;
+      } else if (sessionCtx.callerPhone) {
+        callLog.info(
+          {
+            event: 'caller_id_decision',
+            decision: 'TRUSTED_carrier_attested',
+            reason:
+              'the carrier gave us this number and it is NOT the forwarding line — the caller supplied nothing, so there is nothing to prove',
+            had_caller_id: true,
+            forwarded_from_configured: Boolean(tenantConfig.forwardedFromPhone),
+            next: 'agent must NOT ask for the number; it only needs the name. Preferences load without OTP.',
+          },
+          'CALLER ID: trusted (direct call) — number known, no verification needed'
+        );
+      } else {
+        callLog.info(
+          {
+            event: 'caller_id_decision',
+            decision: 'ABSENT_blocked_or_withheld',
+            reason:
+              'the carrier sent no caller-ID at all (blocked/withheld), or Telnyx did not populate sip.phoneNumber',
+            had_caller_id: false,
+            forwarded_from_configured: Boolean(tenantConfig.forwardedFromPhone),
+            next: 'agent must collect BOTH name and number verbally, then OTP-verify before revealing any account',
+          },
+          'CALLER ID: absent — will collect number verbally'
+        );
       }
 
       // Live-transfer capability. The executor is null when the call lacks the

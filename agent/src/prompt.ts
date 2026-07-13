@@ -157,11 +157,24 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const hasVerification = has('verification');
   const hasTransfer = has('transfer');
 
+  // THE TWO INTAKE BRANCHES. Whether we already have the caller's number decides the
+  // whole opening of the call, so state it as an instruction, not a fact to infer.
+  //
+  //   HAVE the number (they dialed us directly — the normal case):
+  //     don't ask for it. Get their NAME, save both to the CRM, move on.
+  //   NO number (blocked, or the call was forwarded in through the owner's line, so
+  //   the caller-ID was the forwarding number and we discarded it):
+  //     collect BOTH name and number verbally.
+  //
+  // Origin (2026-07-12): a caller who dialed the number DIRECTLY was asked to read
+  // out her own phone number, because a blanket per-tenant env switch was throwing
+  // away every caller ID before the prompt ever saw one. That switch is gone; this
+  // branch is now driven by whether we genuinely have a number.
   const callerLine = ctx.callerPhone
-    ? `The caller's number is ${ctx.callerPhone} (verified by caller ID).`
+    ? `The caller's number is ${ctx.callerPhone} — you ALREADY HAVE IT (verified by caller ID). Do NOT ask them for it, ever; asking for a number you already have makes you sound like you weren't listening. What you still need is their NAME: ask for it early and naturally ("Can I get your name?"), then call identify_caller(name, phone) with the number above to save them to the address book. Do this even if they never book.`
     : hasVerification
-      ? `The caller's number is NOT available (blocked or withheld caller ID). You MUST collect and verify a phone number before booking any appointment — see the "Phone Verification" section below.`
-      : `The caller's number is NOT available (blocked or withheld caller ID). Ask for a good callback number, read it back to confirm (see the phone-capture rules below), and use that for any booking. If the caller can't give a number, offer to take a message.`;
+      ? `You do NOT have the caller's number (blocked/withheld caller ID, or the call was forwarded in — so the caller-ID was the forwarding line, not theirs). You MUST collect and verify a phone number before booking any appointment. Collect BOTH their name AND a good number verbally, read the number back to confirm, then call identify_caller(name, phone) to save them — see the "Phone Verification" section below.`
+      : `You do NOT have the caller's number (blocked/withheld caller ID, or the call was forwarded in — so the caller-ID was the forwarding line, not theirs). Collect BOTH their name AND a good callback number verbally, read the number back to confirm (see the phone-capture rules below), then call identify_caller(name, phone) to save them to the address book, and use that number for any booking. If they can't give a number, offer to take a message.`;
 
   const trimmedCustom = ctx.customPrompt?.trim();
   const baseIdentity = trimmedCustom
@@ -254,7 +267,7 @@ ${
     ? `\n- get_company_policy_answer(question) — semantic search the knowledge base for policy/FAQ answers.`
     : '';
   const verificationToolLines = hasVerification
-    ? `\n- send_verification_code(phone) — SMS a 6-digit code for phone verification (OTP flow).\n- verify_phone_code(phone, code) — check a spoken code against the sent one.`
+    ? `\n- send_verification_code(phone) — SMS a 4-digit code for phone verification (OTP flow).\n- verify_phone_code(phone, code) — check a spoken code against the sent one.`
     : '';
   const transferToolLine = hasTransfer
     ? `\n- transfer_call() — connect the live call to a real person (the owner/staff cell). Use when the caller needs a human: a personal call for the owner, an urgent issue you can't handle, or an explicit request to be connected. Tell the caller you're connecting them BEFORE calling it; if it reports it can't transfer, apologize briefly and offer to take a message.`

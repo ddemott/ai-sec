@@ -116,7 +116,7 @@ describe('buildSystemPrompt', () => {
     //        a phone before any booking. Without this, the LLM might try
     //        to book with an empty phone and hit the gate confusingly.
     const prompt = buildSystemPrompt({ ...BASE_CTX, callerPhone: null });
-    expect(prompt).toContain('NOT available');
+    expect(prompt).toContain("do NOT have the caller's number");
     expect(prompt).toContain('MUST collect and verify');
   });
 
@@ -634,7 +634,7 @@ describe('buildSystemPrompt — capability gating (Realtime tool subset)', () =>
       callerPhone: null,
       capabilities: REALTIME,
     });
-    expect(prompt).toContain('NOT available'); // still tells the model caller-ID is missing
+    expect(prompt).toContain("do NOT have the caller's number"); // still tells the model caller-ID is missing
     expect(prompt).not.toContain('Phone Verification section'); // no dangling pointer
     expect(prompt).not.toContain('MUST collect and verify'); // no OTP promise
     expect(prompt).not.toContain('# Phone Verification');
