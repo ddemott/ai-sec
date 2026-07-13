@@ -115,7 +115,11 @@ describe('/agent-tools/customer-history', () => {
       ],
     });
 
-    const res = await post(app, { tenant_id: TENANT_ID, phone: '+15551112222' });
+    const res = await post(app, {
+      tenant_id: TENANT_ID,
+      phone: '+15551112222',
+      phone_source: 'caller_id',
+    });
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{

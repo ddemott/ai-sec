@@ -480,6 +480,9 @@ describe('agentTools /customer-context', () => {
     const res = await post(app, '/agent-tools/customer-context', {
       tenant_id: TENANT_ID,
       phone: '5551234567',
+      // Carrier-attested caller-ID → the disclosure gate has nothing to prove.
+      // Without this it defaults to 'spoken' and the gate withholds the data.
+      phone_source: 'caller_id',
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toEqual({
@@ -518,6 +521,9 @@ describe('agentTools /customer-context', () => {
     const res = await post(app, '/agent-tools/customer-context', {
       tenant_id: TENANT_ID,
       phone: '5551234567',
+      // Carrier-attested caller-ID → the disclosure gate has nothing to prove.
+      // Without this it defaults to 'spoken' and the gate withholds the data.
+      phone_source: 'caller_id',
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toEqual({

@@ -47,6 +47,11 @@ export const DEEPGRAM_COST_PER_MS = 0.0043 / 60000; // $0.0043/min
 export const GetContextSchema = z.object({
   phone: z.string().min(5),
   tenant_id: z.string().uuid(),
+  // Same disclosure gate as identify_caller — this route hands back the SAME
+  // name + preferences. Defaults to 'spoken' (the cautious value) so a caller
+  // that omits it gets the gate, not a bypass. See callerMayHearCustomerData.
+  phone_source: z.enum(['caller_id', 'spoken']).optional().default('spoken'),
+  call_id: z.string().optional(),
 });
 
 export const FindByNameSchema = z.object({
@@ -242,6 +247,10 @@ export const PageOwnerSchema = z.object({
 export const CustomerHistorySchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
+  // Call history is identity data too. Gated exactly like identify_caller and
+  // customer-context; 'spoken' is the safe default.
+  phone_source: z.enum(['caller_id', 'spoken']).optional().default('spoken'),
+  call_id: z.string().optional(),
 });
 
 // send-self-service-link — text the caller a secure cancel/reschedule link for

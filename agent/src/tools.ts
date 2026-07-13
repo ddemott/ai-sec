@@ -231,11 +231,19 @@ export function buildTools(
         if (!lookupPhone) {
           return 'New caller - no history found.';
         }
+        // Trust is a property of the NUMBER, not of the session. The carrier
+        // attested ctx.callerPhone; anything the LLM hands us is a claim the
+        // caller made out loud — even on a call that HAS caller ID, since the
+        // model can pass a different number than the one that rang us.
+        const usingCarrierNumber =
+          Boolean(ctx.callerPhone) && (!args.phone || lookupPhone === ctx.callerPhone);
         const res = await client.call(
           '/agent-tools/customer-context',
           {
             tenant_id: ctx.tenantId,
             phone: lookupPhone,
+            phone_source: usingCarrierNumber ? 'caller_id' : 'spoken',
+            call_id: ctx.callId,
           },
           { isReadOnly: true }
         );
@@ -953,7 +961,16 @@ export function buildTools(
         }
         const res = await client.call(
           '/agent-tools/customer-history',
-          { tenant_id: ctx.tenantId, phone: ctx.callerPhone },
+          {
+            tenant_id: ctx.tenantId,
+            phone: ctx.callerPhone,
+            // This tool only ever sends ctx.callerPhone — the number the CARRIER
+            // gave us. The LLM cannot substitute one here (there is no phone
+            // parameter), which is why this is 'caller_id'. The server no longer
+            // takes that on faith; it just happens to be true.
+            phone_source: 'caller_id',
+            call_id: ctx.callId,
+          },
           { isReadOnly: true }
         );
         return formatResponse(res);

@@ -145,6 +145,12 @@ describe('save-customer-preference → get_customer_context round-trip (real DB)
     const res = await post('/agent-tools/customer-context', {
       tenant_id: tenantId,
       phone: CUSTOMER_PHONE_RAW,
+      // The carrier gave us this number (normal inbound call with caller-ID), so
+      // there is nothing for the caller to prove. Omitting phone_source would
+      // default to 'spoken' — the safe value — and the disclosure gate would
+      // (correctly) withhold Reba's preferences. See identity.ts
+      // callerMayHearCustomerData.
+      phone_source: 'caller_id',
     });
     expect(res.statusCode).toBe(200);
     const result = res.json().result;
