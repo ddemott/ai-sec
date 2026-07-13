@@ -25,6 +25,30 @@ export interface SessionContext {
    *  uses to target the caller leg. Null when the participant never joined. */
   participantIdentity: string | null;
   /**
+   * The phone number the caller SPOKE and confirmed on this call, when we had no
+   * caller-ID (forwarded line, or blocked).
+   *
+   * WHY (2026-07-13, a real call): on a forwarded line callerPhone is null by
+   * design. The caller gave his number, the agent read it back, he confirmed it —
+   * and then, when the booking fell through and it pivoted to taking a message, it
+   * asked him for a callback number AGAIN. He had given it twice.
+   *
+   * The prompt already forbids this, in a section titled "never re-ask name or
+   * phone", which even names this exact pivot ("a booking attempt didn't work out
+   * and you switch to taking a message — carry the name and number straight over").
+   * The model ignored it.
+   *
+   * So stop asking the model to remember. THE SYSTEM remembers: identify_caller
+   * records the confirmed number here, and every tool that needs a callback number
+   * fills it from here rather than from the LLM. A number the caller already gave
+   * cannot be forgotten by a model that never has to hold it.
+   *
+   * NOT the same as callerPhone: that means "the CARRIER attested this". This one
+   * is "the caller told us this and we read it back". Good enough to call someone
+   * back; NOT good enough to unlock their account — that still needs OTP.
+   */
+  spokenPhone?: string | null;
+  /**
    * Mutable per-call guard: set true by the page_owner_via_sms tool after a
    * SUCCESSFUL page so the owner is paged AT MOST ONCE per call (a failed
    * attempt doesn't set it — one clean retry after a transient failure is

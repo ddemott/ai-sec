@@ -1008,9 +1008,16 @@ describe('take_message', () => {
     });
   });
 
-  it('HAPPY: callback_phone is optional — tool works without it', async () => {
-    // WHO: Caller who didn't provide a callback number (or same as caller-ID)
-    // WHAT: Tool omits callback_phone from body when not supplied
+  it('HAPPY: callback_phone is optional — the SYSTEM fills it from the caller-ID', async () => {
+    // WHO: a caller who didn't state a separate callback number.
+    // WHAT: the model omits callback_phone — and the tool fills it in.
+    // WHY THIS CHANGED (2026-07-13): it used to send `undefined` and leave the model
+    //      to remember the number. On a forwarded line (callerPhone null) the model
+    //      was then the ONLY thing holding a number the caller had already given and
+    //      confirmed — and it forgot, and asked him for it a THIRD time. The number
+    //      the caller gave is now filled from the session, in order of trust
+    //      (caller-ID → the number they spoke), so a model that forgets cannot make
+    //      the caller repeat themselves.
     const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
     const tools = buildTools(makeCtx(), client);
 
@@ -1020,7 +1027,18 @@ describe('take_message', () => {
     });
 
     expect(calls[0].path).toBe('/agent-tools/take-message');
-    // callback_phone is undefined (dropped on JSON serialization) when not supplied
+    expect(calls[0].body.callback_phone).toBe(CALLER_PHONE);
+  });
+
+  it('SAD: with NO number anywhere, callback_phone stays undefined (nothing invented)', async () => {
+    // WHY: filling from the system must never mean fabricating. An anonymous caller
+    //      who gave no number has no callback number, and the tool must say so rather
+    //      than inventing one — the owner would call a number that isn't theirs.
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    await exec(tools.take_message, { caller_name: 'Bob', message: 'Call me back.' });
+
     expect(calls[0].body.callback_phone).toBeUndefined();
   });
 });
@@ -1291,5 +1309,83 @@ describe('send_self_service_link', () => {
     const result = await exec(tools.send_self_service_link, {});
 
     expect(result).toContain("hasn't agreed to receive texts");
+  });
+});
+
+/**
+ * REGRESSION — the caller gave his number twice and was asked a third time.
+ *
+ * On the 2026-07-13 call, on a FORWARDED line (so ctx.callerPhone is null by
+ * design), the caller spoke his number, the agent read it back, he confirmed it.
+ * The booking then fell through, the agent pivoted to taking a message — and asked
+ * him for a callback number AGAIN.
+ *
+ * The prompt already forbids this, in a section literally titled "never re-ask name
+ * or phone", which even names this exact pivot: "a booking attempt didn't work out
+ * and you switch to taking a message — carry the name and number straight over."
+ * The model ignored it.
+ *
+ * So the system remembers instead of the model. identify_caller records the
+ * confirmed number on the session; take_message fills the callback number from
+ * there. A number the caller already gave cannot be forgotten by a model that never
+ * has to hold it.
+ */
+describe('REGRESSION: a number the caller already gave is never asked for twice', () => {
+  it('identify_caller REMEMBERS a spoken number on the session', async () => {
+    // WHO: a caller on a forwarded line — no caller-ID, so they must speak it.
+    const ctx = makeCtx({ callerPhone: null });
+    const { client } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(ctx, client);
+
+    await exec(tools.identify_caller, { name: 'Bob Smith', phone: '6082175303' });
+
+    expect(ctx.spokenPhone).toBe('6082175303');
+  });
+
+  it('take_message REUSES it — the model never has to supply it again', async () => {
+    // WHAT: this is the exact pivot that failed. The booking fell through; the
+    //       agent takes a message. It must NOT ask for the number again.
+    const ctx = makeCtx({ callerPhone: null });
+    ctx.spokenPhone = '6082175303'; // already given + confirmed earlier in the call
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(ctx, client);
+
+    // The model omits callback_phone — as the tool description now tells it to.
+    await exec(tools.take_message, {
+      caller_name: 'Bob Smith',
+      message: 'Give me a callback today.',
+    });
+
+    expect(calls[0].body).toMatchObject({ callback_phone: '6082175303' });
+  });
+
+  it('a carrier-attested caller-ID still wins over a spoken one', async () => {
+    // WHY: order of trust. The carrier's number is attested; a spoken one is only
+    //      claimed. If we have both, use the one that cannot be lied about.
+    const ctx = makeCtx(); // has callerPhone
+    ctx.spokenPhone = '6085550000';
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(ctx, client);
+
+    await exec(tools.take_message, { caller_name: 'Bob', message: 'Call me.' });
+
+    expect(calls[0].body).toMatchObject({ callback_phone: CALLER_PHONE });
+  });
+
+  it('a NEW number the caller gives for the callback still overrides both', async () => {
+    // WHY: the caller is always allowed to say "actually, reach me on this other
+    //      number". Remembering must not become ignoring them.
+    const ctx = makeCtx({ callerPhone: null });
+    ctx.spokenPhone = '6082175303';
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(ctx, client);
+
+    await exec(tools.take_message, {
+      caller_name: 'Bob',
+      callback_phone: '3125550199',
+      message: 'Call my office instead.',
+    });
+
+    expect(calls[0].body).toMatchObject({ callback_phone: '3125550199' });
   });
 });

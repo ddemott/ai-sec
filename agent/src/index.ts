@@ -29,6 +29,7 @@ import { config } from './config.js';
 import { runFallback } from './fallback.js';
 import { buildGreeting } from './greeting.js';
 import { getLogger } from './logger.js';
+import { sanitizeStream } from './speechSanitizer.js';
 import { summarizeToolCalls } from './redactToolArgs.js';
 import { buildSessionContext, callerIdIsForwardNumber } from './sessionContext.js';
 import { fetchCustomerContext } from './customerContext.js';
@@ -768,7 +769,32 @@ export default defineAgent({
           activeCapabilities ? { capabilities: activeCapabilities } : undefined
         );
 
-        const agent = new voice.Agent({
+        // MARKDOWN MUST NEVER REACH THE VOICE.
+        //
+        // On the 2026-07-13 call the model emitted, inside one turn:
+        //
+        //   "Let me check ... Just a moment.   *One moment while I look that up...*"
+        //
+        // The asterisks are literal characters handed to TTS, and gpt-4o-mini-tts
+        // does not quietly ignore them — they distort prosody and insert pauses.
+        // The owner's report was "voice was broken up, did not sound natural", and
+        // that is what he was hearing.
+        //
+        // The prompt has forbidden markdown the entire time ("no markdown, no
+        // bullet points, no formatting"). The model did it anyway. A prompt is a
+        // REQUEST; ttsNode is where we can make it a GUARANTEE. Overriding it means
+        // no future prompt regression, and no new model's habits, can put
+        // punctuation into a customer's ear.
+        class SpeakingAgent extends voice.Agent {
+          override async ttsNode(
+            text: ReadableStream<string>,
+            modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
+          ): ReturnType<typeof voice.Agent.default.ttsNode> {
+            return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
+          }
+        }
+
+        const agent = new SpeakingAgent({
           instructions,
           tools,
         });
