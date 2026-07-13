@@ -30,6 +30,7 @@ import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helper
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms, generateVerificationCode } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
+import { PLACEHOLDER_NAMES } from '../../services/customerLookup';
 
 /**
  * May we read this customer's identity data out loud to whoever is on the line?
@@ -288,16 +289,27 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         // gave us was already ours (a returning caller whose preferences we should
         // load) or brand new (nothing to load).
         const cust = await client.query<{ customer_id: string; is_new: boolean; name: string }>(
+          // The placeholder list is SHARED (customerLookup.PLACEHOLDER_NAMES), not
+          // inlined. This CASE used to hardcode only 'Valued Customer' — while
+          // scheduling.ts writes 'Caller' on every nameless booking. So a caller who
+          // booked before giving their name was stored as 'Caller', and when they
+          // then gave their name this CASE did not match, so it was never
+          // overwritten: "Caller" became permanent, and the session prefetch greeted
+          // them as "Caller" on every future call. The 2026-07-12 bug, still live on
+          // this path until 2026-07-13. A real name is never clobbered — only a
+          // placeholder is.
           `INSERT INTO customers (tenant_id, phone, name)
            VALUES ($1, $2, $3)
            ON CONFLICT (tenant_id, phone) DO UPDATE
              SET name = CASE
-               WHEN customers.name IS NULL OR customers.name = '' OR customers.name = 'Valued Customer'
+               WHEN customers.name IS NULL
+                 OR customers.name = ''
+                 OR customers.name = ANY($4::text[])
                THEN EXCLUDED.name
                ELSE customers.name
              END
            RETURNING customer_id, (xmax = 0) AS is_new, name`,
-          [args.tenant_id, normalized, args.name ?? null]
+          [args.tenant_id, normalized, args.name ?? null, PLACEHOLDER_NAMES as unknown as string[]]
         );
         // Backfill the verbally-captured number + customer onto the live call row
         // so the Calls tab shows it (forwarded-line calls started caller_phone

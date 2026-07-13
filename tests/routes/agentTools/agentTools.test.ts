@@ -622,7 +622,16 @@ describe('agentTools /identify-caller', () => {
     expect(queries).toHaveLength(1);
     expect(queries[0].text).toContain('INSERT INTO customers');
     expect(queries[0].text).toContain('ON CONFLICT');
-    expect(queries[0].params).toEqual([TENANT_ID, '+15551234567', 'Dale DeMott']);
+    // $4 is the SHARED placeholder list (customerLookup.PLACEHOLDER_NAMES). It
+    // must include 'Caller' — scheduling.ts writes that name on every nameless
+    // booking, and until 2026-07-13 this upsert's CASE didn't know about it, so
+    // the name could never be corrected afterwards.
+    expect(queries[0].params).toEqual([
+      TENANT_ID,
+      '+15551234567',
+      'Dale DeMott',
+      ['Valued Customer', 'Caller', 'Unknown'],
+    ]);
   });
 
   it('HAPPY: with call_id, links the captured number + customer onto the voice_sessions row', async () => {
@@ -742,7 +751,19 @@ describe('agentTools /identify-caller', () => {
     expect(res.json()).toMatchObject({ success: true });
     // Same upsert query handles both create and name-update paths
     expect(queries[0].text).toMatch(/ON CONFLICT.*DO UPDATE/s);
-    expect(queries[0].text).toMatch(/Valued Customer/); // CASE guard in SQL
+    // The placeholder set is now the SHARED PLACEHOLDER_NAMES list, passed as a
+    // parameter — not a hardcoded 'Valued Customer' literal in the SQL.
+    //
+    // That literal WAS the bug: scheduling.ts writes 'Caller' on every nameless
+    // booking, this CASE only knew 'Valued Customer', so a caller who booked
+    // before giving their name was stuck as "Caller" FOREVER — and the prefetch
+    // greeted them that way on every future call. Asserting the literal here is
+    // what let the two write paths drift apart in the first place, so assert the
+    // CONTRACT instead: the guard covers every placeholder we know about,
+    // including 'Caller'.
+    expect(queries[0].text).toMatch(/customers\.name = ANY\(\$4::text\[\]\)/);
+    expect(queries[0].params?.[3]).toContain('Caller');
+    expect(queries[0].params?.[3]).toContain('Valued Customer');
   });
 
   it('HAPPY: phone normalized before upsert', async () => {

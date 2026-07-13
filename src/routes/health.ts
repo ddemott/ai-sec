@@ -1,5 +1,6 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool } from 'pg';
+import { timingSafeEqual } from 'crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { withHandler, requireSuperAdmin, type AppRequest } from '../middleware';
@@ -30,6 +31,19 @@ function getDemoHtml(): string {
     demoHtmlCache = fs.readFileSync(path.join(publicDir, 'secretaryhq-demo.html'), 'utf-8');
   }
   return demoHtmlCache;
+}
+
+/**
+ * Constant-time comparison for a secret arriving over the network. Same shape as
+ * the /agent-tools x-agent-secret gate. Length is allowed to leak (negligible
+ * next to per-character timing); the bytes are not.
+ */
+function safeEquals(provided: string, expected: string): boolean {
+  if (!expected) return false;
+  const a = Buffer.from(provided, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 export function registerHealthRoutes(app: AppFastifyInstance, pool: Pool): void {
@@ -66,7 +80,13 @@ export function registerHealthRoutes(app: AppFastifyInstance, pool: Pool): void 
     const auth = req.headers.authorization;
     const provided =
       typeof auth === 'string' && auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : null;
-    if (provided !== token) {
+    // Constant-time compare, matching the x-agent-secret hook. `!==` on a
+    // NETWORK-SUPPLIED string short-circuits at the first differing byte, which
+    // is a genuine (if low-yield) timing oracle: an attacker can recover the
+    // token one character at a time. Cheap to close, and the agent secret was
+    // hardened against exactly this in 2026-05 — this was the last `!==` left on
+    // a secret.
+    if (provided === null || !safeEquals(provided, token)) {
       return reply.status(401).send({ success: false, error: 'Unauthorized' });
     }
     return reply.type('text/plain; version=0.0.4; charset=utf-8').send(metricsRegistry.expose());
