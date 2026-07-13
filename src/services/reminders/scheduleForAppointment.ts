@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { PoolClient } from 'pg';
+import { errorsTotal } from '../metrics.js';
 
 import { normalizePhone } from '../../../shared/phone.js';
 
@@ -195,6 +196,12 @@ export async function scheduleRemindersForAppointment(
       );
     });
   } catch (err) {
+    // Fire-and-forget from a live call: the caller has ALREADY been told "I'll
+    // text you a confirmation". If seeding dies here the promise is simply
+    // broken, with no row to show for it. `logger` is optional (`?.`) so with no
+    // logger this was fully silent, and logger.error is a raw Pino call — it
+    // never touched errors_total. The metric is what survives log truncation.
+    errorsTotal.inc({ event: 'reminder_seed_failed' });
     logger?.error(
       {
         err: err instanceof Error ? err.message : err,
@@ -244,6 +251,12 @@ export async function saveReminderLeadPreference(
       );
     });
   } catch (err) {
+    // Fire-and-forget from a live call: the caller has ALREADY been told "I'll
+    // text you a confirmation". If seeding dies here the promise is simply
+    // broken, with no row to show for it. `logger` is optional (`?.`) so with no
+    // logger this was fully silent, and logger.error is a raw Pino call — it
+    // never touched errors_total. The metric is what survives log truncation.
+    errorsTotal.inc({ event: 'reminder_seed_failed' });
     logger?.error(
       { err: err instanceof Error ? err.message : err, tenantId, phone: '[redacted]' },
       'Failed to save reminder-lead preference (booking itself is unaffected)'
@@ -292,6 +305,12 @@ export async function rescheduleRemindersForAppointment(
       );
     });
   } catch (err) {
+    // Fire-and-forget from a live call: the caller has ALREADY been told "I'll
+    // text you a confirmation". If seeding dies here the promise is simply
+    // broken, with no row to show for it. `logger` is optional (`?.`) so with no
+    // logger this was fully silent, and logger.error is a raw Pino call — it
+    // never touched errors_total. The metric is what survives log truncation.
+    errorsTotal.inc({ event: 'reminder_seed_failed' });
     logger?.error(
       {
         err: err instanceof Error ? err.message : err,
