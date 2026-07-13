@@ -65,6 +65,29 @@ const CAPABILITY_OF: Record<string, Capability> = {
   transfer_call: 'transfer',
 };
 
+/**
+ * Treat a blank/whitespace string as ABSENT.
+ *
+ * Raised in review on #253, and it would have silently defeated the fix it was in.
+ * `args.callback_phone ?? ctx.callerPhone` only falls through on null/undefined —
+ * an EMPTY STRING is not nullish, so a model that sends `callback_phone: ""` would
+ * have that empty string sent to the backend AND block the fallback to the number
+ * the caller already gave. The "never re-ask" guarantee would evaporate exactly
+ * when the model was being sloppy, which is the only time it was needed.
+ *
+ * LLMs emit "" constantly for optional fields. Nullish coalescing is the wrong tool
+ * for anything an LLM fills in.
+ */
+function blank(v: string | null | undefined): boolean {
+  return v === null || v === undefined || v.trim() === '';
+}
+
+/** First non-blank value, or undefined. The order of the arguments is the order of trust. */
+function firstPhone(...vals: (string | null | undefined)[]): string | undefined {
+  for (const v of vals) if (!blank(v)) return v!.trim();
+  return undefined;
+}
+
 /** Pull a UUID appointment_id out of a successful booking response, if present. */
 function extractAppointmentId(res: ToolResponse): string | null {
   if (!res.ok || typeof res.result !== 'object' || res.result === null) return null;
@@ -728,16 +751,40 @@ export function buildTools(
         //
         // Caught by a test that passed a spoken phone on a session that had caller-ID
         // — the first version of this line said 'caller_id' and would have trusted it.
+        //
+        // A BLANK phone is ABSENT, not spoken. Raised in review on #253: `!args.phone`
+        // is false for "  ", so a whitespace string would have been classified
+        // 'spoken' AND sent as the phone — misclassifying phone_source, which is the
+        // field the server's disclosure gate keys on. LLMs emit "" for optional
+        // fields constantly; a truthiness check is not enough for anything they fill.
+        const spoken = blank(args.phone) ? undefined : args.phone!.trim();
         const usingCarrierNumber =
-          Boolean(ctx.callerPhone) && (!args.phone || args.phone === ctx.callerPhone);
+          Boolean(ctx.callerPhone) && (!spoken || spoken === ctx.callerPhone);
         const phoneSource = usingCarrierNumber ? 'caller_id' : 'spoken';
         const res = await client.call('/agent-tools/identify-caller', {
           tenant_id: ctx.tenantId,
-          phone: args.phone ?? ctx.callerPhone,
+          phone: spoken ?? ctx.callerPhone,
           name: args.name,
           phone_source: phoneSource,
           call_id: ctx.callId ?? undefined,
         });
+
+        // THE SYSTEM REMEMBERS THE NUMBER, SO THE MODEL DOESN'T HAVE TO.
+        //
+        // On a forwarded line ctx.callerPhone is null by design. The caller gives
+        // their number, the agent reads it back, they confirm — and then, when the
+        // booking fell through and it pivoted to taking a message, it asked for a
+        // callback number AGAIN. He had already given it twice.
+        //
+        // The prompt forbids that, in a section literally titled "never re-ask name
+        // or phone" which names this exact pivot. The model ignored it. Prompts are
+        // requests; this is a guarantee. Every tool that needs a callback number now
+        // fills it from here, so a number the caller already gave cannot be
+        // forgotten by a model that never has to hold it.
+        if (res.ok && !usingCarrierNumber && spoken) {
+          ctx.spokenPhone = spoken;
+        }
+
         return formatResponse(res);
       },
     }),
@@ -838,8 +885,13 @@ export function buildTools(
         const res = await client.call('/agent-tools/page-owner', {
           tenant_id: ctx.tenantId,
           caller_name: args.caller_name,
-          callback_phone: args.callback_phone,
-          caller_phone: ctx.callerPhone ?? undefined,
+          // Fill from what the SYSTEM knows, in order of trust, before falling back
+          // to whatever the model happened to keep hold of. On a forwarded line
+          // ctx.callerPhone is null — so without ctx.spokenPhone the model was the
+          // ONLY thing remembering a number the caller had already given twice, and
+          // it forgot, and it asked again.
+          callback_phone: firstPhone(args.callback_phone, ctx.callerPhone, ctx.spokenPhone),
+          caller_phone: firstPhone(ctx.callerPhone, ctx.spokenPhone),
           reason: args.reason,
           // Truthy check (not ??) so an empty-string callId is omitted — the
           // backend call_id is min(1) and would 400 on ''.
@@ -852,7 +904,7 @@ export function buildTools(
 
     take_message: llm.tool({
       description:
-        "Record a message from the caller for the business owner and send the owner an SMS alert. Use when the caller has a question you can't answer, wants a callback, or asks to leave a message. Always collect a name and the message content before calling this. A callback number is optional if you already have caller-ID.",
+        "Record a message from the caller for the business owner and send the owner an SMS alert. Use when the caller has a question you can't answer, wants a callback, or asks to leave a message. Collect a name and the message content before calling this.\n\nDO NOT ASK FOR A CALLBACK NUMBER if the caller already gave you one earlier in this call — the system reuses it automatically. Omit callback_phone entirely and it will be filled in. Only ask if you genuinely never got a number at all.",
       parameters: {
         type: 'object',
         properties: {
@@ -863,7 +915,7 @@ export function buildTools(
           callback_phone: {
             type: 'string',
             description:
-              "Phone number the owner should call back. Omit if the caller didn't give one (caller-ID will be used).",
+              'ONLY set this if the caller gives a NEW number specifically for the callback. Otherwise OMIT it — the number they already gave (or their caller-ID) is filled in automatically. Never ask them to repeat a number they have already given you.',
           },
           message: {
             type: 'string',
@@ -879,8 +931,19 @@ export function buildTools(
         const res = await client.call('/agent-tools/take-message', {
           tenant_id: ctx.tenantId,
           caller_name: args.caller_name,
-          callback_phone: args.callback_phone,
-          caller_phone: ctx.callerPhone ?? undefined,
+          // THE PIVOT THAT FAILED (2026-07-13). On a forwarded line ctx.callerPhone
+          // is null by design. The caller gave his number, the agent read it back, he
+          // confirmed it — then the booking fell through, the agent switched to taking
+          // a message, and asked him for a callback number AGAIN.
+          //
+          // The prompt forbids exactly this, in a section titled "never re-ask name or
+          // phone" which even names this pivot. The model ignored it. So the SYSTEM
+          // remembers: identify_caller records the confirmed number on the session and
+          // it is filled in here, in order of trust — a new number the caller
+          // deliberately gives for the callback still wins, because remembering must
+          // never become ignoring them.
+          callback_phone: firstPhone(args.callback_phone, ctx.callerPhone, ctx.spokenPhone),
+          caller_phone: firstPhone(ctx.callerPhone, ctx.spokenPhone),
           message: args.message,
           call_id: ctx.callId ?? undefined,
         });
