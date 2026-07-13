@@ -97,12 +97,16 @@ beforeEach(async (ctx) => {
   );
 });
 
-/** Mark the number as having proved possession (what verify_phone_code does). */
-async function markVerified() {
+/**
+ * Mark the number as having proved possession ON A GIVEN CALL — what
+ * verify_phone_code does. `call_id` is load-bearing: a verification that is not
+ * bound to a call can never open the gate (see migration 20260714000000).
+ */
+async function markVerified(callId: string) {
   await setup.query(
-    `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, verified_at)
-     VALUES ($1, $2, 'x', now() + interval '10 min', now())`,
-    [tenantId, VICTIM_PHONE]
+    `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, verified_at, call_id)
+     VALUES ($1, $2, 'x', now() + interval '10 min', now(), $3)`,
+    [tenantId, VICTIM_PHONE, callId]
   );
 }
 
@@ -180,21 +184,69 @@ describe('SECURITY: spoken phone numbers must prove possession before we disclos
     expect(res.json().result.preferences).toEqual({ preferred_stylist: 'Maria' });
   });
 
-  it('HAPPY: a SPOKEN number discloses once the caller proves possession by OTP', async () => {
+  it('HAPPY: a SPOKEN number discloses once the caller proves possession by OTP on THIS call', async () => {
     // WHY: this is the whole point of the code. Camille on a forwarded line says her
     //      number, reads back the 4 digits we texted, and gets her account — the
     //      gate must open for the real person, not just close on the impostor.
-    await markVerified();
+    await markVerified('call-camille-1');
 
     const res = await post('/agent-tools/customer-context', {
       tenant_id: tenantId,
       phone: VICTIM_PHONE,
       phone_source: 'spoken',
+      call_id: 'call-camille-1',
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json().result.name).toBe(VICTIM_NAME);
     expect(res.json().result.preferences).toEqual({ preferred_stylist: 'Maria' });
+  });
+
+  it("SAD: a verification from ANOTHER call does not open the gate (the 24h replay hole)", async () => {
+    // WHO: a stranger who rings the forwarded line minutes after Camille did.
+    // WHAT: they speak her number. There IS a fresh, valid, verified row for it.
+    // WHY THIS EXISTS: the gate used to accept any row verified for
+    //      (tenant, phone) within 24 HOURS, with nothing tying it to the call in
+    //      progress. So Camille's own legitimate verification at 09:00 opened a
+    //      24-hour window in which ANY caller who spoke her number was handed her
+    //      name, preferences and history — no code, no challenge. One real
+    //      verification became a skeleton key for a day.
+    //
+    //      A code proves you held the handset AT THAT MOMENT. It does not make
+    //      the number yours until tomorrow.
+    await markVerified('call-camille-1');
+
+    const res = await post('/agent-tools/customer-context', {
+      tenant_id: tenantId,
+      phone: VICTIM_PHONE,
+      phone_source: 'spoken',
+      call_id: 'call-stranger-2', // a DIFFERENT call
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.stringify(res.json());
+    expect(body).not.toContain(VICTIM_NAME);
+    expect(body).not.toContain('Maria');
+    expect(res.json().result.requires_verification).toBe(true);
+  });
+
+  it('SAD: a verification with NO call binding can never open the gate (fail closed)', async () => {
+    // WHY: an unattributable proof is not a proof. Legacy rows (and any row
+    //      written by a path that forgets call_id) must be inert, not trusted.
+    await setup.query(
+      `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, verified_at, call_id)
+       VALUES ($1, $2, 'x', now() + interval '10 min', now(), NULL)`,
+      [tenantId, VICTIM_PHONE]
+    );
+
+    const res = await post('/agent-tools/customer-context', {
+      tenant_id: tenantId,
+      phone: VICTIM_PHONE,
+      phone_source: 'spoken',
+      call_id: 'call-whoever-3',
+    });
+
+    expect(JSON.stringify(res.json())).not.toContain(VICTIM_NAME);
   });
 
   it('HAPPY: a genuinely NEW caller on a forwarded line is not challenged for a code', async () => {
