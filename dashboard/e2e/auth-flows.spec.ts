@@ -322,7 +322,8 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
   //        bcrypt-hashed known-plaintext row. Send is unit-tested.
 
   const phone = `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`;
-  const knownCode = '123456';
+  // 4-digit code (2026-07-13 — shortened from 6; it is read back ALOUD mid-call).
+  const knownCode = '1234';
   let phoneVerificationId: string | null = null;
 
   try {
@@ -344,7 +345,7 @@ test('otp-verify: /verify-phone-code accepts a matching code and rejects a wrong
       request,
       null,
       '/agent-tools/verify-phone-code',
-      { tenant_id: freshTenant.tenantId, phone, code: '999999' },
+      { tenant_id: freshTenant.tenantId, phone, code: '9999' },
       { 'x-agent-secret': AGENT_SECRET }
     );
     expect(wrong.status).toBe(200); // route returns 200 + success:false (LLM relays naturally)
