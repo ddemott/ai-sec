@@ -162,9 +162,9 @@ async function callerMayHearCustomerData(
  * them by name, which makes it sound like the AI doesn't actually remember them.
  * The data was right; the conversation was wrong.
  *
- * Mirrors ConsentService.checkConsent exactly, and MUST keep mirroring it — two
- * implementations of "may we text this person?" that can disagree is a worse bug
- * than the one this fixes. Specifically:
+ * Mirrors ConsentService.checkConsent's DECISION RULE, and must keep mirroring it
+ * — two implementations of "may we text this person?" that can disagree is a
+ * worse bug than the one this fixes. Specifically:
  *   - 'sms' OR 'both' counts (a 'both' record covers SMS).
  *   - The MOST RECENT record wins, not any record — a later revocation overrides
  *     an earlier grant.
@@ -172,9 +172,16 @@ async function callerMayHearCustomerData(
  *     (consentService.recordOptOut) writes an opt_out_record AND revokes the
  *     consent, so checking consent alone is sufficient to honour STOP.
  *
- * Fails CLOSED on error: an unknown consent state is treated as "not consented",
- * so the agent asks. Asking someone who already agreed is mildly annoying;
- * texting someone who never agreed — or who said STOP — is illegal.
+ * ONE DELIBERATE DIVERGENCE from checkConsent: this helper FAILS CLOSED on a query
+ * error (returns false), where checkConsent would let the error propagate. That is
+ * not an oversight and it is not a mirror-break, because the two answer different
+ * questions. checkConsent gates an actual SEND — if it cannot determine consent it
+ * must not silently proceed. This one only decides whether the AGENT ASKS. An
+ * unknown consent state here means "ask", which is the safe direction: asking
+ * someone who already agreed is mildly annoying; texting someone who never agreed
+ * — or who said STOP — is illegal. The send is still gated by checkConsent
+ * regardless of what this returns, so a false here can never cause an unlawful
+ * text; it can only cause a redundant question.
  */
 async function hasSmsConsent(
   client: { query: PoolClient['query'] },
