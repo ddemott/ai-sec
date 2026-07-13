@@ -695,3 +695,124 @@ describe('REGRESSION: "Caller" is a placeholder, not a name', () => {
     expect(rows[0].name).toBe('Camille Rousseau');
   });
 });
+
+/**
+ * Consent is REMEMBERED — the AI must not re-ask a customer who already said yes.
+ *
+ * Consent has always been durable in the DATA: ConsentService.checkConsent takes
+ * the most recent record and honours it until revoked, with no expiry — which is
+ * also how TCPA works (prior express consent persists until the customer revokes
+ * it). But nothing ever told the AGENT, so the prompt asked permission before
+ * every single booking. The customer said yes once and got interrogated forever,
+ * immediately after being greeted by name. The data was right; the conversation
+ * was wrong.
+ *
+ * The dangerous half of this feature is the STOP case. `sms_consent: true` tells
+ * the agent "don't ask, just text them" — so if this flag ever survived an opt-out,
+ * we would text someone who explicitly told us to stop. That is the test that
+ * actually matters here.
+ */
+describe('sms_consent: remembered across calls, and killed by STOP', () => {
+  const CONSENT_PHONE_E164 = '+15559990003';
+  const CONSENT_PHONE_RAW = '5559990003';
+
+  beforeEach(async (ctx) => {
+    skipIfDbDown(ctx, () => dbAvailable);
+    if (!dbAvailable) return;
+    await setup.query(`DELETE FROM consent_records WHERE tenant_id = $1 AND customer_phone = $2`, [
+      tenantId,
+      CONSENT_PHONE_E164,
+    ]);
+    await setup.query(`DELETE FROM customers WHERE tenant_id = $1 AND phone = $2`, [
+      tenantId,
+      CONSENT_PHONE_E164,
+    ]);
+    await setup.query(`INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, 'Reba Consent')`, [
+      tenantId,
+      CONSENT_PHONE_E164,
+    ]);
+  });
+
+  it('SAD: a caller who has NEVER consented reports sms_consent:false → the agent must ask', async () => {
+    // WHY: fail closed. An unknown consent state must send the agent down the
+    //      full permission script — texting without consent is illegal; asking
+    //      someone who already agreed is merely annoying.
+    const res = await post('/agent-tools/customer-context', {
+      tenant_id: tenantId,
+      phone: CONSENT_PHONE_RAW,
+      phone_source: 'caller_id',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.sms_consent).toBe(false);
+  });
+
+  it('HAPPY: once consent is recorded, the NEXT call reports sms_consent:true → do not ask again', async () => {
+    // WHO: a returning customer who agreed to texts on a previous call.
+    // WHY: this is the whole feature. Their yes is on file and does not expire.
+    await post('/agent-tools/record-consent', {
+      tenant_id: tenantId,
+      phone: CONSENT_PHONE_RAW,
+      call_id: 'SCL_first_call',
+    });
+
+    const res = await post('/agent-tools/customer-context', {
+      tenant_id: tenantId,
+      phone: CONSENT_PHONE_RAW,
+      phone_source: 'caller_id',
+    });
+    expect(res.json().result.sms_consent).toBe(true);
+  });
+
+  it('SAD: STOP revokes it — a customer who opted out must report sms_consent:false', async () => {
+    // WHO: a customer who consented, then texted STOP.
+    // WHY: THE ONE THAT MATTERS. sms_consent:true tells the agent "don't ask, just
+    //      text them". If that flag survived an opt-out we would text a person who
+    //      explicitly told us to stop — the exact thing consent law exists to
+    //      prevent, and we'd have built the bug ourselves while trying to be
+    //      polite. The opt-out path revokes the consent record, so reading the
+    //      LATEST non-revoked record is what makes STOP work.
+    await post('/agent-tools/record-consent', {
+      tenant_id: tenantId,
+      phone: CONSENT_PHONE_RAW,
+      call_id: 'SCL_first_call',
+    });
+
+    // What consentService.recordOptOut does on STOP: revoke the consent.
+    await setup.query(
+      `UPDATE consent_records SET revoked_at = now(), revoke_reason = 'Opt-out via stop'
+        WHERE tenant_id = $1 AND customer_phone = $2`,
+      [tenantId, CONSENT_PHONE_E164]
+    );
+
+    const res = await post('/agent-tools/customer-context', {
+      tenant_id: tenantId,
+      phone: CONSENT_PHONE_RAW,
+      phone_source: 'caller_id',
+    });
+    expect(res.json().result.sms_consent).toBe(false);
+  });
+
+  it('SAD: an UNVERIFIED spoken number learns nothing — not even that consent exists', async () => {
+    // WHY: sms_consent rides INSIDE the disclosure gate. Telling an unverified
+    //      caller "you're already signed up for texts" would confirm the number
+    //      belongs to a real customer — a small existence oracle, and the gate
+    //      exists precisely to close those.
+    await post('/agent-tools/record-consent', {
+      tenant_id: tenantId,
+      phone: CONSENT_PHONE_RAW,
+      call_id: 'SCL_first_call',
+    });
+
+    const res = await post('/agent-tools/customer-context', {
+      tenant_id: tenantId,
+      phone: CONSENT_PHONE_RAW,
+      phone_source: 'spoken', // claimed, not proven
+      call_id: 'SCL_stranger',
+    });
+
+    const body = JSON.stringify(res.json());
+    expect(body).not.toContain('sms_consent');
+    expect(body).not.toContain('Reba Consent');
+    expect(res.json().result.requires_verification).toBe(true);
+  });
+});

@@ -490,6 +490,10 @@ describe('agentTools /customer-context', () => {
       history: 'Booked oil change; Asked about winter tires',
       // No saved preferences for this row → empty object (not omitted).
       preferences: {},
+      // No consent record → false. FAIL CLOSED: an unknown consent state must
+      // send the agent down the full permission script. Texting without consent
+      // is illegal; asking someone who already agreed is merely annoying.
+      sms_consent: false,
     });
     // WHY: Phone must be normalized to +1 form before the lookup
     expect(queries[0].params).toEqual([TENANT_ID, '+15551234567']);
@@ -516,6 +520,10 @@ describe('agentTools /customer-context', () => {
           ],
         },
         { rows: [] }, // no call summaries
+        // Sarah agreed to appointment texts on a previous call. Consent is
+        // durable (TCPA: prior express consent persists until revoked), so the
+        // agent must NOT run the permission script at her again.
+        { rows: [{ consent_given: true, revoked_at: null }] },
       ],
     });
     const res = await post(app, '/agent-tools/customer-context', {
@@ -530,6 +538,8 @@ describe('agentTools /customer-context', () => {
       name: 'Sarah',
       history: 'No history',
       preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
+      // She already said yes — do not ask again.
+      sms_consent: true,
     });
   });
 
@@ -732,7 +742,15 @@ describe('agentTools /identify-caller', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().result).toEqual({ saved: true, returning_customer: false });
+    // returning_customer:false — nothing to SAY OUT LOUD about them.
+    // sms_consent still rides along: a customer can have agreed to texts without
+    // ever leaving a preference or a call summary, and re-asking them is exactly
+    // the pestering this field exists to stop. Different questions.
+    expect(res.json().result).toEqual({
+      saved: true,
+      returning_customer: false,
+      sms_consent: false,
+    });
   });
 
   it('HAPPY: existing customer with placeholder name gets name updated', async () => {

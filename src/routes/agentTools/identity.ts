@@ -150,6 +150,57 @@ async function callerMayHearCustomerData(
   return true;
 }
 
+/**
+ * Has this number ALREADY agreed to receive appointment texts?
+ *
+ * WHY THIS EXISTS: consent has always been durable — ConsentService.checkConsent
+ * takes the most recent record and honours it until it is revoked, with no
+ * expiry, which is also how TCPA works (prior express consent persists until the
+ * customer revokes it). But nothing ever TOLD the agent, so the prompt asked for
+ * permission before every single booking. The customer said yes once and got
+ * interrogated forever — and it landed immediately after the AI had just greeted
+ * them by name, which makes it sound like the AI doesn't actually remember them.
+ * The data was right; the conversation was wrong.
+ *
+ * Mirrors ConsentService.checkConsent exactly, and MUST keep mirroring it — two
+ * implementations of "may we text this person?" that can disagree is a worse bug
+ * than the one this fixes. Specifically:
+ *   - 'sms' OR 'both' counts (a 'both' record covers SMS).
+ *   - The MOST RECENT record wins, not any record — a later revocation overrides
+ *     an earlier grant.
+ *   - revoked_at set → false. This is what makes STOP work: the opt-out path
+ *     (consentService.recordOptOut) writes an opt_out_record AND revokes the
+ *     consent, so checking consent alone is sufficient to honour STOP.
+ *
+ * Fails CLOSED on error: an unknown consent state is treated as "not consented",
+ * so the agent asks. Asking someone who already agreed is mildly annoying;
+ * texting someone who never agreed — or who said STOP — is illegal.
+ */
+async function hasSmsConsent(
+  client: { query: PoolClient['query'] },
+  tenantId: string,
+  phone: string
+): Promise<boolean> {
+  try {
+    const res = await client.query<{ consent_given: boolean; revoked_at: string | null }>(
+      `SELECT consent_given, revoked_at
+         FROM consent_records
+        WHERE tenant_id = $1
+          AND customer_phone = $2
+          AND consent_type IN ('sms', 'both')
+        ORDER BY consent_date DESC
+        LIMIT 1`,
+      [tenantId, phone]
+    );
+    const latest = res.rows[0];
+    if (!latest) return false;
+    if (latest.revoked_at) return false;
+    return latest.consent_given === true;
+  } catch {
+    return false;
+  }
+}
+
 export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps): void {
   // record-consent — the caller verbally agreed on the call to receive SMS
   // appointment confirmations/reminders. Writes a dated `consent_records` row
@@ -376,14 +427,34 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
 
         const preferences = prefs.rows[0]?.preferences ?? {};
         const history = sums.rows.map((s) => s.summary).join('; ');
+
+        // Did they already agree to be texted? Durable — see hasSmsConsent.
+        const smsConsent = await hasSmsConsent(client, args.tenant_id, normalized);
+
         // A returning row with nothing on it is, to the caller, indistinguishable
         // from a new one — don't announce familiarity we can't back up.
-        if (Object.keys(preferences).length === 0 && !history) return null;
+        //
+        // But consent still rides along. Someone can have said "yes, text me"
+        // without ever leaving a preference or a call summary, and re-asking them
+        // is the exact pestering this change exists to stop. `returning_customer`
+        // governs what the agent SAYS OUT LOUD; `sms_consent` governs what it must
+        // not ask again. Different questions.
+        if (Object.keys(preferences).length === 0 && !history) {
+          return { thin: true as const, smsConsent };
+        }
 
-        return { name: row.name || 'Unknown', preferences, history };
+        return { name: row.name || 'Unknown', preferences, history, smsConsent };
       });
 
       if (!context) return ok(reply, { saved: true, returning_customer: false });
+
+      if ('thin' in context) {
+        return ok(reply, {
+          saved: true,
+          returning_customer: false,
+          sms_consent: context.smsConsent,
+        });
+      }
 
       // Known customer, but the number was only CLAIMED and hasn't been proven.
       // Tell the agent to verify — and tell it NOTHING about who this is. Not the
@@ -405,6 +476,18 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         name: context.name,
         preferences: context.preferences,
         history: context.history || 'No history',
+        // TRUE = they already agreed to appointment texts and have not revoked.
+        // The agent must NOT run the permission script again — see prompt.ts
+        // "Text reminders". Consent is durable (TCPA: prior express consent
+        // persists until revoked), and asking a customer to re-consent on every
+        // call, immediately after greeting them by name, makes the AI sound like
+        // it doesn't actually remember them.
+        //
+        // This rides INSIDE the disclosure gate on purpose: telling an unverified
+        // caller "you're already signed up for texts" would confirm that the
+        // number belongs to a real customer — a small existence oracle, and the
+        // gate exists precisely to close those.
+        sms_consent: context.smsConsent,
       });
     },
     'Failed to identify caller'
@@ -473,7 +556,8 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
           LIMIT 3`,
           [customer.customer_id]
         );
-        return { customer, summaries: sums.rows };
+        const smsConsent = await hasSmsConsent(client, args.tenant_id, normalized);
+        return { customer, summaries: sums.rows, smsConsent };
       });
 
       // Blocked, not absent. Say so plainly, and tell the LLM the way forward —
@@ -489,6 +573,9 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
       if (!data) return ok(reply, 'New caller - no history found.');
       return ok(reply, {
         name: data.customer.name || 'Unknown',
+        // Already agreed to appointment texts? Then do NOT ask again — consent is
+        // durable until revoked. Inside the gate: see the note on identify-caller.
+        sms_consent: data.smsConsent,
         history: data.summaries.map((s) => s.summary).join('; ') || 'No history',
         // Saved customer preferences (preferred staff, last service, likes)
         // captured by save_customer_preference. THIS is how they reach the
