@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict W0CrmIXbbdGXY9n4M3FZMMbBp59JnS8qS3ptFdO4V5O8cxSgHw6YTey5XQG4pGR
+\restrict 9FItLWWcCUzqsekH9zOwLpG6lLgThgGxleMnfsS5uDJJaR5iCjyKxngB9JZTNqO
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3025,10 +3025,18 @@ CREATE TABLE public.phone_verifications (
     expires_at timestamp with time zone NOT NULL,
     attempt_count integer DEFAULT 0 NOT NULL,
     verified_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    call_id text
 );
 
 ALTER TABLE ONLY public.phone_verifications FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: COLUMN phone_verifications.call_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.phone_verifications.call_id IS 'The voice call this verification was proved on. The disclosure gate requires a verified row whose call_id matches the live call — a code proves possession at a moment, not ownership of the number forever. NULL can never satisfy the gate (fail closed).';
 
 
 --
@@ -4286,6 +4294,13 @@ CREATE INDEX idx_phone_verifications_active ON public.phone_verifications USING 
 --
 
 CREATE INDEX idx_phone_verifications_rate_limit ON public.phone_verifications USING btree (tenant_id, phone, created_at DESC);
+
+
+--
+-- Name: idx_phone_verifications_verified_call; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_phone_verifications_verified_call ON public.phone_verifications USING btree (tenant_id, phone, call_id) WHERE (verified_at IS NOT NULL);
 
 
 --
@@ -5713,5 +5728,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict W0CrmIXbbdGXY9n4M3FZMMbBp59JnS8qS3ptFdO4V5O8cxSgHw6YTey5XQG4pGR
+\unrestrict 9FItLWWcCUzqsekH9zOwLpG6lLgThgGxleMnfsS5uDJJaR5iCjyKxngB9JZTNqO
 

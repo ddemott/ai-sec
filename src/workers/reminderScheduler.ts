@@ -21,6 +21,7 @@ import type { Pool } from 'pg';
 import { createDatabaseService, type DatabaseService, getPool } from '../database/index.js';
 import { ReminderService } from '../services/reminders/index.js';
 import { decideRetry, MAX_RETRIES } from '../services/reminders/retryPolicy.js';
+import { errorsTotal } from '../services/metrics.js';
 import { createTenantConfigService, type TenantConfigService } from '../services/tenants/index.js';
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -114,6 +115,14 @@ async function processBatch(): Promise<number> {
     console.log(`✅ Processed ${processed}/${dueReminders.length} reminder(s)`);
     return processed;
   } catch (error) {
+    // This is the whole-batch failure — getDueReminders() itself dying, a pool
+    // checkout timing out, RLS refusing. It was a bare console.error: no metric,
+    // and not even Pino, so it reached only Railway stdout (which truncates) and
+    // nothing else. The other two workers (voiceSessionReaper, scheduleExtender)
+    // both increment errors_total here; this one — the only worker that TEXTS
+    // CUSTOMERS — was the odd one out. If reminders stop platform-wide, this
+    // counter is how we find out.
+    errorsTotal.inc({ event: 'reminder_batch_failed' });
     console.error('❌ Reminder batch processing error:', error);
     return 0;
   }

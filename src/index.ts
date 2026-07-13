@@ -338,10 +338,57 @@ app.log.info(
 
 const port = Number(process.env.PORT || 4001);
 
+/**
+ * Say out loud whether RLS is actually enforced for the role we connect as.
+ *
+ * Production connects as a role with rolbypassrls = true (found 2026-07-13), so
+ * every RLS policy in this database is INERT and tenant isolation rests entirely
+ * on tenantMiddleware. FORCE ROW LEVEL SECURITY does not override BYPASSRLS, and
+ * local/CI connect as a superuser — which also bypasses — so no test in this repo
+ * could ever have caught it, and none did.
+ *
+ * This does not fix it (that is a staged role migration with a landmine under it;
+ * see readinessHandler.ts). It refuses to let it stay invisible. The 2026-05-21
+ * anonymous-tenant hole was survivable precisely BECAUSE someone believed RLS was
+ * a second layer. It is not, and everyone reading these logs should know that.
+ */
+async function reportRlsPosture(): Promise<void> {
+  try {
+    const { rows } = await getPool().query<{ bypasses: boolean; role: string }>(
+      `SELECT rolbypassrls OR rolsuper AS bypasses, rolname AS role
+         FROM pg_roles WHERE rolname = current_user`
+    );
+    const row = rows[0];
+    if (!row) return;
+    if (row.bypasses) {
+      errorsTotal.inc({ event: 'rls_not_enforced' });
+      console.warn(
+        JSON.stringify({
+          event: 'rls_not_enforced',
+          level: 'warn',
+          db_role: row.role,
+          reason:
+            'the DB role this app connects as has BYPASSRLS (or is superuser), so every RLS policy is inert — FORCE ROW LEVEL SECURITY does NOT override it',
+          impact:
+            'tenant isolation rests ENTIRELY on tenantMiddleware; there is no database-level second layer, despite what CLAUDE.md and docs/SECURITY.md claim',
+          fix: "connect as a non-superuser, non-BYPASSRLS role — but FIRST change every admin_bypass policy from `current_setting(...) = ''` to `coalesce(current_setting(...), '') = ''`, or getDueReminders() returns zero rows on a cold connection and ALL reminders silently stop",
+        })
+      );
+    } else {
+      console.log(
+        JSON.stringify({ event: 'rls_enforced', db_role: row.role, msg: 'RLS is enforced' })
+      );
+    }
+  } catch {
+    // Never block startup on a diagnostic.
+  }
+}
+
 app
   .listen({ port, host: '0.0.0.0' })
-  .then(() => {
+  .then(async () => {
     app.log.info(`Server listening on port ${port}`);
+    await reportRlsPosture();
   })
   .catch((err) => {
     app.log.error(

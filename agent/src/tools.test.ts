@@ -647,7 +647,14 @@ describe('send_verification_code + verify_phone_code', () => {
     await exec(tools.send_verification_code, { phone: '5551234567' });
 
     expect(calls[0].path).toBe('/agent-tools/send-verification-code');
-    expect(calls[0].body).toEqual({ tenant_id: TENANT_ID, phone: '5551234567' });
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      // Binds the code to THIS call. The disclosure gate only accepts a
+      // verification whose call_id matches the live call — a code proves
+      // possession at a moment, not ownership of the number for a day.
+      call_id: CALL_ID,
+    });
   });
 
   it('HAPPY: verify forwards both phone and code', async () => {
@@ -663,7 +670,47 @@ describe('send_verification_code + verify_phone_code', () => {
       tenant_id: TENANT_ID,
       phone: '+15551234567',
       code: '123456',
+      call_id: CALL_ID,
     });
+  });
+
+  it('HAPPY: a successful verification ADOPTS the proven number as the caller phone', async () => {
+    // WHO: a returning customer on a FORWARDED line — no caller-ID, so
+    //      ctx.callerPhone starts null.
+    // WHAT: after they read the texted code back, ctx.callerPhone must become
+    //       the proven number.
+    // WHY: every downstream tool guards on `if (!ctx.callerPhone)` —
+    //      get_my_appointments, send_self_service_link, cancel_appointment,
+    //      reschedule_appointment. Before this, the OTP proved the number and
+    //      then THREW THE PROOF AWAY: the caller verified successfully and the
+    //      agent still answered "I can't do that without caller-ID", forever.
+    //      Thinking Hammer's live line IS the forwarded one, so that was every
+    //      returning customer on every call.
+    const ctx = makeCtx({ callerPhone: null });
+    const { client } = makeClient([
+      { ok: true, result: { verified: true, phone: '+15551234567' } },
+    ]);
+    const tools = buildTools(ctx, client);
+
+    expect(ctx.callerPhone).toBeNull();
+    await exec(tools.verify_phone_code, { phone: '5551234567', code: '1234' });
+
+    // The SERVER's normalized E.164 form, not the raw string the LLM heard —
+    // downstream lookups are exact phone matches.
+    expect(ctx.callerPhone).toBe('+15551234567');
+  });
+
+  it('SAD: a FAILED verification does not adopt the number', async () => {
+    // WHY: the guard must open only on proof. A wrong code that still promoted
+    //      the spoken number to "verified caller phone" would hand an impostor
+    //      exactly what the whole gate exists to withhold.
+    const ctx = makeCtx({ callerPhone: null });
+    const { client } = makeClient([{ ok: false, error: 'That code is not right.' }]);
+    const tools = buildTools(ctx, client);
+
+    await exec(tools.verify_phone_code, { phone: '5551234567', code: '9999' });
+
+    expect(ctx.callerPhone).toBeNull();
   });
 });
 

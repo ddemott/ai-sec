@@ -43,7 +43,22 @@ export type WithTenantClient = <T>(
  * ONE list, used by BOTH the write-guard and the overwrite-clause, so they cannot
  * drift apart again. That drift IS the bug.
  */
-const PLACEHOLDER_NAMES = ['Valued Customer', 'Caller', 'Unknown'] as const;
+/**
+ * EXPORTED because the comment directly above this line said the drift IS the
+ * bug, and then the list stayed private and the drift happened anyway.
+ *
+ * identify-caller (agentTools/identity.ts) kept its own inline `name =
+ * 'Valued Customer'` check that did NOT know about 'Caller' — while
+ * agentTools/scheduling.ts writes `args.name || 'Caller'` on every nameless
+ * booking. So: caller books before giving a name → stored as 'Caller' → later
+ * gives their name → identify_caller's CASE doesn't match 'Caller' → the name is
+ * NEVER overwritten, and the session prefetch cheerfully greets them as "Caller"
+ * on every future call, forever. That is the exact 2026-07-12 bug, still live on
+ * the other write path.
+ *
+ * One list. Every write path imports it. There is no second copy to drift.
+ */
+export const PLACEHOLDER_NAMES = ['Valued Customer', 'Caller', 'Unknown'] as const;
 
 function isPlaceholderName(name: string | null | undefined): boolean {
   return (

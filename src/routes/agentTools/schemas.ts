@@ -26,9 +26,35 @@ import { z } from 'zod';
 // on every single attempt — they would be buried in codes and would report it long
 // before it worked. Attempts were tightened 5 → 3 to buy back what the shorter code
 // gives away.
+//
+// THAT MATH WAS A LIE UNTIL 2026-07-13, in two ways (both now fixed):
+//
+//   1. MAX_VERIFY_ATTEMPTS was enforced PER ROW, and verify always read the most
+//      recent unverified row. So a wrong-guesser simply asked for a NEW code — a
+//      fresh row with attempt_count = 0 — and got 3 more tries. "3 attempts" was
+//      really "3 attempts per code, unlimited codes", with no lockout anywhere.
+//      The cap is now counted per (tenant, phone) across a rolling hour, so
+//      requesting another code buys you nothing.
+//
+//   2. Issuing a new code never invalidated the old ones. Several codes were live
+//      at once, so each guess was checked against a growing set of valid answers —
+//      the effective keyspace SHRANK with every resend, the exact opposite of what
+//      the rate limit was supposed to buy. A new code now expires the previous
+//      pending ones: one live code per phone, always.
+//
+// Only with BOTH of those does "9 tries an hour against 10,000" describe reality.
 export const CODE_DIGITS = 4;
 export const CODE_TTL_MINUTES = 10;
+/** Per-code cap (a single code dies after this many wrong guesses). */
 export const MAX_VERIFY_ATTEMPTS = 3;
+/**
+ * Per-PHONE cap across every code issued in the last hour. This is the one that
+ * actually bounds a brute-force attempt; the per-code cap alone was trivially
+ * reset by asking for another code. Deliberately >= MAX_VERIFY_ATTEMPTS so a
+ * caller who genuinely fumbles one code can still be issued a second and try
+ * again — it stops a grinder, not a person having a bad phone call.
+ */
+export const MAX_VERIFY_ATTEMPTS_PER_PHONE_PER_HOUR = 6;
 export const RATE_LIMIT_PER_PHONE_PER_HOUR = 3;
 export const RATE_LIMIT_PER_TENANT_PER_DAY = 100;
 
@@ -203,12 +229,21 @@ export const RecordSmsConsentSchema = z.object({
 export const SendVerificationCodeSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
+  // The call this code is issued on. Stored on the row, and the disclosure gate
+  // requires the verified row to match the LIVE call — a code proves possession
+  // at a moment, not ownership of the number for the next 24 hours. Optional in
+  // the schema (non-voice callers exist) but a verification with no call_id can
+  // never open the gate: an unattributable proof is not a proof.
+  call_id: z.string().min(1).optional(),
 });
 
 export const VerifyPhoneCodeSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
   code: z.string().regex(/^\d+$/, 'Code must be numeric').length(CODE_DIGITS),
+  // Scopes the lookup to a code issued on THIS call, so a code overheard from an
+  // earlier call cannot be replayed on a new one.
+  call_id: z.string().min(1).optional(),
 });
 
 // take-message — record a caller message + SMS-notify the owner.

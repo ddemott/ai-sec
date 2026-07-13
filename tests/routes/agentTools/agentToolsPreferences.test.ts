@@ -585,17 +585,25 @@ describe('identify-caller — a SPOKEN number must prove itself before we reveal
       value: 'Maria',
     });
 
-    // Simulate a completed OTP: verified within the last 24h.
+    // Simulate a completed OTP — proved ON THIS CALL.
+    //
+    // call_id is load-bearing (2026-07-13). The gate used to accept any row
+    // verified for this number in the last 24 HOURS, with nothing tying it to the
+    // call in progress — so one caller's legitimate verification opened a day-long
+    // window in which ANY caller who spoke that number was handed the account. A
+    // code proves you held the handset at a MOMENT; it does not make the number
+    // yours until tomorrow. A row with no call_id can never open the gate.
     await setup.query(
-      `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, verified_at)
-       VALUES ($1, $2, 'x', now() + interval '10 minutes', now())`,
-      [tenantId, CUSTOMER_PHONE_E164]
+      `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, verified_at, call_id)
+       VALUES ($1, $2, 'x', now() + interval '10 minutes', now(), $3)`,
+      [tenantId, CUSTOMER_PHONE_E164, 'SCL_verified_call']
     );
 
     const res = await post('/agent-tools/identify-caller', {
       tenant_id: tenantId,
       phone: CUSTOMER_PHONE_RAW,
-      phone_source: 'spoken', // still spoken — but now PROVEN
+      phone_source: 'spoken', // still spoken — but now PROVEN, on this call
+      call_id: 'SCL_verified_call',
     });
 
     const result = res.json().result;
@@ -604,5 +612,86 @@ describe('identify-caller — a SPOKEN number must prove itself before we reveal
     expect(result.preferences).toEqual({ preferred_stylist: 'Maria' });
 
     await setup.query(`DELETE FROM phone_verifications WHERE tenant_id = $1`, [tenantId]);
+  });
+});
+
+/**
+ * REGRESSION — "Caller" must never become someone's permanent name.
+ *
+ * THE BUG (2026-07-12) and WHY IT SURVIVED ITS OWN FIX (until 2026-07-13):
+ * two write paths disagreed about what counts as a placeholder name.
+ *
+ *   agentTools/scheduling.ts  writes `args.name || 'Caller'` on every nameless booking.
+ *   agentTools/identity.ts    would only overwrite NULL / '' / 'Valued Customer'.
+ *
+ * So a caller who books BEFORE giving their name is stored as 'Caller'; when they
+ * then give it, identify_caller's CASE does not match 'Caller' and the name is
+ * never updated. "Caller" becomes permanent — and the session prefetch cheerfully
+ * greets them as "Caller" on every future call, forever.
+ *
+ * customerLookup.ts fixed its own copy of the list, left a comment saying "that
+ * drift IS the bug", and then kept the list PRIVATE — so the drift happened
+ * anyway, on the other path. The list is exported now, and this test is what
+ * notices if a third path ever appears.
+ */
+describe('REGRESSION: "Caller" is a placeholder, not a name', () => {
+  const CALLER_PHONE_E164 = '+15559990002';
+  const CALLER_PHONE_RAW = '5559990002';
+
+  beforeEach(async (ctx) => {
+    skipIfDbDown(ctx, () => dbAvailable);
+    if (!dbAvailable) return;
+    await setup.query(`DELETE FROM customers WHERE tenant_id = $1 AND phone = $2`, [
+      tenantId,
+      CALLER_PHONE_E164,
+    ]);
+  });
+
+  it('SAD→HAPPY: a customer stored as "Caller" gets their real name on the next identify', async () => {
+    // WHO: a caller who booked before saying who they were — scheduling.ts wrote 'Caller'.
+    // WHAT: they now give their name; identify_caller must be able to correct it.
+    // WHY: THIS IS THE 2026-07-12 BUG. It survived its first fix because only one
+    //      of the two write paths learned the shared placeholder list.
+    await setup.query(`INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, 'Caller')`, [
+      tenantId,
+      CALLER_PHONE_E164,
+    ]);
+
+    const res = await post('/agent-tools/identify-caller', {
+      tenant_id: tenantId,
+      phone: CALLER_PHONE_RAW,
+      name: 'Camille Rousseau',
+      phone_source: 'caller_id',
+    });
+    expect(res.statusCode).toBe(200);
+
+    const { rows } = await setup.query<{ name: string }>(
+      `SELECT name FROM customers WHERE tenant_id = $1 AND phone = $2`,
+      [tenantId, CALLER_PHONE_E164]
+    );
+    expect(rows[0].name).toBe('Camille Rousseau');
+  });
+
+  it('SAD: a REAL name is never clobbered by a later placeholder', async () => {
+    // WHY: the guard must be one-way. Correcting a placeholder is right; letting a
+    //      nameless booking overwrite a known customer's real name with 'Caller'
+    //      would be the same bug pointing the other way.
+    await setup.query(
+      `INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, 'Camille Rousseau')`,
+      [tenantId, CALLER_PHONE_E164]
+    );
+
+    await post('/agent-tools/identify-caller', {
+      tenant_id: tenantId,
+      phone: CALLER_PHONE_RAW,
+      name: 'Caller',
+      phone_source: 'caller_id',
+    });
+
+    const { rows } = await setup.query<{ name: string }>(
+      `SELECT name FROM customers WHERE tenant_id = $1 AND phone = $2`,
+      [tenantId, CALLER_PHONE_E164]
+    );
+    expect(rows[0].name).toBe('Camille Rousseau');
   });
 });

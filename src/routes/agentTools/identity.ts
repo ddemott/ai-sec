@@ -13,6 +13,7 @@ import {
   CODE_DIGITS,
   CODE_TTL_MINUTES,
   MAX_VERIFY_ATTEMPTS,
+  MAX_VERIFY_ATTEMPTS_PER_PHONE_PER_HOUR,
   RATE_LIMIT_PER_PHONE_PER_HOUR,
   RATE_LIMIT_PER_TENANT_PER_DAY,
   CustomerHistorySchema,
@@ -28,6 +29,8 @@ import type { PoolClient } from 'pg';
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms, generateVerificationCode } from '../../services/telnyxSms';
+import { errorsTotal } from '../../services/metrics';
+import { PLACEHOLDER_NAMES } from '../../services/customerLookup';
 
 /**
  * May we read this customer's identity data out loud to whoever is on the line?
@@ -93,14 +96,24 @@ async function callerMayHearCustomerData(
     return true;
   }
 
-  const verified = await client.query(
-    `SELECT 1 FROM phone_verifications
-      WHERE tenant_id = $1 AND phone = $2
-        AND verified_at IS NOT NULL
-        AND verified_at > now() - interval '24 hours'
-      LIMIT 1`,
-    [tenantId, phone]
-  );
+  // Proof must belong to THIS CALL.
+  //
+  // This used to accept any row verified in the last 24h for (tenant, phone) —
+  // so one legitimate verification opened a 24-hour window in which ANY caller
+  // who spoke that number was treated as its owner, with no code. The gate
+  // degraded into "was this number ever verified recently", which is exactly the
+  // claim-based trust it exists to destroy.
+  //
+  // A NULL call_id can never match: an unattributable proof is not a proof.
+  const verified = callId
+    ? await client.query(
+        `SELECT 1 FROM phone_verifications
+          WHERE tenant_id = $1 AND phone = $2 AND call_id = $3
+            AND verified_at IS NOT NULL
+          LIMIT 1`,
+        [tenantId, phone, callId]
+      )
+    : { rowCount: 0 };
 
   if (verified.rowCount === 0) {
     app.log.info(
@@ -128,7 +141,7 @@ async function callerMayHearCustomerData(
       route,
       phone_source: 'spoken',
       otp_verified: true,
-      reason: 'the caller proved possession of this number with a code in the last 24h',
+      reason: 'the caller proved possession of this number with a code ON THIS CALL',
       tenant_id: tenantId,
       call_id: callId ?? null,
     },
@@ -276,16 +289,27 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         // gave us was already ours (a returning caller whose preferences we should
         // load) or brand new (nothing to load).
         const cust = await client.query<{ customer_id: string; is_new: boolean; name: string }>(
+          // The placeholder list is SHARED (customerLookup.PLACEHOLDER_NAMES), not
+          // inlined. This CASE used to hardcode only 'Valued Customer' — while
+          // scheduling.ts writes 'Caller' on every nameless booking. So a caller who
+          // booked before giving their name was stored as 'Caller', and when they
+          // then gave their name this CASE did not match, so it was never
+          // overwritten: "Caller" became permanent, and the session prefetch greeted
+          // them as "Caller" on every future call. The 2026-07-12 bug, still live on
+          // this path until 2026-07-13. A real name is never clobbered — only a
+          // placeholder is.
           `INSERT INTO customers (tenant_id, phone, name)
            VALUES ($1, $2, $3)
            ON CONFLICT (tenant_id, phone) DO UPDATE
              SET name = CASE
-               WHEN customers.name IS NULL OR customers.name = '' OR customers.name = 'Valued Customer'
+               WHEN customers.name IS NULL
+                 OR customers.name = ''
+                 OR customers.name = ANY($4::text[])
                THEN EXCLUDED.name
                ELSE customers.name
              END
            RETURNING customer_id, (xmax = 0) AS is_new, name`,
-          [args.tenant_id, normalized, args.name ?? null]
+          [args.tenant_id, normalized, args.name ?? null, PLACEHOLDER_NAMES as unknown as string[]]
         );
         // Backfill the verbally-captured number + customer onto the live call row
         // so the Calls tab shows it (forwarded-line calls started caller_phone
@@ -702,14 +726,44 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
           return { kind: 'rate_limited_tenant' as const };
         }
 
+        // Brute-force cap that a resend CANNOT reset. The per-row
+        // MAX_VERIFY_ATTEMPTS was defeated by simply asking for a new code
+        // (fresh row, attempt_count = 0, three more guesses, forever). Count
+        // wrong guesses across EVERY code issued to this number in the last hour.
+        const attempts = await client.query<{ total: string }>(
+          `SELECT COALESCE(SUM(attempt_count), 0)::text AS total
+             FROM phone_verifications
+            WHERE tenant_id = $1 AND phone = $2
+              AND created_at > now() - interval '1 hour'`,
+          [args.tenant_id, normalized]
+        );
+        if (parseInt(attempts.rows[0].total, 10) >= MAX_VERIFY_ATTEMPTS_PER_PHONE_PER_HOUR) {
+          return { kind: 'locked_out' as const };
+        }
+
+        // ONE live code per phone. Issuing a code used to leave every previous
+        // one valid, so each guess was tested against a growing set of correct
+        // answers — the keyspace shrank with every resend, precisely inverting
+        // what the rate limit was meant to buy. Retire the old ones first.
+        await client.query(
+          `UPDATE phone_verifications
+              SET expires_at = now()
+            WHERE tenant_id = $1 AND phone = $2
+              AND verified_at IS NULL AND expires_at > now()`,
+          [args.tenant_id, normalized]
+        );
+
         // Generate + hash + insert. bcrypt cost 10 matches auth routes.
         const code = generateVerificationCode(CODE_DIGITS);
         const bcrypt = await import('bcrypt');
         const codeHash = await bcrypt.hash(code, 10);
         await client.query(
-          `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at)
-           VALUES ($1, $2, $3, now() + ($4 || ' minutes')::interval)`,
-          [args.tenant_id, normalized, codeHash, String(CODE_TTL_MINUTES)]
+          // call_id binds the proof to THIS call. A code proves you held the
+          // handset at a moment; it does not make the number yours for a day.
+          // See migration 20260714000000.
+          `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, call_id)
+           VALUES ($1, $2, $3, now() + ($4 || ' minutes')::interval, $5)`,
+          [args.tenant_id, normalized, codeHash, String(CODE_TTL_MINUTES), args.call_id ?? null]
         );
         return { kind: 'inserted' as const, code, fromPhone };
       });
@@ -721,6 +775,27 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         );
       }
       if (smsOutcome.kind === 'rate_limited_phone') {
+        return fail(
+          reply,
+          "I've already sent a few codes to that number recently. Let me take a message instead and have someone call you back."
+        );
+      }
+      if (smsOutcome.kind === 'locked_out') {
+        // Too many WRONG guesses against this number in the last hour, across
+        // every code we issued. Refusing to send another is the point: sending
+        // one would hand the guesser three more tries and text the real owner's
+        // handset again. Same wording as the rate limit — a caller who fumbled
+        // and a caller who is grinding get the same, unhelpful answer.
+        errorsTotal.inc({ event: 'otp_phone_locked_out' });
+        app.log.warn(
+          {
+            event: 'otp_phone_locked_out',
+            reason: `>= ${MAX_VERIFY_ATTEMPTS_PER_PHONE_PER_HOUR} failed code attempts against this number in the last hour`,
+            tenant_id: args.tenant_id,
+            call_id: args.call_id ?? null,
+          },
+          'OTP: phone locked out after repeated wrong codes — refusing to issue another'
+        );
         return fail(
           reply,
           "I've already sent a few codes to that number recently. Let me take a message instead and have someone call you back."
@@ -781,12 +856,16 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
           expires_at: string;
           attempt_count: number;
         }>(
+          // Scoped to THIS call: a code issued on an earlier call cannot be
+          // redeemed on a new one, so overhearing a code buys nothing later.
+          // (A NULL call_id matches only a NULL call_id — non-voice callers.)
           `SELECT phone_verification_id, code_hash, expires_at, attempt_count
            FROM phone_verifications
           WHERE tenant_id = $1 AND phone = $2 AND verified_at IS NULL
+            AND call_id IS NOT DISTINCT FROM $3
           ORDER BY created_at DESC
           LIMIT 1`,
-          [args.tenant_id, normalized]
+          [args.tenant_id, normalized, args.call_id ?? null]
         );
         if (row.rows.length === 0) {
           return { kind: 'no_pending' as const };
