@@ -112,7 +112,9 @@ export function registerTenantRoutes(
     withHandler(async (req: AppRequest, reply) => {
       if (!requireSuperAdmin(req, reply)) return;
       const res = await withPoolClient(pool, (client) =>
-        client.query('SELECT * FROM tenants ORDER BY sort_order ASC, created_at DESC')
+        client.query(
+          'SELECT * FROM tenants WHERE is_deleted = false ORDER BY sort_order ASC, created_at DESC'
+        )
       );
       return reply.send(res.rows);
     }, 'Failed to fetch tenants')
@@ -123,11 +125,33 @@ export function registerTenantRoutes(
     withHandler(async (req: AppRequest, reply) => {
       if (!requireSuperAdmin(req, reply)) return;
       const { id } = req.params as { id: string };
+      // SOFT delete (2026-07-13). A hard DELETE here obliterated an entire business
+      // — every appointment, customer, call recording, transcript, consent record —
+      // irreversibly, from one super-admin call with no undo. Every other entity in
+      // this schema (customers, appointments, voice_sessions, services) is already
+      // soft-deleted; tenants was the outlier, and it was the most destructive one.
+      //
+      // It also deadlocked: the cascade takes FK locks appointments → tenants while
+      // fire-and-forget reminder seeding takes them tenants → appointments, and
+      // Postgres kills one side at random (PR #242). An UPDATE takes no cascade
+      // locks, so the cycle cannot form.
+      //
+      // A hard delete is now a deliberate maintenance-window operation, run by hand.
+      // Nothing in the running application performs one.
+      //
+      // Enforcement lives in createWithTenantClient: a soft-deleted tenant is
+      // TENANT_NOT_FOUND (404) to every tenant-scoped route.
       const res = await withPoolClient(pool, (client) =>
-        client.query('DELETE FROM tenants WHERE tenant_id = $1 RETURNING tenant_id', [id])
+        client.query(
+          `UPDATE tenants
+              SET is_deleted = true, deleted_at = now(), deleted_by = $2
+            WHERE tenant_id = $1 AND is_deleted = false
+            RETURNING tenant_id`,
+          [id, req.auth?.user_id ?? null]
+        )
       );
       if (!assertRowAffected(res, reply, 'Tenant')) return;
-      logEvent(req, 'tenant_deleted', { tenantId: id });
+      logEvent(req, 'tenant_soft_deleted', { tenantId: id });
       return reply.send({ success: true });
     }, 'Failed to delete tenant')
   );

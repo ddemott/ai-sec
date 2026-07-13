@@ -136,10 +136,26 @@ export function createWithTenantClient(pool: Pool): WithTenantClient {
   ): Promise<T> {
     const client = await pool.connect();
     try {
-      // Validate tenant exists (before setting context, so RLS doesn't block the check)
-      const tenantCheck = await client.query('SELECT tenant_id FROM tenants WHERE tenant_id = $1', [
-        tenantId,
-      ]);
+      // Validate tenant exists AND IS NOT SOFT-DELETED, before setting context (so
+      // RLS doesn't block the check).
+      //
+      // THIS IS THE CHOKE POINT FOR TENANT SOFT-DELETE (2026-07-13). Roughly 35
+      // places in src/ read the tenants table, and a soft delete is only as good as
+      // its filter coverage: miss ONE and a "deleted" business keeps answering its
+      // phone, booking appointments, and billing — a zombie tenant, which is worse
+      // than the hard delete we replaced. Rather than sprinkle `AND is_deleted =
+      // false` across 35 call sites and hope, every tenant-scoped route funnels
+      // through here, and a soft-deleted tenant is indistinguishable from a
+      // nonexistent one: TENANT_NOT_FOUND → 404.
+      //
+      // That covers every route using withTenantClient. The remaining paths use the
+      // raw pool (auth/login, the Stripe webhook, inbound-SMS tenant resolution by
+      // phone, the demo reaper, the schedule extender, the tenant list) and are
+      // filtered explicitly at each site — they are enumerated, not assumed.
+      const tenantCheck = await client.query(
+        'SELECT tenant_id FROM tenants WHERE tenant_id = $1 AND is_deleted = false',
+        [tenantId]
+      );
       if (tenantCheck.rows.length === 0) {
         const err = new Error(`Tenant ${tenantId} not found`);
         (err as unknown as { statusCode: number }).statusCode = 404;
@@ -399,12 +415,24 @@ export class PostgresDatabaseService implements DatabaseService {
     // Either way, NULL is "pick it up if scheduled_for is due."
     return this.withClient(async (client) => {
       const result = await client.query(
-        `SELECT * FROM reminder_schedules
-         WHERE status = 'scheduled'
-           AND scheduled_for <= NOW()
-           AND (next_retry_at IS NULL OR next_retry_at <= NOW())
-         ORDER BY scheduled_for
-         LIMIT 100`
+        // THE JOIN IS LOAD-BEARING (2026-07-13). Soft-deleting a tenant does NOT
+        // cascade — its reminder_schedules rows survive, still 'scheduled', still
+        // due. This sweep is cross-tenant, so without the is_deleted filter A
+        // DELETED BUSINESS WOULD KEEP TEXTING ITS CUSTOMERS: appointment reminders
+        // and confirmations, from a company that no longer exists, on a phone number
+        // that may have been released. That is the single worst shape a zombie-tenant
+        // leak could take — it reaches real people, and it is a TCPA problem, not
+        // just a bug.
+        //
+        // This is the cost of soft-delete, and it is why the filter has to be
+        // enumerated rather than assumed: a hard delete took these rows with it.
+        `SELECT rs.* FROM reminder_schedules rs
+           JOIN tenants t ON t.tenant_id = rs.tenant_id AND t.is_deleted = false
+          WHERE rs.status = 'scheduled'
+            AND rs.scheduled_for <= NOW()
+            AND (rs.next_retry_at IS NULL OR rs.next_retry_at <= NOW())
+          ORDER BY rs.scheduled_for
+          LIMIT 100`
       );
       return result.rows;
     });

@@ -219,12 +219,18 @@ describe('cleanupExpiredDemoTenants', () => {
     await pool.end();
   });
 
-  it('HAPPY: deletes demo tenants whose demo_expires_at is in the past', async () => {
+  it('HAPPY: SOFT-deletes demo tenants whose demo_expires_at is in the past', async () => {
     // WHO: reminder scheduler tick running every 60s
-    // WHAT: expired demo tenant is deleted; cascade removes all child rows
+    // WHAT: the expired demo tenant is flagged is_deleted — NOT hard-deleted.
     // WHEN: demo_expires_at < NOW()
     // WHERE: cleanupExpiredDemoTenants() in reminderScheduler
-    // WHY: without cleanup, the DB accumulates stale demo tenants indefinitely
+    // WHY THE CHANGE (2026-07-13): this runs every 60 SECONDS in production, and a
+    //       cascading DELETE races the fire-and-forget reminder seeding of any live
+    //       booking — FK locks in opposite orders, Postgres kills one side at random
+    //       (PR #242). That is a real production deadlock on a 60-second timer. An
+    //       UPDATE takes no cascade locks, so the cycle cannot form. The rows survive
+    //       for the maintenance purge; nothing can reach them (withTenantClient 404s a
+    //       soft-deleted tenant).
     const res = await client.query<{ tenant_id: string }>(
       `INSERT INTO tenants (name, business_type, timezone, is_demo, demo_expires_at)
        VALUES ('Expired Demo', 'automotive', 'America/Chicago', true, NOW() - INTERVAL '1 minute')
@@ -234,8 +240,21 @@ describe('cleanupExpiredDemoTenants', () => {
 
     await cleanupExpiredDemoTenants(pool);
 
-    const check = await client.query('SELECT 1 FROM tenants WHERE tenant_id = $1', [expiredId]);
-    expect(check.rows).toHaveLength(0);
+    // The row SURVIVES, flagged — that is the point. Nothing reads it.
+    const check = await client.query<{ is_deleted: boolean; deleted_at: Date | null }>(
+      'SELECT is_deleted, deleted_at FROM tenants WHERE tenant_id = $1',
+      [expiredId]
+    );
+    expect(check.rows).toHaveLength(1);
+    expect(check.rows[0].is_deleted).toBe(true);
+    expect(check.rows[0].deleted_at).not.toBeNull();
+
+    // And it is invisible to every live-tenant lookup.
+    const live = await client.query(
+      'SELECT 1 FROM tenants WHERE tenant_id = $1 AND is_deleted = false',
+      [expiredId]
+    );
+    expect(live.rows).toHaveLength(0);
   });
 
   it('HAPPY: leaves non-expired demo tenants untouched', async () => {

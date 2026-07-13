@@ -620,7 +620,10 @@ export function registerCommunicationRoutes(
     // by nature — the sender isn't authenticated and no tenant context exists yet —
     // so this reads `tenants` on the raw pool, relying on the admin-bypass policy.
     const tenantRes = await pool.query<{ tenant_id: string }>(
-      `SELECT tenant_id FROM tenants WHERE inbound_phone = $1 LIMIT 1`,
+      // is_deleted filter: a soft-deleted business must not still be answering its
+      // phone. Without this, an inbound STOP would resolve to a zombie tenant and be
+      // recorded against a business that no longer exists.
+      `SELECT tenant_id FROM tenants WHERE inbound_phone = $1 AND is_deleted = false LIMIT 1`,
       [toPhone]
     );
     const tenantId = tenantRes.rows[0]?.tenant_id ?? null;

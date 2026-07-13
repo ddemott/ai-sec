@@ -61,8 +61,11 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
       }
 
       // Look up or create Stripe customer
+      // is_deleted: never open a checkout — and never create a Stripe customer — for
+      // a business that has been deleted. Taking money from a tenant that cannot log
+      // in or answer a call is the worst shape a zombie-tenant leak could take.
       const tenantRes = await pool.query(
-        'SELECT tenant_id, name, stripe_customer_id FROM tenants WHERE tenant_id = $1',
+        'SELECT tenant_id, name, stripe_customer_id FROM tenants WHERE tenant_id = $1 AND is_deleted = false',
         [tenant_id]
       );
       if (tenantRes.rows.length === 0) {

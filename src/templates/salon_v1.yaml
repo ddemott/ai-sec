@@ -1,26 +1,41 @@
-id: "salon_v1"
-name: "Salon & Spa"
-version: "1.0.0"
+id: 'salon_v1'
+name: 'Salon & Spa'
+version: '1.0.0'
 schema:
   customer:
     attributes:
-      - { key: "hair_type", type: "string", label: "Hair Type", options: ["Straight", "Wavy", "Curly", "Coily"] }
-      - { key: "allergies", type: "string", label: "Allergies/Sensitivities" }
+      - {
+          key: 'hair_type',
+          type: 'string',
+          label: 'Hair Type',
+          options: ['Straight', 'Wavy', 'Curly', 'Coily'],
+        }
+      - { key: 'allergies', type: 'string', label: 'Allergies/Sensitivities' }
   appointment:
     attributes:
-      - { key: "preferred_stylist_gender", type: "string", label: "Preferred Stylist Gender", options: ["Any", "Male", "Female"] }
+      - {
+          key: 'preferred_stylist_gender',
+          type: 'string',
+          label: 'Preferred Stylist Gender',
+          options: ['Any', 'Male', 'Female'],
+        }
   lead:
     attributes:
-      - { key: "interest", type: "string", label: "Interested In", options: ["Hair", "Nails", "Skin", "Massage"] }
+      - {
+          key: 'interest',
+          type: 'string',
+          label: 'Interested In',
+          options: ['Hair', 'Nails', 'Skin', 'Massage'],
+        }
 ai:
-  systemPromptModifier: "You are a friendly and stylish salon coordinator. Use a warm, welcoming tone."
-  tools: ["check_availability", "book_appointment"]
+  systemPromptModifier: 'You are a friendly and stylish salon coordinator. Use a warm, welcoming tone.'
+  tools: ['check_availability', 'book_appointment']
 ui:
-  theme: "soft_rose"
+  theme: 'soft_rose'
   terminology:
-    staff: "Stylist"
-    service: "Treatment"
-    customer: "Client"
-    appointment: "Booking"
+    staff: 'Stylist'
+    service: 'Treatment'
+    customer: 'Client'
+    appointment: 'Booking'
 workflows:
-  booking: "standard"
+  booking: 'standard'

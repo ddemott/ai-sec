@@ -66,7 +66,13 @@ export async function extendSchedulesNow(
   const withTenantClient = createWithTenantClient(pool);
 
   // `tenants` HAS an admin-bypass policy, so this read is safe without context.
-  const tenants = await pool.query<{ tenant_id: string }>('SELECT tenant_id FROM tenants');
+  // is_deleted filter: a soft-deleted business must not have its calendar kept alive
+  // — it cannot be booked anyway (createWithTenantClient 404s it), so extending it
+  // would be pure waste, and a resurrected-by-accident tenant would come back with a
+  // suspiciously fresh schedule.
+  const tenants = await pool.query<{ tenant_id: string }>(
+    'SELECT tenant_id FROM tenants WHERE is_deleted = false'
+  );
 
   let rowsInserted = 0;
   let tenantsFailed = 0;

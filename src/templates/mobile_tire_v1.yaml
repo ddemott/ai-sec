@@ -9,13 +9,23 @@ schema:
       - { key: 'license_plate', type: 'string', label: 'License Plate' }
   appointment:
     attributes:
-      - { key: 'service_location', type: 'string', label: 'Service Address/Location', required: true }
+      - {
+          key: 'service_location',
+          type: 'string',
+          label: 'Service Address/Location',
+          required: true,
+        }
       - { key: 'tire_size', type: 'string', label: 'Tire Size (e.g. 225/45R17)' }
       - { key: 'urgent', type: 'boolean', label: 'Emergency/Roadside?' }
   lead:
     attributes:
       - { key: 'location_description', type: 'string', label: 'Where is the vehicle located?' }
-      - { key: 'issue_type', type: 'select', label: 'Issue', options: ['Flat Tire', 'Seasonal Swap', 'New Tires', 'Rotation'] }
+      - {
+          key: 'issue_type',
+          type: 'select',
+          label: 'Issue',
+          options: ['Flat Tire', 'Seasonal Swap', 'New Tires', 'Rotation'],
+        }
 ai:
   systemPromptModifier: 'You are a professional mobile tire service coordinator. You help clients book roadside assistance or scheduled tire swaps at their location. Be helpful, efficient, and always confirm the exact service address.'
   tools: ['check_availability', 'book_appointment']
