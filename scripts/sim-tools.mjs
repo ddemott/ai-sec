@@ -125,7 +125,15 @@ async function main() {
   else fail('service-catalog', `status ${cat.status} ${JSON.stringify(cat.json)}`);
 
   // ── S5. New caller — no history yet ──
-  const ctx1 = await api('/agent-tools/customer-context', { tenant_id: TENANT, phone });
+  const ctx1 = await api('/agent-tools/customer-context', {
+    tenant_id: TENANT,
+    phone,
+    // The harness models a normal inbound call: the CARRIER gave us this
+    // number. The disclosure gate (2026-07-13) defaults phone_source to the
+    // cautious 'spoken' and withholds identity until the caller proves
+    // possession by SMS code, so omitting this returns requires_verification.
+    phone_source: 'caller_id',
+  });
   if (ctx1.json?.success !== undefined || ctx1.status === 200)
     pass('customer-context (new caller)', 'lookup ran');
   else fail('customer-context (new caller)', `status ${ctx1.status}`);
@@ -243,7 +251,15 @@ async function main() {
   }
 
   // ── S9. Returning caller is recognized + preference recalled ──
-  const ctx2 = await api('/agent-tools/customer-context', { tenant_id: TENANT, phone });
+  const ctx2 = await api('/agent-tools/customer-context', {
+    tenant_id: TENANT,
+    phone,
+    // The harness models a normal inbound call: the CARRIER gave us this
+    // number. The disclosure gate (2026-07-13) defaults phone_source to the
+    // cautious 'spoken' and withholds identity until the caller proves
+    // possession by SMS code, so omitting this returns requires_verification.
+    phone_source: 'caller_id',
+  });
   const result2 = ctx2.json?.result ?? {};
   const hasName = /Sim Test Caller/i.test(result2.name ?? '');
   const hasPref =

@@ -503,25 +503,36 @@ type JwtPayload = {
 };
 
 /**
- * Sign a session token. Exported so the auth route can mint tokens on
- * login/register; nothing else should need to call this.
+ * Sign a session token. THE ONLY WAY to mint one — if you are about to call
+ * `jwt.sign` with a session-shaped payload somewhere else, use this instead.
  *
- * Tokens issued before the role column landed (no `role` claim) are
- * treated as 'owner' on read so existing sessions don't get downgraded
- * mid-flight. New tokens always carry an explicit role.
+ * That is not style advice. `/demo/start` used to sign its own token inline,
+ * because it needed a short expiry and this function hardcoded JWT_EXPIRY. The
+ * copy then (a) missed the `typ: 'session'` claim the moment it was added, which
+ * would have 401'd every demo user, and (b) fell back to a DIFFERENT dev secret
+ * ('dev-secret' vs 'dev-jwt-secret-change-in-production'), so with no JWT_SECRET
+ * set it signed tokens this very file could never verify. Both bugs existed
+ * because the token shape lived in two places. `expiresIn` is a parameter now,
+ * so there is no longer a reason for a second minter to exist.
+ *
+ * @param expiresIn Optional override (seconds, or an ms-format string like
+ *        "8h"). Defaults to the JWT_EXPIRY env value.
  */
-export function generateToken(payload: {
-  tenant_id: string;
-  user_id: string;
-  email: string;
-  role: UserRole;
-}): string {
+export function generateToken(
+  payload: {
+    tenant_id: string;
+    user_id: string;
+    email: string;
+    role: UserRole;
+  },
+  expiresIn?: string | number
+): string {
   // jsonwebtoken's `expiresIn` is typed as `string | number` in older
   // versions but the runtime accepts ms-format strings like "8h".
   // SignOptions['expiresIn'] is the exact slot we're filling — narrower
   // than bare `any` while still accepting the env-derived string.
   return jwt.sign({ ...payload, typ: 'session' }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRY as jwt.SignOptions['expiresIn'],
+    expiresIn: (expiresIn ?? JWT_EXPIRY) as jwt.SignOptions['expiresIn'],
   });
 }
 
