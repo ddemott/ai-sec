@@ -1389,3 +1389,72 @@ describe('REGRESSION: a number the caller already gave is never asked for twice'
     expect(calls[0].body).toMatchObject({ callback_phone: '3125550199' });
   });
 });
+
+/**
+ * REGRESSION — an empty string is not a phone number.
+ *
+ * Raised in review on #253, and it would have silently defeated the fix it was in.
+ * `args.callback_phone ?? ctx.callerPhone` only falls through on null/undefined — an
+ * EMPTY STRING is not nullish. So a model sending `callback_phone: ""` would have
+ * that empty string sent to the backend AND block the fallback to the number the
+ * caller already gave. The "never re-ask" guarantee would evaporate exactly when the
+ * model was being sloppy, which is the only time it was needed.
+ *
+ * LLMs emit "" for optional fields constantly. Nullish coalescing is the wrong tool
+ * for any value an LLM fills in.
+ */
+describe('REGRESSION: a blank string is ABSENT, not a value', () => {
+  it('SAD: callback_phone:"" falls back to the remembered number instead of being sent', async () => {
+    // WHO: a caller on a forwarded line who already gave his number.
+    // WHAT: the model sends an empty callback_phone.
+    // WHEN: the pivot from a failed booking to taking a message.
+    // WHERE: tools.ts take_message → firstPhone().
+    // WHY: "" is not nullish, so `??` would have sent it and blocked the fallback —
+    //      the owner would get a message with NO callback number, for a caller who
+    //      had given it twice.
+    const ctx = makeCtx({ callerPhone: null });
+    ctx.spokenPhone = '6082175303';
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(ctx, client);
+
+    await exec(tools.take_message, {
+      caller_name: 'Bob',
+      callback_phone: '',
+      message: 'Call me.',
+    });
+
+    expect(calls[0].body).toMatchObject({ callback_phone: '6082175303' });
+  });
+
+  it('SAD: whitespace-only is also absent', async () => {
+    const ctx = makeCtx({ callerPhone: null });
+    ctx.spokenPhone = '6082175303';
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(ctx, client);
+
+    await exec(tools.take_message, {
+      caller_name: 'Bob',
+      callback_phone: '   ',
+      message: 'Call me.',
+    });
+
+    expect(calls[0].body).toMatchObject({ callback_phone: '6082175303' });
+  });
+
+  it('SAD: a BLANK phone on identify_caller is not classified as "spoken"', async () => {
+    // WHY: phone_source is the field the server's disclosure gate keys on. A
+    //      whitespace string was truthy, so it was called 'spoken' AND sent as the
+    //      phone — misclassifying the gate on garbage input.
+    const ctx = makeCtx(); // has a real caller-ID
+    const { client, calls } = makeClient([{ ok: true, result: { saved: true } }]);
+    const tools = buildTools(ctx, client);
+
+    await exec(tools.identify_caller, { name: 'Bob', phone: '   ' });
+
+    expect(calls[0].body).toMatchObject({
+      phone: CALLER_PHONE, // the carrier's number, not whitespace
+      phone_source: 'caller_id',
+    });
+    expect(ctx.spokenPhone).toBeUndefined(); // nothing blank was remembered
+  });
+});

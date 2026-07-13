@@ -98,3 +98,37 @@ describe('streaming — words must not be glued together', () => {
     expect(sanitizeChunk('3:30\nor 4:00')).toBe('3:30 or 4:00');
   });
 });
+
+/**
+ * The STREAMING path is the one that runs in production. Raised in review on #253:
+ * sanitizeChunk stripped only emphasis, while sanitizeForSpeech (used by nothing on
+ * the hot path) stripped headings and bullets too.
+ *
+ * A sanitizer whose REAL path is weaker than its TESTED path is worse than no
+ * sanitizer, because it looks covered. These tests exercise the path that ships.
+ */
+describe('streaming path strips EVERYTHING the one-shot path does', () => {
+  it('SAD: a lapsed bullet list is not read out as "dash, dash, dash"', async () => {
+    expect(await collect(['I have:\n', '- 2:00 PM\n', '- 3:30 PM'])).toBe(
+      'I have: 2:00 PM 3:30 PM'
+    );
+  });
+
+  it('SAD: a numbered list loses its numbering markers', async () => {
+    expect(await collect(['Options:\n1. Haircut\n', '2. Color'])).toBe('Options: Haircut Color');
+  });
+
+  it('SAD: heading and blockquote markers never reach TTS', async () => {
+    expect(await collect(['## Hours\n', '> We are open 1 to 5.'])).toBe(
+      'Hours We are open 1 to 5.'
+    );
+  });
+
+  it('HAPPY: a hyphen INSIDE speech survives — it is a word, not a bullet', async () => {
+    // WHY: the failure mode that matters. "30-minute" and "well-known" must not be
+    //      mangled by a rule aimed at list bullets.
+    expect(await collect(['It is a 30-minute cut', ' — very popular.'])).toBe(
+      'It is a 30-minute cut — very popular.'
+    );
+  });
+});

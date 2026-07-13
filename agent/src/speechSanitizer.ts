@@ -85,10 +85,27 @@ export function sanitizeChunk(chunk: string): string {
   // per-chunk turns "Hello" + " world" into "Helloworld" — a sanitizer that makes
   // the speech WORSE than the markdown it removed. (I wrote that bug, then caught
   // it here. Hence this comment, and the test that pins it.)
+  //
+  // This must strip EVERYTHING sanitizeForSpeech does, because sanitizeStream is
+  // the path that actually runs in production — the non-streaming form exists for
+  // tests and one-shot text. Raised in review on #253: the first version stripped
+  // only emphasis here, so a model that lapsed into a bulleted list would still
+  // have had "dash, dash, dash" read aloud to a caller. A sanitizer whose real path
+  // is weaker than its tested path is worse than no sanitizer, because it looks
+  // covered.
   return (
     chunk
       .replace(/[*_`~]/g, '')
       .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      // Line-leading markdown structure. Applied per-line within the chunk (/m), so
+      // any bullet or heading that follows a newline INSIDE this chunk is caught.
+      // A marker split across the chunk boundary can still slip through — the
+      // accepted cost of not buffering (dead air is the worse bug), and a stray
+      // dash is survivable where a stall is not.
+      .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
+      .replace(/^[ \t]{0,3}>[ \t]+/gm, '')
+      .replace(/^[ \t]{0,3}[-+•][ \t]+/gm, '')
+      .replace(/^[ \t]{0,3}\d+[.)][ \t]+/gm, '')
       // A newline is a visual device with no meaning in speech — but it IS a word
       // boundary, so it becomes a space rather than nothing.
       .replace(/[\r\n]+/g, ' ')

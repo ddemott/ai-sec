@@ -65,6 +65,29 @@ const CAPABILITY_OF: Record<string, Capability> = {
   transfer_call: 'transfer',
 };
 
+/**
+ * Treat a blank/whitespace string as ABSENT.
+ *
+ * Raised in review on #253, and it would have silently defeated the fix it was in.
+ * `args.callback_phone ?? ctx.callerPhone` only falls through on null/undefined —
+ * an EMPTY STRING is not nullish, so a model that sends `callback_phone: ""` would
+ * have that empty string sent to the backend AND block the fallback to the number
+ * the caller already gave. The "never re-ask" guarantee would evaporate exactly
+ * when the model was being sloppy, which is the only time it was needed.
+ *
+ * LLMs emit "" constantly for optional fields. Nullish coalescing is the wrong tool
+ * for anything an LLM fills in.
+ */
+function blank(v: string | null | undefined): boolean {
+  return v === null || v === undefined || v.trim() === '';
+}
+
+/** First non-blank value, or undefined. The order of the arguments is the order of trust. */
+function firstPhone(...vals: (string | null | undefined)[]): string | undefined {
+  for (const v of vals) if (!blank(v)) return v!.trim();
+  return undefined;
+}
+
 /** Pull a UUID appointment_id out of a successful booking response, if present. */
 function extractAppointmentId(res: ToolResponse): string | null {
   if (!res.ok || typeof res.result !== 'object' || res.result === null) return null;
@@ -728,12 +751,19 @@ export function buildTools(
         //
         // Caught by a test that passed a spoken phone on a session that had caller-ID
         // — the first version of this line said 'caller_id' and would have trusted it.
+        //
+        // A BLANK phone is ABSENT, not spoken. Raised in review on #253: `!args.phone`
+        // is false for "  ", so a whitespace string would have been classified
+        // 'spoken' AND sent as the phone — misclassifying phone_source, which is the
+        // field the server's disclosure gate keys on. LLMs emit "" for optional
+        // fields constantly; a truthiness check is not enough for anything they fill.
+        const spoken = blank(args.phone) ? undefined : args.phone!.trim();
         const usingCarrierNumber =
-          Boolean(ctx.callerPhone) && (!args.phone || args.phone === ctx.callerPhone);
+          Boolean(ctx.callerPhone) && (!spoken || spoken === ctx.callerPhone);
         const phoneSource = usingCarrierNumber ? 'caller_id' : 'spoken';
         const res = await client.call('/agent-tools/identify-caller', {
           tenant_id: ctx.tenantId,
-          phone: args.phone ?? ctx.callerPhone,
+          phone: spoken ?? ctx.callerPhone,
           name: args.name,
           phone_source: phoneSource,
           call_id: ctx.callId ?? undefined,
@@ -751,8 +781,8 @@ export function buildTools(
         // requests; this is a guarantee. Every tool that needs a callback number now
         // fills it from here, so a number the caller already gave cannot be
         // forgotten by a model that never has to hold it.
-        if (res.ok && !usingCarrierNumber && args.phone?.trim()) {
-          ctx.spokenPhone = args.phone.trim();
+        if (res.ok && !usingCarrierNumber && spoken) {
+          ctx.spokenPhone = spoken;
         }
 
         return formatResponse(res);
@@ -860,8 +890,8 @@ export function buildTools(
           // ctx.callerPhone is null — so without ctx.spokenPhone the model was the
           // ONLY thing remembering a number the caller had already given twice, and
           // it forgot, and it asked again.
-          callback_phone: args.callback_phone ?? ctx.callerPhone ?? ctx.spokenPhone ?? undefined,
-          caller_phone: ctx.callerPhone ?? ctx.spokenPhone ?? undefined,
+          callback_phone: firstPhone(args.callback_phone, ctx.callerPhone, ctx.spokenPhone),
+          caller_phone: firstPhone(ctx.callerPhone, ctx.spokenPhone),
           reason: args.reason,
           // Truthy check (not ??) so an empty-string callId is omitted — the
           // backend call_id is min(1) and would 400 on ''.
@@ -912,8 +942,8 @@ export function buildTools(
           // it is filled in here, in order of trust — a new number the caller
           // deliberately gives for the callback still wins, because remembering must
           // never become ignoring them.
-          callback_phone: args.callback_phone ?? ctx.callerPhone ?? ctx.spokenPhone ?? undefined,
-          caller_phone: ctx.callerPhone ?? ctx.spokenPhone ?? undefined,
+          callback_phone: firstPhone(args.callback_phone, ctx.callerPhone, ctx.spokenPhone),
+          caller_phone: firstPhone(ctx.callerPhone, ctx.spokenPhone),
           message: args.message,
           call_id: ctx.callId ?? undefined,
         });
