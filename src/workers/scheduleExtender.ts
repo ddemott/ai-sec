@@ -13,9 +13,13 @@
  * scheduled that day" and concluded the business had no staff. The old design
  * assumed owners would press "copy week" forever. They won't.
  *
- * Mirrors reminderScheduler / voiceSessionReaper's start/stop/interval shape.
- * Cross-tenant (no tenant context) — relies on the admin-bypass RLS policy on
- * employee_schedule, same as the reminder sweep.
+ * Mirrors reminderScheduler / voiceSessionReaper's start/stop/interval shape —
+ * EXCEPT that it must NOT run cross-tenant like they do. It iterates tenants and
+ * runs inside tenant context, because `employees` has a tenant-isolation RLS
+ * policy and NO admin bypass: a context-free sweep sees zero employee rows and
+ * silently extends nothing while reporting success. (`employee_schedule` DOES
+ * have an admin bypass — that asymmetry is the trap, and it is what the first
+ * draft of this worker fell into.) Do not "simplify" this back to one statement.
  *
  * Usage:
  *   startScheduleExtender(); // begin
@@ -115,7 +119,7 @@ async function tick(horizonDays: number): Promise<void> {
 
 /**
  * Start the extender. Runs once immediately (so a lapsed schedule is repaired at
- * boot, not six hours later), then on the interval.
+ * boot, not a day later), then daily.
  */
 export function startScheduleExtender(
   intervalMs: number = DEFAULT_INTERVAL_MS,

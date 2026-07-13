@@ -9,7 +9,7 @@
  * 5W:
  *   WHO  — every tenant whose Setup-wizard schedule is running out
  *   WHAT — repeat each employee's final week forward to a rolling horizon
- *   WHEN — worker tick (6h) + once at boot
+ *   WHEN — worker tick (daily) + once at boot
  *   WHERE— src/services/extendSchedules.ts
  *   WHY  — employee_schedule holds DATES, not a rule. The bookable window shrinks
  *          by a day every day. On 2026-07-12 a real caller asked for a normal
@@ -202,7 +202,7 @@ describe('extendSchedules (real DB)', () => {
   });
 
   it('SAD: is idempotent — a second run inserts nothing', async () => {
-    // The worker ticks every 6h forever. If it were not a no-op once the horizon
+    // The worker ticks daily, forever. If it were not a no-op once the horizon
     // is covered, it would churn the table and the audit log endlessly.
     await seedShift(await nextDow(1));
     const first = await run(30);
@@ -234,8 +234,13 @@ describe('extendSchedules (real DB)', () => {
     const { rowsInserted } = await run(30);
 
     expect(rowsInserted).toBeGreaterThan(0);
+
+    // Precompute today ONCE and filter synchronously. An async predicate inside
+    // .filter() returns a Promise — which is always truthy — so the assertion
+    // would pass no matter what, verifying nothing. (Caught in review on PR #242.)
+    const today = await dayOffset(0);
     const after = await shiftDates();
-    const future = after.filter(async (d) => d > (await dayOffset(0)));
+    const future = after.filter((d) => d > today);
     expect(future.length).toBeGreaterThan(0);
   });
 });

@@ -303,8 +303,8 @@ if (isProduction || process.env.ENABLE_VOICE_SESSION_REAPER === 'true') {
 }
 
 // --- Start Schedule Extender ---
-// Keeps every employee's calendar topped up to a rolling horizon (default 90
-// days). WITHOUT THIS A BUSINESS QUIETLY BECOMES UNBOOKABLE: employee_schedule
+// Keeps every employee's calendar topped up to a rolling horizon (default 180
+// days; SCHEDULE_HORIZON_DAYS overrides). WITHOUT THIS A BUSINESS QUIETLY BECOMES UNBOOKABLE: employee_schedule
 // holds one row per DATE, not a recurring rule, so the window the Setup wizard
 // fanned out shrinks by a day, every day. Thinking Hammer's ran out on
 // 2026-08-19 and a real caller was told "no one is scheduled that day" for a
