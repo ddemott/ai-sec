@@ -93,9 +93,14 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         save_preferences_enabled: row.save_preferences_enabled ?? false,
         preferences_instructions: row.preferences_instructions ?? null,
         // 2026-06-10 (Grok era): per-tenant TTS voice + delivery. NULL means the
-        // agent uses platform defaults. Post-2026-06-25 these are OpenAI voice/speed
-        // (the columns were kept; legacy Grok-only prosody flags tts_soft etc. are inert).
-        // env defaults, so tenants who haven't picked a voice are unaffected.
+        // agent uses platform defaults, so tenants who haven't picked a voice are
+        // unaffected. Post-2026-06-25 tts_voice/tts_speed are OpenAI voice/speed.
+        //
+        // The tts_soft/cheerful/formal/warm/concise flags are NOT inert — this
+        // comment said they were until 2026-07-13, and it was wrong. They started
+        // as Grok prosody knobs and were repurposed as LLM PROMPT-STYLE flags: the
+        // dashboard still renders toggles for them and agent/src/prompt.ts injects
+        // a "# Voice style" section from them. They ride this route to get there.
         tts_voice: row.tts_voice ?? null,
         tts_speed: row.tts_speed ?? null,
         tts_soft: row.tts_soft ?? null,

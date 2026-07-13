@@ -24,9 +24,118 @@ import {
   SendVerificationCodeSchema,
   VerifyPhoneCodeSchema,
 } from './schemas';
+import type { PoolClient } from 'pg';
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms, generateVerificationCode } from '../../services/telnyxSms';
+
+/**
+ * May we read this customer's identity data out loud to whoever is on the line?
+ *
+ * THE ONE GATE. Three routes hand back the same class of secret — a real
+ * person's name, their preferences, their call history:
+ *
+ *   /agent-tools/identify-caller    (identify_caller)
+ *   /agent-tools/customer-context   (get_customer_context)
+ *   /agent-tools/customer-history   (get_detailed_customer_history)
+ *
+ * The gate shipped 2026-07-13 guarded only the FIRST one, which was worth very
+ * little: the LLM chooses which tool to call, and `get_customer_context` takes
+ * a phone number straight from the model. A stranger rings the forwarded line,
+ * says Camille's number, and identify_caller correctly reveals nothing — then
+ * the same number goes to customer-context and out comes her name, her stylist
+ * and her history. A gate on one of three doors is not a gate; it is a
+ * suggestion, and it depended on the model's goodwill to hold.
+ *
+ * So the rule lives HERE, once, and every disclosure route calls it:
+ *
+ *   phone_source='caller_id' → the CARRIER attested the number. The caller
+ *     supplied nothing and cannot lie about it. Nothing to prove.
+ *
+ *   phone_source='spoken'    → the caller CLAIMED the number (forwarded line,
+ *     or blocked caller ID). Anyone can claim any number. They must first prove
+ *     possession: send_verification_code → read the 4-digit code back →
+ *     verify_phone_code. Until then we may still SAVE what they tell us
+ *     (writing is not leaking) but we reveal NOTHING.
+ *
+ * Returns true when disclosure is permitted. Logs the decision either way —
+ * `identify_caller_gate` is the structured event to grep when a caller says the
+ * AI "didn't know them".
+ */
+async function callerMayHearCustomerData(
+  client: { query: PoolClient['query'] },
+  app: AgentToolDeps['app'],
+  params: {
+    tenantId: string;
+    phone: string;
+    phoneSource: 'caller_id' | 'spoken';
+    callId?: string | null;
+    route: string;
+  }
+): Promise<boolean> {
+  const { tenantId, phone, phoneSource, callId, route } = params;
+
+  if (phoneSource === 'caller_id') {
+    app.log.info(
+      {
+        event: 'identify_caller_gate',
+        decision: 'ALLOWED_carrier_attested',
+        route,
+        phone_source: 'caller_id',
+        otp_verified: false,
+        reason:
+          'the CARRIER gave us this number — the caller supplied nothing and cannot lie about it, so there is nothing to prove',
+        tenant_id: tenantId,
+        call_id: callId ?? null,
+      },
+      'IDENTIFY GATE: allowed — carrier-attested caller ID.'
+    );
+    return true;
+  }
+
+  const verified = await client.query(
+    `SELECT 1 FROM phone_verifications
+      WHERE tenant_id = $1 AND phone = $2
+        AND verified_at IS NOT NULL
+        AND verified_at > now() - interval '24 hours'
+      LIMIT 1`,
+    [tenantId, phone]
+  );
+
+  if (verified.rowCount === 0) {
+    app.log.info(
+      {
+        event: 'identify_caller_gate',
+        decision: 'BLOCKED_unverified_spoken_number',
+        route,
+        phone_source: 'spoken',
+        otp_verified: false,
+        reason:
+          'the caller SPOKE this number (no caller-ID) and possession is unproven — revealing name/preferences/history here would hand a stranger someone else data',
+        next: 'agent must send_verification_code then verify_phone_code first',
+        tenant_id: tenantId,
+        call_id: callId ?? null,
+      },
+      'IDENTIFY GATE: blocked — spoken number is unverified. Revealing nothing.'
+    );
+    return false;
+  }
+
+  app.log.info(
+    {
+      event: 'identify_caller_gate',
+      decision: 'ALLOWED_spoken_but_otp_verified',
+      route,
+      phone_source: 'spoken',
+      otp_verified: true,
+      reason: 'the caller proved possession of this number with a code in the last 24h',
+      tenant_id: tenantId,
+      call_id: callId ?? null,
+    },
+    'IDENTIFY GATE: allowed — spoken number, but OTP-verified.'
+  );
+  return true;
+}
 
 export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps): void {
   // record-consent — the caller verbally agreed on the call to receive SMS
@@ -208,79 +317,18 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         // first-time caller is worse than saying nothing.
         if (!row || row.is_new) return null;
 
-        // ── THE GATE (2026-07-13) ────────────────────────────────────────────
-        // Below this line we hand back a real person's NAME, PREFERENCES and CALL
-        // HISTORY. Who told us this phone number?
-        //
-        //   phone_source = 'caller_id' → the CARRIER attested it. The phone network
-        //     vouches that the call came from this handset. Nothing to prove.
-        //
-        //   phone_source = 'spoken' → the CALLER said it out loud, because we had no
-        //     caller ID (forwarded line, or blocked). It is a CLAIM. Anyone can claim
-        //     any number. Without this gate, a stranger who knows (or guesses)
-        //     Camille's number rings the forwarded line, says it, and is told her
-        //     name, her stylist, and what she last had done. That is a data leak, and
-        //     the caller supplied the only "credential" involved.
-        //
-        // So a spoken number must PROVE possession first: send_verification_code →
-        // the caller reads the 4-digit code back → verify_phone_code. Until then we
-        // still SAVE the contact (writing is not leaking) but reveal nothing.
-        if (args.phone_source !== 'caller_id') {
-          const verified = await client.query(
-            `SELECT 1 FROM phone_verifications
-              WHERE tenant_id = $1 AND phone = $2
-                AND verified_at IS NOT NULL
-                AND verified_at > now() - interval '24 hours'
-              LIMIT 1`,
-            [args.tenant_id, normalized]
-          );
-          if (verified.rowCount === 0) {
-            app.log.info(
-              {
-                event: 'identify_caller_gate',
-                decision: 'BLOCKED_unverified_spoken_number',
-                phone_source: args.phone_source,
-                known_customer: true,
-                otp_verified: false,
-                reason:
-                  'the caller SPOKE this number (no caller-ID), it matches a real customer, but possession is unproven — revealing name/preferences/history here would hand a stranger someone else data',
-                next: 'agent must send_verification_code then verify_phone_code before calling identify_caller again',
-                tenant_id: args.tenant_id,
-                call_id: args.call_id ?? null,
-              },
-              'IDENTIFY GATE: blocked — known customer, but the spoken number is unverified. Revealing nothing.'
-            );
-            // Known customer, unproven caller. Contact saved; nothing revealed.
-            return { requiresVerification: true as const };
-          }
-          app.log.info(
-            {
-              event: 'identify_caller_gate',
-              decision: 'ALLOWED_spoken_but_otp_verified',
-              phone_source: 'spoken',
-              known_customer: true,
-              otp_verified: true,
-              reason: 'the caller proved possession of this number with a code in the last 24h',
-              tenant_id: args.tenant_id,
-              call_id: args.call_id ?? null,
-            },
-            'IDENTIFY GATE: allowed — spoken number, but OTP-verified. Loading account.'
-          );
-        } else {
-          app.log.info(
-            {
-              event: 'identify_caller_gate',
-              decision: 'ALLOWED_carrier_attested',
-              phone_source: 'caller_id',
-              known_customer: true,
-              otp_verified: false,
-              reason:
-                'the CARRIER gave us this number — the caller supplied nothing and cannot lie about it, so there is nothing to prove',
-              tenant_id: args.tenant_id,
-              call_id: args.call_id ?? null,
-            },
-            'IDENTIFY GATE: allowed — carrier-attested caller ID. Loading account.'
-          );
+        // THE GATE. Known customer, but who says this is them? Contact is
+        // already saved above (writing is not leaking); disclosure is what we
+        // withhold. See callerMayHearCustomerData.
+        const mayDisclose = await callerMayHearCustomerData(client, app, {
+          tenantId: args.tenant_id,
+          phone: normalized,
+          phoneSource: args.phone_source,
+          callId: args.call_id,
+          route: 'identify-caller',
+        });
+        if (!mayDisclose) {
+          return { requiresVerification: true as const };
         }
 
         const prefs = await client.query<{ preferences: Record<string, unknown> }>(
@@ -373,8 +421,27 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
             AND (c.is_deleted IS NULL OR c.is_deleted = false)`,
           [args.tenant_id, normalized]
         );
+        // No such customer — nothing to disclose, so nothing to gate. Answering
+        // "new caller" here is what lets a genuine first-time caller on a
+        // FORWARDED line (no caller-ID, so their number is always 'spoken') get
+        // through without being challenged for a code they have no reason to
+        // expect. Gate only what we would actually reveal — same shape as
+        // identify_caller, which gates after `is_new`.
         if (cust.rows.length === 0) return null;
+
         const customer = cust.rows[0];
+
+        // THE GATE — a real person's name + preferences are below this line, and
+        // the LLM chose the phone number we looked up. See callerMayHearCustomerData.
+        const mayDisclose = await callerMayHearCustomerData(client, app, {
+          tenantId: args.tenant_id,
+          phone: normalized,
+          phoneSource: args.phone_source,
+          callId: args.call_id,
+          route: 'customer-context',
+        });
+        if (!mayDisclose) return 'BLOCKED' as const;
+
         const sums = await client.query<{ summary: string }>(
           `SELECT summary FROM call_summaries
           WHERE customer_id = $1
@@ -385,6 +452,16 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         return { customer, summaries: sums.rows };
       });
 
+      // Blocked, not absent. Say so plainly, and tell the LLM the way forward —
+      // if we pretended "no history found" the agent would confidently treat a
+      // returning customer as a stranger and never think to verify.
+      if (data === 'BLOCKED') {
+        return ok(reply, {
+          requires_verification: true,
+          message:
+            'This number was given verbally and has not been verified on this call. Use send_verification_code, have the caller read the code back, then verify_phone_code before looking them up.',
+        });
+      }
       if (!data) return ok(reply, 'New caller - no history found.');
       return ok(reply, {
         name: data.customer.name || 'Unknown',
@@ -463,9 +540,13 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
   // customer-history — deeper history than customer-context: last ~10
   // appointments (ANY status — past + upcoming, with service/employee/date/
   // status), the saved preferences map, and the last ~3 post-call summaries
-  // from voice_sessions. Phone is server-injected by the agent (session
-  // context, same trust model as my-appointments) so the LLM can never
-  // enumerate another caller's history.
+  // from voice_sessions.
+  //
+  // This used to say the phone was "server-injected by the agent ... so the LLM
+  // can never enumerate another caller's history". That was never a property of
+  // THIS code — the route accepts whatever phone it is handed. It was a promise
+  // about the CALLER (agent/src/tools.ts), enforced nowhere, one prompt change
+  // away from being false. It is enforced here now.
   toolRoute(
     app,
     '/agent-tools/customer-history',
@@ -496,8 +577,20 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
              AND (c.is_deleted IS NULL OR c.is_deleted = false)`,
           [args.tenant_id, normalized]
         );
+        // Unknown number — nothing to reveal, nothing to gate. (See the same
+        // note in customer-context.)
         if (cust.rows.length === 0) return null;
         const customer = cust.rows[0];
+
+        // THE GATE — appointments, preferences and past call summaries follow.
+        const mayDisclose = await callerMayHearCustomerData(client, app, {
+          tenantId: args.tenant_id,
+          phone: normalized,
+          phoneSource: args.phone_source,
+          callId: args.call_id,
+          route: 'customer-history',
+        });
+        if (!mayDisclose) return 'BLOCKED' as const;
 
         const appts = await client.query<{
           start_time: string;
@@ -538,6 +631,13 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         return { customer, appointments: appts.rows, summaries: sums.rows };
       });
 
+      if (data === 'BLOCKED') {
+        return ok(reply, {
+          requires_verification: true,
+          message:
+            'This number was given verbally and has not been verified on this call. Use send_verification_code, have the caller read the code back, then verify_phone_code before looking them up.',
+        });
+      }
       if (!data) return ok(reply, 'New caller - no history found.');
       return ok(reply, {
         name: data.customer.name || 'Unknown',

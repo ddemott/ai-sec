@@ -166,6 +166,12 @@ test('conversation: returning caller is greeted by name (customer-context lookup
     const res = await callAgentTool(request, '/agent-tools/customer-context', {
       tenant_id: freshTenant.tenantId,
       phone,
+      // Carrier-attested caller-ID — the normal inbound call this test models
+      // ("WHEN: every call where caller-ID is present"). The disclosure gate
+      // added 2026-07-13 defaults phone_source to the cautious 'spoken' and
+      // withholds name/preferences until the caller proves possession by SMS
+      // code, so an omitted field here would (correctly) return nothing.
+      phone_source: 'caller_id',
     });
 
     expect(res.status).toBe(200);
@@ -197,6 +203,8 @@ test('conversation: unknown caller returns "new caller" prompt', async ({ reques
   const res = await callAgentTool(request, '/agent-tools/customer-context', {
     tenant_id: freshTenant.tenantId,
     phone,
+    // See the note above — carrier-attested caller-ID, so the gate opens.
+    phone_source: 'caller_id',
   });
 
   expect(res.status).toBe(200);
@@ -556,6 +564,12 @@ test('conversation: a saved preference is recalled by customer-context on the ne
     const ctx = await callAgentTool(request, '/agent-tools/customer-context', {
       tenant_id: freshTenant.tenantId,
       phone,
+      // Carrier-attested caller-ID — the normal inbound call this test models
+      // ("WHEN: every call where caller-ID is present"). The disclosure gate
+      // added 2026-07-13 defaults phone_source to the cautious 'spoken' and
+      // withholds name/preferences until the caller proves possession by SMS
+      // code, so an omitted field here would (correctly) return nothing.
+      phone_source: 'caller_id',
     });
     expect(ctx.status).toBe(200);
     expect(ctx.body.success).toBe(true);

@@ -111,7 +111,9 @@ describe('Fix #14: Token refresh endpoint', () => {
         role: 'owner' as const,
       };
       // Sign with a short expiry so the refreshed expiry is observably later.
-      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30m' });
+      // `typ: 'session'` mirrors generateToken() — the JWT hook rejects any
+      // token that doesn't claim to be a session.
+      const token = jwt.sign({ ...payload, typ: 'session' }, JWT_SECRET, { expiresIn: '30m' });
       const originalDecoded = jwt.decode(token) as { exp: number };
 
       const res = await app.inject({

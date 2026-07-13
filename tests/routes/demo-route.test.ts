@@ -18,6 +18,8 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
 import { registerDemoRoutes, resetDemoRateLimitForTesting } from '../../src/routes/demo';
+import { generateToken as realGenerateToken } from '../../src/middleware';
+import jwt from 'jsonwebtoken';
 import { jsonContentTypeParser } from '../../src/jsonContentTypeParser';
 
 type MockQueryResult = { rows: Record<string, unknown>[]; rowCount?: number };
@@ -44,7 +46,16 @@ function buildApp(queryResponses: MockQueryResult[]): {
     })),
   } as unknown as Pool;
 
-  const generateToken = vi.fn(() => 'mock-jwt-token');
+  // THE REAL MINTER, not a stub.
+  //
+  // This used to be `vi.fn(() => 'mock-jwt-token')`, and the only assertion on it
+  // was `typeof body.token === 'string'`. That test proved the mock works. It
+  // could not, and did not, notice that the route was IGNORING the injected
+  // minter entirely and hand-rolling its own jwt.sign — which then silently
+  // missed the `typ: 'session'` claim and 401'd every real demo user. A stub
+  // here hides precisely the class of bug this route is prone to: the token has
+  // to be a REAL, verifiable session or the demo is dead on arrival.
+  const generateToken = vi.fn(realGenerateToken);
 
   const app = Fastify({ logger: false });
   // Register the REAL production content-type parser, not Fastify's default.
@@ -97,6 +108,25 @@ describe('POST /demo/start', () => {
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body) as Record<string, unknown>;
+
+    // The token must be a REAL, VERIFIABLE SESSION — not merely "a string".
+    //
+    // /demo/start used to sign its own JWT inline (ignoring the injected minter
+    // above), so when session tokens gained a `typ` claim the demo token silently
+    // stopped being one: every authenticated call a demo user made came back 401.
+    // The old assertion — `typeof body.token === 'string'` — passed happily
+    // throughout. These are the assertions that would have failed.
+    const secret = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-production';
+    const decoded = jwt.verify(body.token as string, secret) as Record<string, unknown>;
+    expect(decoded.typ).toBe('session'); // else the auth hook rejects it outright
+    expect(decoded.user_id).toBe('user-uuid-5678');
+    expect(decoded.tenant_id).toBe('demo-uuid-1234');
+    expect(decoded.role).toBe('owner');
+    // And it must expire with the demo, not in 8 hours like a normal login —
+    // the reason the route wanted its own minter in the first place.
+    const ttl = (decoded.exp as number) - (decoded.iat as number);
+    expect(ttl).toBeLessThanOrEqual(60 * 60);
+    expect(ttl).toBeGreaterThan(0);
     expect(body.success).toBe(true);
     expect(typeof body.token).toBe('string');
     expect(body.tenant_id).toBeDefined();

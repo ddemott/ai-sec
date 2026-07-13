@@ -477,7 +477,50 @@ const JWT_SECRET =
   (process.env.NODE_ENV === 'production' ? '' : 'dev-jwt-secret-change-in-production');
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '8h';
 
+/**
+ * No secret → no tokens. Not "tokens signed with an empty key".
+ *
+ * Raised in review on PR #243: with JWT_SECRET unset in production the constant
+ * above resolves to '', and the fear was that jwt.verify('') would accept ANY
+ * token. Measured, not assumed — jsonwebtoken rejects a falsy key outright:
+ *
+ *   jwt.sign(payload, '')  → throws "secretOrPrivateKey must have a value"
+ *   jwt.verify(token, '')  → throws "secret or public key must be provided"
+ *
+ * So it already fails closed, and src/index.ts:77 refuses to BOOT production
+ * without JWT_SECRET, which means '' is unreachable there anyway. The reviewer's
+ * mechanism was wrong.
+ *
+ * The guard stays regardless, for two reasons. Relying on a third-party library's
+ * internal falsy check to enforce our most important security boundary is thin —
+ * a future jsonwebtoken that treats '' as a valid HMAC key would silently turn
+ * every token into a forgeable one. And a comment in selfServiceToken.ts asserted
+ * exactly that behavior as fact (it was wrong, and is now corrected): when the
+ * codebase cannot agree on whether a thing is safe, make it structurally safe and
+ * stop arguing.
+ */
+function assertSecret(): boolean {
+  return typeof JWT_SECRET === 'string' && JWT_SECRET.length > 0;
+}
+
 type JwtPayload = {
+  /**
+   * Token type. A session token is the ONLY kind that may authenticate a
+   * request; see verifyToken.
+   *
+   * Why this claim exists (found 2026-07-13): self-service cancel/reschedule
+   * tokens (src/services/selfServiceToken.ts) are signed with the SAME
+   * JWT_SECRET, and every appointment confirmation SMS puts one in a link. A
+   * bare `jwt.verify(token, JWT_SECRET)` could not tell the two apart, so that
+   * link's token was accepted as a session — and since it carries no `role`,
+   * the old `role ?? 'owner'` default promoted the bearer to OWNER of the
+   * tenant named in the token. `GET /export/tenant-data` then returned every
+   * customer, appointment, transcript and consent record to anyone holding a
+   * cancel link, for 24h, with no password.
+   *
+   * A shared secret is not an identity. The type claim IS the identity.
+   */
+  typ: 'session';
   tenant_id: string;
   user_id: string;
   email: string;
@@ -486,29 +529,64 @@ type JwtPayload = {
 };
 
 /**
- * Sign a session token. Exported so the auth route can mint tokens on
- * login/register; nothing else should need to call this.
+ * Sign a session token. THE ONLY WAY to mint one — if you are about to call
+ * `jwt.sign` with a session-shaped payload somewhere else, use this instead.
  *
- * Tokens issued before the role column landed (no `role` claim) are
- * treated as 'owner' on read so existing sessions don't get downgraded
- * mid-flight. New tokens always carry an explicit role.
+ * That is not style advice. `/demo/start` used to sign its own token inline,
+ * because it needed a short expiry and this function hardcoded JWT_EXPIRY. The
+ * copy then (a) missed the `typ: 'session'` claim the moment it was added, which
+ * would have 401'd every demo user, and (b) fell back to a DIFFERENT dev secret
+ * ('dev-secret' vs 'dev-jwt-secret-change-in-production'), so with no JWT_SECRET
+ * set it signed tokens this very file could never verify. Both bugs existed
+ * because the token shape lived in two places. `expiresIn` is a parameter now,
+ * so there is no longer a reason for a second minter to exist.
+ *
+ * @param expiresIn Optional override (seconds, or an ms-format string like
+ *        "8h"). Defaults to the JWT_EXPIRY env value.
  */
-export function generateToken(payload: {
-  tenant_id: string;
-  user_id: string;
-  email: string;
-  role: UserRole;
-}): string {
+export function generateToken(
+  payload: {
+    tenant_id: string;
+    user_id: string;
+    email: string;
+    role: UserRole;
+  },
+  expiresIn?: string | number
+): string {
   // jsonwebtoken's `expiresIn` is typed as `string | number` in older
   // versions but the runtime accepts ms-format strings like "8h".
   // SignOptions['expiresIn'] is the exact slot we're filling — narrower
   // than bare `any` while still accepting the env-derived string.
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY as jwt.SignOptions['expiresIn'] });
+  if (!assertSecret()) {
+    // Loud, not silent. A token minted with no key is not a weaker token — it is
+    // a forgery waiting to happen, and issuing one would be worse than failing
+    // the login.
+    throw new Error('JWT_SECRET is not configured — refusing to mint a session token');
+  }
+  return jwt.sign({ ...payload, typ: 'session' }, JWT_SECRET, {
+    expiresIn: (expiresIn ?? JWT_EXPIRY) as jwt.SignOptions['expiresIn'],
+  });
 }
 
+/**
+ * Verify a SESSION token. Rejects every other JWT this system signs with the
+ * same secret — see the `typ` note on JwtPayload for what that prevented.
+ *
+ * Fails CLOSED on anything unexpected: a token with no `typ`, the wrong `typ`,
+ * no `user_id`, or no `role` is not a session, whatever else it may be. The
+ * caller must never be able to reach a route by presenting a token minted for
+ * some other purpose.
+ */
 function verifyToken(token: string): JwtPayload | null {
+  // Fail closed BEFORE consulting jsonwebtoken, so the guarantee is ours rather
+  // than a library implementation detail we happen to depend on.
+  if (!assertSecret()) return null;
   try {
-    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET) as Partial<JwtPayload>;
+    if (decoded.typ !== 'session') return null;
+    // A session is a USER. No user_id → not a session, regardless of `typ`.
+    if (!decoded.user_id || !decoded.tenant_id || !decoded.role) return null;
+    return decoded as JwtPayload;
   } catch {
     return null;
   }
@@ -599,6 +677,9 @@ export function registerJwtAuthHook(app: AppFastifyInstance, pool: Pool) {
       }
     }
 
-    (request as AppRequest).auth = { ...decoded, role: decoded.role ?? 'owner' };
+    // No `role ?? 'owner'` fallback. A token that fails to say what it is does
+    // not get to be the most privileged thing we have — verifyToken already
+    // rejects a payload with no role, so this is the honest assignment.
+    (request as AppRequest).auth = { ...decoded };
   });
 }

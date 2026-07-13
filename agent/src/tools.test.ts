@@ -207,6 +207,11 @@ describe('get_customer_context', () => {
     expect(calls[0].body).toEqual({
       tenant_id: TENANT_ID,
       phone: CALLER_PHONE,
+      // The number came from the CARRIER, so the server's disclosure gate has
+      // nothing to prove. Derived from the NUMBER, not the session — see the
+      // spoken case below, which is the same session with a different number.
+      phone_source: 'caller_id',
+      call_id: CALL_ID,
     });
   });
 
@@ -226,6 +231,12 @@ describe('get_customer_context', () => {
     expect(calls[0].body).toEqual({
       tenant_id: TENANT_ID,
       phone: '+16125559999',
+      // 'spoken', NOT 'caller_id' — even though this session HAS a caller-ID.
+      // The model handed us a DIFFERENT number, so the carrier never vouched for
+      // it and the caller must prove possession before we disclose anything.
+      // Trust is a property of the number, not of the call.
+      phone_source: 'spoken',
+      call_id: CALL_ID,
     });
   });
 
@@ -1137,7 +1148,16 @@ describe('get_detailed_customer_history', () => {
     const result = await exec(tools.get_detailed_customer_history, {});
 
     expect(calls[0].path).toBe('/agent-tools/customer-history');
-    expect(calls[0].body).toEqual({ tenant_id: TENANT_ID, phone: CALLER_PHONE });
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: CALLER_PHONE,
+      // This tool has no `phone` parameter, so the LLM cannot substitute a
+      // number — it only ever sends the carrier's. The server no longer takes
+      // that on faith (it gates every disclosure route), but the claim we send
+      // is true.
+      phone_source: 'caller_id',
+      call_id: CALL_ID,
+    });
     expect(result).toContain('Jane Doe');
     expect(result).toContain('preferred_stylist');
   });

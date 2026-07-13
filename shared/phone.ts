@@ -20,7 +20,13 @@ export function normalizePhone(phone: string | undefined | null): string | null 
   return phone.startsWith('+') ? phone : `+${digits}`;
 }
 
-export function isValidPhone(phone: string | undefined | null): boolean {
+/**
+ * Type predicate, not a plain boolean: `if (!isValidPhone(p)) return;` narrows
+ * `p` to `string` for the rest of the block. Same runtime behavior — it just
+ * tells the compiler what the check already proved, so callers stop needing a
+ * cast to pass a validated number on.
+ */
+export function isValidPhone(phone: string | undefined | null): phone is string {
   return normalizePhone(phone) !== null;
 }
 

@@ -59,12 +59,22 @@ export function resetDemoRateLimitForTesting(): void {
 export function registerDemoRoutes(
   app: AppFastifyInstance,
   pool: Pool,
-  _generateToken: (payload: {
-    tenant_id: string;
-    user_id: string;
-    email: string;
-    role: UserRole;
-  }) => string
+  // The real minter, injected. It used to be `_generateToken` — passed in and
+  // deliberately IGNORED, because it could not take a short expiry and a demo
+  // token must die with the demo. So this route hand-rolled its own jwt.sign,
+  // and that copy went on to miss the `typ: 'session'` claim (401ing every demo
+  // user) and to use a different dev-secret fallback than the verifier. The
+  // dependency was here the whole time; it just wasn't usable. It takes an
+  // expiry now, so it is.
+  generateToken: (
+    payload: {
+      tenant_id: string;
+      user_id: string;
+      email: string;
+      role: UserRole;
+    },
+    expiresIn?: string | number
+  ) => string
 ): void {
   // POST /demo/start
   app.post(
@@ -127,21 +137,24 @@ export function registerDemoRoutes(
       await seedDemoTenant(pool, { tenantId, userId });
 
       // Issue a scoped, time-limited JWT. Expiry matches demo_expires_at.
-      // jsonwebtoken accepts expiresIn as seconds (number).
+      //
+      // Through generateToken — NOT a local jwt.sign. This used to sign inline
+      // because generateToken hardcoded JWT_EXPIRY and a demo needs a short life.
+      // That copy carried two bugs: it silently missed the `typ: 'session'` claim
+      // when that landed (401ing every demo user), and it fell back to a
+      // different dev secret than the verifier ('dev-secret' vs
+      // 'dev-jwt-secret-change-in-production'), so with no JWT_SECRET set it
+      // minted tokens the auth hook could never verify. generateToken takes an
+      // expiry now; there is no reason to hand-roll one.
       const ttlSeconds = Math.floor(DEMO_TTL_MINUTES * 60);
-      // generateToken uses the global JWT_EXPIRY env default; we need a
-      // short expiry here. Sign directly with the same secret instead.
-      const jwt = await import('jsonwebtoken');
-      const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
-      const token = jwt.default.sign(
+      const token = generateToken(
         {
           tenant_id: tenantId,
           user_id: userId,
           email: 'demo@quicklubedemo.invalid',
           role: 'owner' as UserRole,
         },
-        JWT_SECRET,
-        { expiresIn: ttlSeconds }
+        ttlSeconds
       );
 
       return reply.send({

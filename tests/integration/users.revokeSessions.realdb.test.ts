@@ -58,7 +58,12 @@ function backdatedToken(payload: {
   role: 'owner' | 'front_desk';
 }): string {
   const nowSec = Math.floor(Date.now() / 1000);
-  return jwt.sign({ ...payload, iat: nowSec - 60, exp: nowSec + 3600 }, JWT_SECRET);
+  // `typ: 'session'` is what generateToken() stamps and what the JWT hook now
+  // REQUIRES — a token without it is not a session and is rejected outright
+  // (that check is what stops a self-service SMS link from authenticating as an
+  // owner; see middleware.ts JwtPayload). We hand-sign here only to backdate
+  // `iat`, so we must reproduce the real claim set faithfully.
+  return jwt.sign({ ...payload, typ: 'session', iat: nowSec - 60, exp: nowSec + 3600 }, JWT_SECRET);
 }
 
 let setup: Client;
