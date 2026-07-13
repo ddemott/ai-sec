@@ -157,8 +157,12 @@ describe('wrapToolExecute — onCall observability', () => {
   });
 
   it('the log carries what the model was HANDED — the gap where a hallucination lives', async () => {
-    // WHY: knowing a tool ran is not enough. To catch "the tool said X and the
-    //      agent said Y", the log must carry the RESULT the model received.
+    // WHO: whoever is diagnosing a call where the agent said something untrue.
+    // WHAT: the log must carry the RESULT the model received, not just the tool name.
+    // WHEN: every tool call.
+    // WHERE: wrapToolExecute → onCall.resultPreview.
+    // WHY: knowing a tool RAN is not enough. To catch "the tool said X and the agent
+    //      then said Y" — the 2026-07-13 failure — you need X.
     let preview: string | undefined;
     const wrapped = wrapToolExecute('get_available_slots', async () => ({ slots: ['3:00 PM'] }), {
       onCall: (info) => {
@@ -169,6 +173,46 @@ describe('wrapToolExecute — onCall observability', () => {
     await wrapped({} as never, {} as never);
 
     expect(preview).toContain('3:00 PM');
+  });
+
+  it('SECURITY: a customer name / phone / code is REDACTED before it reaches the log', async () => {
+    // WHO: every customer whose data passes through a tool result.
+    // WHAT: the preview must carry the SHAPE of the result, never its contents.
+    // WHEN: every tool call — this logs at INFO, on every call, to centralised logs.
+    // WHERE: wrapToolExecute preview().
+    // WHY: raised in review on #248, and it was right. The first version logged the
+    //      RAW result. Tool results carry a customer's name, phone, preferences and
+    //      history — and a verification flow carries CODES. That would have turned an
+    //      observability feature into a PII leak, in the very PR whose purpose was to
+    //      see more clearly. Diagnostics must not become a second copy of the CRM.
+    //
+    //      The KEY survives ("name" is present) because that is what proves the tool
+    //      RAN — the whole point. The VALUE does not.
+    let preview: string | undefined;
+    const wrapped = wrapToolExecute(
+      'identify_caller',
+      async () => ({
+        name: 'Camille Rousseau',
+        phone: '+16082175303',
+        code: '1234',
+        preferences: { preferred_stylist: 'Maria' },
+      }),
+      { onCall: (info) => void (preview = info.resultPreview) }
+    );
+
+    await wrapped({} as never, {} as never);
+
+    // The values are gone.
+    expect(preview).not.toContain('Camille Rousseau');
+    expect(preview).not.toContain('Maria');
+    expect(preview).not.toContain('6082175303');
+    expect(preview).not.toContain('1234');
+    // The shape survives — "a name came back" is exactly what distinguishes
+    // "the tool ran" from "the model made it up".
+    expect(preview).toContain('name');
+    expect(preview).toContain('[redacted]');
+    // Last 4 kept so a call can still be correlated to a customer.
+    expect(preview).toContain('5303');
   });
 
   it('a THROWING logger can never break the tool contract', async () => {

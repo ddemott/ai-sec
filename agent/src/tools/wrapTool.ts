@@ -66,14 +66,47 @@ export interface WrapToolOptions {
  * signature so it can be dropped onto a FunctionTool.execute in place.
  */
 /**
- * Truncated result preview for the call log. Bounded so a fat payload (a service
- * catalogue, ten slots) can't bloat every log line — we only need enough to see
- * WHAT the model was told, since the whole point is catching the gap between what
- * a tool returned and what the agent then said out loud.
+ * Truncated, REDACTED preview of a tool result, for the call log.
+ *
+ * Raised in review on #248, and it was right: the first version logged the raw
+ * result at INFO on every call. Tool results carry a customer's NAME, their PHONE
+ * NUMBER, their saved preferences and their call history — and a verification
+ * flow carries codes. Shipping that to centralised logs would have turned an
+ * observability feature into a PII leak, in the same PR where the point was to see
+ * more clearly. Diagnostics must not become a second copy of the CRM.
+ *
+ * What we actually need is the SHAPE of what the model was handed — enough to
+ * catch "the tool said X and the agent then said Y" — not the contents. So:
+ *
+ *   - phone numbers          → +1••••••1234 (last 4 only; enough to correlate)
+ *   - anything code-like     → ••••
+ *   - the value of a name/    → redacted, key kept (so you can still see that a
+ *     preference/history key    name WAS returned, which is the thing that
+ *                               distinguishes "tool ran" from "tool never ran")
+ *
+ * Bounded to 200 chars so a fat payload (a service catalogue, ten slots) can't
+ * bloat every line.
  */
 function preview(s: string): string {
   const MAX = 200;
-  return s.length <= MAX ? s : `${s.slice(0, MAX)}…(+${s.length - MAX} chars)`;
+  const redacted = s
+    // Phone numbers, in any shape a tool might return. Keep the last 4: enough to
+    // correlate a call with a customer without storing the number.
+    .replace(/\+?\d[\d\-().\s]{7,}\d/g, (m) => {
+      const d = m.replace(/\D/g, '');
+      return d.length >= 4 ? `+1••••••${d.slice(-4)}` : '••••';
+    })
+    // Verification codes — the one value that must NEVER reach a log.
+    .replace(/("(?:code|verification_code)"\s*:\s*)"[^"]*"/gi, '$1"••••"')
+    // Free-text PII: the KEY stays (so "a name was returned" is still visible —
+    // that is what proves the tool ran), the VALUE goes.
+    .replace(
+      /("(?:name|customer_name|caller_name|history|summary|preferences|message|notes)"\s*:\s*)("(?:[^"\\]|\\.)*"|\{[^}]*\})/gi,
+      '$1"[redacted]"'
+    );
+  return redacted.length <= MAX
+    ? redacted
+    : `${redacted.slice(0, MAX)}…(+${redacted.length - MAX} chars)`;
 }
 
 export function wrapToolExecute<A, O>(
