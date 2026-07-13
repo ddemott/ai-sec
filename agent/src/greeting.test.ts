@@ -108,7 +108,9 @@ describe('buildOpener — tenant-controlled, name-free defaults', () => {
   // otherwise render "Hi, this is ." — a louder failure to a caller than the plain fallback.
   test('whitespace-only fields fall through', () => {
     expect(buildOpener(tenant({ personaName: '   ' }))).toBe('Thanks for calling.');
-    expect(buildOpener(tenant({ firstMessage: '  ', personaName: 'Beth' }))).toBe('Hi, this is Beth.');
+    expect(buildOpener(tenant({ firstMessage: '  ', personaName: 'Beth' }))).toBe(
+      'Hi, this is Beth.'
+    );
   });
 });
 
@@ -130,7 +132,9 @@ describe('composition hygiene', () => {
   // counsel, not to update the expectation.
   test('the DEFAULT wording is pinned: never "recorded", never "training"', () => {
     const d = buildDisclosure('Acme');
-    expect(d).toBe("I'm an AI assistant for Acme, and this call is transcribed for quality and service.");
+    expect(d).toBe(
+      "I'm an AI assistant for Acme, and this call is transcribed for quality and service."
+    );
     expect(d).not.toMatch(/record/i);
     expect(d).not.toMatch(/train/i);
     expect(buildGreeting(tenant())).not.toMatch(/record|train/i);
@@ -163,8 +167,89 @@ describe('resolveDisclosure — tenant override with safe fallback', () => {
   // tenant opener and the closer | WHEN: callDisclosure set | WHERE: buildGreeting composition | WHY:
   // customization changes the words, not the structure — the disclosure stays in its place, once.
   test('a custom disclosure keeps its position and is not duplicated', () => {
-    const g = buildGreeting(tenant({ callDisclosure: 'Heads up: AI here, call is transcribed.', personaName: 'Beth' }));
-    expect(g).toBe('Hi, this is Beth. Heads up: AI here, call is transcribed. How can I help you today?');
+    const g = buildGreeting(
+      tenant({ callDisclosure: 'Heads up: AI here, call is transcribed.', personaName: 'Beth' })
+    );
+    expect(g).toBe(
+      'Hi, this is Beth. Heads up: AI here, call is transcribed. How can I help you today?'
+    );
     expect(g.match(/transcribed/g)).toHaveLength(1);
+  });
+});
+
+/**
+ * REGRESSION — the 2026-07-13 call. The owner's verdict was "sounded very broken",
+ * and he was right: the first thing every caller heard was the assistant saying
+ * the words "curly brace business name", followed by the same question twice.
+ */
+describe('REGRESSION: the greeting must not speak template syntax, or repeat itself', () => {
+  const cfg = {
+    name: 'Thinking Hammer LLC',
+    personaName: null,
+    callDisclosure: null,
+    forwardPhone: null,
+  };
+
+  test('SAD: an unsubstituted {{business_name}} is NEVER spoken', () => {
+    // WHO: every caller to Thinking Hammer.
+    // WHAT: the saved First Message was
+    //       "Hi, thank you for calling {{business_name}}! How can I help you today?"
+    //       and buildOpener returned it VERBATIM.
+    // WHY: the placeholders come from the seeded business templates, where the
+    //      syntax is real — the comms templates (email/SMS) render through
+    //      Handlebars. The spoken greeting does not, and nobody noticed the two
+    //      had different contracts. prompt.ts had substitutePlaceholders the
+    //      whole time; greeting.ts never got it.
+    const greeting = buildGreeting({
+      ...cfg,
+      firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
+    } as never);
+
+    expect(greeting).not.toContain('{{');
+    expect(greeting).not.toContain('}}');
+    expect(greeting).toContain('Thinking Hammer LLC');
+  });
+
+  test('SAD: the same question is not asked twice', () => {
+    // WHY: the owner's First Message already ends with "How can I help you today?"
+    //      and the closer appends it AGAIN — so the assistant asked, disclosed,
+    //      and asked again. The module header claims the opener "no longer carries"
+    //      that question, but that was only ever true of the DEFAULT opener; a
+    //      custom First Message was free to end with it and nothing checked.
+    const greeting = buildGreeting({
+      ...cfg,
+      firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
+    } as never);
+
+    const asks = greeting.toLowerCase().split('how can i help you').length - 1;
+    expect(asks).toBe(1);
+  });
+
+  test('HAPPY: the disclosure still lands BETWEEN the opener and the question', () => {
+    // WHY: the disclosure is the legal clause. Dropping the duplicate question
+    //      must not reorder the greeting so that the disclosure becomes the last
+    //      thing before the caller starts talking — so we strip the question from
+    //      the OPENER and keep the closer, not the reverse.
+    const greeting = buildGreeting({
+      ...cfg,
+      firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
+    } as never);
+
+    const disclosureAt = greeting.toLowerCase().indexOf('ai assistant');
+    const questionAt = greeting.toLowerCase().indexOf('how can i help you');
+    expect(disclosureAt).toBeGreaterThan(-1);
+    expect(questionAt).toBeGreaterThan(disclosureAt);
+  });
+
+  test('SAD: an UNKNOWN placeholder is stripped, never spoken', () => {
+    // WHY: a missing name is survivable; reading punctuation aloud is not. Fail
+    //      silently — the caller hears a slightly plainer sentence, not a bug.
+    const greeting = buildGreeting({
+      ...cfg,
+      firstMessage: 'Welcome to {{nonexistent_thing}}, friend.',
+    } as never);
+
+    expect(greeting).not.toContain('{{');
+    expect(greeting).not.toContain('nonexistent_thing');
   });
 });

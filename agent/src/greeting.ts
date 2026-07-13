@@ -99,9 +99,44 @@ export const CLOSER_WITH_TRANSFER =
  * the closer, after the disclosure, so the caller is not invited to start
  * talking before they have been told what is happening.
  */
+/**
+ * Fill the Handlebars-style placeholders a tenant's First Message may contain,
+ * and strip any we don't recognise.
+ *
+ * WHY (a real call, 2026-07-13): Thinking Hammer's saved First Message was
+ *
+ *     "Hi, thank you for calling {{business_name}}! How can I help you today?"
+ *
+ * and buildOpener returned it VERBATIM. So the very first thing every caller
+ * heard was the assistant saying the words "curly brace business name". The
+ * owner's reaction — "sounded very broken" — was the correct one.
+ *
+ * The placeholders came from the seeded business templates, where that syntax is
+ * real: the comms templates (email/SMS) are rendered through Handlebars. The
+ * spoken greeting is not, and nobody noticed the two had different contracts.
+ *
+ * Two rules, both load-bearing:
+ *   1. SUBSTITUTE what we know ({{business_name}}, {{persona_name}}).
+ *   2. STRIP what we don't. An unknown placeholder must never reach TTS — a
+ *      missing name is survivable, reading punctuation aloud is not. Failing
+ *      silently is right here: the caller hears a slightly plainer sentence
+ *      instead of a bug.
+ */
+export function fillPlaceholders(text: string, config: TenantDisplayConfig): string {
+  return (
+    text
+      .replace(/\{\{\s*business_name\s*\}\}/gi, config.name?.trim() || 'us')
+      .replace(/\{\{\s*persona_name\s*\}\}/gi, config.personaName?.trim() || 'your assistant')
+      // Anything still in braces is unknown — drop it rather than speak it.
+      .replace(/\{\{[^}]*\}\}/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+  );
+}
+
 export function buildOpener(config: TenantDisplayConfig): string {
   const custom = config.firstMessage?.trim();
-  if (custom) return custom;
+  if (custom) return fillPlaceholders(custom, config);
 
   const personaName = config.personaName?.trim();
   return personaName ? `Hi, this is ${personaName}.` : 'Thanks for calling.';
@@ -116,8 +151,30 @@ export function buildOpener(config: TenantDisplayConfig): string {
  * configuration.
  */
 export function buildGreeting(config: TenantDisplayConfig): string {
+  const opener = buildOpener(config);
   const closer = config.forwardPhone?.trim() ? CLOSER_WITH_TRANSFER : CLOSER_NO_TRANSFER;
-  return [buildOpener(config), resolveDisclosure(config), closer]
+
+  // Don't ask the same question twice.
+  //
+  // The 2026-07-13 call opened with: "Hi, thank you for calling {{business_name}}!
+  // How can I help you today? I'm an AI assistant for Thinking Hammer LLC, and
+  // this call is transcribed for quality and service. How can I help you today?"
+  //
+  // The owner's saved First Message already ends with the question, and the closer
+  // appends it again — so the assistant asked it, disclosed, and asked it AGAIN.
+  // The module header even documents the intent ("the opener no longer carries
+  // 'How can I help you today?' — that moved to the closer"), but that was only
+  // ever true of the DEFAULT opener. A custom First Message was free to end with
+  // the same question and nothing checked.
+  //
+  // The disclosure must still land BETWEEN them (it is the legal bit, and it must
+  // not be the last thing before the caller starts talking), so we drop the
+  // question from the OPENER and keep the closer — rather than the reverse.
+  const openerWithoutClosingQuestion = /how can i help you( today)?\s*[?!.]?\s*$/i.test(opener)
+    ? opener.replace(/how can i help you( today)?\s*[?!.]?\s*$/i, '').trim()
+    : opener;
+
+  return [openerWithoutClosingQuestion, resolveDisclosure(config), closer]
     .join(' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
