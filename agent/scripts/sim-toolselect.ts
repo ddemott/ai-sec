@@ -84,9 +84,18 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
   identify_caller: { success: true, result: { saved: true } },
   // The OTP pair must return SUCCESS-shaped results or the full-call case can never
   // reach the booking — the agent would keep retrying verification forever.
+  // Mirrors the REAL route response (agentTools/identity.ts send-verification-code:
+  // ok(reply, { sent, phone, message })). A stub that drifts from the real contract
+  // teaches the model a shape it will never actually see — and this eval's whole
+  // value is that it replays the REAL prompt against the REAL schemas, so a fake
+  // result shape would quietly hollow that out.
   send_verification_code: {
     success: true,
-    result: { sent: true, message: 'I just sent you a text with a short code.' },
+    result: {
+      sent: true,
+      phone: '+16082175303',
+      message: 'I just sent you a text with a short code. Read it back to me when it arrives.',
+    },
   },
   verify_phone_code: { success: true, result: { verified: true, phone: '+16082175303' } },
   get_service_catalog: {
