@@ -124,6 +124,31 @@ export default defineAgent({
         // Identity is the handle the SIP transfer (cold REFER) targets — capture
         // it now so transfer_call can hand the live leg off to a human.
         participantIdentity = sipParticipant.identity;
+
+        // DIAGNOSTIC (2026-07-12): log the SIP attribute KEYS the carrier actually
+        // sent, plus whether the one we key caller-ID off is among them.
+        //
+        // Why this exists: on the 2026-07-12 call the caller dialed the number
+        // DIRECTLY, yet caller_phone landed NULL — so the agent asked a caller who
+        // had a perfectly good caller ID to read out her own number. We could not
+        // tell from the data whether (a) Telnyx/LiveKit never sent
+        // `sip.phoneNumber`, or (b) one of our own guards nulled it. `sip.callID`
+        // DID arrive (the call is in the Calls tab), so the attribute bag was
+        // present — which makes (a) a real possibility, not a stretch.
+        //
+        // Keys only, never values: an attribute bag can carry PII and this line
+        // runs on every call. The presence flags are what disambiguate; the values
+        // would tell us nothing extra.
+        log.info(
+          {
+            event: 'sip_attributes_received',
+            attribute_keys: Object.keys(participantAttributes ?? {}).sort(),
+            has_sip_phone_number: Boolean(participantAttributes?.['sip.phoneNumber']),
+            has_sip_from: Boolean(participantAttributes?.['sip.from']),
+            has_sip_call_id: Boolean(participantAttributes?.['sip.callID']),
+          },
+          'SIP participant attributes — what the carrier actually sent'
+        );
       }
     } catch {
       // Non-fatal — we can still greet without a caller phone
@@ -534,6 +559,13 @@ export default defineAgent({
         // prompt gains a "Customer preferences" section + save tool guidance.
         savePreferencesEnabled: tenantConfig.savePreferencesEnabled,
         preferencesInstructions: tenantConfig.preferencesInstructions,
+        // 2026-07-12: the shop's real opening hours + booking horizon, so the
+        // agent LEADS with them ("we're open weekdays one to five — what day
+        // works?") instead of asking an open question against a calendar the
+        // caller cannot see. NULL = nobody scheduled; the prompt then omits the
+        // section and the agent must not claim to be open.
+        businessHours: tenantConfig.businessHours,
+        bookableThrough: tenantConfig.bookableThrough,
         // 2026-07-12: the caller's prefetched CRM record (name + saved
         // preferences + recent calls). NULL = unknown/blocked caller, or the
         // lookup missed its deadline — the prompt then tells the model to fetch.
@@ -551,6 +583,25 @@ export default defineAgent({
       //    `entry`, kill the job, and leave the caller in dead air. The fallback
       //    speaks a short message so the call degrades to "sorry" instead of
       //    silence. (2026-05-21 — closes the gap-1 outer-throw dead-air path.)
+      // Realtime + no-barge-in is a CONTRADICTION we cannot honor. OpenAI's
+      // speech-to-speech owns barge-in server-side, and LiveKit's plugin rejects
+      // allowInterruptions:false on generateReply (it left the session deaf after
+      // the greeting the last time it was tried). So under Realtime the caller CAN
+      // cut the agent off, including mid-disclosure, no matter what ALLOW_BARGE_IN
+      // says. Say so loudly rather than let the operator believe the greeting is
+      // protected when it isn't — that belief is exactly what the 2026-07-12 call
+      // cost us.
+      if (config.ENABLE_REALTIME && !config.ALLOW_BARGE_IN) {
+        callLog.warn(
+          {
+            event: 'barge_in_setting_ignored',
+            enable_realtime: true,
+            allow_barge_in: false,
+          },
+          'ENABLE_REALTIME=true IGNORES ALLOW_BARGE_IN=false — the caller CAN interrupt the agent, including the AI disclosure. Turn ENABLE_REALTIME off to get an uninterruptible greeting.'
+        );
+      }
+
       try {
         const session = config.ENABLE_REALTIME
           ? new voice.AgentSession({
@@ -584,18 +635,49 @@ export default defineAgent({
                 voice: toOpenAIVoice(tenantConfig.ttsVoice),
                 speed: tenantConfig.ttsSpeed ?? 1.0,
               }),
-              // Don't let a short backchannel ("hello?", "ok") during the TTS gap
-              // cancel/discard __PERSONA_NAME__'s in-flight reply (the failure in the trace:
-              // a 1-word turn pre-empted the generation, orphaning the tool output).
               turnHandling: {
                 interruption: {
+                  // HALF-DUPLEX BY DEFAULT (product decision 2026-07-12, after a real
+                  // call). The caller CANNOT cut the agent off — every utterance plays
+                  // to completion.
+                  //
+                  // Why: barge-in is what makes the conversation script combinatorially
+                  // hard. A caller who talks over a half-delivered sentence leaves the
+                  // agent reasoning about a state it never finished reaching ("did she
+                  // hear the times I offered? did she hear the disclosure?"), so every
+                  // reply needs an "interrupted mid-way" branch and there is no end to
+                  // them. And the AI-identity disclosure is a COMPLIANCE line: if the
+                  // caller talks over it, we legally did not say it. On the 2026-07-12
+                  // call the greeting was cut off mid-disclosure ("...I'm an AI") and
+                  // the agent then composed a SECOND, different greeting — the caller
+                  // heard two openings, neither complete.
+                  //
+                  // The accepted cost: a caller cannot cut off a long reply. Mitigated
+                  // by keeping replies to 1–2 sentences (the prompt mandates it) and
+                  // offering ~2 slots at a time, not six.
+                  enabled: config.ALLOW_BARGE_IN,
+                  // KEEP what she says while the agent is talking. LiveKit's default is
+                  // TRUE — it DISCARDS buffered audio whenever the agent is
+                  // uninterruptible — which would mean "I changed my mind" spoken over a
+                  // reply is silently thrown away and she has to say it twice. Instead we
+                  // buffer it and answer it as the next turn: she can't derail a sentence
+                  // mid-way, but nothing she says is lost.
+                  //
+                  // The GREETING is the deliberate exception — see the say() below, which
+                  // calls session.clearUserTurn() once the opener finishes. Nothing said
+                  // over a fixed script is actionable, and keeping it is what turned her
+                  // "Bye." into a phantom turn that produced the second greeting.
+                  discardAudioIfUninterruptible: false,
+
+                  // Everything below governs barge-in only when ALLOW_BARGE_IN=true
+                  // restores it; it is inert in the default half-duplex mode. Kept
+                  // because the tuning was hard-won and we want it back verbatim if the
+                  // no-interruption experiment is reversed.
+                  //
                   // 'adaptive' = LiveKit's CNN barge-in model: it decides whether to
                   // yield the turn from the ACOUSTICS of the overlapping speech, not
                   // from a raw VAD/duration threshold — so a brief "hello?"/backchannel
-                  // during the TTS gap no longer cancels the in-flight reply. Default-on
-                  // for LiveKit Cloud + Node ≥1.2.0 + VAD (we have silero); set
-                  // explicitly so intent survives a self-host path. Requires a
-                  // non-realtime LLM + aligned-transcript STT (Deepgram qualifies).
+                  // during the TTS gap no longer cancels the in-flight reply.
                   mode: 'adaptive',
                   // minWords is the EFFECTIVE lever when STT is on: a verified LiveKit
                   // maintainer note says STT-detected speech bypasses minDuration, so
@@ -897,7 +979,26 @@ export default defineAgent({
                 instructions: `Greet the caller now by speaking this exact opening line verbatim, then wait for their reply:\n\n${greeting}`,
               });
             } else {
-              await session.say(greeting, { allowInterruptions: false });
+              // Uninterruptible: the opener carries the AI-identity + transcription
+              // disclosure, which is a COMPLIANCE line. If the caller talks over it,
+              // we legally did not say it. allowInterruptions:false here is belt-and-
+              // braces on top of the session-level interruption.enabled:false — this
+              // one utterance must survive even if barge-in is ever re-enabled.
+              const opener = session.say(greeting, { allowInterruptions: false });
+              await opener.waitForPlayout();
+
+              // Drop whatever the caller said OVER the greeting.
+              //
+              // The session keeps buffered audio by default (discardAudioIfUninterruptible
+              // = false, above) so nothing a caller says mid-reply is ever lost. The
+              // greeting is the ONE place we don't want that: it is a fixed script where
+              // nothing the caller says is actionable, and keeping it is exactly what
+              // broke the 2026-07-12 call — she made a noise over the opener, it landed
+              // as a turn ("Bye."), and the model answered it by composing a SECOND,
+              // different greeting. The caller heard two openings, neither complete.
+              //
+              // After this line, everything she says is buffered and answered in order.
+              session.clearUserTurn();
             }
           } catch (e) {
             callLog.error(

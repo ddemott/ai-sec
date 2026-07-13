@@ -85,6 +85,36 @@ const envSchema = z.object({
     .optional()
     .transform((v) => (v?.trim() ? v.trim() : 'shimmer')),
 
+  // Barge-in. When false (the DEFAULT), the caller CANNOT cut the agent off:
+  // every agent utterance plays to completion. Their speech is not lost — STT
+  // still transcribes it and it becomes the next turn once the agent finishes.
+  //
+  // WHY off by default (product decision 2026-07-12, after a real call):
+  // barge-in is what makes the conversation script combinatorially hard. A caller
+  // who talks over the agent cancels a half-delivered sentence, and the agent must
+  // then reason about a state it never finished reaching — "did she hear the times
+  // I offered? did she hear the disclosure?" — so every reply needs a branch for
+  // "interrupted mid-way" and there is no end to them. Worse, the AI-identity
+  // disclosure is a COMPLIANCE line: if a caller talks over it, we legally did not
+  // say it. On the 2026-07-12 call the greeting was cut off mid-disclosure
+  // ("...I'm an AI") and the agent then composed a SECOND, different greeting.
+  //
+  // The cost is real and accepted: a caller cannot cut off a long reply. Mitigated
+  // by keeping replies short (the prompt already mandates 1–2 sentences) and by
+  // offering ~2 slots at a time, not six.
+  //
+  // Set ALLOW_BARGE_IN=true to restore interruptions (they are then governed by
+  // turnHandling.interruption: adaptive mode, minWords 2, false-interruption
+  // resume — see index.ts).
+  //
+  // NOT HONORED IN REALTIME MODE: OpenAI's speech-to-speech owns barge-in
+  // server-side and LiveKit's plugin rejects allowInterruptions:false. Realtime +
+  // ALLOW_BARGE_IN=false is a contradiction; index.ts logs a warning.
+  ALLOW_BARGE_IN: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });
 
