@@ -9,13 +9,26 @@
  */
 import { z } from 'zod';
 
-// ── SMS OTP config — decided 2026-04-23 ────────────────────────────────
-// 6-digit code (industry-standard), 10-min TTL (don't rush callers who are
-// slow with their phones), max 5 verify attempts per code, rate-limit 3
-// sends per phone per hour + 100 per tenant per day to prevent spam.
-export const CODE_DIGITS = 6;
+// ── SMS OTP config — decided 2026-04-23, revised 2026-07-13 ────────────
+// 4-digit code, 10-min TTL (don't rush callers who are slow with their phones),
+// max 3 verify attempts per code, rate-limit 3 sends per phone per hour + 100
+// per tenant per day.
+//
+// WHY 4 AND NOT 6 (2026-07-13): the code is read back ALOUD, mid-call, by someone
+// who just heard it on a phone. Six digits is a memory tax on the caller for a
+// threat model that doesn't warrant it — this gate protects "don't tell a stranger
+// Camille's stylist", not a bank balance. Four digits is a PIN, and people are very
+// good at PINs.
+//
+// The math, honestly: 4 digits = 10,000 combinations. At 3 attempts per code and 3
+// codes per phone per hour, a guesser gets 9 tries an hour → 0.09%. Sustained brute
+// force would take hundreds of phone calls AND would text the victim's real handset
+// on every single attempt — they would be buried in codes and would report it long
+// before it worked. Attempts were tightened 5 → 3 to buy back what the shorter code
+// gives away.
+export const CODE_DIGITS = 4;
 export const CODE_TTL_MINUTES = 10;
-export const MAX_VERIFY_ATTEMPTS = 5;
+export const MAX_VERIFY_ATTEMPTS = 3;
 export const RATE_LIMIT_PER_PHONE_PER_HOUR = 3;
 export const RATE_LIMIT_PER_TENANT_PER_DAY = 100;
 
@@ -139,6 +152,24 @@ export const IdentifyCallerSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
   name: z.string().min(1).max(200).optional(),
+  // WHO IS ASSERTING THIS NUMBER? (2026-07-13 — closes a data leak.)
+  //
+  //   'caller_id' → the CARRIER attested it. The phone network vouches that the
+  //                 call originated from this handset. Trustworthy.
+  //   'spoken'    → the CALLER said it out loud, because we had no caller ID
+  //                 (forwarded line, or blocked). It is a CLAIM, not a fact.
+  //
+  // The route reveals a returning customer's NAME, PREFERENCES and HISTORY. For a
+  // 'spoken' number that is a data leak: anyone who guesses (or knows) Camille's
+  // phone number could ring the forwarded line, claim it, and be told her name,
+  // her stylist, and what she last had done. So a 'spoken' number reveals NOTHING
+  // until it has passed OTP verification — the contact is still saved (writing is
+  // not leaking), but returning_customer comes back false and no personal data
+  // rides along.
+  //
+  // Defaults to 'spoken' — the SAFE assumption. A caller that forgets to say where
+  // the number came from gets the cautious treatment, never the leaky one.
+  phone_source: z.enum(['caller_id', 'spoken']).optional().default('spoken'),
   // When present, link the captured number + customer onto this call's
   // voice_sessions row so the Calls tab shows the verbally-collected number
   // (forwarded-line calls start with caller_phone null).

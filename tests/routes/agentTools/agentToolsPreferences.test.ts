@@ -267,18 +267,19 @@ describe('save-customer-preference → get_customer_context round-trip (real DB)
     expect(prefs.standing_request).toBe(longValue.trim());
   });
 
-  it("HAPPY: identify-caller on a KNOWN number returns that caller's preferences (the forwarded-line path)", async () => {
-    // WHO: a regular whose call arrives via the shop's forwarded published line,
-    //       so the agent has NO caller ID and the session-start prefetch skipped.
-    // WHAT: they say their number out loud → identify_caller → the number matches
-    //        an existing customer → their saved preferences come back in the SAME
-    //        response, no second tool call needed.
-    // WHERE: /agent-tools/identify-caller, the (xmax = 0) "was this an INSERT or
-    //        an ON CONFLICT UPDATE" branch — which is exactly the kind of thing a
-    //        mock cannot prove, hence this real-DB test.
-    // WHY: forwarded lines are the DEFAULT for small businesses keeping their
-    //       published number. Without this, every one of their regulars is a
-    //       stranger for the entire call.
+  it('SECURITY REGRESSION: the forwarded-line path no longer leaks preferences on an UNVERIFIED number', async () => {
+    // THIS TEST USED TO ASSERT THE OPPOSITE, and that was the bug.
+    //
+    // Written 2026-07-12, it pinned the behavior "a caller on a forwarded line says a
+    // number we know → hand back their name, preferences and history." That IS the
+    // data leak: on a forwarded line there is no caller ID, so the number is only ever
+    // a CLAIM. A stranger who knows Camille's number could ring the shop, say it, and
+    // be told her name and her stylist.
+    //
+    // The recall itself is right and stays — it is what makes a forwarded-line regular
+    // feel recognized. What was missing is that the caller must PROVE the number is
+    // theirs first (4-digit code, read back live). See the "must prove itself" suite
+    // below, including the case where verification succeeds and everything unlocks.
     await post('/agent-tools/save-customer-preference', {
       tenant_id: tenantId,
       phone: CUSTOMER_PHONE_RAW,
@@ -288,17 +289,17 @@ describe('save-customer-preference → get_customer_context round-trip (real DB)
 
     const res = await post('/agent-tools/identify-caller', {
       tenant_id: tenantId,
-      phone: CUSTOMER_PHONE_RAW, // the number they just read out — already ours
+      phone: CUSTOMER_PHONE_RAW, // the number they SPOKE — unproven
       name: 'Returning Reba',
     });
 
     expect(res.statusCode).toBe(200);
     const result = res.json().result;
-    expect(result.saved).toBe(true);
-    expect(result.returning_customer).toBe(true);
-    expect(result.preferences).toEqual({ preferred_stylist: 'Maria' });
+    expect(result.saved).toBe(true); // contact still saved — writing is not leaking
+    expect(result.returning_customer).toBe(false); // but nothing is revealed
+    expect(result.requires_verification).toBe(true);
+    expect(result.preferences).toBeUndefined();
   });
-
   it('SAD: identify-caller on a NEW number reports returning_customer:false (no false familiarity)', async () => {
     // WHY: the xmax=0 branch must actually distinguish INSERT from UPDATE against
     //      real Postgres. If it got this backwards, the agent would greet every
@@ -482,5 +483,120 @@ describe('voice-session-start → -end against the real DB functions', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true, result: { ended: false } });
+  });
+});
+
+describe('identify-caller — a SPOKEN number must prove itself before we reveal anything', () => {
+  it('SECURITY: an unverified spoken number gets NO name, NO preferences, NO history', async () => {
+    // WHO: anyone. That is the point.
+    // WHAT: on a forwarded/blocked call we have no caller ID, so the number is
+    //        whatever the caller SAYS it is. It is a claim, not a fact.
+    // WHY: without this gate, a stranger who knows (or guesses) a customer's phone
+    //       number rings the forwarded line, says it, and the AI answers "Welcome
+    //       back, Camille — still seeing Maria for your balayage?" They have just
+    //       been handed her name, her stylist and her service history, and the only
+    //       "credential" they supplied is a number they made up.
+    //
+    //       This is a data leak, and it was introduced on 2026-07-12 by the very
+    //       feature that makes forwarded-line preference recall work. The fix is not
+    //       to remove the recall — it is to make the caller PROVE the number is
+    //       theirs (4-digit code, read back on the live call) before we say a word.
+    await post('/agent-tools/save-customer-preference', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      key: 'preferred_stylist',
+      value: 'Maria',
+    });
+
+    const res = await post('/agent-tools/identify-caller', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      name: 'Definitely Not Reba',
+      phone_source: 'spoken', // ← the caller SAID this number. Unproven.
+    });
+
+    expect(res.statusCode).toBe(200);
+    const result = res.json().result;
+
+    // The contact is still saved — writing is not leaking.
+    expect(result.saved).toBe(true);
+    // But NOTHING about her comes back.
+    expect(result.returning_customer).toBe(false);
+    expect(result.requires_verification).toBe(true);
+    expect(result.name).toBeUndefined(); // not even a hint of who she is
+    expect(result.preferences).toBeUndefined();
+    expect(result.history).toBeUndefined();
+    // And the "verify first" message must not name her either — "Welcome back,
+    // Camille, just verify" would ALREADY have leaked her name.
+    expect(JSON.stringify(result)).not.toMatch(/Reba/i);
+  });
+
+  it('SECURITY: the DEFAULT (no phone_source given) is the safe one', async () => {
+    // A caller that forgets to declare where the number came from must get the
+    // CAUTIOUS treatment, never the leaky one. Failing open here would mean one
+    // forgotten parameter re-opens the leak silently.
+    const res = await post('/agent-tools/identify-caller', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      // phone_source omitted entirely
+    });
+
+    expect(res.json().result.returning_customer).toBe(false);
+    expect(res.json().result.requires_verification).toBe(true);
+  });
+
+  it('HAPPY: a CARRIER-ATTESTED number (caller ID) is trusted — no verification needed', async () => {
+    // WHY: when the phone network hands us the number, the caller supplied nothing.
+    //       They cannot lie about it, so there is nothing to prove. Forcing OTP on a
+    //       normal direct call would tax every honest customer to stop an attack
+    //       that cannot happen on that path.
+    await post('/agent-tools/save-customer-preference', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      key: 'preferred_stylist',
+      value: 'Maria',
+    });
+
+    const res = await post('/agent-tools/identify-caller', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      name: 'Returning Reba',
+      phone_source: 'caller_id', // ← the carrier said so
+    });
+
+    const result = res.json().result;
+    expect(result.returning_customer).toBe(true);
+    expect(result.preferences).toEqual({ preferred_stylist: 'Maria' });
+  });
+
+  it('HAPPY: once the spoken number is VERIFIED, everything unlocks', async () => {
+    // The whole point of the gate is that it OPENS. Prove possession, get your
+    // account — which is exactly what a returning caller on a forwarded line needs.
+    await post('/agent-tools/save-customer-preference', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      key: 'preferred_stylist',
+      value: 'Maria',
+    });
+
+    // Simulate a completed OTP: verified within the last 24h.
+    await setup.query(
+      `INSERT INTO phone_verifications (tenant_id, phone, code_hash, expires_at, verified_at)
+       VALUES ($1, $2, 'x', now() + interval '10 minutes', now())`,
+      [tenantId, CUSTOMER_PHONE_E164]
+    );
+
+    const res = await post('/agent-tools/identify-caller', {
+      tenant_id: tenantId,
+      phone: CUSTOMER_PHONE_RAW,
+      phone_source: 'spoken', // still spoken — but now PROVEN
+    });
+
+    const result = res.json().result;
+    expect(result.returning_customer).toBe(true);
+    expect(result.name).toBe('Returning Reba');
+    expect(result.preferences).toEqual({ preferred_stylist: 'Maria' });
+
+    await setup.query(`DELETE FROM phone_verifications WHERE tenant_id = $1`, [tenantId]);
   });
 });

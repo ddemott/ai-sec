@@ -984,6 +984,10 @@ describe('identify_caller', () => {
       tenant_id: TENANT_ID,
       phone: CALLER_PHONE,
       name: 'Dale DeMott',
+      // The session HAS a caller-ID, so the number is CARRIER-ATTESTED. The backend
+      // will load this caller's preferences without demanding OTP — the caller
+      // supplied nothing and cannot lie about it. (2026-07-13)
+      phone_source: 'caller_id',
       call_id: CALL_ID,
     });
   });
@@ -1005,6 +1009,11 @@ describe('identify_caller', () => {
       tenant_id: TENANT_ID,
       phone: '+16125551234',
       name: 'Jane Doe',
+      // SPOKEN, not caller_id — even though this session HAS a caller-ID. The caller
+      // gave us a DIFFERENT number, and a number a caller speaks is a claim we cannot
+      // verify. Tagging it 'caller_id' because the session happened to have one would
+      // let anyone unlock any account by simply reciting its phone number.
+      phone_source: 'spoken',
       call_id: CALL_ID,
     });
   });
@@ -1097,7 +1106,7 @@ describe('page_owner_via_sms', () => {
       reason: 'angry customer about to leave',
     });
 
-    expect(result).toContain("text-capable number");
+    expect(result).toContain('text-capable number');
     expect(ctx.ownerPaged).toBeUndefined();
     expect(calls).toHaveLength(1);
   });
@@ -1171,7 +1180,7 @@ describe('send_self_service_link', () => {
     });
   });
 
-  it('HAPPY: appointment_id omitted → backend targets the caller\'s next upcoming appointment', async () => {
+  it("HAPPY: appointment_id omitted → backend targets the caller's next upcoming appointment", async () => {
     // WHO: caller with a single upcoming appointment ("text me the link").
     // WHAT: no appointment_id in the body — the backend defaults to the next
     //        upcoming appointment under the caller's phone.
@@ -1207,8 +1216,7 @@ describe('send_self_service_link', () => {
     const { client } = makeClient([
       {
         ok: false,
-        error:
-          "This number hasn't agreed to receive texts from us, so I can't send the link.",
+        error: "This number hasn't agreed to receive texts from us, so I can't send the link.",
       },
     ]);
     const tools = buildTools(makeCtx(), client);
