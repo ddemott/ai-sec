@@ -594,7 +594,7 @@ export function buildTools(
 
     send_verification_code: llm.tool({
       description:
-        'Send a 6-digit SMS verification code to the given phone. Use when a booking tool rejected for "I\'ll need a good phone number" and the caller has provided one verbally. Returns a message string to read VERBATIM to the caller.',
+        'Send a 4-digit SMS verification code to the given phone. Use when a booking tool rejected for "I\'ll need a good phone number" and the caller has provided one verbally. Returns a message string to read VERBATIM to the caller.',
       parameters: {
         type: 'object',
         properties: {
@@ -618,7 +618,7 @@ export function buildTools(
 
     verify_phone_code: llm.tool({
       description:
-        'Verify a 6-digit code the caller just spoke back. On success the phone is trusted and the original booking can proceed. On failure the response tells you whether to ask again, resend, or pivot to taking a message.',
+        'Verify a 4-digit code the caller just spoke back. On success the phone is trusted and the original booking can proceed. On failure the response tells you whether to ask again, resend, or pivot to taking a message.',
       parameters: {
         type: 'object',
         properties: {
@@ -628,7 +628,7 @@ export function buildTools(
           },
           code: {
             type: 'string',
-            description: 'The 6-digit code the caller read back. Digits only.',
+            description: 'The 4-digit code the caller read back. Digits only.',
             pattern: '^\\d+$',
           },
         },
@@ -647,7 +647,7 @@ export function buildTools(
 
     identify_caller: llm.tool({
       description:
-        "Save or update the caller's contact record (phone + name). Call this as soon as the caller gives you their name and number — even if they're not booking. Pass the phone number the caller gave you verbally; it falls back to the caller-ID phone only when you have not collected one. Keeps the address book current without duplicating records. IMPORTANT: if that number turns out to be one we already have, the response comes back with returning_customer:true plus their saved preferences and recent history — USE it (greet them by name, offer their usual). That is how you recognize a regular on a forwarded or blocked-ID call, where you had no caller ID to look them up with at the start.",
+        "Save or update the caller's contact record, and look them up. Call this as soon as you have their number — you do not need their name first. Keeps the address book current without duplicating records.\n\nIf the number is one we already have, the response may come back with returning_customer:true plus their NAME, saved preferences and recent history — USE it (greet them by name, offer their usual). You then do NOT need to ask their name: you have it. Confirm it instead ('I have you as Camille — still right?') rather than asking them to repeat it; a name you read from the record is more reliable than one heard over a phone line.\n\nIf it returns requires_verification:true, the number was one THEY SPOKE (we had no caller ID), so we cannot trust it yet and will tell you nothing about the account. Send them a code (send_verification_code) and verify it (verify_phone_code) BEFORE calling this again — never greet them by name or mention any account until it is verified.",
       parameters: {
         type: 'object',
         properties: {
@@ -669,15 +669,35 @@ export function buildTools(
         if (!contactPhone) {
           return 'No phone number available — ask the caller for their number, then save the contact.';
         }
+        // WHERE DID THIS NUMBER COME FROM? This decides whether the backend will
+        // reveal the caller's name, preferences and history — or demand OTP first.
+        //
+        //   ctx.callerPhone set  → the CARRIER gave us the number. Trustworthy.
+        //   ctx.callerPhone null → we had no caller ID (forwarded line / blocked),
+        //                          so any number here is one the CALLER SPOKE. It is
+        //                          a claim, and anyone can claim anyone's number.
+        //
+        // Sending 'spoken' when unsure is the safe failure: worst case the caller
+        // does an extra 20-second verification. Sending 'caller_id' when unsure
+        // hands a stranger someone else's name and history.
+        // phone_source describes THE NUMBER WE ARE SENDING — not the session's mood.
+        //
+        // A caller can have a perfectly good caller-ID and still give us a DIFFERENT
+        // number ("actually, use my mobile"). That number is SPOKEN: they said it, we
+        // cannot verify it, and it must not unlock someone else's account. Only the
+        // number the CARRIER handed us is carrier-attested.
+        //
+        // Caught by a test that passed a spoken phone on a session that had caller-ID
+        // — the first version of this line said 'caller_id' and would have trusted it.
+        const usingCarrierNumber =
+          Boolean(ctx.callerPhone) && (!args.phone || args.phone === ctx.callerPhone);
+        const phoneSource = usingCarrierNumber ? 'caller_id' : 'spoken';
         const res = await client.call('/agent-tools/identify-caller', {
           tenant_id: ctx.tenantId,
-          phone: contactPhone,
+          phone: args.phone ?? ctx.callerPhone,
           name: args.name,
-          // Link the verbally-captured number to THIS call so the Calls tab row +
-          // detail show it (forwarded-line calls start with caller_phone null).
-          // Truthy check (not ?? ) so an empty-string callId is omitted rather
-          // than sent — the backend's call_id is min(1) and would 400 on ''.
-          call_id: ctx.callId || undefined,
+          phone_source: phoneSource,
+          call_id: ctx.callId ?? undefined,
         });
         return formatResponse(res);
       },

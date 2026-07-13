@@ -131,13 +131,24 @@ async function processBatch(): Promise<number> {
 export async function cleanupExpiredDemoTenants(poolOverride?: Pool): Promise<void> {
   try {
     const pool = poolOverride ?? getPool();
+    // SOFT delete (2026-07-13). This runs EVERY 60 SECONDS in production, and a
+    // cascading DELETE here races the fire-and-forget reminder seeding of any live
+    // booking: the cascade takes FK locks appointments → tenants, the seeding INSERT
+    // takes them tenants → appointments, and Postgres kills one side at random. That
+    // is a real production deadlock on a 60-second timer. An UPDATE takes no cascade
+    // locks.
+    //
+    // The rows still exist; a maintenance-window purge can reclaim them whenever we
+    // want. Nothing reads them: createWithTenantClient treats a soft-deleted tenant
+    // as 404, so an expired demo cannot answer a call, book, or bill.
     const res = await pool.query(
-      `DELETE FROM tenants
-       WHERE is_demo = true AND demo_expires_at < NOW()
+      `UPDATE tenants
+          SET is_deleted = true, deleted_at = now()
+        WHERE is_demo = true AND demo_expires_at < NOW() AND is_deleted = false
        RETURNING tenant_id`
     );
     if ((res.rowCount ?? 0) > 0) {
-      console.log(`🧹 Removed ${res.rowCount} expired demo tenant(s)`);
+      console.log(`🧹 Soft-deleted ${res.rowCount} expired demo tenant(s)`);
     }
   } catch (err) {
     console.error('❌ Demo tenant cleanup error:', err);

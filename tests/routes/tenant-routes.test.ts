@@ -21,12 +21,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { registerTenantRoutes } from '../../src/routes/tenants';
-import {
-  createMockClient,
-  createMockPool,
-  type MockClient,
-  type MockResponse,
-} from '../mock';
+import { createMockClient, createMockPool, type MockClient, type MockResponse } from '../mock';
 
 // Real v4 UUIDs — Zod schemas in the route handler reject pattern fillers.
 const TENANT_ID_A = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -107,7 +102,8 @@ beforeEach(() => {
 describe('DELETE /tenants/:id — happy paths', () => {
   it('HAPPY: deletes the tenant when the row exists and returns success', async () => {
     // WHO: super-admin removing a churned customer's tenant
-    // WHAT: route runs `DELETE FROM tenants WHERE tenant_id = $1 RETURNING tenant_id`,
+    // WHAT: route runs a SOFT delete — `UPDATE tenants SET is_deleted = true` —
+    //        NOT a cascading DELETE (changed 2026-07-13; see below),
     //       sees rowCount=1 via assertRowAffected, returns { success: true }
     // WHEN: confirm-by-name dialog has resolved + admin confirmed delete
     // WHERE: src/routes/tenants.ts → app.delete('/tenants/:id', ...)
@@ -123,8 +119,19 @@ describe('DELETE /tenants/:id — happy paths', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true });
     expect(queries).toHaveLength(1);
-    expect(queries[0].text).toContain('DELETE FROM tenants');
-    expect(queries[0].params).toEqual([TENANT_ID_A]);
+    // SOFT delete, not hard. A cascading DELETE here obliterated an entire business
+    // — every appointment, customer, call recording, transcript and consent record —
+    // irreversibly, from one super-admin call with no undo. It also deadlocked
+    // against fire-and-forget reminder seeding (PR #242). Hard deletion is now a
+    // deliberate maintenance-window operation (scripts/purge-soft-deleted.ts);
+    // nothing in the running application performs one.
+    expect(queries[0].text).toContain('UPDATE tenants');
+    expect(queries[0].text).toContain('is_deleted = true');
+    expect(queries[0].text).not.toContain('DELETE FROM tenants');
+    // Second param is deleted_by — the soft delete records WHO destroyed the
+    // business, which a hard DELETE could never tell you after the fact.
+    expect(queries[0].params?.[0]).toBe(TENANT_ID_A);
+    expect(queries[0].params).toHaveLength(2);
   });
 });
 

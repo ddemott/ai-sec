@@ -23,6 +23,34 @@ export type WithTenantClient = <T>(
   fn: (client: PoolClient) => Promise<T>
 ) => Promise<T>;
 
+/**
+ * Names that are not names. A caller who hasn't said who they are yet gets one of
+ * these as a stand-in, and every one of them must be OVERWRITABLE the moment a real
+ * name arrives.
+ *
+ * THE BUG THIS FIXES (a real call, 2026-07-12): the write-guard below already knew
+ * 'Caller' was junk — it refused to write it over a real name — but the UPDATE's
+ * WHERE clause only overwrote NULL / '' / 'Valued Customer'. It had never been told
+ * 'Caller' was a placeholder too. So a customer stored as 'Caller' could NEVER be
+ * corrected: the real name arrived, the UPDATE matched zero rows, and the placeholder
+ * became permanent.
+ *
+ * Camille called, gave her name, corrected the agent twice, and is still in the CRM
+ * as "Caller". Every future call would have greeted her by it — and now that the
+ * preference prefetch loads her record on turn one, it would have done so
+ * confidently, forever.
+ *
+ * ONE list, used by BOTH the write-guard and the overwrite-clause, so they cannot
+ * drift apart again. That drift IS the bug.
+ */
+const PLACEHOLDER_NAMES = ['Valued Customer', 'Caller', 'Unknown'] as const;
+
+function isPlaceholderName(name: string | null | undefined): boolean {
+  return (
+    !name?.trim() || PLACEHOLDER_NAMES.includes(name.trim() as (typeof PLACEHOLDER_NAMES)[number])
+  );
+}
+
 export async function getOrCreateCustomerByPhone(
   withTenantClient: WithTenantClient,
   tenantId: string,
@@ -38,13 +66,15 @@ export async function getOrCreateCustomerByPhone(
     );
     if (existing.rows.length > 0) {
       const customerId = existing.rows[0].customer_id;
-      // Update name if the new one is more complete than what's stored.
-      if (name && name !== 'Valued Customer' && name !== 'Caller') {
+      // A real name always beats a placeholder — including one we stored ourselves
+      // on an earlier turn of THIS call, which is the common case: the agent books
+      // (or tries to) before the caller has said who they are.
+      if (!isPlaceholderName(name)) {
         await client.query(
           `UPDATE customers SET name = $1
            WHERE customer_id = $2
-             AND (name IS NULL OR name = '' OR name = 'Valued Customer')`,
-          [name, customerId]
+             AND (name IS NULL OR name = '' OR name = ANY($3::text[]))`,
+          [name, customerId, PLACEHOLDER_NAMES]
         );
       }
       return customerId;

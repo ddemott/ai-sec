@@ -258,8 +258,44 @@ export async function seedBookingScenario(
  * appointments, service_employee, service_resource, knowledge_base
  * docs, integrations, etc. So one DELETE removes all of the test's residue.
  */
-export async function cleanTenantData(pool: Pool, tenantId: string): Promise<void> {
-  await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenantId]);
+export async function cleanTenantData(
+  pool: Pool,
+  tenantId: string,
+  maxAttempts = 5
+): Promise<void> {
+  // RETRY ON DEADLOCK (40P01). This is not defensive padding — it fixes a real,
+  // reproducible AB-BA lock cycle that failed CI roughly one run in two and read
+  // exactly like flake (PR #242, run 29220656800):
+  //
+  //   Booking routes seed reminders FIRE-AND-FORGET:
+  //       void scheduleRemindersForAppointment(...)
+  //   so the INSERT into reminder_schedules is STILL RUNNING after the HTTP
+  //   response returned and the spec has moved on to teardown.
+  //
+  //   That INSERT takes FK locks:  tenants ──▶ appointments
+  //   This cascading DELETE takes: appointments ──▶ tenants
+  //
+  //   Opposite order. Each waits on what the other holds; Postgres kills one AT
+  //   RANDOM. When it picks the DELETE, teardown explodes. The randomness IS the
+  //   "flake". Proved deterministically in
+  //   tests/regression/tenantDeleteDeadlock.realdb.test.ts.
+  //
+  // Retry is the correct remedy, not a workaround: a deadlock is a transient
+  // scheduling accident, not a logic error. One transaction is killed precisely
+  // so the other can make progress, and the killed statement is perfectly valid
+  // the instant it is retried. Postgres's own docs say applications should be
+  // prepared to retry transactions aborted by deadlock.
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenantId]);
+      return;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code !== '40P01' || attempt === maxAttempts) throw err;
+      // Back off so the racing fire-and-forget insert can finish and release.
+      await new Promise((r) => setTimeout(r, 50 * attempt));
+    }
+  }
 }
 
 /**

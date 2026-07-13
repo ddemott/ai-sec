@@ -23,7 +23,7 @@ import { registerAgentToolRoutes } from '../../../src/routes/agentTools';
 // Hoisted before imports — intercepts all sendSms calls inside agentTools.ts
 vi.mock('../../../src/services/telnyxSms', () => ({
   sendSms: vi.fn(async () => ({ ok: true })),
-  generateVerificationCode: vi.fn(() => '123456'),
+  generateVerificationCode: vi.fn(() => '1234'),
 }));
 
 import * as telnyxSms from '../../../src/services/telnyxSms';

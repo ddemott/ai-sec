@@ -351,6 +351,11 @@ describe('agentTools /tenant-config', () => {
       forwarded_from_phone: null,
       // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
       call_disclosure: null,
+      // 2026-07-12: hours derived from who is actually scheduled. Null here because
+      // the mock pool returns no shift rows — and null is exactly right: a shop with
+      // nobody scheduled has no hours to state, and the agent must NOT invent any.
+      business_hours: null,
+      bookable_through: null,
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -412,6 +417,11 @@ describe('agentTools /tenant-config', () => {
       forwarded_from_phone: null,
       // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
       call_disclosure: null,
+      // 2026-07-12: hours derived from who is actually scheduled. Null here because
+      // the mock pool returns no shift rows — and null is exactly right: a shop with
+      // nobody scheduled has no hours to state, and the agent must NOT invent any.
+      business_hours: null,
+      bookable_through: null,
     });
   });
 
@@ -641,30 +651,21 @@ describe('agentTools /identify-caller', () => {
     expect(queries[1].params).toEqual([TENANT_ID, 'SCL_abc', '+13128651186', 'cust-1']);
   });
 
-  it('HAPPY: a forwarded-line caller whose spoken number is ALREADY ours gets their preferences back in the same call', async () => {
-    // WHO: a regular calling the shop's published line, which forwards into the
-    //       assistant. The SIP caller-ID is the FORWARDING number, so both guards
-    //       in agent/src/index.ts null it — the agent has NO caller ID.
-    // WHAT: the session-start prefetch (agent/src/customerContext.ts) therefore
-    //        skipped, and the caller's real number only exists once they say it.
-    //        identify_caller is that moment — so when the number matches a
-    //        customer we already have, this route returns their saved preferences
-    //        and history right here, in the same round-trip.
-    // WHEN: mid-call, as soon as the caller reads out their number.
-    // WHY: without this, a forwarded-line regular is a stranger for the whole
-    //       call. The only other route to their preferences is hoping the model
-    //       independently calls get_customer_context afterwards — the exact
-    //       "hope the LLM fetches" weakness that made preferences write-only in
-    //       the first place. Forwarded lines are the DEFAULT for small businesses
-    //       that keep their published number, so this is the common case, not an
-    //       edge case.
+  it('SECURITY: a SPOKEN number that is already ours reveals NOTHING until OTP-verified', async () => {
+    // WHO: anyone who knows (or guesses) a customer's phone number.
+    // WHAT: on a forwarded/blocked call there is no caller-ID, so the number is
+    //        whatever the caller SAYS. This test used to assert we hand back her
+    //        name, preferences and history on that basis alone — which is a data
+    //        leak dressed up as a feature (introduced 2026-07-12, closed 2026-07-13).
+    // WHY: the gate must default CLOSED. Note this request omits phone_source
+    //       entirely, so it falls back to 'spoken' — a forgotten parameter must not
+    //       silently re-open the leak.
     const { app, queries } = buildApp({
       queryResponses: [
-        // is_new:false → the ON CONFLICT branch fired: we already had this number.
+        // is_new:false → we DO know this number...
         { rows: [{ customer_id: 'cust-9', is_new: false, name: 'Reba' }] },
-        { rows: [], rowCount: 1 }, // UPDATE voice_sessions backfill
-        { rows: [{ preferences: { preferred_stylist: 'Maria', last_service: 'balayage' } }] },
-        { rows: [{ summary: 'Booked a cut, asked about color pricing' }] },
+        { rows: [], rowCount: 1 }, // voice_sessions backfill
+        { rows: [], rowCount: 0 }, // ...but NO verified phone_verifications row
       ],
     });
     const res = await post(app, '/agent-tools/identify-caller', {
@@ -672,18 +673,23 @@ describe('agentTools /identify-caller', () => {
       phone: '3128651186',
       name: 'Reba',
       call_id: 'SCL_fwd',
+      // phone_source deliberately omitted → defaults to the SAFE value
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().result).toEqual({
-      saved: true,
-      returning_customer: true,
-      name: 'Reba',
-      preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
-      history: 'Booked a cut, asked about color pricing',
-    });
-    expect(queries).toHaveLength(4);
-    expect(queries[2].text).toContain('customer_preferences');
+    const result = res.json().result;
+    expect(result.saved).toBe(true); // contact still saved — writing is not leaking
+    expect(result.returning_customer).toBe(false);
+    expect(result.requires_verification).toBe(true);
+    expect(result.name).toBeUndefined();
+    expect(result.preferences).toBeUndefined();
+    expect(result.history).toBeUndefined();
+    // The "please verify" message must not name her either — that would leak the
+    // very thing we are protecting.
+    expect(JSON.stringify(result)).not.toMatch(/Reba/i);
+    // It checked phone_verifications and stopped there: no preference/history reads.
+    expect(queries[2].text).toContain('phone_verifications');
+    expect(queries.some((q) => q.text.includes('customer_preferences'))).toBe(false);
   });
 
   it('SAD: a returning row with NOTHING saved on it reports returning_customer:false', async () => {
@@ -2272,7 +2278,7 @@ describe('agentTools /send-verification-code', () => {
     expect(smsBody.from).toBe('+15550001000');
     expect(smsBody.to).toBe('+15551234567');
     expect(smsBody.text).toMatch(
-      /Your SecretaryHQ verification code is: \d{6}\. Reply STOP to opt out\./
+      /Your SecretaryHQ verification code is: \d{4}\. Reply STOP to opt out\./
     );
   });
 
@@ -2433,9 +2439,10 @@ describe('agentTools /send-verification-code', () => {
 });
 
 describe('agentTools /verify-phone-code', () => {
-  // Real bcrypt hash of "123456" — precomputed so tests don't wait on hash
-  // cost. Matches bcrypt.hash('123456', 10) output format.
-  const CODE = '123456';
+  // 4-DIGIT code (2026-07-13 — shortened from 6; it is read back ALOUD on a live
+  // call, and a PIN is what people are good at). Hashed with real bcrypt so the
+  // verify path is exercised, not stubbed.
+  const CODE = '1234';
   let CODE_HASH: string;
 
   beforeEach(async () => {
@@ -2482,7 +2489,7 @@ describe('agentTools /verify-phone-code', () => {
     // WHO: Caller misheard or misread the code (happens — "3" vs "E",
     //       "9" vs "nine" phonetic ambiguity)
     // WHAT: Route increments attempt_count and tells the agent how many
-    //        tries remain so it can say "you have 4 tries left"
+    //        tries remain so it can say "you have 1 try left" (max is now 3)
     const futureExpiry = new Date(Date.now() + 5 * 60_000).toISOString();
     const { app, queries } = buildApp({
       queryResponses: [
@@ -2502,11 +2509,13 @@ describe('agentTools /verify-phone-code', () => {
     const res = await post(app, '/agent-tools/verify-phone-code', {
       tenant_id: TENANT_ID,
       phone: '5551234567',
-      code: '999999',
+      code: '9999',
     });
     expect(res.json().success).toBe(false);
     // attempt_count was 1, now 2, max is 5 → 3 remaining
-    expect(res.json().error).toContain('3 tries left');
+    // MAX_VERIFY_ATTEMPTS is now 3 (was 5). Fixture starts at attempt_count=1, so this
+    // failed try is the 2nd → exactly 1 left. Singular copy, deliberately.
+    expect(res.json().error).toContain('1 try left');
     expect(queries[1].text).toContain('attempt_count = attempt_count + 1');
   });
 
@@ -2857,7 +2866,7 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     // WHY: a swallowed failure here = empty Calls tab + zero diagnosability;
     //       the fix makes the sad path loud.
     const pgErr = Object.assign(new Error('null value in column "caller_phone"'), {
-      code: '23502',
+      code: '2350',
       column: 'caller_phone',
       table: 'voice_sessions',
     });

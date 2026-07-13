@@ -480,7 +480,10 @@ test("conversation: service-catalog returns the tenant's services for the LLM to
   // to the LLM as JSON.
   const wrapped = res.body.result as { services: Array<Record<string, unknown>> };
   expect(Array.isArray(wrapped.services)).toBe(true);
-  expect(wrapped.services.length, 'at least the Tire Rotation service seeded in beforeAll').toBeGreaterThan(0);
+  expect(
+    wrapped.services.length,
+    'at least the Tire Rotation service seeded in beforeAll'
+  ).toBeGreaterThan(0);
   // Pin the service we seeded and the contract shape.
   const rotation = wrapped.services.find((s) =>
     String(s.name).toLowerCase().includes('tire rotation')
@@ -599,7 +602,8 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
   // focus on the agent-side wire contract for the verify response.
   const tag = uniqueTag();
   const phone = `+1555${String(Math.floor(Math.random() * 10000000)).padStart(7, '0')}`;
-  const knownCode = '654321';
+  // 4-digit code (2026-07-13 — shortened from 6; it is read back ALOUD mid-call).
+  const knownCode = '6543';
   let pvId: string | null = null;
 
   try {
@@ -617,7 +621,7 @@ test('conversation: anonymous caller verifies via OTP before booking', async ({ 
     const wrong = await callAgentTool(request, '/agent-tools/verify-phone-code', {
       tenant_id: freshTenant.tenantId,
       phone,
-      code: '000000',
+      code: '0000',
     });
     expect(wrong.status).toBe(200);
     expect(wrong.body.success).toBe(false);

@@ -75,8 +75,18 @@ export function registerAuthRoutes(
         // NULLS LAST: created_at is nullable, and a bare ASC sorts NULLs FIRST in
         // Postgres — a legacy row with no created_at would otherwise win the
         // tie-break. user_id ASC is the final deterministic fallback.
+        // Soft-deleted tenants cannot log in (2026-07-13). A user whose business was
+        // deleted must not get a token: every tenant-scoped route would 404 anyway
+        // (createWithTenantClient treats a soft-deleted tenant as not-found), so a
+        // session would be a broken shell — and issuing a JWT for a business that no
+        // longer exists is exactly the "zombie tenant" failure soft-delete has to
+        // avoid. Fail at the door, with the same generic 401 as a bad password, so the
+        // response never reveals whether an account existed.
         const res = await client.query(
-          'SELECT * FROM users WHERE email = $1 ORDER BY created_at ASC NULLS LAST, user_id ASC',
+          `SELECT u.* FROM users u
+             JOIN tenants t ON t.tenant_id = u.tenant_id AND t.is_deleted = false
+            WHERE u.email = $1
+            ORDER BY u.created_at ASC NULLS LAST, u.user_id ASC`,
           [email]
         );
         if (res.rows.length > 1) {

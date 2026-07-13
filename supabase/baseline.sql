@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict SICCfGt5PwVTJhUPgVicpuRcxcyl95MZ6Y7gYmBZvAs2PPAyLK4jc78gigtexwB
+\restrict W0CrmIXbbdGXY9n4M3FZMMbBp59JnS8qS3ptFdO4V5O8cxSgHw6YTey5XQG4pGR
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3362,7 +3362,10 @@ CREATE TABLE public.tenants (
     persona_name text,
     call_disclosure text,
     call_disclosure_attested_at timestamp with time zone,
-    call_disclosure_attested_by uuid
+    call_disclosure_attested_by uuid,
+    is_deleted boolean DEFAULT false NOT NULL,
+    deleted_at timestamp with time zone,
+    deleted_by uuid
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3471,6 +3474,20 @@ COMMENT ON COLUMN public.tenants.call_disclosure_attested_at IS 'When the owner 
 --
 
 COMMENT ON COLUMN public.tenants.call_disclosure_attested_by IS 'user_id of the owner who attested the custom call_disclosure. FK users(user_id).';
+
+
+--
+-- Name: COLUMN tenants.is_deleted; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.is_deleted IS 'Soft delete. The application NEVER hard-deletes a tenant: DELETE /tenants/:id and the demo-expiry reaper both flip this flag instead. A hard DELETE (which cascades away every appointment, customer, call recording and consent record) is now a deliberate maintenance-window operation only. Also removes the AB-BA deadlock between the cascade and fire-and-forget reminder seeding. 2026-07-13.';
+
+
+--
+-- Name: COLUMN tenants.deleted_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.deleted_at IS 'When the tenant was soft-deleted. The (unbuilt, opt-in) purge worker would use this as the retention clock.';
 
 
 --
@@ -4468,6 +4485,20 @@ CREATE INDEX tenant_docs_embedding_idx ON public.tenant_docs USING hnsw (embeddi
 
 
 --
+-- Name: tenants_deleted_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tenants_deleted_at_idx ON public.tenants USING btree (deleted_at) WHERE (is_deleted = true);
+
+
+--
+-- Name: tenants_live_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tenants_live_idx ON public.tenants USING btree (tenant_id) WHERE (is_deleted = false);
+
+
+--
 -- Name: appointments appointments_auto_version; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -5029,6 +5060,14 @@ ALTER TABLE ONLY public.tenants
 
 ALTER TABLE ONLY public.tenants
     ADD CONSTRAINT tenants_default_service_id_fkey FOREIGN KEY (default_service_id) REFERENCES public.services(service_id) ON DELETE SET NULL;
+
+
+--
+-- Name: tenants tenants_deleted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenants
+    ADD CONSTRAINT tenants_deleted_by_fkey FOREIGN KEY (deleted_by) REFERENCES public.users(user_id) ON DELETE SET NULL;
 
 
 --
@@ -5674,5 +5713,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict SICCfGt5PwVTJhUPgVicpuRcxcyl95MZ6Y7gYmBZvAs2PPAyLK4jc78gigtexwB
+\unrestrict W0CrmIXbbdGXY9n4M3FZMMbBp59JnS8qS3ptFdO4V5O8cxSgHw6YTey5XQG4pGR
 

@@ -1,7 +1,7 @@
 id: auto_bays_v1
-name: "Auto Shop (Service Bays)"
-version: "1.0.0"
-description: "Resource-based scheduling for auto repair shops"
+name: 'Auto Shop (Service Bays)'
+version: '1.0.0'
+description: 'Resource-based scheduling for auto repair shops'
 schema:
   customer:
     attributes:
@@ -24,14 +24,14 @@ schema:
   lead:
     attributes: []
 ai:
-  systemPromptModifier: "You are a helpful service advisor for an auto repair shop. When booking appointments, you are assigning a specific Service Bay (Resource) to the vehicle. Ensure you ask for the vehicle Make and Model."
+  systemPromptModifier: 'You are a helpful service advisor for an auto repair shop. When booking appointments, you are assigning a specific Service Bay (Resource) to the vehicle. Ensure you ask for the vehicle Make and Model.'
   tools: []
 ui:
-  theme: "slate"
+  theme: 'slate'
   terminology:
-    staff: "Service Bay"
-    service: "Repair Service"
-    customer: "Vehicle Owner"
-    appointment: "Service Appointment"
+    staff: 'Service Bay'
+    service: 'Repair Service'
+    customer: 'Vehicle Owner'
+    appointment: 'Service Appointment'
 workflows:
-  booking: "resource_based"
+  booking: 'resource_based'

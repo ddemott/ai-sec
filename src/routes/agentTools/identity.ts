@@ -208,6 +208,81 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         // first-time caller is worse than saying nothing.
         if (!row || row.is_new) return null;
 
+        // ── THE GATE (2026-07-13) ────────────────────────────────────────────
+        // Below this line we hand back a real person's NAME, PREFERENCES and CALL
+        // HISTORY. Who told us this phone number?
+        //
+        //   phone_source = 'caller_id' → the CARRIER attested it. The phone network
+        //     vouches that the call came from this handset. Nothing to prove.
+        //
+        //   phone_source = 'spoken' → the CALLER said it out loud, because we had no
+        //     caller ID (forwarded line, or blocked). It is a CLAIM. Anyone can claim
+        //     any number. Without this gate, a stranger who knows (or guesses)
+        //     Camille's number rings the forwarded line, says it, and is told her
+        //     name, her stylist, and what she last had done. That is a data leak, and
+        //     the caller supplied the only "credential" involved.
+        //
+        // So a spoken number must PROVE possession first: send_verification_code →
+        // the caller reads the 4-digit code back → verify_phone_code. Until then we
+        // still SAVE the contact (writing is not leaking) but reveal nothing.
+        if (args.phone_source !== 'caller_id') {
+          const verified = await client.query(
+            `SELECT 1 FROM phone_verifications
+              WHERE tenant_id = $1 AND phone = $2
+                AND verified_at IS NOT NULL
+                AND verified_at > now() - interval '24 hours'
+              LIMIT 1`,
+            [args.tenant_id, normalized]
+          );
+          if (verified.rowCount === 0) {
+            app.log.info(
+              {
+                event: 'identify_caller_gate',
+                decision: 'BLOCKED_unverified_spoken_number',
+                phone_source: args.phone_source,
+                known_customer: true,
+                otp_verified: false,
+                reason:
+                  'the caller SPOKE this number (no caller-ID), it matches a real customer, but possession is unproven — revealing name/preferences/history here would hand a stranger someone else data',
+                next: 'agent must send_verification_code then verify_phone_code before calling identify_caller again',
+                tenant_id: args.tenant_id,
+                call_id: args.call_id ?? null,
+              },
+              'IDENTIFY GATE: blocked — known customer, but the spoken number is unverified. Revealing nothing.'
+            );
+            // Known customer, unproven caller. Contact saved; nothing revealed.
+            return { requiresVerification: true as const };
+          }
+          app.log.info(
+            {
+              event: 'identify_caller_gate',
+              decision: 'ALLOWED_spoken_but_otp_verified',
+              phone_source: 'spoken',
+              known_customer: true,
+              otp_verified: true,
+              reason: 'the caller proved possession of this number with a code in the last 24h',
+              tenant_id: args.tenant_id,
+              call_id: args.call_id ?? null,
+            },
+            'IDENTIFY GATE: allowed — spoken number, but OTP-verified. Loading account.'
+          );
+        } else {
+          app.log.info(
+            {
+              event: 'identify_caller_gate',
+              decision: 'ALLOWED_carrier_attested',
+              phone_source: 'caller_id',
+              known_customer: true,
+              otp_verified: false,
+              reason:
+                'the CARRIER gave us this number — the caller supplied nothing and cannot lie about it, so there is nothing to prove',
+              tenant_id: args.tenant_id,
+              call_id: args.call_id ?? null,
+            },
+            'IDENTIFY GATE: allowed — carrier-attested caller ID. Loading account.'
+          );
+        }
+
         const prefs = await client.query<{ preferences: Record<string, unknown> }>(
           `SELECT COALESCE(
                     (SELECT jsonb_object_agg(cp.pref_key, cp.pref_value)
@@ -237,6 +312,21 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
       });
 
       if (!context) return ok(reply, { saved: true, returning_customer: false });
+
+      // Known customer, but the number was only CLAIMED and hasn't been proven.
+      // Tell the agent to verify — and tell it NOTHING about who this is. Not the
+      // name, not a hint. "We may know you, prove it" leaks nothing; "Welcome back,
+      // Camille — just verify" would already have leaked her name to a stranger.
+      if ('requiresVerification' in context) {
+        return ok(reply, {
+          saved: true,
+          returning_customer: false,
+          requires_verification: true,
+          message:
+            "Before I can pull up an account for that number, I need to verify it's yours — I'll text a 4-digit code for you to read back.",
+        });
+      }
+
       return ok(reply, {
         saved: true,
         returning_customer: true,
@@ -460,7 +550,7 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
   );
 
   // send_verification_code — used when caller-ID is blocked/garbled/missing
-  // and the caller has verbally provided a phone. Generate a 6-digit code,
+  // and the caller has verbally provided a phone. Generate a 4-digit code,
   // bcrypt-hash it, store with 10-min TTL, SMS it via Telnyx. Rate-limited
   // to prevent this becoming a free SMS-spam relay.
   toolRoute(

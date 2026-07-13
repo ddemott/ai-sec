@@ -101,7 +101,16 @@ async function countTenantRows(tenantId: string): Promise<Record<string, number>
   return counts;
 }
 
-async function tenantExists(tenantId: string): Promise<boolean> {
+/** Is the tenant LIVE — i.e. would any part of the app see it? */
+async function tenantIsLive(tenantId: string): Promise<boolean> {
+  const r = await pool.query('SELECT 1 FROM tenants WHERE tenant_id = $1 AND is_deleted = false', [
+    tenantId,
+  ]);
+  return (r.rowCount ?? 0) > 0;
+}
+
+/** Does the ROW still physically exist (soft-deleted rows do)? */
+async function tenantRowExists(tenantId: string): Promise<boolean> {
   const r = await pool.query('SELECT 1 FROM tenants WHERE tenant_id = $1', [tenantId]);
   return r.rowCount === 1;
 }
@@ -184,26 +193,37 @@ test('cascade: super-admin delete drops the tenant AND all dependent rows across
     // by template); don't require >0 there, but they must drop to 0
     // post-delete if any rows existed.
 
-    expect(await tenantExists(tenant.tenantId), 'tenant must exist before DELETE').toBe(true);
+    expect(await tenantIsLive(tenant.tenantId), 'tenant must be live before DELETE').toBe(true);
 
     const del = await deleteTenantAsSuperAdmin(request, tenant.tenantId);
     expect(del.status, `DELETE must succeed; body=${JSON.stringify(del.body)}`).toBe(200);
     expect(del.body.success).toBe(true);
 
-    // Tenant row itself is gone
-    expect(await tenantExists(tenant.tenantId), 'tenant must be gone after DELETE').toBe(false);
+    // ── THIS TEST INVERTED ON 2026-07-13 ────────────────────────────────────
+    // It used to assert "the tenant row is GONE and every dependent row was
+    // cascaded away." That is exactly what we stopped doing.
+    //
+    // The route now SOFT-deletes. A hard DELETE obliterated an entire business —
+    // every appointment, customer, call recording and consent record — from one
+    // super-admin call, irreversibly, with no undo. It also DEADLOCKED against
+    // fire-and-forget reminder seeding (FK locks in opposite orders; Postgres kills
+    // one at random). Every other entity in this schema was already soft-deleted;
+    // tenants was the outlier, and the most destructive one.
+    //
+    // So the contract is now: INVISIBLE, but INTACT.
+    expect(await tenantIsLive(tenant.tenantId), 'tenant must no longer be LIVE').toBe(false);
+    expect(await tenantRowExists(tenant.tenantId), 'but the row must SURVIVE').toBe(true);
 
-    // FK CASCADE wiped every dependent row. Iterate so any non-zero
-    // count names the offending table in the assertion message —
-    // saves the next debugger ten minutes of guessing.
     const post = await countTenantRows(tenant.tenantId);
     for (const [table, count] of Object.entries(post)) {
-      expect(count, `cascade left ${count} orphan row(s) in '${table}' (pre=${pre[table]})`).toBe(
-        0
-      );
+      expect(
+        count,
+        `soft delete must RETAIN data — '${table}' lost rows (pre=${pre[table]}, post=${count})`
+      ).toBe(pre[table]);
     }
 
-    tenant = null; // tenant is gone; skip the finally cleanup
+    // The destruction still exists — it is just a deliberate maintenance act now
+    // (scripts/purge-soft-deleted.ts). The cascade itself is proven in the next test.
   } finally {
     // Belt-and-suspenders: if anything before the DELETE failed, the
     // tenant still exists and we'd leak its seed rows. cleanTenantData
@@ -214,6 +234,64 @@ test('cascade: super-admin delete drops the tenant AND all dependent rows across
 
 // ────────────────────────────────────────────────────────────────────────────
 // 2. ISOLATION: bystander tenant survives the cascade unchanged
+// ────────────────────────────────────────────────────────────────────────────
+test('purge: a HARD delete still cascades away every dependent row (the maintenance path)', async ({
+  request,
+}) => {
+  // WHO: an operator running scripts/purge-soft-deleted.ts in a maintenance window.
+  // WHAT: the FK CASCADE that the API route no longer triggers.
+  // WHY THIS TEST EXISTS: the route soft-deletes now (2026-07-13), so the cascade
+  //       has no coverage on that path — but the cascade DID NOT GO AWAY. It is what
+  //       the purge relies on to actually reclaim a business's data, and if a future
+  //       migration adds a table with an ON DELETE NO ACTION foreign key, the purge
+  //       would start failing (or worse, leaving orphans) with nothing to catch it.
+  //       Deleting the route's cascade test without replacing it would have silently
+  //       dropped coverage of the only destructive path left in the system.
+  let tenant: RegisteredTenant | null = null;
+  try {
+    tenant = await registerFreshTenant(request);
+    const date = isoDateDaysFromNow(7);
+    const seed = await seedBookingScenario(request, pool, tenant.token, tenant.tenantId, {
+      employees: ['Purge Tech'],
+      resources: ['Purge Bay'],
+      shiftDates: [date],
+    });
+    // An appointment, so audit_log + record_versions trigger rows exist to cascade.
+    await seedAppointment(pool, tenant.tenantId, {
+      resourceId: seed.resourceIds[0],
+      customerId: seed.customerId,
+      employeeId: seed.employeeIds[0],
+      startTime: `${date}T14:00:00.000Z`,
+      endTime: `${date}T14:30:00.000Z`,
+      description: 'purge-test appointment',
+    });
+
+    const tenantId = tenant.tenantId;
+    const pre = await countTenantRows(tenantId);
+    expect(pre.appointments, 'seed must insert an appointment').toBeGreaterThan(0);
+
+    // Soft-delete first, exactly as the app does...
+    const del = await deleteTenantAsSuperAdmin(request, tenantId);
+    expect(del.status).toBe(200);
+    expect(await tenantRowExists(tenantId), 'row survives the soft delete').toBe(true);
+
+    // ...then PURGE it, exactly as the maintenance script does. cleanTenantData is
+    // that same hard DELETE (with the deadlock retry — see PR #242).
+    await cleanTenantData(pool, tenantId);
+
+    expect(await tenantRowExists(tenantId), 'purge must remove the row').toBe(false);
+
+    const post = await countTenantRows(tenantId);
+    for (const [table, count] of Object.entries(post)) {
+      expect(count, `purge left ${count} orphan row(s) in '${table}' (pre=${pre[table]})`).toBe(0);
+    }
+
+    tenant = null; // purged; skip the finally cleanup
+  } finally {
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 test("isolation: deleting one tenant does not touch any other tenant's rows", async ({
   request,
@@ -276,8 +354,13 @@ test("isolation: deleting one tenant does not touch any other tenant's rows", as
     // Delete A. B must be untouched.
     const del = await deleteTenantAsSuperAdmin(request, tenantA.tenantId);
     expect(del.status).toBe(200);
-    expect(await tenantExists(tenantA.tenantId), 'A must be gone').toBe(false);
-    expect(await tenantExists(tenantB.tenantId), 'B must still exist').toBe(true);
+    // A is soft-deleted (2026-07-13): no longer LIVE, but its row survives for the
+    // maintenance purge. B must be completely untouched — that is what this test is
+    // really about, and it matters just as much for an UPDATE as it did for a DELETE:
+    // a mis-scoped `SET is_deleted = true` with no WHERE would retire every business
+    // on the platform at once.
+    expect(await tenantIsLive(tenantA.tenantId), 'A must no longer be live').toBe(false);
+    expect(await tenantIsLive(tenantB.tenantId), 'B must still be live').toBe(true);
 
     const postB = await countTenantRows(tenantB.tenantId);
     for (const [table, count] of Object.entries(postB)) {
@@ -346,8 +429,8 @@ test('authz: a tenant owner cannot delete their own tenant — returns 403, tena
     // somehow only at the response layer (e.g. it sends 403 but lets
     // the handler continue), this would catch it.
     expect(
-      await tenantExists(tenant.tenantId),
-      'tenant must still exist after a rejected delete'
+      await tenantIsLive(tenant.tenantId),
+      'tenant must still be LIVE after a rejected delete — the 403 must fire before any write'
     ).toBe(true);
     const post = await countTenantRows(tenant.tenantId);
     for (const [table, count] of Object.entries(post)) {

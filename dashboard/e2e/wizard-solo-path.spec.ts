@@ -37,6 +37,7 @@
 import { test, expect } from './helpers/test';
 import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
+import { cleanTenantData } from './helpers/fixtures';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
@@ -236,7 +237,7 @@ test.afterAll(async () => {
 async function cleanupTenant(tenantId: string): Promise<void> {
   await pool.query('DELETE FROM service_employee WHERE tenant_id = $1', [tenantId]);
   await pool.query('DELETE FROM service_resource WHERE tenant_id = $1', [tenantId]);
-  await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenantId]);
+  await cleanTenantData(pool, tenantId);
 }
 
 // ────────────────────────────────────────────────────────────────────────────

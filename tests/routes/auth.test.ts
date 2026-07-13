@@ -296,8 +296,14 @@ describe('Auth Routes — Handler-Level', () => {
       // Guard the determinism at the source: the SQL must carry the ORDER BY,
       // else a future edit could regress to arbitrary row order and this test
       // (which only sees the mock's scripted order) would still pass blindly.
-      const loginQuery = queries.find((q) => /FROM users WHERE email/i.test(q.text));
-      expect(loginQuery?.text).toMatch(/ORDER BY created_at ASC NULLS LAST, user_id ASC/i);
+      const loginQuery = queries.find((q) => /FROM users/i.test(q.text));
+      expect(loginQuery?.text).toMatch(/ORDER BY u\.created_at ASC NULLS LAST, u\.user_id ASC/i);
+      // And the login query must EXCLUDE soft-deleted tenants (2026-07-13). A user
+      // whose business was deleted must not get a token: every tenant-scoped route
+      // would 404 anyway, and issuing a JWT for a business that no longer exists is
+      // the zombie-tenant failure soft-delete exists to prevent. Asserted on the SQL
+      // itself, because the mock can't tell us what the DB would have filtered.
+      expect(loginQuery?.text).toMatch(/is_deleted = false/i);
     });
 
     it('returns 400 on invalid email (WHO: client | WHAT: Zod rejects bad email | WHERE: /login validation | WHY: prevents DB query with garbage)', async () => {

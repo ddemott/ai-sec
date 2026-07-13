@@ -67,6 +67,21 @@ export interface PromptContext {
    */
   preferencesInstructions?: string | null;
   /**
+   * The shop's opening hours, already spoken ("Monday to Friday, 1:00 PM to
+   * 5:00 PM"), derived from who is actually on the schedule. NULL when nobody is
+   * scheduled — the agent must then NOT claim to be open.
+   *
+   * Origin (2026-07-12): the agent asked "what day and time were you thinking?"
+   * — an open question against a calendar the caller cannot see. She named a date
+   * in the past, then a date past the end of the schedule, was refused both
+   * times, and gave up after seven minutes. A receptionist would have said "we're
+   * open weekdays one to five" and the impossible answers would never have
+   * happened. Prevention beats recovery.
+   */
+  businessHours?: string | null;
+  /** Last date anyone is scheduled — so the agent can say how far out it books. */
+  bookableThrough?: string | null;
+  /**
    * The caller's CRM record, prefetched at session start (customerContext.ts)
    * when caller ID is available and they're a known customer. Baked into a
    * "# Who you're speaking to" section so the model has their name, saved
@@ -142,11 +157,24 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const hasVerification = has('verification');
   const hasTransfer = has('transfer');
 
+  // THE TWO INTAKE BRANCHES. Whether we already have the caller's number decides the
+  // whole opening of the call, so state it as an instruction, not a fact to infer.
+  //
+  //   HAVE the number (they dialed us directly — the normal case):
+  //     don't ask for it. Get their NAME, save both to the CRM, move on.
+  //   NO number (blocked, or the call was forwarded in through the owner's line, so
+  //   the caller-ID was the forwarding number and we discarded it):
+  //     collect BOTH name and number verbally.
+  //
+  // Origin (2026-07-12): a caller who dialed the number DIRECTLY was asked to read
+  // out her own phone number, because a blanket per-tenant env switch was throwing
+  // away every caller ID before the prompt ever saw one. That switch is gone; this
+  // branch is now driven by whether we genuinely have a number.
   const callerLine = ctx.callerPhone
-    ? `The caller's number is ${ctx.callerPhone} (verified by caller ID).`
+    ? `The caller's number is ${ctx.callerPhone} — you ALREADY HAVE IT (verified by caller ID). Do NOT ask them for it, ever; asking for a number you already have makes you sound like you weren't listening. What you still need is their NAME: ask for it early and naturally ("Can I get your name?"), then call identify_caller(name, phone) with the number above to save them to the address book. Do this even if they never book.`
     : hasVerification
-      ? `The caller's number is NOT available (blocked or withheld caller ID). You MUST collect and verify a phone number before booking any appointment — see the "Phone Verification" section below.`
-      : `The caller's number is NOT available (blocked or withheld caller ID). Ask for a good callback number, read it back to confirm (see the phone-capture rules below), and use that for any booking. If the caller can't give a number, offer to take a message.`;
+      ? `You do NOT have the caller's number (blocked/withheld caller ID, or the call was forwarded in — so the caller-ID was the forwarding line, not theirs). You MUST collect and verify a phone number before booking any appointment. Collect BOTH their name AND a good number verbally, read the number back to confirm, then call identify_caller(name, phone) to save them — see the "Phone Verification" section below.`
+      : `You do NOT have the caller's number (blocked/withheld caller ID, or the call was forwarded in — so the caller-ID was the forwarding line, not theirs). Collect BOTH their name AND a good callback number verbally, read the number back to confirm (see the phone-capture rules below), then call identify_caller(name, phone) to save them to the address book, and use that number for any booking. If they can't give a number, offer to take a message.`;
 
   const trimmedCustom = ctx.customPrompt?.trim();
   const baseIdentity = trimmedCustom
@@ -166,6 +194,23 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   // instructs the agent to save durable facts about returning callers.
   const ownerPrefGuidance = ctx.preferencesInstructions?.trim();
   const preferencesEnabled = ctx.savePreferencesEnabled !== false;
+
+  // The shop's opening hours + booking horizon, so the agent LEADS with them
+  // instead of asking the caller to guess. See PromptContext.businessHours.
+  const hoursSection = ctx.businessHours
+    ? `
+
+# When we're open
+${ctx.businessHours}.${
+        ctx.bookableThrough ? ` You can book appointments through ${ctx.bookableThrough}.` : ''
+      }
+
+Use this BEFORE asking the caller for a day. Say it plainly — "we're open ${ctx.businessHours}" — and then ask what day works for them. A caller cannot see your calendar: if you ask an open "what day and time?" they will name a day you are closed, you will have to refuse them, and they will have to guess again. That is how a two-minute booking becomes a seven-minute failure.
+
+- If they name a day or time OUTSIDE these hours, say so kindly and immediately offer what IS open: "We're closed Saturdays — I have Monday at 1 or Tuesday at 2. Would either work?" Never just say "that's not available" and wait.
+- If they name a date in the PAST, say so plainly ("that date has already passed") and offer the soonest real openings.
+- Never claim to be open outside these hours, and never invent an hour that isn't listed.`
+    : '';
 
   // Known-caller context, prefetched before the greeting (customerContext.ts).
   // Rendered ABOVE the preferences section so "the preferences you already
@@ -222,7 +267,7 @@ ${
     ? `\n- get_company_policy_answer(question) — semantic search the knowledge base for policy/FAQ answers.`
     : '';
   const verificationToolLines = hasVerification
-    ? `\n- send_verification_code(phone) — SMS a 6-digit code for phone verification (OTP flow).\n- verify_phone_code(phone, code) — check a spoken code against the sent one.`
+    ? `\n- send_verification_code(phone) — SMS a 4-digit code for phone verification (OTP flow).\n- verify_phone_code(phone, code) — check a spoken code against the sent one.`
     : '';
   const transferToolLine = hasTransfer
     ? `\n- transfer_call() — connect the live call to a real person (the owner/staff cell). Use when the caller needs a human: a personal call for the owner, an urgent issue you can't handle, or an explicit request to be connected. Tell the caller you're connecting them BEFORE calling it; if it reports it can't transfer, apologize briefly and offer to take a message.`
@@ -291,7 +336,7 @@ For questions about hours, pricing beyond what's in the catalog, return policies
 
 # Today's context
 - Today is ${ctx.currentDate} (${ctx.timezone}).
-- ${callerLine}${knownCustomerSection}
+- ${callerLine}${knownCustomerSection}${hoursSection}
 
 # Available tools
 - get_customer_context(phone) — look up a caller's history and preferences by the phone number they gave you; greets returning customers by name.
@@ -338,7 +383,7 @@ The caller chooses the time — you never do. Their day is built around their li
 
 Required ordering:
 
-1. Ask the caller, politely, what day and time work for THEM. If they haven't said, ask: "What day were you thinking?" then "Morning or afternoon better for you?" Don't assume or impose a time to make them fit a gap in the schedule.
+1. **State the hours, THEN ask.** Never ask a bare open-ended "what day and time were you thinking?" — the caller cannot see your calendar, so an open question invites a day you're closed, and you then have to refuse them. Lead with the hours listed above and ask inside them: "We're open weekdays one to five — what day works for you?" Then, if needed: "Morning or afternoon better for you?" The caller still chooses their time; you are simply not making them guess it. (If no hours are listed above, ask openly — but call get_available_slots before agreeing to anything.)
 2. Call get_available_slots(service, date) FIRST to find what's actually open around the time they asked for. (get_available_slots gives SPOKEN times only — no resource id.)
 3. Propose ONLY times the tool returned, on the 15-minute clock grid (:00, :15, :30, :45 — never :07, :23, :40). The system rejects off-grid times, so any time you say aloud must already be on the grid. Offer a couple and let them pick: "I have 2 or 3:30 with Carlos — which works for you?"
 4. After the caller picks one, book it with **book_with_scheduling(requirements, window, phone, name, requested_start)**. Set **window_from to EXACTLY the time the caller picked** (not earlier) — the tool books the earliest opening at or after window_from, so a window that starts before their pick books them earlier than they asked. When the caller named a specific time, also pass **requested_start = that exact time** so the tool can tell you if the slot ended up different. This is the DEFAULT booking tool: it finds the resource AND assigns a staff member for you, so you never need a resource id.

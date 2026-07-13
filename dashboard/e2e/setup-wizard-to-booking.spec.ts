@@ -51,6 +51,7 @@
 import { test, expect } from './helpers/test';
 import { type APIRequestContext } from '@playwright/test';
 import { Pool } from 'pg';
+import { cleanTenantData } from './helpers/fixtures';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
@@ -301,7 +302,7 @@ test('wizard finalize → fresh tenant can immediately book', async ({ request }
     expect(bookBody.success).toBe(true);
     expect(bookBody.appointment_id, 'route returns the new appointment_id').toBeTruthy();
   } finally {
-    if (tenant) await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenant.tenantId]);
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
@@ -381,7 +382,7 @@ test('skipping expand-weekly leaves tenant with EMPLOYEE_NOT_SCHEDULED on every 
       'error must indicate the employee is not on shift'
     ).toMatch(/shift|not_scheduled|not on shift/);
   } finally {
-    if (tenant) await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenant.tenantId]);
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
 
@@ -437,6 +438,6 @@ test('expand-weekly default produces ~4 weeks of employee_schedule rows', async 
       `latest schedule row should be ~27 days out, got ${daysOut}`
     ).toBeGreaterThanOrEqual(27);
   } finally {
-    if (tenant) await pool.query('DELETE FROM tenants WHERE tenant_id = $1', [tenant.tenantId]);
+    if (tenant) await cleanTenantData(pool, tenant.tenantId);
   }
 });
