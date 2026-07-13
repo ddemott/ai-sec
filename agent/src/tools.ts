@@ -1195,6 +1195,35 @@ export function buildTools(
           },
           `tool ${tool} ${reason} — returned a graceful fallback so the caller is not left in silence`
         ),
+      // EVERY call, happy path included. Grep `event:"tool_call"` with a call_id
+      // to get the exact sequence of tools the model invoked on a call — and,
+      // just as importantly, the ones it DIDN'T.
+      //
+      // On 2026-07-13 the agent told a caller "I just sent you a text with a
+      // verification code" and "I see that 3 PM is taken". Neither happened: no
+      // verification row existed and there were zero appointments that day. It had
+      // narrated tool calls it never made — and because this wrapper only logged
+      // FAILURES, a tool never invoked looked exactly like a tool that worked.
+      // Both silent. The diagnosis took counting rows in six tables and reasoning
+      // backwards.
+      //
+      // You cannot see a hallucinated tool call. You can only see the real ones
+      // and notice what's missing. So log the real ones.
+      onCall: ({ tool, ok, durationMs, resultPreview }) =>
+        getLogger().info(
+          {
+            event: 'tool_call',
+            tool,
+            ok,
+            duration_ms: durationMs,
+            tenant_id: ctx.tenantId,
+            call_id: ctx.callId,
+            // What the model was HANDED. Compare against what it then said out
+            // loud — that gap is where a hallucination lives.
+            result_preview: resultPreview,
+          },
+          `tool_call ${tool} ${ok ? 'ok' : 'FAILED'} in ${durationMs}ms`
+        ),
     });
     result[name] = ft;
   }

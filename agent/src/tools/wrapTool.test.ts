@@ -110,3 +110,78 @@ describe('wrapToolExecute', () => {
     expect(await wrapped({}, {})).toBe('custom hold');
   });
 });
+
+/**
+ * EVERY tool call must be observable — including the ones that succeed.
+ *
+ * WHY (2026-07-13, a real call): the agent told the caller "I just sent you a
+ * text with a verification code" and "I see that 3 PM is taken". Neither was
+ * true — no verification row was ever written, and the calendar was empty that
+ * day. The model had NARRATED TOOL CALLS IT NEVER MADE.
+ *
+ * And we could not see it. This wrapper logged only FAILURES, so a tool the
+ * model never invoked and a tool that ran perfectly looked identical: silent.
+ * Diagnosing it meant counting rows across six tables and reasoning backwards
+ * ("customers is empty, therefore identify_caller was never called").
+ *
+ * A hallucinated tool call is invisible BY CONSTRUCTION unless you log the calls
+ * that really happened — the absence in the log is the evidence. So `onCall`
+ * fires on every invocation, and these tests keep it that way.
+ */
+describe('wrapToolExecute — onCall observability', () => {
+  it('HAPPY: a SUCCESSFUL call is reported (this is the case that was invisible)', async () => {
+    const calls: { tool: string; ok: boolean }[] = [];
+    const wrapped = wrapToolExecute('identify_caller', async () => ({ saved: true }), {
+      onCall: ({ tool, ok }) => calls.push({ tool, ok }),
+    });
+
+    await wrapped({} as never, {} as never);
+
+    expect(calls).toEqual([{ tool: 'identify_caller', ok: true }]);
+  });
+
+  it('SAD: a THROWING call is reported as not-ok (and still returns the fallback)', async () => {
+    const calls: { tool: string; ok: boolean }[] = [];
+    const wrapped = wrapToolExecute(
+      'send_verification_code',
+      async () => {
+        throw new Error('backend 500');
+      },
+      { onCall: ({ tool, ok }) => calls.push({ tool, ok }) }
+    );
+
+    const out = await wrapped({} as never, {} as never);
+
+    expect(calls).toEqual([{ tool: 'send_verification_code', ok: false }]);
+    expect(out).toContain(FALLBACK_MARK); // contract still holds
+  });
+
+  it('the log carries what the model was HANDED — the gap where a hallucination lives', async () => {
+    // WHY: knowing a tool ran is not enough. To catch "the tool said X and the
+    //      agent said Y", the log must carry the RESULT the model received.
+    let preview: string | undefined;
+    const wrapped = wrapToolExecute('get_available_slots', async () => ({ slots: ['3:00 PM'] }), {
+      onCall: (info) => {
+        preview = info.resultPreview;
+      },
+    });
+
+    await wrapped({} as never, {} as never);
+
+    expect(preview).toContain('3:00 PM');
+  });
+
+  it('a THROWING logger can never break the tool contract', async () => {
+    // WHY: diagnostics are best-effort. A logger that throws must not turn a
+    //      graceful fallback back into a rejected promise — that would convert an
+    //      observability feature into a dead-air bug, which is the exact trade
+    //      this whole wrapper exists to prevent.
+    const wrapped = wrapToolExecute('take_message', async () => 'Saved.', {
+      onCall: () => {
+        throw new Error('logger exploded');
+      },
+    });
+
+    await expect(wrapped({} as never, {} as never)).resolves.toBe('Saved.');
+  });
+});
