@@ -743,7 +743,16 @@ test('invite teammate: owner POST /users/invite creates user + reset token', asy
 // Next.js app and require no login — the token is the credential).
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Minimal HS256 JWT signer for E2E tests (matches selfServiceToken.ts dev fallback secret + 24h). No extra deps. */
+/**
+ * Minimal HS256 JWT signer for E2E tests (matches selfServiceToken.ts dev
+ * fallback secret + 24h). No extra deps.
+ *
+ * NOTE: this REIMPLEMENTS the production payload rather than importing
+ * generateSelfServiceToken (the backend isn't importable from the Playwright
+ * process). That duplication is a liability — it silently drifted the moment the
+ * real payload gained a `typ` claim on 2026-07-13, and this spec was the only
+ * thing that noticed. If you change SelfServiceTokenPayload, change it here too.
+ */
 function generateTestSelfServiceToken(
   appointmentId: string,
   tenantId: string,
@@ -753,6 +762,11 @@ function generateTestSelfServiceToken(
   const header = { alg: 'HS256', typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
   const payload = {
+    // The payload `typ` — NOT the JWS header `typ: 'JWT'` above, which is a
+    // different field entirely. This one is what stops a cancel link from being
+    // accepted as a login session (see middleware.ts JwtPayload). Without it the
+    // backend's verifySelfServiceToken rejects the token outright.
+    typ: 'self_service',
     appointment_id: appointmentId,
     tenant_id: tenantId,
     action,
