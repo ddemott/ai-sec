@@ -26,8 +26,23 @@
  * A hold line you have to wait for is not a hold line.
  */
 
-/** Deadline 1 (~2.5s of thinking, no audio): a tool is slow, cover it. */
+/** Deadline 1, and a TOOL IS ACTUALLY RUNNING: name what is happening. */
 export const HOLD_LINE = 'One moment while I check that for you.';
+
+/**
+ * Deadline 1, and NO tool is running — the agent is merely slow to think.
+ *
+ * It must not claim a lookup. On 2026-07-14 the watchdog said "one moment while I
+ * check that for you" SEVEN times on a call whose tools all returned in under 15ms.
+ * Nothing was being checked. The caller asked, twice, "what are you checking?" and
+ * "what am I waiting for?" — because he could tell it was not true.
+ *
+ * This is the same defect as the prompt line I deleted for letting the MODEL claim
+ * work it had not done. I replaced it with a RUNTIME that claimed work IT was not
+ * doing. A machine lying on a timer is still lying. So this line asks for a beat and
+ * asserts nothing.
+ */
+export const THINKING_LINE = 'Just a moment.';
 
 /** Deadline 2 (~4s, still nothing): stop pretending, offer a way out. */
 export const RECOVERY_LINE =
@@ -46,4 +61,4 @@ export const TOOL_FALLBACK_LINE =
  * Every fixed line worth pre-synthesizing per tenant voice, minus the greeting
  * (which is tenant-specific and warmed alongside these at call start).
  */
-export const HOLD_LINES = [HOLD_LINE, RECOVERY_LINE, TOOL_FALLBACK_LINE] as const;
+export const HOLD_LINES = [HOLD_LINE, THINKING_LINE, RECOVERY_LINE, TOOL_FALLBACK_LINE] as const;

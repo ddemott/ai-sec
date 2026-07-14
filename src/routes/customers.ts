@@ -39,18 +39,50 @@ const CustomerCreateSchema = z.object({
   notes: z.string().max(2000).optional().nullable(),
 });
 
-const CustomerUpdateSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  phone: z.string().min(1).max(30).optional(),
-  email: z.string().email().optional().nullable(),
-  first_name: z.string().max(100).optional().nullable(),
-  last_name: z.string().max(100).optional().nullable(),
-  address: z.string().max(500).optional().nullable(),
-  address_line2: z.string().max(500).optional().nullable(),
-  city: z.string().max(100).optional().nullable(),
-  state: z.string().max(100).optional().nullable(),
-  postal_code: z.string().max(20).optional().nullable(),
-  timezone: z.string().max(50).optional().nullable(),
+/**
+ * A BLANK FORM FIELD IS AN EMPTY FIELD, NOT AN INVALID ONE.
+ *
+ * Reported from production 2026-07-14: "tried to update customer name but it failed."
+ * The name was fine. The EMAIL was blank.
+ *
+ * The edit form submits every field it has, so a customer with no email on file sends
+ * `email: ""`. An empty string is neither `undefined` nor `null`, so `.optional()` and
+ * `.nullable()` both let it through to `.email()`, which rejects it — and Zod fails the
+ * WHOLE request. The rename dies because of a field the owner never touched, with an
+ * error about email that they have no way to connect to what they were doing.
+ *
+ * Same trap as the `??` bug in the agent, in a different costume: an empty string is not
+ * "absent", and a UI produces them constantly. `?? ` does not fall through on `""`, and
+ * neither does `.nullable()`.
+ *
+ * So blanks are normalised at the boundary, once, for every optional string: "" (and
+ * whitespace) means "no value", which is what the person clearing a text box meant.
+ * Doing it in the SCHEMA rather than in the handler means it holds for every client —
+ * the dashboard, a future mobile app, a curl — instead of relying on each one to send
+ * exactly the right flavour of nothing.
+ */
+const blankToNull = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? null : v), schema);
+
+/** Same idea for fields that must not be OVERWRITTEN with nothing (phone, name): a
+ *  blank means "I did not change this", not "delete it". */
+const blankToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), schema);
+
+export const CustomerUpdateSchema = z.object({
+  // A blank name/phone is "unchanged", not "wipe it" — the handler preserves the
+  // current value for anything undefined. Sending "" used to 400 the whole request.
+  name: blankToUndefined(z.string().min(1).max(200).optional()),
+  phone: blankToUndefined(z.string().min(1).max(30).optional()),
+  email: blankToNull(z.string().email().optional().nullable()),
+  first_name: blankToNull(z.string().max(100).optional().nullable()),
+  last_name: blankToNull(z.string().max(100).optional().nullable()),
+  address: blankToNull(z.string().max(500).optional().nullable()),
+  address_line2: blankToNull(z.string().max(500).optional().nullable()),
+  city: blankToNull(z.string().max(100).optional().nullable()),
+  state: blankToNull(z.string().max(100).optional().nullable()),
+  postal_code: blankToNull(z.string().max(20).optional().nullable()),
+  timezone: blankToNull(z.string().max(50).optional().nullable()),
   metadata: z.record(z.string(), z.unknown()).optional().nullable(),
   // Top-level convenience field used by CRMView (Internal Notes textarea)
   // and E2E tests. Folded into metadata.notes by the handler below so the

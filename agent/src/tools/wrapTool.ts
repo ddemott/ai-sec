@@ -26,6 +26,7 @@ export const WRAP_TOOL_TIMEOUT_MS = 25_000;
 // cache and speaks with live-TTS latency on the exact path that is already going
 // badly for the caller.
 import { TOOL_FALLBACK_LINE } from '../session/holdLines.js';
+import { toolStarted, toolFinished } from '../session/toolActivity.js';
 
 const DEFAULT_FALLBACK = TOOL_FALLBACK_LINE;
 
@@ -146,6 +147,14 @@ export function wrapToolExecute<A, O>(
   return async (args: A, opts: O): Promise<string> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const startedAt = Date.now();
+    // Mark the tool as IN FLIGHT for the whole of execute(), so the watchdog can
+    // tell "the agent is waiting on a lookup" from "the agent is just slow to
+    // think". Its hold line used to claim a lookup either way — it said "one
+    // moment while I check that for you" SEVEN times on a call whose tools all
+    // returned in under 15ms, and the caller asked, twice, what it was checking.
+    // Wrapping it HERE means every tool is counted by construction, including any
+    // a customer adds later. Released in the finally below, on every path.
+    toolStarted();
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(`tool_timeout:${toolName}`)), timeoutMs);
     });
@@ -185,6 +194,11 @@ export function wrapToolExecute<A, O>(
       reportCall({ tool: toolName, ok: false, durationMs: Date.now() - startedAt });
       return fallback;
     } finally {
+      // EVERY path — success, empty, throw, timeout. A tool that never clears its
+      // in-flight mark would leave the watchdog believing a lookup is running for
+      // the rest of the call, and it would say "let me check that for you" on
+      // every turn until the caller hung up.
+      toolFinished();
       if (timer) clearTimeout(timer);
     }
   };

@@ -58,6 +58,30 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => v !== 'false'),
 
+  // SMS. OFF BY DEFAULT until 10DLC registration lands.
+  //
+  // Not one text this product has ever sent has reached a handset. The number is not
+  // 10DLC-registered, so the carriers drop everything — Telnyx reports success and the
+  // message dies silently (error 40010). communications_history has had zero delivered
+  // rows for the life of the product.
+  //
+  // Meanwhile the agent has been PROMISING texts. On 2026-07-14 it closed a booking
+  // with "You'll receive a text confirmation about your appointment shortly." Nothing
+  // was ever going to arrive. That is the same lie we have spent this entire week
+  // hunting — the agent claiming work that did not happen — except this time the code
+  // agreed with it, and the carrier is the one who says no.
+  //
+  // An agent that CANNOT text must not be ABLE to say it will. So this gates the
+  // record_sms_consent tool AND the prompt's whole texting section: with SMS off, the
+  // model has no tool to text with and is told plainly that it cannot. You cannot
+  // promise what you have no means to do.
+  //
+  // Flip to ENABLE_SMS=true the day the campaign is approved. Nothing else changes.
+  ENABLE_SMS: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+
   // Thinking-sound bed: when "true", a looping keyboard-typing ambiance plays
   // while the agent is in the 'thinking' state and stops the instant it starts
   // speaking — covers the pipeline TTS gap / slow tool with a "receptionist is

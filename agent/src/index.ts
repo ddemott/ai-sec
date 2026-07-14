@@ -38,7 +38,7 @@ import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { toolsForPhase, type CallPhase } from './toolPhases.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
-import { HOLD_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
+import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
 import { attachOutputWatchdog } from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
 import { TranscriptRecorder } from './transcript.js';
@@ -114,7 +114,44 @@ export default defineAgent({
       },
       `ai-sec-agent worker booting — commit ${commit}`
     );
-    proc.userData.vad = await silero.VAD.load();
+    // LET PEOPLE FINISH THEIR SENTENCES.
+    //
+    // We were running Silero's defaults, and its minSilenceDuration is 550ms. Half a
+    // second of silence is not the end of a thought — it is a person RECALLING
+    // something. On the 2026-07-14 call Dale said "I was hoping to speak to him about
+    // a contract that I possibly have from…", paused to bring the company name to
+    // mind, and the agent decided he was done and asked him what the company was. He
+    // had to stop it and say "hey, you didn't get the company name."
+    //
+    // It is worse than an ordinary interruption because BARGE-IN IS OFF by product
+    // decision (ALLOW_BARGE_IN, default false): once the agent starts talking the
+    // caller cannot talk over it. So an early endpoint is unrecoverable — they must
+    // sit and listen to a question they were already answering.
+    //
+    // 900ms costs ~350ms of extra latency before the agent replies. That is a good
+    // trade: a beat of silence reads as "listening"; cutting someone off reads as
+    // "not listening", and it is the single rudest thing a receptionist can do.
+    // Tunable on a real call without a code change.
+    // 1300ms, not 900. And 900 was already up from Silero's 550 default.
+    //
+    // The thing that keeps breaking is PHONE NUMBERS. Nobody says a phone number as
+    // one continuous run of sound — they say it in chunks, with a beat between them:
+    // "eight eight eight … six five six … one one eight two". Those beats are a
+    // SECOND long, easily. At 900ms the endpointer decided the caller was finished
+    // after the area code, and the agent talked over the rest of his own number. He
+    // reported it twice: "you never took my phone number", and "doesn't wait for me to
+    // say my phone number."
+    //
+    // A phone number is the single most important string a receptionist collects, and
+    // it is the one most likely to contain a pause. Bias the whole call toward
+    // patience: 1300ms costs a beat before every reply, and buys us never cutting
+    // someone off mid-number. Being a little slow reads as "listening". Talking over
+    // someone reads as "not listening", and here it is unrecoverable — barge-in is off,
+    // so once the agent starts, the caller must sit and listen to the end.
+    const minSilenceMs = Number(process.env.VAD_MIN_SILENCE_MS ?? 1300);
+    proc.userData.vad = await silero.VAD.load({
+      minSilenceDuration: Number.isFinite(minSilenceMs) ? minSilenceMs : 900,
+    });
   },
 
   entry: async (ctx: JobContext) => {
@@ -646,9 +683,29 @@ export default defineAgent({
       // advertises a tool that isn't in the ToolContext — a mismatch makes the
       // model call a non-existent tool → error/hallucination → dead air on a
       // voice call (GH issue #113). undefined = all capabilities (pipeline mode).
-      const activeCapabilities = config.ENABLE_REALTIME
-        ? (['identity', 'scheduling', 'messaging'] as const)
-        : undefined;
+      // ONE list, driving BOTH the toolset and the prompt (GH #113 — if they drift,
+      // the model is told about a tool it cannot call, tries anyway, and the caller
+      // gets dead air).
+      //
+      // 'sms' is absent unless ENABLE_SMS=true, and it is absent TODAY: the number is
+      // not 10DLC-registered, so no text this product sends has ever reached a handset.
+      // The agent nevertheless closed a real booking with "you'll receive a text
+      // confirmation shortly." Removing the capability removes record_sms_consent AND
+      // swaps the prompt's texting section for one that says, plainly, that it cannot
+      // text. It cannot promise what it has no means to do.
+      const ALL_CAPS = [
+        'identity',
+        'scheduling',
+        'messaging',
+        'knowledge',
+        'verification',
+        'transfer',
+        'sms',
+      ] as const;
+      const REALTIME_CAPS = ['identity', 'scheduling', 'messaging', 'sms'] as const;
+      const activeCapabilities = (config.ENABLE_REALTIME ? REALTIME_CAPS : ALL_CAPS).filter(
+        (c) => c !== 'sms' || config.ENABLE_SMS
+      );
 
       // 3b. Prefetch the caller's CRM record so the prompt can carry their name,
       //     saved preferences, and recent history into turn one. Runs AFTER both
@@ -1199,6 +1256,7 @@ export default defineAgent({
           // miss the cache and put live TTS latency back on the line whose only job
           // is to cover latency. Nothing would error. It would just get slow again.
           const fillerText = HOLD_LINE;
+          const thinkingText = THINKING_LINE;
           const recoveryText = RECOVERY_LINE;
           const fillerTts = new deepgram.TTS({
             apiKey: config.DEEPGRAM_API_KEY,
@@ -1217,6 +1275,22 @@ export default defineAgent({
           );
           const detachWatchdog = attachOutputWatchdog(session, {
             voice: watchdogVoice,
+            thinkingText,
+            // 3.5s, not 2.5s. At 2.5s it fired SEVEN TIMES in one call — the pipeline
+            // (STT → gpt-4o-mini → TTS) routinely takes longer than that to produce a
+            // first word, so the "backstop" became the normal case and the caller was
+            // held on nearly every turn. A backstop that fires every turn is not a
+            // backstop, it is a stutter. Tunable without a deploy.
+            // 2800ms. It was 2500 (fired 7x in one call, and LIED each time — "let me
+            // check that for you" when nothing was being checked), then 3500 to shut it
+            // up, which traded the lying for LONG SILENCES the caller filled with
+            // "Hello?".
+            //
+            // The line is HONEST now — "Just a moment." when no tool is running — so
+            // firing is cheap again, and the right move is to cover the gap sooner
+            // rather than leave a caller wondering if the line dropped. The real cure
+            // is the agent being faster; this is the dressing on the wound.
+            deadline1Ms: Number(process.env.WATCHDOG_DEADLINE_1_MS ?? 2800),
             fillerText,
             recoveryText,
             log: callLog,

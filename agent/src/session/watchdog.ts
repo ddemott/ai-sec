@@ -27,6 +27,7 @@
  */
 import { voice } from '@livekit/agents';
 import { getFillerFrame, frameStream } from './fillerCache.js';
+import { isToolRunning } from './toolActivity.js';
 
 /** SpeechHandle (not re-exported by the package) — the return type of say(). */
 type SpeechHandle = ReturnType<voice.AgentSession['say']>;
@@ -34,8 +35,15 @@ type SpeechHandle = ReturnType<voice.AgentSession['say']>;
 export interface WatchdogOptions {
   /** Tenant voice id (cache key for the pre-synthesized clips). */
   voice: string;
-  /** Filler line spoken at deadline 1 (must be warmed in the filler cache). */
+  /** Spoken at deadline 1 when a TOOL IS RUNNING — it may name the lookup. */
   fillerText: string;
+  /**
+   * Spoken at deadline 1 when NO tool is running (the agent is just slow to think).
+   * It must claim nothing: saying "let me check that for you" when there is nothing
+   * being checked is a lie the caller can hear, and on 2026-07-14 he called it out
+   * mid-call. Both lines are pre-synthesized.
+   */
+  thinkingText: string;
   /** Recovery line spoken at deadline 2. */
   recoveryText: string;
   /** ms of 'thinking' with no audio before the filler plays. */
@@ -118,7 +126,16 @@ export function attachOutputWatchdog(
     // now. Only hold the line if the agent is still thinking (no audio yet).
     if (session.agentState !== 'thinking') return;
     fillerDone = false;
-    fillerHandle = speakHold(opts.fillerText, 'filler') ?? undefined;
+    // SAY THE TRUE THING. A tool really running earns "let me check that for you";
+    // an LLM that is merely slow gets "just a moment", which promises nothing and so
+    // cannot be false. The watchdog stays cause-AGNOSTIC about WHEN it fires (dead
+    // air is dead air) and becomes cause-HONEST about WHAT it says.
+    const running = isToolRunning();
+    fillerHandle =
+      speakHold(
+        running ? opts.fillerText : opts.thinkingText,
+        running ? 'filler' : 'thinking'
+      ) ?? undefined;
     // Mark when the filler's playout finishes so a later 'speaking' (the real
     // reply, which is serialized AFTER the filler) is recognized as real audio.
     fillerHandle?.addDoneCallback(() => {

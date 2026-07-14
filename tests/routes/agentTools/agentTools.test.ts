@@ -837,7 +837,8 @@ describe('agentTools /capture-job-inquiry', () => {
       tenant_id: TENANT_ID,
       caller_name: 'Rhonda Recruiter',
       callback_phone: '3128651186',
-      company: 'Acme Corp',
+      caller_company: 'Acme Corp',
+      client_company: 'Globex Health',
       represents_company: false,
       employment_type: 'contract',
       rate_range: '$120-140/hr',
@@ -851,7 +852,8 @@ describe('agentTools /capture-job-inquiry', () => {
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
       'DaleDeMott@thinkinghammer.com',
       expect.objectContaining({
-        company: 'Acme Corp',
+        callerCompany: 'Acme Corp',
+        clientCompany: 'Globex Health',
         employmentType: 'contract',
         duration: '6 months',
         locationType: 'remote',
@@ -861,12 +863,40 @@ describe('agentTools /capture-job-inquiry', () => {
     );
   });
 
-  it('HAPPY: full-time inquiry with no callback phone skips the customer lookup', async () => {
+  it('SAD: NO CALLBACK PHONE is refused outright — nothing is written', async () => {
+    // CONTRACT CHANGE, 2026-07-14. This test used to be "full-time inquiry with no
+    // callback phone skips the customer lookup" — it asserted that a phoneless inquiry
+    // saved happily, just without a customer link. That contract is exactly what let a
+    // real call save a six-month Blue Cross contract at $65-72/hr under the placeholder
+    // name "Caller" with no phone number, after which the agent told the caller "I now
+    // have all the information I need."
+    //
+    // It did not. It had a lead nobody could answer. The "skip the customer lookup"
+    // path it was protecting is now unreachable by design, so the test that guarded it
+    // is replaced by the one that matters: the route REFUSES, and writes NOTHING.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Frank FullTime',
+      client_company: 'Globex',
+      employment_type: 'full_time',
+      rate_range: '$180k-200k',
+    });
+    expect(res.statusCode).toBe(200); // agent-tools speak failure at 200
+    expect(res.json().success).toBe(false);
+    expect(res.json().error).toMatch(/number/i);
+    expect(queries).toHaveLength(0); // no half-row left behind
+    expect(vi.mocked(sendJobInquiryEmail)).not.toHaveBeenCalled();
+  });
+
+  it('HAPPY: a full-time inquiry with a number lands and emails the owner', async () => {
     // WHO: a caller about a full-time role who left no callback number.
     // WHAT: with no callback phone the customer-lookup query is skipped, so the
-    //        first query is the INSERT and the second resolves the recipient.
+    //        A callback number is now REQUIRED, so the customer lookup always runs:
+    //        lookup → INSERT → resolve recipient.
     const { app, queries } = buildApp({
       queryResponses: [
+        { rows: [] }, // customer lookup by callback phone — no match
         { rows: [{ job_inquiry_id: 'ji-2' }] }, // INSERT
         { rows: [{ email: 'owner@example.com' }] }, // recipient (fell back to owner email)
       ],
@@ -874,7 +904,8 @@ describe('agentTools /capture-job-inquiry', () => {
     const res = await post(app, '/agent-tools/capture-job-inquiry', {
       tenant_id: TENANT_ID,
       caller_name: 'Frank FullTime',
-      company: 'Globex',
+      callback_phone: '3125552222',
+      client_company: 'Globex',
       employment_type: 'full_time',
       rate_range: '$180k-200k',
       location_type: 'onsite',
@@ -882,8 +913,8 @@ describe('agentTools /capture-job-inquiry', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { emailed: true } });
-    expect(queries).toHaveLength(2);
-    expect(queries[0].text).toContain('INSERT INTO job_inquiries');
+    expect(queries).toHaveLength(3);
+    expect(queries[1].text).toContain('INSERT INTO job_inquiries');
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
       'owner@example.com',
       expect.objectContaining({
@@ -908,7 +939,8 @@ describe('agentTools /capture-job-inquiry', () => {
     const res = await post(app, '/agent-tools/capture-job-inquiry', {
       tenant_id: TENANT_ID,
       caller_name: 'Erin Error',
-      company: 'Initech',
+      callback_phone: '3125551111',
+      client_company: 'Initech',
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { emailed: false } });
@@ -927,6 +959,7 @@ describe('agentTools /capture-job-inquiry', () => {
     const res = await post(app, '/agent-tools/capture-job-inquiry', {
       tenant_id: TENANT_ID,
       caller_name: 'Nora NoEmail',
+      callback_phone: '3125553333',
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { emailed: false } });
@@ -2026,6 +2059,85 @@ describe('agentTools pure-inquiry abandonment attribution', () => {
 });
 
 describe('agentTools /available-slots', () => {
+  it('SAD: open_times ENUMERATES every bookable time — the model must never do interval arithmetic', async () => {
+    // WHO: a caller asking for 3 PM on a wide-open afternoon.
+    // WHEN: 2026-07-14. This route returned ONE PROSE SENTENCE — "We have openings all
+    //       day from 1 PM to 5 PM" — and gpt-4o-mini, holding that exact string, told
+    //       the caller:
+    //
+    //         "He has openings from 1 PM to 5 PM. Unfortunately, 3 PM is not in that
+    //          time range. Would you like to choose a different time?"
+    //
+    //       Three o'clock is inside one-to-five. It had CALLED the tool. It had the
+    //       right answer in front of it. It then misread the sentence, refused a slot
+    //       that was wide open, and the caller settled for a time he did not want.
+    // WHY: the earlier version of this bug was the model not calling the tool at all.
+    //      We fixed that and found this underneath — a tool result the model cannot
+    //      reliably READ is barely better than no tool. Interval reasoning over prose
+    //      is exactly what a small model fumbles, and it fumbles it SILENTLY, with the
+    //      confidence of something that just looked it up.
+    //
+    //      So it no longer computes. It looks in a list. This test is that list.
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Consultation',
+              duration_minutes: 30,
+              price: null,
+              required_skills: [],
+            },
+          ],
+        },
+        // The exact shift Dale actually works: 1 PM to 5 PM, nothing booked.
+        { rows: [{ source: 'shift', start_time: '13:00:00', end_time: '17:00:00' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'Consultation',
+      date: '2030-01-02',
+    });
+    expect(res.statusCode).toBe(200);
+    const result = res.json().result;
+
+    // The exact time the model talked a real caller out of.
+    expect(result.open_times).toContain('3:00 PM');
+
+    // THE CLOSING BOUNDARY IS INCLUSIVE. A meeting may END exactly when the day ends.
+    //
+    // 4:30 + 30 minutes = 5:00, and the shift runs to 5:00, so 4:30 is the LAST
+    // bookable start and it MUST be offered. Getting this wrong by one slot silently
+    // deletes the end of every working day — and it is the exact slot a caller reaches
+    // for ("can you do the last one before you close?").
+    expect(result.open_times).toContain('4:30 PM'); // ends at 5:00 — allowed
+    expect(result.open_times[result.open_times.length - 1]).toBe('4:30 PM');
+
+    // ...but not a minute past it. 4:45 would run to 5:15, and 5:00 to 5:30.
+    expect(result.open_times).not.toContain('4:45 PM');
+    expect(result.open_times).not.toContain('5:00 PM');
+
+    // Every offered time is on the 15-minute grid the booking RPC accepts.
+    expect(result.open_times[0]).toBe('1:00 PM');
+    for (const t of result.open_times) {
+      expect(t).toMatch(/:(00|15|30|45) (AM|PM)$/);
+    }
+
+    // ONE SOURCE OF TRUTH. `spoken` is BUILT FROM open_times, and must never contain a
+    // prose RANGE — "we have openings all day from 1 PM to 5 PM" is an invitation to do
+    // interval arithmetic, and the model accepts it every time. Given a range and a
+    // table, it reads the range: on 2026-07-14 it refused 4:30 (in the list) and
+    // offered "1:00, 2:30, or 4:00" (not in the list) while the list sat right there.
+    // Every clock time it says aloud must be a time it can actually book.
+    const spokenTimes = (result.spoken as string).match(/\d{1,2}:\d{2} (AM|PM)/g) ?? [];
+    expect(spokenTimes.length).toBeGreaterThan(0);
+    for (const t of spokenTimes) {
+      expect(result.open_times, `spoken offered ${t}, which is not bookable`).toContain(t);
+    }
+  });
+
   it('HAPPY: produces spoken slot string with service + open windows', async () => {
     // WHO: Caller asking "when can you fit me in for an oil change Friday?"
     // WHAT: Single union-all returns service row + shift rows + appointment
@@ -2064,12 +2176,22 @@ describe('agentTools /available-slots', () => {
       date: '2030-01-01',
     });
     expect(res.statusCode).toBe(200);
-    const text = res.json().result as string;
+    const text = res.json().result.spoken as string;
     expect(text).toContain('Oil Change takes about 30 minutes');
     expect(text).toContain('$45');
     // WHY: The 12-13 appointment splits the day into 8-12 and 13-17
-    expect(text).toMatch(/8 AM to 12 PM/);
-    expect(text).toMatch(/1 PM to 5 PM/);
+    // The prose RANGE is gone on purpose. It was the thing the model reasoned over —
+    // given "openings all day from 1 PM to 5 PM" AND a list of bookable times, it read
+    // the range and invented times that were not in the list. `spoken` is now built
+    // FROM open_times, so every clock time it utters is one it can actually book.
+    const offered = text.match(/\d{1,2}:\d{2} (AM|PM)/g) ?? [];
+    expect(offered.length).toBeGreaterThan(0);
+    const bookable = res.json().result.open_times as string[];
+    for (const t of offered) expect(bookable).toContain(t);
+    // The morning shift AND the afternoon one are both reachable — the sample spans
+    // the day rather than reading out the first three slots and stopping.
+    expect(bookable).toContain('8:00 AM');
+    expect(bookable).toContain('1:00 PM');
     // The resolver name-match query runs FIRST (keyed by tenant + spoken
     // type) and must filter soft-deleted services so a removed service is
     // never priced/quoted back to the caller.
@@ -2091,6 +2213,13 @@ describe('agentTools /available-slots', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [] }, // resolver: name match misses
+        // The SEMANTIC step now runs between the name match and the default (see
+        // serviceResolver). Here it finds nothing above the threshold — which is the
+        // case this test is about — so resolution still falls through to the tenant
+        // default, exactly as it always did. A semantic match that is not confident
+        // must not displace a default the owner deliberately chose.
+        { rows: [] }, // ensureServiceEmbeddings: nothing missing an embedding
+        { rows: [] }, // match_service_by_intent: no confident match
         {
           rows: [
             {
@@ -2111,9 +2240,12 @@ describe('agentTools /available-slots', () => {
       date: '2030-01-01',
     });
     expect(res.statusCode).toBe(200);
-    const text = res.json().result as string;
+    const text = res.json().result.spoken as string;
     expect(text).toContain('Programming Consultation takes about 30 minutes');
-    expect(text).toMatch(/1 PM to 5 PM/);
+    const offered2 = text.match(/\d{1,2}:\d{2} (AM|PM)/g) ?? [];
+    const bookable2 = res.json().result.open_times as string[];
+    expect(offered2.length).toBeGreaterThan(0);
+    for (const t of offered2) expect(bookable2).toContain(t);
   });
 
   it('HAPPY: no shifts for the day returns "no one scheduled" message', async () => {
@@ -2140,7 +2272,7 @@ describe('agentTools /available-slots', () => {
       service_type: 'Oil Change',
       date: '2030-01-01',
     });
-    const text = res.json().result as string;
+    const text = res.json().result.spoken as string;
     expect(text).toContain("don't have anyone scheduled");
   });
 
@@ -2214,12 +2346,19 @@ describe('agentTools /available-slots', () => {
         service_type: 'Oil Change',
         date: '2030-06-15',
       });
-      const text = res.json().result as string;
+      const text = res.json().result.spoken as string;
       // The response has two phrases: "our hours are X to Y" (full coverage
       // for context) and "We have openings ..." (only the future slots).
       // The today filter is ONLY about the openings phrase — the context
       // hours line legitimately quotes the shift's full span.
-      expect(text).toMatch(/We have openings 2:30 PM to 5 PM/);
+      // Only FUTURE slots — the elapsed part of today is gone from the list itself, so
+    // it cannot be spoken. (It used to be excluded from the prose and still reachable
+    // by reasoning over the range.)
+    const bookable3 = res.json().result.open_times as string[];
+    expect(bookable3).not.toContain('1:00 PM'); // already elapsed
+    expect(bookable3).toContain('2:30 PM');
+    const offered3 = text.match(/\d{1,2}:\d{2} (AM|PM)/g) ?? [];
+    for (const t of offered3) expect(bookable3).toContain(t);
       expect(text).not.toMatch(/openings 8 AM/);
       expect(text).not.toMatch(/openings all day from 8/);
     } finally {
@@ -2267,7 +2406,7 @@ describe('agentTools /available-slots', () => {
         date: '2030-06-15',
       });
       expect(res.statusCode).toBe(200);
-      const text = res.json().result as string;
+      const text = res.json().result.spoken as string;
       expect(text).toContain('fully booked');
       expect(text).toContain('try a different day');
     } finally {

@@ -91,7 +91,10 @@ If you did not request this, you can safely ignore this email — your password 
 
 /** Structured fields captured during a voice job-inquiry intake. */
 export interface JobInquiryFields {
-  company?: string | null;
+  /** Where the work would actually happen — the end client. */
+  clientCompany?: string | null;
+  /** The agency that rang. Who you will actually be negotiating with. */
+  callerCompany?: string | null;
   representsCompany?: boolean | null;
   employmentType?: string | null;
   rateRange?: string | null;
@@ -127,8 +130,11 @@ export async function sendJobInquiryEmail(to: string, fields: JobInquiryFields):
   const rows: Array<[string, string]> = [
     ['Caller', orDash(fields.callerName)],
     ['Callback', orDash(fields.callbackPhone)],
-    ['Company', orDash(fields.company)],
-    ['Works for this company', yesNo(fields.representsCompany)],
+    // BOTH companies, labelled so they cannot be confused at a glance. A lead that
+    // says only "Blue Cross" leaves the owner ringing back an agency he cannot name.
+    ['Client (where the work is)', orDash(fields.clientCompany)],
+    ['Caller works for', orDash(fields.callerCompany)],
+    ['In-house at the client', yesNo(fields.representsCompany)],
     ['Employment type', employment],
     [rateLabel, orDash(fields.rateRange)],
   ];
@@ -139,7 +145,14 @@ export async function sendJobInquiryEmail(to: string, fields: JobInquiryFields):
   if (fields.address) rows.push(['Address', fields.address]);
   if (fields.timezone) rows.push(['Timezone', fields.timezone]);
 
-  const subject = `New job inquiry${fields.company ? ` — ${fields.company}` : ''}`;
+  // The subject line is what he sees on his phone, so it leads with the CLIENT (is
+  // this work I want?) and names the agency second (who is asking?).
+  const subject =
+    `New job inquiry` +
+    (fields.clientCompany ? ` — ${fields.clientCompany}` : '') +
+    (fields.callerCompany && fields.callerCompany !== fields.clientCompany
+      ? ` (via ${fields.callerCompany})`
+      : '');
   const text =
     `A caller asked whether you're available for work. Details collected on the call:\n\n` +
     rows.map(([k, v]) => `${k}: ${v}`).join('\n') +

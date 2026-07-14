@@ -21,6 +21,7 @@ import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
 import { sendJobInquiryEmail } from '../../services/communications/systemEmail';
+import { isPlaceholderName } from '../../services/customerLookup';
 import { SMSService } from '../../services/communications/smsService';
 import { ConsentService } from '../../services/consentService';
 import { createDatabaseService } from '../../database/index';
@@ -294,6 +295,38 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
     async (args, reply) => {
       const callbackPhone = args.callback_phone ? normalizePhone(args.callback_phone) : null;
 
+      // A LEAD YOU CANNOT ANSWER IS NOT A LEAD.
+      //
+      // 2026-07-14, a real call. The agent walked the whole intake ladder perfectly —
+      // Blue Cross Blue Shield, contract, $65-72/hr, six months, hybrid, 300 Randolph
+      // Street — and saved it under caller_name "Caller" with an EMPTY phone number.
+      // Then it told the caller "I now have all the information I need."
+      //
+      // It did not. It had a six-month contract lead and no way on earth to reach the
+      // person offering it. Every field that makes the row look impressive was
+      // captured; the only two that make it USEFUL were not.
+      //
+      // "Caller" is not a name the model invented — it is our own placeholder
+      // (PLACEHOLDER_NAMES), which it had seen elsewhere and helpfully filled in. The
+      // prompt says to collect a name "at minimum". The model decided it had one.
+      //
+      // So the prompt asks, and the ROUTE ENFORCES. A tool that cannot do its job must
+      // FAIL and say why — never save a hollow row and report success. The error text
+      // is written to be spoken: it tells the agent exactly what to go and get, and
+      // the agent will call back with it.
+      if (isPlaceholderName(args.caller_name)) {
+        return fail(
+          reply,
+          "I still need the caller's name before I can pass this along. Ask them for their name, then call this again."
+        );
+      }
+      if (!callbackPhone || !isValidPhone(callbackPhone)) {
+        return fail(
+          reply,
+          'I still need a callback number before I can pass this along — the owner has no way to reach them without one. Ask for the best number to reach them, read it back to confirm, then call this again.'
+        );
+      }
+
       const row = await withTenantClient(args.tenant_id, async (client) => {
         // Link to an existing customer if the callback number matches one. Non-fatal.
         let customerId: string | null = null;
@@ -310,15 +343,19 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
 
         const res = await client.query<{ job_inquiry_id: string }>(
           `INSERT INTO job_inquiries
-             (tenant_id, customer_id, company, represents_company, employment_type,
-              rate_range, duration, location_type, address, timezone,
+             (tenant_id, customer_id, client_company, caller_company, represents_company,
+              employment_type, rate_range, duration, location_type, address, timezone,
               caller_name, callback_phone, call_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
            RETURNING job_inquiry_id`,
           [
             args.tenant_id,
             customerId,
-            args.company ?? null,
+            args.client_company ?? null,
+            // An IN-HOUSE recruiter works for the client, so the two companies are the
+            // same thing said once. Fill it rather than leaving a hole the owner has to
+            // reason about while looking at a lead.
+            args.caller_company ?? (args.represents_company ? (args.client_company ?? null) : null),
             args.represents_company ?? null,
             args.employment_type ?? null,
             args.rate_range ?? null,
@@ -371,7 +408,9 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
       if (row.recipient) {
         try {
           await sendJobInquiryEmail(row.recipient, {
-            company: args.company,
+            clientCompany: args.client_company,
+            callerCompany:
+              args.caller_company ?? (args.represents_company ? args.client_company : undefined),
             representsCompany: args.represents_company,
             employmentType: args.employment_type,
             rateRange: args.rate_range,
@@ -427,6 +466,26 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         job_inquiry_id: row.job_inquiry_id,
         emailed,
         message: passedAlong + emailAsk,
+        // THIS TOOL IS NOT THE END OF THE CALL, AND ITS REPLY MUST NOT SOUND LIKE IT.
+        //
+        // 2026-07-14. The caller opened with: "I'd like to have a meeting with Dale to
+        // talk to him about a job position." That is TWO asks — a meeting, and the
+        // details. The agent walked the whole intake ladder perfectly, relayed this
+        // message, then said "is there anything else?" and ended the call.
+        //
+        // Kyle never got his meeting. He rang for one, answered nine questions, and
+        // hung up without it.
+        //
+        // The prompt already told the model to hold the caller's ask. It lost anyway —
+        // because the model relays a tool's `message` almost verbatim, and this message
+        // READS LIKE A GOODBYE ("passed those along… he'll get back to you"). A rule in
+        // the prompt cannot outweigh a closing line handed over at the exact moment of
+        // closing. The tool was steering the call, and it steered it out the door.
+        //
+        // So the tool now says what is actually true: the paperwork is done, and the
+        // call may well not be.
+        next_step:
+          'The job details are recorded. This is NOT the end of the call. If the caller ALSO asked for anything else — most often a MEETING or a callback with the owner — do that NOW, before you say goodbye. Do not ask "is there anything else?" as a way of closing while one of their original requests is still undone.',
       });
     },
     'Failed to capture job inquiry'
