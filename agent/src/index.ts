@@ -19,7 +19,15 @@
 import { initSentry, captureException as captureSentry } from './sentry.js';
 initSentry();
 
-import { type JobContext, WorkerOptions, cli, defineAgent, voice } from '@livekit/agents';
+import {
+  type JobContext,
+  WorkerOptions,
+  cli,
+  defineAgent,
+  voice,
+  tts,
+  tokenize,
+} from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as openai from '@livekit/agents-plugin-openai';
 import * as silero from '@livekit/agents-plugin-silero';
@@ -659,12 +667,40 @@ export default defineAgent({
               // fill with "hello?", which cancelled the reply. gpt-4o-mini-tts is
               // ~1.3s and consistent. Per-tenant voice/speed from the dashboard;
               // tts_voice is an OpenAI voice id (unset/legacy → 'shimmer'). 2026-06-25.
-              tts: new openai.TTS({
-                apiKey: config.OPENAI_API_KEY,
-                model: 'gpt-4o-mini-tts',
-                voice: toOpenAIVoice(tenantConfig.ttsVoice),
-                speed: tenantConfig.ttsSpeed ?? 1.0,
-              }),
+              //
+              // WRAPPED IN StreamAdapter — this is the "voice isn't smooth" fix.
+              //
+              // The OpenAI TTS plugin is NON-STREAMING: it buffers the ENTIRE reply and
+              // returns audio only when the whole clip is synthesised. The comment above
+              // says so, and treats it as a latency number (~1.3s). It is not just
+              // latency — it is CADENCE. Every single agent turn became:
+              //
+              //     silence … silence … [whole paragraph, all at once]
+              //
+              // The owner's report after two calls was "voice was broken up / did not
+              // sound natural / still not smooth", and this is it. Nothing was wrong with
+              // the AUDIO. What was wrong was that a human conversation does not arrive in
+              // buffered blocks with a hole in front of each one.
+              //
+              // StreamAdapter wraps a non-streaming TTS with a sentence tokenizer:
+              // sentence one is synthesised and starts PLAYING while sentence two is still
+              // being generated. Time-to-first-word drops to the cost of the first
+              // sentence instead of the whole reply, and the gap between sentences is
+              // filled with speech rather than silence.
+              //
+              // This is the supported mechanism the earlier "re-add a filler later via a
+              // supported mechanism if perceived latency is an issue" note (2026-06-25)
+              // was waiting for. The right answer to dead air is not a filler phrase
+              // apologising for it — it is not having the dead air.
+              tts: new tts.StreamAdapter(
+                new openai.TTS({
+                  apiKey: config.OPENAI_API_KEY,
+                  model: 'gpt-4o-mini-tts',
+                  voice: toOpenAIVoice(tenantConfig.ttsVoice),
+                  speed: tenantConfig.ttsSpeed ?? 1.0,
+                }),
+                new tokenize.basic.SentenceTokenizer()
+              ),
               turnHandling: {
                 interruption: {
                   // HALF-DUPLEX BY DEFAULT (product decision 2026-07-12, after a real
