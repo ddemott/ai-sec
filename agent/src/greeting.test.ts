@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import {
   buildGreeting,
+  speakableName,
   buildOpener,
   buildDisclosure,
   resolveDisclosure,
@@ -202,7 +203,10 @@ describe('REGRESSION: the greeting must not speak template syntax, or repeat its
 
     expect(greeting).not.toContain('{{');
     expect(greeting).not.toContain('}}');
-    expect(greeting).toContain('Thinking Hammer LLC');
+    // The SPOKEN name — the legal suffix is stripped for speech (see speakableName).
+    // Nobody answers a phone with "Thank you for calling Thinking Hammer L-L-C".
+    expect(greeting).toContain('Thinking Hammer');
+    expect(greeting).not.toMatch(/\bLLC\b/);
   });
 
   test('SAD: the same question is not asked twice', () => {
@@ -272,8 +276,9 @@ describe('REGRESSION: the business name is spoken ONCE, not twice', () => {
       })
     );
 
-    const mentions = greeting.split('Thinking Hammer LLC').length - 1;
+    const mentions = greeting.split('Thinking Hammer').length - 1;
     expect(mentions).toBe(1);
+    expect(greeting).not.toMatch(/\bLLC\b/);
     // The AI disclosure must survive — it is the legal clause.
     expect(greeting).toMatch(/AI assistant/i);
   });
@@ -285,7 +290,74 @@ describe('REGRESSION: the business name is spoken ONCE, not twice', () => {
       tenant({ name: 'Thinking Hammer LLC', firstMessage: 'Hi, this is Clara.' })
     );
 
-    expect(greeting).toContain('Thinking Hammer LLC');
-    expect(greeting).toMatch(/AI assistant for Thinking Hammer LLC/i);
+    // The disclosure names the business — using the SPOKEN name. It is the legal
+    // identification clause, so it must still say WHO the AI represents; it just does
+    // not read the registration suffix aloud.
+    expect(greeting).toContain('Thinking Hammer');
+    expect(greeting).toMatch(/AI assistant for Thinking Hammer/i);
+    expect(greeting).not.toMatch(/\bLLC\b/);
+  });
+});
+
+/**
+ * REGRESSION — nobody says the legal suffix out loud.
+ *
+ * The 2026-07-14 call opened with "Thank you for calling Thinking Hammer LLC" and the
+ * owner asked what the word was. That is the clearest possible evidence it should not
+ * be there: he could not even parse it, and it is his own company.
+ *
+ * A receptionist says "Thank you for calling Thinking Hammer". The suffix is a
+ * registration detail, not part of the name the business is KNOWN by — and TTS engines
+ * either spell it out letter by letter or slur it into a non-word.
+ *
+ * SPOKEN ONLY. tenants.name keeps the legal name and everything WRITTEN still shows it
+ * in full.
+ */
+describe('REGRESSION: the legal suffix is never spoken', () => {
+  test('SAD: "LLC" is stripped from the spoken name', () => {
+    expect(speakableName('Thinking Hammer LLC')).toBe('Thinking Hammer');
+  });
+
+  test('the common suffixes all go', () => {
+    expect(speakableName('Acme Inc.')).toBe('Acme');
+    expect(speakableName('Acme Incorporated')).toBe('Acme');
+    expect(speakableName('Acme Ltd')).toBe('Acme');
+    expect(speakableName('Acme Corp.')).toBe('Acme');
+    expect(speakableName('Acme, LLC')).toBe('Acme');
+    expect(speakableName('Acme L.L.C.')).toBe('Acme');
+    // "L.L.C" WITHOUT a trailing dot — a common spelling the first (regex) version
+    // missed entirely. Dots are spelling, not meaning: LLC / L.L.C / L.L.C. are the
+    // same word, so the token is normalised before it is compared.
+    expect(speakableName('Acme L.L.C')).toBe('Acme');
+    expect(speakableName('Acme I.N.C.')).toBe('Acme');
+    expect(speakableName('Acme PLLC')).toBe('Acme');
+    expect(speakableName('Acme Company')).toBe('Acme');
+  });
+
+  test('HAPPY: a suffix-like word INSIDE the name is kept — it is part of the name', () => {
+    // WHY: the failure mode that would be worse than the bug. Stripping a word that is
+    //      genuinely part of a business's identity is a bigger insult than saying "LLC"
+    //      once. Only a suffix at the END, with a word boundary before it, goes.
+    expect(speakableName('Hammer & Co Ironworks')).toBe('Hammer & Co Ironworks');
+    expect(speakableName('Incorporated Designs')).toBe('Incorporated Designs');
+    expect(speakableName('Limited Edition Cuts')).toBe('Limited Edition Cuts');
+  });
+
+  test('SAD: a business literally named "LLC" does not vanish from its own greeting', () => {
+    // WHY: never return empty. Something odd beats nothing.
+    expect(speakableName('LLC')).toBe('LLC');
+  });
+
+  test('the greeting says the short name, and says it ONCE', () => {
+    const greeting = buildGreeting(
+      tenant({
+        name: 'Thinking Hammer LLC',
+        firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
+      })
+    );
+
+    expect(greeting).not.toMatch(/\bLLC\b/);
+    expect(greeting).toContain('Thinking Hammer');
+    expect(greeting.split('Thinking Hammer').length - 1).toBe(1);
   });
 });

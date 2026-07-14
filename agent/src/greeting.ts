@@ -48,8 +48,73 @@ import type { TenantDisplayConfig } from './tenantConfig.js';
  * disclosure guarantees every caller on the default is told which business
  * answered.
  */
+/**
+ * The business name as a PERSON would say it — without the legal suffix.
+ *
+ * "Thank you for calling Thinking Hammer LLC" is not how anyone answers a phone. A
+ * receptionist says "Thank you for calling Thinking Hammer". The suffix is a
+ * registration detail, not part of the name the business is known by, and read aloud a
+ * TTS engine either spells it out letter by letter or slurs it into a non-word. The
+ * owner heard it on the 2026-07-14 call and asked WHAT THE WORD WAS — about his own
+ * company. That is as clear as evidence gets.
+ *
+ * SPOKEN ONLY. tenants.name keeps the legal name, and everything WRITTEN — dashboard,
+ * contracts, invoices — still shows it in full.
+ *
+ * IMPLEMENTATION: take the LAST token, strip its dots, and compare against a known set.
+ * A regex over suffix spellings was the first attempt and it was both too strict and too
+ * loose (review on #259): it missed "L.L.C" without the trailing dot, and its alternates
+ * duplicated an optional dot it already allowed. Comparing a NORMALISED token to a SET
+ * says what it means, and gains every dotted spelling for free.
+ *
+ * Only the LAST token is ever considered — which is what protects a suffix-like word
+ * that is genuinely part of the name:
+ *
+ *     "Hammer & Co Ironworks"  → last token "Ironworks"    → kept whole
+ *     "Incorporated Designs"   → last token "Designs"      → kept whole
+ *     "Thinking Hammer LLC"    → last token "LLC"          → "Thinking Hammer"
+ *
+ * Stripping a word that is genuinely part of a business's identity is a worse error than
+ * saying "LLC" once, so the rule refuses to guess.
+ */
+const LEGAL_SUFFIXES = new Set([
+  'llc',
+  'inc',
+  'incorporated',
+  'ltd',
+  'limited',
+  'corp',
+  'corporation',
+  'co',
+  'company',
+  'plc',
+  'llp',
+  'lp',
+  'pllc',
+  'pc',
+]);
+
+export function speakableName(name: string | null | undefined): string {
+  const trimmed = name?.trim() ?? '';
+  if (!trimmed) return trimmed;
+
+  // Head + final token, separated by whitespace and/or a comma ("Acme, LLC").
+  const m = /^(.*?)[\s,]+([A-Za-z.]+)$/.exec(trimmed);
+  if (!m) return trimmed;
+
+  const [, head, lastToken] = m;
+  // Dots are spelling, not meaning: LLC / L.L.C / L.L.C. are the same word.
+  const normalised = lastToken.replace(/\./g, '').toLowerCase();
+  if (!LEGAL_SUFFIXES.has(normalised)) return trimmed;
+
+  const spoken = head.replace(/[\s,]+$/, '').trim();
+  // Never return empty: a business literally named "LLC" must not vanish from its own
+  // greeting. Something odd beats nothing.
+  return spoken || trimmed;
+}
+
 export function buildDisclosure(businessName: string): string {
-  return `I'm an AI assistant for ${businessName}, and this call is transcribed for quality and service.`;
+  return `I'm an AI assistant for ${speakableName(businessName)}, and this call is transcribed for quality and service.`;
 }
 
 /**
@@ -147,7 +212,7 @@ export const CLOSER_WITH_TRANSFER =
 function fillPlaceholders(text: string, config: TenantDisplayConfig): string {
   return (
     text
-      .replace(/\{\{\s*business_name\s*\}\}/gi, config.name?.trim() || 'us')
+      .replace(/\{\{\s*business_name\s*\}\}/gi, speakableName(config.name) || 'us')
       .replace(/\{\{\s*persona_name\s*\}\}/gi, config.personaName?.trim() || 'your assistant')
       // Anything still in braces is unknown — drop it rather than speak it.
       .replace(/\{\{[^}]*\}\}/g, '')
@@ -214,9 +279,13 @@ export function buildGreeting(config: TenantDisplayConfig): string {
   // into both their First Message and their disclosure, that is their sentence to
   // write, and we do not quietly redact it.
   const customDisclosure = config.callDisclosure?.trim();
-  const name = config.name?.trim();
+  // Compare on the SPOKEN name, not the legal one. The opener now contains
+  // "Thinking Hammer" (the suffix is stripped for speech), so matching against
+  // "Thinking Hammer LLC" would never hit and the dedupe would silently stop
+  // working — the caller would hear the business named twice again.
+  const name = speakableName(config.name);
   const openerNamesBusiness =
-    Boolean(name) && openerWithoutClosingQuestion.toLowerCase().includes(name!.toLowerCase());
+    Boolean(name) && openerWithoutClosingQuestion.toLowerCase().includes(name.toLowerCase());
   const disclosure = customDisclosure
     ? customDisclosure
     : openerNamesBusiness
