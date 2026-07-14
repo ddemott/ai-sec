@@ -10,7 +10,7 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 
 ## Architecture
 
-- **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + OpenAI (TTS) → Fastify `/agent-tools/*`
+- **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + **Deepgram Aura (TTS, native WebSocket streaming — switched from OpenAI TTS 2026-07-14 because the OpenAI plugin is NON-STREAMING: it buffers the whole reply before emitting any audio, so every turn was silence-then-a-burst. Chopping the input into sentences with StreamAdapter only traded one gap for a gap between every sentence. You cannot make a non-streaming engine stream by chopping its input finer)** → Fastify `/agent-tools/*`
 - **Backend**: Fastify (28 flat route modules under `src/routes/` + the `agentTools/` module dir) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `ai-sec-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind + TS
@@ -24,7 +24,7 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 - **Frontend**: Next.js 14, React 18, Tailwind 3.4, Lucide, react-big-calendar
 - **Voice agent**: LiveKit Agents (Node), `@livekit/agents-plugin-{deepgram,openai}`, `livekit-server-sdk`
 - **DB**: PostgreSQL + pgvector (ankane/pgvector Docker)
-- **Voice stack**: Telnyx + LiveKit Cloud + Deepgram Nova-3 + OpenAI GPT-4o-mini + OpenAI TTS (default voice `shimmer`). Fully OpenAI as of 2026-06-25 — Grok/xAI TTS removed (no `XAI_API_KEY` needed). Voice + speed are **per-tenant** via `tenants.tts_voice` (an OpenAI voice id: shimmer/nova/alloy/echo/onyx/fable) `/tts_speed`, set on the dashboard Phone Assistant → AI Persona page. The five style flags (`tts_soft`, `tts_cheerful`, `tts_formal`, `tts_warm`, `tts_concise`) are **LIVE, not inert** — this doc claimed they were dead Grok prosody columns until 2026-07-13, which was false and dangerous next to the "delete on sight" principle. They began as Grok prosody flags and were repurposed as LLM **prompt-style** flags: live dashboard toggles (`VoiceIdentitySection.tsx`) → `tenants` UPDATE → `/agent-tools/tenant-config` → `agent/src/prompt.ts` `# Voice style`. Deleting them removes two working toggles.
+- **Voice stack**: Telnyx + LiveKit Cloud + Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + **Deepgram Aura (TTS, default `aura-asteria-en`)**. TTS moved OpenAI → Deepgram Aura on **2026-07-14**: the OpenAI TTS plugin is NON-STREAMING (buffers the entire reply before emitting any audio), so every turn was silence-then-a-burst. Aura streams over a WebSocket as the words are produced. (Grok/xAI TTS was removed 2026-06-25; no `XAI_API_KEY` needed. The LLM is still OpenAI.) Voice + speed are **per-tenant** via `tenants.tts_voice` (an OpenAI voice id: shimmer/nova/alloy/echo/onyx/fable) `/tts_speed`, set on the dashboard Phone Assistant → AI Persona page. The five style flags (`tts_soft`, `tts_cheerful`, `tts_formal`, `tts_warm`, `tts_concise`) are **LIVE, not inert** — this doc claimed they were dead Grok prosody columns until 2026-07-13, which was false and dangerous next to the "delete on sight" principle. They began as Grok prosody flags and were repurposed as LLM **prompt-style** flags: live dashboard toggles (`VoiceIdentitySection.tsx`) → `tenants` UPDATE → `/agent-tools/tenant-config` → `agent/src/prompt.ts` `# Voice style`. Deleting them removes two working toggles.
 - **Testing**: Vitest (backend + dashboard), Playwright (e2e), `scripts/simulate.sh` (on-demand system harness: `status` health board, `tools` agent-tools journey, `toolselect` LLM tool-selection eval, `call` browser voice test — see Development)
 
 ## Key Directories
@@ -71,6 +71,7 @@ Quick commands:
 - Heavy pre-commit automation: `npm run prepare-commit` (runs checks + tests + drift detector + more)
 - Create feature branch (recommended): `npm run create-branch feat/my-work` or `bash scripts/create-feature-branch.sh feat/my-work`
 - Verify docs drift: `npm run verify:claude-md`
+- **Verify the agent can actually SPEAK: `cd agent && npm run verify:tts`** — opens the REAL Deepgram WebSocket with the REAL config and demands real audio bytes back, for every voice the picker can map to. **MANDATORY before any TTS change reaches prod.** Origin: 2026-07-14 — a TTS engine swap passed typecheck and all 567 unit tests and took the phone line COMPLETELY SILENT (the plugin appends `?speed=…` to the WS upgrade URL; Aura answers 400; the socket never opens; there is no TTS at all). Not one of those tests synthesises a word — they all mock the TTS. **"It compiles and the tests are green" is not the same as "it makes noise."** `tenants.tts_speed` is consequently INERT under Aura — it is not passed, because passing it is what caused the outage.
 
 Logins (all `/ password`):
 
