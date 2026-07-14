@@ -36,6 +36,7 @@ import { fetchCustomerContext } from './customerContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
+import { toolsForPhase, type CallPhase } from './toolPhases.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
 import { attachOutputWatchdog } from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
@@ -844,7 +845,45 @@ export default defineAgent({
         // (it used to call session.say() from inside execute(), which stalled the
         // generation — see the no-op comment below), so it no longer depends on
         // session being initialized; the ordering is harmless either way.
-        const tools = buildTools(
+        // THE MODEL SEES ONE PHASE OF THE CALL AT A TIME (toolPhases.ts).
+        //
+        // Handing gpt-4o-mini all 23 tools on every turn is over every published
+        // ceiling (OpenAI: "<20 at the start of a turn"; LiveKit: 5-12), and our own
+        // eval shows what it costs — asked to take a message, the model called NO
+        // tool at all and told the caller "I've sent the owner a message". Prompt
+        // rules did not fix that. Neither did temperature 0. A model cannot pick the
+        // wrong tool from a set that does not contain it, and it picks the right one
+        // far more often from six candidates than from twenty-three.
+        //
+        // The agent starts in 'intake' and moves when the model calls a router
+        // (start_booking / manage_appointment). The routers are the ONLY door out:
+        // the scheduling tools are not visible during intake, so the model cannot
+        // TALK its way to get_available_slots — the cheapest path to what the caller
+        // asked for now runs THROUGH a tool call instead of around it.
+        //
+        // Late-bound on purpose: the tools must exist before the Agent, and the
+        // Agent must exist before a tool can swap its toolset. `phaseAgent` closes
+        // that loop. A router that fires before the Agent exists (impossible today —
+        // the model cannot call a tool before session.start) is a no-op, not a crash.
+        let phaseAgent: voice.Agent | null = null;
+        let phase: CallPhase = 'intake';
+        const applyPhase = async (next: CallPhase): Promise<void> => {
+          phase = next;
+          if (!phaseAgent) return;
+          const scoped = toolsForPhase(allTools, next);
+          await phaseAgent.updateTools(scoped);
+          callLog.info(
+            {
+              event: 'tool_phase_changed',
+              phase: next,
+              tool_count: Object.keys(scoped).length,
+              tools: Object.keys(scoped),
+            },
+            `tool phase → ${next} (${Object.keys(scoped).length} tools visible)`
+          );
+        };
+
+        const allTools = buildTools(
           sessionCtx,
           client,
           {
@@ -871,7 +910,17 @@ export default defineAgent({
           // knowledge/RAG, transfer, and OTP to shrink the per-turn schema tokens.
           // `activeCapabilities` (computed once above) drives this AND the system
           // prompt, so the two can never drift (GH issue #113). Pipeline = all tools.
-          activeCapabilities ? { capabilities: activeCapabilities } : undefined
+          //
+          // Capabilities and phases compose, and the order matters: capabilities are
+          // authoritative and decide what this SESSION has at all; phases only ever
+          // narrow that further, per turn. A phase can never hand back a tool a
+          // capability withheld — toolsForPhase intersects, it does not union. So
+          // ENABLE_PHONE_VERIFICATION=false still means no OTP tool exists, in any
+          // phase, no matter what toolPhases.ts lists.
+          {
+            ...(activeCapabilities ? { capabilities: activeCapabilities } : {}),
+            onPhaseChange: applyPhase,
+          }
         );
 
         // MARKDOWN MUST NEVER REACH THE VOICE.
@@ -899,13 +948,29 @@ export default defineAgent({
           }
         }
 
+        // Open in INTAKE: identity, the catalog, the policy answerer, every way to
+        // reach a human — and the two routers. Not the calendar. The model cannot
+        // offer, refuse, or invent a time before it has called a tool that returns
+        // one, because the tools that return times are not in the room yet.
+        const intakeTools = toolsForPhase(allTools, 'intake');
         const agent = new SpeakingAgent({
           instructions,
-          tools,
+          tools: intakeTools,
         });
+        phaseAgent = agent;
 
         await session.start({ agent, room: ctx.room });
-        callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
+        callLog.info(
+          {
+            event: 'session_started',
+            phase,
+            tool_count: Object.keys(intakeTools).length,
+            // The count the model actually sees. If this creeps back toward 23,
+            // the narrowing has silently regressed and the hallucinations return.
+            tool_count_all: Object.keys(allTools).length,
+          },
+          'voice session started — agent ready to greet'
+        );
 
         // Record every finalized turn (caller STT + agent replies) for the
         // call transcript. Attached BEFORE the greeting `say()` below — which

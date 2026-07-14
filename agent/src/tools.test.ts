@@ -55,13 +55,21 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 23 expected tool names', () => {
+  it('HAPPY: exposes exactly the 25 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
+    //
+    // NOTE this is the FULL set the session is capable of — NOT what the model
+    // sees on any given turn. Since 2026-07-14 the model only ever sees one
+    // phase of it (toolPhases.ts): ~14 at intake, ~9 while booking. Handing it
+    // all 25 at once is what made it hallucinate tool results. This assertion is
+    // the inventory; toolPhases.test.ts asserts what is actually exposed.
     const tools = buildTools(makeCtx(), makeClient([]).client);
     expect(Object.keys(tools).sort()).toEqual(
       [
+        'start_booking',
+        'manage_appointment',
         'book_appointment',
         'book_with_scheduling',
         'cancel_appointment',

@@ -23,15 +23,37 @@ const envSchema = z.object({
   // SPEED/SOFT) were removed 2026-06-25 when the agent went fully OpenAI — they
   // are no longer required for the worker to boot (no XAI_API_KEY needed).
 
-  // Output watchdog (the "never silent" backstop): when "true", a session-level
-  // timer plays a cached holding phrase if no agent audio is produced within the
-  // deadline after the caller's turn, then a recovery line. OFF by default — its
-  // acoustic behavior can't be CI-verified, so it ships inert and is enabled on
-  // Railway after a real-call validation. Instantly reversible.
+  // Output watchdog (the "never silent" backstop): a session-level timer plays a
+  // cached holding phrase if no agent audio is produced within the deadline after
+  // the caller's turn, then a recovery line.
+  //
+  // ON BY DEFAULT as of 2026-07-14. It used to ship inert, waiting for a real-call
+  // validation that never came — and that was survivable only because something
+  // ELSE was covering the gap: the system prompt told the model to say "one moment
+  // while I look that up" before a slow tool.
+  //
+  // That instruction had to go. It was the thing letting the model NARRATE a
+  // lookup instead of performing one — it said "one moment" three times on the
+  // 2026-07-13 call and never called a tool, because a sentence satisfied the
+  // instruction and a tool call is work. But deleting it removes the ONLY hold
+  // line we had: speakFiller has been a NO-OP since 2026-06-25 (calling say() from
+  // inside a tool's execute() froze the generation loop, #97).
+  //
+  // So the prompt fix, alone, would have traded a lying agent for a SILENT one —
+  // 2-4s of dead air on every availability check. Dead air is the bug that has
+  // taken this line down twice. The watchdog is the supported way to cover it: it
+  // fires from a TIMER, never inside execute(), and speaks PRE-SYNTHESIZED audio
+  // (PREGEN_LINES), so there is no TTS latency on the hold line itself.
+  //
+  // The point of the change is WHERE the hold line comes from. It is now spoken by
+  // the RUNTIME, because a tool really is taking time — never by the model, as a
+  // substitute for calling one. A machine cannot lie about work it did not do.
+  //
+  // Opt out with ENABLE_OUTPUT_WATCHDOG=false (instantly reversible, no deploy).
   ENABLE_OUTPUT_WATCHDOG: z
     .string()
     .optional()
-    .transform((v) => v === 'true'),
+    .transform((v) => v !== 'false'),
 
   // Thinking-sound bed: when "true", a looping keyboard-typing ambiance plays
   // while the agent is in the 'thinking' state and stops the instant it starts

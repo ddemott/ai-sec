@@ -23,6 +23,7 @@ import type { TransferResult } from './transferClient.js';
 import type { CallOutcomeTracker } from './callOutcome.js';
 import { wrapToolExecute } from './tools/wrapTool.js';
 import { getLogger } from './logger.js';
+import type { CallPhase } from './toolPhases.js';
 
 /**
  * Capability groups. Every tool belongs to exactly one; a customer agent can
@@ -40,6 +41,11 @@ export type Capability =
   | 'transfer';
 
 const CAPABILITY_OF: Record<string, Capability> = {
+  // The phase routers (toolPhases.ts). 'scheduling', because that is where they
+  // LEAD — so a session built without scheduling loses the doors along with the
+  // rooms, rather than keeping a door that opens onto nothing.
+  start_booking: 'scheduling',
+  manage_appointment: 'scheduling',
   get_company_policy_answer: 'knowledge',
   take_message: 'messaging',
   capture_job_inquiry: 'messaging',
@@ -218,7 +224,16 @@ export function buildTools(
   transfer?: TransferCapability,
   outcome?: CallOutcomeTracker,
   speakFiller?: (phrase: string) => void,
-  opts?: { capabilities?: readonly Capability[] }
+  opts?: {
+    capabilities?: readonly Capability[];
+    /**
+     * Swap the model's visible toolset to a new phase. Supplied by index.ts,
+     * which owns the live Agent; undefined in tests and in the eval's static
+     * snapshot, where the routers are inert (they still appear, so the model's
+     * choices are graded, but nothing is mutated).
+     */
+    onPhaseChange?: (phase: CallPhase) => void | Promise<void>;
+  }
 ): llm.ToolContext {
   // Only offer a live transfer in the no-caller-ID fallbacks when one can
   // actually happen: the 'transfer' capability is active for this session, a
@@ -234,7 +249,46 @@ export function buildTools(
     !!transfer?.execute;
   const transferOrMessage = canOfferTransfer ? 'transfer or take a message' : 'take a message';
 
+  /**
+   * The routers. Calling one swaps the model's toolset (see toolPhases.ts).
+   *
+   * They exist because narrowing needs a door. The scheduling tools are not
+   * visible during intake, so the ONLY way the model can reach the thing the
+   * caller asked for is to make a real tool call — it cannot talk its way to
+   * get_available_slots. That is the whole point: the cheapest path to the
+   * caller's goal now runs THROUGH a tool instead of around it.
+   *
+   * They are deliberately dumb. No arguments, no HTTP, no failure mode. A router
+   * that could fail would be a new way to strand a caller mid-call.
+   */
+  const routeTo = async (phase: CallPhase, reply: string): Promise<string> => {
+    await opts?.onPhaseChange?.(phase);
+    return JSON.stringify({ ok: true, next: reply });
+  };
+
   const allTools: llm.ToolContext = {
+    start_booking: llm.tool({
+      description:
+        "The caller wants to make a NEW appointment. Call this FIRST, before asking them for a day or a time — it is what gives you the scheduling tools, and you have NO way to see the calendar until you do. You do not need their service, day, time, name or number first; call it as soon as you know they want to book, then gather the rest. Do NOT tell the caller you are 'checking' or 'looking something up' — just call this.",
+      parameters: { type: 'object', properties: {} },
+      execute: async () =>
+        routeTo(
+          'booking',
+          'Scheduling tools are now available. Use get_available_slots (they have a day in mind) or get_scheduling_options (they do not) to find real openings. Never state or refuse a time you have not seen in a tool result.'
+        ),
+    }),
+
+    manage_appointment: llm.tool({
+      description:
+        "The caller wants to check, MOVE, or CANCEL an appointment they ALREADY have. Call this FIRST, before promising anything — it is what gives you the tools to look their booking up, and you cannot see a single existing appointment until you do. Do not use this for a NEW appointment (that is start_booking).",
+      parameters: { type: 'object', properties: {} },
+      execute: async () =>
+        routeTo(
+          'manage',
+          'Appointment-management tools are now available. Call get_my_appointments to see what they actually have before changing anything.'
+        ),
+    }),
+
     get_customer_context: llm.tool({
       description:
         "Look up a caller in the CRM by phone. Returns the customer's name, a short history, any saved preferences (preferred staff, last service, likes), and sms_consent — whether they have ALREADY agreed to appointment texts (if true, never ask for that permission again). sms_consent is OMITTED when the caller is new, or when the response is requires_verification (consent status is withheld until the number is proven, exactly like the name). Treat an absent sms_consent as NO consent and ask: a missing field is never permission. Pass the phone number the caller gave you verbally when you have it; otherwise it falls back to the caller-ID phone. Use this to recognize returning callers.",

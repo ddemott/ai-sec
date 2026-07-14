@@ -20,6 +20,7 @@
 // sim-rag.mjs.
 
 import { buildTools } from '../src/tools.js';
+import { toolsForPhase, PHASE_ROUTERS, type CallPhase } from '../src/toolPhases.js';
 import { buildSystemPrompt, formatDateForPrompt } from '../src/prompt.js';
 import type { SessionContext } from '../src/sessionContext.js';
 import type { ToolsClient } from '../src/toolsClient.js';
@@ -83,17 +84,47 @@ interface ToolShape {
   parameters: Record<string, unknown>;
 }
 const toolCtx = buildTools(ctx, stubClient);
-const openaiTools = Object.entries(toolCtx).map(([name, t]) => {
-  const shape = t as unknown as ToolShape;
-  return {
-    type: 'function' as const,
-    function: { name, description: shape.description, parameters: shape.parameters },
-  };
-});
+
+/**
+ * THE MODEL MUST SEE WHAT PRODUCTION SHOWS IT — one PHASE of the toolset, not all 25.
+ *
+ * This eval has now been caught twice testing a fiction: once with a prompt that
+ * omitted businessHours (so the model had nothing to confabulate from and dutifully
+ * called the tool, passing 3/3 while production lied), and once with a non-null
+ * callerPhone (so the spoken-number path it existed to test never ran). Both times
+ * it passed vacuously.
+ *
+ * Since 2026-07-14 production narrows the visible toolset per phase (toolPhases.ts)
+ * and swaps it when the model calls a router. An eval that kept offering all 25 tools
+ * would be grading a configuration that no longer exists — the third version of the
+ * same mistake. So: start in intake, and swap when a router fires, exactly as the
+ * live agent does.
+ */
+function toolsFor(phase: CallPhase) {
+  return Object.entries(toolsForPhase(toolCtx, phase)).map(([name, t]) => {
+    const shape = t as unknown as ToolShape;
+    return {
+      type: 'function' as const,
+      function: { name, description: shape.description, parameters: shape.parameters },
+    };
+  });
+}
 
 // ── Synthetic tool results (what the "backend" answers per tool) ─────────────
 
 const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
+  // The phase routers. These MUST mirror what tools.ts actually returns — a stub
+  // that drifts from the real contract teaches the model a shape it will never
+  // see in production, and this eval's entire value is that it replays the real
+  // thing. (The phase SWAP itself is applied in runCase, not here.)
+  start_booking: {
+    ok: true,
+    next: 'Scheduling tools are now available. Use get_available_slots (they have a day in mind) or get_scheduling_options (they do not) to find real openings. Never state or refuse a time you have not seen in a tool result.',
+  },
+  manage_appointment: {
+    ok: true,
+    next: 'Appointment-management tools are now available. Call get_my_appointments to see what they actually have before changing anything.',
+  },
   get_customer_context: {
     success: true,
     result: { found: true, name: 'Jane Doe', preferences: {} },
@@ -482,7 +513,8 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 const MAX_ATTEMPTS = 6;
 
 async function chat(
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  tools: ReturnType<typeof toolsFor>
 ): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
   let lastErr = '';
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -495,7 +527,7 @@ async function chat(
           model: MODEL,
           temperature: 0,
           messages,
-          tools: openaiTools,
+          tools,
           tool_choice: 'auto',
         }),
       });
@@ -557,10 +589,13 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
   // Everything the agent SAYS, across the whole call. Graded against `called` at
   // the end — a claim with no tool behind it is a lie to the caller.
   const said: string[] = [];
+  // Production opens every call in 'intake' and swaps the visible toolset when the
+  // model calls a router. Mirror it exactly — see toolsFor().
+  let phase: CallPhase = 'intake';
   messages.push({ role: 'user', content: userQueue.shift()! });
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const { content, toolCalls } = await chat(messages);
+    const { content, toolCalls } = await chat(messages, toolsFor(phase));
 
     if (content) said.push(content);
 
@@ -576,6 +611,10 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
             reason: `called FORBIDDEN tool ${tc.function.name} (args: ${tc.function.arguments.slice(0, 120)})`,
           };
         }
+        // A router swaps the toolset for every subsequent round, exactly as the
+        // live agent's onPhaseChange → agent.updateTools() does.
+        const target = PHASE_ROUTERS[tc.function.name as keyof typeof PHASE_ROUTERS];
+        if (target) phase = target;
         const result = DEFAULT_TOOL_RESULTS[tc.function.name] ?? { success: true, result: {} };
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
       }
