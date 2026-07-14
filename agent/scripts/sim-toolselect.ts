@@ -82,7 +82,13 @@ const systemPrompt = buildSystemPrompt({
 // Proves the model BOOKS instead of stalling on a code it can never send.
 const systemPromptNoVerify = buildSystemPrompt({
   tenantName: "Bella's Hair Studio",
-  callerPhone: ctx.callerPhone,
+  // NULL — and this is the whole point of the case.
+  //
+  // The first version passed ctx.callerPhone (non-null), which parked the prompt in the
+  // "you ALREADY HAVE the caller's number" branch. The spoken-number path — the one this
+  // case exists to test, the one a forwarded line always takes — was never exercised, and
+  // the case passed 3/3 while proving nothing. A test that cannot fail is not a test.
+  callerPhone: null,
   currentDate: formatDateForPrompt(new Date(), TZ),
   timezone: TZ,
   businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
@@ -257,14 +263,29 @@ const CASES: EvalCase[] = [
     name: 'NO OTP: books a spoken number instead of stalling on a code it cannot send',
     noVerify: true,
     userTurns: [
-      "I'd like an appointment tomorrow at two.",
-      'Two is fine.',
+      // The times must match what get_available_slots actually returns in the stub
+      // (3:00 / 3:30). Accepting a time the tool never offered would let the case pass
+      // on a conversation that could not happen in production.
+      "I'd like an appointment tomorrow afternoon.",
       'My name is Bob Smith.',
       'six zero eight two one seven five three zero three.',
       'Yes, that is correct.',
+      '3:30 works.',
+      'Yes, texting me is fine.',
       'Yes, please book it.',
+      'No, that is everything. Thank you.',
     ],
-    required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
+    // identify_caller is REQUIRED — it is where requires_verification surfaces, and the
+    // whole point is that the agent handles that answer by BOOKING anyway.
+    // Order reflects what the agent ACTUALLY does on a no-caller-ID call: it needs a
+    // name and number before it can do anything, so identify_caller comes first, then
+    // the calendar, then the booking. (Requiring slots BEFORE identify_caller was my
+    // error and made the case fail for the wrong reason.)
+    required: [
+      ['identify_caller'],
+      ['get_available_slots', 'get_scheduling_options'],
+      ['book_with_scheduling'],
+    ],
     // take_message is the FAILURE mode here: it is what the agent fell back to on the
     // real call when the code never arrived. Booking was always possible.
     forbidden: ['book_appointment', 'check_availability', 'take_message'],
@@ -633,7 +654,23 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
             reason: `called FORBIDDEN tool ${tc.function.name} (args: ${tc.function.arguments.slice(0, 120)})`,
           };
         }
-        const result = DEFAULT_TOOL_RESULTS[tc.function.name] ?? { success: true, result: {} };
+        // The REAL route returns requires_verification for a number the caller merely
+        // SPOKE. Feeding a generic success here would mean the case never sees the
+        // response the new prompt guidance exists to handle — the eval would test a
+        // conversation production can never have.
+        const result =
+          c.noVerify && tc.function.name === 'identify_caller'
+            ? {
+                success: true,
+                result: {
+                  saved: true,
+                  returning_customer: false,
+                  requires_verification: true,
+                  message:
+                    "Before I can pull up an account for that number, I need to verify it's yours.",
+                },
+              }
+            : (DEFAULT_TOOL_RESULTS[tc.function.name] ?? { success: true, result: {} });
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
       }
       continue;
@@ -681,11 +718,16 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
 }
 
 async function main(): Promise<void> {
+  // SIM_CASE=<substring> runs a single case. The full suite is 13 cases x N rounds with
+  // rate-limit backoff — minutes. Far too slow a loop when iterating on ONE case, and a
+  // gate you cannot run quickly is a gate you stop running.
+  const filter = process.env.SIM_CASE?.toLowerCase();
+  const selected = filter ? CASES.filter((c) => c.name.toLowerCase().includes(filter)) : CASES;
   console.log(
-    `${C.b}SecretaryHQ — agent tool-selection eval${C.x} ${C.d}(model: ${MODEL}, ${CASES.length} cases)${C.x}`
+    `${C.b}SecretaryHQ — agent tool-selection eval${C.x} ${C.d}(model: ${MODEL}, ${selected.length} cases)${C.x}`
   );
   let passed = 0;
-  for (const c of CASES) {
+  for (const c of selected) {
     let r: CaseResult;
     try {
       r = await runCase(c);
