@@ -54,11 +54,28 @@ const stubClient = {
   call: async () => ({ success: false, error: 'sim-toolselect stub — must never execute' }),
 } as unknown as ToolsClient;
 
+// THE PROMPT MUST MATCH PRODUCTION, FIELD FOR FIELD.
+//
+// This eval used to omit businessHours — and that omission hid the exact bug it
+// existed to catch. On the 2026-07-13 evening call the agent NEVER called
+// get_available_slots. It read "we're open 1:00 PM to 5:00 PM" out of its own
+// prompt, invented two slots from it ("I can offer you 1:00 or 2:00"), and then
+// refused the caller's 3:00 PM with a fabricated reason — on a completely empty
+// calendar.
+//
+// The eval passed 3/3 the whole time, because WITHOUT hours in the prompt the model
+// has nothing to confabulate from and dutifully calls the tool. The bug lived
+// entirely in a field the eval didn't replay.
+//
+// An eval that does not reproduce production's prompt does not test production. It
+// tests a fiction that happens to be easier to pass.
 const systemPrompt = buildSystemPrompt({
   tenantName: "Bella's Hair Studio",
   callerPhone: ctx.callerPhone,
   currentDate: formatDateForPrompt(new Date(), TZ),
   timezone: TZ,
+  businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+  bookableThrough: '2027-01-08',
 });
 
 interface ToolShape {
@@ -263,6 +280,53 @@ const CASES: EvalCase[] = [
         pattern: /\b(saved|taken|noted)\s+(your\s+)?message\b/i,
         requiresTool: ['take_message'],
         lie: 'told the caller a message was saved without ever saving it',
+      },
+    ],
+  },
+  {
+    // ── THE 2026-07-13 EVENING CALL ─────────────────────────────────────────
+    //
+    // It booked — the first real appointment this system ever made — and then hung
+    // up WITHOUT EVER OFFERING TO TEXT. consent_records: 0. So the four reminders it
+    // queued were all thrown away at send time for "no consent", and the customer
+    // got no confirmation, no reminder, nothing on his phone.
+    //
+    // A booking the customer cannot see is half a booking.
+    //
+    // It also never called get_available_slots: it read "we're open 1:00 PM to 5:00
+    // PM" out of its own prompt, invented two slots from it, and refused the
+    // caller's 3:00 PM with a fabricated reason — on an EMPTY calendar. The hours are
+    // the door, not the diary.
+    name: 'FULL CALL: hours are not availability, and a booking must offer a text',
+    userTurns: [
+      "I'd like to set up a meeting for tomorrow at three.",
+      'How about tomorrow at three?',
+      'Three is fine.',
+      'My name is Bob Smith.',
+      'six zero eight two one seven five three zero three.',
+      'Yes, that is correct.',
+      // The spoken number is unverified, so the agent runs the OTP. Script the whole
+      // leg — a case that runs out of caller turns mid-flow proves nothing about what
+      // the agent would have done next.
+      'The code is 1234.',
+      'Yes, texting me is fine.',
+      'Yes, please book it.',
+      'No, that is all. Thank you.',
+    ],
+    // It must CHECK the calendar (not read times off the business hours), ASK about
+    // texting, and BOOK.
+    required: [
+      ['get_available_slots', 'get_scheduling_options'],
+      ['record_sms_consent'],
+      ['book_with_scheduling'],
+    ],
+    forbidden: ['book_appointment', 'check_availability'],
+    claims: [
+      {
+        pattern:
+          /\b(is|are|was)\s+(taken|booked|unavailable|not available)\b|\baren'?t available\b|\bwe close at\b/i,
+        requiresTool: ['get_available_slots', 'get_scheduling_options', 'check_availability'],
+        lie: 'refused a time inside the business hours without ever checking the calendar',
       },
     ],
   },
