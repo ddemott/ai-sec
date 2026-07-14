@@ -21,8 +21,13 @@
  *  catches a true hang, never a legitimately slow call. */
 export const WRAP_TOOL_TIMEOUT_MS = 25_000;
 
-const DEFAULT_FALLBACK =
-  "Sorry, I'm having a little trouble with that right now. Would you like me to take a message and have someone get back to you?";
+// ONE definition (session/holdLines.ts) — it is pre-synthesized per tenant voice,
+// and the filler cache is keyed BY THE TEXT, so a drifted copy silently misses the
+// cache and speaks with live-TTS latency on the exact path that is already going
+// badly for the caller.
+import { TOOL_FALLBACK_LINE } from '../session/holdLines.js';
+
+const DEFAULT_FALLBACK = TOOL_FALLBACK_LINE;
 
 export interface WrapToolOptions {
   /** Override the per-tool timeout (e.g. a long-running booking). */

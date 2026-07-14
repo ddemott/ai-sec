@@ -38,6 +38,7 @@ import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { toolsForPhase, type CallPhase } from './toolPhases.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
+import { HOLD_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
 import { attachOutputWatchdog } from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
 import { TranscriptRecorder } from './transcript.js';
@@ -1132,9 +1133,13 @@ export default defineAgent({
           // DIFFERENT VOICE from the rest of the call. Both lines are already in
           // PREGEN_LINES; this warm is now a no-op cache hit in the normal case.
           const watchdogVoice = ttsVoiceKey;
-          const fillerText = 'One moment while I check that for you.';
-          const recoveryText =
-            "Sorry, this is taking me a moment. If you'd like, I can take a message and have someone get right back to you.";
+          // ONE definition (session/holdLines.ts). These used to be string literals
+          // here AND in PREGEN_LINES below — and the filler cache is keyed BY THE
+          // TEXT, so a one-character drift between the two copies would silently
+          // miss the cache and put live TTS latency back on the line whose only job
+          // is to cover latency. Nothing would error. It would just get slow again.
+          const fillerText = HOLD_LINE;
+          const recoveryText = RECOVERY_LINE;
           const fillerTts = new deepgram.TTS({
             apiKey: config.DEEPGRAM_API_KEY,
             model: ttsVoiceKey,
@@ -1198,12 +1203,11 @@ export default defineAgent({
         // waiting on our cache-fill is worse than a caller waiting on a synth. First
         // call after a deploy misses and synthesises live (the old behaviour); every
         // call after that is instant.
-        const PREGEN_LINES = [
-          greeting,
-          'One moment while I check that for you.',
-          "Sorry, this is taking me a moment. If you'd like, I can take a message and have someone get right back to you.",
-          "Sorry, I'm having a little trouble with that right now. Would you like me to take a message and have someone get back to you?",
-        ];
+        // The greeting is tenant-specific; the rest are the fixed runtime lines,
+        // imported from their ONE definition (session/holdLines.ts) rather than
+        // re-typed here. The cache is keyed by the text — a drifted copy misses it
+        // silently and reintroduces the very latency this pre-generation removes.
+        const PREGEN_LINES = [greeting, ...HOLD_LINES];
         void warmFillers(
           new deepgram.TTS({
             apiKey: config.DEEPGRAM_API_KEY,
