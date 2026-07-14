@@ -704,7 +704,16 @@ export default defineAgent({
       ] as const;
       const REALTIME_CAPS = ['identity', 'scheduling', 'messaging', 'sms'] as const;
       const activeCapabilities = (config.ENABLE_REALTIME ? REALTIME_CAPS : ALL_CAPS).filter(
-        (c) => c !== 'sms' || config.ENABLE_SMS
+        (c) =>
+          (c !== 'sms' || config.ENABLE_SMS) &&
+          // OTP is a security control, so it defaults ON and is only removed by an explicit
+          // decision — but it works by TEXTING a code, and no text reaches a handset until
+          // 10DLC lands. On a forwarded line the agent asks the caller to read back a code
+          // that will never arrive, they wait, nothing comes, and the booking dies.
+          //
+          // Verification gates DISCLOSURE, not CREATION. A booking reveals nothing — the
+          // caller supplies every fact in it.
+          (c !== 'verification' || config.ENABLE_PHONE_VERIFICATION)
       );
 
       // 3b. Prefetch the caller's CRM record so the prompt can carry their name,

@@ -247,6 +247,13 @@ export function buildTools(
   // runtime can't honor (transfer_call returns not_configured / "not available"
   // → dead-end). Mirrors the prompt's capability gating (PR #114). When transfer
   // is unavailable we offer only a message.
+  // Does this session HAVE the OTP tools? A tool DESCRIPTION that tells the model to
+  // call send_verification_code when send_verification_code is not in the toolset is the
+  // exact prompt/tool mismatch capability-gating exists to prevent (GH #113): the model
+  // tries to call a tool that does not exist, errors, and the caller hears dead air.
+  // Removing the tool is not enough — NOTHING MAY STILL POINT AT IT.
+  const hasVerification = !opts?.capabilities || opts.capabilities.includes('verification');
+
   const canOfferTransfer =
     (!opts?.capabilities || opts.capabilities.includes('transfer')) &&
     !!transfer?.forwardPhone &&
@@ -804,7 +811,7 @@ export function buildTools(
 
     identify_caller: llm.tool({
       description:
-        "Save or update the caller's contact record, and look them up. Call this as soon as you have their number — you do not need their name first. Keeps the address book current without duplicating records.\n\nIf the number is one we already have, the response may come back with returning_customer:true plus their NAME, saved preferences and recent history — USE it (greet them by name, offer their usual). You then do NOT need to ask their name: you have it. Confirm it instead ('I have you as Camille — still right?') rather than asking them to repeat it; a name you read from the record is more reliable than one heard over a phone line.\n\nIf it returns sms_consent:true, they have ALREADY agreed to appointment texts — that permission is on file and does not expire, so do NOT ask for it again and do NOT call record_sms_consent. Just say you'll text them as usual. If sms_consent is FALSE **or the field is ABSENT** (it is omitted on a requires_verification response, and for a brand-new caller), treat that as NO consent and ask for permission using the full script. A missing field is never permission.\n\nIf it returns requires_verification:true, the number was one THEY SPOKE (we had no caller ID), so we cannot trust it yet and will tell you nothing about the account. Send them a code (send_verification_code) and verify it (verify_phone_code) BEFORE calling this again — never greet them by name or mention any account until it is verified.",
+        `Save or update the caller's contact record, and look them up. Call this as soon as you have their number — you do not need their name first. Keeps the address book current without duplicating records.\n\nIf the number is one we already have, the response may come back with returning_customer:true plus their NAME, saved preferences and recent history — USE it (greet them by name, offer their usual). You then do NOT need to ask their name: you have it. Confirm it instead ('I have you as Camille — still right?') rather than asking them to repeat it; a name you read from the record is more reliable than one heard over a phone line.\n\nIf it returns sms_consent:true, they have ALREADY agreed to appointment texts — that permission is on file and does not expire, so do NOT ask for it again and do NOT call record_sms_consent. Just say you'll text them as usual. If sms_consent is FALSE **or the field is ABSENT** (it is omitted on a requires_verification response, and for a brand-new caller), treat that as NO consent and ask for permission using the full script. A missing field is never permission.\n\nIf it returns requires_verification:true, the number was one THEY SPOKE (we had no caller ID), so we cannot trust it yet and will tell you nothing about the account. ${hasVerification ? 'Send them a code (send_verification_code) and verify it (verify_phone_code) BEFORE calling this again — never greet them by name or mention any account until it is verified.' : 'You have NO way to verify a number on this call: do NOT mention verification, codes or texts. It does NOT stop you BOOKING — treat them as a new caller, use the name and number they gave you, and book normally. A booking reveals nothing about anyone: they supply every fact in it.'}`,
       parameters: {
         type: 'object',
         properties: {
