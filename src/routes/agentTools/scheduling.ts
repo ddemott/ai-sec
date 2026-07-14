@@ -726,9 +726,17 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
       });
 
       if (!service) {
+        // "someone", not a name. This string is SPOKEN TO THE CALLER, and it used to
+        // say "I'll have DALE get back to you" — a hardcoded first name, in a route
+        // that every tenant on the platform shares. A caller to Bella's Hair Studio
+        // was told a man named Dale would ring them back. (Found 2026-07-14 while
+        // grepping for exactly this after the same bug turned up in the job-inquiry
+        // reply.) The route has no owner name to hand and does not need one: a
+        // receptionist saying "someone will get back to you" is correct for every
+        // business, and a name we cannot look up is a name we must not invent.
         return ok(
           reply,
-          `I'm not able to pull up our booking options right now. Would you like to leave a message and I'll have Dale get back to you?`
+          `I'm not able to pull up our booking options right now. Would you like to leave a message and I'll have someone get back to you?`
         );
       }
 

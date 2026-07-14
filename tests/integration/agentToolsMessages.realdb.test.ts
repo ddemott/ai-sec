@@ -171,6 +171,72 @@ describe('capture-job-inquiry → real job_inquiries row', () => {
     expect(row.rows[0].location_type).toBe('remote');
   });
 
+  it('SAD: the spoken reply names the REAL inbox and the REAL owner — never "his inbox", never "Dale"', async () => {
+    // WHO: a recruiter who called a business and was asked to send a job description.
+    // WHAT: the `message` this route returns is spoken to the caller almost verbatim —
+    //       the model relays it rather than composing its own. So every defect in this
+    //       string is a defect a customer HEARS.
+    // WHEN: found on a real call, 2026-07-14. The agent said, exactly:
+    //         "Please also email a job description to HIS INBOX with your name and
+    //          company in the subject line."
+    //       To which inbox? The route has known the address the whole time — it emails
+    //       the owner with it two lines earlier — and simply never put it in the
+    //       sentence. We asked a recruiter to send us a job description and did not
+    //       tell them where. They cannot follow that instruction. Nothing arrives.
+    // WHY:  and it said "Dale" — a hardcoded first name, in a route EVERY tenant on
+    //       the platform shares. A salon's assistant would have told its caller that
+    //       the details were passed along to Dale.
+    // This test OWNS its data (feedback_test_isolation): give the tenant a
+    // recipient, and take it away again at the end.
+    const recipient = 'hiring@example-test.com';
+    await setup.query(`UPDATE tenants SET job_inquiry_email = $2 WHERE tenant_id = $1`, [
+      tenantId,
+      recipient,
+    ]);
+
+    const res = await post('/agent-tools/capture-job-inquiry', {
+      tenant_id: tenantId,
+      caller_name: 'Spoken Sam',
+      company: 'Blue Cross',
+    });
+    expect(res.statusCode).toBe(200);
+
+    const spoken: string = res.json().result.message;
+    expect(spoken).toContain(recipient); // the address, out loud
+    expect(spoken).not.toMatch(/his inbox|her inbox|their inbox/i);
+    expect(spoken).not.toContain('Dale'); // not on THIS tenant — it is not their owner
+
+    await setup.query(`UPDATE tenants SET job_inquiry_email = NULL WHERE tenant_id = $1`, [
+      tenantId,
+    ]);
+  });
+
+  it('SAD: with NO inbox configured, it does not ask the caller to email one', async () => {
+    // WHO: a recruiter calling a tenant whose owner never set a job-inquiry email.
+    // WHY: the old reply asked them to email "his inbox" UNCONDITIONALLY — even when
+    //      there was no recipient at all and the route had just logged
+    //      `job_inquiry_no_recipient`. So the caller is told to send a job description
+    //      somewhere that does not exist. They go away, they send it (where?), and
+    //      nothing ever arrives. An instruction the caller CANNOT follow is worse than
+    //      no instruction: it manufactures a false belief that the ball is rolling.
+    //      The inquiry row still saves — that is the durable record — but we stay
+    //      silent about a channel we do not have.
+    await setup.query(`UPDATE tenants SET job_inquiry_email = NULL WHERE tenant_id = $1`, [
+      tenantId,
+    ]);
+
+    const res = await post('/agent-tools/capture-job-inquiry', {
+      tenant_id: tenantId,
+      caller_name: 'Voidless Vera',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.saved).toBe(true); // the row still lands
+
+    const spoken: string = res.json().result.message;
+    expect(spoken).not.toMatch(/email/i); // no ask we cannot honour
+    expect(spoken).toMatch(/passed those details along/i); // but we still confirm receipt
+  });
+
   it('HAPPY: a minimal inquiry (name only) still lands — optional fields default NULL', async () => {
     const res = await post('/agent-tools/capture-job-inquiry', {
       tenant_id: tenantId,

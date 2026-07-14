@@ -769,7 +769,11 @@ export function buildTools(
         properties: {
           name: {
             type: 'string',
-            description: 'The caller\'s full name as they stated it, e.g. "Dale DeMott".',
+            // A NEUTRAL example. This description is sent to the LLM on every call for
+            // every tenant, so a real person's name here is that person's PII sitting
+            // in every customer's prompt — and it biases the model toward a name it
+            // has seen in its instructions.
+            description: 'The caller\'s full name as they stated it, e.g. "Jordan Reyes".',
           },
           phone: {
             type: 'string',
@@ -1068,7 +1072,10 @@ export function buildTools(
         address?: string;
         timezone?: string;
       }) => {
-        speakFiller?.('One moment while I pass that along to Dale...');
+        // No name. speakFiller is currently a no-op, but this said "pass that along
+        // to Dale" — so the day anyone re-enables it, every tenant's caller hears the
+        // platform owner's first name. A dormant string is still a string.
+        speakFiller?.('One moment while I pass that along...');
         const res = await client.call('/agent-tools/capture-job-inquiry', {
           tenant_id: ctx.tenantId,
           caller_name: args.caller_name,

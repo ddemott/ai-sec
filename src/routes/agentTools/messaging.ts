@@ -333,14 +333,26 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         );
 
         // Resolve the notification recipient: the dedicated job_inquiry_email,
-        // else the tenant owner's user email.
-        const recip = await client.query<{ email: string | null }>(
+        // else the tenant owner's user email. The owner's NAME comes back too — the
+        // spoken reply used to say "Dale" as a hardcoded string, in a route shared by
+        // every tenant on the platform, so a salon's assistant would tell its caller
+        // it had passed the details to Dale.
+        const recip = await client.query<{ email: string | null; owner_name: string | null }>(
           `SELECT COALESCE(
                     t.job_inquiry_email,
                     (SELECT u.email FROM users u
                       WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
                       ORDER BY u.created_at ASC LIMIT 1)
-                  ) AS email
+                  ) AS email,
+                  -- FIRST name: this is spoken aloud ("passed those details along to
+                  -- Dale"), and a receptionist says the first name. full_name is the
+                  -- fallback, not the preference. users has full_name/first_name/
+                  -- last_name and no bare name column; assuming otherwise 500d this
+                  -- route in test.
+                  (SELECT COALESCE(NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(u.full_name), ''))
+                     FROM users u
+                    WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
+                    ORDER BY u.created_at ASC LIMIT 1) AS owner_name
              FROM tenants t WHERE t.tenant_id = $1`,
           [args.tenant_id]
         );
@@ -348,6 +360,7 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         return {
           job_inquiry_id: res.rows[0]?.job_inquiry_id ?? null,
           recipient: recip.rows[0]?.email ?? null,
+          ownerName: recip.rows[0]?.owner_name ?? null,
         };
       });
 
@@ -386,13 +399,34 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         );
       }
 
+      // WHAT THE CALLER ACTUALLY HEARS.
+      //
+      // This string is spoken almost verbatim — the model relays a tool's `message`
+      // rather than composing its own. Which means every defect in it is a defect a
+      // customer hears, and this one had three.
+      //
+      // 1. It never said the address. "Please also email a job description to HIS
+      //    INBOX" — to which inbox? The route has known the address the whole time
+      //    (it is emailing the owner two lines above with it) and simply never put it
+      //    in the sentence. We asked a recruiter to send a job description and did
+      //    not tell them where. Caught on a real call 2026-07-14.
+      // 2. It said "Dale". Hardcoded. In a route every tenant shares.
+      // 3. Worst: when NO recipient is configured it STILL asked them to email — into
+      //    a void, with no address and no inbox at the other end. An instruction the
+      //    caller cannot possibly follow is worse than no instruction; they will go
+      //    away and do it, and nothing will arrive. So the email sentence now exists
+      //    ONLY when there is somewhere for it to go.
+      const who = row.ownerName ?? 'the owner';
+      const passedAlong = `Thanks — I've passed those details along to ${who} and they'll get back to you.`;
+      const emailAsk = row.recipient
+        ? ` Please also email a job description to ${row.recipient}, and put your name and company in the subject line.`
+        : '';
+
       return ok(reply, {
         saved: true,
         job_inquiry_id: row.job_inquiry_id,
         emailed,
-        message:
-          "Thanks — I've passed those details along to Dale and he'll get back to you. " +
-          'Please also email a job description to his inbox with your name and company in the subject line.',
+        message: passedAlong + emailAsk,
       });
     },
     'Failed to capture job inquiry'
