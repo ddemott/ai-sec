@@ -82,6 +82,31 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
 
+  // PHONE VERIFICATION (the OTP code). ON by default — it is a SECURITY control, and a
+  // security control must never be switched off by an omission, only by a decision.
+  //
+  // But it is currently a control that CANNOT RUN. It works by texting the caller a
+  // code, and no text this product sends reaches a handset (10DLC, see ENABLE_SMS). So
+  // on a forwarded line — where we have no caller ID and the OTP is the only way to
+  // trust a spoken number — the agent asks the caller to read back a code that will
+  // never arrive. They wait. Nothing comes. The booking dies.
+  //
+  // The design bug it exposed is worth keeping: **VERIFICATION GATES DISCLOSURE, NOT
+  // CREATION.** A booking reveals nothing — the caller supplies every fact in it. An
+  // undeliverable text was blocking an appointment it had no business blocking. Reading
+  // someone their appointment history is a different matter, and stays gated.
+  //
+  // With this false, send_verification_code / verify_phone_code are removed from the
+  // toolset AND from the prompt (they move together — GH #113: describing a tool the
+  // model cannot call is how you get a hallucinated call and dead air), and the agent is
+  // told that requires_verification does NOT stop it booking.
+  //
+  // Set ENABLE_PHONE_VERIFICATION=false on Railway until 10DLC lands.
+  ENABLE_PHONE_VERIFICATION: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false'),
+
   // Thinking-sound bed: when "true", a looping keyboard-typing ambiance plays
   // while the agent is in the 'thinking' state and stops the instant it starts
   // speaking — covers the pipeline TTS gap / slow tool with a "receptionist is
