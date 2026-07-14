@@ -699,7 +699,24 @@ export default defineAgent({
           : new voice.AgentSession({
               vad: ctx.proc.userData.vad as silero.VAD,
               stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
-              llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
+              // temperature: 0 — PICKING A TOOL IS NOT A CREATIVE ACT.
+              //
+              // We never passed a temperature, so every call ran at OpenAI's default
+              // of 1.0: full sampling randomness, applied to a 23-way tool-selection
+              // decision. Then we called the resulting run-to-run variance "flaky" and
+              // went looking for the bug in the prompt.
+              //
+              // The variance WAS the bug. At temperature 1 the model can sample its way
+              // into narrating a lookup instead of performing one, or into the wrong one
+              // of two similar tools, and it will do it on some calls and not others —
+              // which is exactly the signature we spent days chasing. Warmth in this
+              // product comes from the persona and the voice, not from the token
+              // sampler.
+              llm: new openai.LLM({
+                apiKey: config.OPENAI_API_KEY,
+                model: 'gpt-4o-mini',
+                temperature: 0,
+              }),
               // TTS IS DEEPGRAM AURA — native WebSocket streaming.
               // This is the "voice isn't smooth" fix, take two.
               //
