@@ -33,9 +33,8 @@
  * the cost of a miss is a customer hearing it.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { globSync } from 'node:fs';
-import { resolve, relative } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve, relative, join } from 'node:path';
 
 const ROOT = resolve(__dirname, '..');
 
@@ -50,7 +49,30 @@ const DENY = [
   // not the code. A persona is a product decision. A real person's name is a leak.
 ];
 
-const SHIPPING_GLOBS = ['src/**/*.ts', 'agent/src/**/*.ts', 'shared/**/*.ts'];
+const SHIPPING_DIRS = ['src', 'agent/src', 'shared'];
+
+/**
+ * Walk the tree by hand rather than with fs.globSync.
+ *
+ * globSync is EXPERIMENTAL and version-dependent: it found 200+ files locally and ZERO
+ * on CI's Node, so the guard scanned nothing and would have passed vacuously — except
+ * that it also asserts it scanned >50 files, which is the only reason we found out. A
+ * guard that silently protects nothing is worse than no guard, because it is believed.
+ * readdirSync is boring and works everywhere.
+ */
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(resolve(ROOT, dir), { withFileTypes: true })) {
+    const rel = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+      out.push(...walk(rel));
+    } else if (entry.name.endsWith('.ts')) {
+      out.push(rel);
+    }
+  }
+  return out;
+}
 
 /** Strip comments so history and rationale don't trip the guard — only CODE counts. */
 function stripComments(src: string): string {
@@ -67,8 +89,8 @@ describe('no real person is hardcoded into shipping code', () => {
   it("SAD: a tenant's caller must never be told that 'Dale' will get back to them", () => {
     const offenders: string[] = [];
 
-    const files = SHIPPING_GLOBS.flatMap((g) =>
-      globSync(g, { cwd: ROOT }).filter(
+    const files = SHIPPING_DIRS.flatMap((d) =>
+      walk(d).filter(
         (f) =>
           !f.endsWith('.test.ts') &&
           // Demo/seed data invents people ON PURPOSE — that is what it is for.
