@@ -71,6 +71,7 @@ Quick commands:
 - Heavy pre-commit automation: `npm run prepare-commit` (runs checks + tests + drift detector + more)
 - Create feature branch (recommended): `npm run create-branch feat/my-work` or `bash scripts/create-feature-branch.sh feat/my-work`
 - Verify docs drift: `npm run verify:claude-md`
+- **Verify the agent can actually SPEAK: `cd agent && npm run verify:tts`** — opens the REAL Deepgram WebSocket with the REAL config and demands real audio bytes back, for every voice the picker can map to. **MANDATORY before any TTS change reaches prod.** Origin: 2026-07-14 — a TTS engine swap passed typecheck and all 567 unit tests and took the phone line COMPLETELY SILENT (the plugin appends `?speed=…` to the WS upgrade URL; Aura answers 400; the socket never opens; there is no TTS at all). Not one of those tests synthesises a word — they all mock the TTS. **"It compiles and the tests are green" is not the same as "it makes noise."** `tenants.tts_speed` is consequently INERT under Aura — it is not passed, because passing it is what caused the outage.
 
 Logins (all `/ password`):
 

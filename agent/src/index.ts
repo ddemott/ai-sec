@@ -736,7 +736,22 @@ export default defineAgent({
               tts: new deepgram.TTS({
                 apiKey: config.DEEPGRAM_API_KEY,
                 model: ttsVoiceKey,
-                speed: tenantConfig.ttsSpeed ?? 1.0,
+                // NO `speed`. Aura's WebSocket REJECTS it — the plugin appends
+                // ?speed=… to the upgrade URL and Deepgram answers 400, so the socket
+                // never opens, so there is NO TTS AT ALL. That is not a degraded voice;
+                // it is a SILENT PHONE LINE. Measured:
+                //
+                //     WITHOUT speed  -> OPEN
+                //     WITH speed=1   -> Unexpected server response: 400
+                //
+                // The first version of this passed `speed: tenantConfig.ttsSpeed ?? 1.0`, so EVERY
+                // call sent speed=1 and every call was silent. The owner rang his own
+                // business, said "Hello… Hello…", heard nothing, and hung up.
+                //
+                // tenants.tts_speed is therefore INERT for Aura. It stays in the schema
+                // and the dashboard (it is meaningful again the moment we move to a
+                // TTS that honours it) but it is not passed here, and pretending
+                // otherwise is what caused the outage.
               }),
               turnHandling: {
                 interruption: {
@@ -1041,7 +1056,6 @@ export default defineAgent({
           const fillerTts = new deepgram.TTS({
             apiKey: config.DEEPGRAM_API_KEY,
             model: ttsVoiceKey,
-            speed: tenantConfig.ttsSpeed ?? 1.0,
           }) as unknown as Parameters<typeof warmFillers>[0];
           void warmFillers(fillerTts, watchdogVoice, [fillerText, recoveryText]).then(
             ({ failed }) => {
@@ -1112,7 +1126,6 @@ export default defineAgent({
           new deepgram.TTS({
             apiKey: config.DEEPGRAM_API_KEY,
             model: ttsVoiceKey,
-            speed: tenantConfig.ttsSpeed ?? 1.0,
           }) as unknown as Parameters<typeof warmFillers>[0],
           ttsVoiceKey,
           PREGEN_LINES
