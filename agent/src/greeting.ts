@@ -53,6 +53,28 @@ export function buildDisclosure(businessName: string): string {
 }
 
 /**
+ * The same disclosure, for when the OPENER has already named the business.
+ *
+ * A SECOND AUTHORED STRING, not a regex edit of the first. Raised in review on #254,
+ * and the reviewer was right: the first version stripped "for <business>" out of the
+ * disclosure with a regex. That clause is the platform's AI IDENTIFICATION — the
+ * legal bit — and this file's own header says its wording must not change without
+ * review. Worse, it would have mutated a TENANT'S CUSTOM callDisclosure, silently
+ * rewriting compliance text somebody else wrote and is relying on.
+ *
+ * You do not edit legal wording with a regular expression. You write the second
+ * version, deliberately, and choose between them. Both name the speaker as an AI and
+ * both disclose the transcription; this one simply doesn't repeat a business name the
+ * caller heard one second ago.
+ *
+ * A tenant's CUSTOM disclosure is never touched by either path — it is spoken
+ * verbatim, which is the contract resolveDisclosure has always had.
+ */
+export function buildDisclosureShort(): string {
+  return `I'm an AI assistant, and this call is transcribed for quality and service.`;
+}
+
+/**
  * Resolve the disclosure actually spoken: the tenant's custom text when set and
  * non-blank, otherwise the platform default. A whitespace-only column counts as
  * unset — clearing the field returns the tenant to the safe default rather than
@@ -183,23 +205,25 @@ export function buildGreeting(config: TenantDisplayConfig): string {
   // like a bug to a caller" — and then waved it through as "the owner's choice [that]
   // only costs a repeat". It doesn't cost a repeat. It costs the first impression.
   //
-  // The DISCLOSURE is the one that must keep the name (it is the legal identification
-  // — "I'm an AI assistant for X"). So when the opener already names the business, the
-  // disclosure drops to the shorter form. The caller hears the name once, in the
-  // sentence that legally needs it.
-  const disclosure = resolveDisclosure(config);
+  // We CHOOSE between two authored disclosures; we do NOT edit one. Rewriting the
+  // legal clause with a regex (the first version of this) would mutate compliance
+  // wording, and would have silently rewritten a TENANT'S OWN callDisclosure.
+  //
+  // A custom disclosure is therefore never deduped — it is spoken verbatim, exactly
+  // as resolveDisclosure has always promised. If an owner writes their business name
+  // into both their First Message and their disclosure, that is their sentence to
+  // write, and we do not quietly redact it.
+  const customDisclosure = config.callDisclosure?.trim();
   const name = config.name?.trim();
   const openerNamesBusiness =
     Boolean(name) && openerWithoutClosingQuestion.toLowerCase().includes(name!.toLowerCase());
-  const finalDisclosure =
-    openerNamesBusiness && disclosure.toLowerCase().includes(name!.toLowerCase())
-      ? disclosure.replace(
-          new RegExp(`\\s*for ${name!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'),
-          ''
-        )
-      : disclosure;
+  const disclosure = customDisclosure
+    ? customDisclosure
+    : openerNamesBusiness
+      ? buildDisclosureShort()
+      : buildDisclosure(config.name);
 
-  return [openerWithoutClosingQuestion, finalDisclosure, closer]
+  return [openerWithoutClosingQuestion, disclosure, closer]
     .join(' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
