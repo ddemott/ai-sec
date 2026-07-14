@@ -105,7 +105,10 @@ export default defineAgent({
         event: 'agent_boot',
         commit,
         booted_at: new Date().toISOString(),
-        tts: 'deepgram-aura (native streaming)',
+        // NOT hardcoded. Realtime mode is speech-to-speech and has NO Deepgram TTS at
+        // all — a stamp that says "deepgram-aura" on a Realtime worker is a NEW lying
+        // stamp inside the PR that fixes a lying stamp. Report what will actually run.
+        tts: process.env.ENABLE_REALTIME === 'true' ? 'openai-realtime (s2s)' : 'deepgram-aura',
       },
       `ai-sec-agent worker booting — commit ${commit}`
     );
@@ -697,9 +700,8 @@ export default defineAgent({
               vad: ctx.proc.userData.vad as silero.VAD,
               stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
               llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
-              // TTS is OpenAI. The plugin is non-streaming (buffers the whole clip
-              // before any audio plays), so model latency = dead air on every reply.
-              // NATIVE STREAMING TTS. This is the "voice isn't smooth" fix, take two.
+              // TTS IS DEEPGRAM AURA — native WebSocket streaming.
+              // This is the "voice isn't smooth" fix, take two.
               //
               // THE HISTORY, because it is the whole lesson:
               //
