@@ -36,7 +36,7 @@ import { fetchCustomerContext } from './customerContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
-import { warmFillers } from './session/fillerCache.js';
+import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
 import { attachOutputWatchdog } from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
 import { TranscriptRecorder } from './transcript.js';
@@ -45,17 +45,6 @@ import { summarizeCall } from './callSummary.js';
 import { classifyCallOutcome } from './callClassify.js';
 import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
-
-/** OpenAI TTS voices offered in the dashboard picker. Validate the tenant's
- *  saved voice against this set so a legacy value (e.g. old Grok 'ara' from
- *  pre-2026-06-25) or anything unexpected falls back to 'shimmer' instead of
- *  erroring at the OpenAI API. */
-const OPENAI_VOICES = ['shimmer', 'nova', 'alloy', 'echo', 'onyx', 'fable'] as const;
-function toOpenAIVoice(v: string | null | undefined): (typeof OPENAI_VOICES)[number] {
-  return v && (OPENAI_VOICES as readonly string[]).includes(v)
-    ? (v as (typeof OPENAI_VOICES)[number])
-    : 'shimmer';
-}
 
 /**
  * The tenant's saved voice, mapped to its nearest Deepgram Aura equivalent.
@@ -91,10 +80,6 @@ function toAuraVoice(v: string | null | undefined): DeepgramVoice {
 
 export default defineAgent({
   prewarm: async (proc) => {
-    // Boot-version marker. Printed once when the worker process starts, so the
-    // Railway logs unambiguously show WHICH code is live (vs guessing from a
-    // redeploy). If you don't see build 'spoken-phone-v3-openai-tts' + these features in
-    // the logs, the worker is running an older deployment.
     // WHAT CODE IS THIS WORKER ACTUALLY RUNNING?
     //
     // This used to be a hand-written string: build:'spoken-phone-v3-openai-tts',
@@ -686,6 +671,12 @@ export default defineAgent({
       }
 
       try {
+        // The tenant's voice, resolved ONCE. Used by the live TTS, by the
+        // pre-generation cache, and by the watchdog — they must all agree, or the
+        // cache misses and the hold line comes out in a different voice from the rest
+        // of the call.
+        const ttsVoiceKey = toAuraVoice(tenantConfig.ttsVoice);
+
         const session = config.ENABLE_REALTIME
           ? new voice.AgentSession({
               // OpenAI Realtime (speech-to-speech) — one model does STT+LLM+TTS
@@ -742,7 +733,7 @@ export default defineAgent({
               // choice the owner made in the dashboard.
               tts: new deepgram.TTS({
                 apiKey: config.DEEPGRAM_API_KEY,
-                model: toAuraVoice(tenantConfig.ttsVoice),
+                model: ttsVoiceKey,
                 speed: tenantConfig.ttsSpeed ?? 1.0,
               }),
               turnHandling: {
@@ -1036,16 +1027,20 @@ export default defineAgent({
         // the call; until warm, the watchdog falls back to live TTS), then attach
         // the session-level deadline timer.
         if (config.ENABLE_OUTPUT_WATCHDOG) {
-          const watchdogVoice = toOpenAIVoice(tenantConfig.ttsVoice);
+          // Same voice AND same cache key as the main pre-generation above, or the
+          // watchdog would synthesise its own copies under a different key — paying
+          // twice for identical audio, and (worse) speaking the hold line in a
+          // DIFFERENT VOICE from the rest of the call. Both lines are already in
+          // PREGEN_LINES; this warm is now a no-op cache hit in the normal case.
+          const watchdogVoice = ttsVoiceKey;
           const fillerText = 'One moment while I check that for you.';
           const recoveryText =
             "Sorry, this is taking me a moment. If you'd like, I can take a message and have someone get right back to you.";
-          const fillerTts = new openai.TTS({
-            apiKey: config.OPENAI_API_KEY,
-            model: 'gpt-4o-mini-tts',
-            voice: watchdogVoice,
+          const fillerTts = new deepgram.TTS({
+            apiKey: config.DEEPGRAM_API_KEY,
+            model: ttsVoiceKey,
             speed: tenantConfig.ttsSpeed ?? 1.0,
-          });
+          }) as unknown as Parameters<typeof warmFillers>[0];
           void warmFillers(fillerTts, watchdogVoice, [fillerText, recoveryText]).then(
             ({ failed }) => {
               if (failed.length > 0) {
@@ -1086,6 +1081,47 @@ export default defineAgent({
         // and cannot be edited or removed from the dashboard. See greeting.ts for
         // the wording rules and why each clause is worded the way it is.
         const greeting = buildGreeting(tenantConfig);
+
+        // PRE-GENERATE the fixed lines for this tenant's voice.
+        //
+        // Dale's observation, and it is the right one: most of what this agent says at
+        // the edges of a call is not generated at all — it is a FIXED SCRIPT. The
+        // greeting is byte-identical on every call. So is the hold line. So is the
+        // "I'm having trouble" fallback. Paying a TTS round-trip for a sentence that
+        // cannot change is pure waste, and it is charged precisely at the moments the
+        // caller is least willing to wait: the instant they are connected, and the
+        // instant something is already slow.
+        //
+        // Synthesise them ONCE per worker per voice, replay the frames forever. The
+        // LiveKit worker is per-tenant and long-lived, so the voice is stable and the
+        // cache pays for itself on call two.
+        //
+        // Deliberately fire-and-forget: warming MUST NOT block call setup. A caller
+        // waiting on our cache-fill is worse than a caller waiting on a synth. First
+        // call after a deploy misses and synthesises live (the old behaviour); every
+        // call after that is instant.
+        const PREGEN_LINES = [
+          greeting,
+          'One moment while I check that for you.',
+          "Sorry, this is taking me a moment. If you'd like, I can take a message and have someone get right back to you.",
+          "Sorry, I'm having a little trouble with that right now. Would you like me to take a message and have someone get back to you?",
+        ];
+        void warmFillers(
+          new deepgram.TTS({
+            apiKey: config.DEEPGRAM_API_KEY,
+            model: ttsVoiceKey,
+            speed: tenantConfig.ttsSpeed ?? 1.0,
+          }) as unknown as Parameters<typeof warmFillers>[0],
+          ttsVoiceKey,
+          PREGEN_LINES
+        ).then(
+          ({ warmed, failed }) =>
+            callLog.info(
+              { event: 'pregen_warmed', warmed: warmed.length, failed: failed.length },
+              `pre-generated ${warmed.length} fixed line(s); ${failed.length} failed (they fall back to live synthesis)`
+            ),
+          () => undefined
+        );
         // Greeting. Pipeline mode plays it via say() uninterrupted (a caller's
         // "hi?"/line noise at pickup shouldn't truncate the opening line); Realtime
         // mode speaks it via generateReply with server-side turn-taking (it rejects
@@ -1119,7 +1155,41 @@ export default defineAgent({
               // we legally did not say it. allowInterruptions:false here is belt-and-
               // braces on top of the session-level interruption.enabled:false — this
               // one utterance must survive even if barge-in is ever re-enabled.
-              const opener = session.say(greeting, { allowInterruptions: false });
+              // PRE-GENERATED GREETING — zero TTS latency on pickup.
+              //
+              // The greeting is the ONE line that is fully deterministic: it is built
+              // from the tenant's own config and is byte-identical on every call this
+              // worker ever answers. Synthesising it live meant every caller heard a
+              // beat of silence at pickup — the worst possible place for it, because a
+              // caller who has just been connected and hears nothing assumes the line is
+              // dead. It is also the longest single utterance of the call.
+              //
+              // So we synthesise it ONCE and replay the frame. session.say(text, {audio})
+              // skips synthesis entirely. The machinery already existed (fillerCache, built
+              // for the watchdog's hold lines) and was simply never pointed at the one
+              // utterance that needed it most.
+              //
+              // Warming is best-effort and off the hot path: if it hasn't landed yet (first
+              // call after a deploy) or the synth failed, `frame` is undefined and say()
+              // falls back to live synthesis — slower, but never silent. A cache miss must
+              // degrade to the old behaviour, never to dead air.
+              const greetingFrame = getFillerFrame(ttsVoiceKey, greeting);
+              const opener = greetingFrame
+                ? session.say(greeting, {
+                    allowInterruptions: false,
+                    audio: frameStream(greetingFrame),
+                  })
+                : session.say(greeting, { allowInterruptions: false });
+              callLog.info(
+                {
+                  event: 'greeting_spoken',
+                  pregenerated: Boolean(greetingFrame),
+                  chars: greeting.length,
+                },
+                greetingFrame
+                  ? 'greeting played from cache — no TTS latency'
+                  : 'greeting synthesised live (cache miss) — audible pause at pickup'
+              );
               await opener.waitForPlayout();
 
               // Drop whatever the caller said OVER the greeting.
