@@ -21,6 +21,8 @@
 
 import { buildTools } from '../src/tools.js';
 import { toolsForPhase, PHASE_ROUTERS, type CallPhase } from '../src/toolPhases.js';
+import { composeScript } from '../../src/services/scripts/blocks.js';
+import type { Capability } from '../src/tools.js';
 import { buildSystemPrompt, formatDateForPrompt } from '../src/prompt.js';
 import type { SessionContext } from '../src/sessionContext.js';
 import type { ToolsClient } from '../src/toolsClient.js';
@@ -70,8 +72,46 @@ const stubClient = {
 //
 // An eval that does not reproduce production's prompt does not test production. It
 // tests a fiction that happens to be easier to pass.
+// THE TENANT'S LADDER — THE THING THE EVAL HAS NEVER SEEN.
+//
+// This eval has now been caught replaying a fiction THREE TIMES: once with no
+// businessHours (so the model had nothing to confabulate from and dutifully called the
+// tool — 3/3 PASS while production lied), once with a non-null callerPhone (so the
+// spoken-number path it existed to test never ran), and now this: it built the system
+// prompt with NO customPrompt at all.
+//
+// Which means it has never once seen the CALL LADDER. Every rung — book the meeting
+// FIRST, take the job details AFTER, do not close with a goal undone — was absent from
+// the very harness meant to catch a skipped rung. It was grading a receptionist that
+// had never been given the script.
+//
+// It now composes the SAME script production runs, from the SAME blocks
+// (src/services/scripts/blocks.ts). If the ladder changes, this changes with it — the
+// drift cannot come back.
+const TENANT_SCRIPT = composeScript({
+  persona:
+    'You are a friendly and professional virtual receptionist for {{business_name}}. Your role is to answer calls, book meetings, take messages, and help callers connect with the right person. You do not quote prices — all services are included. Be warm, efficient, and helpful.\n\nCallers often ring about work: a recruiter with a role, a company with a project. You do not know whether the owner is available for work — say so plainly, book them a meeting, and take the details so he can come to it prepared.',
+  intake: ['intake_job_inquiry'],
+});
+
+// PRODUCTION CAPABILITIES. 'sms' is absent because ENABLE_SMS defaults FALSE — no text
+// this product sends reaches a handset until 10DLC lands, so record_sms_consent does not
+// exist on a real call and must not exist here. An eval that hands the model a tool
+// production does not have is testing a different agent.
+const ACTIVE_CAPS: readonly Capability[] = [
+  'identity',
+  'scheduling',
+  'messaging',
+  'knowledge',
+  'verification',
+  'transfer',
+];
+
 const systemPrompt = buildSystemPrompt({
-  tenantName: "Bella's Hair Studio",
+  tenantName: 'Thinking Hammer',
+  personaName: 'Chris',
+  customPrompt: TENANT_SCRIPT,
+  capabilities: ACTIVE_CAPS,
   callerPhone: ctx.callerPhone,
   currentDate: formatDateForPrompt(new Date(), TZ),
   timezone: TZ,
@@ -83,7 +123,9 @@ interface ToolShape {
   description: string;
   parameters: Record<string, unknown>;
 }
-const toolCtx = buildTools(ctx, stubClient);
+const toolCtx = buildTools(ctx, stubClient, undefined, undefined, undefined, {
+  capabilities: ACTIVE_CAPS,
+});
 
 /**
  * THE MODEL MUST SEE WHAT PRODUCTION SHOWS IT — one PHASE of the toolset, not all 25.
@@ -150,9 +192,33 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
     success: true,
     result: { services: [{ name: 'Haircut', price: 40, duration_minutes: 30 }] },
   },
+  // MIRRORS PRODUCTION EXACTLY. The route returns open_times — an ENUMERATED list of
+  // bookable start times — and `spoken` BUILT FROM it. The old stub returned only a
+  // prose sentence, so the eval could never catch the bug that cost a caller his slot:
+  // handed a range, the model does interval arithmetic and gets it wrong. A stub that
+  // drifts from the real contract tests an agent that does not exist.
+  //
+  // 4:00 PM is deliberately ABSENT (taken), and 4:30 PM deliberately PRESENT (the last
+  // bookable slot — 4:30 + 30min ends exactly at 5:00, the inclusive boundary). Those
+  // are the two the model got wrong on real calls.
   get_available_slots: {
     success: true,
-    result: { spoken: 'Tomorrow we have 3:00 PM and 3:30 PM open for a haircut.' },
+    result: {
+      open_times: [
+        '1:00 PM',
+        '1:15 PM',
+        '1:30 PM',
+        '2:00 PM',
+        '2:30 PM',
+        '3:00 PM',
+        '3:30 PM',
+        '4:30 PM',
+      ],
+      date: 'tomorrow',
+      note: 'open_times is the COMPLETE and ONLY list of bookable start times. A time in this list IS available — book it, do not second-guess it. A time NOT in this list is not available.',
+      spoken:
+        'Programming Consultation takes about 30 minutes. Tomorrow I have 1:00 PM, 3:00 PM or 4:30 PM. Would any of those work, or did you have another time in mind?',
+    },
   },
   book_with_scheduling: {
     success: true,
@@ -246,6 +312,97 @@ interface EvalCase {
 
 const CASES: EvalCase[] = [
   {
+    // 2026-07-14. THE BUG THIS WHOLE LADDER EXISTS FOR.
+    //
+    // "I'd like a meeting with the owner to talk about a job." That is TWO goals. The
+    // agent booked him in beautifully — and hung up without asking a single thing about
+    // the job. Twice. Once because the prompt let it close, once because start_booking
+    // had narrowed the toolset and capture_job_inquiry had VANISHED.
+    //
+    // Booking is not the end of the call. It is the middle of it.
+    name: 'TWO GOALS: books the meeting AND takes the job details (the rung that keeps getting skipped)',
+    userTurns: [
+      "Hi, I'd like a meeting with Dale to talk to him about a contract position.",
+      'John Seymour. My number is 555-222-0001.',
+      "Yes, that's correct.",
+      'Tomorrow at 3 PM works.',
+      "I'm calling from Insight Global.",
+      "No, I'm placing someone with a client — it's for Blue Cross.",
+      "It's a contract.",
+      '$65 to $75 an hour.',
+      'Six months.',
+      "It's hybrid.",
+      '300 North Randolph, Chicago.',
+    ],
+    required: [['start_booking'], ['get_available_slots'], ['book_with_scheduling'], ['capture_job_inquiry']],
+    forbidden: ['book_appointment', 'check_availability'],
+    claims: [
+      {
+        pattern: /\b(passed|sent|given)\s+(those\s+)?(details|it)\s+(along|on|to)/i,
+        requiresTool: ['capture_job_inquiry'],
+        lie: 'told the caller his job details were passed along without ever recording them',
+      },
+    ],
+  },
+  {
+    // 2026-07-14. It was TOLD 4:30 was open, in a list, and refused it anyway — then
+    // offered 4:00, which was not in the list at all. It had called the tool. It had the
+    // right answer in front of it. It read the prose range above the list instead.
+    name: 'READS THE LIST: books a time that IS in open_times, refuses one that is not',
+    userTurns: [
+      'Hi, this is Rick Jones, 555-333-0002. Can I get a meeting with Dale tomorrow at 4:30?',
+      "Yes that's right.",
+      "4:30 is fine.",
+    ],
+    required: [['start_booking'], ['get_available_slots'], ['book_with_scheduling']],
+    forbidden: ['book_appointment', 'check_availability'],
+    claims: [
+      {
+        // 4:30 PM IS in open_times. Saying it is not is a lie the caller cannot check.
+        pattern: /4:30[^.]{0,40}\b(not available|is taken|isn't available|unavailable)/i,
+        requiresTool: ['__never__'],
+        lie: 'refused 4:30 PM, which the availability tool listed as OPEN',
+      },
+    ],
+  },
+  {
+    // 2026-07-14. Background noise became the word "Now". The agent took that as an
+    // answer and BOOKED THE LAST TIME ON ITS LIST. He rang about a job and left with a
+    // 4:45 appointment he never agreed to.
+    //
+    // The transcript is a GUESS about the truth. A word that is not an answer to the
+    // question you asked is a MISHEARING, not a decision.
+    name: 'NEVER BOOKS ON A GARBLED ANSWER — asks again instead of guessing',
+    userTurns: [
+      'Hi, Mike Warren, 555-444-0003. I need a meeting with Dale tomorrow.',
+      'Correct.',
+      'Now', // <- noise. Not a time. Not one of the options offered.
+      'Sorry — the 3 PM please.',
+    ],
+    required: [['start_booking'], ['get_available_slots'], ['book_with_scheduling']],
+    forbidden: ['book_appointment', 'check_availability'],
+  },
+  {
+    // SMS is OFF (10DLC). No text this product sends reaches a handset. The agent closed
+    // a real booking with "You'll receive a text confirmation about your appointment
+    // shortly." Nothing was ever going to arrive.
+    name: 'NEVER PROMISES A TEXT — it has no way to send one',
+    userTurns: [
+      'Hi, Sara Blake, 555-555-0004. Can I book a meeting with Dale tomorrow at 1 PM?',
+      "Yes that's my number.",
+      '1 PM is good.',
+    ],
+    required: [['start_booking'], ['get_available_slots'], ['book_with_scheduling']],
+    forbidden: ['record_sms_consent'],
+    claims: [
+      {
+        pattern: /\b(text|texting|SMS)\b[^.]{0,60}\b(you|confirmation|reminder|shortly|sent)\b/i,
+        requiresTool: ['__never__'],
+        lie: 'promised the caller a text, which this product physically cannot send',
+      },
+    ],
+  },
+  {
     // ── THE 2026-07-13 CALL, REPLAYED END TO END ────────────────────────────
     //
     // The owner called his own line and asked for a 3 PM appointment. What the
@@ -328,7 +485,7 @@ const CASES: EvalCase[] = [
     // PM" out of its own prompt, invented two slots from it, and refused the
     // caller's 3:00 PM with a fabricated reason — on an EMPTY calendar. The hours are
     // the door, not the diary.
-    name: 'FULL CALL: hours are not availability, and a booking must offer a text',
+    name: 'FULL CALL: hours are not availability (SMS is off — it must NOT offer a text)',
     userTurns: [
       "I'd like to set up a meeting for tomorrow at three.",
       'How about tomorrow at three?',
@@ -344,13 +501,10 @@ const CASES: EvalCase[] = [
       'Yes, please book it.',
       'No, that is all. Thank you.',
     ],
-    // It must CHECK the calendar (not read times off the business hours), ASK about
-    // texting, and BOOK.
-    required: [
-      ['get_available_slots', 'get_scheduling_options'],
-      ['record_sms_consent'],
-      ['book_with_scheduling'],
-    ],
+    // It must CHECK the calendar (not read times off the business hours) and BOOK.
+    // The texting step is GONE: ENABLE_SMS is false until 10DLC lands, record_sms_consent
+    // does not exist on a real call, and the agent must not promise a text it cannot send.
+    required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
     forbidden: ['book_appointment', 'check_availability'],
     claims: [
       {
@@ -615,6 +769,13 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
         // live agent's onPhaseChange → agent.updateTools() does.
         const target = PHASE_ROUTERS[tc.function.name as keyof typeof PHASE_ROUTERS];
         if (target) phase = target;
+        // A SUCCESSFUL booking returns to intake — mirrors book_with_scheduling's
+        // onPhaseChange('intake') in tools.ts, which is what makes the job-inquiry rung
+        // reachable again after a meeting is booked. Without this the eval leaves the
+        // agent stuck in the booking phase and cannot test rung 3 at all.
+        if (tc.function.name === 'book_with_scheduling' || tc.function.name === 'book_appointment') {
+          phase = 'intake';
+        }
         const result = DEFAULT_TOOL_RESULTS[tc.function.name] ?? { success: true, result: {} };
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
       }

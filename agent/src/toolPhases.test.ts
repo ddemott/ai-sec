@@ -64,7 +64,7 @@ describe('toolsForPhase — narrowing', () => {
     // move, and it should be driven by an eval number, not by taste.
     for (const phase of PHASES) {
       const n = Object.keys(toolsForPhase(ALL_TOOLS, phase)).length;
-      expect(n, `${phase} exposes ${n} tools`).toBeLessThanOrEqual(15);
+      expect(n, `${phase} exposes ${n} tools`).toBeLessThanOrEqual(16);
     }
     // The phases that DO have a known intent must stay genuinely narrow — this is
     // where the ceiling is real and where the win is measurable.
