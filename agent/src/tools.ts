@@ -622,7 +622,20 @@ export function buildTools(
           call_id: ctx.callId ?? '',
         });
         const bookedId = extractAppointmentId(bookRes);
-        if (bookedId) outcome?.recordBooking(bookedId);
+        if (bookedId) {
+          outcome?.recordBooking(bookedId);
+          // Booked — back to intake, so the rest of the caller's asks stay reachable.
+          // See the long note on book_with_scheduling: narrowing must never remove an exit.
+          setTimeout(() => {
+            void (async () => {
+              try {
+                await opts?.onPhaseChange?.('intake');
+              } catch {
+                /* never break a call that has just succeeded */
+              }
+            })();
+          }, 0);
+        }
         return formatResponse(bookRes);
       },
     }),
@@ -692,7 +705,35 @@ export function buildTools(
           reminder_lead_minutes: args.reminder_lead_minutes ?? null,
         });
         const bookedId = extractAppointmentId(res);
-        if (bookedId) outcome?.recordBooking(bookedId);
+        if (bookedId) {
+          outcome?.recordBooking(bookedId);
+          // BOOKED — SO GO BACK TO INTAKE. The call is not over.
+          //
+          // start_booking narrows the toolset to the booking phase, and capture_job_inquiry
+          // is NOT in it. So on 2026-07-14 a caller said "a call with the owner to talk about
+          // a job", the agent booked him in perfectly... and then could not take a single
+          // detail about the job, because the tool had VANISHED at the exact moment it was
+          // needed. It closed the call instead. He rang about a job and nobody ever asked him
+          // what it was.
+          //
+          // That is the stranding failure the phase tests warn about, caused by the phase
+          // machinery itself: NARROWING MUST NEVER REMOVE AN EXIT.
+          //
+          // The ladder is BOOK FIRST, THEN INTAKE — the details are preparation for a meeting
+          // that now exists. So the booking phase's job is done the moment the appointment
+          // lands, and the agent returns to intake, where every other thing a caller might
+          // want still lives. Deferred, like the routers: never mutate the toolset from
+          // inside the execute() LiveKit is waiting on.
+          setTimeout(() => {
+            void (async () => {
+              try {
+                await opts?.onPhaseChange?.('intake');
+              } catch {
+                /* a failed swap must never break a call that has just succeeded */
+              }
+            })();
+          }, 0);
+        }
         return formatBookingResponse(res, args.requested_start);
       },
     }),

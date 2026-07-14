@@ -899,6 +899,26 @@ export default defineAgent({
                 // otherwise is what caused the outage.
               }),
               turnHandling: {
+                // LET PEOPLE FINISH. THEN LET THEM FINISH AGAIN.
+                //
+                // "No time to answer questions." — the owner, after the agent asked his
+                // name, closed his turn while he was still saying it, and talked over
+                // him. He had to start again. Barge-in is OFF, so he could not even cut
+                // back in: he had to sit and listen to the interruption.
+                //
+                // minDelay is how long the silence must last before the turn is declared
+                // over, and in VAD mode the effective wait is max(VAD silence, minDelay).
+                // Both are raised: a person answering a question pauses to THINK, and a
+                // person reading out a phone number pauses between the groups of digits.
+                // Those pauses are not the end of a sentence, and treating them as one is
+                // how you lose half a phone number.
+                //
+                // maxDelay caps the wait so a caller who genuinely stops mid-thought is
+                // not left hanging forever.
+                //
+                // The cost is real and accepted: every reply now starts a beat later. A
+                // beat of silence reads as LISTENING. Talking over someone reads as not
+                // listening — and here it is unrecoverable.
                 interruption: {
                   // HALF-DUPLEX BY DEFAULT (product decision 2026-07-12, after a real
                   // call). The caller CANNOT cut the agent off — every utterance plays
@@ -961,9 +981,24 @@ export default defineAgent({
                 // __PERSONA_NAME__ never finishes a reply → freeze. Wait ~1.3s of silence so a
                 // multi-part answer AGGREGATES into one turn → one reply. maxDelay
                 // caps the wait so a truly-finished caller isn't left hanging.
+                //
+                // RAISED 1300 -> 1500 / 4000 -> 6000 on 2026-07-14. "No time to answer
+                // questions." The agent asked the owner his name, closed his turn while
+                // he was still saying it, and talked over him — and barge-in is OFF, so
+                // he could not cut back in. He had to sit through the interruption and
+                // start again.
+                //
+                // A person answering a question pauses to THINK, and a person reading out
+                // a phone number pauses between the groups of digits. Those pauses are not
+                // the end of a sentence. Treating them as one is how you lose half a phone
+                // number — which is exactly what happened, twice.
+                //
+                // The cost is accepted: every reply starts a beat later. A beat of silence
+                // reads as LISTENING; talking over someone reads as not listening, and
+                // here it cannot be undone. Tunable on a real call without a deploy.
                 endpointing: {
-                  minDelay: 1300,
-                  maxDelay: 4000,
+                  minDelay: Number(process.env.ENDPOINTING_MIN_DELAY_MS ?? 1500),
+                  maxDelay: Number(process.env.ENDPOINTING_MAX_DELAY_MS ?? 6000),
                 },
               },
             });

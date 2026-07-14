@@ -60,7 +60,11 @@ describe('buildSystemPrompt', () => {
     //        caller can't guess what's on offer. Fix lives in the prompt.
     const prompt = buildSystemPrompt(BASE_CTX);
     expect(prompt).toContain('get_service_catalog');
-    expect(prompt).toMatch(/never ask an open-ended/i);
+    // The RULE, not the old prose. Rewritten 2026-07-14 when the platform prompt
+    // became IF/THEN like the tenant ladder — prose and structure side by side is a
+    // fight the prose keeps winning, and the model kept ignoring the structure.
+    expect(prompt).toMatch(/NEVER ask an open/i);
+    expect(prompt).toMatch(/cannot guess your menu/i);
     expect(prompt).toMatch(/take a message/i);
   });
 
@@ -232,7 +236,7 @@ describe('buildSystemPrompt', () => {
     //        NO_AVAILABILITY, awkward "actually that's taken" follow-up
     //        on the phone. Prompt now mandates the check-first flow.
     const prompt = buildSystemPrompt(BASE_CTX);
-    expect(prompt).toMatch(/Availability discipline/i);
+    expect(prompt).toMatch(/NEVER SPEAK A TIME A TOOL HAS NOT GIVEN YOU/i);
     // Both check-availability tools called out as the gate before booking.
     expect(prompt).toMatch(/get_available_slots[\s\S]*get_scheduling_options[\s\S]*FIRST/i);
     // Sequence is explicit — caller asks → check → propose → book.
@@ -298,8 +302,17 @@ describe('buildSystemPrompt', () => {
     //        rejects, the caller has already heard a time the agent
     //        couldn't deliver. The hard rule prevents that.
     const prompt = buildSystemPrompt(BASE_CTX);
-    expect(prompt).toMatch(/hard rule/i);
-    expect(prompt).toMatch(/MUST call an availability tool BEFORE/);
+    // The guarantee, stated as the IF it now is: an availability tool must run before a
+    // booking tool, and a time may not be offered or refused without one.
+    expect(prompt).toMatch(/about to BOOK a time[\s\S]{0,120}availability tool must have run first/i);
+    expect(prompt).toMatch(/about to OFFER a time[\s\S]{0,120}open_times/i);
+    expect(prompt).toMatch(/about to REFUSE a time[\s\S]{0,160}open_times/i);
+    // Same guarantee, now stated as an IF (the platform prompt became a decision tree
+    // on 2026-07-14 — a wall of prose next to a ladder is a fight the prose wins, and
+    // the model was reading the prose and ignoring the ladder).
+    expect(prompt).toMatch(
+      /about to BOOK a time[\s\S]{0,140}availability tool must have run first/i
+    );
     // All three availability tools called out so the LLM knows it has
     // multiple paths into the gate (different tools fit different shapes
     // of caller request).

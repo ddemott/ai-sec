@@ -24,11 +24,18 @@ interface FakeHandle {
 function makeFakeSession() {
   const handlers: Record<string, Array<(ev: unknown) => void>> = {};
   let agentState = 'listening';
+  let userState = 'listening';
   const sayCalls: Array<{ text: string; opts: unknown }> = [];
   const handles: FakeHandle[] = [];
   let n = 0;
 
   const session = {
+    get userState() {
+      return userState;
+    },
+    setUserState(v: string) {
+      userState = v;
+    },
     get agentState() {
       return agentState;
     },
@@ -59,7 +66,18 @@ function makeFakeSession() {
     );
   };
 
-  return { session: session as unknown as voice.AgentSession, sayCalls, handles, emit };
+  /** The caller's state — the thing the watchdog used to ignore, and talk over. */
+  const setUserState = (v: string) => {
+    userState = v;
+  };
+
+  return {
+    session: session as unknown as voice.AgentSession,
+    sayCalls,
+    handles,
+    emit,
+    setUserState,
+  };
 }
 
 describe('attachOutputWatchdog', () => {
@@ -93,6 +111,44 @@ describe('attachOutputWatchdog', () => {
     toolFinished();
   });
 
+  it('SAD: the hold line NEVER plays while the caller is still speaking', async () => {
+    // WHO: a caller halfway through saying his name.
+    // WHEN: 2026-07-14, a real call.
+    //
+    //   Assistant: "What is your name?"
+    //   Caller:    (starts his name, pauses for breath)
+    //   -> the endpointer closes his turn at the pause; the agent enters 'thinking'
+    //   -> 2.8s later the watchdog plays "Just a moment." STRAIGHT OVER HIM
+    //   Caller:    "You never got my name."
+    //
+    // His name was lost. Barge-in is OFF by product decision, so he could not talk
+    // through it — he had to sit and listen to the interruption and start again. His
+    // verdict: "coming back too quick", "no time to answer questions".
+    //
+    // The watchdog watched the AGENT for silence and never once looked at the CALLER.
+    // But a hold line exists to reassure someone who is WAITING. Played at someone
+    // mid-sentence it is the exact opposite — the machine deciding its own silence
+    // matters more than their voice. **If the caller is speaking there IS no dead air**,
+    // and the only thing that can spoil the call is us.
+    // A tool IS running — so a hold line is legitimate here, and would play if the
+    // caller were silent. The ONLY reason it must not is that he is mid-sentence.
+    _resetToolActivityForTest();
+    toolStarted();
+    const f = makeFakeSession();
+    attach(f);
+    f.emit('thinking');
+    f.setUserState('speaking'); // he is mid-sentence
+
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(f.sayCalls, 'must not talk over a speaking caller').toHaveLength(0);
+
+    // ...and it re-arms, so a genuinely slow tool is still covered once he stops.
+    f.setUserState('listening');
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(f.sayCalls).toHaveLength(1);
+    toolFinished();
+  });
+
   it('SAD: stuck thinking with NO tool running → asks for a moment, and CLAIMS NOTHING', async () => {
     // WHO: every caller, on nearly every turn — the STT→gpt-4o-mini→TTS pipeline
     //      routinely takes longer than the deadline to produce a first word.
@@ -113,9 +169,15 @@ describe('attachOutputWatchdog', () => {
     attach(f);
     f.emit('thinking');
     await vi.advanceTimersByTimeAsync(2500);
-    expect(f.sayCalls).toHaveLength(1);
-    expect(f.sayCalls[0].text).toBe('Just a moment.');
-    expect(f.sayCalls[0].text).not.toMatch(/check|look|find/i);
+
+    // NOTHING. The agent is not working — it is waiting — and a machine that fills the
+    // silence while it waits for a human to answer is talking over them.
+    //
+    // The owner's instruction, after it cut him off mid-name: "I need ALL questions to
+    // have a watchdog and wait for the answer." A question is an invitation to speak;
+    // the rudest thing you can do after asking one is make a noise. And barge-in is OFF,
+    // so he cannot talk through it — he has to stop, listen, and start again.
+    expect(f.sayCalls, 'a waiting agent must be SILENT').toHaveLength(0);
   });
 
   it('HAPPY: real audio before deadline 1 → no filler ever plays', async () => {

@@ -122,20 +122,68 @@ export function attachOutputWatchdog(
 
   const fireFiller = () => {
     timer1 = undefined;
+
+    // NEVER TALK OVER THE CALLER.
+    //
+    // The watchdog watched the AGENT for silence and never once looked at the CALLER.
+    // So this happened, on a real call (2026-07-14):
+    //
+    //   Assistant: "What is your name?"
+    //   Caller:    (starts saying his name, pauses for breath)
+    //   -> the endpointer closes his turn at the pause, the agent enters 'thinking'
+    //   -> 2.8s later the watchdog plays "Just a moment." ON TOP OF HIM
+    //   Caller:    "You never got my name."
+    //
+    // His name was lost. And because barge-in is OFF by product decision, he could not
+    // talk through it — he had to sit and listen to the interruption, then start again.
+    // His verdict: "coming back too quick", "no time to answer questions".
+    //
+    // A hold line exists to reassure someone who is WAITING. Playing it at someone who
+    // is mid-sentence is the exact opposite: it is the machine deciding its own silence
+    // matters more than their voice. If the caller is speaking, there IS no dead air —
+    // the call is going fine, and the only thing that can spoil it is us.
+    //
+    // So: if the user is speaking, stand down and re-arm. We will get another chance
+    // the moment they stop, and if the agent really is stuck, the deadline fires then.
+    if (session.userState === 'speaking') {
+      timer1 = setTimeout(fireFiller, deadline1);
+      return;
+    }
+
     // Re-check: the real reply may have started between the timer scheduling and
     // now. Only hold the line if the agent is still thinking (no audio yet).
     if (session.agentState !== 'thinking') return;
+
+    // THE AGENT ONLY SPEAKS WHEN IT IS ACTUALLY DOING SOMETHING.
+    //
+    // The hold line now plays ONLY while a tool is genuinely in flight. If no tool is
+    // running, the agent is not working — it is waiting — and a machine that fills the
+    // silence while it waits for a human to answer is not being helpful, it is talking
+    // over them.
+    //
+    // The owner's instruction, after the call where it cut him off mid-name: "I need
+    // ALL questions to have a watchdog and wait for the answer." That is the right
+    // design, and it is stronger than the userState guard above (which only catches the
+    // caller once they have already STARTED speaking — it cannot help the person who is
+    // still drawing breath, or thinking, or reading a number off a screen).
+    //
+    // A question is an invitation to speak. The single rudest thing you can do after
+    // asking one is make a noise. And here it is worse than rude: barge-in is OFF, so
+    // the caller cannot talk through the interruption — they must stop, listen, and
+    // start their answer again.
+    //
+    // The cost, accepted: pure LLM latency (~2-3s) is no longer covered by a spoken
+    // line. That is a pause, and a pause after a question reads as LISTENING. The
+    // deadline-2 recovery line still fires for a genuinely stuck turn, so a truly dead
+    // call is never left dead. If the ambient cover is ever wanted back, that is what
+    // ENABLE_THINKING_SOUND is for — a bed, not a sentence.
+    if (!isToolRunning()) {
+      timer2 = setTimeout(fireRecovery, deadline2);
+      return;
+    }
+
     fillerDone = false;
-    // SAY THE TRUE THING. A tool really running earns "let me check that for you";
-    // an LLM that is merely slow gets "just a moment", which promises nothing and so
-    // cannot be false. The watchdog stays cause-AGNOSTIC about WHEN it fires (dead
-    // air is dead air) and becomes cause-HONEST about WHAT it says.
-    const running = isToolRunning();
-    fillerHandle =
-      speakHold(
-        running ? opts.fillerText : opts.thinkingText,
-        running ? 'filler' : 'thinking'
-      ) ?? undefined;
+    fillerHandle = speakHold(opts.fillerText, 'filler') ?? undefined;
     // Mark when the filler's playout finishes so a later 'speaking' (the real
     // reply, which is serialized AFTER the filler) is recognized as real audio.
     fillerHandle?.addDoneCallback(() => {
