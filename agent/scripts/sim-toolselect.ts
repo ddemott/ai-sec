@@ -78,6 +78,20 @@ const systemPrompt = buildSystemPrompt({
   bookableThrough: '2027-01-08',
 });
 
+// The prompt the agent gets when ENABLE_PHONE_VERIFICATION=false (10DLC pending).
+// Proves the model BOOKS instead of stalling on a code it can never send.
+const systemPromptNoVerify = buildSystemPrompt({
+  tenantName: "Bella's Hair Studio",
+  callerPhone: ctx.callerPhone,
+  currentDate: formatDateForPrompt(new Date(), TZ),
+  timezone: TZ,
+  businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+  bookableThrough: '2027-01-08',
+  capabilities: ['identity', 'scheduling', 'messaging', 'knowledge', 'transfer'],
+});
+
+const VERIFY_TOOLS = new Set(['send_verification_code', 'verify_phone_code']);
+
 interface ToolShape {
   description: string;
   parameters: Record<string, unknown>;
@@ -183,6 +197,13 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
 interface EvalCase {
   name: string;
   userTurns: string[];
+  /**
+   * Run this case as if ENABLE_PHONE_VERIFICATION=false — the OTP tools are removed
+   * and the prompt never mentions them, exactly as in production when 10DLC
+   * registration is pending. Proves the agent BOOKS instead of stalling on a code it
+   * has no way to send.
+   */
+  noVerify?: boolean;
   required: string[][];
   forbidden: string[];
   /**
@@ -214,6 +235,48 @@ interface EvalCase {
 }
 
 const CASES: EvalCase[] = [
+  {
+    // ── NO OTP: the agent must BOOK, not stall on a code it cannot send ────────
+    //
+    // The tenant's Telnyx number is not 10DLC-registered, so US carriers silently
+    // DROP every A2P text. Telnyx accepts the send and reports success; the carrier
+    // throws it away. No verification code has ever reached a handset.
+    //
+    // So on 2026-07-14 the agent asked the caller to read back a code that was never
+    // coming, waited, apologised, asked for his number a third time, and fell back to
+    // taking a message. The appointment died on a text that could not exist.
+    //
+    // And that is the real defect, 10DLC aside: VERIFICATION GATES DISCLOSURE, NOT
+    // CREATION. Proving you hold a number is required before we read a stranger's
+    // name and history aloud. It has NEVER been required to create a booking — a
+    // booking reveals nothing, because the caller supplies every fact in it.
+    //
+    // With ENABLE_PHONE_VERIFICATION=false the OTP tools are gone and the prompt never
+    // mentions them. This case proves the model does the sane thing: takes the name and
+    // number, and books.
+    name: 'NO OTP: books a spoken number instead of stalling on a code it cannot send',
+    noVerify: true,
+    userTurns: [
+      "I'd like an appointment tomorrow at two.",
+      'Two is fine.',
+      'My name is Bob Smith.',
+      'six zero eight two one seven five three zero three.',
+      'Yes, that is correct.',
+      'Yes, please book it.',
+    ],
+    required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
+    // take_message is the FAILURE mode here: it is what the agent fell back to on the
+    // real call when the code never arrived. Booking was always possible.
+    forbidden: ['book_appointment', 'check_availability', 'take_message'],
+    claims: [
+      {
+        // It must not promise a text it cannot send — the tools do not even exist.
+        pattern: /\b(sent|texted|texting|send)\s+(you\s+)?(a\s+)?(text|code|verification)/i,
+        requiresTool: ['send_verification_code'],
+        lie: 'promised a verification text on a call where it has no way to send one',
+      },
+    ],
+  },
   {
     // ── THE 2026-07-13 CALL, REPLAYED END TO END ────────────────────────────
     //
@@ -482,7 +545,8 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 const MAX_ATTEMPTS = 6;
 
 async function chat(
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  tools: typeof openaiTools = openaiTools
 ): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
   let lastErr = '';
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -495,7 +559,7 @@ async function chat(
           model: MODEL,
           temperature: 0,
           messages,
-          tools: openaiTools,
+          tools,
           tool_choice: 'auto',
         }),
       });
@@ -540,7 +604,12 @@ interface CaseResult {
 }
 
 async function runCase(c: EvalCase): Promise<CaseResult> {
-  const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
+  const messages: ChatMessage[] = [
+    { role: 'system', content: c.noVerify ? systemPromptNoVerify : systemPrompt },
+  ];
+  const tools = c.noVerify
+    ? openaiTools.filter((t) => !VERIFY_TOOLS.has(t.function.name))
+    : openaiTools;
   const userQueue = [...c.userTurns];
   const called: string[] = [];
   // Everything the agent SAYS, across the whole call. Graded against `called` at
@@ -549,7 +618,7 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
   messages.push({ role: 'user', content: userQueue.shift()! });
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const { content, toolCalls } = await chat(messages);
+    const { content, toolCalls } = await chat(messages, tools);
 
     if (content) said.push(content);
 

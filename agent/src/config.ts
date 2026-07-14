@@ -57,6 +57,35 @@ const envSchema = z.object({
       return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.5;
     }),
 
+  /**
+   * Phone verification (the OTP flow). ON by default.
+   *
+   * Set ENABLE_PHONE_VERIFICATION=false to drop send_verification_code /
+   * verify_phone_code from the toolset entirely. Because the system prompt is
+   * capability-gated on the same value, the model is not merely discouraged from
+   * running an OTP — it is never told the tools exist, so it cannot try.
+   *
+   * WHY THIS EXISTS (2026-07-14): the tenant's Telnyx number is not 10DLC-registered,
+   * so US carriers silently DROP every A2P message. Telnyx accepts the send and
+   * reports success; the carrier throws it away. No code has ever reached a handset.
+   *
+   * The agent therefore asked callers to read back a code that was never coming,
+   * waited, apologised, and fell back to taking a message — killing the booking. And
+   * that is the actual bug, independent of 10DLC: VERIFICATION GATES DISCLOSURE, NOT
+   * CREATION. Proving you hold a number is required before we read a stranger's name
+   * and history out loud. It has never been required to CREATE a booking, because a
+   * booking reveals nothing — the caller supplies every fact in it.
+   *
+   * So an undeliverable text was blocking an appointment it had no business blocking.
+   * This switch removes the OTP from the flow while 10DLC registration is pending, and
+   * the disclosure gate keeps working exactly as before: a spoken number simply never
+   * unlocks a returning customer's account. It reveals nothing; it just no longer
+   * stops them booking.
+   */
+  ENABLE_PHONE_VERIFICATION: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false'),
   // OpenAI Realtime (speech-to-speech) mode: when "true", the agent uses
   // openai.realtime.RealtimeModel as the llm instead of the STT→LLM→TTS pipeline,
   // removing the TTS synthesis step (measured 2–3s/reply, non-streaming = dead

@@ -583,9 +583,27 @@ export default defineAgent({
       // advertises a tool that isn't in the ToolContext — a mismatch makes the
       // model call a non-existent tool → error/hallucination → dead air on a
       // voice call (GH issue #113). undefined = all capabilities (pipeline mode).
-      const activeCapabilities = config.ENABLE_REALTIME
+      //
+      // ENABLE_PHONE_VERIFICATION=false drops the OTP pair. Capability-gating (rather
+      // than a prompt instruction saying "don't do it") is the whole point: the model
+      // is never told the tools exist, so it cannot decide to try anyway — and the
+      // prompt's OTP section disappears with them, so it cannot describe a flow it
+      // has no way to run.
+      const baseCaps = config.ENABLE_REALTIME
         ? (['identity', 'scheduling', 'messaging'] as const)
-        : undefined;
+        : ([
+            'identity',
+            'scheduling',
+            'messaging',
+            'knowledge',
+            'verification',
+            'transfer',
+          ] as const);
+      const activeCapabilities = config.ENABLE_PHONE_VERIFICATION
+        ? config.ENABLE_REALTIME
+          ? baseCaps
+          : undefined // undefined = ALL capabilities (the existing pipeline default)
+        : baseCaps.filter((c) => c !== 'verification');
 
       // 3b. Prefetch the caller's CRM record so the prompt can carry their name,
       //     saved preferences, and recent history into turn one. Runs AFTER both
