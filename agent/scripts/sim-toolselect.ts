@@ -537,6 +537,17 @@ interface CaseResult {
   pass: boolean;
   called: string[];
   reason: string;
+  /**
+   * What the agent SAID. Printed on failure.
+   *
+   * A failing case used to report only what was NOT called — "missing required
+   * tool take_message; called: none" — which tells you the tool didn't fire but
+   * not what the caller heard instead. That is the whole question. The model
+   * does not fail by going silent; it fails by saying "sure, I'll pass that
+   * along" and ending its turn, which is indistinguishable from success until
+   * you read the words. Print them.
+   */
+  said: string[];
 }
 
 async function runCase(c: EvalCase): Promise<CaseResult> {
@@ -561,6 +572,7 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
           return {
             pass: false,
             called,
+            said,
             reason: `called FORBIDDEN tool ${tc.function.name} (args: ${tc.function.arguments.slice(0, 120)})`,
           };
         }
@@ -586,6 +598,7 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
     return {
       pass: false,
       called,
+      said,
       reason: `missing required tool (wanted one of [${c.required[idx].join(', ')}] at step ${idx + 1}; called: ${called.join(' → ') || 'none'})`,
     };
   }
@@ -603,12 +616,13 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
       return {
         pass: false,
         called,
+        said,
         reason: `LIED TO THE CALLER — ${claim.lie}. Said "${m[0].trim().slice(0, 80)}" but never called [${claim.requiresTool.join(' | ')}] (called: ${called.join(' → ') || 'none'})`,
       };
     }
   }
 
-  return { pass: true, called, reason: 'ok' };
+  return { pass: true, called, said, reason: 'ok' };
 }
 
 async function main(): Promise<void> {
@@ -621,12 +635,20 @@ async function main(): Promise<void> {
     try {
       r = await runCase(c);
     } catch (err) {
-      r = { pass: false, called: [], reason: `harness error: ${(err as Error).message}` };
+      r = { pass: false, called: [], said: [], reason: `harness error: ${(err as Error).message}` };
     }
     const mark = r.pass ? `${C.g}PASS${C.x}` : `${C.r}FAIL${C.x}`;
     console.log(`  ${mark}  ${c.name}`);
     console.log(`        ${C.d}sequence: ${r.called.join(' → ') || '(no tools called)'}${C.x}`);
-    if (!r.pass) console.log(`        ${C.y}${r.reason}${C.x}`);
+    if (!r.pass) {
+      console.log(`        ${C.y}${r.reason}${C.x}`);
+      // What did the caller actually HEAR? A tool that never fired is only half
+      // the story — the other half is the plausible sentence the model said
+      // instead, and that is the part that reaches a customer.
+      for (const line of r.said) {
+        console.log(`        ${C.d}said: "${line.replace(/\s+/g, ' ').trim().slice(0, 140)}"${C.x}`);
+      }
+    }
     if (r.pass) passed++;
   }
   const rate = passed / CASES.length;
