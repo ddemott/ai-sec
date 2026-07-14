@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 9FItLWWcCUzqsekH9zOwLpG6lLgThgGxleMnfsS5uDJJaR5iCjyKxngB9JZTNqO
+\restrict B8QyVeG7PfbEdKH0znumJkQ0wdaemSqJVYARdnLmtg0vcuI00ArPrixl14bddQn
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -1953,14 +1953,38 @@ CREATE FUNCTION public.sync_customer_names() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    IF NEW.name IS DISTINCT FROM OLD.name AND (NEW.first_name IS NOT DISTINCT FROM OLD.first_name AND NEW.last_name IS NOT DISTINCT FROM OLD.last_name) THEN
+    IF TG_OP = 'INSERT' THEN
+        -- No OLD row. Whichever side the caller supplied is authoritative; derive
+        -- the other. If they supplied both, believe both and touch nothing.
+        IF NEW.name IS NOT NULL AND NEW.name <> ''
+           AND NEW.first_name IS NULL AND NEW.last_name IS NULL THEN
+            NEW.first_name := split_part(NEW.name, ' ', 1);
+            NEW.last_name := CASE
+                WHEN position(' ' in NEW.name) > 0
+                THEN substring(NEW.name from position(' ' in NEW.name) + 1)
+                ELSE NULL
+            END;
+        ELSIF (NEW.name IS NULL OR NEW.name = '')
+              AND (NEW.first_name IS NOT NULL OR NEW.last_name IS NOT NULL) THEN
+            NEW.name := trim(COALESCE(NEW.first_name, '') || ' ' || COALESCE(NEW.last_name, ''));
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    -- UPDATE: unchanged from the original — whichever side MOVED wins, and a change
+    -- to both at once is left alone (the caller means what they said).
+    IF NEW.name IS DISTINCT FROM OLD.name
+       AND (NEW.first_name IS NOT DISTINCT FROM OLD.first_name
+            AND NEW.last_name IS NOT DISTINCT FROM OLD.last_name) THEN
         NEW.first_name := split_part(NEW.name, ' ', 1);
         NEW.last_name := CASE
             WHEN position(' ' in NEW.name) > 0
             THEN substring(NEW.name from position(' ' in NEW.name) + 1)
             ELSE NULL
         END;
-    ELSIF (NEW.first_name IS DISTINCT FROM OLD.first_name OR NEW.last_name IS DISTINCT FROM OLD.last_name) AND NEW.name IS NOT DISTINCT FROM OLD.name THEN
+    ELSIF (NEW.first_name IS DISTINCT FROM OLD.first_name
+           OR NEW.last_name IS DISTINCT FROM OLD.last_name)
+          AND NEW.name IS NOT DISTINCT FROM OLD.name THEN
         NEW.name := trim(COALESCE(NEW.first_name, '') || ' ' || COALESCE(NEW.last_name, ''));
     END IF;
     RETURN NEW;
@@ -4629,7 +4653,7 @@ CREATE TRIGGER trg_customers_updated_at BEFORE UPDATE ON public.customers FOR EA
 -- Name: customers trg_sync_customer_names; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER trg_sync_customer_names BEFORE UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.sync_customer_names();
+CREATE TRIGGER trg_sync_customer_names BEFORE INSERT OR UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.sync_customer_names();
 
 
 --
@@ -5728,5 +5752,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9FItLWWcCUzqsekH9zOwLpG6lLgThgGxleMnfsS5uDJJaR5iCjyKxngB9JZTNqO
+\unrestrict B8QyVeG7PfbEdKH0znumJkQ0wdaemSqJVYARdnLmtg0vcuI00ArPrixl14bddQn
 

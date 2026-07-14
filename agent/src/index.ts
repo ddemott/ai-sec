@@ -251,6 +251,14 @@ export default defineAgent({
     //    catch degrades to a fallback message instead of silence.
     let client: ToolsClient;
     let tenantConfig: Awaited<ReturnType<typeof fetchTenantConfig>>;
+    // Resolved the INSTANT the tenant is known, so the greeting can be synthesised
+    // while the phone is still ringing. See the warm block below.
+    let ttsVoiceKey: DeepgramVoice;
+    let greeting: string;
+    // Resolves when the GREETING's audio is in the cache. Awaited (with a hard cap)
+    // right before we speak, so the opener actually USES the pre-generation instead
+    // of racing it and losing. See the warm block and the say() below.
+    let greetingWarm: Promise<unknown> = Promise.resolve();
     // Accumulates the spoken conversation (caller STT + agent replies) so the
     // shutdown callback can persist it as the call's transcript. Declared here
     // — above both the shutdown registration and the session listener — so both
@@ -501,6 +509,59 @@ export default defineAgent({
         'tenant config resolved'
       );
 
+      // ── WARM THE VOICE WHILE THE PHONE IS STILL RINGING ──────────────────────
+      //
+      // Dale's observation, and it is the right one: the work should start when the
+      // phone starts ringing, not when we pick it up.
+      //
+      // This warm used to sit ~700 lines further down, immediately before the
+      // greeting's say(). Fire-and-forget, racing a call it could not win: the say()
+      // fired microseconds later, the cache was empty, and the greeting synthesised
+      // LIVE on every cold worker — an audible pause at pickup, on the very first
+      // thing a customer ever hears. The log said so on this branch's first test
+      // call: greeting_spoken pregenerated=false "audible pause at pickup".
+      //
+      // Everything between here and session.start — building the prompt, the tools,
+      // the LLM/STT/TTS plugins, starting the session — is time the caller is already
+      // spending. The tenant (and therefore the voice, and therefore the greeting) is
+      // fully known RIGHT NOW. So spend that window synthesising instead of idling.
+      //
+      // Still fire-and-forget: a caller must never wait on OUR cache-fill. If the
+      // warm loses the race anyway, getFillerFrame returns null and the greeting
+      // synthesises live exactly as before — the old behaviour is the floor, not the
+      // failure mode.
+      ttsVoiceKey = toAuraVoice(tenantConfig.ttsVoice);
+      greeting = buildGreeting(tenantConfig);
+      {
+        const tts = new deepgram.TTS({
+          apiKey: config.DEEPGRAM_API_KEY,
+          model: ttsVoiceKey,
+        }) as unknown as Parameters<typeof warmFillers>[0];
+
+        // THE GREETING GETS ITS OWN PROMISE, and it is warmed FIRST and ALONE.
+        //
+        // Bundling it with the hold lines made it hostage to them: warmFillers
+        // resolves when ALL four clips are done, so the greeting — the one line we
+        // need in the next few hundred milliseconds — waited on three lines nobody
+        // needs until a tool goes slow. Warm what you are about to say, first.
+        greetingWarm = warmFillers(tts, ttsVoiceKey, [greeting]);
+
+        // The hold lines stay fire-and-forget. Nothing waits on them: the earliest
+        // they can possibly be needed is 2.5s into a slow tool, several turns away,
+        // and if they somehow miss, getFillerFrame returns null and the watchdog
+        // synthesises live. They must never delay the opener.
+        void greetingWarm
+          .then(() => warmFillers(tts, ttsVoiceKey, [...HOLD_LINES]))
+          .then(
+            ({ warmed, failed }) =>
+              callLog.info(
+                { event: 'pregen_warmed', warmed: warmed.length, failed: failed.length },
+                `pre-generated ${warmed.length} hold line(s); ${failed.length} failed (they fall back to live synthesis)`
+              ),
+            () => undefined
+          );
+      }
+
       // Forwarded-line guard (number match): when the SIP caller-ID equals the
       // tenant's forwarded-from line (the published number the carrier forwards
       // INTO the assistant), the call was forwarded — so the caller-ID is the
@@ -676,11 +737,10 @@ export default defineAgent({
       }
 
       try {
-        // The tenant's voice, resolved ONCE. Used by the live TTS, by the
-        // pre-generation cache, and by the watchdog — they must all agree, or the
-        // cache misses and the hold line comes out in a different voice from the rest
-        // of the call.
-        const ttsVoiceKey = toAuraVoice(tenantConfig.ttsVoice);
+        // ttsVoiceKey + greeting were resolved the moment the tenant was known (see
+        // the warm block above) — the live TTS, the pre-generation cache and the
+        // watchdog all read the SAME value, or the cache misses and the hold line
+        // comes out in a different voice from the rest of the call.
 
         const session = config.ENABLE_REALTIME
           ? new voice.AgentSession({
@@ -1183,46 +1243,11 @@ export default defineAgent({
         // disclosure is appended by the platform on every call for every tenant
         // and cannot be edited or removed from the dashboard. See greeting.ts for
         // the wording rules and why each clause is worded the way it is.
-        const greeting = buildGreeting(tenantConfig);
-
-        // PRE-GENERATE the fixed lines for this tenant's voice.
         //
-        // Dale's observation, and it is the right one: most of what this agent says at
-        // the edges of a call is not generated at all — it is a FIXED SCRIPT. The
-        // greeting is byte-identical on every call. So is the hold line. So is the
-        // "I'm having trouble" fallback. Paying a TTS round-trip for a sentence that
-        // cannot change is pure waste, and it is charged precisely at the moments the
-        // caller is least willing to wait: the instant they are connected, and the
-        // instant something is already slow.
-        //
-        // Synthesise them ONCE per worker per voice, replay the frames forever. The
-        // LiveKit worker is per-tenant and long-lived, so the voice is stable and the
-        // cache pays for itself on call two.
-        //
-        // Deliberately fire-and-forget: warming MUST NOT block call setup. A caller
-        // waiting on our cache-fill is worse than a caller waiting on a synth. First
-        // call after a deploy misses and synthesises live (the old behaviour); every
-        // call after that is instant.
-        // The greeting is tenant-specific; the rest are the fixed runtime lines,
-        // imported from their ONE definition (session/holdLines.ts) rather than
-        // re-typed here. The cache is keyed by the text — a drifted copy misses it
-        // silently and reintroduces the very latency this pre-generation removes.
-        const PREGEN_LINES = [greeting, ...HOLD_LINES];
-        void warmFillers(
-          new deepgram.TTS({
-            apiKey: config.DEEPGRAM_API_KEY,
-            model: ttsVoiceKey,
-          }) as unknown as Parameters<typeof warmFillers>[0],
-          ttsVoiceKey,
-          PREGEN_LINES
-        ).then(
-          ({ warmed, failed }) =>
-            callLog.info(
-              { event: 'pregen_warmed', warmed: warmed.length, failed: failed.length },
-              `pre-generated ${warmed.length} fixed line(s); ${failed.length} failed (they fall back to live synthesis)`
-            ),
-          () => undefined
-        );
+        // `greeting` and `ttsVoiceKey` were resolved — and their audio warmed — the
+        // moment the tenant was known, while the phone was still ringing. By the time
+        // we get here the frame is usually already in the cache, so the opener plays
+        // instantly instead of synthesising live at pickup.
         // Greeting. Pipeline mode plays it via say() uninterrupted (a caller's
         // "hi?"/line noise at pickup shouldn't truncate the opening line); Realtime
         // mode speaks it via generateReply with server-side turn-taking (it rejects
@@ -1274,6 +1299,31 @@ export default defineAgent({
               // call after a deploy) or the synth failed, `frame` is undefined and say()
               // falls back to live synthesis — slower, but never silent. A cache miss must
               // degrade to the old behaviour, never to dead air.
+              // WAIT FOR THE VOICE TO BE READY — but never longer than it would have
+              // taken to just synthesise it live.
+              //
+              // Starting the warm early was not enough. Fire-and-forget means the
+              // say() fires microseconds later and reads an EMPTY cache, so the
+              // pre-generation lost its own race on every cold worker and the greeting
+              // synthesised live anyway — measured, twice, on this branch:
+              // `greeting_spoken pregenerated=false`. Work started but not awaited is
+              // work wasted.
+              //
+              // So await it, with a hard cap. The cap is what makes this safe: if the
+              // synth is slow or Deepgram is having a bad day, we stop waiting and
+              // stream live exactly as before. Worst case is TODAY'S behaviour; best
+              // case the opener plays instantly from a frame. There is no case where a
+              // caller waits longer than they already do.
+              //
+              // On a real PSTN call this is nearly free — the phone is RINGING through
+              // ctx.connect() and waitForParticipant(), and the warm started back when
+              // the tenant resolved. By here it is usually already done.
+              const GREETING_WARM_CAP_MS = 1500;
+              await Promise.race([
+                greetingWarm.catch(() => undefined),
+                new Promise((r) => setTimeout(r, GREETING_WARM_CAP_MS)),
+              ]);
+
               const greetingFrame = getFillerFrame(ttsVoiceKey, greeting);
               const opener = greetingFrame
                 ? session.say(greeting, {
@@ -1289,7 +1339,7 @@ export default defineAgent({
                 },
                 greetingFrame
                   ? 'greeting played from cache — no TTS latency'
-                  : 'greeting synthesised live (cache miss) — audible pause at pickup'
+                  : 'greeting synthesised live (warm missed the cap) — audible pause at pickup'
               );
               await opener.waitForPlayout();
 
@@ -1368,6 +1418,22 @@ cli.runApp(
     // Must match the agentName in the LiveKit dispatch rule
     // (SDR_if97ky4Zf7e6 / dynatire-dispatch). If these drift, dispatched
     // jobs won't route to this worker and calls will hit dead air.
-    agentName: 'ai-secretary-agent',
+    //
+    // OVERRIDABLE so a BRANCH can be heard without racing production.
+    //
+    // LiveKit load-balances a dispatch across every worker registered under the
+    // same agentName. So running a local worker on a feature branch — the only way
+    // to actually LISTEN to a change before merging it — silently entered it into a
+    // coin-flip with the Railway worker running main. Whichever won the job is the
+    // code you heard, and nothing in the output told you which.
+    //
+    // That is not hypothetical. On 2026-07-14 the owner was told a fix was live
+    // because a dispatch "picked up"; it had landed on the OLD binary, and the
+    // worker did not actually restart until five minutes after he hung up. A test
+    // whose result you cannot attribute to a specific commit is not a test.
+    //
+    // Set AGENT_NAME=ai-secretary-agent-dev on both the worker and the dispatcher
+    // (scripts/sim-call.mjs reads the same var) and the job can ONLY land on yours.
+    agentName: process.env.AGENT_NAME ?? 'ai-secretary-agent',
   })
 );
