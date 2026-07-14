@@ -254,3 +254,38 @@ describe('REGRESSION: the greeting must not speak template syntax, or repeat its
     expect(greeting).not.toContain('nonexistent_thing');
   });
 });
+
+describe('REGRESSION: the business name is spoken ONCE, not twice', () => {
+  test('SAD: an opener that names the business does not get it repeated in the disclosure', () => {
+    // WHO: every caller. WHAT: the 2026-07-13 evening greeting was
+    //      "Hi, thank you for calling Thinking Hammer LLC! I'm an AI assistant for
+    //       Thinking Hammer LLC, and this call is transcribed..."
+    // WHY: this module's own header predicted it — "saying it twice in six seconds
+    //      sounds like a bug to a caller" — and then waved it through as the owner's
+    //      choice that "only costs a repeat". It doesn't cost a repeat; it costs the
+    //      first impression. The DISCLOSURE keeps the name when the opener doesn't,
+    //      because that is the sentence that legally needs it.
+    const greeting = buildGreeting(
+      tenant({
+        name: 'Thinking Hammer LLC',
+        firstMessage: 'Hi, thank you for calling {{business_name}}! How can I help you today?',
+      })
+    );
+
+    const mentions = greeting.split('Thinking Hammer LLC').length - 1;
+    expect(mentions).toBe(1);
+    // The AI disclosure must survive — it is the legal clause.
+    expect(greeting).toMatch(/AI assistant/i);
+  });
+
+  test('HAPPY: when the opener does NOT name the business, the disclosure still does', () => {
+    // WHY: the disclosure is the legal identification. Deduping must never mean
+    //      dropping the business name entirely.
+    const greeting = buildGreeting(
+      tenant({ name: 'Thinking Hammer LLC', firstMessage: 'Hi, this is Clara.' })
+    );
+
+    expect(greeting).toContain('Thinking Hammer LLC');
+    expect(greeting).toMatch(/AI assistant for Thinking Hammer LLC/i);
+  });
+});

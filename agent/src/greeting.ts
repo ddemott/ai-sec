@@ -174,7 +174,32 @@ export function buildGreeting(config: TenantDisplayConfig): string {
     ? opener.replace(/how can i help you( today)?\s*[?!.]?\s*$/i, '').trim()
     : opener;
 
-  return [openerWithoutClosingQuestion, resolveDisclosure(config), closer]
+  // Don't say the business name twice in six seconds.
+  //
+  // 2026-07-13 evening call: "Hi, thank you for calling Thinking Hammer LLC! I'm an
+  // AI assistant for Thinking Hammer LLC, and this call is transcribed..."
+  //
+  // This module's own header predicted it — "saying it twice in six seconds sounds
+  // like a bug to a caller" — and then waved it through as "the owner's choice [that]
+  // only costs a repeat". It doesn't cost a repeat. It costs the first impression.
+  //
+  // The DISCLOSURE is the one that must keep the name (it is the legal identification
+  // — "I'm an AI assistant for X"). So when the opener already names the business, the
+  // disclosure drops to the shorter form. The caller hears the name once, in the
+  // sentence that legally needs it.
+  const disclosure = resolveDisclosure(config);
+  const name = config.name?.trim();
+  const openerNamesBusiness =
+    Boolean(name) && openerWithoutClosingQuestion.toLowerCase().includes(name!.toLowerCase());
+  const finalDisclosure =
+    openerNamesBusiness && disclosure.toLowerCase().includes(name!.toLowerCase())
+      ? disclosure.replace(
+          new RegExp(`\\s*for ${name!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'),
+          ''
+        )
+      : disclosure;
+
+  return [openerWithoutClosingQuestion, finalDisclosure, closer]
     .join(' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
