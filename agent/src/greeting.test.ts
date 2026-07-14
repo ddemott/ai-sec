@@ -325,7 +325,13 @@ describe('REGRESSION: the legal suffix is never spoken', () => {
     expect(speakableName('Acme Corp.')).toBe('Acme');
     expect(speakableName('Acme, LLC')).toBe('Acme');
     expect(speakableName('Acme L.L.C.')).toBe('Acme');
+    // "L.L.C" WITHOUT a trailing dot — a common spelling the first (regex) version
+    // missed entirely. Dots are spelling, not meaning: LLC / L.L.C / L.L.C. are the
+    // same word, so the token is normalised before it is compared.
+    expect(speakableName('Acme L.L.C')).toBe('Acme');
+    expect(speakableName('Acme I.N.C.')).toBe('Acme');
     expect(speakableName('Acme PLLC')).toBe('Acme');
+    expect(speakableName('Acme Company')).toBe('Acme');
   });
 
   test('HAPPY: a suffix-like word INSIDE the name is kept — it is part of the name', () => {
