@@ -5,6 +5,7 @@
  * separate, manual validation item per the never-silent spec.)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { toolStarted, toolFinished, _resetToolActivityForTest } from './toolActivity.js';
 import { voice } from '@livekit/agents';
 import { attachOutputWatchdog } from './watchdog.js';
 import { _resetFillerCacheForTest } from './fillerCache.js';
@@ -71,20 +72,50 @@ describe('attachOutputWatchdog', () => {
   const attach = (s: ReturnType<typeof makeFakeSession>) =>
     attachOutputWatchdog(s.session, {
       voice: 'eve',
-      fillerText: FILLER,
+      thinkingText: 'Just a moment.',
+    fillerText: FILLER,
       recoveryText: RECOVERY,
       log: noopLog,
     });
 
-  it("SAD: stuck 'thinking' past deadline 1 → plays the filler line", async () => {
-    // WHO: a turn where no agent audio is produced (slow TTS / stalled tool / silent LLM).
-    // WHAT: after deadline1 of 'thinking' with no 'speaking', the watchdog speaks the hold line.
+  it("SAD: stuck 'thinking' past deadline 1 WITH A TOOL RUNNING → names the lookup", async () => {
+    // WHO: a caller waiting on a genuinely slow tool (availability, policy RAG — 2-4s).
+    // WHAT: after deadline1 of 'thinking' with no 'speaking', the watchdog holds the line
+    //       and it is ALLOWED to say what it is doing, because it really is doing it.
+    _resetToolActivityForTest();
+    toolStarted();
     const f = makeFakeSession();
     attach(f);
     f.emit('thinking');
     await vi.advanceTimersByTimeAsync(2500);
     expect(f.sayCalls).toHaveLength(1);
     expect(f.sayCalls[0].text).toBe(FILLER);
+    toolFinished();
+  });
+
+  it('SAD: stuck thinking with NO tool running → asks for a moment, and CLAIMS NOTHING', async () => {
+    // WHO: every caller, on nearly every turn — the STT→gpt-4o-mini→TTS pipeline
+    //      routinely takes longer than the deadline to produce a first word.
+    // WHAT: the hold line must NOT say "let me check that for you" when nothing is
+    //      being checked.
+    // WHY:  on the 2026-07-14 call it said exactly that SEVEN TIMES, and every tool on
+    //      that call returned in under 15ms. Nothing was ever being looked up. The
+    //      caller could tell, and said so, mid-call: "what are you checking?" and
+    //      "what am I waiting for?"
+    //
+    //      This is the same defect as the prompt line we deleted for letting the MODEL
+    //      claim work it had not done — except here the RUNTIME was doing the lying, on
+    //      a timer. A machine lying on a schedule is still lying. The watchdog stays
+    //      cause-AGNOSTIC about when it fires (dead air is dead air) and becomes
+    //      cause-HONEST about what it says.
+    _resetToolActivityForTest();
+    const f = makeFakeSession();
+    attach(f);
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(f.sayCalls).toHaveLength(1);
+    expect(f.sayCalls[0].text).toBe('Just a moment.');
+    expect(f.sayCalls[0].text).not.toMatch(/check|look|find/i);
   });
 
   it('HAPPY: real audio before deadline 1 → no filler ever plays', async () => {
@@ -99,6 +130,10 @@ describe('attachOutputWatchdog', () => {
   });
 
   it('SAD: still no audio past deadline 2 → escalates to the recovery line', async () => {
+    // A tool IS running here — otherwise deadline 1 speaks the neutral line and this
+    // test would be asserting the wrong first utterance.
+    _resetToolActivityForTest();
+    toolStarted();
     const f = makeFakeSession();
     attach(f);
     f.emit('thinking');

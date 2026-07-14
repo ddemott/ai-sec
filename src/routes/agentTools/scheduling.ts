@@ -28,7 +28,6 @@ import {
   bookingOutcomeFromAgentError,
   timeToMinutes,
   dateTimeToMinutes,
-  minutesToTime,
   mergeIntervals,
   subtractIntervals,
   type AgentToolDeps,
@@ -127,7 +126,17 @@ async function findSoonestSlots(
   });
 }
 
-export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {
+export function registerSchedulingRoutes({
+  app,
+  pool,
+  withTenantClient,
+  // Booking now matches the SERVICE by MEANING, not by substring — the caller says
+  // "a meeting to talk about a role" and pgvector finds Programming Consultation.
+  // Previously the LLM guessed a catalog name and an ILIKE dutifully matched its
+  // guess, which is how a six-month-contract conversation got booked as a 15-minute
+  // Personal Callback. See serviceResolver.
+  getEmbedding,
+}: AgentToolDeps): void {
   // get_service_catalog — list public services for the tenant.
   toolRoute(
     app,
@@ -518,7 +527,8 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
         const resolved = await resolveServiceForBooking(
           client,
           args.tenant_id,
-          args.requirements.serviceType
+          args.requirements.serviceType,
+          getEmbedding
         );
         // Buffer enforced on the agent path; the RPC's internal slot selection
         // skips any resource/employee that would land within the buffer of an
@@ -548,7 +558,7 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
           error_code: string | null;
         }>(
           `SELECT * FROM book_with_scheduling_atomic(
-           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
          )`,
           [
             args.tenant_id,
@@ -572,6 +582,14 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
             resolved?.name ?? args.requirements.serviceType ?? null,
             resolved?.duration_minutes ?? 30,
             bufferMinutes, // p_buffer_minutes
+            // p_service_id — WHAT WAS ACTUALLY BOOKED.
+            //
+            // The RPC has always taken p_service_type (a NAME) and used it only to pick
+            // a skilled employee, then thrown it away: its INSERT never listed
+            // service_id. So every appointment this product has ever booked by phone
+            // has a NULL service. The owner sees a customer, a time, and a blank.
+            // The service was resolved right here, in `resolved`, and never sent.
+            resolved?.service_id ?? null,
           ]
         );
         const row = rpc.rows[0];
@@ -714,7 +732,7 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
       // "consulting" / anything never dead-ends with "couldn't find a service".
       // Null only when the tenant has no bookable service at all.
       const service = await withTenantClient(args.tenant_id, (client) =>
-        resolveServiceForBooking(client, args.tenant_id, args.service_type)
+        resolveServiceForBooking(client, args.tenant_id, args.service_type, getEmbedding)
       );
 
       // Format date for speech ("Wednesday, April 2")
@@ -726,9 +744,17 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
       });
 
       if (!service) {
+        // "someone", not a name. This string is SPOKEN TO THE CALLER, and it used to
+        // say "I'll have DALE get back to you" — a hardcoded first name, in a route
+        // that every tenant on the platform shares. A caller to Bella's Hair Studio
+        // was told a man named Dale would ring them back. (Found 2026-07-14 while
+        // grepping for exactly this after the same bug turned up in the job-inquiry
+        // reply.) The route has no owner name to hand and does not need one: a
+        // receptionist saying "someone will get back to you" is correct for every
+        // business, and a name we cannot look up is a name we must not invent.
         return ok(
           reply,
-          `I'm not able to pull up our booking options right now. Would you like to leave a message and I'll have Dale get back to you?`
+          `I'm not able to pull up our booking options right now. Would you like to leave a message and I'll have someone get back to you?`
         );
       }
 
@@ -813,17 +839,26 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
         });
 
         if (soonest.length > 0) {
-          return ok(
-            reply,
-            `${serviceInfo} We don't have anyone scheduled on ${dayName}, but the soonest I can get you in is ${describeSlots(soonest, ianaTimezone)}. Would either of those work?`
-          );
+          // Same SHAPE on every path (see the open_times comment below). A route that
+          // returns a bare string sometimes and an object other times makes the model
+          // guess which it got, and a model that guesses is the whole problem.
+          // open_times is empty because nothing is open ON THE REQUESTED DAY — the
+          // alternatives live in the spoken text, which is where the caller needs them.
+          return ok(reply, {
+            spoken: `${serviceInfo} We don't have anyone scheduled on ${dayName}, but the soonest I can get you in is ${describeSlots(soonest, ianaTimezone)}. Would either of those work?`,
+            date: args.date,
+            open_times: [],
+            note: 'Nothing is open on the requested day. open_times is empty — do NOT offer a time on this day. Offer the alternatives named in spoken.',
+          });
         }
         // Genuinely nothing open for a week — now "try another day" IS the honest
         // answer, and a message is the right fallback.
-        return ok(
-          reply,
-          `${serviceInfo} Unfortunately, we don't have anyone scheduled to work on ${dayName}, and I'm not finding anything open in the next week. Would you like me to take a message so someone can call you back?`
-        );
+        return ok(reply, {
+          spoken: `${serviceInfo} Unfortunately, we don't have anyone scheduled to work on ${dayName}, and I'm not finding anything open in the next week. Would you like me to take a message so someone can call you back?`,
+          date: args.date,
+          open_times: [],
+          note: 'Nothing is open. open_times is empty — do NOT offer any time. Offer to take a message.',
+        });
       }
 
       const coverage = mergeIntervals(
@@ -854,30 +889,105 @@ export function registerSchedulingRoutes({ app, pool, withTenantClient }: AgentT
         : usable;
 
       if (futureSlots.length === 0) {
-        return ok(
-          reply,
-          `${serviceInfo} Unfortunately, we're fully booked on ${dayName}. Would you like to try a different day?`
-        );
+        return ok(reply, {
+          spoken: `${serviceInfo} Unfortunately, we're fully booked on ${dayName}. Would you like to try a different day?`,
+          date: args.date,
+          open_times: [],
+          note: 'Fully booked. open_times is empty — do NOT offer any time on this day.',
+        });
       }
 
-      const slotStrings = futureSlots.map((s) => {
-        if (s.start === coverage[0]?.start && s.end === coverage[coverage.length - 1]?.end) {
-          return `all day from ${minutesToTime(s.start)} to ${minutesToTime(s.end)}`;
-        }
-        return `${minutesToTime(s.start)} to ${minutesToTime(s.end)}`;
-      });
-      const openHours = `${minutesToTime(coverage[0].start)} to ${minutesToTime(
-        coverage[coverage.length - 1].end
-      )}`;
-      const slotsText =
-        slotStrings.length === 1
-          ? slotStrings[0]
-          : slotStrings.slice(0, -1).join(', ') + ', and ' + slotStrings[slotStrings.length - 1];
+      // The prose slot RANGES ("all day from 1 PM to 5 PM", "our hours are ...") that
+      // used to be built here are GONE, deliberately — they are what the model reasoned
+      // over instead of reading the list, and it is why it refused an available 4:30 and
+      // offered a 4:00 that was not open. See the comment below. Nothing derives a range
+      // any more; `spoken` is built FROM open_times.
 
-      return ok(
-        reply,
-        `${serviceInfo} On ${dayName}, our hours are ${openHours}. We have openings ${slotsText}. What time works best for you?`
-      );
+      // DO NOT MAKE THE MODEL DO ARITHMETIC. GIVE IT A LIST.
+      //
+      // This route used to return ONE PROSE SENTENCE: "We have openings all day from
+      // 1 PM to 5 PM." To answer "can I have 3 PM?" the model then had to work out
+      // whether 3 PM falls inside that interval — and on 2026-07-14, handed exactly
+      // that sentence, gpt-4o-mini told the caller:
+      //
+      //   "He has openings from 1 PM to 5 PM. Unfortunately, 3 PM is not in that
+      //    time range. Would you like to choose a different time?"
+      //
+      // It called the tool. It got the right answer. It then misread it, refused a
+      // slot that was wide open, and the caller settled for a time he did not want.
+      //
+      // The earlier version of this bug was the model NOT CALLING the tool. We fixed
+      // that, and uncovered this one underneath: a tool result the model cannot
+      // reliably READ is barely better than no tool at all. Interval reasoning over a
+      // sentence is exactly the kind of thing a small model fumbles, and it fumbles it
+      // SILENTLY — with the confidence of something that just looked it up.
+      //
+      // So the model no longer computes anything. `open_times` is the enumerated list
+      // of every start time that can actually be booked (15-minute grid, service
+      // duration fits before the window closes). Membership, not arithmetic: if the
+      // caller's time is in the list it is available, and if it is absent it is not.
+      // `spoken` stays for what to read aloud.
+      const GRID_MINUTES = 15;
+      // ALWAYS "H:MM AM/PM", never "1 PM". minutesToTime drops the :00 because it is
+      // built for SPEECH, where "one PM" is what a person says. But open_times is not
+      // speech — it is a lookup table the model matches the caller's time against, and
+      // a list that mixes "1 PM" with "1:15 PM" is a list the model has to normalise
+      // before it can search it. That is arithmetic again, by the back door. One shape.
+      const gridTime = (mins: number): string => {
+        const h24 = Math.floor(mins / 60);
+        const m = mins % 60;
+        const ampm = h24 >= 12 ? 'PM' : 'AM';
+        const h = h24 % 12 === 0 ? 12 : h24 % 12;
+        return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
+      };
+      const openTimes: string[] = [];
+      for (const win of futureSlots) {
+        // Round the window start UP to the grid — the booking RPC rejects off-grid
+        // times, so offering one would be offering a slot that cannot be booked.
+        const first = Math.ceil(win.start / GRID_MINUTES) * GRID_MINUTES;
+        for (let t = first; t + duration_minutes <= win.end; t += GRID_MINUTES) {
+          openTimes.push(gridTime(t));
+        }
+      }
+
+      // ONE SOURCE OF TRUTH. NEVER TWO.
+      //
+      // The first version of this fix returned BOTH the list AND the old prose
+      // sentence — "we have openings all day from 1 PM to 5 PM" — with the sentence
+      // first. The model read the sentence, reasoned about the RANGE exactly as it
+      // always had, and ignored the list sitting underneath it: on 2026-07-14 it
+      // refused 4:30 PM (which was in the list) and offered "1:00, 2:30, or 4:00"
+      // (which were not).
+      //
+      // That is on me, not the model. I added a list to stop it doing interval
+      // arithmetic and left the invitation to interval arithmetic directly above it.
+      // Given a prose range and a table, a language model will read the prose. So the
+      // range language is GONE. `spoken` is now BUILT FROM the list — the only times it
+      // can utter are times that are actually bookable, because they are the only times
+      // in the sentence.
+      //
+      // A sample of concrete times, not the whole list: reading fourteen options at a
+      // caller is its own failure. Spread them across the day so the choice is real.
+      const sample: string[] = [];
+      if (openTimes.length <= 3) {
+        sample.push(...openTimes);
+      } else {
+        const step = (openTimes.length - 1) / 2;
+        sample.push(openTimes[0], openTimes[Math.round(step)], openTimes[openTimes.length - 1]);
+      }
+      const spokenTimes =
+        sample.length === 1
+          ? sample[0]
+          : `${sample.slice(0, -1).join(', ')} or ${sample[sample.length - 1]}`;
+
+      return ok(reply, {
+        // The LIST first, and the prose derived FROM it. Order matters: it is what the
+        // model reads first, and there is no longer a range for it to reason about.
+        open_times: openTimes,
+        date: args.date,
+        note: 'open_times is the COMPLETE and ONLY list of bookable start times. A time in this list IS available — book it, do not second-guess it. A time NOT in this list is not available. Never state a time that is not in this list, and never refuse one that is. Do NOT reason about opening hours or ranges — they do not tell you what is free.',
+        spoken: `${serviceInfo} On ${dayName} I have ${spokenTimes}. Would any of those work, or did you have another time in mind?`,
+      });
     },
     'Failed to compute available slots'
   );

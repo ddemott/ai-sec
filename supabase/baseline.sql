@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 9FItLWWcCUzqsekH9zOwLpG6lLgThgGxleMnfsS5uDJJaR5iCjyKxngB9JZTNqO
+\restrict Z0ONHRdEzqnMkxvcRo2QmPzjCvIxdInDfxAwVMUnXoZyg7pSR4kmO93uuDGpQ6C
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -437,10 +437,10 @@ $$;
 
 
 --
--- Name: book_with_scheduling_atomic(uuid, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, timestamp with time zone, text[], text[], uuid, text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: book_with_scheduling_atomic(uuid, text, text, text, text, text, timestamp with time zone, timestamp with time zone, timestamp with time zone, timestamp with time zone, text[], text[], uuid, text, text, integer, integer, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text DEFAULT NULL::text, p_description text DEFAULT 'Booking via SecretaryHQ'::text, p_call_id text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_start_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_window_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_window_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_required_skills text[] DEFAULT '{}'::text[], p_required_capabilities text[] DEFAULT '{}'::text[], p_preferred_resource_id uuid DEFAULT NULL::uuid, p_preferred_employee_id text DEFAULT NULL::text, p_service_type text DEFAULT NULL::text, p_duration_minutes integer DEFAULT 30, p_buffer_minutes integer DEFAULT 0) RETURNS TABLE(success boolean, appointment_id uuid, resource_id uuid, resource_name text, employee_id uuid, employee_name text, booked_start timestamp with time zone, booked_end timestamp with time zone, customer_id uuid, error_message text, error_code text)
+CREATE FUNCTION public.book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text DEFAULT NULL::text, p_description text DEFAULT 'Booking via SecretaryHQ'::text, p_call_id text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_start_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_window_from timestamp with time zone DEFAULT NULL::timestamp with time zone, p_window_to timestamp with time zone DEFAULT NULL::timestamp with time zone, p_required_skills text[] DEFAULT '{}'::text[], p_required_capabilities text[] DEFAULT '{}'::text[], p_preferred_resource_id uuid DEFAULT NULL::uuid, p_preferred_employee_id text DEFAULT NULL::text, p_service_type text DEFAULT NULL::text, p_duration_minutes integer DEFAULT 30, p_buffer_minutes integer DEFAULT 0, p_service_id uuid DEFAULT NULL::uuid) RETURNS TABLE(success boolean, appointment_id uuid, resource_id uuid, resource_name text, employee_id uuid, employee_name text, booked_start timestamp with time zone, booked_end timestamp with time zone, customer_id uuid, error_message text, error_code text)
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -669,10 +669,20 @@ BEGIN
     BEGIN
         INSERT INTO appointments (
             tenant_id, resource_id, customer_id, start_time, end_time,
-            description, call_id, location, employee_id
+            description, call_id, location, employee_id, service_id
         ) VALUES (
             p_tenant_id, v_resource_id, v_customer_id, v_start, v_end,
-            p_description, p_call_id, p_location, v_employee_id
+            p_description, p_call_id, p_location, v_employee_id,
+            -- Fall back to resolving the service BY NAME when the caller did not pass
+            -- an id: p_service_type has always been here, and it was always only used
+            -- to pick a skilled employee. The service itself was thrown away.
+            COALESCE(
+                p_service_id,
+                (SELECT s.service_id FROM services s
+                  WHERE s.tenant_id = p_tenant_id
+                    AND lower(s.name) = lower(p_service_type)
+                  LIMIT 1)
+            )
         ) RETURNING appointments.appointment_id INTO v_appointment_id;
     EXCEPTION WHEN exclusion_violation THEN
         RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, NULL::TEXT, NULL::UUID, NULL::TEXT,
@@ -686,18 +696,6 @@ BEGIN
         v_employee_id, v_employee_name, v_start, v_end, v_customer_id, NULL::TEXT, NULL::TEXT;
 END;
 $$;
-
-
---
--- Name: FUNCTION book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text, p_description text, p_call_id text, p_location text, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_window_from timestamp with time zone, p_window_to timestamp with time zone, p_required_skills text[], p_required_capabilities text[], p_preferred_resource_id uuid, p_preferred_employee_id text, p_service_type text, p_duration_minutes integer, p_buffer_minutes integer); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.book_with_scheduling_atomic(p_tenant_id uuid, p_phone text, p_customer_name text, p_description text, p_call_id text, p_location text, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_window_from timestamp with time zone, p_window_to timestamp with time zone, p_required_skills text[], p_required_capabilities text[], p_preferred_resource_id uuid, p_preferred_employee_id text, p_service_type text, p_duration_minutes integer, p_buffer_minutes integer) IS 'Atomic booking with scheduling. Uses employee_schedule (date-based) for shift validation.
-Concurrency-safe via appointments_no_resource_overlap / appointments_no_employee_overlap
-exclusion constraints — race losers receive TIMESLOT_OCCUPIED.
-p_buffer_minutes (default 0) pads appointment-overlap checks to enforce a minimum gap
-between back-to-back bookings; 0 reproduces the original behavior exactly.
-Error codes: TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_AVAILABILITY, INVALID_PARAMS';
 
 
 --
@@ -1481,6 +1479,28 @@ $$;
 
 
 --
+-- Name: match_service_by_intent(uuid, public.vector); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.match_service_by_intent(p_tenant_id uuid, p_query_embedding public.vector) RETURNS TABLE(service_id uuid, name text, duration_minutes integer, price double precision, required_skills text[], similarity double precision)
+    LANGUAGE sql STABLE
+    AS $$
+    SELECT s.service_id,
+           s.name,
+           s.duration_minutes::int,
+           CASE WHEN s.price IS NULL THEN NULL ELSE s.price::float8 END,
+           COALESCE(s.required_skills, '{}'),
+           1 - (s.embedding <=> p_query_embedding) AS similarity
+      FROM services s
+     WHERE s.tenant_id = p_tenant_id
+       AND s.embedding IS NOT NULL
+       AND (s.is_deleted IS NULL OR s.is_deleted = false)
+     ORDER BY s.embedding <=> p_query_embedding
+     LIMIT 1;
+$$;
+
+
+--
 -- Name: notify_n8n_on_appointment(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1953,14 +1973,38 @@ CREATE FUNCTION public.sync_customer_names() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-    IF NEW.name IS DISTINCT FROM OLD.name AND (NEW.first_name IS NOT DISTINCT FROM OLD.first_name AND NEW.last_name IS NOT DISTINCT FROM OLD.last_name) THEN
+    IF TG_OP = 'INSERT' THEN
+        -- No OLD row. Whichever side the caller supplied is authoritative; derive
+        -- the other. If they supplied both, believe both and touch nothing.
+        IF NEW.name IS NOT NULL AND NEW.name <> ''
+           AND NEW.first_name IS NULL AND NEW.last_name IS NULL THEN
+            NEW.first_name := split_part(NEW.name, ' ', 1);
+            NEW.last_name := CASE
+                WHEN position(' ' in NEW.name) > 0
+                THEN substring(NEW.name from position(' ' in NEW.name) + 1)
+                ELSE NULL
+            END;
+        ELSIF (NEW.name IS NULL OR NEW.name = '')
+              AND (NEW.first_name IS NOT NULL OR NEW.last_name IS NOT NULL) THEN
+            NEW.name := trim(COALESCE(NEW.first_name, '') || ' ' || COALESCE(NEW.last_name, ''));
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    -- UPDATE: unchanged from the original — whichever side MOVED wins, and a change
+    -- to both at once is left alone (the caller means what they said).
+    IF NEW.name IS DISTINCT FROM OLD.name
+       AND (NEW.first_name IS NOT DISTINCT FROM OLD.first_name
+            AND NEW.last_name IS NOT DISTINCT FROM OLD.last_name) THEN
         NEW.first_name := split_part(NEW.name, ' ', 1);
         NEW.last_name := CASE
             WHEN position(' ' in NEW.name) > 0
             THEN substring(NEW.name from position(' ' in NEW.name) + 1)
             ELSE NULL
         END;
-    ELSIF (NEW.first_name IS DISTINCT FROM OLD.first_name OR NEW.last_name IS DISTINCT FROM OLD.last_name) AND NEW.name IS NOT DISTINCT FROM OLD.name THEN
+    ELSIF (NEW.first_name IS DISTINCT FROM OLD.first_name
+           OR NEW.last_name IS DISTINCT FROM OLD.last_name)
+          AND NEW.name IS NOT DISTINCT FROM OLD.name THEN
         NEW.name := trim(COALESCE(NEW.first_name, '') || ' ' || COALESCE(NEW.last_name, ''));
     END IF;
     RETURN NEW;
@@ -2838,7 +2882,7 @@ CREATE TABLE public.job_inquiries (
     job_inquiry_id uuid DEFAULT gen_random_uuid() NOT NULL,
     tenant_id uuid NOT NULL,
     customer_id uuid,
-    company text,
+    client_company text,
     represents_company boolean,
     employment_type text,
     rate_range text,
@@ -2849,10 +2893,32 @@ CREATE TABLE public.job_inquiries (
     caller_name text,
     callback_phone text,
     call_id text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    caller_company text
 );
 
 ALTER TABLE ONLY public.job_inquiries FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: COLUMN job_inquiries.client_company; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.job_inquiries.client_company IS 'Where the work would actually happen — the end client (e.g. Blue Cross Blue Shield).';
+
+
+--
+-- Name: COLUMN job_inquiries.represents_company; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.job_inquiries.represents_company IS 'True when the caller works directly for the client company (in-house recruiter), so caller_company = client_company. False = an agency placing on a client''s behalf.';
+
+
+--
+-- Name: COLUMN job_inquiries.caller_company; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.job_inquiries.caller_company IS 'The company the CALLER works for — the staffing agency placing the role. Equals client_company when represents_company is true (an in-house recruiter). NULL on rows captured before 2026-07-14, when we never asked.';
 
 
 --
@@ -3221,10 +3287,18 @@ CREATE TABLE public.services (
     is_deleted boolean DEFAULT false,
     deleted_at timestamp with time zone,
     deleted_by text,
-    is_auto_seeded boolean DEFAULT false NOT NULL
+    is_auto_seeded boolean DEFAULT false NOT NULL,
+    embedding public.vector(1536)
 );
 
 ALTER TABLE ONLY public.services FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: COLUMN services.embedding; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.services.embedding IS 'text-embedding-3-small over "name. subtitle. description" — used to match a caller''s spoken intent to a service (serviceResolver). NULL means never embedded; the resolver back-fills lazily and falls back to ILIKE + the tenant default.';
 
 
 --
@@ -4629,7 +4703,7 @@ CREATE TRIGGER trg_customers_updated_at BEFORE UPDATE ON public.customers FOR EA
 -- Name: customers trg_sync_customer_names; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER trg_sync_customer_names BEFORE UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.sync_customer_names();
+CREATE TRIGGER trg_sync_customer_names BEFORE INSERT OR UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.sync_customer_names();
 
 
 --
@@ -5728,5 +5802,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9FItLWWcCUzqsekH9zOwLpG6lLgThgGxleMnfsS5uDJJaR5iCjyKxngB9JZTNqO
+\unrestrict Z0ONHRdEzqnMkxvcRo2QmPzjCvIxdInDfxAwVMUnXoZyg7pSR4kmO93uuDGpQ6C
 

@@ -308,7 +308,10 @@ export const CaptureJobInquirySchema = z.object({
   tenant_id: z.string().uuid(),
   caller_name: z.string().min(1).max(200),
   callback_phone: z.string().max(50).optional(),
-  company: z.string().max(300).optional(),
+  // TWO companies. The agency that CALLED, and the client where the work happens.
+  // They are different facts and both matter — see migration 20260714130000.
+  caller_company: z.string().max(300).optional(),
+  client_company: z.string().max(300).optional(),
   represents_company: z.boolean().optional(),
   employment_type: z.enum(['contract', 'full_time']).optional(),
   rate_range: z.string().max(200).optional(),

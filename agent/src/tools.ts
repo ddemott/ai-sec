@@ -23,6 +23,7 @@ import type { TransferResult } from './transferClient.js';
 import type { CallOutcomeTracker } from './callOutcome.js';
 import { wrapToolExecute } from './tools/wrapTool.js';
 import { getLogger } from './logger.js';
+import type { CallPhase } from './toolPhases.js';
 
 /**
  * Capability groups. Every tool belongs to exactly one; a customer agent can
@@ -37,9 +38,18 @@ export type Capability =
   | 'identity'
   | 'scheduling'
   | 'verification'
-  | 'transfer';
+  | 'transfer'
+  // Texting. Its OWN capability, not part of 'scheduling', precisely so it can be
+  // switched off while booking keeps working — which is the state we are in until
+  // 10DLC registration lands and a text can actually reach a handset.
+  | 'sms';
 
 const CAPABILITY_OF: Record<string, Capability> = {
+  // The phase routers (toolPhases.ts). 'scheduling', because that is where they
+  // LEAD — so a session built without scheduling loses the doors along with the
+  // rooms, rather than keeping a door that opens onto nothing.
+  start_booking: 'scheduling',
+  manage_appointment: 'scheduling',
   get_company_policy_answer: 'knowledge',
   take_message: 'messaging',
   capture_job_inquiry: 'messaging',
@@ -50,7 +60,7 @@ const CAPABILITY_OF: Record<string, Capability> = {
   find_caller_by_name: 'identity',
   identify_caller: 'identity',
   save_customer_preference: 'identity',
-  record_sms_consent: 'scheduling',
+  record_sms_consent: 'sms',
   get_service_catalog: 'scheduling',
   get_available_slots: 'scheduling',
   get_scheduling_options: 'scheduling',
@@ -218,7 +228,16 @@ export function buildTools(
   transfer?: TransferCapability,
   outcome?: CallOutcomeTracker,
   speakFiller?: (phrase: string) => void,
-  opts?: { capabilities?: readonly Capability[] }
+  opts?: {
+    capabilities?: readonly Capability[];
+    /**
+     * Swap the model's visible toolset to a new phase. Supplied by index.ts,
+     * which owns the live Agent; undefined in tests and in the eval's static
+     * snapshot, where the routers are inert (they still appear, so the model's
+     * choices are graded, but nothing is mutated).
+     */
+    onPhaseChange?: (phase: CallPhase) => void | Promise<void>;
+  }
 ): llm.ToolContext {
   // Only offer a live transfer in the no-caller-ID fallbacks when one can
   // actually happen: the 'transfer' capability is active for this session, a
@@ -234,7 +253,74 @@ export function buildTools(
     !!transfer?.execute;
   const transferOrMessage = canOfferTransfer ? 'transfer or take a message' : 'take a message';
 
+  /**
+   * The routers. Calling one swaps the model's toolset (see toolPhases.ts).
+   *
+   * They exist because narrowing needs a door. The scheduling tools are not
+   * visible during intake, so the ONLY way the model can reach the thing the
+   * caller asked for is to make a real tool call — it cannot talk its way to
+   * get_available_slots. That is the whole point: the cheapest path to the
+   * caller's goal now runs THROUGH a tool instead of around it.
+   *
+   * They are deliberately dumb. No arguments, no HTTP, no failure mode. A router
+   * that could fail would be a new way to strand a caller mid-call.
+   */
+  const routeTo = async (phase: CallPhase, reply: string): Promise<string> => {
+    // DEFER THE SWAP. Do not mutate the toolset from inside a tool's own execute().
+    //
+    // agent.updateTools() REPLACES the ToolContext — and start_booking is IN that
+    // context, currently running. Swapping it out mid-execute pulls the rug from under
+    // the very tool LiveKit is waiting on, and it cannot find the output to attach:
+    //
+    //     WARN  toolName: "start_booking"  msg: "function output missing"   x4
+    //
+    // The model then has a tool call with no result, so it calls it AGAIN, and again.
+    // On the 2026-07-14 call the owner heard it looping at the end and hung up on it.
+    //
+    // This is the same shape as #97 (session.say() from inside execute() froze the
+    // generation): the LiveKit rule is that a tool's execute() must not reach back and
+    // mutate the machinery that is currently running it. Return first; mutate after.
+    //
+    // setTimeout(0) — a MACROTASK, not queueMicrotask. Microtasks drain before the
+    // current stack unwinds, which is still "inside" the execute for this purpose. A
+    // macrotask lands after LiveKit has taken the return value and attached it, and
+    // well before the next inference (which is network-bound).
+    setTimeout(() => {
+      void (async () => {
+        try {
+          await opts?.onPhaseChange?.(phase);
+        } catch {
+          /* a failed swap must never break the call — the caller keeps the wider
+             toolset, which is worse than ideal and infinitely better than a dead line */
+        }
+      })();
+    }, 0);
+    return JSON.stringify({ ok: true, next: reply });
+  };
+
   const allTools: llm.ToolContext = {
+    start_booking: llm.tool({
+      description:
+        "The caller wants to make a NEW appointment. Call this FIRST, before asking them for a day or a time — it is what gives you the scheduling tools, and you have NO way to see the calendar until you do. You do not need their service, day, time, name or number first; call it as soon as you know they want to book, then gather the rest. Do NOT tell the caller you are 'checking' or 'looking something up' — just call this.",
+      parameters: { type: 'object', properties: {} },
+      execute: async () =>
+        routeTo(
+          'booking',
+          'Scheduling tools are now available. Use get_available_slots (they have a day in mind) or get_scheduling_options (they do not) to find real openings. Never state or refuse a time you have not seen in a tool result.'
+        ),
+    }),
+
+    manage_appointment: llm.tool({
+      description:
+        "The caller wants to check, MOVE, or CANCEL an appointment they ALREADY have. Call this FIRST, before promising anything — it is what gives you the tools to look their booking up, and you cannot see a single existing appointment until you do. Do not use this for a NEW appointment (that is start_booking).",
+      parameters: { type: 'object', properties: {} },
+      execute: async () =>
+        routeTo(
+          'manage',
+          'Appointment-management tools are now available. Call get_my_appointments to see what they actually have before changing anything.'
+        ),
+    }),
+
     get_customer_context: llm.tool({
       description:
         "Look up a caller in the CRM by phone. Returns the customer's name, a short history, any saved preferences (preferred staff, last service, likes), and sms_consent — whether they have ALREADY agreed to appointment texts (if true, never ask for that permission again). sms_consent is OMITTED when the caller is new, or when the response is requires_verification (consent status is withheld until the number is proven, exactly like the name). Treat an absent sms_consent as NO consent and ask: a missing field is never permission. Pass the phone number the caller gave you verbally when you have it; otherwise it falls back to the caller-ID phone. Use this to recognize returning callers.",
@@ -329,7 +415,8 @@ export function buildTools(
         properties: {
           service_type: {
             type: 'string',
-            description: 'Service name or partial match, e.g., "oil change" or "tire rotation".',
+            description:
+              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: \"a meeting to talk about a contract role\", \"have the owner call me back\", \"look at my project\". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a \"Personal Callback\" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
           },
           date: {
             type: 'string',
@@ -367,7 +454,11 @@ export function buildTools(
       parameters: {
         type: 'object',
         properties: {
-          service_type: { type: 'string' },
+          service_type: {
+            type: 'string',
+            description:
+              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: \"a meeting to talk about a contract role\", \"have the owner call me back\", \"look at my project\". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a \"Personal Callback\" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
+          },
           required_resource_capabilities: {
             type: 'array',
             items: { type: 'string' },
@@ -535,7 +626,11 @@ export function buildTools(
       parameters: {
         type: 'object',
         properties: {
-          service_type: { type: 'string' },
+          service_type: {
+            type: 'string',
+            description:
+              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: \"a meeting to talk about a contract role\", \"have the owner call me back\", \"look at my project\". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a \"Personal Callback\" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
+          },
           required_resource_capabilities: { type: 'array', items: { type: 'string' } },
           required_employee_skills: { type: 'array', items: { type: 'string' } },
           preferred_resource_id: { type: 'string' },
@@ -715,7 +810,11 @@ export function buildTools(
         properties: {
           name: {
             type: 'string',
-            description: 'The caller\'s full name as they stated it, e.g. "Dale DeMott".',
+            // A NEUTRAL example. This description is sent to the LLM on every call for
+            // every tenant, so a real person's name here is that person's PII sitting
+            // in every customer's prompt — and it biases the model toward a name it
+            // has seen in its instructions.
+            description: 'The caller\'s full name as they stated it, e.g. "Jordan Reyes".',
           },
           phone: {
             type: 'string',
@@ -953,7 +1052,7 @@ export function buildTools(
 
     capture_job_inquiry: llm.tool({
       description:
-        "Record a work/job inquiry for the business owner and email it to them. Use when a caller asks whether the owner is available for work or about a specific position, AFTER you have walked through the intake questions (company, whether they work there, contract vs full-time, rate/salary range, contract length if applicable, onsite/remote/hybrid, and address or timezone). Always collect at least the caller's name. You MUST call this tool once you have the answers — do not tell the caller you'll pass it along without calling it. Fields you didn't get may be omitted.",
+        "Record a work/job inquiry for the business owner and email it to them. Use when a caller asks whether the owner is available for work or about a specific position, AFTER you have walked through the intake questions.\n\nTHERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME. `caller_company` is the agency the CALLER works for — the people you are actually talking to, and who the owner will negotiate the rate with. `client_company` is where the WORK would happen — the name on the badge. A recruiter from Insight Global placing someone at Blue Cross has caller_company='Insight Global' and client_company='Blue Cross'. Only when they are an IN-HOUSE recruiter (represents_company=true) are the two the same. Ask for both; do not guess one from the other.\n\nREQUIRES the caller's real name AND a callback number — it will REFUSE without them, and it is right to: a lead the owner cannot answer is not a lead. If it refuses, go and ask for what's missing, then call it again. You MUST call this tool once you have the answers — do not tell the caller you'll pass it along without calling it. Other fields you didn't get may be omitted.",
       parameters: {
         type: 'object',
         properties: {
@@ -962,9 +1061,15 @@ export function buildTools(
             type: 'string',
             description: 'Phone number the owner should call back, if given.',
           },
-          company: {
+          caller_company: {
             type: 'string',
-            description: 'The hiring company the caller represents.',
+            description:
+              'The company the CALLER works for — the staffing agency that rang. NOT where the work is, unless they are an in-house recruiter.',
+          },
+          client_company: {
+            type: 'string',
+            description:
+              'The company where the WORK would actually happen — the end client the owner would be placed at.',
           },
           represents_company: {
             type: 'boolean',
@@ -1005,7 +1110,8 @@ export function buildTools(
       execute: async (args: {
         caller_name: string;
         callback_phone?: string;
-        company?: string;
+        caller_company?: string;
+        client_company?: string;
         represents_company?: boolean;
         employment_type?: 'contract' | 'full_time';
         rate_range?: string;
@@ -1014,12 +1120,27 @@ export function buildTools(
         address?: string;
         timezone?: string;
       }) => {
-        speakFiller?.('One moment while I pass that along to Dale...');
+        // No name. speakFiller is currently a no-op, but this said "pass that along
+        // to Dale" — so the day anyone re-enables it, every tenant's caller hears the
+        // platform owner's first name. A dormant string is still a string.
+        speakFiller?.('One moment while I pass that along...');
         const res = await client.call('/agent-tools/capture-job-inquiry', {
           tenant_id: ctx.tenantId,
           caller_name: args.caller_name,
-          callback_phone: args.callback_phone ?? ctx.callerPhone ?? undefined,
-          company: args.company,
+          // firstPhone, NOT `??` — and it now also falls back to the number the
+          // caller SPOKE (ctx.spokenPhone), which is the only number we have on a
+          // forwarded line. This line used to be
+          //   args.callback_phone ?? ctx.callerPhone ?? undefined
+          // which is the exact nullish-coalescing trap documented on blank(): a model
+          // sending callback_phone:"" would send the empty string AND block the
+          // fallback. And it never consulted spokenPhone at all.
+          //
+          // The result, on a real call: a perfect job lead — six-month hybrid contract
+          // at Blue Cross, $65-72/hr — captured with NO PHONE NUMBER. An inquiry you
+          // cannot answer is not an inquiry. It is a story about one that got away.
+          callback_phone: firstPhone(args.callback_phone, ctx.callerPhone, ctx.spokenPhone),
+          caller_company: args.caller_company,
+          client_company: args.client_company,
           represents_company: args.represents_company,
           employment_type: args.employment_type,
           rate_range: args.rate_range,

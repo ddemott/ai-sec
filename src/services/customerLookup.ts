@@ -60,7 +60,7 @@ export type WithTenantClient = <T>(
  */
 export const PLACEHOLDER_NAMES = ['Valued Customer', 'Caller', 'Unknown'] as const;
 
-function isPlaceholderName(name: string | null | undefined): boolean {
+export function isPlaceholderName(name: string | null | undefined): boolean {
   return (
     !name?.trim() || PLACEHOLDER_NAMES.includes(name.trim() as (typeof PLACEHOLDER_NAMES)[number])
   );

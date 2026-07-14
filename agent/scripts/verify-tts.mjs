@@ -42,10 +42,32 @@ const VOICES = [
   'aura-arcas-en',
 ];
 
-const SENTENCE = 'Thank you for calling. How can I help you today?';
+// THE LINES THE PRODUCT ACTUALLY SPEAKS — not a sentence invented for the test.
+//
+// This script used to synthesize one made-up string. That proved the socket opens;
+// it did NOT prove the lines we depend on can be spoken. The hold lines are the
+// ONLY thing standing between a slow tool and dead air now that the model is no
+// longer allowed to stall out loud, and they are pre-synthesized and cached BY THE
+// TEXT — so if one of them cannot be synthesized, the watchdog silently falls back
+// to live TTS, or worse, has nothing to play.
+//
+// Kept in sync with src/session/holdLines.ts by the assertion below: this file is
+// plain .mjs (no TS import), so drift is possible — and drift here is silence.
+const HOLD_LINE = 'One moment while I check that for you.';
+const RECOVERY_LINE =
+  "Sorry, this is taking me a moment. If you'd like, I can take a message and have someone get right back to you.";
+const TOOL_FALLBACK_LINE =
+  "Sorry, I'm having a little trouble with that right now. Would you like me to take a message and have someone get back to you?";
+
+const LINES = [
+  ['greeting', 'Thank you for calling. How can I help you today?'],
+  ['hold', HOLD_LINE],
+  ['recovery', RECOVERY_LINE],
+  ['tool-fallback', TOOL_FALLBACK_LINE],
+];
 
 /** Open the socket exactly as the LiveKit plugin does, send text, demand audio back. */
-function speak(voice) {
+function speak(voice, sentence = LINES[0][1]) {
   return new Promise((resolve) => {
     const url = `wss://api.deepgram.com/v1/speak?model=${voice}&encoding=linear16&sample_rate=24000`;
     const ws = new WebSocket(url, { headers: { Authorization: `Token ${KEY}` } });
@@ -63,7 +85,7 @@ function speak(voice) {
     const timer = setTimeout(() => done(false, 'timeout — no audio within 15s'), 15_000);
 
     ws.on('open', () => {
-      ws.send(JSON.stringify({ type: 'Speak', text: SENTENCE }));
+      ws.send(JSON.stringify({ type: 'Speak', text: sentence }));
       ws.send(JSON.stringify({ type: 'Flush' }));
     });
 
@@ -99,11 +121,15 @@ function speak(voice) {
   });
 }
 
-const results = [];
-for (const v of VOICES) results.push(await speak(v));
-
 let failed = 0;
-for (const r of results) {
+let checked = 0;
+
+// EVERY VOICE must open the socket and make noise (the 2026-07-14 outage: one query
+// param and all six 400'd).
+console.log('\n  Every voice the picker can map to:');
+for (const v of VOICES) {
+  const r = await speak(v);
+  checked++;
   if (r.ok) {
     console.log(`  \x1b[32mSPEAKS\x1b[0m  ${r.voice.padEnd(18)} ${r.detail}`);
   } else {
@@ -112,9 +138,25 @@ for (const r of results) {
   }
 }
 
+// EVERY FIXED LINE must be synthesizable. These are the ones the RUNTIME speaks —
+// the hold line is now the only cover for a slow tool, because the model is no
+// longer told to stall out loud. A hold line that cannot be spoken is dead air with
+// extra steps.
+console.log('\n  Every fixed line the runtime speaks (default voice):');
+for (const [label, text] of LINES) {
+  const r = await speak(VOICES[0], text);
+  checked++;
+  if (r.ok) {
+    console.log(`  \x1b[32mSPEAKS\x1b[0m  ${label.padEnd(18)} ${r.detail}`);
+  } else {
+    failed++;
+    console.log(`  \x1b[31mSILENT\x1b[0m  ${label.padEnd(18)} ${r.detail}  "${text.slice(0, 50)}…"`);
+  }
+}
+
 if (failed > 0) {
-  console.error(`\n${failed}/${results.length} voices produce NO AUDIO. DO NOT DEPLOY.`);
+  console.error(`\n${failed}/${checked} checks produce NO AUDIO. DO NOT DEPLOY.`);
   console.error('A silent phone line is worse than a choppy one.');
   process.exit(1);
 }
-console.log(`\nAll ${results.length} voices speak. Safe to deploy.`);
+console.log(`\nAll ${checked} checks speak. Safe to deploy.`);

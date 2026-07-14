@@ -36,7 +36,9 @@ import { fetchCustomerContext } from './customerContext.js';
 import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
+import { toolsForPhase, type CallPhase } from './toolPhases.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
+import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
 import { attachOutputWatchdog } from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
 import { TranscriptRecorder } from './transcript.js';
@@ -112,7 +114,44 @@ export default defineAgent({
       },
       `ai-sec-agent worker booting — commit ${commit}`
     );
-    proc.userData.vad = await silero.VAD.load();
+    // LET PEOPLE FINISH THEIR SENTENCES.
+    //
+    // We were running Silero's defaults, and its minSilenceDuration is 550ms. Half a
+    // second of silence is not the end of a thought — it is a person RECALLING
+    // something. On the 2026-07-14 call Dale said "I was hoping to speak to him about
+    // a contract that I possibly have from…", paused to bring the company name to
+    // mind, and the agent decided he was done and asked him what the company was. He
+    // had to stop it and say "hey, you didn't get the company name."
+    //
+    // It is worse than an ordinary interruption because BARGE-IN IS OFF by product
+    // decision (ALLOW_BARGE_IN, default false): once the agent starts talking the
+    // caller cannot talk over it. So an early endpoint is unrecoverable — they must
+    // sit and listen to a question they were already answering.
+    //
+    // 900ms costs ~350ms of extra latency before the agent replies. That is a good
+    // trade: a beat of silence reads as "listening"; cutting someone off reads as
+    // "not listening", and it is the single rudest thing a receptionist can do.
+    // Tunable on a real call without a code change.
+    // 1300ms, not 900. And 900 was already up from Silero's 550 default.
+    //
+    // The thing that keeps breaking is PHONE NUMBERS. Nobody says a phone number as
+    // one continuous run of sound — they say it in chunks, with a beat between them:
+    // "eight eight eight … six five six … one one eight two". Those beats are a
+    // SECOND long, easily. At 900ms the endpointer decided the caller was finished
+    // after the area code, and the agent talked over the rest of his own number. He
+    // reported it twice: "you never took my phone number", and "doesn't wait for me to
+    // say my phone number."
+    //
+    // A phone number is the single most important string a receptionist collects, and
+    // it is the one most likely to contain a pause. Bias the whole call toward
+    // patience: 1300ms costs a beat before every reply, and buys us never cutting
+    // someone off mid-number. Being a little slow reads as "listening". Talking over
+    // someone reads as "not listening", and here it is unrecoverable — barge-in is off,
+    // so once the agent starts, the caller must sit and listen to the end.
+    const minSilenceMs = Number(process.env.VAD_MIN_SILENCE_MS ?? 1300);
+    proc.userData.vad = await silero.VAD.load({
+      minSilenceDuration: Number.isFinite(minSilenceMs) ? minSilenceMs : 900,
+    });
   },
 
   entry: async (ctx: JobContext) => {
@@ -249,6 +288,14 @@ export default defineAgent({
     //    catch degrades to a fallback message instead of silence.
     let client: ToolsClient;
     let tenantConfig: Awaited<ReturnType<typeof fetchTenantConfig>>;
+    // Resolved the INSTANT the tenant is known, so the greeting can be synthesised
+    // while the phone is still ringing. See the warm block below.
+    let ttsVoiceKey: DeepgramVoice;
+    let greeting: string;
+    // Resolves when the GREETING's audio is in the cache. Awaited (with a hard cap)
+    // right before we speak, so the opener actually USES the pre-generation instead
+    // of racing it and losing. See the warm block and the say() below.
+    let greetingWarm: Promise<unknown> = Promise.resolve();
     // Accumulates the spoken conversation (caller STT + agent replies) so the
     // shutdown callback can persist it as the call's transcript. Declared here
     // — above both the shutdown registration and the session listener — so both
@@ -499,6 +546,59 @@ export default defineAgent({
         'tenant config resolved'
       );
 
+      // ── WARM THE VOICE WHILE THE PHONE IS STILL RINGING ──────────────────────
+      //
+      // Dale's observation, and it is the right one: the work should start when the
+      // phone starts ringing, not when we pick it up.
+      //
+      // This warm used to sit ~700 lines further down, immediately before the
+      // greeting's say(). Fire-and-forget, racing a call it could not win: the say()
+      // fired microseconds later, the cache was empty, and the greeting synthesised
+      // LIVE on every cold worker — an audible pause at pickup, on the very first
+      // thing a customer ever hears. The log said so on this branch's first test
+      // call: greeting_spoken pregenerated=false "audible pause at pickup".
+      //
+      // Everything between here and session.start — building the prompt, the tools,
+      // the LLM/STT/TTS plugins, starting the session — is time the caller is already
+      // spending. The tenant (and therefore the voice, and therefore the greeting) is
+      // fully known RIGHT NOW. So spend that window synthesising instead of idling.
+      //
+      // Still fire-and-forget: a caller must never wait on OUR cache-fill. If the
+      // warm loses the race anyway, getFillerFrame returns null and the greeting
+      // synthesises live exactly as before — the old behaviour is the floor, not the
+      // failure mode.
+      ttsVoiceKey = toAuraVoice(tenantConfig.ttsVoice);
+      greeting = buildGreeting(tenantConfig);
+      {
+        const tts = new deepgram.TTS({
+          apiKey: config.DEEPGRAM_API_KEY,
+          model: ttsVoiceKey,
+        }) as unknown as Parameters<typeof warmFillers>[0];
+
+        // THE GREETING GETS ITS OWN PROMISE, and it is warmed FIRST and ALONE.
+        //
+        // Bundling it with the hold lines made it hostage to them: warmFillers
+        // resolves when ALL four clips are done, so the greeting — the one line we
+        // need in the next few hundred milliseconds — waited on three lines nobody
+        // needs until a tool goes slow. Warm what you are about to say, first.
+        greetingWarm = warmFillers(tts, ttsVoiceKey, [greeting]);
+
+        // The hold lines stay fire-and-forget. Nothing waits on them: the earliest
+        // they can possibly be needed is 2.5s into a slow tool, several turns away,
+        // and if they somehow miss, getFillerFrame returns null and the watchdog
+        // synthesises live. They must never delay the opener.
+        void greetingWarm
+          .then(() => warmFillers(tts, ttsVoiceKey, [...HOLD_LINES]))
+          .then(
+            ({ warmed, failed }) =>
+              callLog.info(
+                { event: 'pregen_warmed', warmed: warmed.length, failed: failed.length },
+                `pre-generated ${warmed.length} hold line(s); ${failed.length} failed (they fall back to live synthesis)`
+              ),
+            () => undefined
+          );
+      }
+
       // Forwarded-line guard (number match): when the SIP caller-ID equals the
       // tenant's forwarded-from line (the published number the carrier forwards
       // INTO the assistant), the call was forwarded — so the caller-ID is the
@@ -583,9 +683,29 @@ export default defineAgent({
       // advertises a tool that isn't in the ToolContext — a mismatch makes the
       // model call a non-existent tool → error/hallucination → dead air on a
       // voice call (GH issue #113). undefined = all capabilities (pipeline mode).
-      const activeCapabilities = config.ENABLE_REALTIME
-        ? (['identity', 'scheduling', 'messaging'] as const)
-        : undefined;
+      // ONE list, driving BOTH the toolset and the prompt (GH #113 — if they drift,
+      // the model is told about a tool it cannot call, tries anyway, and the caller
+      // gets dead air).
+      //
+      // 'sms' is absent unless ENABLE_SMS=true, and it is absent TODAY: the number is
+      // not 10DLC-registered, so no text this product sends has ever reached a handset.
+      // The agent nevertheless closed a real booking with "you'll receive a text
+      // confirmation shortly." Removing the capability removes record_sms_consent AND
+      // swaps the prompt's texting section for one that says, plainly, that it cannot
+      // text. It cannot promise what it has no means to do.
+      const ALL_CAPS = [
+        'identity',
+        'scheduling',
+        'messaging',
+        'knowledge',
+        'verification',
+        'transfer',
+        'sms',
+      ] as const;
+      const REALTIME_CAPS = ['identity', 'scheduling', 'messaging', 'sms'] as const;
+      const activeCapabilities = (config.ENABLE_REALTIME ? REALTIME_CAPS : ALL_CAPS).filter(
+        (c) => c !== 'sms' || config.ENABLE_SMS
+      );
 
       // 3b. Prefetch the caller's CRM record so the prompt can carry their name,
       //     saved preferences, and recent history into turn one. Runs AFTER both
@@ -674,11 +794,10 @@ export default defineAgent({
       }
 
       try {
-        // The tenant's voice, resolved ONCE. Used by the live TTS, by the
-        // pre-generation cache, and by the watchdog — they must all agree, or the
-        // cache misses and the hold line comes out in a different voice from the rest
-        // of the call.
-        const ttsVoiceKey = toAuraVoice(tenantConfig.ttsVoice);
+        // ttsVoiceKey + greeting were resolved the moment the tenant was known (see
+        // the warm block above) — the live TTS, the pre-generation cache and the
+        // watchdog all read the SAME value, or the cache misses and the hold line
+        // comes out in a different voice from the rest of the call.
 
         const session = config.ENABLE_REALTIME
           ? new voice.AgentSession({
@@ -699,7 +818,24 @@ export default defineAgent({
           : new voice.AgentSession({
               vad: ctx.proc.userData.vad as silero.VAD,
               stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
-              llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
+              // temperature: 0 — PICKING A TOOL IS NOT A CREATIVE ACT.
+              //
+              // We never passed a temperature, so every call ran at OpenAI's default
+              // of 1.0: full sampling randomness, applied to a 23-way tool-selection
+              // decision. Then we called the resulting run-to-run variance "flaky" and
+              // went looking for the bug in the prompt.
+              //
+              // The variance WAS the bug. At temperature 1 the model can sample its way
+              // into narrating a lookup instead of performing one, or into the wrong one
+              // of two similar tools, and it will do it on some calls and not others —
+              // which is exactly the signature we spent days chasing. Warmth in this
+              // product comes from the persona and the voice, not from the token
+              // sampler.
+              llm: new openai.LLM({
+                apiKey: config.OPENAI_API_KEY,
+                model: 'gpt-4o-mini',
+                temperature: 0,
+              }),
               // TTS IS DEEPGRAM AURA — native WebSocket streaming.
               // This is the "voice isn't smooth" fix, take two.
               //
@@ -827,7 +963,45 @@ export default defineAgent({
         // (it used to call session.say() from inside execute(), which stalled the
         // generation — see the no-op comment below), so it no longer depends on
         // session being initialized; the ordering is harmless either way.
-        const tools = buildTools(
+        // THE MODEL SEES ONE PHASE OF THE CALL AT A TIME (toolPhases.ts).
+        //
+        // Handing gpt-4o-mini all 23 tools on every turn is over every published
+        // ceiling (OpenAI: "<20 at the start of a turn"; LiveKit: 5-12), and our own
+        // eval shows what it costs — asked to take a message, the model called NO
+        // tool at all and told the caller "I've sent the owner a message". Prompt
+        // rules did not fix that. Neither did temperature 0. A model cannot pick the
+        // wrong tool from a set that does not contain it, and it picks the right one
+        // far more often from six candidates than from twenty-three.
+        //
+        // The agent starts in 'intake' and moves when the model calls a router
+        // (start_booking / manage_appointment). The routers are the ONLY door out:
+        // the scheduling tools are not visible during intake, so the model cannot
+        // TALK its way to get_available_slots — the cheapest path to what the caller
+        // asked for now runs THROUGH a tool call instead of around it.
+        //
+        // Late-bound on purpose: the tools must exist before the Agent, and the
+        // Agent must exist before a tool can swap its toolset. `phaseAgent` closes
+        // that loop. A router that fires before the Agent exists (impossible today —
+        // the model cannot call a tool before session.start) is a no-op, not a crash.
+        let phaseAgent: voice.Agent | null = null;
+        let phase: CallPhase = 'intake';
+        const applyPhase = async (next: CallPhase): Promise<void> => {
+          phase = next;
+          if (!phaseAgent) return;
+          const scoped = toolsForPhase(allTools, next);
+          await phaseAgent.updateTools(scoped);
+          callLog.info(
+            {
+              event: 'tool_phase_changed',
+              phase: next,
+              tool_count: Object.keys(scoped).length,
+              tools: Object.keys(scoped),
+            },
+            `tool phase → ${next} (${Object.keys(scoped).length} tools visible)`
+          );
+        };
+
+        const allTools = buildTools(
           sessionCtx,
           client,
           {
@@ -854,7 +1028,17 @@ export default defineAgent({
           // knowledge/RAG, transfer, and OTP to shrink the per-turn schema tokens.
           // `activeCapabilities` (computed once above) drives this AND the system
           // prompt, so the two can never drift (GH issue #113). Pipeline = all tools.
-          activeCapabilities ? { capabilities: activeCapabilities } : undefined
+          //
+          // Capabilities and phases compose, and the order matters: capabilities are
+          // authoritative and decide what this SESSION has at all; phases only ever
+          // narrow that further, per turn. A phase can never hand back a tool a
+          // capability withheld — toolsForPhase intersects, it does not union. So
+          // ENABLE_PHONE_VERIFICATION=false still means no OTP tool exists, in any
+          // phase, no matter what toolPhases.ts lists.
+          {
+            ...(activeCapabilities ? { capabilities: activeCapabilities } : {}),
+            onPhaseChange: applyPhase,
+          }
         );
 
         // MARKDOWN MUST NEVER REACH THE VOICE.
@@ -882,13 +1066,29 @@ export default defineAgent({
           }
         }
 
+        // Open in INTAKE: identity, the catalog, the policy answerer, every way to
+        // reach a human — and the two routers. Not the calendar. The model cannot
+        // offer, refuse, or invent a time before it has called a tool that returns
+        // one, because the tools that return times are not in the room yet.
+        const intakeTools = toolsForPhase(allTools, 'intake');
         const agent = new SpeakingAgent({
           instructions,
-          tools,
+          tools: intakeTools,
         });
+        phaseAgent = agent;
 
         await session.start({ agent, room: ctx.room });
-        callLog.info({ event: 'session_started' }, 'voice session started — agent ready to greet');
+        callLog.info(
+          {
+            event: 'session_started',
+            phase,
+            tool_count: Object.keys(intakeTools).length,
+            // The count the model actually sees. If this creeps back toward 23,
+            // the narrowing has silently regressed and the hallucinations return.
+            tool_count_all: Object.keys(allTools).length,
+          },
+          'voice session started — agent ready to greet'
+        );
 
         // Record every finalized turn (caller STT + agent replies) for the
         // call transcript. Attached BEFORE the greeting `say()` below — which
@@ -1050,9 +1250,14 @@ export default defineAgent({
           // DIFFERENT VOICE from the rest of the call. Both lines are already in
           // PREGEN_LINES; this warm is now a no-op cache hit in the normal case.
           const watchdogVoice = ttsVoiceKey;
-          const fillerText = 'One moment while I check that for you.';
-          const recoveryText =
-            "Sorry, this is taking me a moment. If you'd like, I can take a message and have someone get right back to you.";
+          // ONE definition (session/holdLines.ts). These used to be string literals
+          // here AND in PREGEN_LINES below — and the filler cache is keyed BY THE
+          // TEXT, so a one-character drift between the two copies would silently
+          // miss the cache and put live TTS latency back on the line whose only job
+          // is to cover latency. Nothing would error. It would just get slow again.
+          const fillerText = HOLD_LINE;
+          const thinkingText = THINKING_LINE;
+          const recoveryText = RECOVERY_LINE;
           const fillerTts = new deepgram.TTS({
             apiKey: config.DEEPGRAM_API_KEY,
             model: ttsVoiceKey,
@@ -1070,6 +1275,22 @@ export default defineAgent({
           );
           const detachWatchdog = attachOutputWatchdog(session, {
             voice: watchdogVoice,
+            thinkingText,
+            // 3.5s, not 2.5s. At 2.5s it fired SEVEN TIMES in one call — the pipeline
+            // (STT → gpt-4o-mini → TTS) routinely takes longer than that to produce a
+            // first word, so the "backstop" became the normal case and the caller was
+            // held on nearly every turn. A backstop that fires every turn is not a
+            // backstop, it is a stutter. Tunable without a deploy.
+            // 2800ms. It was 2500 (fired 7x in one call, and LIED each time — "let me
+            // check that for you" when nothing was being checked), then 3500 to shut it
+            // up, which traded the lying for LONG SILENCES the caller filled with
+            // "Hello?".
+            //
+            // The line is HONEST now — "Just a moment." when no tool is running — so
+            // firing is cheap again, and the right move is to cover the gap sooner
+            // rather than leave a caller wondering if the line dropped. The real cure
+            // is the agent being faster; this is the dressing on the wound.
+            deadline1Ms: Number(process.env.WATCHDOG_DEADLINE_1_MS ?? 2800),
             fillerText,
             recoveryText,
             log: callLog,
@@ -1096,47 +1317,11 @@ export default defineAgent({
         // disclosure is appended by the platform on every call for every tenant
         // and cannot be edited or removed from the dashboard. See greeting.ts for
         // the wording rules and why each clause is worded the way it is.
-        const greeting = buildGreeting(tenantConfig);
-
-        // PRE-GENERATE the fixed lines for this tenant's voice.
         //
-        // Dale's observation, and it is the right one: most of what this agent says at
-        // the edges of a call is not generated at all — it is a FIXED SCRIPT. The
-        // greeting is byte-identical on every call. So is the hold line. So is the
-        // "I'm having trouble" fallback. Paying a TTS round-trip for a sentence that
-        // cannot change is pure waste, and it is charged precisely at the moments the
-        // caller is least willing to wait: the instant they are connected, and the
-        // instant something is already slow.
-        //
-        // Synthesise them ONCE per worker per voice, replay the frames forever. The
-        // LiveKit worker is per-tenant and long-lived, so the voice is stable and the
-        // cache pays for itself on call two.
-        //
-        // Deliberately fire-and-forget: warming MUST NOT block call setup. A caller
-        // waiting on our cache-fill is worse than a caller waiting on a synth. First
-        // call after a deploy misses and synthesises live (the old behaviour); every
-        // call after that is instant.
-        const PREGEN_LINES = [
-          greeting,
-          'One moment while I check that for you.',
-          "Sorry, this is taking me a moment. If you'd like, I can take a message and have someone get right back to you.",
-          "Sorry, I'm having a little trouble with that right now. Would you like me to take a message and have someone get back to you?",
-        ];
-        void warmFillers(
-          new deepgram.TTS({
-            apiKey: config.DEEPGRAM_API_KEY,
-            model: ttsVoiceKey,
-          }) as unknown as Parameters<typeof warmFillers>[0],
-          ttsVoiceKey,
-          PREGEN_LINES
-        ).then(
-          ({ warmed, failed }) =>
-            callLog.info(
-              { event: 'pregen_warmed', warmed: warmed.length, failed: failed.length },
-              `pre-generated ${warmed.length} fixed line(s); ${failed.length} failed (they fall back to live synthesis)`
-            ),
-          () => undefined
-        );
+        // `greeting` and `ttsVoiceKey` were resolved — and their audio warmed — the
+        // moment the tenant was known, while the phone was still ringing. By the time
+        // we get here the frame is usually already in the cache, so the opener plays
+        // instantly instead of synthesising live at pickup.
         // Greeting. Pipeline mode plays it via say() uninterrupted (a caller's
         // "hi?"/line noise at pickup shouldn't truncate the opening line); Realtime
         // mode speaks it via generateReply with server-side turn-taking (it rejects
@@ -1188,6 +1373,31 @@ export default defineAgent({
               // call after a deploy) or the synth failed, `frame` is undefined and say()
               // falls back to live synthesis — slower, but never silent. A cache miss must
               // degrade to the old behaviour, never to dead air.
+              // WAIT FOR THE VOICE TO BE READY — but never longer than it would have
+              // taken to just synthesise it live.
+              //
+              // Starting the warm early was not enough. Fire-and-forget means the
+              // say() fires microseconds later and reads an EMPTY cache, so the
+              // pre-generation lost its own race on every cold worker and the greeting
+              // synthesised live anyway — measured, twice, on this branch:
+              // `greeting_spoken pregenerated=false`. Work started but not awaited is
+              // work wasted.
+              //
+              // So await it, with a hard cap. The cap is what makes this safe: if the
+              // synth is slow or Deepgram is having a bad day, we stop waiting and
+              // stream live exactly as before. Worst case is TODAY'S behaviour; best
+              // case the opener plays instantly from a frame. There is no case where a
+              // caller waits longer than they already do.
+              //
+              // On a real PSTN call this is nearly free — the phone is RINGING through
+              // ctx.connect() and waitForParticipant(), and the warm started back when
+              // the tenant resolved. By here it is usually already done.
+              const GREETING_WARM_CAP_MS = 1500;
+              await Promise.race([
+                greetingWarm.catch(() => undefined),
+                new Promise((r) => setTimeout(r, GREETING_WARM_CAP_MS)),
+              ]);
+
               const greetingFrame = getFillerFrame(ttsVoiceKey, greeting);
               const opener = greetingFrame
                 ? session.say(greeting, {
@@ -1203,7 +1413,7 @@ export default defineAgent({
                 },
                 greetingFrame
                   ? 'greeting played from cache — no TTS latency'
-                  : 'greeting synthesised live (cache miss) — audible pause at pickup'
+                  : 'greeting synthesised live (warm missed the cap) — audible pause at pickup'
               );
               await opener.waitForPlayout();
 
@@ -1282,6 +1492,22 @@ cli.runApp(
     // Must match the agentName in the LiveKit dispatch rule
     // (SDR_if97ky4Zf7e6 / dynatire-dispatch). If these drift, dispatched
     // jobs won't route to this worker and calls will hit dead air.
-    agentName: 'ai-secretary-agent',
+    //
+    // OVERRIDABLE so a BRANCH can be heard without racing production.
+    //
+    // LiveKit load-balances a dispatch across every worker registered under the
+    // same agentName. So running a local worker on a feature branch — the only way
+    // to actually LISTEN to a change before merging it — silently entered it into a
+    // coin-flip with the Railway worker running main. Whichever won the job is the
+    // code you heard, and nothing in the output told you which.
+    //
+    // That is not hypothetical. On 2026-07-14 the owner was told a fix was live
+    // because a dispatch "picked up"; it had landed on the OLD binary, and the
+    // worker did not actually restart until five minutes after he hung up. A test
+    // whose result you cannot attribute to a specific commit is not a test.
+    //
+    // Set AGENT_NAME=ai-secretary-agent-dev on both the worker and the dispatcher
+    // (scripts/sim-call.mjs reads the same var) and the job can ONLY land on yours.
+    agentName: process.env.AGENT_NAME ?? 'ai-secretary-agent',
   })
 );
