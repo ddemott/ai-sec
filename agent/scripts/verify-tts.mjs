@@ -84,7 +84,17 @@ function speak(voice) {
 
     ws.on('close', (code) => {
       clearTimeout(timer);
-      if (bytes === 0) done(false, `socket closed (${code}) with no audio`);
+      // ALWAYS resolve. The first version only resolved when bytes === 0 — so a socket
+      // that delivered audio and then closed WITHOUT a "Flushed" message left the
+      // promise pending forever, and the whole gate hung. A verification script that
+      // can hang is a verification script that gets bypassed, which is exactly how the
+      // outage it exists to prevent happens again.
+      done(
+        bytes > 1000,
+        bytes > 1000
+          ? `${bytes} bytes of audio`
+          : `socket closed (${code}) with only ${bytes} bytes`
+      );
     });
   });
 }

@@ -744,7 +744,7 @@ export default defineAgent({
                 //     WITHOUT speed  -> OPEN
                 //     WITH speed=1   -> Unexpected server response: 400
                 //
-                // The first version of this passed `speed: ttsSpeed ?? 1.0`, so EVERY
+                // The first version of this passed `speed: tenantConfig.ttsSpeed ?? 1.0`, so EVERY
                 // call sent speed=1 and every call was silent. The owner rang his own
                 // business, said "Hello… Hello…", heard nothing, and hung up.
                 //
