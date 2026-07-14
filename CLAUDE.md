@@ -10,7 +10,7 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 
 ## Architecture
 
-- **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + OpenAI (TTS) → Fastify `/agent-tools/*`
+- **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + **Deepgram Aura (TTS, native WebSocket streaming — switched from OpenAI TTS 2026-07-14 because the OpenAI plugin is NON-STREAMING: it buffers the whole reply before emitting any audio, so every turn was silence-then-a-burst. Chopping the input into sentences with StreamAdapter only traded one gap for a gap between every sentence. You cannot make a non-streaming engine stream by chopping its input finer)** → Fastify `/agent-tools/*`
 - **Backend**: Fastify (28 flat route modules under `src/routes/` + the `agentTools/` module dir) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `ai-sec-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind + TS

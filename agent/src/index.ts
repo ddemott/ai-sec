@@ -19,15 +19,7 @@
 import { initSentry, captureException as captureSentry } from './sentry.js';
 initSentry();
 
-import {
-  type JobContext,
-  WorkerOptions,
-  cli,
-  defineAgent,
-  voice,
-  tts,
-  tokenize,
-} from '@livekit/agents';
+import { type JobContext, WorkerOptions, cli, defineAgent, voice } from '@livekit/agents';
 import * as deepgram from '@livekit/agents-plugin-deepgram';
 import * as openai from '@livekit/agents-plugin-openai';
 import * as silero from '@livekit/agents-plugin-silero';
@@ -65,19 +57,72 @@ function toOpenAIVoice(v: string | null | undefined): (typeof OPENAI_VOICES)[num
     : 'shimmer';
 }
 
+/**
+ * The tenant's saved voice, mapped to its nearest Deepgram Aura equivalent.
+ *
+ * The dashboard picker stores OpenAI voice ids (shimmer/nova/…), and owners have
+ * already chosen one. Switching the TTS engine must not silently reset their voice
+ * or make the picker meaningless, so the saved value is honoured — translated, not
+ * discarded. Matched on timbre: the two feminine-bright voices go to Asteria/Luna,
+ * the neutral ones to Stella/Athena, the masculine ones to Orion/Arcas.
+ *
+ * Anything unknown (a legacy Grok id, a typo) falls back to Asteria rather than
+ * erroring at the API — the same fail-soft contract toOpenAIVoice has always had.
+ */
+const AURA_BY_OPENAI_VOICE: Record<string, DeepgramVoice> = {
+  shimmer: 'aura-asteria-en',
+  nova: 'aura-luna-en',
+  alloy: 'aura-stella-en',
+  echo: 'aura-athena-en',
+  onyx: 'aura-orion-en',
+  fable: 'aura-arcas-en',
+};
+type DeepgramVoice =
+  | 'aura-asteria-en'
+  | 'aura-luna-en'
+  | 'aura-stella-en'
+  | 'aura-athena-en'
+  | 'aura-orion-en'
+  | 'aura-arcas-en';
+
+function toAuraVoice(v: string | null | undefined): DeepgramVoice {
+  return (v && AURA_BY_OPENAI_VOICE[v]) || 'aura-asteria-en';
+}
+
 export default defineAgent({
   prewarm: async (proc) => {
     // Boot-version marker. Printed once when the worker process starts, so the
     // Railway logs unambiguously show WHICH code is live (vs guessing from a
     // redeploy). If you don't see build 'spoken-phone-v3-openai-tts' + these features in
     // the logs, the worker is running an older deployment.
+    // WHAT CODE IS THIS WORKER ACTUALLY RUNNING?
+    //
+    // This used to be a hand-written string: build:'spoken-phone-v3-openai-tts',
+    // features:[…,'untrusted_caller_id',…]. UNTRUSTED_CALLER_ID was deleted from this
+    // codebase weeks ago. The stamp had been lying ever since, which makes it worse
+    // than no stamp: it answers the question confidently and wrongly.
+    //
+    // It cost a real call. On 2026-07-14 the owner was told the voice fix was live
+    // because `simulate.sh --deep` reported "dispatch picked up" — which proves the
+    // worker is ALIVE, not that it is NEW. His call ran on the old binary; the worker
+    // did not actually restart until five minutes after he hung up. This is the exact
+    // stale-binary trap CLAUDE.md warns about, and a hand-maintained version string is
+    // no defence against it, because nobody remembers to bump it.
+    //
+    // Railway injects the deployed commit. Print THAT. A stamp that a human has to
+    // remember to update is a stamp that will eventually lie.
+    const commit =
+      process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 8) ??
+      process.env.GIT_COMMIT_SHA?.slice(0, 8) ??
+      'unknown';
     getLogger().info(
       {
         event: 'agent_boot',
-        build: 'spoken-phone-v3-openai-tts',
-        features: ['find_caller_by_name', 'untrusted_caller_id', 'spoken_phone_params'],
+        commit,
+        booted_at: new Date().toISOString(),
+        tts: 'deepgram-aura (native streaming)',
       },
-      'ai-sec-agent worker booting'
+      `ai-sec-agent worker booting — commit ${commit}`
     );
     proc.userData.vad = await silero.VAD.load();
   },
@@ -663,44 +708,43 @@ export default defineAgent({
               llm: new openai.LLM({ apiKey: config.OPENAI_API_KEY, model: 'gpt-4o-mini' }),
               // TTS is OpenAI. The plugin is non-streaming (buffers the whole clip
               // before any audio plays), so model latency = dead air on every reply.
-              // tts-1 measured 2–5s/sentence → multi-second silent gaps that callers
-              // fill with "hello?", which cancelled the reply. gpt-4o-mini-tts is
-              // ~1.3s and consistent. Per-tenant voice/speed from the dashboard;
-              // tts_voice is an OpenAI voice id (unset/legacy → 'shimmer'). 2026-06-25.
+              // NATIVE STREAMING TTS. This is the "voice isn't smooth" fix, take two.
               //
-              // WRAPPED IN StreamAdapter — this is the "voice isn't smooth" fix.
+              // THE HISTORY, because it is the whole lesson:
               //
-              // The OpenAI TTS plugin is NON-STREAMING: it buffers the ENTIRE reply and
-              // returns audio only when the whole clip is synthesised. The comment above
-              // says so, and treats it as a latency number (~1.3s). It is not just
-              // latency — it is CADENCE. Every single agent turn became:
+              //   tts-1              — 2–5s per sentence. Multi-second dead air; callers
+              //                        said "hello?" and cancelled the reply.
+              //   gpt-4o-mini-tts    — ~1.3s and consistent, but the OpenAI plugin is
+              //                        NON-STREAMING: it buffers the ENTIRE reply and
+              //                        emits audio only when the whole clip is done. So
+              //                        every turn was: silence … silence … [paragraph].
+              //                        The owner called it "broken up / not natural".
+              //   + StreamAdapter    — my first fix. It splits the reply into SENTENCES
+              //                        and synthesises each one separately. Time-to-first-
+              //                        word improved — but every sentence became its own
+              //                        HTTP round-trip, so I traded one gap at the start
+              //                        for a small gap between EVERY sentence. The owner's
+              //                        verdict: "a bit choppy still, not as smooth as it
+              //                        once was." He was right. I had moved the stutter,
+              //                        not removed it.
               //
-              //     silence … silence … [whole paragraph, all at once]
+              // You cannot make a non-streaming engine stream by chopping its input
+              // finer. Each chop is another round-trip. The only real fix is an engine
+              // that streams audio as it generates it.
               //
-              // The owner's report after two calls was "voice was broken up / did not
-              // sound natural / still not smooth", and this is it. Nothing was wrong with
-              // the AUDIO. What was wrong was that a human conversation does not arrive in
-              // buffered blocks with a hole in front of each one.
+              // Deepgram Aura does: a WebSocket connection, audio flowing continuously as
+              // the words are produced. No buffering, no per-sentence handshake. We
+              // already pay Deepgram for STT, so the key and the vendor relationship
+              // already exist — this adds no new dependency, only removes a bad one.
               //
-              // StreamAdapter wraps a non-streaming TTS with a sentence tokenizer:
-              // sentence one is synthesised and starts PLAYING while sentence two is still
-              // being generated. Time-to-first-word drops to the cost of the first
-              // sentence instead of the whole reply, and the gap between sentences is
-              // filled with speech rather than silence.
-              //
-              // This is the supported mechanism the earlier "re-add a filler later via a
-              // supported mechanism if perceived latency is an issue" note (2026-06-25)
-              // was waiting for. The right answer to dead air is not a filler phrase
-              // apologising for it — it is not having the dead air.
-              tts: new tts.StreamAdapter(
-                new openai.TTS({
-                  apiKey: config.OPENAI_API_KEY,
-                  model: 'gpt-4o-mini-tts',
-                  voice: toOpenAIVoice(tenantConfig.ttsVoice),
-                  speed: tenantConfig.ttsSpeed ?? 1.0,
-                }),
-                new tokenize.basic.SentenceTokenizer()
-              ),
+              // The tenant's saved voice is honoured, translated to its nearest Aura
+              // timbre (see toAuraVoice) — an engine swap must not silently reset a
+              // choice the owner made in the dashboard.
+              tts: new deepgram.TTS({
+                apiKey: config.DEEPGRAM_API_KEY,
+                model: toAuraVoice(tenantConfig.ttsVoice),
+                speed: tenantConfig.ttsSpeed ?? 1.0,
+              }),
               turnHandling: {
                 interruption: {
                   // HALF-DUPLEX BY DEFAULT (product decision 2026-07-12, after a real
