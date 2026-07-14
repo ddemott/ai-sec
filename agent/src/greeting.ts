@@ -48,8 +48,43 @@ import type { TenantDisplayConfig } from './tenantConfig.js';
  * disclosure guarantees every caller on the default is told which business
  * answered.
  */
+/**
+ * The business name as a PERSON would say it — without the legal suffix.
+ *
+ * "Thank you for calling Thinking Hammer LLC" is not how anyone answers a phone.
+ * A receptionist says "Thank you for calling Thinking Hammer". The suffix is a
+ * registration detail, not part of the name the business is known by, and read
+ * aloud it lands somewhere between stilted and bizarre — TTS engines either spell
+ * it out letter by letter or slur it into a non-word. The owner heard it on the
+ * 2026-07-14 call and asked what the word was, which is the clearest possible
+ * evidence that it should not be there.
+ *
+ * SPOKEN ONLY. tenants.name keeps the legal name, and everything WRITTEN — the
+ * dashboard, contracts, invoices — still shows it in full. This strips it from the
+ * one place a suffix has never belonged: out loud.
+ *
+ * Conservative on purpose: only a suffix at the END, only with a word boundary in
+ * front of it. "Hammer & Co Ironworks" keeps its "Co" — the suffix is mid-name, so
+ * it is part of the name. Stripping a word that is genuinely part of a business's
+ * identity is a worse error than saying "LLC" once.
+ */
+export function speakableName(name: string | null | undefined): string {
+  const trimmed = name?.trim() ?? '';
+  if (!trimmed) return trimmed;
+  const spoken = trimmed
+    // Optional comma, then the suffix, then optional trailing period — end of string.
+    .replace(
+      /[\s,]+(llc|l\.l\.c\.|inc|inc\.|incorporated|ltd|ltd\.|limited|corp|corp\.|corporation|co|co\.|plc|llp|lp|pllc|pc)\.?$/i,
+      ''
+    )
+    .trim();
+  // Never return an empty string: a business literally named "LLC" would otherwise
+  // vanish from its own greeting. Something odd beats nothing.
+  return spoken || trimmed;
+}
+
 export function buildDisclosure(businessName: string): string {
-  return `I'm an AI assistant for ${businessName}, and this call is transcribed for quality and service.`;
+  return `I'm an AI assistant for ${speakableName(businessName)}, and this call is transcribed for quality and service.`;
 }
 
 /**
@@ -147,7 +182,7 @@ export const CLOSER_WITH_TRANSFER =
 function fillPlaceholders(text: string, config: TenantDisplayConfig): string {
   return (
     text
-      .replace(/\{\{\s*business_name\s*\}\}/gi, config.name?.trim() || 'us')
+      .replace(/\{\{\s*business_name\s*\}\}/gi, speakableName(config.name) || 'us')
       .replace(/\{\{\s*persona_name\s*\}\}/gi, config.personaName?.trim() || 'your assistant')
       // Anything still in braces is unknown — drop it rather than speak it.
       .replace(/\{\{[^}]*\}\}/g, '')
@@ -214,9 +249,13 @@ export function buildGreeting(config: TenantDisplayConfig): string {
   // into both their First Message and their disclosure, that is their sentence to
   // write, and we do not quietly redact it.
   const customDisclosure = config.callDisclosure?.trim();
-  const name = config.name?.trim();
+  // Compare on the SPOKEN name, not the legal one. The opener now contains
+  // "Thinking Hammer" (the suffix is stripped for speech), so matching against
+  // "Thinking Hammer LLC" would never hit and the dedupe would silently stop
+  // working — the caller would hear the business named twice again.
+  const name = speakableName(config.name);
   const openerNamesBusiness =
-    Boolean(name) && openerWithoutClosingQuestion.toLowerCase().includes(name!.toLowerCase());
+    Boolean(name) && openerWithoutClosingQuestion.toLowerCase().includes(name.toLowerCase());
   const disclosure = customDisclosure
     ? customDisclosure
     : openerNamesBusiness
