@@ -345,8 +345,8 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
                       ORDER BY u.created_at ASC LIMIT 1)
                   ) AS email,
                   -- FIRST name: this is spoken aloud ("passed those details along to
-                  -- Dale"), and a receptionist says the first name. full_name is the
-                  -- fallback, not the preference. users has full_name/first_name/
+                  -- <owner>"), and a receptionist uses the first name. full_name is
+                  -- the fallback, not the preference. users has full_name/first_name/
                   -- last_name and no bare name column; assuming otherwise 500d this
                   -- route in test.
                   (SELECT COALESCE(NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(u.full_name), ''))
