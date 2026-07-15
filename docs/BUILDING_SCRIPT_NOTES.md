@@ -4,6 +4,62 @@ A running record of how the voice-agent call flow is built, why, and every bug w
 getting it to work. Written so a second business — or a second developer — can rebuild
 the same thing without re-paying for the lessons.
 
+---
+
+## ✅ VERIFIED SUCCESS POINT — 2026-07-15 (branch `spike/task-group-ladder`)
+
+**The task-group call flow works end-to-end on a live voice call.** This is the point to
+come back to. Everything below the line is why and how.
+
+What a real voice call did, confirmed in the database:
+
+```
+greeting → intent (begin_call) → TASK GROUP:
+    identity → book_meeting → job_intake   (every rung completed)
+    ✓ appointment: Programming Consultation, real time on the calendar
+    ✓ job inquiry: name + phone + BOTH companies + rate + length + location, recorded
+    ✓ clean goodbye by name, then hangup — NO re-collection
+```
+
+**What works (verified on the call, not just in tests):**
+
+| Behaviour | Status |
+|---|---|
+| Runs the whole call as host-code rungs the model can't skip | ✅ works |
+| Books the right service (semantic match) at a real time (not October) | ✅ works |
+| Takes ALL job-intake details, both companies kept apart | ✅ works — the rung that used to get skipped |
+| Identity flows to booking (no re-asking the phone) | ✅ works |
+| Opens on what the caller already said (no "what would you like?") | ✅ works |
+| No "how can I help?" re-ask after identity (positive framing) | ✅ works |
+| Natural spoken summary, no markdown/run-on | ✅ works |
+| Clean close by name, no end-of-call re-collection | ✅ works |
+
+**What is NOT done yet (honest scope):**
+
+- **Only 3 rungs exist**: identity, book_meeting, job_intake. The prompt ladder handled
+  more (cancel, reschedule, take-message, page-owner, policy Q&A). Those are not rungs yet.
+- **The stack is snapshotted at group start** — a NEW goal raised at the very end ("oh, and
+  can you also…") is not picked up; the fixed goodbye fires. Known limit, documented.
+- **Text E2E (`sim-taskgroup.ts`) does not exercise the runtime handoff** — only a live
+  call does. Keep both.
+- **Behind `ENABLE_TASK_GROUP` only.** The agent answering the real phone is the prompt
+  ladder, untouched.
+
+**How to grow from 3 rungs to a full receptionist (the roadmap):**
+
+You do NOT code per-request. You code per goal TYPE (a rung), and `begin_call` routes to it.
+1. Build a rung per goal the business actually gets — same 5-part pattern, reuse existing
+   tools (`cancel_appointment`, `take_message`, `get_company_policy_answer` all exist).
+2. Add one boolean to `begin_call` for each, so intent detects it.
+3. Add "loop back after the group" plumbing ONCE — re-run intent after `group.run()`, and if
+   a new goal appeared, run a second group. That generically handles any known goal type
+   raised late (the snapshotted-stack limit).
+
+Each rung is small, safe, isolated (the loop keeps rungs from breaking each other), and has
+its own tests. Adding a capability is bounded work, not a rewrite. That is the payoff.
+
+---
+
 **Two flows exist in the codebase. Know which you are reading about:**
 
 1. **The prompt ladder** (shipped, default). The whole call is one big system prompt with
