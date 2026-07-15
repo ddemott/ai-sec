@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { llm, initializeLogger } from '@livekit/agents';
-import { BookMeetingTask, BOOK_MEETING_INSTRUCTIONS } from './bookMeetingTask.js';
+import { makeBookMeetingRung, BOOK_MEETING_INSTRUCTIONS } from './bookMeetingTask.js';
 
 beforeAll(() => {
   initializeLogger({ pretty: false, level: 'silent' });
@@ -45,7 +45,7 @@ function schedulingTools(booking: llm.ToolContext[string]): llm.ToolContext {
   };
 }
 
-async function callBooking(task: BookMeetingTask, args: unknown = {}): Promise<unknown> {
+async function callBooking(task: ReturnType<typeof makeBookMeetingRung>, args: unknown = {}): Promise<unknown> {
   const tool = (task.toolCtx as Record<string, unknown>).book_with_scheduling as {
     execute: (a: unknown, c: unknown) => Promise<unknown>;
   };
@@ -58,7 +58,7 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     const booking = fakeBookingTool(
       JSON.stringify({ success: true, appointment_id: 'appt-123', booked_time: '3:30 PM' })
     );
-    const task = new BookMeetingTask({
+    const task = makeBookMeetingRung({
       schedulingTools: schedulingTools(booking),
       requestedService: 'a meeting about a contract',
       onBooked,
@@ -81,7 +81,7 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     const booking = fakeBookingTool(
       JSON.stringify({ error: 'Requested time slot is already booked', error_code: 'TIMESLOT_OCCUPIED' })
     );
-    const task = new BookMeetingTask({
+    const task = makeBookMeetingRung({
       schedulingTools: schedulingTools(booking),
       requestedService: 'a meeting',
     });
@@ -96,7 +96,7 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     // WHY: a missed success just keeps the task trying; a FALSE success ends the rung
     //      with no meeting. When in doubt, stay open.
     const booking = fakeBookingTool('the booking system is having trouble right now');
-    const task = new BookMeetingTask({
+    const task = makeBookMeetingRung({
       schedulingTools: schedulingTools(booking),
       requestedService: 'a meeting',
     });
@@ -109,7 +109,7 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     // book_with_scheduling — the model cannot end this rung by talking, and cannot end it
     // by claiming it booked. It has to actually book.
     const booking = fakeBookingTool(JSON.stringify({ appointment_id: 'x' }));
-    const task = new BookMeetingTask({
+    const task = makeBookMeetingRung({
       schedulingTools: schedulingTools(booking),
       requestedService: 'a meeting',
     });
@@ -122,7 +122,7 @@ describe('BookMeetingTask — the booking IS the transition', () => {
 
   it('SAD: it reuses the real scheduling tools — it does not reinvent booking', async () => {
     const booking = fakeBookingTool(JSON.stringify({ appointment_id: 'x' }));
-    const task = new BookMeetingTask({
+    const task = makeBookMeetingRung({
       schedulingTools: schedulingTools(booking),
       requestedService: 'a meeting',
     });

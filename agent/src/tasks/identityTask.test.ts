@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { llm, initializeLogger } from '@livekit/agents';
-import { IdentityTask, IDENTITY_INSTRUCTIONS } from './identityTask.js';
+import { makeIdentityRung, IDENTITY_INSTRUCTIONS } from './identityTask.js';
 import type { SessionContext } from '../sessionContext.js';
 
 // LiveKit's Agent base class logs on construction, and refuses to exist without a
@@ -44,7 +44,7 @@ const fakeIdentifyCaller = llm.tool({
 });
 
 /** Reach into the task's own tools and call one, the way the model would. */
-async function callTool(task: IdentityTask, name: string, args: unknown): Promise<unknown> {
+async function callTool(task: ReturnType<typeof makeIdentityRung>, name: string, args: unknown): Promise<unknown> {
   const tool = (task.toolCtx as Record<string, unknown>)[name] as {
     execute: (a: unknown, o: unknown) => Promise<unknown>;
   };
@@ -58,7 +58,7 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     // to run an AgentTask outside a Task context ("must be executed inside a Task
     // context"). A rung is not a thing you can invoke ad hoc; it is a thing the loop
     // pops. There is no side door into the middle of a call.
-    const task = new IdentityTask({ ctx: makeCtx(), identifyCaller: fakeIdentifyCaller });
+    const task = makeIdentityRung({ ctx: makeCtx(), identifyCaller: fakeIdentifyCaller });
     await expect(task.run()).rejects.toThrow(/inside a Task context/i);
   });
 
@@ -71,13 +71,13 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     // Compare with today, where the equivalent guarantee is a line of PROSE ("do not
     // close the call while a request is outstanding") that the model has now ignored on
     // two separate calls.
-    const task = new IdentityTask({ ctx: makeCtx(), identifyCaller: fakeIdentifyCaller });
+    const task = makeIdentityRung({ ctx: makeCtx(), identifyCaller: fakeIdentifyCaller });
     expect(task.done, 'a task that has done no work must not be done').toBe(false);
   });
 
   it('HAPPY: calling confirm_identity — and ONLY that — completes the task', async () => {
     const onIdentified = vi.fn();
-    const task = new IdentityTask({
+    const task = makeIdentityRung({
       ctx: makeCtx(),
       identifyCaller: fakeIdentifyCaller,
       onIdentified,
@@ -99,7 +99,7 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     //      that already worked. identify_caller took a week of real calls to get right
     //      (E.164 at the boundary, the placeholder-name bug, the first/last split). The
     //      task receives it. It does not build a second one.
-    const task = new IdentityTask({ ctx: makeCtx(), identifyCaller: fakeIdentifyCaller });
+    const task = makeIdentityRung({ ctx: makeCtx(), identifyCaller: fakeIdentifyCaller });
     expect(Object.keys(task.toolCtx).sort()).toEqual(['confirm_identity', 'identify_caller']);
   });
 
@@ -108,7 +108,7 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     // WHY: "never re-ask for something you already have" — reading a number back to a
     //      man whose number is on our screen is that rule broken in its most irritating
     //      form, and he told us so: "Phone number was already given and it asked again."
-    const task = new IdentityTask({
+    const task = makeIdentityRung({
       ctx: makeCtx('+16305551212'),
       identifyCaller: fakeIdentifyCaller,
     });
@@ -133,7 +133,7 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     //      confirming — making the caller repeat what they said 20 seconds ago. The intent
     //      is captured at begin_call and threaded here; identity should collect name/phone
     //      and hand straight to the next rung, never re-open the ask.
-    const task = new IdentityTask({
+    const task = makeIdentityRung({
       ctx: makeCtx(),
       identifyCaller: fakeIdentifyCaller,
       requestedService: 'a meeting to talk about a contract position',

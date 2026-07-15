@@ -24,7 +24,7 @@
  * only to notice success.
  */
 import { llm, voice } from '@livekit/agents';
-import { sanitizeStream } from '../speechSanitizer.js';
+import { makeRung, idExtractor } from './rung.js';
 
 export interface BookMeetingResult {
   appointmentId: string;
@@ -61,109 +61,57 @@ You already have their name and number. Do NOT ask for them again.
 
 Booking the meeting is what finishes this step. There is nothing to say or do after it — the moment it is booked, you are done here.`;
 
-export class BookMeetingTask extends voice.AgentTask<BookMeetingResult> {
-  constructor(opts: BookMeetingTaskOptions) {
-    const { schedulingTools, onBooked } = opts;
-
-    const realBooking = schedulingTools['book_with_scheduling'];
-    if (!realBooking) {
-      throw new Error('BookMeetingTask requires book_with_scheduling in schedulingTools');
-    }
-
-    // WRAP the real booking tool. Call it exactly as a live call would, then look at
-    // what it returned: an appointment_id means the booking LANDED, and that is the only
-    // thing that ends this task. The model does not get a vote — there is no "finish
-    // booking" tool for it to skip or to claim it called.
-    const wrappedBooking = llm.tool({
-      description: (realBooking as unknown as { description: string }).description,
-      parameters: (realBooking as unknown as { parameters: Record<string, unknown> }).parameters,
-      execute: async (args: unknown, ctx: unknown): Promise<unknown> => {
-        // DEFAULT the identity we already hold. book_with_scheduling REQUIRES a phone; the
-        // caller gave it in the identity rung, so a model that omits it here should still
-        // book, not ask again. (The first E2E failed exactly here.)
-        const withIdentity =
-          args && typeof args === 'object'
-            ? {
-                ...(args as Record<string, unknown>),
-                phone: (args as { phone?: string }).phone || opts.knownPhone,
-                name: (args as { name?: string }).name || opts.knownName,
-              }
-            : args;
-        const raw = await (
-          realBooking as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }
-        ).execute(withIdentity, ctx);
-
-        const appointmentId = extractAppointmentId(raw);
-        if (appointmentId) {
-          const result: BookMeetingResult = { appointmentId, bookedResult: raw };
-          await onBooked?.(result);
-          this.complete(result); // ← the booking IS the transition
-        }
-        // Whether it booked or not, hand the tool's own words back to the model so it can
-        // speak them (confirm the time, or relay why it failed and try again).
-        return raw;
-      },
-    });
-
-    // What the caller ALREADY told us they want. Injected so the rung opens by acting on
-    // it — going to get_available_slots — instead of asking "what would you like to book?"
-    // when they already said. (First voice call: it asked, redundantly, and the caller
-    // noticed.) Only ask what the meeting is for if they genuinely never said.
-    const alreadyAsked = opts.requestedService?.trim()
-      ? `The caller has already told you what they want: "${opts.requestedService.trim()}". Open immediately by finding them a time for it — call get_available_slots right away and offer the open times.`
-      : '';
-
-    super({
-      // The runtime preamble goes FIRST — the model needs to know what today is before
-      // it reads a single instruction about booking. Without it, it books blind (the
-      // first live call guessed October and every booking failed EMPLOYEE_NOT_SCHEDULED).
-      instructions: [opts.runtimePreamble, alreadyAsked, BOOK_MEETING_INSTRUCTIONS]
-        .filter(Boolean)
-        .join('\n\n'),
-      tools: {
-        ...schedulingTools,
-        book_with_scheduling: wrappedBooking,
-      },
-    });
-  }
-
-  // Speak when this rung takes over — see IdentityTask.onEnter. A task with no onEnter
-  // becomes the active agent and stays silent, and the call hangs.
-  override async onEnter(): Promise<void> {
-    this.session.generateReply();
-  }
-
-  // MARKDOWN MUST NEVER REACH THE VOICE — the same guarantee SpeakingAgent gives the main
-  // path. The task-group path is plain voice.Agent, so without this a model that answers
-  // with a bulleted summary ("- Caller Company: ABC") gets its dashes and newlines read
-  // straight to Deepgram, which collapses them into one flat run with no pauses. That is
-  // the "it ran the lines together" report from the first successful voice call.
-  override async ttsNode(
-    text: ReadableStream<string>,
-    modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
-  ): ReturnType<typeof voice.Agent.default.ttsNode> {
-    return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
-  }
-}
-
 /**
- * Pull an appointment_id out of whatever book_with_scheduling returned.
- *
- * The tool returns a JSON STRING to the LLM (`{ success: true, appointment_id: … }` on
- * success, an error shape otherwise). Parse it and read the id. Anything unparseable, or
- * any shape without an id, means "not booked" — so the task stays open, which is the
- * safe direction: a missed success just keeps trying; a false success would end the rung
- * with no meeting.
+ * Rung 2 as an ACTION rung (see rung.ts): the whole point is one real backend write,
+ * book_with_scheduling, so the rung ends the instant it returns an appointment_id. The
+ * booking IS the transition — the model has no "finish booking" tool to skip or to claim
+ * it called. get_available_slots / get_service_catalog ride along as the passthrough
+ * tools the model needs to reach that write.
  */
-function extractAppointmentId(toolResult: unknown): string | null {
-  if (typeof toolResult !== 'string') return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(toolResult);
-  } catch {
-    return null;
+export function makeBookMeetingRung(opts: BookMeetingTaskOptions): voice.AgentTask<BookMeetingResult> {
+  const { schedulingTools, onBooked } = opts;
+
+  const realBooking = schedulingTools['book_with_scheduling'];
+  if (!realBooking) {
+    throw new Error('makeBookMeetingRung requires book_with_scheduling in schedulingTools');
   }
-  if (!parsed || typeof parsed !== 'object') return null;
-  const id = (parsed as { appointment_id?: unknown }).appointment_id;
-  return typeof id === 'string' && id.length > 0 ? id : null;
+
+  // What the caller ALREADY told us they want. Injected so the rung opens by acting on it —
+  // going straight to get_available_slots — instead of asking "what would you like to
+  // book?" when they already said. Only ask what the meeting is for if they never said.
+  const alreadyAsked = opts.requestedService?.trim()
+    ? `The caller has already told you what they want: "${opts.requestedService.trim()}". Open immediately by finding them a time for it — call get_available_slots right away and offer the open times.`
+    : '';
+
+  // The passthrough scheduling tools, minus the completion tool (makeRung re-adds it).
+  const { book_with_scheduling: _drop, ...passthrough } = schedulingTools;
+  void _drop;
+
+  return makeRung<BookMeetingResult>({
+    // The runtime preamble goes FIRST — the model must know what today is before it reads
+    // a single instruction about booking, or it books blind (the first live call guessed
+    // October and every booking failed EMPLOYEE_NOT_SCHEDULED).
+    instructions: [opts.runtimePreamble, alreadyAsked, BOOK_MEETING_INSTRUCTIONS]
+      .filter(Boolean)
+      .join('\n\n'),
+    tools: passthrough,
+    completion: {
+      kind: 'action',
+      toolName: 'book_with_scheduling',
+      realTool: realBooking,
+      // DEFAULT the identity we already hold. book_with_scheduling REQUIRES a phone; the
+      // caller gave it in the identity rung, so a model that omits it here should still
+      // book, not ask again. (The first E2E failed exactly here.)
+      argDefaults: (args) => ({
+        ...args,
+        phone: (args.phone as string) || opts.knownPhone,
+        name: (args.name as string) || opts.knownName,
+      }),
+      extract: idExtractor('appointment_id', (_id, raw) => ({
+        appointmentId: _id,
+        bookedResult: raw,
+      })),
+      onDone: onBooked,
+    },
+  });
 }

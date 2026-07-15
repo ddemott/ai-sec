@@ -120,6 +120,10 @@ interface Persona {
   location?: 'onsite' | 'remote' | 'hybrid';
   address?: string;
   timezone?: string;
+  // schedule-change (cancel / reschedule an EXISTING appointment)
+  wantsScheduleChange?: boolean;
+  scheduleAction?: 'cancel' | 'reschedule';
+  existingService?: string; // what the seeded appointment is, so the caller can name it
   // hard behaviours the persona MUST exhibit (adversarial)
   refusesPhone?: boolean; // never gives a number
 }
@@ -145,6 +149,20 @@ function personaSystem(p: Persona, style: string): string {
       : `Your phone number: ${p.phone} (give THIS exact number when asked; you may phrase the digits naturally, but the number itself is always ${p.phone}).`,
     `Why you called: ${p.goalLine}`,
   ];
+  if (p.wantsScheduleChange) {
+    facts.push(
+      `You ALREADY have an appointment booked — a ${p.existingService ?? 'meeting'}. You are calling to ${p.scheduleAction === 'cancel' ? 'CANCEL that appointment' : 'RESCHEDULE (move) that appointment to a different time'}.`
+    );
+    if (p.scheduleAction === 'reschedule') {
+      facts.push(
+        `When the receptionist reads back your current appointment, confirm it is the one. When they offer available new times, pick ONE of the offered times and say it clearly.`
+      );
+    } else {
+      facts.push(
+        `When the receptionist reads back your current appointment and asks you to confirm you want it canceled, say yes.`
+      );
+    }
+  }
   if (p.hasJobInquiry) {
     facts.push(`The company you work for: ${p.callerCompany}`);
     if (p.inHouse) {
@@ -287,12 +305,54 @@ interface Expect {
   jobInquiry: boolean;
   clientCompany?: string;
   representsCompany?: boolean;
+  // schedule-change outcomes, checked against the seeded appointment
+  canceled?: boolean;
+  rescheduled?: boolean;
+}
+/** What a seed step handed back — the appointment the scenario will act on. */
+interface SeedInfo {
+  appointmentId: string;
+  startTime: string;
 }
 interface Scenario {
   title: string;
   persona: Persona;
   expect: Expect;
   styles?: string[]; // default: a spread
+  /** Insert the state the scenario acts on (e.g. an existing appointment to cancel). Runs
+   *  AFTER the per-run cleanup, so each run acts on a fresh row. */
+  seed?: (db: Client, p: Persona) => Promise<SeedInfo>;
+}
+
+// A THQ resource + service to hang a seeded appointment on (both real seed rows).
+const SEED_RESOURCE_ID = '3d0d00d6-86b7-466a-8a9f-4d7f8a585f17'; // Main Office Line
+const SEED_SERVICE = 'Programming Consultation';
+
+/** Seed an existing, upcoming, scheduled appointment for this caller — the thing a
+ *  cancel/reschedule call acts on. Creates the customer too (identify_caller will re-find
+ *  the same row by phone during the call). */
+async function seedAppointment(db: Client, p: Persona): Promise<SeedInfo> {
+  const e164 = '+1' + p.phone.replace(/\D/g, '');
+  const cust = await db.query<{ customer_id: string }>(
+    `INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, $3)
+       ON CONFLICT (tenant_id, phone) DO UPDATE SET name = EXCLUDED.name
+     RETURNING customer_id`,
+    [TENANT, e164, p.name]
+  );
+  const customerId = cust.rows[0].customer_id;
+  // Tomorrow at 14:00 (local server clock) — comfortably future and inside the 1-5pm
+  // window; the exact zone does not matter (cancel ignores time; reschedule replaces it).
+  const start = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  start.setHours(14, 0, 0, 0);
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
+  const appt = await db.query<{ appointment_id: string; start_time: string }>(
+    `INSERT INTO appointments
+       (tenant_id, resource_id, customer_id, start_time, end_time, status, description)
+     VALUES ($1, $2, $3, $4, $5, 'scheduled', $6)
+     RETURNING appointment_id, start_time`,
+    [TENANT, SEED_RESOURCE_ID, customerId, start.toISOString(), end.toISOString(), SEED_SERVICE]
+  );
+  return { appointmentId: appt.rows[0].appointment_id, startTime: appt.rows[0].start_time };
 }
 
 const DEFAULT_STYLES = ['plain', 'terse', 'chatty', 'frontloader', 'corrector', 'rambler'];
@@ -370,6 +430,40 @@ const SCENARIOS: Scenario[] = [
     styles: ['plain', 'terse'],
   },
   {
+    title: 'cancel an existing appointment',
+    persona: {
+      name: 'Owen Pratt',
+      phone: '555-901-0007',
+      goalLine: 'you want to cancel an appointment you already have',
+      wantsMeeting: false,
+      hasJobInquiry: false,
+      wantsScheduleChange: true,
+      scheduleAction: 'cancel',
+      existingService: 'Programming Consultation',
+      requestedService: 'canceling my appointment',
+    },
+    expect: { appointment: false, jobInquiry: false, canceled: true },
+    seed: seedAppointment,
+    styles: ['plain', 'chatty'],
+  },
+  {
+    title: 'reschedule an existing appointment',
+    persona: {
+      name: 'Mara Quinn',
+      phone: '555-901-0008',
+      goalLine: 'you want to move an appointment you already have to a different time',
+      wantsMeeting: false,
+      hasJobInquiry: false,
+      wantsScheduleChange: true,
+      scheduleAction: 'reschedule',
+      existingService: 'Programming Consultation',
+      requestedService: 'moving my appointment',
+    },
+    expect: { appointment: false, jobInquiry: false, rescheduled: true },
+    seed: seedAppointment,
+    styles: ['plain', 'terse'],
+  },
+  {
     title: 'STRESS: caller refuses to give a phone number',
     persona: {
       name: 'Robin Vance',
@@ -386,20 +480,47 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-async function verify(db: Client, p: Persona, e: Expect): Promise<string[]> {
+async function verify(db: Client, p: Persona, e: Expect, seed?: SeedInfo): Promise<string[]> {
   const fails: string[] = [];
   const e164 = '+1' + p.phone.replace(/\D/g, '');
 
-  const appt = await db.query<{ service: string | null }>(
-    `SELECT s.name AS service FROM appointments a
-       LEFT JOIN services s USING (service_id)
-       JOIN customers c USING (customer_id)
-      WHERE a.tenant_id = $1 AND c.phone = $2 ORDER BY a.created_at DESC LIMIT 1`,
-    [TENANT, e164]
-  );
-  if (e.appointment && !appt.rows[0]) fails.push('expected APPOINTMENT, none found');
-  if (!e.appointment && appt.rows[0]) fails.push('APPOINTMENT booked but none expected');
-  if (e.appointment && appt.rows[0] && !appt.rows[0].service) fails.push('appointment service is NULL');
+  // Schedule-change scenarios act on the SEEDED appointment (by id), so check that row
+  // directly and skip the generic "was a new appointment booked?" checks below.
+  const isScheduleChange = Boolean(e.canceled || e.rescheduled);
+  if (e.canceled) {
+    const r = await db.query<{ status: string }>(
+      `SELECT status FROM appointments WHERE appointment_id = $1`,
+      [seed?.appointmentId]
+    );
+    const status = r.rows[0]?.status;
+    if (status !== 'canceled') fails.push(`expected appointment CANCELED, status is "${status}"`);
+  }
+  if (e.rescheduled) {
+    const r = await db.query<{ status: string; start_time: string }>(
+      `SELECT status, start_time FROM appointments WHERE appointment_id = $1`,
+      [seed?.appointmentId]
+    );
+    const row = r.rows[0];
+    if (!row) fails.push('rescheduled appointment vanished');
+    else if (row.status !== 'scheduled')
+      fails.push(`expected RESCHEDULED (still scheduled), status is "${row.status}"`);
+    else if (String(row.start_time) === String(seed?.startTime))
+      fails.push('expected RESCHEDULED to a new time, but start_time is unchanged');
+  }
+
+  if (!isScheduleChange) {
+    const appt = await db.query<{ service: string | null }>(
+      `SELECT s.name AS service FROM appointments a
+         LEFT JOIN services s USING (service_id)
+         JOIN customers c USING (customer_id)
+        WHERE a.tenant_id = $1 AND c.phone = $2 ORDER BY a.created_at DESC LIMIT 1`,
+      [TENANT, e164]
+    );
+    if (e.appointment && !appt.rows[0]) fails.push('expected APPOINTMENT, none found');
+    if (!e.appointment && appt.rows[0]) fails.push('APPOINTMENT booked but none expected');
+    if (e.appointment && appt.rows[0] && !appt.rows[0].service)
+      fails.push('appointment service is NULL');
+  }
 
   const job = await db.query<{ client_company: string | null; represents_company: boolean | null }>(
     `SELECT client_company, represents_company FROM job_inquiries
@@ -459,6 +580,7 @@ async function main(): Promise<void> {
       for (const style of styles) {
         for (let r = 0; r < RUNS; r++) {
           // reset this caller's rows so each run is deterministic
+          let seedInfo: SeedInfo | undefined;
           if (db) {
             const e164 = '+1' + sc.persona.phone.replace(/\D/g, '');
             await db.query(`DELETE FROM job_inquiries WHERE tenant_id=$1 AND callback_phone=$2`, [TENANT, e164]);
@@ -466,6 +588,8 @@ async function main(): Promise<void> {
               `DELETE FROM appointments WHERE tenant_id=$1 AND customer_id IN (SELECT customer_id FROM customers WHERE tenant_id=$1 AND phone=$2)`,
               [TENANT, e164]
             );
+            // Seed AFTER the wipe, so the scenario acts on a fresh appointment.
+            if (sc.seed) seedInfo = await sc.seed(db, sc.persona);
           }
           runs++;
           const deps = makeDeps();
@@ -477,7 +601,7 @@ async function main(): Promise<void> {
             console.log(`  ${style.padEnd(11)} ${C.r}ERROR${C.x} ${(err as Error).message}`);
             continue;
           }
-          const dbFails = db ? await verify(db, sc.persona, sc.expect) : [];
+          const dbFails = db ? await verify(db, sc.persona, sc.expect, seedInfo) : [];
           const rungInfo = `${res.rungsCompleted.length}/${res.rungsAttempted.length} rungs`;
           if (dbFails.length === 0) {
             passed++;

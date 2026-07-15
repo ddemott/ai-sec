@@ -36,8 +36,10 @@ greeting → intent (begin_call) → TASK GROUP:
 
 **What is NOT done yet (honest scope):**
 
-- **Only 3 rungs exist**: identity, book_meeting, job_intake. The prompt ladder handled
-  more (cancel, reschedule, take-message, page-owner, policy Q&A). Those are not rungs yet.
+- **4 rungs exist**: identity, book_meeting, job_intake, and schedule_change (cancel /
+  reschedule — added 2026-07-15 on the generic `makeRung` core, the first lookup-then-act
+  rung). Still not rungs: take-message, page-owner, policy Q&A. Adding them is now config on
+  `makeRung`, not a new class.
 - **The stack is snapshotted at group start** — a NEW goal raised at the very end ("oh, and
   can you also…") is not picked up; the fixed goodbye fires. Known limit, documented.
 - **Text E2E (`sim-taskgroup.ts`) does not exercise the runtime handoff** — only a live
@@ -184,12 +186,40 @@ group.run() resolves only when the stack is EMPTY → root agent says goodbye
 
 | File | Role |
 |---|---|
+| `rung.ts` | **The generic rung core.** `makeRung(cfg)` builds an `AgentTask` with onEnter + ttsNode + completion-in-a-tool baked in. Every rung is built from it. |
 | `callRootAgent.ts` | Greets, classifies intent via `begin_call`, runs the group inside that tool. |
 | `callPlan.ts` | `planCallTasks(goals, deps)` → ordered `TaskSpec[]`. **This is the checklist.** Pure. Also `runtimePreamble`, `knownCallerLine`, `pick`. |
-| `identityTask.ts` | Rung 1. Name + phone. Completion tool: `confirm_identity`. |
-| `bookMeetingTask.ts` | Rung 2. Wraps the real `book_with_scheduling`; completes on `appointment_id`. |
-| `jobIntakeTask.ts` | Rung 3. Wraps the real `capture_job_inquiry`; completes on `job_inquiry_id`. |
+| `identityTask.ts` | Rung 1 — a COLLECT rung. Name + phone via `confirm_identity`. |
+| `bookMeetingTask.ts` | Rung 2 — an ACTION rung. Wraps the real `book_with_scheduling`; completes on `appointment_id`. |
+| `jobIntakeTask.ts` | Rung 3 — an ACTION rung. Wraps the real `capture_job_inquiry`; completes on `job_inquiry_id`. |
+| `schedulingTask.ts` | Rung 4 — a LOOKUP-THEN-ACT rung. Reads `get_my_appointments`, then completes on `cancel_appointment` OR `reschedule_appointment` OR `no_appointment_change`. |
 | `../scripts/sim-taskgroup.ts` | E2E harness — runs the real tasks/tools/backend/DB with a **live LLM caller** (a second model plays the caller across phrasing styles). `SIM_TRACE=1` logs every tool call + result. |
+
+### The GENERIC rung — one shape, a few TYPES (`rung.ts`)
+
+A rung is DATA now, not a bespoke class. `makeRung(cfg)` takes `{ instructions, tools, completion }`
+and returns a real `voice.AgentTask` with every rung guarantee baked in by CONSTRUCTION —
+onEnter speaks, ttsNode strips markdown, and completion lives inside a tool. The
+business-specific part is only the config. This killed the copy-paste that let a fourth rung
+drift (forget the onEnter → dead call). There are exactly **two completion modes**, and every
+rung so far — and every one we foresee — is one of them:
+
+| TYPE | Completion mode | "Done" is… | Rungs |
+|---|---|---|---|
+| **Collect** | a synthetic confirm tool | the model has gathered + confirmed the facts | identity |
+| **Action** | wrap the real doing-tool | the backend write returned its success id | book, job-intake, scheduling |
+
+A **lookup-then-act** rung (scheduling) is just Action with a read tool added to `tools` and
+**more than one** completion — `makeRung` accepts an array, and the first to succeed wins.
+Scheduling carries three: cancel, reschedule, and a narrow `no_appointment_change` escape so a
+caller with nothing upcoming can't hang the loop. Adding a business's rung is now: pick the
+TYPE, write the instructions, list the load-bearing tools, name the completion. Nothing else.
+
+To add a rung generically: `makeRung({ instructions, tools: pick(deps.tools, [...]), completion })`
+where `completion` is one `{kind:'collect', …}` or `{kind:'action', …}` (or an array for a
+multi-ending rung). Then register it in `planCallTasks` behind its goal flag and add the flag to
+`begin_call`. The `idExtractor(idField, build)` helper turns any tool's success-id JSON into a
+typed result, so an Action completion is usually one line.
 
 ### The core idea, in one sentence
 

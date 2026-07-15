@@ -20,7 +20,7 @@
  * owner cannot answer never gets recorded as "done".
  */
 import { llm, voice } from '@livekit/agents';
-import { sanitizeStream } from '../speechSanitizer.js';
+import { makeRung, idExtractor } from './rung.js';
 
 export interface JobIntakeResult {
   jobInquiryId: string;
@@ -69,81 +69,34 @@ The instant you have the answers, your VERY NEXT action is to CALL capture_job_i
 
 Only after capture_job_inquiry returns do you confirm out loud, as ONE short natural sentence ("So that's a six-month hybrid contract with Northern Trust, sixty-five to eighty-two an hour — got it, I'll pass that to the owner."). This is a PHONE CALL: no bulleted list, no field-by-field "Caller Company: X, Client Company: Y" summary (it reads aloud as one flat run-on), no dashes, no field labels, no markdown of any kind.`;
 
-export class JobIntakeTask extends voice.AgentTask<JobIntakeResult> {
-  constructor(opts: JobIntakeTaskOptions) {
-    const { messagingTools, onCaptured } = opts;
-
-    const realCapture = messagingTools['capture_job_inquiry'];
-    if (!realCapture) {
-      throw new Error('JobIntakeTask requires capture_job_inquiry in messagingTools');
-    }
-
-    const wrappedCapture = llm.tool({
-      description: (realCapture as unknown as { description: string }).description,
-      parameters: (realCapture as unknown as { parameters: Record<string, unknown> }).parameters,
-      execute: async (args: unknown, ctx: unknown): Promise<unknown> => {
-        const raw = await (
-          realCapture as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }
-        ).execute(args, ctx);
-
-        const jobInquiryId = extractInquiryId(raw);
-        if (jobInquiryId) {
-          const result: JobIntakeResult = { jobInquiryId, raw };
-          await onCaptured?.(result);
-          this.complete(result); // ← the recording IS the transition
-        }
-        // Hand the tool's own words back — its refusal reason on a miss, its confirmation
-        // + email instruction on success — so the model can relay it.
-        return raw;
-      },
-    });
-
-    const intro = opts.meetingBooked ? JOB_INTAKE_INTRO_BOOKED : JOB_INTAKE_INTRO_NO_BOOKING;
-    super({
-      instructions: [opts.knownCaller, intro, JOB_INTAKE_INSTRUCTIONS]
-        .filter(Boolean)
-        .join('\n\n'),
-      tools: {
-        ...messagingTools,
-        capture_job_inquiry: wrappedCapture,
-      },
-    });
-  }
-
-  // Speak when this rung takes over — see IdentityTask.onEnter. A task with no onEnter
-  // becomes the active agent and stays silent, and the call hangs.
-  override async onEnter(): Promise<void> {
-    this.session.generateReply();
-  }
-
-  // MARKDOWN MUST NEVER REACH THE VOICE — the same guarantee SpeakingAgent gives the main
-  // path. The task-group path is plain voice.Agent, so without this a model that answers
-  // with a bulleted summary ("- Caller Company: ABC") gets its dashes and newlines read
-  // straight to Deepgram, which collapses them into one flat run with no pauses. That is
-  // the "it ran the lines together" report from the first successful voice call.
-  override async ttsNode(
-    text: ReadableStream<string>,
-    modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
-  ): ReturnType<typeof voice.Agent.default.ttsNode> {
-    return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
-  }
-}
-
 /**
- * A job_inquiry_id in the returned JSON means the inquiry was RECORDED (and emailed to
- * the owner). A refusal (missing name/number) has no id, so the task stays open — the
- * safe direction, exactly as with the booking: a missed success retries; a false success
- * would tell the owner a lead exists that does not.
+ * Rung 3 as an ACTION rung (see rung.ts): the whole point is the capture_job_inquiry
+ * write, so the rung ends the instant it returns a job_inquiry_id. The recording IS the
+ * transition — there is no "finish intake" tool to skip or fake, which is the exact fix
+ * for the rung the prompt ladder kept skipping. capture_job_inquiry's own refuse gate
+ * (no name/number) keeps a lead the owner cannot answer from ever recording as "done".
  */
-function extractInquiryId(toolResult: unknown): string | null {
-  if (typeof toolResult !== 'string') return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(toolResult);
-  } catch {
-    return null;
+export function makeJobIntakeRung(opts: JobIntakeTaskOptions): voice.AgentTask<JobIntakeResult> {
+  const { messagingTools, onCaptured } = opts;
+
+  const realCapture = messagingTools['capture_job_inquiry'];
+  if (!realCapture) {
+    throw new Error('makeJobIntakeRung requires capture_job_inquiry in messagingTools');
   }
-  if (!parsed || typeof parsed !== 'object') return null;
-  const id = (parsed as { job_inquiry_id?: unknown }).job_inquiry_id;
-  return typeof id === 'string' && id.length > 0 ? id : null;
+
+  const intro = opts.meetingBooked ? JOB_INTAKE_INTRO_BOOKED : JOB_INTAKE_INTRO_NO_BOOKING;
+  const { capture_job_inquiry: _drop, ...passthrough } = messagingTools;
+  void _drop;
+
+  return makeRung<JobIntakeResult>({
+    instructions: [opts.knownCaller, intro, JOB_INTAKE_INSTRUCTIONS].filter(Boolean).join('\n\n'),
+    tools: passthrough,
+    completion: {
+      kind: 'action',
+      toolName: 'capture_job_inquiry',
+      realTool: realCapture,
+      extract: idExtractor('job_inquiry_id', (id, raw) => ({ jobInquiryId: id, raw })),
+      onDone: onCaptured,
+    },
+  });
 }
