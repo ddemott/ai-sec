@@ -65,9 +65,9 @@ THERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME. Never ask a bare "what compan
   - Onsite/hybrid → "What is the address of the position?"
   - Remote → "What timezone, so they know the office hours?"
 
-When you have the answers, call capture_job_inquiry. Pass employment_type as "contract" or "full_time"; location_type as "onsite", "remote", or "hybrid". Omit anything you did not get. Recording it is what finishes this step — merely saying "I've noted that" does nothing. If capture_job_inquiry refuses because a name or number is missing, ask for it and call it again.
+The instant you have the answers, your VERY NEXT action is to CALL capture_job_inquiry — call it BEFORE you say anything back to the caller. Pass employment_type as "contract" or "full_time"; location_type as "onsite", "remote", or "hybrid". Omit anything you did not get. CALLING the tool is the only thing that records the role and finishes this step; a spoken "I've noted that" or "I'll pass that along" records NOTHING and is true only AFTER the tool has run — so run it first, then say it. If capture_job_inquiry refuses because a name or number is missing, ask for it and call it again.
 
-DO NOT read back a bulleted list or a field-by-field summary — this is a PHONE CALL, and a list of "Caller Company: X, Client Company: Y" reads aloud as one flat run-on with no pauses. If you confirm anything, say it as ONE short natural sentence ("So that's a six-month hybrid contract with Northern Trust, sixty-five to eighty-two an hour — got it, I'll pass that to the owner."). No dashes, no bullet points, no field labels, no markdown of any kind.`;
+Only after capture_job_inquiry returns do you confirm out loud, as ONE short natural sentence ("So that's a six-month hybrid contract with Northern Trust, sixty-five to eighty-two an hour — got it, I'll pass that to the owner."). This is a PHONE CALL: no bulleted list, no field-by-field "Caller Company: X, Client Company: Y" summary (it reads aloud as one flat run-on), no dashes, no field labels, no markdown of any kind.`;
 
 export class JobIntakeTask extends voice.AgentTask<JobIntakeResult> {
   constructor(opts: JobIntakeTaskOptions) {

@@ -73,7 +73,7 @@ Do not book anything. Do not take any details about why they called — that com
 - If they say it is wrong, ask again. Never proceed on a number they did not confirm.
 - If you only caught part of it, say which part you got and ask for the rest ("I only caught 555-111 — can you give me the last four?").
 
-When you have BOTH the name and a number they have confirmed, call confirm_identity. That is the only way to finish here.
+When you have BOTH the name and a number they have confirmed, call confirm_identity. That is the only way to finish here — and the ONLY tool you actually need. If you happen to look the caller up and that lookup reports any trouble, carry right on: you already have their name and number, so call confirm_identity with those and move the call forward. A lookup hiccup never blocks you from finishing here.
 
 The moment you call confirm_identity, your job is DONE and the system moves the caller straight into what they rang for. So your very last words are simply a short, warm acknowledgement using their name — for example "Perfect, thanks Scott." — three or four words, and then you are finished. The next step already knows what they want and will take it from there.`;
 

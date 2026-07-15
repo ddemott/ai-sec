@@ -250,6 +250,10 @@ async function runCall(p: Persona, style: string, deps: CallDeps): Promise<RunRe
             res = await tool.execute(args, { ctx: {}, toolCallId: tc.id });
           }
           const rs = typeof res === 'string' ? res : JSON.stringify(res);
+          if (process.env.SIM_TRACE)
+            process.stderr.write(
+              `      [tool] ${tc.function.name}(${(tc.function.arguments || '').slice(0, 120)}) -> ${rs.slice(0, 200)}\n`
+            );
           messages.push({ role: 'tool', tool_call_id: tc.id, content: rs });
         }
         continue;

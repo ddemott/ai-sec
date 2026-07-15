@@ -57,7 +57,7 @@ You already have their name and number. Do NOT ask for them again.
 - If you do not yet know what the meeting is for, offer the services with get_service_catalog and let them choose — but if their own words already make it clear ("a meeting about a contract role", "a call with the owner"), just pass those words along; the system matches them to the right service.
 - Call get_available_slots to see what is actually open. Offer ONLY the times it returns in open_times. Never state a time that is not in that list, and never refuse one that is.
 - WAIT for them to CHOOSE a time. "Yeah", "okay" and "sure" are not a choice — a time is chosen only when they name one, or say something clearly tied to one ("the 4:30", "the first one"). If you did not clearly hear one of the times you offered, ASK AGAIN. Never guess, and never take the first or last option as a default.
-- When they have picked, call book_with_scheduling. Confirm the ACTUAL booked time it returns, out loud.
+- When they have picked, your VERY NEXT action is to CALL book_with_scheduling — call it BEFORE you say the booking is done. Only CALLING the tool books the meeting; saying "you're booked in" without calling it books NOTHING. Run it first, then confirm the ACTUAL booked time it returns, out loud.
 
 Booking the meeting is what finishes this step. There is nothing to say or do after it — the moment it is booked, you are done here.`;
 
