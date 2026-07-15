@@ -24,6 +24,7 @@
  * only to notice success.
  */
 import { llm, voice } from '@livekit/agents';
+import { sanitizeStream } from '../speechSanitizer.js';
 
 export interface BookMeetingResult {
   appointmentId: string;
@@ -104,20 +105,44 @@ export class BookMeetingTask extends voice.AgentTask<BookMeetingResult> {
       },
     });
 
+    // What the caller ALREADY told us they want. Injected so the rung opens by acting on
+    // it — going to get_available_slots — instead of asking "what would you like to book?"
+    // when they already said. (First voice call: it asked, redundantly, and the caller
+    // noticed.) Only ask what the meeting is for if they genuinely never said.
+    const alreadyAsked = opts.requestedService?.trim()
+      ? `The caller has already told you what they want: "${opts.requestedService.trim()}". Open immediately by finding them a time for it — call get_available_slots right away and offer the open times.`
+      : '';
+
     super({
       // The runtime preamble goes FIRST — the model needs to know what today is before
       // it reads a single instruction about booking. Without it, it books blind (the
       // first live call guessed October and every booking failed EMPLOYEE_NOT_SCHEDULED).
-      instructions: opts.runtimePreamble
-        ? `${opts.runtimePreamble}
-
-${BOOK_MEETING_INSTRUCTIONS}`
-        : BOOK_MEETING_INSTRUCTIONS,
+      instructions: [opts.runtimePreamble, alreadyAsked, BOOK_MEETING_INSTRUCTIONS]
+        .filter(Boolean)
+        .join('\n\n'),
       tools: {
         ...schedulingTools,
         book_with_scheduling: wrappedBooking,
       },
     });
+  }
+
+  // Speak when this rung takes over — see IdentityTask.onEnter. A task with no onEnter
+  // becomes the active agent and stays silent, and the call hangs.
+  override async onEnter(): Promise<void> {
+    this.session.generateReply();
+  }
+
+  // MARKDOWN MUST NEVER REACH THE VOICE — the same guarantee SpeakingAgent gives the main
+  // path. The task-group path is plain voice.Agent, so without this a model that answers
+  // with a bulleted summary ("- Caller Company: ABC") gets its dashes and newlines read
+  // straight to Deepgram, which collapses them into one flat run with no pauses. That is
+  // the "it ran the lines together" report from the first successful voice call.
+  override async ttsNode(
+    text: ReadableStream<string>,
+    modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
+  ): ReturnType<typeof voice.Agent.default.ttsNode> {
+    return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
   }
 }
 

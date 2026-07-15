@@ -24,6 +24,7 @@
  * without disturbing the one that answers the phone today.
  */
 import { llm, voice } from '@livekit/agents';
+import { sanitizeStream } from '../speechSanitizer.js';
 import { getLogger } from '../logger.js';
 import type { SessionContext } from '../sessionContext.js';
 import { planCallTasks, buildCallTaskGroup, type CallDeps, type CallRuntime } from './callPlan.js';
@@ -116,10 +117,11 @@ Do not try to book, or take details, or collect their name yet. Just understand 
     }
     this.#started = true;
 
+    const state = {}; // filled by the identity rung, read by the rest AND by the goodbye
     const deps: CallDeps = {
       ctx: this.#opts.ctx,
       runtime: this.#opts.runtime,
-      state: {}, // filled by the identity rung, read by the rest
+      state,
       tools: this.#opts.tools,
       onIdentified: this.#opts.onIdentified,
       onBooked: this.#opts.onBooked,
@@ -151,8 +153,40 @@ Do not try to book, or take details, or collect their name yet. Just understand 
       `task group complete — every rung done: ${Object.keys(result.taskResults).join(', ')}`
     );
 
-    // The model speaks a close after this returns. The rungs already confirmed the
-    // concrete outcomes (the booked time, the recorded inquiry) as they happened.
-    return 'All set — everything the caller asked for is done. Give them a brief, warm goodbye.';
+    // THE CALL IS OVER. END IT — do not hand back to the free-running root agent.
+    //
+    // When the group returns, control would otherwise fall back to THIS agent, whose
+    // instructions are the START-of-call intent step ("understand the ask, collect
+    // identity"). It has no memory that the sub-agents already did all of that, so with
+    // nothing left to do it reverts to its opening job and asks for the name and number
+    // AGAIN — which is exactly what a real call did after everything was booked and
+    // recorded ("I'll need your name and the best phone number...").
+    //
+    // So we speak a fixed, definitive goodbye (no LLM generation, no question that invites
+    // more) and CLOSE the session. The rungs already confirmed the concrete outcomes (the
+    // booked time, the recorded inquiry) as they happened, so there is nothing left to say.
+    const name = (state as { callerName?: string }).callerName;
+    const goodbye = name
+      ? `You're all set, ${name}. Thanks for calling, and have a great day!`
+      : `You're all set. Thanks for calling, and have a great day!`;
+    try {
+      await this.session.say(goodbye, { allowInterruptions: false }).waitForPlayout();
+    } catch {
+      /* if say fails, still close — a silent hangup beats a re-collection loop */
+    }
+    await this.session.close();
+    return 'Call complete.';
+  }
+
+  // MARKDOWN MUST NEVER REACH THE VOICE — the same guarantee SpeakingAgent gives the main
+  // path. The task-group path is plain voice.Agent, so without this a model that answers
+  // with a bulleted summary ("- Caller Company: ABC") gets its dashes and newlines read
+  // straight to Deepgram, which collapses them into one flat run with no pauses. That is
+  // the "it ran the lines together" report from the first successful voice call.
+  override async ttsNode(
+    text: ReadableStream<string>,
+    modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
+  ): ReturnType<typeof voice.Agent.default.ttsNode> {
+    return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
   }
 }

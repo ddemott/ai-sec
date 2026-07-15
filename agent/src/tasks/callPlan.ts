@@ -144,6 +144,7 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
       new IdentityTask({
         ctx: deps.ctx,
         identifyCaller: deps.tools['identify_caller'],
+        requestedService: goals.requestedService,
         onIdentified: async (r) => {
           // Carry the confirmed identity forward to every later rung.
           deps.state.callerName = r.name;

@@ -20,6 +20,7 @@
  * owner cannot answer never gets recorded as "done".
  */
 import { llm, voice } from '@livekit/agents';
+import { sanitizeStream } from '../speechSanitizer.js';
 
 export interface JobIntakeResult {
   jobInquiryId: string;
@@ -60,7 +61,9 @@ THERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME. Never ask a bare "what compan
   - Onsite/hybrid → "What is the address of the position?"
   - Remote → "What timezone, so they know the office hours?"
 
-When you have the answers, call capture_job_inquiry. Pass employment_type as "contract" or "full_time"; location_type as "onsite", "remote", or "hybrid". Omit anything you did not get. Recording it is what finishes this step — merely saying "I've noted that" does nothing. If capture_job_inquiry refuses because a name or number is missing, ask for it and call it again.`;
+When you have the answers, call capture_job_inquiry. Pass employment_type as "contract" or "full_time"; location_type as "onsite", "remote", or "hybrid". Omit anything you did not get. Recording it is what finishes this step — merely saying "I've noted that" does nothing. If capture_job_inquiry refuses because a name or number is missing, ask for it and call it again.
+
+DO NOT read back a bulleted list or a field-by-field summary — this is a PHONE CALL, and a list of "Caller Company: X, Client Company: Y" reads aloud as one flat run-on with no pauses. If you confirm anything, say it as ONE short natural sentence ("So that's a six-month hybrid contract with Northern Trust, sixty-five to eighty-two an hour — got it, I'll pass that to the owner."). No dashes, no bullet points, no field labels, no markdown of any kind.`;
 
 export class JobIntakeTask extends voice.AgentTask<JobIntakeResult> {
   constructor(opts: JobIntakeTaskOptions) {
@@ -100,6 +103,24 @@ export class JobIntakeTask extends voice.AgentTask<JobIntakeResult> {
         capture_job_inquiry: wrappedCapture,
       },
     });
+  }
+
+  // Speak when this rung takes over — see IdentityTask.onEnter. A task with no onEnter
+  // becomes the active agent and stays silent, and the call hangs.
+  override async onEnter(): Promise<void> {
+    this.session.generateReply();
+  }
+
+  // MARKDOWN MUST NEVER REACH THE VOICE — the same guarantee SpeakingAgent gives the main
+  // path. The task-group path is plain voice.Agent, so without this a model that answers
+  // with a bulleted summary ("- Caller Company: ABC") gets its dashes and newlines read
+  // straight to Deepgram, which collapses them into one flat run with no pauses. That is
+  // the "it ran the lines together" report from the first successful voice call.
+  override async ttsNode(
+    text: ReadableStream<string>,
+    modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
+  ): ReturnType<typeof voice.Agent.default.ttsNode> {
+    return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
   }
 }
 

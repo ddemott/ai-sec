@@ -238,6 +238,40 @@ machine that fills the silence while waiting for a human to answer is talking ov
 salon's caller heard it. There's now a test (`tests/noHardcodedNames.test.ts`) that fails
 if a real identifier appears in shipping code. Use tenant data or a neutral word.
 
+### H. After the group ends, the ROOT AGENT re-collects — close the session
+
+The task-group flow runs inside `begin_call.execute` on the root agent. When
+`group.run()` returns, control falls back to that root agent — whose instructions are
+the START-of-call intent step ("understand the ask, collect identity"). It has no
+memory that the sub-agents already booked and recorded everything (they were separate
+agents with their own contexts). So with nothing left to do, it reverts to its opening
+job and **asks for the name and phone AGAIN**, after the entire call was done. Seen on a
+real call: "...I've passed those along to Dale. Is there anything else? … Great! I'll
+need your name and the best phone number to reach you at."
+**Fix:** when the group completes, DON'T hand back to the free-running root agent. Speak
+a fixed, definitive goodbye (no LLM generation, no "anything else?" that invites more)
+using the name from `CallState`, then `session.close()`. The rungs already confirmed the
+concrete outcomes as they happened, so there is nothing left to say.
+**Watch for:** any point where a sub-flow returns control to an agent whose instructions
+are for a DIFFERENT phase of the call. The returning agent doesn't know what the
+sub-flow did — end the call, or update its instructions to match the phase.
+
+### G. Tell the model what TO DO, not what NOT to do
+
+We fixed the "how can I help you?" re-ask (gotcha #6) with a negation — "do NOT ask
+'how can I help'". Dale's insight: models act on positive instructions far more
+reliably than negations, and naming the forbidden phrase can even prime it. The
+reliable form tells the rung what its **last action IS**: "the moment you confirm
+identity, your final words are a short 'Thanks, <name>' and the system takes over."
+Nothing to decline — just a thing to do. **Prefer "do X" over "don't do Y" everywhere
+in a script; reserve negations for hard prohibitions ("never book a time not in the
+list"), where the prohibition IS the instruction.**
+
+> Status: **VERIFIED on a live call 2026-07-15.** Positive framing ("your last words are a
+> brief 'Thanks, <name>' and the system takes over") stopped the "how can I help?" re-ask
+> cleanly — the agent went straight from confirming the number to offering booking times.
+> Negation ("do NOT ask how can I help") had not been reliable; positive framing was.
+
 ### F. "It compiles and the tests are green" ≠ "it makes noise"
 
 The whole reason this doc exists. A TTS engine swap passed typecheck + 567 unit tests and

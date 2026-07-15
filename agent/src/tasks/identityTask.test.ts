@@ -127,6 +127,25 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     expect(IDENTITY_INSTRUCTIONS).toMatch(/that is fine and welcome/i);
   });
 
+  it('SAD: identity does NOT re-ask what the caller wants — it carries the ask forward', async () => {
+    // WHO: a caller who stated their goal at the greeting ("a meeting about a job").
+    // WHY: the identity rung used to close with "How can I assist you today?" AFTER
+    //      confirming — making the caller repeat what they said 20 seconds ago. The intent
+    //      is captured at begin_call and threaded here; identity should collect name/phone
+    //      and hand straight to the next rung, never re-open the ask.
+    const task = new IdentityTask({
+      ctx: makeCtx(),
+      identifyCaller: fakeIdentifyCaller,
+      requestedService: 'a meeting to talk about a contract position',
+    });
+    expect(task.instructions).toContain('a meeting to talk about a contract position');
+    // POSITIVE framing (2026-07-15, Dale's point: models act on "do X", not "don't do Y").
+    // Instead of "do NOT ask how can I help", the rung is told its last action IS a brief
+    // acknowledgement and the system takes over — nothing to decline, just a thing to do.
+    expect(task.instructions).toMatch(/short, warm acknowledgement/i);
+    expect(task.instructions).toMatch(/system will act on their request/i);
+  });
+
   it('SAD: the hard-won identity rules survive the move — they are not re-derived', async () => {
     // Every one of these cost a real call. They must come across intact, or the spike
     // reintroduces bugs we have already paid for.

@@ -34,6 +34,7 @@
  * The whole spike is about moving the LADDER down a layer, not rebuilding the rungs.
  */
 import { llm, voice } from '@livekit/agents';
+import { sanitizeStream } from '../speechSanitizer.js';
 import type { SessionContext } from '../sessionContext.js';
 
 export interface IdentityResult {
@@ -48,6 +49,10 @@ export interface IdentityTaskOptions {
   ctx: SessionContext;
   /** The real identify_caller tool from buildTools() — not a new one. */
   identifyCaller: llm.ToolContext[string];
+  /** What the caller ALREADY said they want (from the intent step). Injected so identity
+   *  does not re-ask "how can I help?" after confirming — it knows, and the next rung
+   *  handles it. */
+  requestedService?: string;
   /** Called with the confirmed values, so the caller record is saved exactly as today. */
   onIdentified?: (r: IdentityResult) => Promise<void> | void;
 }
@@ -68,7 +73,9 @@ Do not book anything. Do not take any details about why they called — that com
 - If they say it is wrong, ask again. Never proceed on a number they did not confirm.
 - If you only caught part of it, say which part you got and ask for the rest ("I only caught 555-111 — can you give me the last four?").
 
-When you have BOTH the name and a number they have confirmed, call confirm_identity. That is the only way to finish here.`;
+When you have BOTH the name and a number they have confirmed, call confirm_identity. That is the only way to finish here.
+
+The moment you call confirm_identity, your job is DONE and the system moves the caller straight into what they rang for. So your very last words are simply a short, warm acknowledgement using their name — for example "Perfect, thanks Scott." — three or four words, and then you are finished. The next step already knows what they want and will take it from there.`;
 
 export class IdentityTask extends voice.AgentTask<IdentityResult> {
   constructor(opts: IdentityTaskOptions) {
@@ -79,10 +86,19 @@ export class IdentityTask extends voice.AgentTask<IdentityResult> {
     // "never re-ask what you already have" rule broken in its most annoying form.
     const known = ctx.callerPhone;
 
+    const askLine = opts.requestedService?.trim()
+      ? `You already know why the caller rang: "${opts.requestedService.trim()}". Your only task here is their name and number; the system will act on their request the instant you confirm their identity.`
+      : '';
     super({
-      instructions: known
-        ? `${IDENTITY_INSTRUCTIONS}\n\nYou ALREADY have their number (${known}) from caller ID. Do NOT ask for it and do NOT read it back. You need only their NAME — then call confirm_identity with the name and that number.`
-        : IDENTITY_INSTRUCTIONS,
+      instructions: [
+        IDENTITY_INSTRUCTIONS,
+        askLine,
+        known
+          ? `You ALREADY have their number (${known}) from caller ID. Do NOT ask for it and do NOT read it back. You need only their NAME — then call confirm_identity with the name and that number.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
 
       tools: {
         // The existing tool, untouched. The task does not reinvent the CRM write.
@@ -124,5 +140,25 @@ export class IdentityTask extends voice.AgentTask<IdentityResult> {
         }),
       },
     });
+  }
+
+  // SPEAK WHEN THIS RUNG TAKES OVER. Without an onEnter the task becomes the active agent
+  // and sits SILENT — exactly how the first live call got stuck: begin_call handed off to
+  // identity, and identity never asked for the name while the caller said "hello? you
+  // there?". The shipped WarmTransferTask defines onEnter for the same reason.
+  override async onEnter(): Promise<void> {
+    this.session.generateReply();
+  }
+
+  // MARKDOWN MUST NEVER REACH THE VOICE — the same guarantee SpeakingAgent gives the main
+  // path. The task-group path is plain voice.Agent, so without this a model that answers
+  // with a bulleted summary ("- Caller Company: ABC") gets its dashes and newlines read
+  // straight to Deepgram, which collapses them into one flat run with no pauses. That is
+  // the "it ran the lines together" report from the first successful voice call.
+  override async ttsNode(
+    text: ReadableStream<string>,
+    modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
+  ): ReturnType<typeof voice.Agent.default.ttsNode> {
+    return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
   }
 }
