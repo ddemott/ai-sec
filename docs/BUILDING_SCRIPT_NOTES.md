@@ -60,6 +60,60 @@ its own tests. Adding a capability is bounded work, not a rewrite. That is the p
 
 ---
 
+## Hardening pass — a LIVE LLM caller, at volume (2026-07-15)
+
+After the live-call success, the harness (`sim-taskgroup.ts`) was upgraded from a *scripted*
+caller to a **live LLM caller**: a second model PLAYS the caller from a persona (the facts it
+holds + a behavioural style — `plain`, `terse`, `chatty`, `frontloader`, `corrector`,
+`rambler`) at temperature 0.9, so it words things differently every run. Same real
+tasks/tools/backend/DB; every run verified against the **database**, not the transcript.
+Dale's instinct — "real callers word things differently; make it bullet-proof" — was right:
+the varied caller found bugs the scripted one never could, immediately.
+
+Run at volume (30–48 runs/pass across the styles), it surfaced three more real faults. All
+three fixed at the **shared instruction string**, so both flows benefit:
+
+1. **Root cause 3, caught in the wild — and the fix is REORDERING, not prohibition.** ~1 run
+   in 30, the agent gathered every job detail then *said* "I've noted that, I'll pass it
+   along" **without ever calling `capture_job_inquiry`**. The instruction already *forbade*
+   that exact phrase ("merely saying 'I've noted that' does nothing") — and the model said it
+   anyway. **A prohibition cannot beat this; the model doesn't obey "don't."** What worked:
+   reorder the action ahead of the speech — *"the instant you have the answers, your VERY
+   NEXT action is to CALL the tool — before you say anything back."* Call, THEN confirm.
+   Applied the same reorder preventively to the booking rung (say-you're-booked-without-
+   booking is the identical failure). This is gotcha G (positive framing) applied to root
+   cause 3: don't tell it what not to say, tell it what to do FIRST.
+
+2. **A rung must survive a failed lookup it doesn't need.** `identify_caller` sits in the
+   identity rung's toolset but is NOT required to finish it (`confirm_identity` is). When
+   `identify_caller` returned an error, the model sometimes spiralled — "I'm having technical
+   difficulties…", apology after apology, and it **never called `confirm_identity`**. The
+   whole call lost at rung 1, over a tool that was never load-bearing. **Fix:** the rung's
+   instructions now say a lookup hiccup never blocks completion — you already have the name
+   and number, so call `confirm_identity` and move on. **Watch for:** any rung that exposes a
+   tool it doesn't strictly need to complete. Either don't give it the tool (best), or tell
+   it explicitly that the tool failing is survivable. A non-load-bearing tool that can derail
+   the load-bearing path is a trap.
+
+3. **The lookup error was a LOCAL DB GAP — and it teaches the debugging discipline.** The
+   `identify_caller` 500 was `column "phone_verifications.call_id" does not exist`: three
+   migrations were unapplied on the dev DB. The tell that cracked it: the 500 hit ONLY
+   **returning** callers (the disclosure gate runs only when the customer already exists), so
+   across repeated runs it looked *random* — pass, pass, pass, 500 — when it was in fact
+   deterministic on "have we seen this phone before". **Get the real trace first:** a
+   `SIM_TRACE=1` flag on the harness that logs every tool call + result turned "sometimes
+   fails" into "`identify_caller -> {error: Backend returned 500}`", and the backend log gave
+   the exact column + stack. One trace beat any amount of guessing. (Lesson mirrors
+   `LESSONS_LEARNED.md` #1: measure/trace before fixing.)
+
+**Result:** full suite **30/30 across all six styles**; in-house company-labeling **10/10**
+in a focused stress run. Remaining known-soft spot: on the two-companies distinction the
+model occasionally mislabels a *placing-with-a-client* call as in-house (`represents_company`
+wrong) — a model-accuracy wobble, still under stress measurement, not yet a confirmed
+recurring failure.
+
+---
+
 **Two flows exist in the codebase. Know which you are reading about:**
 
 1. **The prompt ladder** (shipped, default). The whole call is one big system prompt with
@@ -135,7 +189,7 @@ group.run() resolves only when the stack is EMPTY → root agent says goodbye
 | `identityTask.ts` | Rung 1. Name + phone. Completion tool: `confirm_identity`. |
 | `bookMeetingTask.ts` | Rung 2. Wraps the real `book_with_scheduling`; completes on `appointment_id`. |
 | `jobIntakeTask.ts` | Rung 3. Wraps the real `capture_job_inquiry`; completes on `job_inquiry_id`. |
-| `../scripts/sim-taskgroup.ts` | E2E harness — runs the real tasks/tools/backend/DB, scripted caller. |
+| `../scripts/sim-taskgroup.ts` | E2E harness — runs the real tasks/tools/backend/DB with a **live LLM caller** (a second model plays the caller across phrasing styles). `SIM_TRACE=1` logs every tool call + result. |
 
 ### The core idea, in one sentence
 
@@ -156,6 +210,30 @@ lives on the function.")
 5. Add the markdown `ttsNode` override (gotcha #5) or the rung will read markdown aloud.
 6. Register it in `planCallTasks` behind its goal flag, in the right order.
 7. Thread any state it needs from earlier rungs via `CallState` (gotcha #2).
+
+**And the four rules the hardening pass proved you cannot skip (each cost a lost call):**
+
+8. **Give the rung ONLY the tools it needs to complete.** A non-load-bearing tool (a lookup
+   the rung doesn't need to finish) that can error will sometimes derail the load-bearing
+   path — the model apologises about the failed tool and never calls the completion tool.
+   If a rung must carry such a tool, its instructions MUST say the tool failing is survivable
+   ("you already have what you need — call `<completion_tool>` and move on"). Best is not to
+   give it the tool at all (root cause 2 / gotcha #3).
+9. **ACTION-FIRST wording: "call the tool, THEN confirm" — never the reverse.** The model
+   will substitute a confirmation *sentence* for the completion *tool call* if the wording
+   lets it. Write: *"the instant you have what you need, your VERY NEXT action is to CALL
+   `<tool>`, before you say anything back."* This is the reliable defence against root cause
+   3 inside a rung (the task-group structure defends the *ordering* of rungs; this defends
+   *within* a rung).
+10. **Positive framing, always (gotcha G).** Tell the rung what its next action IS, not what
+    not to say. Prohibitions (even naming the exact bad phrase) do not reliably stop the
+    model — reordering the instruction to a positive "do X first" does. Reserve negations for
+    hard prohibitions where the prohibition itself IS the instruction ("never offer a time
+    not in the list").
+11. **Every fact from an earlier rung goes in THIS rung's instructions, not just the chat
+    context.** A task's system prompt is fresh; the chat history carries the conversation but
+    the model acts on its *instructions*. Inject the caller's name/number/prior-answers
+    explicitly so the rung doesn't re-ask (root cause 1 / gotcha #6).
 
 ### How to duplicate for a new vertical
 
@@ -443,7 +521,13 @@ above.
 2. **List the rung's tools.** Is any of them not strictly needed? Remove it. Do any two
    descriptions answer the same caller sentence? Disambiguate. (RC2)
 3. **Find the completion.** Is it a tool call, and is it the REAL doing-tool (not a "say
-   you're done" tool)? If the rung can end by the model talking, it will. (RC3)
+   you're done" tool)? If the rung can end by the model talking, it will. (RC3) And is the
+   wording **action-first** — "call `<tool>`, THEN confirm", never "confirm" before the call?
+   (recipe rule 9)
+3a. **Every tool the rung holds — is it load-bearing?** For each tool that is NOT the
+   completion tool: if it errors, can the rung still finish? If the instructions don't say
+   the failure is survivable, the model may spiral on it and never complete. Drop the tool or
+   say "its failing is fine". (recipe rule 8)
 4. **Check `onEnter` + `ttsNode` exist.** Missing `onEnter` = dead call. Missing `ttsNode` =
    markdown read aloud. (Gotchas #4, #5)
 5. **Read the rung's opening line out loud.** Does it ask for something an earlier rung
@@ -463,9 +547,13 @@ cross-cutting gotcha (A–F) — an empty-string, a mis-heard word, or the model
 
 1. **Unit tests** (`vitest`) — task logic, plan completeness, tool wiring. Fast, but blind
    to the assembled call (gotchas 1, 2, 4 all passed unit tests).
-2. **`sim-taskgroup.ts`** — the whole call, real tasks/tools/backend/DB, scripted caller.
-   Catches state-flow, date-context, wrong-tool, DB-outcome bugs. **Does NOT** catch the
-   runtime agent-swap / `onEnter` / TTS issues.
+2. **`sim-taskgroup.ts`** — the whole call, real tasks/tools/backend/DB, **live LLM caller**
+   across six phrasing styles (`plain`/`terse`/`chatty`/`frontloader`/`corrector`/`rambler`),
+   verified against the DB. Catches state-flow, date-context, wrong-tool, DB-outcome, and
+   **phrasing-induced** bugs a scripted caller misses. Run it at volume (`SIM_RUNS=N`) —
+   several of the worst bugs showed up ~1 run in 30. `SIM_TRACE=1` logs every tool call +
+   result (how the narrate-instead-of-act and the 500 were caught). **Does NOT** catch the
+   runtime agent-swap / `onEnter` / TTS issues — only a live call does.
 3. **`sim-toolselect.ts`** — the prompt-ladder eval; replays the real prompt + tools through
    the real model. Catches tool-selection and "narrates instead of acts". Costs OpenAI $.
 4. **Browser voice call** (`simulate.sh call`, or a dispatched sim room) — the only thing
