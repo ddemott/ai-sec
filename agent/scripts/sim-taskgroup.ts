@@ -1,33 +1,40 @@
 /**
- * TASK-GROUP END-TO-END. The whole call, driven by code, not a segment.
+ * TASK-GROUP END-TO-END — with a LIVE LLM CALLER, so it is bulletproof to phrasing.
  *
- * sim-toolselect exercises the PROMPT ladder. This exercises the TASK-GROUP flow: it runs
- * the REAL tasks (planCallTasks → IdentityTask, BookMeetingTask, JobIntakeTask) with their
- * REAL instructions and REAL tools, against the REAL backend at BACKEND_URL, writing to the
- * REAL database — the only thing swapped for voice is a SCRIPTED caller.
+ * The point Dale made: real callers word things differently, pause differently, front-load
+ * or withhold, give half a number and correct it, answer a question you didn't ask. Scripted
+ * turns test ONE phrasing — your own. So this harness does NOT script the caller. A second
+ * LLM PLAYS the caller: given a persona (the facts it holds + a behavioural style), it
+ * responds naturally to whatever the agent says, and DIFFERENTLY every run.
  *
- * It replays exactly what the TaskGroup loop does: pop a task, run its chat loop until its
- * completion tool fires (confirm_identity / a successful book_with_scheduling / a
- * successful capture_job_inquiry), then advance. When the last task completes, it reads the
- * database and checks the CONCRETE outcomes: an appointment with the right service, and a
- * job inquiry — the two goals the prompt ladder kept dropping.
+ * It runs the REAL tasks (planCallTasks → Identity → Book → JobIntake) with their real
+ * instructions and real tools, against the real backend + real DB. The only thing not real
+ * is the caller's voice — it's an LLM instead of a phone. Each scenario runs across several
+ * STYLES (terse, chatty, front-loader, self-corrector, …) to shake out phrasing bugs, and
+ * every run is verified against the DATABASE, not the transcript.
  *
- * Run: cd agent && npx tsx scripts/sim-taskgroup.ts   (needs OPENAI_API_KEY, AGENT_SECRET,
- * a backend on BACKEND_URL, and a bookable tenant.)
+ * Run:  cd agent && BACKEND_URL=https://localhost:4001 npx tsx scripts/sim-taskgroup.ts
+ *   env: OPENAI_API_KEY, AGENT_SECRET, DATABASE_URL, a backend, a bookable tenant.
+ *   SIM_CASE=<substr>   run only matching scenarios
+ *   SIM_STYLES=terse,chatty   limit which styles run (default: all)
+ *   SIM_RUNS=1          runs per (scenario × style) (default 1)
  */
 import { llm, initializeLogger } from '@livekit/agents';
 import { Client } from 'pg';
 import { ToolsClient } from '../src/toolsClient.js';
 import { buildTools } from '../src/tools.js';
-import { planCallTasks, runtimePreamble, type CallDeps } from '../src/tasks/callPlan.js';
+import { planCallTasks, type CallDeps } from '../src/tasks/callPlan.js';
 import type { SessionContext } from '../src/sessionContext.js';
 
 const API_KEY = process.env.OPENAI_API_KEY;
-const MODEL = process.env.SIM_TASKGROUP_MODEL || 'gpt-4o-mini';
+const AGENT_MODEL = process.env.SIM_TASKGROUP_MODEL || 'gpt-4o-mini';
+const CALLER_MODEL = process.env.SIM_CALLER_MODEL || 'gpt-4o-mini';
 const BACKEND_URL = process.env.BACKEND_URL || 'https://localhost:4001';
 const AGENT_SECRET = process.env.AGENT_SECRET || '';
 const DB_URL = process.env.DATABASE_URL || '';
 const TENANT = process.env.SIM_TENANT || 'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0';
+const CASE_FILTER = process.env.SIM_CASE || '';
+const RUNS = Number(process.env.SIM_RUNS || 1);
 
 const C = process.stdout.isTTY
   ? { g: '\x1b[32m', r: '\x1b[31m', y: '\x1b[33m', d: '\x1b[2m', b: '\x1b[1m', x: '\x1b[0m' }
@@ -35,31 +42,37 @@ const C = process.stdout.isTTY
 
 if (!API_KEY) throw new Error('OPENAI_API_KEY not set');
 if (!AGENT_SECRET) throw new Error('AGENT_SECRET not set');
-// Accept the local self-signed backend cert.
 if (BACKEND_URL.startsWith('https://localhost')) process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
+interface ToolCall {
+  id: string;
+  function: { name: string; arguments: string };
+}
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | null;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
 }
-interface ToolCall {
-  id: string;
-  function: { name: string; arguments: string };
-}
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-async function chat(
+async function openai(
+  model: string,
+  temperature: number,
   messages: ChatMessage[],
-  tools: { type: 'function'; function: unknown }[]
+  tools?: { type: 'function'; function: unknown }[]
 ): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
   for (let attempt = 1; attempt <= 5; attempt++) {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
-      body: JSON.stringify({ model: MODEL, temperature: 0, messages, tools, tool_choice: 'auto' }),
+      body: JSON.stringify({
+        model,
+        temperature,
+        messages,
+        ...(tools ? { tools, tool_choice: 'auto' } : {}),
+      }),
     }).catch(() => null);
     if (res?.ok) {
       const j = (await res.json()) as {
@@ -76,7 +89,6 @@ async function chat(
   throw new Error('OpenAI unreachable after retries');
 }
 
-/** Turn a ToolContext into OpenAI function schemas. */
 function toolSchemas(ctx: llm.ToolContext): { type: 'function'; function: unknown }[] {
   return Object.entries(ctx).map(([name, t]) => {
     const shape = t as unknown as { description: string; parameters: Record<string, unknown> };
@@ -87,202 +99,410 @@ function toolSchemas(ctx: llm.ToolContext): { type: 'function'; function: unknow
   });
 }
 
-/**
- * Drive ONE task to completion. Runs its chat loop, feeding scripted caller turns and
- * executing its real tools, until the task reports done() — exactly what TaskGroup's loop
- * does with `await task.run()`. Returns the transcript for reporting.
- */
-async function runTask(
-  task: { instructions: string; toolCtx: llm.ToolContext; done: boolean },
-  callerTurns: string[],
-  said: string[]
-): Promise<void> {
-  const schemas = toolSchemas(task.toolCtx);
-  const queue = [...callerTurns];
-  const messages: ChatMessage[] = [
-    { role: 'system', content: task.instructions },
-    // A nudge so the task opens by addressing the caller, as onEnter's generateReply would.
-    { role: 'user', content: queue.shift() ?? 'Hello?' },
-  ];
+// ── THE CALLER ────────────────────────────────────────────────────────────────
+// A persona = the facts the caller holds + a behavioural style. The caller LLM sees the
+// running transcript and produces the next spoken line — naturally, and differently each run.
 
-  for (let round = 0; round < 16 && !task.done; round++) {
-    const { content, toolCalls } = await chat(messages, schemas);
-    if (content) said.push(content);
-
-    if (toolCalls.length > 0) {
-      messages.push({ role: 'assistant', content: content ?? null, tool_calls: toolCalls });
-      for (const tc of toolCalls) {
-        const tool = task.toolCtx[tc.function.name] as
-          | { execute: (a: unknown, o: unknown) => Promise<unknown> }
-          | undefined;
-        let result: unknown = `unknown tool ${tc.function.name}`;
-        if (tool) {
-          let args: unknown = {};
-          try {
-            args = JSON.parse(tc.function.arguments || '{}');
-          } catch {
-            /* leave {} */
-          }
-          result = await tool.execute(args, { ctx: {}, toolCallId: tc.id });
-        }
-        messages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: typeof result === 'string' ? result : JSON.stringify(result),
-        });
-      }
-      continue; // let the model react to the tool result before the next caller turn
-    }
-
-    // Plain reply — feed the next scripted caller turn.
-    messages.push({ role: 'assistant', content: content ?? '' });
-    const next = queue.shift();
-    if (!next) break;
-    messages.push({ role: 'user', content: next });
-  }
+interface Persona {
+  name: string;
+  phone: string; // canonical; the caller states THIS number, phrased however
+  goalLine: string; // how they open ("I'd like a meeting with Dale about a job")
+  wantsMeeting: boolean;
+  hasJobInquiry: boolean;
+  requestedService: string;
+  // job facts (used only if hasJobInquiry)
+  callerCompany?: string;
+  clientCompany?: string;
+  inHouse?: boolean; // hiring for own company → client == caller
+  employmentType?: 'contract' | 'full_time';
+  rate?: string;
+  length?: string;
+  location?: 'onsite' | 'remote' | 'hybrid';
+  address?: string;
+  timezone?: string;
+  // hard behaviours the persona MUST exhibit (adversarial)
+  refusesPhone?: boolean; // never gives a number
 }
 
-async function main(): Promise<void> {
-  initializeLogger({ pretty: false, level: 'silent' });
-  console.log(`${C.b}Task-group E2E${C.x} ${C.d}(model ${MODEL}, backend ${BACKEND_URL})${C.x}\n`);
+const STYLES: Record<string, string> = {
+  plain: 'Answer naturally and directly, one short spoken sentence at a time.',
+  terse: 'Answer in as few words as possible — often one or two words. Do not elaborate.',
+  chatty:
+    'Be warm and a bit chatty. Sometimes volunteer extra detail before being asked, and add small asides. Still get to the point.',
+  frontloader:
+    'In your VERY FIRST reply, cram in as much as you can at once — your name, number, and what you want, all in one breath. After that, answer what is asked.',
+  corrector:
+    'When you give your phone number the first time, say it slightly wrong or incompletely; then when they read it back or ask, correct it to the right one.',
+  rambler:
+    'Ramble a little — start answering, go off on a short tangent, then come back to the point. Never refuse to answer, just take a scenic route.',
+};
 
-  const ctx: SessionContext = {
-    tenantId: TENANT,
-    callerPhone: null, // forwarded-line style: caller must give the number aloud
-    callId: `sim-taskgroup-${Date.now()}`,
-    roomName: 'sim-taskgroup',
-    participantIdentity: 'sim',
-  };
-  const client = new ToolsClient({ backendUrl: BACKEND_URL, agentSecret: AGENT_SECRET });
-  const tools = buildTools(ctx, client);
+function personaSystem(p: Persona, style: string): string {
+  const facts = [
+    `Your name: ${p.name}`,
+    p.refusesPhone
+      ? `You will NOT give your phone number, no matter how many times asked. Politely decline every time.`
+      : `Your phone number: ${p.phone} (give THIS exact number when asked; you may phrase the digits naturally, but the number itself is always ${p.phone}).`,
+    `Why you called: ${p.goalLine}`,
+  ];
+  if (p.hasJobInquiry) {
+    facts.push(`The company you work for: ${p.callerCompany}`);
+    if (p.inHouse) {
+      facts.push(
+        `You are hiring for YOUR OWN company (${p.callerCompany}) — if asked whether you're hiring for your own company or placing with a client, say your OWN company. There is no separate client.`
+      );
+    } else {
+      facts.push(
+        `You are placing someone with a CLIENT: ${p.clientCompany}. If asked whether it's your own company or a client, say a client, and name ${p.clientCompany}.`
+      );
+    }
+    facts.push(`Employment type: ${p.employmentType === 'full_time' ? 'full time' : 'contract'}`);
+    if (p.rate) facts.push(`Pay/rate: ${p.rate}`);
+    if (p.length) facts.push(`Contract length: ${p.length}`);
+    if (p.location) facts.push(`Location: ${p.location}`);
+    if (p.address) facts.push(`Address of the position: ${p.address}`);
+    if (p.timezone) facts.push(`Timezone: ${p.timezone}`);
+  }
+  return `You are a person calling a small business's phone receptionist. You are the CALLER, not the assistant. Speak like a real person on the phone — short spoken turns, no lists, no markdown.
 
-  // Resolve the runtime facts the same way index.ts does.
-  const now = new Date();
-  const currentDate = now.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'America/Chicago',
-  });
-  const deps: CallDeps = {
-    ctx,
-    state: {},
-    runtime: {
-      currentDate,
-      timezone: 'America/Chicago',
-      businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
-      bookableThrough: null,
-    },
-    tools,
-  };
+STYLE: ${STYLES[style]}
 
-  // THE CALL: "a meeting to talk about a job" — two goals, the pair the ladder kept
-  // dropping. Intent classification (what CallRootAgent.begin_call does) is asserted by
-  // the fixture: wantsMeeting + hasJobInquiry.
-  const goals = {
-    wantsMeeting: true,
-    hasJobInquiry: true,
-    requestedService: 'a meeting to talk about a contract position',
-  };
-  const specs = planCallTasks(goals, deps);
-  console.log(`  plan: ${specs.map((s) => s.id).join(' → ')}\n`);
+FACTS ABOUT YOU (answer truthfully from these, but only when relevant/asked):
+${facts.map((f) => '- ' + f).join('\n')}
 
-  // Scripted caller turns per rung. A real caller answers what the rung asks; these are
-  // written to satisfy each rung's questions in order.
-  const turnsByTask: Record<string, string[]> = {
-    identity: [
-      "Hi, I'd like a meeting with Dale to talk about a contract position.",
-      'My name is Priya Nowak.',
-      'My number is 555-212-0199.',
-      "Yes, that's correct.",
-    ],
-    book_meeting: [
-      'Tomorrow afternoon works.',
-      "Whatever's open around 2 is great.",
-      'That time works, yes.',
-    ],
-    job_intake: [
-      "I'm calling from Insight Global.",
-      "No, I'm placing someone with a client — it's for Blue Cross.",
-      "It's a contract.",
-      '$70 to $80 an hour.',
-      'Twelve months.',
-      "It's hybrid.",
-      '200 East Randolph, Chicago.',
-    ],
-  };
+RULES:
+- Reply with ONLY your spoken words for your next turn. No stage directions, no quotes.
+- Answer the question you were actually asked. Give facts as they come up; do not dump everything unless your STYLE says to.
+- If they ask something you already answered, you may say so briefly, then answer again.
+- When the receptionist has clearly finished helping you (confirmed your booking and/or said they've passed your details along, and asks if there's anything else), say you're all set / no thanks — do not invent new requests.
+- Never say you are an AI. Never narrate. Just talk.`;
+}
 
-  const said: string[] = [];
-  const tabDate = new Date().toISOString();
+async function callerReply(personaSys: string, shared: ChatMessage[]): Promise<string> {
+  // The caller sees the call from ITS side: the agent's lines (role 'assistant' in the
+  // shared history) are what the caller HEARD → 'user' to the caller model; the caller's
+  // own prior lines (role 'user' in shared) are its own past turns → 'assistant'.
+  const view: ChatMessage[] = [{ role: 'system', content: personaSys }];
+  for (const m of shared) {
+    if (m.role === 'assistant' && m.content) view.push({ role: 'user', content: m.content });
+    else if (m.role === 'user' && m.content) view.push({ role: 'assistant', content: m.content });
+  }
+  const { content } = await openai(CALLER_MODEL, 0.9, view);
+  return (content ?? 'Okay.').trim();
+}
+
+// ── DRIVER: run the whole call with a live caller ──────────────────────────────
+
+interface RunResult {
+  rungsCompleted: string[];
+  rungsAttempted: string[];
+  transcript: { who: 'agent' | 'caller'; text: string }[];
+}
+
+async function runCall(p: Persona, style: string, deps: CallDeps): Promise<RunResult> {
+  const personaSys = personaSystem(p, style);
+  const specs = planCallTasks(p, deps);
+  const result: RunResult = { rungsCompleted: [], rungsAttempted: [], transcript: [] };
+
+  // Shared conversation carried across rungs (mirrors TaskGroup's merged chatCtx, minus the
+  // per-rung system prompt). The caller has continuous memory of the whole call.
+  const shared: ChatMessage[] = [];
+
+  // The caller opens the call.
+  const opener = await callerReply(personaSys, [{ role: 'assistant', content: 'Thanks for calling. How can I help you today?' }]);
+  result.transcript.push({ who: 'agent', text: 'How can I help you today?' });
+  result.transcript.push({ who: 'caller', text: opener });
+  shared.push({ role: 'user', content: opener });
+
+  let totalTurns = 0;
   for (const spec of specs) {
+    result.rungsAttempted.push(spec.id);
     const task = spec.factory() as unknown as {
       instructions: string;
       toolCtx: llm.ToolContext;
       done: boolean;
     };
-    process.stdout.write(`  ${C.d}running rung${C.x} ${spec.id} ... `);
-    await runTask(task, turnsByTask[spec.id] ?? ['Okay.'], said);
-    if (task.done) {
-      console.log(`${C.g}done${C.x}`);
-    } else {
-      console.log(`${C.r}NOT COMPLETED${C.x} — the rung did not finish its work`);
-    }
-  }
+    const schemas = toolSchemas(task.toolCtx);
+    const messages: ChatMessage[] = [{ role: 'system', content: task.instructions }, ...shared];
 
-  // ── VERIFY AGAINST THE DATABASE — the concrete outcomes, not the transcript ──
-  console.log(`\n  ${C.b}Checking the database for what actually landed:${C.x}`);
-  let pass = true;
-  if (DB_URL) {
-    const db = new Client({ connectionString: DB_URL });
-    await db.connect();
-    try {
-      const appt = await db.query(
-        `SELECT a.appointment_id, a.start_time, s.name AS service
-           FROM appointments a LEFT JOIN services s USING (service_id)
-          WHERE a.tenant_id = $1 AND a.created_at >= $2
-          ORDER BY a.created_at DESC LIMIT 1`,
-        [TENANT, tabDate]
-      );
-      if (appt.rows[0]) {
-        console.log(
-          `  ${C.g}✓ APPOINTMENT${C.x} ${appt.rows[0].service ?? '(no service)'} at ${appt.rows[0].start_time}`
-        );
-        if (!appt.rows[0].service) {
-          console.log(`  ${C.r}  …but service is NULL${C.x}`);
-          pass = false;
+    for (let round = 0; round < 16 && !task.done && totalTurns < 60; round++) {
+      totalTurns++;
+      const { content, toolCalls } = await openai(AGENT_MODEL, 0, messages, schemas);
+
+      if (toolCalls.length > 0) {
+        messages.push({ role: 'assistant', content: content ?? null, tool_calls: toolCalls });
+        if (content) {
+          result.transcript.push({ who: 'agent', text: content });
+          shared.push({ role: 'assistant', content });
         }
-      } else {
-        console.log(`  ${C.r}✗ NO APPOINTMENT was booked${C.x}`);
-        pass = false;
+        for (const tc of toolCalls) {
+          const tool = task.toolCtx[tc.function.name] as
+            | { execute: (a: unknown, o: unknown) => Promise<unknown> }
+            | undefined;
+          let res: unknown = `unknown tool ${tc.function.name}`;
+          if (tool) {
+            let args: unknown = {};
+            try {
+              args = JSON.parse(tc.function.arguments || '{}');
+            } catch {
+              /* {} */
+            }
+            res = await tool.execute(args, { ctx: {}, toolCallId: tc.id });
+          }
+          const rs = typeof res === 'string' ? res : JSON.stringify(res);
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: rs });
+        }
+        continue;
       }
 
-      const job = await db.query(
-        `SELECT caller_name, callback_phone, caller_company, client_company, rate_range
-           FROM job_inquiries WHERE tenant_id = $1 AND created_at >= $2
-          ORDER BY created_at DESC LIMIT 1`,
-        [TENANT, tabDate]
-      );
-      if (job.rows[0]) {
-        const j = job.rows[0];
-        console.log(
-          `  ${C.g}✓ JOB INQUIRY${C.x} ${j.caller_name} / ${j.callback_phone} — ${j.caller_company} → ${j.client_company}, ${j.rate_range}`
-        );
-      } else {
-        console.log(`  ${C.r}✗ NO JOB INQUIRY was recorded (the rung that keeps getting skipped)${C.x}`);
-        pass = false;
+      // Plain agent reply → speak it, then let the caller respond.
+      const agentLine = content ?? '';
+      messages.push({ role: 'assistant', content: agentLine });
+      if (agentLine.trim()) {
+        result.transcript.push({ who: 'agent', text: agentLine });
+        shared.push({ role: 'assistant', content: agentLine });
       }
-    } finally {
-      await db.end();
+      if (task.done) break;
+
+      const reply = await callerReply(personaSys, shared);
+      result.transcript.push({ who: 'caller', text: reply });
+      shared.push({ role: 'user', content: reply });
+      messages.push({ role: 'user', content: reply });
     }
-  } else {
-    console.log(`  ${C.y}(DATABASE_URL not set — skipping DB verification)${C.x}`);
+
+    if (task.done) result.rungsCompleted.push(spec.id);
+    else break; // a rung that never completed blocks the ones after it (as the real loop would)
+  }
+  return result;
+}
+
+// ── SCENARIOS (persona + expectations) ─────────────────────────────────────────
+
+interface Expect {
+  appointment: boolean;
+  jobInquiry: boolean;
+  clientCompany?: string;
+  representsCompany?: boolean;
+}
+interface Scenario {
+  title: string;
+  persona: Persona;
+  expect: Expect;
+  styles?: string[]; // default: a spread
+}
+
+const DEFAULT_STYLES = ['plain', 'terse', 'chatty', 'frontloader', 'corrector', 'rambler'];
+
+const SCENARIOS: Scenario[] = [
+  {
+    title: 'meeting + job (the two-goal baseline)',
+    persona: {
+      name: 'Priya Nowak',
+      phone: '555-901-0001',
+      goalLine: 'you want a meeting with Dale to talk about a contract role',
+      wantsMeeting: true,
+      hasJobInquiry: true,
+      requestedService: 'a meeting about a contract role',
+      callerCompany: 'Insight Global',
+      clientCompany: 'Blue Cross',
+      employmentType: 'contract',
+      rate: '$70 to $80 an hour',
+      length: 'twelve months',
+      location: 'hybrid',
+      address: '200 East Randolph, Chicago',
+    },
+    expect: { appointment: true, jobInquiry: true, clientCompany: 'Blue Cross', representsCompany: false },
+  },
+  {
+    title: 'meeting only — must NOT fabricate a job inquiry',
+    persona: {
+      name: 'Grace Okoro',
+      phone: '555-901-0002',
+      goalLine: 'you just want to book a meeting with Dale (no job talk)',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a meeting with Dale',
+    },
+    expect: { appointment: true, jobInquiry: false },
+    styles: ['plain', 'terse', 'frontloader'],
+  },
+  {
+    title: 'job only — records it, does NOT book a meeting',
+    persona: {
+      name: 'Sam Devlin',
+      phone: '555-901-0003',
+      goalLine: 'you just want to pass a role to Dale, no meeting needed',
+      wantsMeeting: false,
+      hasJobInquiry: true,
+      requestedService: 'passing a role to Dale',
+      callerCompany: 'TEKsystems',
+      clientCompany: 'Northern Trust',
+      employmentType: 'full_time',
+      rate: '$150k to $180k',
+      location: 'onsite',
+      address: '10 South Wacker, Chicago',
+    },
+    expect: { appointment: false, jobInquiry: true, clientCompany: 'Northern Trust', representsCompany: false },
+    styles: ['plain', 'chatty', 'rambler'],
+  },
+  {
+    title: 'in-house recruiter — must NOT double-ask the company',
+    persona: {
+      name: 'Dana Feld',
+      phone: '555-901-0004',
+      goalLine: 'you have a role at your own company and want to reach Dale',
+      wantsMeeting: false,
+      hasJobInquiry: true,
+      requestedService: 'a role at our company',
+      callerCompany: 'Globex',
+      inHouse: true,
+      employmentType: 'contract',
+      rate: '$90 an hour',
+      length: 'six months',
+      location: 'remote',
+      timezone: 'Central',
+    },
+    expect: { appointment: false, jobInquiry: true, clientCompany: 'Globex', representsCompany: true },
+    styles: ['plain', 'terse'],
+  },
+  {
+    title: 'STRESS: caller refuses to give a phone number',
+    persona: {
+      name: 'Robin Vance',
+      phone: '555-901-0006',
+      goalLine: 'you want a meeting but will not share a phone number',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a meeting',
+      refusesPhone: true,
+    },
+    // No number → identity can't complete → no booking. Documents the limit.
+    expect: { appointment: false, jobInquiry: false },
+    styles: ['plain'],
+  },
+];
+
+async function verify(db: Client, p: Persona, e: Expect): Promise<string[]> {
+  const fails: string[] = [];
+  const e164 = '+1' + p.phone.replace(/\D/g, '');
+
+  const appt = await db.query<{ service: string | null }>(
+    `SELECT s.name AS service FROM appointments a
+       LEFT JOIN services s USING (service_id)
+       JOIN customers c USING (customer_id)
+      WHERE a.tenant_id = $1 AND c.phone = $2 ORDER BY a.created_at DESC LIMIT 1`,
+    [TENANT, e164]
+  );
+  if (e.appointment && !appt.rows[0]) fails.push('expected APPOINTMENT, none found');
+  if (!e.appointment && appt.rows[0]) fails.push('APPOINTMENT booked but none expected');
+  if (e.appointment && appt.rows[0] && !appt.rows[0].service) fails.push('appointment service is NULL');
+
+  const job = await db.query<{ client_company: string | null; represents_company: boolean | null }>(
+    `SELECT client_company, represents_company FROM job_inquiries
+      WHERE tenant_id = $1 AND callback_phone = $2 ORDER BY created_at DESC LIMIT 1`,
+    [TENANT, e164]
+  );
+  if (e.jobInquiry && !job.rows[0]) fails.push('expected JOB INQUIRY, none found');
+  if (!e.jobInquiry && job.rows[0]) fails.push('JOB INQUIRY recorded but none expected');
+  if (e.clientCompany && job.rows[0] && job.rows[0].client_company !== e.clientCompany)
+    fails.push(`client_company="${job.rows[0].client_company}", expected "${e.clientCompany}"`);
+  if (e.representsCompany !== undefined && job.rows[0] && job.rows[0].represents_company !== e.representsCompany)
+    fails.push(`represents_company=${job.rows[0].represents_company}, expected ${e.representsCompany}`);
+
+  return fails;
+}
+
+function makeDeps(): CallDeps {
+  const ctx: SessionContext = {
+    tenantId: TENANT,
+    callerPhone: null,
+    callId: `sim-tg-${Date.now()}-${Math.floor(performance.now())}`,
+    roomName: 'sim-tg',
+    participantIdentity: 'sim',
+  };
+  const client = new ToolsClient({ backendUrl: BACKEND_URL, agentSecret: AGENT_SECRET });
+  const tools = buildTools(ctx, client);
+  const now = new Date();
+  const currentDate = now.toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago',
+  });
+  return {
+    ctx,
+    state: {},
+    runtime: { currentDate, timezone: 'America/Chicago', businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM', bookableThrough: null },
+    tools,
+  };
+}
+
+async function main(): Promise<void> {
+  initializeLogger({ pretty: false, level: 'silent' });
+  const stylesEnv = (process.env.SIM_STYLES || '').split(',').map((s) => s.trim()).filter(Boolean);
+
+  const chosen = SCENARIOS.filter((s) => !CASE_FILTER || s.title.toLowerCase().includes(CASE_FILTER.toLowerCase()));
+  console.log(`${C.b}Task-group E2E — live LLM caller${C.x} ${C.d}(agent ${AGENT_MODEL}, caller ${CALLER_MODEL})${C.x}`);
+
+  const db = DB_URL ? new Client({ connectionString: DB_URL }) : null;
+  if (db) await db.connect();
+
+  let runs = 0;
+  let passed = 0;
+  const failures: { title: string; style: string; fails: string[]; transcript: RunResult['transcript'] }[] = [];
+
+  try {
+    for (const sc of chosen) {
+      const styles = (stylesEnv.length ? stylesEnv : sc.styles ?? DEFAULT_STYLES);
+      console.log(`\n${C.b}${sc.title}${C.x}`);
+      for (const style of styles) {
+        for (let r = 0; r < RUNS; r++) {
+          // reset this caller's rows so each run is deterministic
+          if (db) {
+            const e164 = '+1' + sc.persona.phone.replace(/\D/g, '');
+            await db.query(`DELETE FROM job_inquiries WHERE tenant_id=$1 AND callback_phone=$2`, [TENANT, e164]);
+            await db.query(
+              `DELETE FROM appointments WHERE tenant_id=$1 AND customer_id IN (SELECT customer_id FROM customers WHERE tenant_id=$1 AND phone=$2)`,
+              [TENANT, e164]
+            );
+          }
+          runs++;
+          const deps = makeDeps();
+          let res: RunResult;
+          try {
+            res = await runCall(sc.persona, style, deps);
+          } catch (err) {
+            failures.push({ title: sc.title, style, fails: [`THREW: ${(err as Error).message}`], transcript: [] });
+            console.log(`  ${style.padEnd(11)} ${C.r}ERROR${C.x} ${(err as Error).message}`);
+            continue;
+          }
+          const dbFails = db ? await verify(db, sc.persona, sc.expect) : [];
+          const rungInfo = `${res.rungsCompleted.length}/${res.rungsAttempted.length} rungs`;
+          if (dbFails.length === 0) {
+            passed++;
+            console.log(`  ${style.padEnd(11)} ${C.g}PASS${C.x} ${C.d}(${rungInfo})${C.x}`);
+          } else {
+            failures.push({ title: sc.title, style, fails: dbFails, transcript: res.transcript });
+            console.log(`  ${style.padEnd(11)} ${C.r}FAIL${C.x} ${C.d}(${rungInfo})${C.x} — ${dbFails.join('; ')}`);
+          }
+        }
+      }
+    }
+  } finally {
+    if (db) await db.end();
   }
 
-  console.log(
-    `\n  ${pass ? C.g : C.r}${pass ? 'PASS' : 'FAIL'}${C.x} — both goals ${pass ? 'landed' : 'did NOT land'}.`
-  );
-  process.exit(pass ? 0 : 1);
+  console.log(`\n${passed === runs ? C.g : C.r}${passed}/${runs} runs passed${C.x}`);
+
+  // Dump transcripts of failures so the cause is visible without re-running.
+  if (failures.length) {
+    console.log(`\n${C.b}── FAILURE TRANSCRIPTS ──${C.x}`);
+    for (const f of failures) {
+      console.log(`\n${C.r}✗ ${f.title} [${f.style}]${C.x} — ${f.fails.join('; ')}`);
+      for (const t of f.transcript) {
+        console.log(`   ${t.who === 'agent' ? C.b + 'AGENT ' : C.d + 'caller'}${C.x} ${t.text}`);
+      }
+    }
+  }
+
+  process.exit(passed === runs ? 0 : 1);
 }
 
 main().catch((err) => {

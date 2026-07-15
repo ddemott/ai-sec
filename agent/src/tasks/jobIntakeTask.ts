@@ -33,6 +33,9 @@ export interface JobIntakeTaskOptions {
   /** The caller identity from the identity rung — capture_job_inquiry refuses without a
    *  name and number, and both were already collected. */
   knownCaller?: string;
+  /** Was a meeting booked before this rung? Controls the opener — on a JOB-ONLY call there
+   *  is no booking, so "you're booked in" would be a lie (the E2E caught it). */
+  meetingBooked?: boolean;
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
 }
 
@@ -43,9 +46,10 @@ export interface JobIntakeTaskOptions {
  * becomes generated from the other; for now they are kept deliberately identical so the
  * two paths ask the same questions in the same order.
  */
-export const JOB_INTAKE_INSTRUCTIONS = `You have booked the meeting. NOW take the details of the role, so the owner can come to it prepared. You already have the caller's name and number — do NOT ask again.
+export const JOB_INTAKE_INTRO_BOOKED = `You have booked the meeting. NOW take the details of the role, so the owner can come to it prepared. Open with something like: "Great — you're booked in. While I have you, let me grab a few details about the role."`;
+export const JOB_INTAKE_INTRO_NO_BOOKING = `The caller wants to pass a role to the owner (no meeting was booked). Take the details so the owner has them. Open with something like: "Sure — let me grab a few details about the role so I can pass them along."`;
 
-Say: "Great — you're booked in. While I have you, let me grab a few details about the role."
+export const JOB_INTAKE_INSTRUCTIONS = `Take the details of the role so the owner can come prepared. You already have the caller's name and number — do NOT ask again.
 
 Then work these questions ONE AT A TIME. Skip any they have already answered. Acknowledge each answer before the next.
 
@@ -53,7 +57,7 @@ THERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME. Never ask a bare "what compan
 - "What company are you calling from?" → that is the CALLER'S company (caller_company), the agency that rang.
 - "Are you hiring for your own company, or placing someone with a client?"
   - Placing with a client → "Which company would the work actually be for?" → client_company. represents_company = false.
-  - Their own company → the two are the same; do NOT ask again. represents_company = true.
+  - Their own company → set client_company to the SAME company they just named, and represents_company = true. Do NOT ask which company the work is for — they told you.
 - "Is this a contract position or full time?"
   - Contract → "What rate range?" and "What length of contract?"
   - Full time → "What salary range?"
@@ -94,10 +98,11 @@ export class JobIntakeTask extends voice.AgentTask<JobIntakeResult> {
       },
     });
 
+    const intro = opts.meetingBooked ? JOB_INTAKE_INTRO_BOOKED : JOB_INTAKE_INTRO_NO_BOOKING;
     super({
-      instructions: opts.knownCaller
-        ? `${opts.knownCaller}\n\n${JOB_INTAKE_INSTRUCTIONS}`
-        : JOB_INTAKE_INSTRUCTIONS,
+      instructions: [opts.knownCaller, intro, JOB_INTAKE_INSTRUCTIONS]
+        .filter(Boolean)
+        .join('\n\n'),
       tools: {
         ...messagingTools,
         capture_job_inquiry: wrappedCapture,

@@ -189,6 +189,7 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
         new JobIntakeTask({
           messagingTools: pick(deps.tools, ['capture_job_inquiry']),
           knownCaller: knownCallerLine(deps.state),
+          meetingBooked: goals.wantsMeeting,
           onCaptured: deps.onCaptured,
         }),
     });

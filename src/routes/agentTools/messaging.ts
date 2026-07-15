@@ -351,10 +351,13 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
           [
             args.tenant_id,
             customerId,
-            args.client_company ?? null,
-            // An IN-HOUSE recruiter works for the client, so the two companies are the
-            // same thing said once. Fill it rather than leaving a hole the owner has to
-            // reason about while looking at a lead.
+            // IN-HOUSE recruiter: the caller works FOR the client, so the two companies
+            // are the same thing said once. Fill EITHER from the other — the model
+            // routinely gives one and leaves the other blank, and which one it drops
+            // varies with phrasing (the E2E caller caught client_company left NULL when
+            // the caller said "hiring for my own company"). Symmetric so neither hole
+            // survives.
+            args.client_company ?? (args.represents_company ? (args.caller_company ?? null) : null),
             args.caller_company ?? (args.represents_company ? (args.client_company ?? null) : null),
             args.represents_company ?? null,
             args.employment_type ?? null,
@@ -408,7 +411,8 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
       if (row.recipient) {
         try {
           await sendJobInquiryEmail(row.recipient, {
-            clientCompany: args.client_company,
+            clientCompany:
+              args.client_company ?? (args.represents_company ? args.caller_company : undefined),
             callerCompany:
               args.caller_company ?? (args.represents_company ? args.client_company : undefined),
             representsCompany: args.represents_company,
