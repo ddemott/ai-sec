@@ -35,7 +35,24 @@ function makeDeps(): CallDeps {
   });
   return {
     ctx,
-    tools: { identify_caller: tool, book_with_scheduling: tool, get_available_slots: tool },
+    state: {},
+    runtime: {
+      currentDate: 'Wednesday, July 15, 2026',
+      timezone: 'America/Chicago',
+      businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+      bookableThrough: '2027-01-08',
+    },
+    tools: {
+      identify_caller: tool,
+      book_with_scheduling: tool,
+      get_available_slots: tool,
+      get_service_catalog: tool,
+      get_scheduling_options: tool, // the MESSY tool — must NOT reach the booking task
+      book_appointment: tool, // bug #3 trap — must NOT reach the booking task
+      check_availability: tool, // bug #3 trap
+      capture_job_inquiry: tool,
+      take_message: tool,
+    },
   };
 }
 
@@ -94,6 +111,46 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(spy).not.toHaveBeenCalled();
     // The specs are data; the agents do not exist yet.
     expect(plan.every((s) => typeof s.factory === 'function')).toBe(true);
+  });
+
+  it('SAD: BookMeetingTask gets ONLY the clean grid tools — not the messy one, not the traps', () => {
+    // THE FIRST-CALL BUG. The whole point of tasks is narrow tools per rung, and I broke
+    // it by passing the full toolbox: the model reached past get_available_slots (clean
+    // 15-minute grid) for get_scheduling_options (raw "soonest-from-now" times — 1:41 PM,
+    // drifting minute to minute, wandering to October). And book_appointment /
+    // check_availability are the bug-#3 traps (need a resource_id get_available_slots
+    // never returns). None of them may reach this task.
+    const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: false }, makeDeps());
+    const book = specs.find((s) => s.id === 'book_meeting')!;
+    const names = Object.keys(book.factory().toolCtx);
+    expect(names).toContain('get_available_slots');
+    expect(names).toContain('book_with_scheduling');
+    expect(names).not.toContain('get_scheduling_options'); // the messy times
+    expect(names).not.toContain('book_appointment'); // bug #3 trap
+    expect(names).not.toContain('check_availability'); // bug #3 trap
+  });
+
+  it('SAD: the booking rung KNOWS what today is — it must not guess a month', () => {
+    // THE FIRST LIVE-CALL BUG, from the logs not the transcript: a task with no date
+    // context queried get_available_slots for OCTOBER, hit the "nothing that day" fallback
+    // (raw soonest-from-now times like 1:41 PM), and every book_with_scheduling failed
+    // EMPLOYEE_NOT_SCHEDULED. Each task REPLACES the system prompt — where the date and
+    // hours live — with its own, so the runtime facts must be threaded in explicitly.
+    const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: false }, makeDeps());
+    const book = specs.find((s) => s.id === 'book_meeting')!;
+    const instr = (book.factory() as unknown as { instructions: string }).instructions;
+    expect(instr).toContain('July 15, 2026'); // today
+    expect(instr).toMatch(/1:00 PM to 5:00 PM/); // hours
+    expect(instr).toMatch(/resolve it against TODAY/i);
+  });
+
+  it('SAD: JobIntakeTask gets ONLY capture_job_inquiry — nothing to wander into', () => {
+    const specs = planCallTasks({ wantsMeeting: false, hasJobInquiry: true }, makeDeps());
+    const intake = specs.find((s) => s.id === 'job_intake')!;
+    const names = Object.keys(intake.factory().toolCtx);
+    expect(names).toContain('capture_job_inquiry');
+    expect(names).not.toContain('book_with_scheduling');
+    expect(names).not.toContain('take_message');
   });
 
   it('HAPPY: buildCallTaskGroup registers the plan onto a real TaskGroup', () => {

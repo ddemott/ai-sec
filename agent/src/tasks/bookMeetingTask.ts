@@ -40,6 +40,12 @@ export interface BookMeetingTaskOptions {
   schedulingTools: llm.ToolContext;
   /** What the caller asked for, in THEIR words — passed to the service matcher. */
   requestedService: string;
+  /** Date + hours the model must not guess (see callPlan.runtimePreamble). */
+  runtimePreamble?: string;
+  /** The confirmed number from the identity rung — defaulted into the booking call so a
+   *  model that forgets to pass it still books, instead of asking again. */
+  knownPhone?: string;
+  knownName?: string;
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
 }
 
@@ -71,9 +77,20 @@ export class BookMeetingTask extends voice.AgentTask<BookMeetingResult> {
       description: (realBooking as unknown as { description: string }).description,
       parameters: (realBooking as unknown as { parameters: Record<string, unknown> }).parameters,
       execute: async (args: unknown, ctx: unknown): Promise<unknown> => {
+        // DEFAULT the identity we already hold. book_with_scheduling REQUIRES a phone; the
+        // caller gave it in the identity rung, so a model that omits it here should still
+        // book, not ask again. (The first E2E failed exactly here.)
+        const withIdentity =
+          args && typeof args === 'object'
+            ? {
+                ...(args as Record<string, unknown>),
+                phone: (args as { phone?: string }).phone || opts.knownPhone,
+                name: (args as { name?: string }).name || opts.knownName,
+              }
+            : args;
         const raw = await (
           realBooking as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }
-        ).execute(args, ctx);
+        ).execute(withIdentity, ctx);
 
         const appointmentId = extractAppointmentId(raw);
         if (appointmentId) {
@@ -88,7 +105,14 @@ export class BookMeetingTask extends voice.AgentTask<BookMeetingResult> {
     });
 
     super({
-      instructions: BOOK_MEETING_INSTRUCTIONS,
+      // The runtime preamble goes FIRST — the model needs to know what today is before
+      // it reads a single instruction about booking. Without it, it books blind (the
+      // first live call guessed October and every booking failed EMPLOYEE_NOT_SCHEDULED).
+      instructions: opts.runtimePreamble
+        ? `${opts.runtimePreamble}
+
+${BOOK_MEETING_INSTRUCTIONS}`
+        : BOOK_MEETING_INSTRUCTIONS,
       tools: {
         ...schedulingTools,
         book_with_scheduling: wrappedBooking,

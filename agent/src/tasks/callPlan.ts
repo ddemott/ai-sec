@@ -23,6 +23,7 @@ import { llm, voice, beta } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
 import { IdentityTask, type IdentityResult } from './identityTask.js';
 import { BookMeetingTask, type BookMeetingResult } from './bookMeetingTask.js';
+import { JobIntakeTask, type JobIntakeResult } from './jobIntakeTask.js';
 
 /**
  * What the caller wants ACCOMPLISHED by the time they hang up — the output of the intent
@@ -39,12 +40,64 @@ export interface CallerGoals {
 }
 
 /** Everything a task needs, gathered once and threaded through the plan. */
+/**
+ * The runtime facts a task cannot guess and must not: what day it is, when the business
+ * is open, the timezone. buildSystemPrompt injects these into the prompt on the current
+ * agent — but each task REPLACES that prompt with its own, so without threading these
+ * through, the model books blind. On the first live call it guessed October dates and
+ * every booking failed EMPLOYEE_NOT_SCHEDULED. A task that does not know what today is
+ * cannot book tomorrow.
+ */
+export interface CallRuntime {
+  /** e.g. "Wednesday, July 15, 2026" — same format buildSystemPrompt uses. */
+  currentDate: string;
+  timezone: string;
+  /** e.g. "Monday to Friday, 1:00 PM to 5:00 PM", or null if nobody is scheduled. */
+  businessHours: string | null;
+  /** Last date anyone is scheduled, so the model does not offer beyond it. */
+  bookableThrough: string | null;
+}
+
+/** What later rungs are told about the caller identity already collected. */
+export function knownCallerLine(state: CallState): string {
+  if (state.callerName && state.callerPhone) {
+    return `The caller is ${state.callerName}, phone ${state.callerPhone}. You ALREADY have these — use them (pass the phone to any tool that needs one) and do NOT ask for them again.`;
+  }
+  return '';
+}
+
+/** The preamble every task prepends, so no rung is blind to the date or the hours. */
+export function runtimePreamble(rt: CallRuntime): string {
+  const hours = rt.businessHours
+    ? `We are open ${rt.businessHours}.${rt.bookableThrough ? ` You can book through ${rt.bookableThrough}.` : ''}`
+    : `No one is currently scheduled, so do not claim to be open.`;
+  return `Today is ${rt.currentDate} (${rt.timezone}). ${hours} When the caller names a day like "tomorrow" or "Friday", resolve it against TODAY'S date above — never guess a month or year.`;
+}
+
+/**
+ * STATE THAT FLOWS BETWEEN RUNGS. Each task is a separate agent with its own prompt, so
+ * what the identity rung learns (the caller's name and confirmed number) is invisible to
+ * the booking rung unless it is carried HERE. The first real E2E caught exactly this: the
+ * caller gave and confirmed a number, then the booking tool asked for it again because the
+ * booking task had no idea it existed. A shared, mutable object is the carrier — identity
+ * writes it, later rungs read it (their factories run AFTER identity completes, so the
+ * value is there).
+ */
+export interface CallState {
+  callerName?: string;
+  callerPhone?: string;
+}
+
 export interface CallDeps {
   ctx: SessionContext;
+  runtime: CallRuntime;
+  /** Written by the identity rung, read by every later rung. */
+  state: CallState;
   /** The full ToolContext from buildTools() — tasks take the slices they need. */
   tools: llm.ToolContext;
   onIdentified?: (r: IdentityResult) => Promise<void> | void;
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
+  onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
 }
 
 /**
@@ -64,6 +117,20 @@ export interface TaskSpec {
  * Pure. This is the checklist, and the loop's guarantee is exactly as strong as this
  * list is complete: every goal here becomes a task the caller cannot leave without.
  */
+/**
+ * Pick a NAMED SUBSET of tools. This is the point of the whole architecture — a task sees
+ * only the tools its rung needs — and it is the fix for the first real call: I handed
+ * BookMeetingTask the ENTIRE toolbox (deps.tools), so the model reached past
+ * get_available_slots (clean 15-minute grid) for get_scheduling_options (raw
+ * "soonest-from-now" times like 1:41 PM that drift minute by minute and wander to
+ * October). A tool the task does not have is a tool the model cannot misfire.
+ */
+function pick(tools: llm.ToolContext, names: string[]): llm.ToolContext {
+  const out: llm.ToolContext = {};
+  for (const n of names) if (tools[n]) out[n] = tools[n];
+  return out;
+}
+
 export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
   const specs: TaskSpec[] = [];
 
@@ -77,7 +144,12 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
       new IdentityTask({
         ctx: deps.ctx,
         identifyCaller: deps.tools['identify_caller'],
-        onIdentified: deps.onIdentified,
+        onIdentified: async (r) => {
+          // Carry the confirmed identity forward to every later rung.
+          deps.state.callerName = r.name;
+          deps.state.callerPhone = r.phone;
+          await deps.onIdentified?.(r);
+        },
       }),
   });
 
@@ -89,17 +161,37 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
       description: 'Book the appointment the caller asked for.',
       factory: () =>
         new BookMeetingTask({
-          schedulingTools: deps.tools,
+          schedulingTools: pick(deps.tools, [
+            'get_available_slots',
+            'get_service_catalog',
+            'book_with_scheduling',
+          ]),
           requestedService: goals.requestedService ?? 'a meeting',
+          runtimePreamble: [runtimePreamble(deps.runtime), knownCallerLine(deps.state)]
+            .filter(Boolean)
+            .join(' '),
+          knownPhone: deps.state.callerPhone,
+          knownName: deps.state.callerName,
           onBooked: deps.onBooked,
         }),
     });
   }
 
   // RUNG 3 — the intake, if there is a role to brief. AFTER the booking, deliberately:
-  // preparation comes after the thing it prepares for. (The task itself is the next piece
-  // of the spike; registered here so the PLAN is complete and testable now.)
-  // if (goals.hasJobInquiry) specs.push({ id: 'job_intake', ... });
+  // preparation comes after the thing it prepares for. THIS is the rung the prompt ladder
+  // kept skipping; as a registered task the loop will not end without it.
+  if (goals.hasJobInquiry) {
+    specs.push({
+      id: 'job_intake',
+      description: "Collect the role details and record them for the owner.",
+      factory: () =>
+        new JobIntakeTask({
+          messagingTools: pick(deps.tools, ['capture_job_inquiry']),
+          knownCaller: knownCallerLine(deps.state),
+          onCaptured: deps.onCaptured,
+        }),
+    });
+  }
 
   return specs;
 }

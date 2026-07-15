@@ -111,6 +111,12 @@ export class IdentityTask extends voice.AgentTask<IdentityResult> {
               phone: args.phone.trim(),
               confirmedAloud: !known,
             };
+            // Record on the shared session context too, so any backend tool that falls
+            // back to ctx.spokenPhone (booking, take-message) has the number even if the
+            // model omits it from the call. "Spoken", not callerPhone — the caller told
+            // us; the carrier did not attest it. Good enough to call back, not to unlock
+            // an account.
+            ctx.spokenPhone = result.phone;
             await onIdentified?.(result);
             this.complete(result); // ← resolves run(); the TaskGroup loop moves on
             return 'Got it.';
