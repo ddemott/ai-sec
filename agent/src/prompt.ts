@@ -300,14 +300,10 @@ ${
     ? `- This caller's saved preferences are in the "# Who you're speaking to" section above. USE them: greet them by what you know, offer their usual, and make relevant suggestions ("Would you like your nails done as well this time?").`
     : `- You do NOT have this caller's saved preferences yet — there was no caller ID to look them up with (blocked, or the call came in through a forwarded line). The moment they give you their number, call identify_caller(name, phone) with it. If that number is one we already have, the response comes back with returning_customer:true and their saved preferences and history — USE them: greet them by name, offer their usual, make relevant suggestions ("Would you like your nails done as well this time?"). If you need more than that comes back, call get_customer_context(phone).`
 }
-- When you learn something durable and useful for next time — preferred staff member, the service they just had, a like/dislike, an allergy, a standing request — call save_customer_preference(phone, key, value) to remember it. Use a short, stable key (e.g. "preferred_stylist", "last_service", "dislikes") and a plain-text value.
-- Only save things that will still matter on a future call. Don't save one-off scheduling details or anything the caller asks you to keep private.
-- Saving is silent — don't announce "I'm saving that." Just weave it naturally into the conversation.`
+- (Saving new preferences is parked for now — the save tool is temporarily removed while we get the core booking + inquiry flow solid. You can still READ and use any preferences that come back on a returning caller; you just don't record new ones this call.)`
     : '';
 
   const preferenceToolLine = preferencesEnabled
-    ? `\n- save_customer_preference(phone, key, value) — remember a durable fact about this customer (preferred staff, last service, likes/dislikes) for future calls.`
-    : '';
 
   // Capability-gated tool lines (same pattern as preferenceToolLine). Each is
   // emitted only when its capability is in the active subset, so "# Available

@@ -26,7 +26,6 @@ const ALL_TOOLS = Object.fromEntries(
     'get_detailed_customer_history',
     'find_caller_by_name',
     'identify_caller',
-    'save_customer_preference',
     'send_verification_code',
     'verify_phone_code',
     'get_service_catalog',

@@ -522,7 +522,7 @@ describe('buildSystemPrompt', () => {
     }
   });
 
-  it('PREFERENCES ON (default): section and save tool present when flag unset or true', () => {
+  it('PREFERENCES ON (default): section renders, but the SAVE tool is parked', () => {
     // WHO: any tenant that hasn't explicitly opted out (the default state).
     // WHAT: prompt includes the preferences section + save tool.
     // WHEN: every call where savePreferencesEnabled is undefined, null, or true.
@@ -535,7 +535,12 @@ describe('buildSystemPrompt', () => {
     ]) {
       const prompt = buildSystemPrompt(ctx);
       expect(prompt).toContain('# Customer preferences');
-      expect(prompt).toContain('save_customer_preference(phone, key, value)');
+      // The SAVE tool is parked (2026-07-14) — it collided with capture_job_inquiry,
+      // and it is a nice-to-have while the core booking + inquiry flow is settled. The
+      // section still renders the READ-BACK guidance (greet a returning caller, offer
+      // their usual); it just no longer tells the model to record new preferences.
+      expect(prompt).not.toContain('save_customer_preference(phone, key, value)');
+      expect(prompt).toMatch(/Saving new preferences is parked/i);
     }
   });
 
@@ -551,7 +556,8 @@ describe('buildSystemPrompt', () => {
     });
     expect(prompt).toContain('# Customer preferences');
     expect(prompt).toContain(ownerText);
-    expect(prompt).toContain('save_customer_preference(phone, key, value)');
+    // save tool parked — see the note above.
+    expect(prompt).not.toContain('save_customer_preference(phone, key, value)');
   });
 
   it('PREFERENCES ON, no instructions: falls back to built-in default guidance', () => {
@@ -566,7 +572,7 @@ describe('buildSystemPrompt', () => {
       });
       expect(prompt).toContain('# Customer preferences');
       expect(prompt).toContain('Remember what each customer likes');
-      expect(prompt).toContain('save_customer_preference');
+      expect(prompt).not.toContain('save_customer_preference(phone');
     }
   });
 });

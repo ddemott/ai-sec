@@ -59,7 +59,6 @@ const CAPABILITY_OF: Record<string, Capability> = {
   send_self_service_link: 'scheduling',
   find_caller_by_name: 'identity',
   identify_caller: 'identity',
-  save_customer_preference: 'identity',
   record_sms_consent: 'sms',
   get_service_catalog: 'scheduling',
   get_available_slots: 'scheduling',
@@ -936,40 +935,6 @@ export function buildTools(
       },
     }),
 
-    save_customer_preference: llm.tool({
-      description:
-        "Remember a durable fact about the caller for future calls — preferred staff member, the service they just had, a like/dislike, an allergy, a standing request. Only use when the business has asked you to track preferences and the fact will still matter next time. Saving is silent; don't announce it. No-op if the caller isn't a known customer yet.",
-      parameters: {
-        type: 'object',
-        properties: {
-          phone: {
-            type: 'string',
-            description:
-              "The caller's phone. Pass the caller-ID phone unless they gave a different verified one.",
-          },
-          key: {
-            type: 'string',
-            description:
-              'Short stable label for the preference, e.g. "preferred_stylist", "last_service", "dislikes". Reuse the same key to update an existing preference.',
-          },
-          value: {
-            type: 'string',
-            description: 'The preference itself in plain text, e.g. "Maria" or "balayage".',
-          },
-        },
-        required: ['phone', 'key', 'value'],
-        additionalProperties: false,
-      },
-      execute: async (args: { phone: string; key: string; value: string }) => {
-        const res = await client.call('/agent-tools/save-customer-preference', {
-          tenant_id: ctx.tenantId,
-          phone: args.phone,
-          key: args.key,
-          value: args.value,
-        });
-        return formatResponse(res);
-      },
-    }),
 
     record_sms_consent: llm.tool({
       description:
@@ -1100,7 +1065,7 @@ export function buildTools(
 
     capture_job_inquiry: llm.tool({
       description:
-        "Record a work/job inquiry for the business owner and email it to them. Use when a caller asks whether the owner is available for work or about a specific position, AFTER you have walked through the intake questions.\n\nTHERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME. `caller_company` is the agency the CALLER works for — the people you are actually talking to, and who the owner will negotiate the rate with. `client_company` is where the WORK would happen — the name on the badge. A recruiter from Insight Global placing someone at Blue Cross has caller_company='Insight Global' and client_company='Blue Cross'. Only when they are an IN-HOUSE recruiter (represents_company=true) are the two the same. Ask for both; do not guess one from the other.\n\nREQUIRES the caller's real name AND a callback number — it will REFUSE without them, and it is right to: a lead the owner cannot answer is not a lead. If it refuses, go and ask for what's missing, then call it again. You MUST call this tool once you have the answers — do not tell the caller you'll pass it along without calling it. Other fields you didn't get may be omitted.",
+        "The ONE place every detail of a JOB or ROLE goes — company, rate, contract length, onsite/remote, address. The MOMENT a caller mentions work, a position, a contract, or hiring, this is the tool that owns it. Do NOT file any of it under save_customer_preference: a job is not a customer preference, and anything saved there never reaches the owner.\n\nHOW TO USE IT: gather the answers as the caller gives them (ask the intake questions one at a time), HOLD them, and call this ONCE when you have them. It records the inquiry for the owner and emails it. Do not call it per-answer, and do not tell the caller you passed anything along until you have actually called it.\n\nTHERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME. `caller_company` is the agency the CALLER works for — the people you are actually talking to, and who the owner will negotiate the rate with. `client_company` is where the WORK would happen — the name on the badge. A recruiter from Insight Global placing someone at Blue Cross has caller_company='Insight Global' and client_company='Blue Cross'. Only when they are an IN-HOUSE recruiter (represents_company=true) are the two the same. Ask for both; do not guess one from the other.\n\nREQUIRES the caller's real name AND a callback number — it will REFUSE without them, and it is right to: a lead the owner cannot answer is not a lead. If it refuses, go and ask for what's missing, then call it again. You MUST call this tool once you have the answers — do not tell the caller you'll pass it along without calling it. Other fields you didn't get may be omitted.",
       parameters: {
         type: 'object',
         properties: {

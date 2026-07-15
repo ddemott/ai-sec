@@ -88,7 +88,6 @@ export const PHASE_TOOLS: Record<CallPhase, readonly string[]> = {
     'identify_caller',
     'get_customer_context',
     'get_detailed_customer_history',
-    'save_customer_preference',
     'find_caller_by_name',
     'send_verification_code',
     'verify_phone_code',
