@@ -324,35 +324,55 @@ interface Scenario {
   seed?: (db: Client, p: Persona) => Promise<SeedInfo>;
 }
 
-// A THQ resource + service to hang a seeded appointment on (both real seed rows).
-const SEED_RESOURCE_ID = '3d0d00d6-86b7-466a-8a9f-4d7f8a585f17'; // Main Office Line
-const SEED_SERVICE = 'Programming Consultation';
+const SEED_SERVICE_NAME = 'Programming Consultation';
 
-/** Seed an existing, upcoming, scheduled appointment for this caller — the thing a
- *  cancel/reschedule call acts on. Creates the customer too (identify_caller will re-find
- *  the same row by phone during the call). */
+/** POST to a backend agent-tool the way the agent would (x-agent-secret). */
+async function postAgent(path: string, body: Record<string, unknown>): Promise<{
+  success: boolean;
+  result?: Record<string, unknown>;
+  error?: string;
+}> {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-agent-secret': AGENT_SECRET },
+    body: JSON.stringify(body),
+  });
+  return (await res.json()) as { success: boolean; result?: Record<string, unknown>; error?: string };
+}
+
+/**
+ * Seed the appointment a cancel/reschedule call will act on — by BOOKING A REAL MEETING
+ * through the production path (book_with_scheduling), NOT a raw INSERT. This is the point
+ * Dale made: the thing you cancel has to be a real appointment, created the way a real one
+ * is — so it carries a real service_id, an assigned employee, shift coverage, the lot. A
+ * raw INSERT reproduced the NULL-service "blank calendar" bug; booking cannot.
+ *
+ * Books the earliest open slot in tomorrow's business window, then reads the row back for
+ * the actual start_time (so the reschedule check can prove the time moved).
+ */
 async function seedAppointment(db: Client, p: Persona): Promise<SeedInfo> {
-  const e164 = '+1' + p.phone.replace(/\D/g, '');
-  const cust = await db.query<{ customer_id: string }>(
-    `INSERT INTO customers (tenant_id, phone, name) VALUES ($1, $2, $3)
-       ON CONFLICT (tenant_id, phone) DO UPDATE SET name = EXCLUDED.name
-     RETURNING customer_id`,
-    [TENANT, e164, p.name]
+  // Tomorrow's date in the tenant's zone, so the window lands on a real shift.
+  const dateStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', {
+    timeZone: 'America/Chicago',
+  });
+  const booked = await postAgent('/agent-tools/book-with-scheduling', {
+    tenant_id: TENANT,
+    phone: p.phone,
+    name: p.name,
+    description: 'Booking via SecretaryHQ',
+    call_id: `sim-seed-${p.phone}`,
+    requirements: { serviceType: SEED_SERVICE_NAME },
+    window: { from: `${dateStr}T13:00:00`, to: `${dateStr}T17:00:00` },
+  });
+  if (!booked.success || !booked.result?.appointment_id) {
+    throw new Error(`seed booking failed: ${booked.error ?? JSON.stringify(booked.result)}`);
+  }
+  const appointmentId = String(booked.result.appointment_id);
+  const row = await db.query<{ start_time: string }>(
+    `SELECT start_time FROM appointments WHERE appointment_id = $1`,
+    [appointmentId]
   );
-  const customerId = cust.rows[0].customer_id;
-  // Tomorrow at 14:00 (local server clock) — comfortably future and inside the 1-5pm
-  // window; the exact zone does not matter (cancel ignores time; reschedule replaces it).
-  const start = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  start.setHours(14, 0, 0, 0);
-  const end = new Date(start.getTime() + 30 * 60 * 1000);
-  const appt = await db.query<{ appointment_id: string; start_time: string }>(
-    `INSERT INTO appointments
-       (tenant_id, resource_id, customer_id, start_time, end_time, status, description)
-     VALUES ($1, $2, $3, $4, $5, 'scheduled', $6)
-     RETURNING appointment_id, start_time`,
-    [TENANT, SEED_RESOURCE_ID, customerId, start.toISOString(), end.toISOString(), SEED_SERVICE]
-  );
-  return { appointmentId: appt.rows[0].appointment_id, startTime: appt.rows[0].start_time };
+  return { appointmentId, startTime: row.rows[0]?.start_time };
 }
 
 const DEFAULT_STYLES = ['plain', 'terse', 'chatty', 'frontloader', 'corrector', 'rambler'];
@@ -487,6 +507,16 @@ async function verify(db: Client, p: Persona, e: Expect, seed?: SeedInfo): Promi
   // Schedule-change scenarios act on the SEEDED appointment (by id), so check that row
   // directly and skip the generic "was a new appointment booked?" checks below.
   const isScheduleChange = Boolean(e.canceled || e.rescheduled);
+  if (isScheduleChange && seed) {
+    // The seeded appointment must carry a real service_id — a NULL service is the
+    // "blank on the owner's calendar" bug; test data must not reproduce it.
+    const r = await db.query<{ service_id: string | null }>(
+      `SELECT service_id FROM appointments WHERE appointment_id = $1`,
+      [seed.appointmentId]
+    );
+    if (r.rows[0] && !r.rows[0].service_id)
+      fails.push('seeded appointment has a NULL service_id (should be a real service)');
+  }
   if (e.canceled) {
     const r = await db.query<{ status: string }>(
       `SELECT status FROM appointments WHERE appointment_id = $1`,
