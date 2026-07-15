@@ -102,10 +102,13 @@ export function makeBookMeetingRung(opts: BookMeetingTaskOptions): voice.AgentTa
       // DEFAULT the identity we already hold. book_with_scheduling REQUIRES a phone; the
       // caller gave it in the identity rung, so a model that omits it here should still
       // book, not ask again. (The first E2E failed exactly here.)
+      // Trim before the `||` fallback: a whitespace-only value (" ") is truthy and would
+      // block the fallback to the known identity, recreating the "blank strings block
+      // fallbacks" gotcha (see tools.ts). Trimmed empty → falsy → falls back correctly.
       argDefaults: (args) => ({
         ...args,
-        phone: (args.phone as string) || opts.knownPhone,
-        name: (args.name as string) || opts.knownName,
+        phone: (args.phone as string)?.trim() || opts.knownPhone,
+        name: (args.name as string)?.trim() || opts.knownName,
       }),
       extract: idExtractor('appointment_id', (_id, raw) => ({
         appointmentId: _id,

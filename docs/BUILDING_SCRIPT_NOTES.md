@@ -109,10 +109,29 @@ three fixed at the **shared instruction string**, so both flows benefit:
    `LESSONS_LEARNED.md` #1: measure/trace before fixing.)
 
 **Result:** full suite **30/30 across all six styles**; in-house company-labeling **10/10**
-in a focused stress run. Remaining known-soft spot: on the two-companies distinction the
-model occasionally mislabels a *placing-with-a-client* call as in-house (`represents_company`
-wrong) — a model-accuracy wobble, still under stress measurement, not yet a confirmed
-recurring failure.
+in a focused stress run.
+
+### Second hardening pass (2026-07-15, autonomous)
+
+Fixed the two-companies `represents_company` wobble (a *placing-with-a-client* call
+occasionally recorded as in-house) and closed three Copilot review nits. Two durable lessons:
+
+- **DERIVE a fact from the data the model reports RELIABLY, not from a flag it flips.** The
+  voice model reliably reports the two company NAMES it heard, but routinely flips the
+  `represents_company` boolean. So `resolveJobCompanies` (messaging.ts) now DERIVES it: two
+  different names → agency+client (false); same name → in-house (true). The trace showed the
+  *residual* failures were a different bug — under the rambler style the model skipped asking
+  "which company are YOU from?" and duplicated the client's name into `caller_company`, so
+  even the derivation saw "same name → in-house". Fix was in the intake prompt: make
+  capturing the caller's OWN company explicit and non-skippable, distinct from the client.
+  Together: rambler job-only went from ~1-in-4 failing to **10/10**, full suite **19/19**.
+- **The booking RPC wants a TARGETED window, not a wide one to scan.** `book_with_scheduling`
+  with a wide multi-day window whose earliest slot is occupied COLLIDES ("already booked")
+  rather than advancing — because the live agent always calls `get_available_slots` first and
+  passes `window_from` = a known-open slot. The E2E seed learned this the hard way (a
+  contended single-employee calendar): the seed now finds a real open slot via
+  `available-slots`, then books that exact time. Also: a seed failure now skips that one run
+  instead of throwing and crashing the whole suite.
 
 ---
 

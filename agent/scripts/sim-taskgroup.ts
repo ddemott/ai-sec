@@ -340,6 +340,18 @@ async function postAgent(path: string, body: Record<string, unknown>): Promise<{
   return (await res.json()) as { success: boolean; result?: Record<string, unknown>; error?: string };
 }
 
+/** "1:00 PM" / "4:30 PM" → local-naive 24h "13:00:00" / "16:30:00" for a booking window. */
+function to24h(spoken: string): string {
+  const m = spoken.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return '13:00:00';
+  let h = Number(m[1]);
+  const min = m[2];
+  const ap = m[3].toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${min}:00`;
+}
+
 /**
  * Seed the appointment a cancel/reschedule call will act on — by BOOKING A REAL MEETING
  * through the production path (book_with_scheduling), NOT a raw INSERT. This is the point
@@ -351,10 +363,26 @@ async function postAgent(path: string, body: Record<string, unknown>): Promise<{
  * the actual start_time (so the reschedule check can prove the time moved).
  */
 async function seedAppointment(db: Client, p: Persona): Promise<SeedInfo> {
-  // Tomorrow's date in the tenant's zone, so the window lands on a real shift.
-  const dateStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', {
-    timeZone: 'America/Chicago',
-  });
+  // Find a REAL open slot first, then book that exact time — mirroring how the live agent
+  // books (get_available_slots → book a targeted window). Passing a wide window and hoping
+  // the RPC scans forward does NOT work: with the earliest slot occupied it collides rather
+  // than advancing (the RPC expects a targeted window_from, which the model always gives it
+  // after get_available_slots). So scan days for the first one with an open time.
+  const zone = 'America/Chicago';
+  let picked: { date: string; from: string } | null = null;
+  for (let d = 1; d <= 8 && !picked; d++) {
+    const date = new Date(Date.now() + d * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', {
+      timeZone: zone,
+    });
+    const slots = await postAgent('/agent-tools/available-slots', {
+      tenant_id: TENANT,
+      service_type: SEED_SERVICE_NAME,
+      date,
+    });
+    const open = (slots.result?.open_times as string[] | undefined) ?? [];
+    if (open.length > 0) picked = { date, from: `${date}T${to24h(open[0])}` };
+  }
+  if (!picked) throw new Error('seed: no open slot found in the next 8 days');
   const booked = await postAgent('/agent-tools/book-with-scheduling', {
     tenant_id: TENANT,
     phone: p.phone,
@@ -362,7 +390,8 @@ async function seedAppointment(db: Client, p: Persona): Promise<SeedInfo> {
     description: 'Booking via SecretaryHQ',
     call_id: `sim-seed-${p.phone}`,
     requirements: { serviceType: SEED_SERVICE_NAME },
-    window: { from: `${dateStr}T13:00:00`, to: `${dateStr}T17:00:00` },
+    // Narrow window AT the open slot — book exactly that time.
+    window: { from: picked.from, to: `${picked.date}T17:00:00` },
   });
   if (!booked.success || !booked.result?.appointment_id) {
     throw new Error(`seed booking failed: ${booked.error ?? JSON.stringify(booked.result)}`);
@@ -618,8 +647,24 @@ async function main(): Promise<void> {
               `DELETE FROM appointments WHERE tenant_id=$1 AND customer_id IN (SELECT customer_id FROM customers WHERE tenant_id=$1 AND phone=$2)`,
               [TENANT, e164]
             );
-            // Seed AFTER the wipe, so the scenario acts on a fresh appointment.
-            if (sc.seed) seedInfo = await sc.seed(db, sc.persona);
+            // Seed AFTER the wipe, so the scenario acts on a fresh appointment. A seed
+            // failure (e.g. a contended calendar) must NOT crash the whole suite — record it
+            // as this run's failure and move on, so one bad seed can't hide 30 good runs.
+            if (sc.seed) {
+              try {
+                seedInfo = await sc.seed(db, sc.persona);
+              } catch (err) {
+                runs++;
+                failures.push({
+                  title: sc.title,
+                  style,
+                  fails: [`SEED FAILED: ${(err as Error).message}`],
+                  transcript: [],
+                });
+                console.log(`  ${style.padEnd(11)} ${C.r}SEED-ERR${C.x} ${(err as Error).message}`);
+                continue;
+              }
+            }
           }
           runs++;
           const deps = makeDeps();

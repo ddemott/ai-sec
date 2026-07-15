@@ -140,6 +140,12 @@ function pick(tools: llm.ToolContext, names: string[]): llm.ToolContext {
 export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
   const specs: TaskSpec[] = [];
 
+  // CallRootAgent is told to send requested_service = "" when the ask is unclear, and `??`
+  // would let that empty string through as the service intent (degrading the semantic match
+  // and the "already asked" opener). Treat blank as ABSENT here, once, so every rung sees a
+  // real value or nothing.
+  const requestedService = goals.requestedService?.trim() || undefined;
+
   // RUNG 1 — always. You cannot book a meeting or brief the owner on a caller you cannot
   // name or reach. Identity is not a goal the caller states; it is the floor under all of
   // them.
@@ -150,7 +156,7 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
       makeIdentityRung({
         ctx: deps.ctx,
         identifyCaller: deps.tools['identify_caller'],
-        requestedService: goals.requestedService,
+        requestedService,
         onIdentified: async (r) => {
           // Carry the confirmed identity forward to every later rung.
           deps.state.callerName = r.name;
@@ -173,7 +179,7 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
             'get_service_catalog',
             'book_with_scheduling',
           ]),
-          requestedService: goals.requestedService ?? 'a meeting',
+          requestedService: requestedService ?? 'a meeting',
           runtimePreamble: [runtimePreamble(deps.runtime), knownCallerLine(deps.state)]
             .filter(Boolean)
             .join(' '),
