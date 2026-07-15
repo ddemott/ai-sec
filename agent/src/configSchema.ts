@@ -136,6 +136,16 @@ export const envSchema = z.object({
   // removing the TTS synthesis step (measured 2–3s/reply, non-streaming = dead
   // air). OFF by default — A/B test on Railway, instantly reversible. MODEL/VOICE
   // are the realtime model id + voice (realtime has its own voice set).
+  // TASK-GROUP CALL FLOW (the spike). When "true", the call runs through a LiveKit
+  // TaskGroup — identity → book → job-intake as host-code rungs the model cannot skip —
+  // instead of the prompt-based ladder. OFF by default: it is unproven on a live call,
+  // and this is the flag that lets one be made without disturbing the agent that answers
+  // the phone today. See src/tasks/.
+  ENABLE_TASK_GROUP: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+
   ENABLE_REALTIME: z
     .string()
     .optional()

@@ -37,6 +37,7 @@ import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { toolsForPhase, type CallPhase } from './toolPhases.js';
+import { CallRootAgent } from './tasks/callRootAgent.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
 import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
 import { attachOutputWatchdog } from './session/watchdog.js';
@@ -1080,11 +1081,33 @@ export default defineAgent({
         // offer, refuse, or invent a time before it has called a tool that returns
         // one, because the tools that return times are not in the room yet.
         const intakeTools = toolsForPhase(allTools, 'intake');
-        const agent = new SpeakingAgent({
-          instructions,
-          tools: intakeTools,
-        });
-        phaseAgent = agent;
+
+        // TASK-GROUP FLOW (spike, ENABLE_TASK_GROUP). Runs the call as a LiveKit
+        // TaskGroup of host-code rungs the model cannot skip, instead of the prompt
+        // ladder. Same tools, same backend, same tenant — only the SEQUENCING moves from
+        // prompt-space into the loop. Off by default; this is how the whole thing gets
+        // its first real call without touching the agent that answers the phone.
+        const agent = config.ENABLE_TASK_GROUP
+          ? new CallRootAgent({
+              ctx: sessionCtx,
+              tools: allTools,
+              persona: instructions,
+              // The date + hours the rungs must not guess. On the first live call a task
+              // with no date context booked October and every attempt failed
+              // EMPLOYEE_NOT_SCHEDULED — because each task REPLACES the system prompt
+              // (where these live) with its own.
+              runtime: {
+                currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
+                timezone: tenantConfig.timezone,
+                businessHours: tenantConfig.businessHours,
+                bookableThrough: tenantConfig.bookableThrough,
+              },
+            })
+          : new SpeakingAgent({
+              instructions,
+              tools: intakeTools,
+            });
+        if (!config.ENABLE_TASK_GROUP) phaseAgent = agent as InstanceType<typeof SpeakingAgent>;
 
         await session.start({ agent, room: ctx.room });
         callLog.info(
