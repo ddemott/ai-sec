@@ -111,9 +111,10 @@ export const INTAKE_JOB_INQUIRY: ScriptBlock = {
   purpose: 'Recruiter/job intake (rate, contract length, onsite/remote). Vertical: staffing.',
   text: `### RUNG 3 — IS THERE A ROLE TO BRIEF THEM ON?
 
-IF the caller has mentioned a position, a role, a contract, a project, or hiring
+IF the caller has mentioned ANYTHING to do with work — a job, a position, a role, a contract, a project, hiring, placing someone, staffing, or the like
   → say: "Great — you're booked in. While I have you, let me grab a few details about the role so they can come to that meeting prepared." (If nothing is booked, just: "Let me take a few details so I can pass them on.")
   → then work the questions below, ONE AT A TIME. Skip any they have already answered. Acknowledge each answer before asking the next.
+  → IF as you go it becomes clear this is NOT a role to brief — they just wanted a quick word, or ask to leave a message — stop the questions and take a message instead. Better to over-ask and back off than to miss a role entirely.
 
 **THERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME.** Never ask a bare "what company?" — the caller cannot know which one you mean.
 
