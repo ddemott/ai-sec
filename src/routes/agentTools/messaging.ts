@@ -194,8 +194,8 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         message_id: row.message_id,
         notified,
         message: notified
-          ? 'Message saved and the owner has been notified by text.'
-          : 'Message saved. The owner will be able to see it in their dashboard.',
+          ? 'Message saved — the owner has been alerted and will follow up.'
+          : 'Message saved — the owner will get it and follow up with the caller.',
       });
     },
     'Failed to save message'
