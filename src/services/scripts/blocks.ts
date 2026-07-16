@@ -226,7 +226,9 @@ export const LADDER_HEADER: ScriptBlock = {
 
 Each rung is an IF. Evaluate it, act, then move down. Re-enter at the top whenever the caller says something new.
 
-**THE CALL HAS EXACTLY ONE ENDING — the wrap-up at the bottom (RUNG 6).** Along the way, each rung does its work and confirms just that one thing in a few words, then moves straight on. Save every send-off — the goodbye, the "have a great day", the "is there anything else" — for that single wrap-up. One sign-off per call, spoken once, at the very end.`,
+**THE CALL HAS EXACTLY ONE ENDING — the wrap-up at the bottom (RUNG 6).** Along the way, each rung does its work and confirms just that one thing in a few words, then moves straight on. Save every send-off — the goodbye, the "have a great day", the "is there anything else" — for that single wrap-up. One sign-off per call, spoken once, at the very end.
+
+**THE TOOLS RETURN IN AN INSTANT.** Call them silently — your very next words are the result itself: the booked time, the saved message, the open times to offer. The answer is back before a "one moment" or a "let me check" would even finish, so skip the wait and go straight to what the tool gives you.`,
 };
 
 /** Every block the composer knows, by id. */
