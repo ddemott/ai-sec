@@ -19,7 +19,7 @@
  * callPlan), that should already be in hand — but the belt-and-braces is real: a lead the
  * owner cannot answer never gets recorded as "done".
  */
-import { llm, voice } from '@livekit/agents';
+import { type llm, type voice } from '@livekit/agents';
 import { makeRung, idExtractor } from './rung.js';
 
 export interface JobIntakeResult {

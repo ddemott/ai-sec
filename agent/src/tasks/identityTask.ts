@@ -33,7 +33,7 @@
  * exists and already works — the task just receives it, plus one small completion tool.
  * The whole spike is about moving the LADDER down a layer, not rebuilding the rungs.
  */
-import { llm, voice } from '@livekit/agents';
+import { type llm, type voice } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
 import { makeRung } from './rung.js';
 

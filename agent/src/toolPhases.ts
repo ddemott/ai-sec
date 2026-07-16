@@ -151,7 +151,7 @@ export const PHASE_TOOLS: Record<CallPhase, readonly string[]> = {
 export function toolsForPhase<T extends Record<string, V>, V>(all: T, phase: CallPhase): T {
   const allowed = new Set<string>(PHASE_TOOLS[phase]);
   const out: Record<string, V> = {};
-  for (const [name, tool] of Object.entries(all) as [string, V][]) {
+  for (const [name, tool] of Object.entries(all)) {
     if (allowed.has(name)) out[name] = tool;
   }
   // A tool MAP with fewer keys, not a partial of a fixed shape: LiveKit's

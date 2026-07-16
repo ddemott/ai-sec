@@ -26,7 +26,7 @@
  * tools now fall back to (booking already trusts the same number) — so a forwarded-line
  * caller can manage their own appointment, which before they simply could not.
  */
-import { llm, voice } from '@livekit/agents';
+import { type llm, type voice } from '@livekit/agents';
 import { makeRung, idExtractor } from './rung.js';
 
 export interface ScheduleChangeResult {

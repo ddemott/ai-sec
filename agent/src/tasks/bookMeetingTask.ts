@@ -23,7 +23,7 @@
  * inclusive 5:00 boundary). The task receives them. It wraps only the booking tool, and
  * only to notice success.
  */
-import { llm, voice } from '@livekit/agents';
+import { type llm, type voice } from '@livekit/agents';
 import { makeRung, idExtractor } from './rung.js';
 
 export interface BookMeetingResult {

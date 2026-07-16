@@ -19,7 +19,7 @@
  * not get to choose this order, exactly as with the composed script blocks, and for the
  * same reason: it is what the bad calls taught us, not a preference.
  */
-import { llm, voice, beta } from '@livekit/agents';
+import { type llm, type voice, beta } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
 import { makeIdentityRung, type IdentityResult } from './identityTask.js';
 import { makeBookMeetingRung, type BookMeetingResult } from './bookMeetingTask.js';
