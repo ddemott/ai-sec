@@ -191,7 +191,11 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
             .join(' '),
           knownPhone: deps.state.callerPhone,
           knownName: deps.state.callerName,
+          // Fallback so a booking that cannot happen becomes a RECORDED message, never a
+          // promise with no tool behind it (the 2026-07-16 dead-end).
+          takeMessage: deps.tools['take_message'],
           onBooked: deps.onBooked,
+          onMessageTaken: deps.onMessageTaken,
         }),
     });
   }

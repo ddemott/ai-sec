@@ -45,7 +45,10 @@ function schedulingTools(booking: llm.ToolContext[string]): llm.ToolContext {
   };
 }
 
-async function callBooking(task: ReturnType<typeof makeBookMeetingRung>, args: unknown = {}): Promise<unknown> {
+async function callBooking(
+  task: ReturnType<typeof makeBookMeetingRung>,
+  args: unknown = {}
+): Promise<unknown> {
   const tool = (task.toolCtx as Record<string, unknown>).book_with_scheduling as {
     execute: (a: unknown, c: unknown) => Promise<unknown>;
   };
@@ -68,9 +71,7 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     await callBooking(task);
 
     expect(task.done, 'a real appointment_id ends the rung').toBe(true);
-    expect(onBooked).toHaveBeenCalledWith(
-      expect.objectContaining({ appointmentId: 'appt-123' })
-    );
+    expect(onBooked).toHaveBeenCalledWith(expect.objectContaining({ appointmentId: 'appt-123' }));
   });
 
   it('SAD: a FAILED booking does NOT end the task — the caller has no meeting', async () => {
@@ -79,7 +80,10 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     //      here would drop the caller with nothing in the diary, which is the exact bug
     //      the whole structure exists to prevent.
     const booking = fakeBookingTool(
-      JSON.stringify({ error: 'Requested time slot is already booked', error_code: 'TIMESLOT_OCCUPIED' })
+      JSON.stringify({
+        error: 'Requested time slot is already booked',
+        error_code: 'TIMESLOT_OCCUPIED',
+      })
     );
     const task = makeBookMeetingRung({
       schedulingTools: schedulingTools(booking),
@@ -118,6 +122,44 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     expect(toolNames).not.toContain('finish');
     expect(toolNames).not.toContain('confirm_booking');
     expect(toolNames).not.toContain('done');
+  });
+
+  it('HAPPY: when a booking cannot happen, take_message RECORDS the message and ends the rung', async () => {
+    // The 2026-07-16 dead-end: booking failed (no open times), the caller wanted a callback,
+    // and the model said "I'll pass it along" with no tool behind it — nothing saved. The
+    // take_message FALLBACK makes the save real: calling it completes the rung with a message.
+    const onMessageTaken = vi.fn();
+    const booking = fakeBookingTool(JSON.stringify({ error: 'NO_AVAILABILITY' }));
+    const takeMessage = fakeBookingTool(JSON.stringify({ saved: true, message_id: 'msg-9' }));
+    const task = makeBookMeetingRung({
+      schedulingTools: schedulingTools(booking),
+      requestedService: 'a meeting',
+      knownName: 'Scott',
+      takeMessage,
+      onMessageTaken,
+    });
+    expect(Object.keys(task.toolCtx)).toContain('take_message');
+    expect(task.done).toBe(false);
+    const tool = (task.toolCtx as Record<string, unknown>).take_message as {
+      execute: (a: unknown, c: unknown) => Promise<unknown>;
+    };
+    await tool.execute({ message: 'have him call me back' }, { ctx: {}, toolCallId: 'tc' });
+    expect(task.done, 'a real message_id ends the rung').toBe(true);
+    expect(onMessageTaken).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'msg-9' }));
+  });
+
+  it('SAD: no take_message tool given → no fallback, booking is the only exit', () => {
+    const booking = fakeBookingTool(JSON.stringify({ appointment_id: 'x' }));
+    const task = makeBookMeetingRung({
+      schedulingTools: schedulingTools(booking),
+      requestedService: 'a meeting',
+    });
+    expect(Object.keys(task.toolCtx)).not.toContain('take_message');
+  });
+
+  it('SAD: the fallback is ACTION-FIRST — call take_message, do not just promise it', () => {
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/CALL take_message/);
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/saves NOTHING/i);
   });
 
   it('SAD: it reuses the real scheduling tools — it does not reinvent booking', async () => {
