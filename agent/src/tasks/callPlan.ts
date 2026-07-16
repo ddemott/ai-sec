@@ -25,6 +25,7 @@ import { makeIdentityRung, type IdentityResult } from './identityTask.js';
 import { makeBookMeetingRung, type BookMeetingResult } from './bookMeetingTask.js';
 import { makeJobIntakeRung, type JobIntakeResult } from './jobIntakeTask.js';
 import { makeTakeMessageRung, type TakeMessageResult } from './takeMessageTask.js';
+import { makePolicyQaRung, type PolicyQaResult } from './policyQaTask.js';
 import { makeSchedulingRung, type ScheduleChangeResult } from './schedulingTask.js';
 
 /**
@@ -45,6 +46,9 @@ export interface CallerGoals {
    *  booking or a role does not cover. The universal catch-all. Optional for the same
    *  call-site-compatibility reason as wantsScheduleChange. */
   wantsToLeaveMessage?: boolean;
+  /** They have QUESTIONS about the business — hours, pricing, services, policies,
+   *  location. Answered from the knowledge base (RAG), never from the model's memory. */
+  hasQuestions?: boolean;
   /** In their own words, for the service matcher. */
   requestedService?: string;
 }
@@ -109,6 +113,7 @@ export interface CallDeps {
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
   onMessageTaken?: (r: TakeMessageResult) => Promise<void> | void;
+  onAnswered?: (r: PolicyQaResult) => Promise<void> | void;
   onScheduleChanged?: (r: ScheduleChangeResult) => Promise<void> | void;
 }
 
@@ -152,25 +157,66 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
   // real value or nothing.
   const requestedService = goals.requestedService?.trim() || undefined;
 
-  // RUNG 1 — always. You cannot book a meeting or brief the owner on a caller you cannot
-  // name or reach. Identity is not a goal the caller states; it is the floor under all of
-  // them.
-  specs.push({
-    id: 'identity',
-    description: "Get and confirm the caller's name and phone number.",
-    factory: () =>
-      makeIdentityRung({
-        ctx: deps.ctx,
-        identifyCaller: deps.tools['identify_caller'],
-        requestedService,
-        onIdentified: async (r) => {
-          // Carry the confirmed identity forward to every later rung.
-          deps.state.callerName = r.name;
-          deps.state.callerPhone = r.phone;
-          await deps.onIdentified?.(r);
-        },
-      }),
-  });
+  // A QUESTIONS-ONLY call is the ONE deliberate exception to identity-first (decided
+  // 2026-07-16): a caller asking "when are you open?" must not be interrogated for a
+  // name and number before getting an answer — that is how you lose the caller in the
+  // first ten seconds. Identity is the floor under goals that need a CONTACT (a
+  // booking, a message, a role, a change); pure curiosity needs none. If their
+  // questions turn into a message ("have the owner get back to me"), the Q&A rung
+  // gathers name+number itself and take_message's backend gate enforces it.
+  const questionsOnly =
+    goals.hasQuestions === true &&
+    !goals.wantsMeeting &&
+    !goals.hasJobInquiry &&
+    !(goals.wantsScheduleChange ?? false) &&
+    !(goals.wantsToLeaveMessage ?? false);
+
+  // RUNG 1 — for every call with a contact-needing goal. You cannot book a meeting or
+  // brief the owner on a caller you cannot name or reach. Identity is not a goal the
+  // caller states; it is the floor under all of them (except questions-only — above).
+  if (!questionsOnly) {
+    specs.push({
+      id: 'identity',
+      description: "Get and confirm the caller's name and phone number.",
+      factory: () =>
+        makeIdentityRung({
+          ctx: deps.ctx,
+          identifyCaller: deps.tools['identify_caller'],
+          requestedService,
+          onIdentified: async (r) => {
+            // Carry the confirmed identity forward to every later rung.
+            deps.state.callerName = r.name;
+            deps.state.callerPhone = r.phone;
+            await deps.onIdentified?.(r);
+          },
+        }),
+    });
+  }
+
+  // RUNG 1.5 — their questions, if they have any. BEFORE the booking, deliberately:
+  // the book-first doctrine exists because callers were hanging up unbooked after
+  // answering nine of OUR questions — but Q&A is THEIR questions, and a caller who
+  // asked "what do you charge?" cannot reasonably be marched into picking a time
+  // before hearing the answer. Once answered, the loop proceeds to the booking rung
+  // automatically — the plan still cannot end with the meeting unbooked.
+  if (goals.hasQuestions) {
+    specs.push({
+      id: 'policy_qa',
+      description: "Answer the caller's questions from the knowledge base.",
+      factory: () =>
+        makePolicyQaRung({
+          knowledgeTools: pick(deps.tools, ['get_company_policy_answer']),
+          takeMessage: deps.tools['take_message'],
+          knownCaller: knownCallerLine(deps.state),
+          runtimePreamble: runtimePreamble(deps.runtime),
+          // The rung is an island — it must KNOW a booking step follows, or it
+          // truthfully denies an ability the call actually has and the caller
+          // gives up (the 0/4 live-LLM run, 2026-07-16).
+          bookingFollows: goals.wantsMeeting,
+          onAnswered: deps.onAnswered,
+        }),
+    });
+  }
 
   // RUNG 2 — the meeting, if they want one. FIRST among their actual goals, because it is
   // what they rang for; the details are preparation for it.

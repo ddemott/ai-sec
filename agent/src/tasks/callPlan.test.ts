@@ -52,6 +52,7 @@ function makeDeps(): CallDeps {
       check_availability: tool, // bug #3 trap
       capture_job_inquiry: tool,
       take_message: tool,
+      get_company_policy_answer: tool,
       get_my_appointments: tool,
       cancel_appointment: tool,
       reschedule_appointment: tool,
@@ -229,6 +230,36 @@ describe('planCallTasks — the checklist the loop enforces', () => {
       'take_message',
       'schedule_change',
     ]);
+  });
+
+  it('HAPPY: a questions-ONLY call gets policy_qa and SKIPS identity — the one exception', () => {
+    // Decided 2026-07-16: a caller asking "when are you open?" must not be
+    // interrogated for a name and number before getting an answer. Identity is the
+    // floor under contact-needing goals; pure curiosity has none.
+    const plan = ids({ wantsMeeting: false, hasJobInquiry: false, hasQuestions: true });
+    expect(plan).toEqual(['policy_qa']);
+  });
+
+  it('SAD: questions + ANY contact-needing goal still runs identity, questions before booking', () => {
+    // Mixed call: "what do you charge? and I'd like to book." Their questions come
+    // before the booking (they cannot pick a time before hearing the price), and the
+    // loop still cannot end with the meeting unbooked.
+    const plan = ids({ wantsMeeting: true, hasJobInquiry: false, hasQuestions: true });
+    expect(plan).toEqual(['identity', 'policy_qa', 'book_meeting']);
+  });
+
+  it('SAD: the Q&A rung gets retrieval + the message fallback — nothing else', () => {
+    const specs = planCallTasks(
+      { wantsMeeting: false, hasJobInquiry: false, hasQuestions: true },
+      makeDeps()
+    );
+    const qa = specs.find((s) => s.id === 'policy_qa')!;
+    const names = Object.keys(qa.factory().toolCtx).sort();
+    expect(names).toEqual(['get_company_policy_answer', 'questions_answered', 'take_message']);
+  });
+
+  it('HAPPY: no questions goal → no policy_qa rung', () => {
+    expect(ids({ wantsMeeting: true, hasJobInquiry: false })).not.toContain('policy_qa');
   });
 
   it('HAPPY: buildCallTaskGroup registers the plan onto a real TaskGroup', () => {
