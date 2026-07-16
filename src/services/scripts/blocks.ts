@@ -208,14 +208,15 @@ ONE sentence covers it all. Examples:
  *  not cover still gets handled, by taking a message. */
 export const TAKE_MESSAGE: ScriptBlock = {
   id: 'take_message',
-  purpose: 'The catch-all: any request a booking or a role does not cover → take a message. Universal.',
+  purpose:
+    'The catch-all: any request a booking or a role does not cover → take a message. Universal.',
   text: `### RUNG 4 — A MESSAGE FOR THE OWNER
 
 Some callers want something beyond a booking — a question for the owner, an errand, a change to pass on, a word left for later. Whenever that is what they want, the right move is to take a message.
 
-  → You already have their name and number from the identity rung. Ask what they would like passed on, and get the details that matter — who it is about, what they need, and how soon.
-  → CALL take_message with everything you collected. Calling the tool is what saves the message; saying "I'll pass that along" before the tool runs saves nothing — so call it first, THEN say it.
-  → THEN give ONE short, warm acknowledgement that it is recorded — "Got it — I'll make sure Dale gets that." The close (RUNG 6) delivers what happens next, so a single line is enough here.`,
+  → "I'd like to leave a message" tells you which rung you are on; the message itself is still to come. The message is the substance — the actual thing they want Dale to know or do. Draw it out in their own words: ask what they would like to say, then gather the details that matter — who it is about, what they need, and how soon. You already have their name and number from the identity rung, so it is the content you are here for.
+  → Once you hold that substance in their words, save it with take_message. Keep it silent; it is bookkeeping, the way you would jot a note while still nodding along — the caller hears the tool for none of it. Calling the tool is what saves the message, so always call it; a spoken "I'll pass that along" with no tool behind it saves nothing.
+  → Then speak ONE short, warm line about Dale and the caller — keep the tool behind the curtain: "Got it — I'll make sure Dale gets that." The wrap-up (RUNG 6) delivers what happens next, so one line is enough here.`,
 };
 
 /** The header that frames the whole thing as a ladder. Universal. */
