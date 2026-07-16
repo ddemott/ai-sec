@@ -52,6 +52,9 @@ function makeDeps(): CallDeps {
       check_availability: tool, // bug #3 trap
       capture_job_inquiry: tool,
       take_message: tool,
+      get_my_appointments: tool,
+      cancel_appointment: tool,
+      reschedule_appointment: tool,
     },
   };
 }
@@ -151,6 +154,36 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(names).toContain('capture_job_inquiry');
     expect(names).not.toContain('book_with_scheduling');
     expect(names).not.toContain('take_message');
+  });
+
+  it('HAPPY: a caller who wants to cancel/reschedule gets the schedule_change rung', () => {
+    // The manage goal becomes a registered rung, so the loop enforces it like any other.
+    const plan = ids({ wantsMeeting: false, hasJobInquiry: false, wantsScheduleChange: true });
+    expect(plan).toEqual(['identity', 'schedule_change']);
+  });
+
+  it('HAPPY: no schedule-change goal → no schedule_change rung', () => {
+    // We never manufacture a manage step; a plain booking call must not get one.
+    expect(ids({ wantsMeeting: true, hasJobInquiry: false })).not.toContain('schedule_change');
+  });
+
+  it('SAD: schedule_change gets the read + both mutations + the slot finder — and its escape hatch', () => {
+    // A lookup-then-act rung: it must be able to SEE the appointments (get_my_appointments),
+    // find a new time (get_available_slots), and MUTATE (cancel/reschedule). The third exit
+    // no_appointment_change exists so a caller with nothing upcoming cannot hang the loop.
+    const specs = planCallTasks(
+      { wantsMeeting: false, hasJobInquiry: false, wantsScheduleChange: true },
+      makeDeps()
+    );
+    const manage = specs.find((s) => s.id === 'schedule_change')!;
+    const names = Object.keys(manage.factory().toolCtx).sort();
+    expect(names).toContain('get_my_appointments');
+    expect(names).toContain('get_available_slots');
+    expect(names).toContain('cancel_appointment');
+    expect(names).toContain('reschedule_appointment');
+    expect(names).toContain('no_appointment_change'); // the "nothing to change" exit
+    // and NOT a way to book a brand-new meeting — that is a different rung.
+    expect(names).not.toContain('book_with_scheduling');
   });
 
   it('HAPPY: buildCallTaskGroup registers the plan onto a real TaskGroup', () => {

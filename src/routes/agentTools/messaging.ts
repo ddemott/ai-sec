@@ -44,6 +44,51 @@ function buildSmsStack(pool: Pool) {
   return { consentService, smsService };
 }
 
+/**
+ * A staffing call has TWO companies: the CALLER'S company (the agency that rang) and the
+ * CLIENT company (where the work is). `represents_company` = true means the caller works
+ * directly for the client (an in-house recruiter), so the two are the same.
+ *
+ * DERIVE represents_company from the NAMES, do not trust the model's boolean. The model
+ * reliably reports the two company names it heard, but routinely FLIPS the flag — the E2E
+ * caught it setting represents_company=true for a caller placing with a *different* client
+ * (Northern Trust) than the agency they called from (TEKsystems). When both names are
+ * present, whether they are the same company is a fact we can compute, not a judgement the
+ * model has to get right: same name → in-house (true); different → agency+client (false).
+ *
+ * When only one name is present it is the "in-house said once" case (or an incomplete
+ * agency call): trust the model's flag, and if it says in-house, fill the missing name from
+ * the one we have so neither column is NULL.
+ */
+export function resolveJobCompanies(input: {
+  client_company?: string | null;
+  caller_company?: string | null;
+  represents_company?: boolean | null;
+}): { clientCompany: string | null; callerCompany: string | null; representsCompany: boolean | null } {
+  const clean = (s?: string | null): string | null =>
+    typeof s === 'string' && s.trim() !== '' ? s.trim() : null;
+  const cc = clean(input.client_company);
+  const ac = clean(input.caller_company);
+
+  // Both named → derive from equality (ignore the model's possibly-flipped boolean).
+  if (cc && ac) {
+    return {
+      clientCompany: cc,
+      callerCompany: ac,
+      representsCompany: cc.toLowerCase() === ac.toLowerCase(),
+    };
+  }
+
+  // In-house said once → both columns get the single company we have.
+  if (input.represents_company === true) {
+    const one = cc ?? ac;
+    return { clientCompany: one, callerCompany: one, representsCompany: true };
+  }
+
+  // Otherwise keep what we have; represents stays whatever the model reported (or null).
+  return { clientCompany: cc, callerCompany: ac, representsCompany: input.represents_company ?? null };
+}
+
 export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {
   const { consentService, smsService } = buildSmsStack(pool);
 
@@ -327,6 +372,11 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         );
       }
 
+      // Derive the two companies + represents_company from the names (see
+      // resolveJobCompanies) — the model flips the boolean but reports the names. Computed
+      // out here so both the INSERT and the owner email use the same resolved values.
+      const companies = resolveJobCompanies(args);
+
       const row = await withTenantClient(args.tenant_id, async (client) => {
         // Link to an existing customer if the callback number matches one. Non-fatal.
         let customerId: string | null = null;
@@ -351,12 +401,9 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
           [
             args.tenant_id,
             customerId,
-            args.client_company ?? null,
-            // An IN-HOUSE recruiter works for the client, so the two companies are the
-            // same thing said once. Fill it rather than leaving a hole the owner has to
-            // reason about while looking at a lead.
-            args.caller_company ?? (args.represents_company ? (args.client_company ?? null) : null),
-            args.represents_company ?? null,
+            companies.clientCompany,
+            companies.callerCompany,
+            companies.representsCompany,
             args.employment_type ?? null,
             args.rate_range ?? null,
             args.duration ?? null,
@@ -408,10 +455,9 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
       if (row.recipient) {
         try {
           await sendJobInquiryEmail(row.recipient, {
-            clientCompany: args.client_company,
-            callerCompany:
-              args.caller_company ?? (args.represents_company ? args.client_company : undefined),
-            representsCompany: args.represents_company,
+            clientCompany: companies.clientCompany ?? undefined,
+            callerCompany: companies.callerCompany ?? undefined,
+            representsCompany: companies.representsCompany ?? undefined,
             employmentType: args.employment_type,
             rateRange: args.rate_range,
             duration: args.duration,

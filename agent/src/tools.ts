@@ -1240,14 +1240,19 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async () => {
-        if (!ctx.callerPhone) {
+        // Caller-ID if the carrier gave it; otherwise the number the caller confirmed in
+        // the identity step (ctx.spokenPhone). On a forwarded/blocked-ID line caller-ID is
+        // null by design, and without the spoken fallback a caller literally could not
+        // manage their own appointment — booking already trusts the same spoken number.
+        const managePhone = firstPhone(ctx.callerPhone, ctx.spokenPhone);
+        if (!managePhone) {
           return JSON.stringify({
-            error: `I can't look up appointments without caller-ID. If you'd like help canceling or rescheduling, I can ${transferOrMessage}.`,
+            error: `I can't look up appointments until I have your number. If you'd like help canceling or rescheduling, I can ${transferOrMessage}.`,
           });
         }
         const res = await client.call(
           '/agent-tools/my-appointments',
-          { tenant_id: ctx.tenantId, phone: ctx.callerPhone },
+          { tenant_id: ctx.tenantId, phone: managePhone },
           { isReadOnly: true }
         );
         return formatResponse(res);
@@ -1270,14 +1275,15 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { appointment_id: string }) => {
-        if (!ctx.callerPhone) {
+        const managePhone = firstPhone(ctx.callerPhone, ctx.spokenPhone);
+        if (!managePhone) {
           return JSON.stringify({
-            error: `I can't cancel without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
+            error: `I can't cancel until I have your number to find the appointment. Offer to ${transferOrMessage}.`,
           });
         }
         const res = await client.call('/agent-tools/cancel-appointment', {
           tenant_id: ctx.tenantId,
-          phone: ctx.callerPhone,
+          phone: managePhone,
           appointment_id: args.appointment_id,
         });
         return formatResponse(res);
@@ -1312,15 +1318,16 @@ export function buildTools(
         new_start_time: string;
         new_end_time: string;
       }) => {
-        if (!ctx.callerPhone) {
+        const managePhone = firstPhone(ctx.callerPhone, ctx.spokenPhone);
+        if (!managePhone) {
           return JSON.stringify({
-            error: `I can't reschedule without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
+            error: `I can't reschedule until I have your number to find the appointment. Offer to ${transferOrMessage}.`,
           });
         }
         speakFiller?.('One moment while I move that for you...');
         const res = await client.call('/agent-tools/reschedule-appointment', {
           tenant_id: ctx.tenantId,
-          phone: ctx.callerPhone,
+          phone: managePhone,
           appointment_id: args.appointment_id,
           new_start_time: args.new_start_time,
           new_end_time: args.new_end_time,

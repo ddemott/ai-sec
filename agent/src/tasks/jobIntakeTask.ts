@@ -19,8 +19,8 @@
  * callPlan), that should already be in hand — but the belt-and-braces is real: a lead the
  * owner cannot answer never gets recorded as "done".
  */
-import { llm, voice } from '@livekit/agents';
-import { sanitizeStream } from '../speechSanitizer.js';
+import { type llm, type voice } from '@livekit/agents';
+import { makeRung, idExtractor } from './rung.js';
 
 export interface JobIntakeResult {
   jobInquiryId: string;
@@ -33,6 +33,9 @@ export interface JobIntakeTaskOptions {
   /** The caller identity from the identity rung — capture_job_inquiry refuses without a
    *  name and number, and both were already collected. */
   knownCaller?: string;
+  /** Was a meeting booked before this rung? Controls the opener — on a JOB-ONLY call there
+   *  is no booking, so "you're booked in" would be a lie (the E2E caught it). */
+  meetingBooked?: boolean;
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
 }
 
@@ -43,17 +46,18 @@ export interface JobIntakeTaskOptions {
  * becomes generated from the other; for now they are kept deliberately identical so the
  * two paths ask the same questions in the same order.
  */
-export const JOB_INTAKE_INSTRUCTIONS = `You have booked the meeting. NOW take the details of the role, so the owner can come to it prepared. You already have the caller's name and number — do NOT ask again.
+export const JOB_INTAKE_INTRO_BOOKED = `You have booked the meeting. NOW take the details of the role, so the owner can come to it prepared. Open with something like: "Great — you're booked in. While I have you, let me grab a few details about the role."`;
+export const JOB_INTAKE_INTRO_NO_BOOKING = `The caller wants to pass a role to the owner (no meeting was booked). Take the details so the owner has them. Open with something like: "Sure — let me grab a few details about the role so I can pass them along."`;
 
-Say: "Great — you're booked in. While I have you, let me grab a few details about the role."
+export const JOB_INTAKE_INSTRUCTIONS = `Take the details of the role so the owner can come prepared. You already have the caller's name and number — do NOT ask again.
 
 Then work these questions ONE AT A TIME. Skip any they have already answered. Acknowledge each answer before the next.
 
-THERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME. Never ask a bare "what company?".
-- "What company are you calling from?" → that is the CALLER'S company (caller_company), the agency that rang.
+THERE ARE TWO SEPARATE COMPANIES and you must keep them apart. Never ask a bare "what company?".
+- caller_company = the company the CALLER works for — their own employer or staffing agency. ALWAYS ask "And which company are you calling from?" and record their answer as caller_company. Ask this EVEN IF they have already named a client, because the client is a DIFFERENT company. The client's name NEVER goes in caller_company — if the only company you have heard so far is the one the work is for, you still need to ask who THEY work for.
 - "Are you hiring for your own company, or placing someone with a client?"
-  - Placing with a client → "Which company would the work actually be for?" → client_company. represents_company = false.
-  - Their own company → the two are the same; do NOT ask again. represents_company = true.
+  - Placing with a client → "Which company would the work actually be for?" → that answer is client_company, and it is a different company from caller_company. represents_company = false.
+  - Their own company → the work is at their own company, so client_company is the SAME as caller_company. represents_company = true. Do NOT ask which company the work is for — they told you.
 - "Is this a contract position or full time?"
   - Contract → "What rate range?" and "What length of contract?"
   - Full time → "What salary range?"
@@ -61,84 +65,38 @@ THERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME. Never ask a bare "what compan
   - Onsite/hybrid → "What is the address of the position?"
   - Remote → "What timezone, so they know the office hours?"
 
-When you have the answers, call capture_job_inquiry. Pass employment_type as "contract" or "full_time"; location_type as "onsite", "remote", or "hybrid". Omit anything you did not get. Recording it is what finishes this step — merely saying "I've noted that" does nothing. If capture_job_inquiry refuses because a name or number is missing, ask for it and call it again.
+The instant you have the answers, your VERY NEXT action is to CALL capture_job_inquiry — call it BEFORE you say anything back to the caller. Pass employment_type as "contract" or "full_time"; location_type as "onsite", "remote", or "hybrid". Omit anything you did not get. CALLING the tool is the only thing that records the role and finishes this step; a spoken "I've noted that" or "I'll pass that along" records NOTHING and is true only AFTER the tool has run — so run it first, then say it. If capture_job_inquiry refuses because a name or number is missing, ask for it and call it again.
 
-DO NOT read back a bulleted list or a field-by-field summary — this is a PHONE CALL, and a list of "Caller Company: X, Client Company: Y" reads aloud as one flat run-on with no pauses. If you confirm anything, say it as ONE short natural sentence ("So that's a six-month hybrid contract with Northern Trust, sixty-five to eighty-two an hour — got it, I'll pass that to the owner."). No dashes, no bullet points, no field labels, no markdown of any kind.`;
-
-export class JobIntakeTask extends voice.AgentTask<JobIntakeResult> {
-  constructor(opts: JobIntakeTaskOptions) {
-    const { messagingTools, onCaptured } = opts;
-
-    const realCapture = messagingTools['capture_job_inquiry'];
-    if (!realCapture) {
-      throw new Error('JobIntakeTask requires capture_job_inquiry in messagingTools');
-    }
-
-    const wrappedCapture = llm.tool({
-      description: (realCapture as unknown as { description: string }).description,
-      parameters: (realCapture as unknown as { parameters: Record<string, unknown> }).parameters,
-      execute: async (args: unknown, ctx: unknown): Promise<unknown> => {
-        const raw = await (
-          realCapture as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }
-        ).execute(args, ctx);
-
-        const jobInquiryId = extractInquiryId(raw);
-        if (jobInquiryId) {
-          const result: JobIntakeResult = { jobInquiryId, raw };
-          await onCaptured?.(result);
-          this.complete(result); // ← the recording IS the transition
-        }
-        // Hand the tool's own words back — its refusal reason on a miss, its confirmation
-        // + email instruction on success — so the model can relay it.
-        return raw;
-      },
-    });
-
-    super({
-      instructions: opts.knownCaller
-        ? `${opts.knownCaller}\n\n${JOB_INTAKE_INSTRUCTIONS}`
-        : JOB_INTAKE_INSTRUCTIONS,
-      tools: {
-        ...messagingTools,
-        capture_job_inquiry: wrappedCapture,
-      },
-    });
-  }
-
-  // Speak when this rung takes over — see IdentityTask.onEnter. A task with no onEnter
-  // becomes the active agent and stays silent, and the call hangs.
-  override async onEnter(): Promise<void> {
-    this.session.generateReply();
-  }
-
-  // MARKDOWN MUST NEVER REACH THE VOICE — the same guarantee SpeakingAgent gives the main
-  // path. The task-group path is plain voice.Agent, so without this a model that answers
-  // with a bulleted summary ("- Caller Company: ABC") gets its dashes and newlines read
-  // straight to Deepgram, which collapses them into one flat run with no pauses. That is
-  // the "it ran the lines together" report from the first successful voice call.
-  override async ttsNode(
-    text: ReadableStream<string>,
-    modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
-  ): ReturnType<typeof voice.Agent.default.ttsNode> {
-    return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
-  }
-}
+Only after capture_job_inquiry returns do you confirm out loud, as ONE short natural sentence ("So that's a six-month hybrid contract with Northern Trust, sixty-five to eighty-two an hour — got it, I'll pass that to the owner."). This is a PHONE CALL: no bulleted list, no field-by-field "Caller Company: X, Client Company: Y" summary (it reads aloud as one flat run-on), no dashes, no field labels, no markdown of any kind.`;
 
 /**
- * A job_inquiry_id in the returned JSON means the inquiry was RECORDED (and emailed to
- * the owner). A refusal (missing name/number) has no id, so the task stays open — the
- * safe direction, exactly as with the booking: a missed success retries; a false success
- * would tell the owner a lead exists that does not.
+ * Rung 3 as an ACTION rung (see rung.ts): the whole point is the capture_job_inquiry
+ * write, so the rung ends the instant it returns a job_inquiry_id. The recording IS the
+ * transition — there is no "finish intake" tool to skip or fake, which is the exact fix
+ * for the rung the prompt ladder kept skipping. capture_job_inquiry's own refuse gate
+ * (no name/number) keeps a lead the owner cannot answer from ever recording as "done".
  */
-function extractInquiryId(toolResult: unknown): string | null {
-  if (typeof toolResult !== 'string') return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(toolResult);
-  } catch {
-    return null;
+export function makeJobIntakeRung(opts: JobIntakeTaskOptions): voice.AgentTask<JobIntakeResult> {
+  const { messagingTools, onCaptured } = opts;
+
+  const realCapture = messagingTools['capture_job_inquiry'];
+  if (!realCapture) {
+    throw new Error('makeJobIntakeRung requires capture_job_inquiry in messagingTools');
   }
-  if (!parsed || typeof parsed !== 'object') return null;
-  const id = (parsed as { job_inquiry_id?: unknown }).job_inquiry_id;
-  return typeof id === 'string' && id.length > 0 ? id : null;
+
+  const intro = opts.meetingBooked ? JOB_INTAKE_INTRO_BOOKED : JOB_INTAKE_INTRO_NO_BOOKING;
+  const { capture_job_inquiry: _drop, ...passthrough } = messagingTools;
+  void _drop;
+
+  return makeRung<JobIntakeResult>({
+    instructions: [opts.knownCaller, intro, JOB_INTAKE_INSTRUCTIONS].filter(Boolean).join('\n\n'),
+    tools: passthrough,
+    completion: {
+      kind: 'action',
+      toolName: 'capture_job_inquiry',
+      realTool: realCapture,
+      extract: idExtractor('job_inquiry_id', (id, raw) => ({ jobInquiryId: id, raw })),
+      onDone: onCaptured,
+    },
+  });
 }

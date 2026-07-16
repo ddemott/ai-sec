@@ -33,9 +33,9 @@
  * exists and already works — the task just receives it, plus one small completion tool.
  * The whole spike is about moving the LADDER down a layer, not rebuilding the rungs.
  */
-import { llm, voice } from '@livekit/agents';
-import { sanitizeStream } from '../speechSanitizer.js';
+import { type llm, type voice } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
+import { makeRung } from './rung.js';
 
 export interface IdentityResult {
   name: string;
@@ -67,98 +67,77 @@ export const IDENTITY_INSTRUCTIONS = `Your ONLY job right now is to get the call
 
 Do not book anything. Do not take any details about why they called — that comes next, and it is not your job. If they start telling you why they rang, that is fine and welcome: say you have got that, and get their name and number first.
 
-- Ask for their name. Wait for the answer.
-- Ask for the best number to reach them.
+VERIFY WHAT INFORMATION YOU ALREADY HAVE from this call. ASK FOR INFORMATION YOU STILL NEED.
+- A name they already gave → use it and acknowledge it warmly ("Thanks, Steven.").
+- A number they already gave → read THAT number straight back to verify it ("I have you at 630-111-2286 — is that right?").
+- Still need their name → ask for it, and wait for the answer.
+- Still need their number → ask for the best number to reach them.
 - READ THE NUMBER BACK and ask if it is right. Then STOP TALKING and wait. Do not act, do not "process", do not call a tool while they are still answering.
 - If they say it is wrong, ask again. Never proceed on a number they did not confirm.
 - If you only caught part of it, say which part you got and ask for the rest ("I only caught 555-111 — can you give me the last four?").
 
-When you have BOTH the name and a number they have confirmed, call confirm_identity. That is the only way to finish here.
+When you have BOTH the name and a number they have confirmed, call confirm_identity. That is the only way to finish here — and the ONLY tool you actually need. If you happen to look the caller up and that lookup reports any trouble, carry right on: you already have their name and number, so call confirm_identity with those and move the call forward. A lookup hiccup never blocks you from finishing here.
 
 The moment you call confirm_identity, your job is DONE and the system moves the caller straight into what they rang for. So your very last words are simply a short, warm acknowledgement using their name — for example "Perfect, thanks Scott." — three or four words, and then you are finished. The next step already knows what they want and will take it from there.`;
 
-export class IdentityTask extends voice.AgentTask<IdentityResult> {
-  constructor(opts: IdentityTaskOptions) {
-    const { ctx, identifyCaller, onIdentified } = opts;
+/**
+ * Rung 1 as a COLLECT rung (see rung.ts): it gathers the name + a confirmed number and a
+ * synthetic `confirm_identity` tool marks it done. There is no single backend write that
+ * means "identity is established" — the DOING is the gathering — so this is collect, not
+ * action. `identify_caller` rides along as a passthrough CRM lookup; the instructions say
+ * a failure of it is survivable (rule 8), so a lookup hiccup can never block completion.
+ */
+export function makeIdentityRung(opts: IdentityTaskOptions): voice.AgentTask<IdentityResult> {
+  const { ctx, identifyCaller, onIdentified } = opts;
 
-    // A caller-ID number is already attested by the carrier — there is nothing to
-    // read back, and asking a man to confirm a number we can already see is the
-    // "never re-ask what you already have" rule broken in its most annoying form.
-    const known = ctx.callerPhone;
+  // A caller-ID number is already attested by the carrier — there is nothing to read back,
+  // and asking a man to confirm a number we can already see breaks "never re-ask what you
+  // already have" in its most annoying form.
+  const known = ctx.callerPhone;
 
-    const askLine = opts.requestedService?.trim()
-      ? `You already know why the caller rang: "${opts.requestedService.trim()}". Your only task here is their name and number; the system will act on their request the instant you confirm their identity.`
-      : '';
-    super({
-      instructions: [
-        IDENTITY_INSTRUCTIONS,
-        askLine,
-        known
-          ? `You ALREADY have their number (${known}) from caller ID. Do NOT ask for it and do NOT read it back. You need only their NAME — then call confirm_identity with the name and that number.`
-          : '',
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
+  const askLine = opts.requestedService?.trim()
+    ? `You already know why the caller rang: "${opts.requestedService.trim()}". Your only task here is their name and number; the system will act on their request the instant you confirm their identity.`
+    : '';
 
-      tools: {
-        // The existing tool, untouched. The task does not reinvent the CRM write.
-        identify_caller: identifyCaller,
-
-        // THE ONLY EXIT. There is no other way to end this task — no sentence, no
-        // apology, no "have a great day". The loop advances when the work is done and
-        // not one turn before.
-        confirm_identity: llm.tool({
-          description:
-            'Call this ONCE you have the caller\'s name AND a phone number they have confirmed (or that came from caller ID). This finishes the identity step. Do not call it on a number they have not agreed to.',
-          parameters: {
-            type: 'object',
-            properties: {
-              name: { type: 'string', description: "The caller's name, as they gave it." },
-              phone: {
-                type: 'string',
-                description: 'The confirmed phone number.',
-              },
-            },
-            required: ['name', 'phone'],
-          },
-          execute: async (args: { name: string; phone: string }) => {
-            const result: IdentityResult = {
-              name: args.name.trim(),
-              phone: args.phone.trim(),
-              confirmedAloud: !known,
-            };
-            // Record on the shared session context too, so any backend tool that falls
-            // back to ctx.spokenPhone (booking, take-message) has the number even if the
-            // model omits it from the call. "Spoken", not callerPhone — the caller told
-            // us; the carrier did not attest it. Good enough to call back, not to unlock
-            // an account.
-            ctx.spokenPhone = result.phone;
-            await onIdentified?.(result);
-            this.complete(result); // ← resolves run(); the TaskGroup loop moves on
-            return 'Got it.';
-          },
-        }),
+  return makeRung<IdentityResult>({
+    instructions: [
+      IDENTITY_INSTRUCTIONS,
+      askLine,
+      known
+        ? `You ALREADY have their number (${known}) from caller ID. Do NOT ask for it and do NOT read it back. You need only their NAME — then call confirm_identity with the name and that number.`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    // The existing CRM tool, untouched and non-load-bearing (rule 8): the rung completes
+    // via confirm_identity, and the instructions tell the model a lookup hiccup is fine.
+    tools: { identify_caller: identifyCaller },
+    completion: {
+      kind: 'collect',
+      toolName: 'confirm_identity',
+      description:
+        'Call this ONCE you have the caller\'s name AND a phone number they have confirmed (or that came from caller ID). This finishes the identity step. Do not call it on a number they have not agreed to.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: "The caller's name, as they gave it." },
+          phone: { type: 'string', description: 'The confirmed phone number.' },
+        },
+        required: ['name', 'phone'],
       },
-    });
-  }
-
-  // SPEAK WHEN THIS RUNG TAKES OVER. Without an onEnter the task becomes the active agent
-  // and sits SILENT — exactly how the first live call got stuck: begin_call handed off to
-  // identity, and identity never asked for the name while the caller said "hello? you
-  // there?". The shipped WarmTransferTask defines onEnter for the same reason.
-  override async onEnter(): Promise<void> {
-    this.session.generateReply();
-  }
-
-  // MARKDOWN MUST NEVER REACH THE VOICE — the same guarantee SpeakingAgent gives the main
-  // path. The task-group path is plain voice.Agent, so without this a model that answers
-  // with a bulleted summary ("- Caller Company: ABC") gets its dashes and newlines read
-  // straight to Deepgram, which collapses them into one flat run with no pauses. That is
-  // the "it ran the lines together" report from the first successful voice call.
-  override async ttsNode(
-    text: ReadableStream<string>,
-    modelSettings: Parameters<typeof voice.Agent.default.ttsNode>[2]
-  ): ReturnType<typeof voice.Agent.default.ttsNode> {
-    return voice.Agent.default.ttsNode(this, sanitizeStream(text), modelSettings);
-  }
+      build: (args): IdentityResult => ({
+        name: String(args.name ?? '').trim(),
+        phone: String(args.phone ?? '').trim(),
+        confirmedAloud: !known,
+      }),
+      onDone: async (result) => {
+        // Record on the shared session context, so any backend tool that falls back to
+        // ctx.spokenPhone (booking, take-message) has the number even if the model omits
+        // it. "Spoken", not callerPhone — the caller told us; the carrier did not attest
+        // it. Good enough to call back, not to unlock an account.
+        ctx.spokenPhone = result.phone;
+        await onIdentified?.(result);
+      },
+    },
+  });
 }

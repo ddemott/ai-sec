@@ -19,11 +19,12 @@
  * not get to choose this order, exactly as with the composed script blocks, and for the
  * same reason: it is what the bad calls taught us, not a preference.
  */
-import { llm, voice, beta } from '@livekit/agents';
+import { type llm, type voice, beta } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
-import { IdentityTask, type IdentityResult } from './identityTask.js';
-import { BookMeetingTask, type BookMeetingResult } from './bookMeetingTask.js';
-import { JobIntakeTask, type JobIntakeResult } from './jobIntakeTask.js';
+import { makeIdentityRung, type IdentityResult } from './identityTask.js';
+import { makeBookMeetingRung, type BookMeetingResult } from './bookMeetingTask.js';
+import { makeJobIntakeRung, type JobIntakeResult } from './jobIntakeTask.js';
+import { makeSchedulingRung, type ScheduleChangeResult } from './schedulingTask.js';
 
 /**
  * What the caller wants ACCOMPLISHED by the time they hang up — the output of the intent
@@ -35,6 +36,10 @@ export interface CallerGoals {
   wantsMeeting: boolean;
   /** They mentioned a role, contract, project, or hiring — details to brief the owner. */
   hasJobInquiry: boolean;
+  /** They want to CHANGE an existing appointment — cancel it or move it. Optional (absent =
+   *  false) so the three original goals keep their existing call sites; the intent router
+   *  always supplies it explicitly. */
+  wantsScheduleChange?: boolean;
   /** In their own words, for the service matcher. */
   requestedService?: string;
 }
@@ -98,6 +103,7 @@ export interface CallDeps {
   onIdentified?: (r: IdentityResult) => Promise<void> | void;
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
+  onScheduleChanged?: (r: ScheduleChangeResult) => Promise<void> | void;
 }
 
 /**
@@ -134,6 +140,12 @@ function pick(tools: llm.ToolContext, names: string[]): llm.ToolContext {
 export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
   const specs: TaskSpec[] = [];
 
+  // CallRootAgent is told to send requested_service = "" when the ask is unclear, and `??`
+  // would let that empty string through as the service intent (degrading the semantic match
+  // and the "already asked" opener). Treat blank as ABSENT here, once, so every rung sees a
+  // real value or nothing.
+  const requestedService = goals.requestedService?.trim() || undefined;
+
   // RUNG 1 — always. You cannot book a meeting or brief the owner on a caller you cannot
   // name or reach. Identity is not a goal the caller states; it is the floor under all of
   // them.
@@ -141,10 +153,10 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
     id: 'identity',
     description: "Get and confirm the caller's name and phone number.",
     factory: () =>
-      new IdentityTask({
+      makeIdentityRung({
         ctx: deps.ctx,
         identifyCaller: deps.tools['identify_caller'],
-        requestedService: goals.requestedService,
+        requestedService,
         onIdentified: async (r) => {
           // Carry the confirmed identity forward to every later rung.
           deps.state.callerName = r.name;
@@ -161,13 +173,13 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
       id: 'book_meeting',
       description: 'Book the appointment the caller asked for.',
       factory: () =>
-        new BookMeetingTask({
+        makeBookMeetingRung({
           schedulingTools: pick(deps.tools, [
             'get_available_slots',
             'get_service_catalog',
             'book_with_scheduling',
           ]),
-          requestedService: goals.requestedService ?? 'a meeting',
+          requestedService: requestedService ?? 'a meeting',
           runtimePreamble: [runtimePreamble(deps.runtime), knownCallerLine(deps.state)]
             .filter(Boolean)
             .join(' '),
@@ -186,10 +198,34 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
       id: 'job_intake',
       description: "Collect the role details and record them for the owner.",
       factory: () =>
-        new JobIntakeTask({
+        makeJobIntakeRung({
           messagingTools: pick(deps.tools, ['capture_job_inquiry']),
           knownCaller: knownCallerLine(deps.state),
+          meetingBooked: goals.wantsMeeting,
           onCaptured: deps.onCaptured,
+        }),
+    });
+  }
+
+  // RUNG 4 — change an EXISTING appointment, if they came to cancel or reschedule. It reads
+  // (get_my_appointments) then mutates; a manage call has three honest endings, so the rung
+  // carries three completions (see schedulingTask). Placed last: it concerns an appointment
+  // that already exists, independent of anything booked or briefed on this call.
+  if (goals.wantsScheduleChange) {
+    specs.push({
+      id: 'schedule_change',
+      description: 'Cancel or reschedule an existing appointment for the caller.',
+      factory: () =>
+        makeSchedulingRung({
+          manageTools: pick(deps.tools, [
+            'get_my_appointments',
+            'cancel_appointment',
+            'reschedule_appointment',
+            'get_available_slots',
+          ]),
+          knownCaller: knownCallerLine(deps.state),
+          runtimePreamble: runtimePreamble(deps.runtime),
+          onChanged: deps.onScheduleChanged,
         }),
     });
   }

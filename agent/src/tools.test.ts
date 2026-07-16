@@ -905,7 +905,7 @@ describe('reschedule_appointment', () => {
       new_end_time: NEW_END,
     });
 
-    expect(JSON.parse(result).error).toMatch(/without caller-ID/i);
+    expect(JSON.parse(result).error).toMatch(/your number/i);
     expect(calls).toHaveLength(0);
   });
 });
@@ -946,7 +946,7 @@ describe('get_my_appointments', () => {
 
     const result = await exec(tools.get_my_appointments, {});
 
-    expect(JSON.parse(result).error).toMatch(/caller-ID/i);
+    expect(JSON.parse(result).error).toMatch(/your number/i);
     expect(calls).toHaveLength(0);
   });
 });
@@ -986,7 +986,7 @@ describe('cancel_appointment', () => {
 
     const result = await exec(tools.cancel_appointment, { appointment_id: APPT_ID });
 
-    expect(JSON.parse(result).error).toMatch(/caller-ID/i);
+    expect(JSON.parse(result).error).toMatch(/your number/i);
     expect(calls).toHaveLength(0);
   });
 });
