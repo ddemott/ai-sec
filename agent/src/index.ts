@@ -966,6 +966,20 @@ export default defineAgent({
                   minDelay: 1300,
                   maxDelay: 4000,
                 },
+                // WAIT FOR THE WHOLE UTTERANCE BEFORE REPLYING. Preemptive generation is
+                // ON by LiveKit's default: it starts composing a reply from the INTERIM
+                // transcript, before the caller finishes. On a live call the caller read a
+                // phone number in groups ("five eight six" … "one eight two" … "three two
+                // three two"); preemptive generation fired on "five eight six" alone and
+                // the agent answered "I only caught 586 — give me the next three digits",
+                // committing to a reply built from a third of the number even though the
+                // endpointer (minDelay 1300ms) went on to aggregate the FULL number into
+                // one turn. So the two fought and the fragment won. Disabling it makes the
+                // agent generate only from the endpointer's final, aggregated transcript —
+                // the cost is a little latency after the caller stops; the win is that it
+                // stops answering half-heard numbers and multi-part answers. (This is the
+                // "didn't wait for me" report, 2026-07-15.)
+                preemptiveGeneration: { enabled: false },
               },
             });
 

@@ -55,7 +55,11 @@ export class CallRootAgent extends voice.Agent {
     super({
       instructions: `${opts.persona}
 
-You are at the very start of a call. Your ONE job right now is to understand what the caller wants, then hand off. Greet them warmly, ask how you can help if they have not already said, and listen.
+You are at the very start of a call. Your ONE job is to work out what the caller wants and hand off. The steps AFTER you take the caller's name, take their number, and do the booking — all automatically — so your whole job here is to understand the ask and pass it on.
+
+The moment the caller tells you why they called, your very next action is to call begin_call. That single tool call IS the hand-off. Handing off right away is what lets the next step greet them and take their name and number as ONE smooth first request. (If they have not said why they are calling yet, ask "how can I help?" and listen; the instant they answer, call begin_call.)
+
+Leave the name, the number, and the booking to the steps that follow — they are built to do exactly that. Your part is done the moment you call begin_call.
 
 As soon as you know what they are calling about, call begin_call with:
 - wants_meeting: true if they want to make a NEW appointment, meeting, call, viewing or demo — even mentioned in passing.
