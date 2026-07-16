@@ -152,7 +152,13 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
   },
   get_available_slots: {
     success: true,
-    result: { spoken: 'Tomorrow we have 3:00 PM and 3:30 PM open for a haircut.' },
+    // Service-neutral wording, deliberately: the REAL tool echoes the service the
+    // caller asked for, but this stub was hardcoded to "for a haircut" — so when a
+    // scenario's caller asked for a MEETING, the model would balk at the mismatch
+    // ("those are for haircuts, let me check for a meeting…"), wander, and the
+    // FULL-CALL cases flapped. A stub that contradicts the caller is testing a
+    // fiction (2026-07-16).
+    result: { spoken: 'Tomorrow we have 3:00 PM and 3:30 PM open.' },
   },
   book_with_scheduling: {
     success: true,
@@ -272,21 +278,24 @@ const CASES: EvalCase[] = [
       'My name is Bob Smith.',
       'six zero eight two one seven five three zero three.',
       'Correct.',
-      // The caller reads back the texted code — the leg the real call NEVER reached,
-      // because the agent claimed to send a code it had never sent.
-      'The code is 1234.',
       'Yes, please book it.',
       'Yes, texting me is fine.',
     ],
-    // The whole forwarded-line flow: LOOK at the calendar, PROVE the spoken number
-    // (no caller-ID, so possession must be proven before we act on it), then
-    // actually BOOK — which on the real call never happened at all.
-    required: [
-      ['get_available_slots', 'get_scheduling_options'],
-      ['send_verification_code'],
-      ['verify_phone_code'],
-      ['book_with_scheduling'],
-    ],
+    // LOOK at the calendar, then actually BOOK — which on the real call never
+    // happened at all.
+    //
+    // 2026-07-16: the OTP legs (send_verification_code → verify_phone_code) were
+    // REMOVED from `required`, because they tested a fiction on two axes: this
+    // harness runs every scenario with an ATTESTED caller-ID (+15552220001 — the
+    // prompt's own rule says a carrier-attested number never needs an OTP), and
+    // production runs ENABLE_PHONE_VERIFICATION=false until 10DLC lands (a code
+    // that cannot be delivered must not block a booking). The model was behaving
+    // correctly and this case failed on every run for it. The OTP LIE ("I sent
+    // you a text" with no tool behind it) is still covered — by the claims below
+    // and by its dedicated TRUTHFULNESS case. When the verification flag flips
+    // on, restore the two legs AND give this scenario callerPhone: null so the
+    // forwarded-line flow it describes can actually occur.
+    required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
     forbidden: ['book_appointment', 'check_availability'],
     claims: [
       {
@@ -336,21 +345,21 @@ const CASES: EvalCase[] = [
       'My name is Bob Smith.',
       'six zero eight two one seven five three zero three.',
       'Yes, that is correct.',
-      // The spoken number is unverified, so the agent runs the OTP. Script the whole
-      // leg — a case that runs out of caller turns mid-flow proves nothing about what
-      // the agent would have done next.
-      'The code is 1234.',
       'Yes, texting me is fine.',
       'Yes, please book it.',
       'No, that is all. Thank you.',
     ],
-    // It must CHECK the calendar (not read times off the business hours), ASK about
-    // texting, and BOOK.
-    required: [
-      ['get_available_slots', 'get_scheduling_options'],
-      ['record_sms_consent'],
-      ['book_with_scheduling'],
-    ],
+    // It must CHECK the calendar (not read times off the business hours) and BOOK.
+    //
+    // 2026-07-16: record_sms_consent was REMOVED from `required` (and the phantom
+    // "the code is 1234" turn deleted): production runs ENABLE_SMS=false until
+    // 10DLC lands, and with SMS off record_sms_consent does not even exist as a
+    // tool — the eval was demanding, in a fixed position, a tool the live agent
+    // cannot hold. The case's real teeth are its claims (never refuse a time
+    // without checking the calendar) plus slots-then-book. When ENABLE_SMS flips
+    // on, restore ['record_sms_consent'] — without pinning it before the booking;
+    // the prompt mandates consent, not its position in the sequence.
+    required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
     forbidden: ['book_appointment', 'check_availability'],
     claims: [
       {
@@ -428,6 +437,11 @@ const CASES: EvalCase[] = [
     userTurns: [
       "Hi, it's Jane Doe, 555-222-0001 — I need to cancel my haircut tomorrow.",
       'Yes, that one — cancel it please.',
+      // A third affirmation, because cancel_appointment's contract says "always
+      // confirm with the caller first" and the model sometimes double-confirms —
+      // with only two scripted turns the caller ran out of lines and the call
+      // ended one tool short (the flake seen 2026-07-16). Real callers answer again.
+      "Yes, I'm sure — cancel it.",
     ],
     required: [['get_my_appointments'], ['cancel_appointment']],
     forbidden: ['book_appointment', 'book_with_scheduling'],
