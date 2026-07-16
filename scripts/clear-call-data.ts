@@ -73,22 +73,31 @@ const TARGET_TABLES = [
   'customers',
 ];
 
-function hostOf(url: string): string {
+/** Hostname of the DSN, or null when it cannot be parsed. Null must REFUSE, never pass:
+ *  a key/value DSN like "host=prod-db dbname=..." fails URL parsing, and treating the
+ *  parse failure as "local" would let it delete remote data without --force. Unknown is
+ *  not local — unknown is unknown. */
+function hostOf(url: string): string | null {
   try {
     return new URL(url).hostname;
   } catch {
-    return '';
+    return null;
   }
 }
 
+// '' is a SUCCESSFULLY PARSED URL with no host — a local-socket DSN like
+// "postgres:///dbname" — and is safe to allow because an unparseable string is now
+// null (refused), not ''. The two used to be conflated, which was the bypass.
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db', ''];
 
 async function main() {
   const host = hostOf(DB_URL);
-  if (!LOCAL_HOSTS.includes(host) && !FORCE) {
+  if ((host === null || !LOCAL_HOSTS.includes(host)) && !FORCE) {
     console.error(
-      `\nRefusing to clear call data on non-local host "${host}".\n` +
-        `Allowed: ${LOCAL_HOSTS.filter(Boolean).join(', ')}. Pass --force to override.\n`
+      host === null
+        ? `\nRefusing: could not parse a hostname from the connection string, so it cannot be verified as local. Use a postgres:// URL, or pass --force if you are certain.\n`
+        : `\nRefusing to clear call data on non-local host "${host}".\n` +
+            `Allowed: ${LOCAL_HOSTS.filter(Boolean).join(', ')} (or a socket URL with no host). Pass --force to override.\n`
     );
     process.exit(1);
   }
