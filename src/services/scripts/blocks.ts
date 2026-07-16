@@ -114,7 +114,7 @@ export const INTAKE_JOB_INQUIRY: ScriptBlock = {
 IF the caller has mentioned ANYTHING to do with work — a job, a position, a role, a contract, a project, hiring, placing someone, staffing, or the like
   → say: "Great — you're booked in. While I have you, let me grab a few details about the role so they can come to that meeting prepared." (If nothing is booked, just: "Let me take a few details so I can pass them on.")
   → then work the questions below, ONE AT A TIME. Skip any they have already answered. Acknowledge each answer before asking the next.
-  → IF as you go it becomes clear this is NOT a role to brief — they just wanted a quick word, or ask to leave a message — stop the questions and take a message instead. Better to over-ask and back off than to miss a role entirely.
+  → IF as you go they turn out to just want a quick word or to leave a message → switch to taking a message. Over-ask and ease off; that way a real role is always caught.
 
 **THERE ARE TWO COMPANIES AND THEY ARE NOT THE SAME.** Never ask a bare "what company?" — the caller cannot know which one you mean.
 
@@ -332,37 +332,53 @@ WHEN you have worked the questions for whichever branch applies
 export const COMPLETE_ALL_GOALS: ScriptBlock = {
   id: 'complete_all_goals',
   purpose: "Re-read the caller's first sentence; every stated goal must be DONE. Universal.",
-  text: `### RUNG 4 — IS EVERY GOAL ACTUALLY DONE?
+  text: `### RUNG 5 — IS EVERY GOAL ACTUALLY DONE?
 
-**The caller's first sentence is a LIST of goals, not one goal.** Go back and read it again.
+**The caller's first sentence is a LIST of goals.** Read it again as a list.
 
-"I'd like a meeting with the owner about a job position" is TWO goals: a booked appointment, AND the details reaching him. If there is a third, it counts too. **Recording the details does not book the meeting, and booking the meeting does not record the details.**
+"I'd like a meeting with the owner about a job position" is TWO goals: a booked appointment, AND the details reaching him. If there is a third, it counts too. **Each goal earns its OWN tool** — the booking tool books the meeting, the intake tool records the details. When both are goals, run both.
+
+**A goal counts as DONE the moment its tool has run:** a booking has an appointment, a message has a saved message, an inquiry has a recorded inquiry.
 
 FOR EACH goal they stated:
-  IF a TOOL actually completed it (a booking has an appointment, a message has a saved message, an inquiry has a recorded inquiry)
-    → it is done.
-  ELSE
-    → it is NOT done, however thoroughly you discussed it. **Go and do it now.**
+  IF its tool has run
+    → that goal is done; move to the next.
+  ELSE (you discussed it, its tool is still waiting)
+    → **do it now:** return to that rung and run the tool.
 
-IF they asked for a meeting and nothing is booked
-  → go back to the booking rung. Now.
+IF they asked for a meeting and its tool is still waiting
+  → return to the booking rung now, and book it.
 
-IF they never mentioned a meeting
+IF a meeting would help and the diary is still empty
   → offer one: "Would you like me to get something in the diary?"
 
-**NEVER use "is there anything else I can help you with?" to end a call while one of their own requests is still outstanding.** That question is for THEIR extras. It is not a way out.`,
+**Reach the close once every goal they stated has its tool behind it.** Keep "is there anything else I can help you with?" for THEIR extras — the things they raise on their own.`,
 };
 
 /** RUNG 5 — CLOSE. Universal. */
 export const CLOSE: ScriptBlock = {
   id: 'close',
   purpose: 'Close on the outcome (when to turn up), not on the paperwork. Universal.',
-  text: `### RUNG 5 — CLOSE ON THE OUTCOME, NOT THE PAPERWORK
+  text: `### RUNG 6 — CLOSE ON THE OUTCOME, NOT THE PAPERWORK
 
 IF a meeting is booked
   → the last thing they hear is when to turn up: "So that's Wednesday at 1:15 — they'll have all this in front of them. Thanks, and have a great day."
 ELSE
   → confirm plainly what WILL happen, and who will contact them.`,
+};
+
+/** RUNG — a message for the owner. The universal ELSE: a need a booking or a role does
+ *  not cover still gets handled, by taking a message. */
+export const TAKE_MESSAGE: ScriptBlock = {
+  id: 'take_message',
+  purpose: 'The catch-all: any request a booking or a role does not cover → take a message. Universal.',
+  text: `### RUNG 4 — A MESSAGE FOR THE OWNER
+
+Some callers want something beyond a booking — a question for the owner, an errand, a change to pass on, a word left for later. Whenever that is what they want, the right move is to take a message.
+
+  → You already have their name and number from the identity rung. Ask what they would like passed on, and get the details that matter — who it is about, what they need, and how soon.
+  → CALL take_message with everything you collected. Calling the tool is what saves the message; saying "I'll pass that along" before the tool runs saves nothing — so call it first, THEN say it.
+  → THEN tell them plainly who will get it and when they can expect to hear back.`,
 };
 
 /** The header that frames the whole thing as a ladder. Universal. */
@@ -382,6 +398,7 @@ export const BLOCKS: Record<string, ScriptBlock> = Object.fromEntries(
     BOOK_MEETING,
     INTAKE_JOB_INQUIRY,
     INTAKE_REAL_ESTATE,
+    TAKE_MESSAGE,
     COMPLETE_ALL_GOALS,
     CLOSE,
   ].map((b) => [b.id, b])
@@ -397,11 +414,15 @@ export const CANONICAL_ORDER = [
   'identity',
   'book_meeting',
   // ...intake blocks slot in here...
+  'take_message',
   'complete_all_goals',
   'close',
 ] as const;
 
-const INTAKE_SLOT_INDEX = CANONICAL_ORDER.indexOf('complete_all_goals');
+// Intake blocks slot in just before take_message: booking, then any role intake, then the
+// take-a-message ELSE, then the goal check. So a caller whose need is neither a booking nor
+// a role still gets handled (a message) before the call can complete.
+const INTAKE_SLOT_INDEX = CANONICAL_ORDER.indexOf('take_message');
 
 export interface ScriptComposition {
   /** The business's own identity/role text — who they are, what they do. */
