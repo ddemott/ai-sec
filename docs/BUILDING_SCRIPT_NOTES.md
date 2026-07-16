@@ -61,12 +61,15 @@ greeting → intent (begin_call) → TASK GROUP:
 
 **What is NOT done yet (honest scope):**
 
-- **6 rungs exist**: identity, book_meeting, job_intake, schedule_change (cancel /
-  reschedule — added 2026-07-15 on the generic `makeRung` core, the first lookup-then-act
-  rung), take_message (added 2026-07-16 — the universal catch-all, an ACTION rung
-  wrapping the real `take_message`), and policy_qa (added 2026-07-16 — the caller's
-  QUESTIONS, answered from the knowledge base via RAG; see its section below). Still not
-  a rung: page-owner. Adding one is config on `makeRung`, not a new class.
+- **6 rungs exist**: identity, book_meeting, meeting_context (rung 3 — TEMPLATE-dispatched:
+  'job' is the old job_intake, now linking the inquiry to the meeting; 'default' is one
+  wrap-up notes question onto the appointment — added 2026-07-16, Dale's design, see its
+  section below), schedule_change (cancel / reschedule — added 2026-07-15 on the generic
+  `makeRung` core, the first lookup-then-act rung), take_message (added 2026-07-16 — the
+  universal catch-all, an ACTION rung wrapping the real `take_message`), and policy_qa
+  (added 2026-07-16 — the caller's QUESTIONS, answered from the knowledge base via RAG;
+  see its section below). Still not a rung: page-owner. Adding one is config on
+  `makeRung`, not a new class.
 - **The stack is snapshotted at group start** — a NEW goal raised at the very end ("oh, and
   can you also…") is not picked up; the fixed goodbye fires. Known limit, documented.
 - **Text E2E (`sim-taskgroup.ts`) does not exercise the runtime handoff** — only a live
@@ -270,6 +273,54 @@ voice. Known limit unchanged: a goal that only EMERGES mid-call (pure Q&A caller
 to book after the plan snapshot) still needs the "re-run intent after the group"
 loop-back from the roadmap.
 
+### The MEETING-GOALS rung — rung 3 generalized into templates (2026-07-16, Dale's ask)
+
+Dale's design: rung 3 is not "the job rung" — it is **what the meeting needs attached to
+it**, and that varies by goal exactly the way the composed script blocks' INTAKE varies
+by vertical. So `meeting_context` replaced `job_intake` in the plan, dispatched by
+TEMPLATE (`meetingContextTask.ts`):
+
+- **'job'** (selected by `has_job_inquiry`) — the existing job intake, unchanged, PLUS:
+  the `job_inquiries` row now carries an `appointment_id` FK to the meeting it was
+  booked around, and the capture route stamps a `Job details: …` summary into the
+  appointment's description. The owner opens the calendar entry and sees what the
+  meeting is ABOUT.
+- **'default'** (every other booked meeting) — ONE light wrap-up question ("anything
+  you'd like us to know ahead of the meeting?"). An answer is written by the new
+  `attach_meeting_notes` tool (`Caller notes: …` onto the appointment); "no" exits via
+  a synthetic `no_notes`; `take_message` rides along as the honest fallback. A future
+  vertical (fixing a car) is a NEW TEMPLATE here, not a new rung.
+
+**The plumbing rule that makes it safe: THE SYSTEM CARRIES THE MEETING ID, never the
+model.** `CallOutcomeTracker` already records the booked `appointment_id`;
+`capture_job_inquiry` and `attach_meeting_notes` read it from there inside their
+`execute` (same trust model as `spokenPhone`). The model never sees a UUID, so it can
+never attach to the wrong meeting. The backend still verifies the id belongs to the
+tenant, and on a miss saves the inquiry UNLINKED — the row is the lead, the link is
+context.
+
+**Host-code skip:** the notes rung's factory runs AFTER booking and reads
+`CallState.appointmentId` (what HAPPENED, not what was asked). Booking fell back to a
+message → a `SkipRung` completes in `onEnter`, no LLM turn, no audio — the caller is
+never asked about a meeting that does not exist. Same state also fixed the job opener:
+"you're booked in" now only opens the intake when something actually was.
+
+**What the live-LLM hardening pass found (same day):**
+
+1. **The model invented a note.** ~1-in-3 chatty runs attached "Consulting work
+   discussion." — a topic label the caller never spoke — without asking the question.
+   Root cause 3 again (a sentence-shaped step with a write available). Mitigation:
+   ASK-FIRST wording + "the MEETING TOPIC is NOT a note" + "never attach a note whose
+   content the caller did not actually say". 8/8 after. HONEST RESIDUAL: prompt
+   discipline; the sim's `descriptionMatch` check (the COBOL token can only reach the
+   description through the tool) keeps this class visible.
+2. **An evening run turned every booking into a message.** `get_available_slots` for
+   TODAY is empty after close, and the booking fallback's trigger read "no open times →
+   take a message" LITERALLY — the model messaged instead of offering tomorrow.
+   Pre-existing wording bug in `BOOK_MEETING_INSTRUCTIONS`, exposed by running the sim
+   in the evening. Fix: "no open times on ONE day does NOT mean the booking cannot
+   happen — check the next day and offer those times." Full suite 30/30 after.
+
 ---
 
 **Two flows exist in the codebase. Know which you are reading about:**
@@ -347,7 +398,8 @@ group.run() resolves only when the stack is EMPTY → root agent says goodbye
 | `callPlan.ts` | `planCallTasks(goals, deps)` → ordered `TaskSpec[]`. **This is the checklist.** Pure. Also `runtimePreamble`, `knownCallerLine`, `pick`. |
 | `identityTask.ts` | Rung 1 — a COLLECT rung. Name + phone via `confirm_identity`. |
 | `bookMeetingTask.ts` | Rung 2 — an ACTION rung. Wraps the real `book_with_scheduling`; completes on `appointment_id`. |
-| `jobIntakeTask.ts` | Rung 3 — an ACTION rung. Wraps the real `capture_job_inquiry`; completes on `job_inquiry_id`. |
+| `meetingContextTask.ts` | Rung 3 — MEETING GOALS, dispatched by TEMPLATE. 'job' → the job intake; 'default' → one wrap-up notes question (ACTION `attach_meeting_notes` OR COLLECT `no_notes`, `take_message` fallback). Skips in host code (`SkipRung`, completes in onEnter) when no meeting actually landed. |
+| `jobIntakeTask.ts` | The 'job' TEMPLATE — an ACTION rung. Wraps the real `capture_job_inquiry`; completes on `job_inquiry_id`. The runtime injects the booked `appointment_id` so the inquiry links to the meeting. |
 | `takeMessageTask.ts` | Rung 4 — an ACTION rung, the universal catch-all. Wraps the real `take_message`; completes on `message_id`. Carries NO passthrough tools (take_message IS the completion). |
 | `policyQaTask.ts` | The Q&A rung — COLLECT (`questions_answered`) with an ACTION fallback (the real `take_message`). Holds ONLY `get_company_policy_answer`; every factual answer comes from retrieval. Questions-only calls skip identity (the one doctrine exception). |
 | `schedulingTask.ts` | Rung 5 — a LOOKUP-THEN-ACT rung. Reads `get_my_appointments`, then completes on `cancel_appointment` OR `reschedule_appointment` OR `no_appointment_change`. |

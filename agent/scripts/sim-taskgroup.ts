@@ -23,6 +23,7 @@ import { llm, initializeLogger } from '@livekit/agents';
 import { Client } from 'pg';
 import { ToolsClient } from '../src/toolsClient.js';
 import { buildTools } from '../src/tools.js';
+import { CallOutcomeTracker } from '../src/callOutcome.js';
 import { planCallTasks, type CallDeps } from '../src/tasks/callPlan.js';
 import type { SessionContext } from '../src/sessionContext.js';
 
@@ -127,6 +128,9 @@ interface Persona {
   // leave-a-message (the universal catch-all)
   wantsToLeaveMessage?: boolean;
   messageBody?: string; // what they want passed to the owner, in their own words
+  // something to say when the wrap-up asks "anything you'd like noted ahead of the
+  // meeting?" — omit and the persona says no (the notes step must cost ONE question)
+  meetingNotes?: string;
   // questions about the business (answered from the knowledge base)
   hasQuestions?: boolean;
   questionFacts?: string; // what they want to know, and when they're satisfied
@@ -177,6 +181,13 @@ function personaSystem(p: Persona, style: string): string {
   if (p.hasQuestions && p.questionFacts) {
     facts.push(
       `You have QUESTIONS about the business: ${p.questionFacts} Ask them ONE at a time, listen to each answer, and once you have what you came for, say that's all you needed. You are just gathering information — do not book anything and do not leave a message unless the receptionist cannot answer and offers to have the owner get back to you.`
+    );
+  }
+  if (p.wantsMeeting) {
+    facts.push(
+      p.meetingNotes
+        ? `If, after your booking is confirmed, the receptionist asks whether there's anything you'd like noted or known ahead of the meeting, tell them: "${p.meetingNotes}" (in your own words). Do not volunteer it before they ask.`
+        : `If asked whether there's anything you'd like noted ahead of the meeting, say no — you've covered everything.`
     );
   }
   if (p.hasJobInquiry) {
@@ -257,7 +268,17 @@ async function runCall(p: Persona, style: string, deps: CallDeps): Promise<RunRe
       instructions: string;
       toolCtx: llm.ToolContext;
       done: boolean;
+      completesOnEnter?: boolean;
+      onEnter?: () => Promise<void>;
     };
+    // A host-code skip (e.g. the notes rung when no meeting landed) completes in
+    // onEnter with no session and no turn. Only rungs that FLAG it get this call —
+    // a normal rung's onEnter needs the live session and would throw here.
+    if (task.completesOnEnter && task.onEnter) {
+      await task.onEnter();
+      result.rungsCompleted.push(spec.id);
+      continue;
+    }
     const schemas = toolSchemas(task.toolCtx);
     const messages: ChatMessage[] = [{ role: 'system', content: task.instructions }, ...shared];
 
@@ -332,6 +353,11 @@ interface Expect {
   // retrieval, not invention) / must NOT contain an identity shakedown
   transcriptMatch?: RegExp;
   transcriptForbid?: RegExp;
+  // the booked appointment's description must match (proves attach_meeting_notes /
+  // the job-summary stamp actually WROTE to the calendar entry, not just spoke)
+  descriptionMatch?: RegExp;
+  // the job inquiry row must be LINKED to the appointment booked on this call
+  jobLinked?: boolean;
 }
 /** What a seed step handed back — the appointment the scenario will act on. */
 interface SeedInfo {
@@ -504,6 +530,10 @@ const SCENARIOS: Scenario[] = [
       jobInquiry: true,
       clientCompany: 'Blue Cross',
       representsCompany: false,
+      // The meeting and the role are ONE story now: the inquiry row links to the
+      // appointment, and the calendar entry says what the meeting is about.
+      jobLinked: true,
+      descriptionMatch: /Job details:/,
     },
   },
   {
@@ -518,6 +548,27 @@ const SCENARIOS: Scenario[] = [
     },
     expect: { appointment: true, jobInquiry: false },
     styles: ['plain', 'terse', 'frontloader'],
+  },
+  {
+    title: 'meeting with a NOTE — the wrap-up answer lands on the calendar entry',
+    persona: {
+      name: 'Theo Marsh',
+      phone: '555-901-0013',
+      goalLine: 'you want to book a meeting with Dale about some consulting work',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a consulting meeting',
+      meetingNotes:
+        'the project involves migrating an old COBOL system, so he should look at that before the meeting',
+    },
+    // The distinctive token proves the WRITE: "COBOL" can only reach the appointment's
+    // description through attach_meeting_notes — a spoken "I'll note that" leaves no row.
+    expect: {
+      appointment: true,
+      jobInquiry: false,
+      descriptionMatch: /Caller notes:.*COBOL/is,
+    },
+    styles: ['plain', 'chatty'],
   },
   {
     title: 'job only — records it, does NOT book a meeting',
@@ -733,9 +784,14 @@ async function verify(db: Client, p: Persona, e: Expect, seed?: SeedInfo): Promi
       fails.push('expected RESCHEDULED to a new time, but start_time is unchanged');
   }
 
+  let bookedApptId: string | null = null;
   if (!isScheduleChange) {
-    const appt = await db.query<{ service: string | null }>(
-      `SELECT s.name AS service FROM appointments a
+    const appt = await db.query<{
+      service: string | null;
+      appointment_id: string;
+      description: string | null;
+    }>(
+      `SELECT s.name AS service, a.appointment_id, a.description FROM appointments a
          LEFT JOIN services s USING (service_id)
          JOIN customers c USING (customer_id)
         WHERE a.tenant_id = $1 AND c.phone = $2 ORDER BY a.created_at DESC LIMIT 1`,
@@ -745,10 +801,24 @@ async function verify(db: Client, p: Persona, e: Expect, seed?: SeedInfo): Promi
     if (!e.appointment && appt.rows[0]) fails.push('APPOINTMENT booked but none expected');
     if (e.appointment && appt.rows[0] && !appt.rows[0].service)
       fails.push('appointment service is NULL');
+    bookedApptId = appt.rows[0]?.appointment_id ?? null;
+    // The WRITE, not the words: the note / job summary must be ON the calendar entry.
+    if (
+      e.descriptionMatch &&
+      appt.rows[0] &&
+      !e.descriptionMatch.test(appt.rows[0].description ?? '')
+    )
+      fails.push(
+        `appointment description does not match ${e.descriptionMatch} — got "${appt.rows[0].description ?? ''}"`
+      );
   }
 
-  const job = await db.query<{ client_company: string | null; represents_company: boolean | null }>(
-    `SELECT client_company, represents_company FROM job_inquiries
+  const job = await db.query<{
+    client_company: string | null;
+    represents_company: boolean | null;
+    appointment_id: string | null;
+  }>(
+    `SELECT client_company, represents_company, appointment_id FROM job_inquiries
       WHERE tenant_id = $1 AND callback_phone = $2 ORDER BY created_at DESC LIMIT 1`,
     [TENANT, e164]
   );
@@ -764,6 +834,14 @@ async function verify(db: Client, p: Persona, e: Expect, seed?: SeedInfo): Promi
     fails.push(
       `represents_company=${job.rows[0].represents_company}, expected ${e.representsCompany}`
     );
+  // A "meeting about a job" call must link the inquiry to THE meeting it booked — the
+  // owner opens the calendar entry and the role context is one click away, not a hunt.
+  if (e.jobLinked && job.rows[0]) {
+    if (!job.rows[0].appointment_id)
+      fails.push('expected job inquiry LINKED to the appointment, but appointment_id is NULL');
+    else if (bookedApptId && job.rows[0].appointment_id !== bookedApptId)
+      fails.push('job inquiry is linked to a DIFFERENT appointment than the one booked');
+  }
 
   // Leave-a-message: the whole point is take_message ACTUALLY firing. Verify a
   // customer_messages row landed for this caller (not that the agent SAID it did).
@@ -789,7 +867,11 @@ function makeDeps(): CallDeps {
     participantIdentity: 'sim',
   };
   const client = new ToolsClient({ backendUrl: BACKEND_URL, agentSecret: AGENT_SECRET });
-  const tools = buildTools(ctx, client);
+  // The outcome tracker, exactly as index.ts wires it: book_with_scheduling records the
+  // appointment_id on it, and capture_job_inquiry / attach_meeting_notes read it back —
+  // the SYSTEM carries the meeting id, never the model. Without this the sim would test
+  // a plumbing the live agent doesn't have (and vice versa).
+  const tools = buildTools(ctx, client, undefined, new CallOutcomeTracker());
   const now = new Date();
   const currentDate = now.toLocaleDateString('en-US', {
     weekday: 'long',
