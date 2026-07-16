@@ -181,19 +181,27 @@ IF they asked for a meeting and its tool is still waiting
 IF a meeting would help and the diary is still empty
   → offer one: "Would you like me to get something in the diary?"
 
-**Reach the close once every goal they stated has its tool behind it.** Keep "is there anything else I can help you with?" for THEIR extras — the things they raise on their own.`,
+**Once every goal they stated has its tool behind it, go straight to the close — that is your send-off.** Save "is there anything else I can help you with?" for THEIR extras, the things they raise on their own.`,
 };
 
 /** RUNG 5 — CLOSE. Universal. */
 export const CLOSE: ScriptBlock = {
   id: 'close',
   purpose: 'Close on the outcome (when to turn up), not on the paperwork. Universal.',
-  text: `### RUNG 6 — CLOSE ON THE OUTCOME (WHEN TO TURN UP)
+  text: `### RUNG 6 — THE WRAP-UP (the ONE ending of the call)
 
-IF a meeting is booked
-  → the last thing they hear is when to turn up: "So that's Wednesday at 1:15 — they'll have all this in front of them. Thanks, and have a great day."
-ELSE
-  → confirm plainly what WILL happen, and who will contact them.`,
+This is the ONLY goodbye. Sum up EVERYTHING the call produced in a SINGLE warm sentence, then stop talking.
+
+Roll every outcome the call actually produced into that one line:
+  → a booked meeting → the day and time to turn up ("Wednesday at 2:45 with Dale")
+  → a message taken → that it is on its way to the owner
+  → role details recorded → that they will reach the owner before the meeting
+Then close with one sign-off: "Thanks for calling, and have a great day."
+
+ONE sentence covers it all. Examples:
+  → booking only: "You're all set — Wednesday at 2:45 with Dale. Thanks for calling, and have a great day."
+  → message only: "Got it — I've passed that to Dale and he'll get back to you. Thanks for calling, and have a great day."
+  → both: "You're all set — Wednesday at 2:45 with Dale, and I've passed your note along to him. Thanks for calling, and have a great day."`,
 };
 
 /** RUNG — a message for the owner. The universal ELSE: a need a booking or a role does
@@ -207,7 +215,7 @@ Some callers want something beyond a booking — a question for the owner, an er
 
   → You already have their name and number from the identity rung. Ask what they would like passed on, and get the details that matter — who it is about, what they need, and how soon.
   → CALL take_message with everything you collected. Calling the tool is what saves the message; saying "I'll pass that along" before the tool runs saves nothing — so call it first, THEN say it.
-  → THEN tell them plainly who will get it and when they can expect to hear back.`,
+  → THEN give ONE short, warm acknowledgement that it is recorded — "Got it — I'll make sure Dale gets that." The close (RUNG 6) delivers what happens next, so a single line is enough here.`,
 };
 
 /** The header that frames the whole thing as a ladder. Universal. */
@@ -216,7 +224,9 @@ export const LADDER_HEADER: ScriptBlock = {
   purpose: 'Frames the script as a decision tree. Always first.',
   text: `## THE CALL LADDER — a decision tree. Work down it, rung by rung; the shape of the call is fixed, so follow it.
 
-Each rung is an IF. Evaluate it, act, then move down. Re-enter at the top whenever the caller says something new.`,
+Each rung is an IF. Evaluate it, act, then move down. Re-enter at the top whenever the caller says something new.
+
+**THE CALL HAS EXACTLY ONE ENDING — the wrap-up at the bottom (RUNG 6).** Along the way, each rung does its work and confirms just that one thing in a few words, then moves straight on. Save every send-off — the goodbye, the "have a great day", the "is there anything else" — for that single wrap-up. One sign-off per call, spoken once, at the very end.`,
 };
 
 /** Every block the composer knows, by id. */
