@@ -61,11 +61,12 @@ greeting → intent (begin_call) → TASK GROUP:
 
 **What is NOT done yet (honest scope):**
 
-- **5 rungs exist**: identity, book_meeting, job_intake, schedule_change (cancel /
+- **6 rungs exist**: identity, book_meeting, job_intake, schedule_change (cancel /
   reschedule — added 2026-07-15 on the generic `makeRung` core, the first lookup-then-act
-  rung), and take_message (added 2026-07-16 — the universal catch-all, an ACTION rung
-  wrapping the real `take_message`; see below). Still not rungs: page-owner, policy Q&A.
-  Adding them is now config on `makeRung`, not a new class.
+  rung), take_message (added 2026-07-16 — the universal catch-all, an ACTION rung
+  wrapping the real `take_message`), and policy_qa (added 2026-07-16 — the caller's
+  QUESTIONS, answered from the knowledge base via RAG; see its section below). Still not
+  a rung: page-owner. Adding one is config on `makeRung`, not a new class.
 - **The stack is snapshotted at group start** — a NEW goal raised at the very end ("oh, and
   can you also…") is not picked up; the fixed goodbye fires. Known limit, documented.
 - **Text E2E (`sim-taskgroup.ts`) does not exercise the runtime handoff** — only a live
@@ -199,6 +200,78 @@ row), exactly as with scheduling — the sim skips the runtime handoff.
 
 ---
 
+### The policy-Q&A rung — RAG answers as a rung (2026-07-16, autonomous; Dale's ask)
+
+Dale: "what if the user wants to ask questions about the company, pricing, hours of
+operation… this has to do with the RAG." The retrieval layer already existed end-to-end
+and measured 100% on the sim-rag eval (get_company_policy_answer →
+/agent-tools/policy-answer → search_tenant_docs pgvector, honest out-of-scope fallback,
+gap-logging for the owner). What was missing was FLOW: nothing guaranteed a
+questions-call ends properly, and on the ladder, hours and prices are exactly the facts
+a model invents most fluently.
+
+**The design (policyQaTask.ts):** a COLLECT rung with an ACTION fallback — the
+scheduling rung's multi-completion pattern.
+
+- Tools: ONLY get_company_policy_answer (retrieval is the point of the rung; rule 8).
+- Exit 1: `questions_answered` (synthetic — curiosity has no success id).
+- Exit 2: the REAL take_message. The policy route's own fallback text offers "I can
+  take a message so the owner gets back to you" — a rung that spoke that offer while
+  holding no tool to perform it would promise a save it cannot make, which is the
+  bug class this whole week was spent killing. The write is the transition.
+- `begin_call` gains `has_questions`; the rung is planned after identity and BEFORE
+  the booking on mixed calls — the book-first doctrine exists because callers hung up
+  unbooked after answering nine of OUR questions, but Q&A is THEIR questions, and
+  nobody picks a time before hearing the price. The loop still cannot end with a
+  flagged meeting unbooked.
+
+**THE ONE DOCTRINE CHANGE — identity is now conditional (flagged for Dale's review).**
+A questions-ONLY call plans `[policy_qa]` with NO identity rung: a caller asking "when
+are you open?" must not be interrogated for a name and number before getting an answer.
+Identity remains the floor under every contact-needing goal (booking, message, role,
+change); pure curiosity has none. If the caller's questions turn into "have the owner
+get back to me", the rung gathers name+number itself and take_message's backend gate
+enforces them. This is the first exception to "identity is always rung 1" in
+planCallTasks, deliberately narrow, and trivially revertible (one `if`).
+
+**E2E:** sim-taskgroup gained a `seedKnowledgeBase` helper (through the REAL
+/knowledge/add ingestion — real embeddings — for the same reason seedAppointment books
+through the real RPC) and two scenarios: QUESTIONS-ONLY (the $149 figure exists only in
+the seeded KB, so if it reaches the transcript the answer came from retrieval; the
+transcript must also NOT contain a number shakedown) and QUESTIONS-then-BOOKING (price
+answered first, meeting still lands in the DB).
+
+**What the live-LLM hardening pass found (same day), both caught by the new scenarios:**
+
+1. **The island denied an ability the call had.** Mid-questions the caller said "can I
+   go ahead and book?" and the rung — holding no booking tools — truthfully said "I
+   don't have the ability to book sessions directly." The caller gave up; by the time
+   the queued booking rung offered real times they had disengaged. 0/4 on the mixed
+   scenario. Root cause 1 wearing a new coat: the rung didn't know what follows it.
+   Fix: `bookingFollows` — when a booking rung is queued, "I want to book" IS the
+   completion cue (call questions_answered; the booking step takes over in the same
+   breath), and the rung may never claim it cannot book. Without a booking queued, the
+   rung offers a REAL recorded message instead of a dead "I can't". 3/3 after.
+
+2. **A hallucinated price with a fake citation.** One run in six, the model answered
+   "$100 per hour" — a figure existing NOWHERE — prefixed "according to our pricing
+   policy", having said "let me check… one moment" and emitted a literal "…" to
+   role-play the lookup it never made (the exact behavior in toolPhases.ts's header,
+   now inside a rung). Root cause 3: retrieval has no natural WRITE to weld the answer
+   to, so the tool call cannot be made the rung's exit per-question. Mitigation is the
+   ladder's proven wording (tools return IN AN INSTANT — never "one moment"; your first
+   action on an already-asked question is the tool call; a price you did not just read
+   out of a tool result is a price you are making up): 8/8 after. HONEST RESIDUAL: this
+   is prompt discipline, not structure — the transcript-fact check in the sim (the $149
+   only exists in the seeded KB) is the guardrail that keeps this class visible.
+
+**Still unproven:** a live mic call (as ever), and the questions-then-BOOKING order on
+voice. Known limit unchanged: a goal that only EMERGES mid-call (pure Q&A caller decides
+to book after the plan snapshot) still needs the "re-run intent after the group"
+loop-back from the roadmap.
+
+---
+
 **Two flows exist in the codebase. Know which you are reading about:**
 
 1. **The prompt ladder** (shipped, default). The whole call is one big system prompt with
@@ -276,6 +349,7 @@ group.run() resolves only when the stack is EMPTY → root agent says goodbye
 | `bookMeetingTask.ts` | Rung 2 — an ACTION rung. Wraps the real `book_with_scheduling`; completes on `appointment_id`. |
 | `jobIntakeTask.ts` | Rung 3 — an ACTION rung. Wraps the real `capture_job_inquiry`; completes on `job_inquiry_id`. |
 | `takeMessageTask.ts` | Rung 4 — an ACTION rung, the universal catch-all. Wraps the real `take_message`; completes on `message_id`. Carries NO passthrough tools (take_message IS the completion). |
+| `policyQaTask.ts` | The Q&A rung — COLLECT (`questions_answered`) with an ACTION fallback (the real `take_message`). Holds ONLY `get_company_policy_answer`; every factual answer comes from retrieval. Questions-only calls skip identity (the one doctrine exception). |
 | `schedulingTask.ts` | Rung 5 — a LOOKUP-THEN-ACT rung. Reads `get_my_appointments`, then completes on `cancel_appointment` OR `reschedule_appointment` OR `no_appointment_change`. |
 | `../scripts/sim-taskgroup.ts` | E2E harness — runs the real tasks/tools/backend/DB with a **live LLM caller** (a second model plays the caller across phrasing styles). `SIM_TRACE=1` logs every tool call + result. |
 

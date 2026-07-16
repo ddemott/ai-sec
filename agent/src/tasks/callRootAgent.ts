@@ -68,9 +68,10 @@ As soon as you know what they are calling about, call begin_call with:
 - has_job_inquiry: true if they mentioned a job, role, contract, project, or hiring.
 - wants_schedule_change: true if they want to CANCEL or RESCHEDULE an appointment they ALREADY have.
 - wants_to_leave_message: true if they want to leave a message, have the owner call them back, or pass something along that is not a booking or a role.
+- has_questions: true if they are asking about the business — hours, pricing, services, policies, location, or anything else factual.
 - requested_service: their OWN WORDS for what they want ("a meeting about a contract role", "a call with the owner"). Leave blank if unclear.
 
-When in doubt, say YES to a goal — it is far better to ask an extra question later than to miss what they rang for. If a caller says "I'd like a meeting to talk about a job", that is BOTH: wants_meeting=true AND has_job_inquiry=true. "I need to move my appointment" is wants_schedule_change=true. Booking a NEW time is wants_meeting; changing an EXISTING one is wants_schedule_change — a reschedule is the latter. "I'd like to leave a message" or "tell the owner…" is wants_to_leave_message=true — even if the message mentions a job or a callback, leaving a message is the goal, so set wants_to_leave_message (not has_job_inquiry) unless they also clearly want the role briefed for a meeting.
+When in doubt, say YES to a goal — it is far better to ask an extra question later than to miss what they rang for. If a caller says "I'd like a meeting to talk about a job", that is BOTH: wants_meeting=true AND has_job_inquiry=true. "I need to move my appointment" is wants_schedule_change=true. Booking a NEW time is wants_meeting; changing an EXISTING one is wants_schedule_change — a reschedule is the latter. "I'd like to leave a message" or "tell the owner…" is wants_to_leave_message=true — even if the message mentions a job or a callback, leaving a message is the goal, so set wants_to_leave_message (not has_job_inquiry) unless they also clearly want the role briefed for a meeting. "What are your hours?" or "how much do you charge?" is has_questions=true — and a caller who ONLY has questions gets answers immediately, without being asked for a name or number first, so classify it and hand off just as fast.
 
 Do not try to book, or take details, or collect their name yet. Just understand the ask and call begin_call. Everything after that is handled for you.`,
       tools: {
@@ -98,6 +99,11 @@ Do not try to book, or take details, or collect their name yet. Just understand 
                 description:
                   'They want to leave a message for the owner, have the owner call them back, or pass something along that is not a booking or a role.',
               },
+              has_questions: {
+                type: 'boolean',
+                description:
+                  'They are asking about the business: hours, pricing, services, policies, location, or anything factual.',
+              },
               requested_service: {
                 type: 'string',
                 description: "The caller's own words for what they want, for the service matcher.",
@@ -110,6 +116,7 @@ Do not try to book, or take details, or collect their name yet. Just understand 
             has_job_inquiry: boolean;
             wants_schedule_change?: boolean;
             wants_to_leave_message?: boolean;
+            has_questions?: boolean;
             requested_service?: string;
           }): Promise<string> => this.#runGroup(args),
         }),
@@ -127,6 +134,7 @@ Do not try to book, or take details, or collect their name yet. Just understand 
     has_job_inquiry: boolean;
     wants_schedule_change?: boolean;
     wants_to_leave_message?: boolean;
+    has_questions?: boolean;
     requested_service?: string;
   }): Promise<string> {
     // begin_call can only fire once. A second classification mid-call is the
@@ -159,6 +167,7 @@ Do not try to book, or take details, or collect their name yet. Just understand 
         hasJobInquiry: goals.has_job_inquiry,
         wantsScheduleChange: goals.wants_schedule_change ?? false,
         wantsToLeaveMessage: goals.wants_to_leave_message ?? false,
+        hasQuestions: goals.has_questions ?? false,
         requestedService: goals.requested_service,
       },
       deps

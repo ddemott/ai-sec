@@ -127,6 +127,9 @@ interface Persona {
   // leave-a-message (the universal catch-all)
   wantsToLeaveMessage?: boolean;
   messageBody?: string; // what they want passed to the owner, in their own words
+  // questions about the business (answered from the knowledge base)
+  hasQuestions?: boolean;
+  questionFacts?: string; // what they want to know, and when they're satisfied
   // hard behaviours the persona MUST exhibit (adversarial)
   refusesPhone?: boolean; // never gives a number
 }
@@ -169,6 +172,11 @@ function personaSystem(p: Persona, style: string): string {
   if (p.wantsToLeaveMessage && p.messageBody) {
     facts.push(
       `You want to leave a MESSAGE for the owner: "${p.messageBody}". When the receptionist asks what you'd like to pass on, say this in your own words. You do NOT want to book a meeting and you are NOT briefing a role — you just want the message passed along and (if it mentions one) a callback.`
+    );
+  }
+  if (p.hasQuestions && p.questionFacts) {
+    facts.push(
+      `You have QUESTIONS about the business: ${p.questionFacts} Ask them ONE at a time, listen to each answer, and once you have what you came for, say that's all you needed. You are just gathering information — do not book anything and do not leave a message unless the receptionist cannot answer and offers to have the owner get back to you.`
     );
   }
   if (p.hasJobInquiry) {
@@ -320,6 +328,10 @@ interface Expect {
   rescheduled?: boolean;
   // leave-a-message outcome — a customer_messages row must land (take_message fired)
   message?: boolean;
+  // the spoken transcript must contain a KB FACT (proves the answer came from
+  // retrieval, not invention) / must NOT contain an identity shakedown
+  transcriptMatch?: RegExp;
+  transcriptForbid?: RegExp;
 }
 /** What a seed step handed back — the appointment the scenario will act on. */
 interface SeedInfo {
@@ -333,7 +345,7 @@ interface Scenario {
   styles?: string[]; // default: a spread
   /** Insert the state the scenario acts on (e.g. an existing appointment to cancel). Runs
    *  AFTER the per-run cleanup, so each run acts on a fresh row. */
-  seed?: (db: Client, p: Persona) => Promise<SeedInfo>;
+  seed?: (db: Client, p: Persona) => Promise<SeedInfo | null>;
 }
 
 const SEED_SERVICE_NAME = 'Programming Consultation';
@@ -421,6 +433,45 @@ async function seedAppointment(db: Client, p: Persona): Promise<SeedInfo> {
     [appointmentId]
   );
   return { appointmentId, startTime: row.rows[0]?.start_time };
+}
+
+/**
+ * Seed the knowledge base the Q&A scenarios retrieve from — through the REAL ingestion
+ * path (/knowledge/add computes real embeddings server-side), not a raw INSERT, for the
+ * same reason seedAppointment books through the real RPC: test data created any other
+ * way dodges the machinery under test. Idempotent: prior sim-qa docs are wiped first.
+ */
+async function seedKnowledgeBase(db: Client): Promise<SeedInfo | null> {
+  await db.query(`DELETE FROM tenant_docs WHERE tenant_id = $1 AND source = 'sim-qa'`, [TENANT]);
+  const login = await fetch(`${BACKEND_URL}/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'daledemott@gmail.com', password: 'password' }),
+  });
+  const auth = (await login.json()) as { success: boolean; token?: string };
+  if (!auth.success || !auth.token) throw new Error('seedKnowledgeBase: login failed');
+  const DOCS = [
+    {
+      question: 'How much does a programming consultation cost?',
+      answer:
+        'A programming consultation is $149 for a 30-minute session, payable after the meeting.',
+    },
+    {
+      question: 'Can consultations be done remotely?',
+      answer:
+        'Yes — consultations can be held remotely over video call, or in person at the office.',
+    },
+  ];
+  for (const doc of DOCS) {
+    const r = await fetch(`${BACKEND_URL}/knowledge/add`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${auth.token}` },
+      body: JSON.stringify({ ...doc, category: 'faq', source: 'sim-qa' }),
+    });
+    const j = (await r.json()) as { success: boolean };
+    if (!j.success) throw new Error(`seedKnowledgeBase: /knowledge/add failed (${r.status})`);
+  }
+  return null;
 }
 
 const DEFAULT_STYLES = ['plain', 'terse', 'chatty', 'frontloader', 'corrector', 'rambler'];
@@ -578,6 +629,49 @@ const SCENARIOS: Scenario[] = [
     // must NOT open a job inquiry or book a meeting.
     expect: { appointment: false, jobInquiry: false, message: true },
     styles: ['plain', 'terse', 'frontloader'],
+  },
+  {
+    title: 'QUESTIONS ONLY: answered from the KB, no identity shakedown',
+    persona: {
+      name: 'Nora Fields',
+      phone: '555-901-0011',
+      goalLine: 'you are just calling with a couple of questions about the business',
+      wantsMeeting: false,
+      hasJobInquiry: false,
+      hasQuestions: true,
+      requestedService: 'a couple of questions',
+      questionFacts:
+        'you want to know (1) how much a programming consultation costs, and (2) whether consultations can be done remotely over video.',
+    },
+    // The $149 figure exists ONLY in the seeded KB — if it reaches the transcript,
+    // the answer came from retrieval. And a questions-only caller must never be
+    // asked for a phone number (the identity rung is skipped by design).
+    expect: {
+      appointment: false,
+      jobInquiry: false,
+      transcriptMatch: /149/,
+      transcriptForbid: /best (phone )?number|number to reach/i,
+    },
+    seed: seedKnowledgeBase,
+    styles: ['plain', 'terse'],
+  },
+  {
+    title: 'QUESTIONS then BOOKING: price answered first, meeting still lands',
+    persona: {
+      name: 'Iris Chen',
+      phone: '555-901-0012',
+      goalLine:
+        'you want to know what a programming consultation costs, and if the price is reasonable you want to book one',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      hasQuestions: true,
+      requestedService: 'a programming consultation',
+      questionFacts:
+        'you want to know how much a programming consultation costs before you commit. Any price under $500 is fine — once you hear it, go ahead and book.',
+    },
+    expect: { appointment: true, jobInquiry: false, transcriptMatch: /149/ },
+    seed: seedKnowledgeBase,
+    styles: ['plain'],
   },
   {
     title: 'STRESS: caller refuses to give a phone number',
@@ -765,7 +859,7 @@ async function main(): Promise<void> {
             // as this run's failure and move on, so one bad seed can't hide 30 good runs.
             if (sc.seed) {
               try {
-                seedInfo = await sc.seed(db, sc.persona);
+                seedInfo = (await sc.seed(db, sc.persona)) ?? undefined;
               } catch (err) {
                 runs++;
                 failures.push({
@@ -795,6 +889,13 @@ async function main(): Promise<void> {
             continue;
           }
           const dbFails = db ? await verify(db, sc.persona, sc.expect, seedInfo) : [];
+          const spoken = res.transcript.map((t) => t.text).join(' ');
+          if (sc.expect.transcriptMatch && !sc.expect.transcriptMatch.test(spoken))
+            dbFails.push(
+              `transcript never contained ${sc.expect.transcriptMatch} — the KB fact was not spoken`
+            );
+          if (sc.expect.transcriptForbid && sc.expect.transcriptForbid.test(spoken))
+            dbFails.push(`transcript matched forbidden ${sc.expect.transcriptForbid}`);
           const rungInfo = `${res.rungsCompleted.length}/${res.rungsAttempted.length} rungs`;
           if (dbFails.length === 0) {
             passed++;
