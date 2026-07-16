@@ -402,6 +402,23 @@ bulleted/field-labelled list — a list has no sentence boundaries so TTS never 
 **Watch for:** any new agent on this path needs the `ttsNode` override, or markdown leaks
 to voice.
 
+### 7. The root agent's persona must NOT be the ladder — a 10k-token contradiction loses calls
+
+index.ts passed the FULL prompt-ladder system prompt (buildSystemPrompt output, ~10.5k chars
+incl. the tenant's composed RUNG script) as CallRootAgent's `persona`. So the intent agent's
+prompt was 130 lines of "run the call yourself — ask their name, take the message, here is
+RUNG 4" followed by 14 lines of "your ONE job is to call begin_call". Which text won was a
+coin flip per call: on 2026-07-16 a booking call handed off fine, and a leave-a-message call
+20 minutes later never called begin_call at all — the root agent ran the ladder's
+take-a-message script conversationally, held NO take_message tool, and the caller's message
+was heading for a narrated save with nothing behind it. Zero tool calls in the entire call.
+**Fix:** the root agent gets an IDENTITY LINE ("You are <persona_name>, the AI receptionist
+for <business>"), never a script; the rungs carry their own instructions.
+**Watch for:** any agent whose prompt embeds instructions meant for a DIFFERENT layer. And a
+sober eval note: a single-turn text replay (sim-begincall.ts) could NOT reproduce this even
+with the identical prompt at temperature 0 — the failure only manifested on the live voice
+path. Some of these only a real call catches (gotcha F applies to prompts too).
+
 ### 6. Asking for something the caller already said
 
 After identity, the booking rung opened with "What would you like to book a meeting for?" —

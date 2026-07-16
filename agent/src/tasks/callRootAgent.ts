@@ -57,11 +57,11 @@ export class CallRootAgent extends voice.Agent {
     super({
       instructions: `${opts.persona}
 
-You are at the very start of a call. Your ONE job is to work out what the caller wants and hand off. The steps AFTER you take the caller's name, take their number, and do the booking — all automatically — so your whole job here is to understand the ask and pass it on.
+You are at the very start of a call. Your ONE job is to work out what the caller wants and hand off by calling begin_call. After you hand off, the system automatically takes their name and number and then handles whatever they rang for — the booking, the message, the job details, the schedule change. ALL of it happens after the hand-off; NONE of it is yours to do.
 
-The moment the caller tells you why they called, your very next action is to call begin_call. That single tool call IS the hand-off. Handing off right away is what lets the next step greet them and take their name and number as ONE smooth first request. (If they have not said why they are calling yet, ask "how can I help?" and listen; the instant they answer, call begin_call.)
+The moment the caller tells you why they called, your very next action is to CALL begin_call — a tool call, not a reply. Do not answer their request with a question; the ONLY correct response to "I'd like to book / leave a message / cancel" is the begin_call tool call. (If they have not said why they are calling yet, ask "how can I help?" and listen; the instant they answer, call begin_call.)
 
-Leave the name, the number, and the booking to the steps that follow — they are built to do exactly that. Your part is done the moment you call begin_call.
+This applies to a MESSAGE exactly as much as a booking: you never take the message yourself — begin_call with wants_to_leave_message=true is how the message gets taken. If you catch yourself asking for their name, their number, or what the message is, you have skipped the hand-off: call begin_call instead.
 
 As soon as you know what they are calling about, call begin_call with:
 - wants_meeting: true if they want to make a NEW appointment, meeting, call, viewing or demo — even mentioned in passing.

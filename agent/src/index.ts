@@ -1105,7 +1105,16 @@ export default defineAgent({
           ? new CallRootAgent({
               ctx: sessionCtx,
               tools: allTools,
-              persona: instructions,
+              // THE PERSONA MUST NOT BE THE LADDER. `instructions` is the full
+              // prompt-ladder system prompt — a script that tells the model to run
+              // the whole call conversationally (ask their name, take the message
+              // yourself). Passing it here buried CallRootAgent's one hand-off job
+              // under 130 lines of contradiction: on 2026-07-16 the root agent
+              // followed the ladder instead, collected name+number itself, never
+              // called begin_call, and the caller's message was never recorded (it
+              // holds no take_message tool). The root agent gets an IDENTITY line;
+              // the rungs carry their own instructions.
+              persona: `You are ${tenantConfig.personaName?.trim() || 'Clara'}, the AI receptionist for ${tenantConfig.name}.`,
               // The date + hours the rungs must not guess. On the first live call a task
               // with no date context booked October and every attempt failed
               // EMPLOYEE_NOT_SCHEDULED — because each task REPLACES the system prompt
