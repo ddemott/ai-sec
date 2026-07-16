@@ -24,6 +24,7 @@ import type { SessionContext } from '../sessionContext.js';
 import { makeIdentityRung, type IdentityResult } from './identityTask.js';
 import { makeBookMeetingRung, type BookMeetingResult } from './bookMeetingTask.js';
 import { makeJobIntakeRung, type JobIntakeResult } from './jobIntakeTask.js';
+import { makeTakeMessageRung, type TakeMessageResult } from './takeMessageTask.js';
 import { makeSchedulingRung, type ScheduleChangeResult } from './schedulingTask.js';
 
 /**
@@ -40,6 +41,10 @@ export interface CallerGoals {
    *  false) so the three original goals keep their existing call sites; the intent router
    *  always supplies it explicitly. */
   wantsScheduleChange?: boolean;
+  /** They want to leave a message for the owner — a question, a callback request, anything a
+   *  booking or a role does not cover. The universal catch-all. Optional for the same
+   *  call-site-compatibility reason as wantsScheduleChange. */
+  wantsToLeaveMessage?: boolean;
   /** In their own words, for the service matcher. */
   requestedService?: string;
 }
@@ -103,6 +108,7 @@ export interface CallDeps {
   onIdentified?: (r: IdentityResult) => Promise<void> | void;
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
+  onMessageTaken?: (r: TakeMessageResult) => Promise<void> | void;
   onScheduleChanged?: (r: ScheduleChangeResult) => Promise<void> | void;
 }
 
@@ -185,7 +191,11 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
             .join(' '),
           knownPhone: deps.state.callerPhone,
           knownName: deps.state.callerName,
+          // Fallback so a booking that cannot happen becomes a RECORDED message, never a
+          // promise with no tool behind it (the 2026-07-16 dead-end).
+          takeMessage: deps.tools['take_message'],
           onBooked: deps.onBooked,
+          onMessageTaken: deps.onMessageTaken,
         }),
     });
   }
@@ -196,7 +206,7 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
   if (goals.hasJobInquiry) {
     specs.push({
       id: 'job_intake',
-      description: "Collect the role details and record them for the owner.",
+      description: 'Collect the role details and record them for the owner.',
       factory: () =>
         makeJobIntakeRung({
           messagingTools: pick(deps.tools, ['capture_job_inquiry']),
@@ -207,7 +217,26 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
     });
   }
 
-  // RUNG 4 — change an EXISTING appointment, if they came to cancel or reschedule. It reads
+  // RUNG 4 — take a message, if they want one. The universal catch-all: a need that a
+  // booking or a role does not cover still gets handled, by recording a message. Placed
+  // AFTER book + intake, mirroring the composed-script order (take_message is the ELSE rung
+  // after the vertical intake). As a registered task the loop will not end without the
+  // take_message write — the exact fix for the ladder narrating the save without doing it.
+  if (goals.wantsToLeaveMessage) {
+    specs.push({
+      id: 'take_message',
+      description: 'Record a message from the caller for the owner.',
+      factory: () =>
+        makeTakeMessageRung({
+          messagingTools: pick(deps.tools, ['take_message']),
+          knownCaller: knownCallerLine(deps.state),
+          knownName: deps.state.callerName,
+          onMessageTaken: deps.onMessageTaken,
+        }),
+    });
+  }
+
+  // RUNG 5 — change an EXISTING appointment, if they came to cancel or reschedule. It reads
   // (get_my_appointments) then mutates; a manage call has three honest endings, so the rung
   // carries three completions (see schedulingTask). Placed last: it concerns an appointment
   // that already exists, independent of anything booked or briefed on this call.

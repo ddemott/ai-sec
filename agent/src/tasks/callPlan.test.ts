@@ -186,6 +186,51 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(names).not.toContain('book_with_scheduling');
   });
 
+  it('HAPPY: a caller who wants to leave a message gets the take_message rung', () => {
+    // The universal catch-all becomes a registered rung, so the loop enforces the
+    // take_message WRITE — the exact fix for the ladder narrating "I've passed that along"
+    // without ever calling the tool.
+    const plan = ids({ wantsMeeting: false, hasJobInquiry: false, wantsToLeaveMessage: true });
+    expect(plan).toEqual(['identity', 'take_message']);
+  });
+
+  it('HAPPY: no message goal → no take_message rung (we never manufacture it)', () => {
+    expect(ids({ wantsMeeting: true, hasJobInquiry: false })).not.toContain('take_message');
+  });
+
+  it('SAD: take_message rung gets ONLY take_message — nothing to wander into', () => {
+    // gotcha #3 / rule 8: a rung sees only its load-bearing tool. take_message IS the
+    // completion, so the rung carries exactly that — no booking, no job intake to grab.
+    const specs = planCallTasks(
+      { wantsMeeting: false, hasJobInquiry: false, wantsToLeaveMessage: true },
+      makeDeps()
+    );
+    const msg = specs.find((s) => s.id === 'take_message')!;
+    const names = Object.keys(msg.factory().toolCtx);
+    expect(names).toContain('take_message');
+    expect(names).not.toContain('book_with_scheduling');
+    expect(names).not.toContain('capture_job_inquiry');
+  });
+
+  it('SAD: the FULL order is fixed — identity → book → job_intake → take_message → schedule_change', () => {
+    // Order is not a preference (BUILDING_SCRIPT_NOTES checklist #6). take_message is the
+    // ELSE catch-all, so it sits after the vertical intake and before an existing-appointment
+    // change — mirroring the composed-script block order.
+    const plan = ids({
+      wantsMeeting: true,
+      hasJobInquiry: true,
+      wantsToLeaveMessage: true,
+      wantsScheduleChange: true,
+    });
+    expect(plan).toEqual([
+      'identity',
+      'book_meeting',
+      'job_intake',
+      'take_message',
+      'schedule_change',
+    ]);
+  });
+
   it('HAPPY: buildCallTaskGroup registers the plan onto a real TaskGroup', () => {
     // The loop is LiveKit's; this only checks the assembly does not throw and returns a
     // group. The guarantee (pops every task, completes only when empty) is LiveKit's own

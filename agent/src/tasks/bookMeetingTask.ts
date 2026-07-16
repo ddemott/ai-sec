@@ -24,11 +24,17 @@
  * only to notice success.
  */
 import { type llm, type voice } from '@livekit/agents';
-import { makeRung, idExtractor } from './rung.js';
+import { makeRung, idExtractor, type RungCompletion } from './rung.js';
 
 export interface BookMeetingResult {
-  appointmentId: string;
-  /** The raw JSON the booking tool returned — the spoken time, employee, etc. */
+  /** 'booked' when a meeting went in the diary; 'message' when the caller could not be
+   *  booked (no open times, or they'd rather leave a message) and one was recorded instead. */
+  outcome: 'booked' | 'message';
+  /** Present when outcome is 'booked'. */
+  appointmentId?: string;
+  /** Present when outcome is 'message'. */
+  messageId?: string;
+  /** The raw JSON the completing tool returned — the spoken time/employee, or the saved-message reply. */
   bookedResult: unknown;
 }
 
@@ -47,7 +53,14 @@ export interface BookMeetingTaskOptions {
    *  model that forgets to pass it still books, instead of asking again. */
   knownPhone?: string;
   knownName?: string;
+  /** The take_message tool — added as a FALLBACK completion. When a booking truly cannot
+   *  happen (no open times, or the caller would rather leave a message), calling it RECORDS
+   *  the message and completes the rung. Without this the model offers to "pass something
+   *  along" it has no way to save (the 2026-07-16 dead-end). Omit → no fallback. */
+  takeMessage?: llm.ToolContext[string];
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
+  /** Called when the fallback message path completes instead of a booking. */
+  onMessageTaken?: (r: { messageId: string; raw: unknown }) => Promise<void> | void;
 }
 
 export const BOOK_MEETING_INSTRUCTIONS = `Your ONE job right now is to get a meeting into the diary. Nothing else — not the details of why they are coming, not their preferences. Just the booking.
@@ -59,7 +72,9 @@ You already have their name and number. Do NOT ask for them again.
 - WAIT for them to CHOOSE a time. "Yeah", "okay" and "sure" are not a choice — a time is chosen only when they name one, or say something clearly tied to one ("the 4:30", "the first one"). If you did not clearly hear one of the times you offered, ASK AGAIN. Never guess, and never take the first or last option as a default.
 - When they have picked, your VERY NEXT action is to CALL book_with_scheduling — call it BEFORE you say the booking is done. Only CALLING the tool books the meeting; saying "you're booked in" without calling it books NOTHING. Run it first, then confirm the ACTUAL booked time it returns, out loud.
 
-Booking the meeting is what finishes this step. There is nothing to say or do after it — the moment it is booked, you are done here.`;
+If — and ONLY if — a booking genuinely cannot happen (get_available_slots comes back with no open times, or the caller says they would rather just leave a message than pick a time), take a message instead: CALL take_message with their name and what they want passed on. Calling take_message is the ONLY thing that records it — offering to "pass it along" or "have someone get back to them" WITHOUT calling take_message saves NOTHING and misleads the caller. So if you say it, call it. Do NOT drop to a message just because they are slow to choose; a message is for when a booking truly is not going to happen.
+
+Booking the meeting — or, when it cannot happen, recording a message — is what finishes this step. There is nothing to say or do after it.`;
 
 /**
  * Rung 2 as an ACTION rung (see rung.ts): the whole point is one real backend write,
@@ -68,7 +83,9 @@ Booking the meeting is what finishes this step. There is nothing to say or do af
  * it called. get_available_slots / get_service_catalog ride along as the passthrough
  * tools the model needs to reach that write.
  */
-export function makeBookMeetingRung(opts: BookMeetingTaskOptions): voice.AgentTask<BookMeetingResult> {
+export function makeBookMeetingRung(
+  opts: BookMeetingTaskOptions
+): voice.AgentTask<BookMeetingResult> {
   const { schedulingTools, onBooked } = opts;
 
   const realBooking = schedulingTools['book_with_scheduling'];
@@ -87,15 +104,10 @@ export function makeBookMeetingRung(opts: BookMeetingTaskOptions): voice.AgentTa
   const { book_with_scheduling: _drop, ...passthrough } = schedulingTools;
   void _drop;
 
-  return makeRung<BookMeetingResult>({
-    // The runtime preamble goes FIRST — the model must know what today is before it reads
-    // a single instruction about booking, or it books blind (the first live call guessed
-    // October and every booking failed EMPLOYEE_NOT_SCHEDULED).
-    instructions: [opts.runtimePreamble, alreadyAsked, BOOK_MEETING_INSTRUCTIONS]
-      .filter(Boolean)
-      .join('\n\n'),
-    tools: passthrough,
-    completion: {
+  // The PRIMARY completion: a real booking. The rung ends the instant book_with_scheduling
+  // returns an appointment_id.
+  const completions: RungCompletion<BookMeetingResult>[] = [
+    {
       kind: 'action',
       toolName: 'book_with_scheduling',
       realTool: realBooking,
@@ -110,11 +122,46 @@ export function makeBookMeetingRung(opts: BookMeetingTaskOptions): voice.AgentTa
         phone: (args.phone as string)?.trim() || opts.knownPhone,
         name: (args.name as string)?.trim() || opts.knownName,
       }),
-      extract: idExtractor('appointment_id', (_id, raw) => ({
-        appointmentId: _id,
+      extract: idExtractor('appointment_id', (id, raw) => ({
+        outcome: 'booked' as const,
+        appointmentId: id,
         bookedResult: raw,
       })),
       onDone: onBooked,
     },
+  ];
+
+  // The FALLBACK completion: when a booking cannot happen, a message CAN be recorded — and
+  // the write is what completes the rung, so the model can no longer promise to "pass it
+  // along" without take_message actually running (the 2026-07-16 dead-end). Same
+  // multi-completion shape the scheduling rung uses; the first to succeed wins.
+  if (opts.takeMessage) {
+    completions.push({
+      kind: 'action',
+      toolName: 'take_message',
+      realTool: opts.takeMessage,
+      argDefaults: opts.knownName
+        ? (args) => ({ caller_name: opts.knownName, ...args })
+        : undefined,
+      extract: idExtractor('message_id', (id, raw) => ({
+        outcome: 'message' as const,
+        messageId: id,
+        bookedResult: raw,
+      })),
+      onDone: opts.onMessageTaken
+        ? (r) => opts.onMessageTaken!({ messageId: r.messageId ?? '', raw: r.bookedResult })
+        : undefined,
+    });
+  }
+
+  return makeRung<BookMeetingResult>({
+    // The runtime preamble goes FIRST — the model must know what today is before it reads
+    // a single instruction about booking, or it books blind (the first live call guessed
+    // October and every booking failed EMPLOYEE_NOT_SCHEDULED).
+    instructions: [opts.runtimePreamble, alreadyAsked, BOOK_MEETING_INSTRUCTIONS]
+      .filter(Boolean)
+      .join('\n\n'),
+    tools: passthrough,
+    completion: completions,
   });
 }

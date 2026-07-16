@@ -31,6 +31,7 @@ import { planCallTasks, buildCallTaskGroup, type CallDeps, type CallRuntime } fr
 import type { IdentityResult } from './identityTask.js';
 import type { BookMeetingResult } from './bookMeetingTask.js';
 import type { JobIntakeResult } from './jobIntakeTask.js';
+import type { TakeMessageResult } from './takeMessageTask.js';
 import type { ScheduleChangeResult } from './schedulingTask.js';
 
 export interface CallRootOptions {
@@ -44,6 +45,7 @@ export interface CallRootOptions {
   onIdentified?: (r: IdentityResult) => Promise<void> | void;
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
+  onMessageTaken?: (r: TakeMessageResult) => Promise<void> | void;
   onScheduleChanged?: (r: ScheduleChangeResult) => Promise<void> | void;
 }
 
@@ -55,19 +57,20 @@ export class CallRootAgent extends voice.Agent {
     super({
       instructions: `${opts.persona}
 
-You are at the very start of a call. Your ONE job is to work out what the caller wants and hand off. The steps AFTER you take the caller's name, take their number, and do the booking — all automatically — so your whole job here is to understand the ask and pass it on.
+You are at the very start of a call. Your ONE job is to work out what the caller wants and hand off by calling begin_call. After you hand off, the system automatically takes their name and number and then handles whatever they rang for — the booking, the message, the job details, the schedule change. ALL of it happens after the hand-off; NONE of it is yours to do.
 
-The moment the caller tells you why they called, your very next action is to call begin_call. That single tool call IS the hand-off. Handing off right away is what lets the next step greet them and take their name and number as ONE smooth first request. (If they have not said why they are calling yet, ask "how can I help?" and listen; the instant they answer, call begin_call.)
+The moment the caller tells you why they called, your very next action is to CALL begin_call — a tool call, not a reply. Do not answer their request with a question; the ONLY correct response to "I'd like to book / leave a message / cancel" is the begin_call tool call. (If they have not said why they are calling yet, ask "how can I help?" and listen; the instant they answer, call begin_call.)
 
-Leave the name, the number, and the booking to the steps that follow — they are built to do exactly that. Your part is done the moment you call begin_call.
+This applies to a MESSAGE exactly as much as a booking: you never take the message yourself — begin_call with wants_to_leave_message=true is how the message gets taken. If you catch yourself asking for their name, their number, or what the message is, you have skipped the hand-off: call begin_call instead.
 
 As soon as you know what they are calling about, call begin_call with:
 - wants_meeting: true if they want to make a NEW appointment, meeting, call, viewing or demo — even mentioned in passing.
 - has_job_inquiry: true if they mentioned a job, role, contract, project, or hiring.
 - wants_schedule_change: true if they want to CANCEL or RESCHEDULE an appointment they ALREADY have.
+- wants_to_leave_message: true if they want to leave a message, have the owner call them back, or pass something along that is not a booking or a role.
 - requested_service: their OWN WORDS for what they want ("a meeting about a contract role", "a call with the owner"). Leave blank if unclear.
 
-When in doubt, say YES to a goal — it is far better to ask an extra question later than to miss what they rang for. If a caller says "I'd like a meeting to talk about a job", that is BOTH: wants_meeting=true AND has_job_inquiry=true. "I need to move my appointment" is wants_schedule_change=true. Booking a NEW time is wants_meeting; changing an EXISTING one is wants_schedule_change — a reschedule is the latter.
+When in doubt, say YES to a goal — it is far better to ask an extra question later than to miss what they rang for. If a caller says "I'd like a meeting to talk about a job", that is BOTH: wants_meeting=true AND has_job_inquiry=true. "I need to move my appointment" is wants_schedule_change=true. Booking a NEW time is wants_meeting; changing an EXISTING one is wants_schedule_change — a reschedule is the latter. "I'd like to leave a message" or "tell the owner…" is wants_to_leave_message=true — even if the message mentions a job or a callback, leaving a message is the goal, so set wants_to_leave_message (not has_job_inquiry) unless they also clearly want the role briefed for a meeting.
 
 Do not try to book, or take details, or collect their name yet. Just understand the ask and call begin_call. Everything after that is handled for you.`,
       tools: {
@@ -90,6 +93,11 @@ Do not try to book, or take details, or collect their name yet. Just understand 
                 description:
                   'They want to CANCEL or RESCHEDULE an appointment they already have (not book a new one).',
               },
+              wants_to_leave_message: {
+                type: 'boolean',
+                description:
+                  'They want to leave a message for the owner, have the owner call them back, or pass something along that is not a booking or a role.',
+              },
               requested_service: {
                 type: 'string',
                 description: "The caller's own words for what they want, for the service matcher.",
@@ -101,6 +109,7 @@ Do not try to book, or take details, or collect their name yet. Just understand 
             wants_meeting: boolean;
             has_job_inquiry: boolean;
             wants_schedule_change?: boolean;
+            wants_to_leave_message?: boolean;
             requested_service?: string;
           }): Promise<string> => this.#runGroup(args),
         }),
@@ -117,6 +126,7 @@ Do not try to book, or take details, or collect their name yet. Just understand 
     wants_meeting: boolean;
     has_job_inquiry: boolean;
     wants_schedule_change?: boolean;
+    wants_to_leave_message?: boolean;
     requested_service?: string;
   }): Promise<string> {
     // begin_call can only fire once. A second classification mid-call is the
@@ -140,6 +150,7 @@ Do not try to book, or take details, or collect their name yet. Just understand 
       onIdentified: this.#opts.onIdentified,
       onBooked: this.#opts.onBooked,
       onCaptured: this.#opts.onCaptured,
+      onMessageTaken: this.#opts.onMessageTaken,
       onScheduleChanged: this.#opts.onScheduleChanged,
     };
     const specs = planCallTasks(
@@ -147,6 +158,7 @@ Do not try to book, or take details, or collect their name yet. Just understand 
         wantsMeeting: goals.wants_meeting,
         hasJobInquiry: goals.has_job_inquiry,
         wantsScheduleChange: goals.wants_schedule_change ?? false,
+        wantsToLeaveMessage: goals.wants_to_leave_message ?? false,
         requestedService: goals.requested_service,
       },
       deps

@@ -64,7 +64,11 @@ export function resolveJobCompanies(input: {
   client_company?: string | null;
   caller_company?: string | null;
   represents_company?: boolean | null;
-}): { clientCompany: string | null; callerCompany: string | null; representsCompany: boolean | null } {
+}): {
+  clientCompany: string | null;
+  callerCompany: string | null;
+  representsCompany: boolean | null;
+} {
   const clean = (s?: string | null): string | null =>
     typeof s === 'string' && s.trim() !== '' ? s.trim() : null;
   const cc = clean(input.client_company);
@@ -86,7 +90,11 @@ export function resolveJobCompanies(input: {
   }
 
   // Otherwise keep what we have; represents stays whatever the model reported (or null).
-  return { clientCompany: cc, callerCompany: ac, representsCompany: input.represents_company ?? null };
+  return {
+    clientCompany: cc,
+    callerCompany: ac,
+    representsCompany: input.represents_company ?? null,
+  };
 }
 
 export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {
@@ -194,8 +202,8 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         message_id: row.message_id,
         notified,
         message: notified
-          ? 'Message saved and the owner has been notified by text.'
-          : 'Message saved. The owner will be able to see it in their dashboard.',
+          ? 'Message saved — the owner has been alerted and will follow up.'
+          : 'Message saved — the owner will get it and follow up with the caller.',
       });
     },
     'Failed to save message'
