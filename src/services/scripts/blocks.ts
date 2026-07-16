@@ -152,7 +152,7 @@ WHEN you have worked the questions
 };
 
 /**
- * RUNG 4 — EVERY GOAL DONE. Universal.
+ * RUNG 5 — EVERY GOAL DONE. Universal.
  *
  * The caller's first sentence is a LIST of goals, not one goal. "I'd like a meeting with
  * the owner about a job position" is TWO. This rung is what stops the agent completing one,
@@ -184,7 +184,7 @@ IF a meeting would help and the diary is still empty
 **Once every goal they stated has its tool behind it, go straight to the close — that is your send-off.** Save "is there anything else I can help you with?" for THEIR extras, the things they raise on their own.`,
 };
 
-/** RUNG 5 — CLOSE. Universal. */
+/** RUNG 6 — CLOSE. Universal. */
 export const CLOSE: ScriptBlock = {
   id: 'close',
   purpose: 'Close on the outcome (when to turn up), not on the paperwork. Universal.',
@@ -204,7 +204,7 @@ ONE sentence covers it all. Examples:
   → both: "You're all set — Wednesday at 2:45 with the owner, and I've passed your note along to them. Thanks for calling, and have a great day."`,
 };
 
-/** RUNG — a message for the owner. The universal ELSE: a need a booking or a role does
+/** RUNG — a message for the owner. The universal ELSE: a need that a booking or a role does
  *  not cover still gets handled, by taking a message. */
 export const TAKE_MESSAGE: ScriptBlock = {
   id: 'take_message',
