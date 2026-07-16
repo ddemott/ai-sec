@@ -16,7 +16,6 @@ import {
   CANONICAL_ORDER,
   composeScript,
   INTAKE_JOB_INQUIRY,
-  INTAKE_REAL_ESTATE,
 } from '../../src/services/scripts/blocks';
 
 const PERSONA = 'You are the receptionist for Acme.';
@@ -45,47 +44,54 @@ describe('script composition — the invariants a copy-pasted script would lose'
     //      immediately." — a real caller, mid-call, 2026-07-14. The agent read his
     //      number back and acted on it before he could say yes.
     //      A new business must not have to rediscover that.
-    for (const intake of [['intake_job_inquiry'], ['intake_real_estate'], []]) {
+    for (const intake of [['intake_job_inquiry'], []]) {
       const script = composeScript({ persona: PERSONA, intake });
       expect(script).toContain('STOP TALKING');
       expect(script).toMatch(/read it back/i);
-      expect(script).toMatch(/never proceed on a number they did not confirm/i);
+      // Positive framing (gotcha G): "a number counts as ready ONLY once they have said
+      // yes to it" — the do-X form of the old "never proceed on an unconfirmed number".
+      expect(script).toMatch(/counts as ready ONLY once they have said yes/i);
     }
   });
 
   it('SAD: every script forbids closing on an unfinished ask', () => {
     // WHY: "Is there anything else I can help you with?" is how the agent ended a call
     //      with the caller's own request undone. It sounds like service. It is an exit.
-    for (const intake of [['intake_job_inquiry'], ['intake_real_estate']]) {
+    for (const intake of [['intake_job_inquiry']]) {
       const script = composeScript({ persona: PERSONA, intake });
       expect(script).toMatch(/is there anything else/i);
-      expect(script).toMatch(/it is not a way out/i);
+      // Positive framing (gotcha G): the do-X form keeps "anything else?" for the caller's
+      // own extras, rather than forbidding it as "not a way out".
+      expect(script).toMatch(/for THEIR extras/i);
     }
   });
 
-  it('HAPPY: two verticals share every universal rung and differ ONLY in intake', () => {
-    // WHY: this IS the feature. A staffing agency and an estate agent are the same call
-    //      with different questions in the middle. If they diverge anywhere else, the
-    //      abstraction has failed and we are back to maintaining N scripts by hand.
+  it('HAPPY: two different intakes share every universal rung and differ ONLY in the middle', () => {
+    // WHY: this IS the feature. Two businesses are the same call with different questions
+    //      in the middle. If they diverge anywhere else, the abstraction has failed and we
+    //      are back to maintaining N scripts by hand. (Proven with the live staffing block
+    //      vs an inline custom intake — the two ways a tenant gets an intake.)
+    const CUSTOM = '### RUNG 3 — ASK ABOUT THE VAN\n\nIF they mentioned a van → what make?';
     const staffing = composeScript({ persona: PERSONA, intake: ['intake_job_inquiry'] });
-    const realEstate = composeScript({ persona: PERSONA, intake: ['intake_real_estate'] });
+    const custom = composeScript({ persona: PERSONA, customIntake: CUSTOM });
 
     for (const universal of [
       'ladder_header',
       'identity',
       'book_meeting',
+      'take_message',
       'complete_all_goals',
       'close',
     ]) {
       expect(staffing).toContain(BLOCKS[universal].text);
-      expect(realEstate).toContain(BLOCKS[universal].text);
+      expect(custom).toContain(BLOCKS[universal].text);
     }
 
     // ...and the only difference is the middle.
     expect(staffing).toContain(INTAKE_JOB_INQUIRY.text);
-    expect(staffing).not.toContain(INTAKE_REAL_ESTATE.text);
-    expect(realEstate).toContain(INTAKE_REAL_ESTATE.text);
-    expect(realEstate).not.toContain(INTAKE_JOB_INQUIRY.text);
+    expect(staffing).not.toContain('ASK ABOUT THE VAN');
+    expect(custom).toContain('ASK ABOUT THE VAN');
+    expect(custom).not.toContain(INTAKE_JOB_INQUIRY.text);
   });
 
   it('HAPPY: a business that fits no existing block can supply its own intake inline', () => {
@@ -117,54 +123,6 @@ describe('script composition — the invariants a copy-pasted script would lose'
     expect(() => composeScript({ persona: PERSONA, intake: ['intake_dentistry'] })).toThrow(
       /Unknown intake block/
     );
-  });
-
-  it('SAD: the real-estate script NEVER values a home, and screens for another agent', () => {
-    // WHO: a seller, ringing a listing agent. This is the money call in real estate and
-    //      it has two traps in it, both of which a naive script walks straight into.
-    //
-    // TRAP 1 — "what's my house worth?" A number given on the phone is anchored to,
-    //      certainly wrong (nobody has seen the house), and it destroys the entire
-    //      reason for the listing appointment. The honest answer IS the appointment.
-    //
-    // TRAP 2 — the property is already listed with ANOTHER BROKERAGE. Soliciting that
-    //      seller is an ethics violation and in many states a licence matter. It has to
-    //      be asked FIRST, and a "yes" must END the call, not just annotate it.
-    //
-    // Both are the kind of thing a business owner assumes their receptionist knows and
-    // never thinks to write down — which is exactly why it belongs in a shared block
-    // rather than in one tenant's hand-typed prompt.
-    const script = composeScript({ persona: PERSONA, intake: ['intake_real_estate'] });
-
-    expect(script).toMatch(/NEVER put a value on someone's home/i);
-    expect(script).toMatch(/listed with another agent/i);
-    expect(script).toMatch(/ethics violation/i);
-    // ...and the asking price of OUR OWN listing is public — the rule is about opinions
-    // of value, not about refusing to speak. A script that cannot quote its own listing
-    // is useless to the business.
-    expect(script).toMatch(/ASKING PRICE.*is public/i);
-    // Never advise on financing.
-    expect(script).toMatch(/never advise on mortgages/i);
-  });
-
-  it('HAPPY: the real-estate script routes every caller a real agency actually gets', () => {
-    // WHY: a real estate line is not just buyers and sellers. It is other AGENTS wanting
-    //      showing access or submitting an offer (time-critical — a slow answer loses a
-    //      sale), clients mid-transaction who must NOT be run through a lead-intake
-    //      script, and tenants of managed properties whose "no heat" call is an emergency
-    //      and not a message. Miss a branch and that caller gets the wrong call entirely.
-    const script = composeScript({ persona: PERSONA, intake: ['intake_real_estate'] });
-
-    expect(script).toMatch(/THEY ARE SELLING/i);
-    expect(script).toMatch(/THEY ARE BUYING/i);
-    expect(script).toMatch(/ONE OF OUR LISTINGS/i);
-    expect(script).toMatch(/ANOTHER AGENT/i);
-    expect(script).toMatch(/EXISTING CLIENT, MID-TRANSACTION/i);
-    expect(script).toMatch(/A TENANT/i);
-
-    // The two that must ESCALATE rather than take a polite message.
-    expect(script).toMatch(/SUBMITTING AN OFFER[\s\S]{0,200}Page the agent/i);
-    expect(script).toMatch(/EMERGENCY[\s\S]{0,160}page the owner NOW/i);
   });
 
   it('HAPPY: every block in CANONICAL_ORDER actually exists', () => {
