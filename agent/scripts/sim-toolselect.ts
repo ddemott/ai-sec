@@ -448,6 +448,20 @@ const CASES: EvalCase[] = [
     forbidden: ['book_appointment', 'book_with_scheduling'],
   },
   {
+    // Reproduces the 2026-07-16 live failure: caller ASKS to leave a message,
+    // then the message body mentions "a job" and "a callback". The model must
+    // record it with take_message — NOT divert into role intake or booking on
+    // those words, and NOT narrate "I've saved that" with no tool behind it.
+    name: 'leave-a-message that mentions a job/callback still calls take_message',
+    userTurns: [
+      "I'd like to leave a message for the owner. It's Jack Smith, my number is 555-832-1186.",
+      'Tell him I have a job for him, and I would like him to give me a callback.',
+      "No, that's it — thanks.",
+    ],
+    required: [['take_message']],
+    forbidden: ['book_appointment', 'book_with_scheduling', 'capture_job_inquiry'],
+  },
+  {
     // New 2026-07-04 tool: caller explicitly wants the self-service text
     // instead of a live reschedule — the model must send the link, not run
     // the live reschedule (or worse, cancel).
@@ -685,7 +699,9 @@ async function main(): Promise<void> {
       // the story — the other half is the plausible sentence the model said
       // instead, and that is the part that reaches a customer.
       for (const line of r.said) {
-        console.log(`        ${C.d}said: "${line.replace(/\s+/g, ' ').trim().slice(0, 140)}"${C.x}`);
+        console.log(
+          `        ${C.d}said: "${line.replace(/\s+/g, ' ').trim().slice(0, 140)}"${C.x}`
+        );
       }
     }
     if (r.pass) passed++;

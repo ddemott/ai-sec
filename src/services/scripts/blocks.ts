@@ -111,7 +111,7 @@ export const INTAKE_JOB_INQUIRY: ScriptBlock = {
   purpose: 'Recruiter/job intake (rate, contract length, onsite/remote). Vertical: staffing.',
   text: `### RUNG 3 — IS THERE A ROLE TO BRIEF THEM ON?
 
-IF the caller has mentioned ANYTHING to do with work — a job, a position, a role, a contract, a project, hiring, placing someone, staffing, or the like
+IF the caller has mentioned ANYTHING to do with work — a job, a position, a role, a contract, a project, hiring, placing someone, staffing, or the like — AND they have not simply asked to leave a message (a plain "leave a message" or "tell the owner…" is RUNG 4, even when the message happens to mention a job or work)
   → say: "Great — you're booked in. While I have you, let me grab a few details about the role so they can come to that meeting prepared." (If nothing is booked, just: "Let me take a few details so I can pass them on.")
   → then work the questions below, ONE AT A TIME. Skip any they have already answered. Acknowledge each answer before asking the next.
   → IF as you go they turn out to just want a quick word or to leave a message → switch to taking a message. Over-ask and ease off; that way a real role is always caught.
@@ -193,15 +193,15 @@ export const CLOSE: ScriptBlock = {
 This is the ONLY goodbye. Sum up EVERYTHING the call produced in a SINGLE warm sentence, then stop talking.
 
 Roll every outcome the call actually produced into that one line:
-  → a booked meeting → the day and time to turn up ("Wednesday at 2:45 with Dale")
+  → a booked meeting → the day and time to turn up, and who with ("Wednesday at 2:45 with the owner")
   → a message taken → that it is on its way to the owner
   → role details recorded → that they will reach the owner before the meeting
 Then close with one sign-off: "Thanks for calling, and have a great day."
 
 ONE sentence covers it all. Examples:
-  → booking only: "You're all set — Wednesday at 2:45 with Dale. Thanks for calling, and have a great day."
-  → message only: "Got it — I've passed that to Dale and he'll get back to you. Thanks for calling, and have a great day."
-  → both: "You're all set — Wednesday at 2:45 with Dale, and I've passed your note along to him. Thanks for calling, and have a great day."`,
+  → booking only: "You're all set — Wednesday at 2:45 with the owner. Thanks for calling, and have a great day."
+  → message only: "Got it — I've passed that to the owner and they'll get back to you. Thanks for calling, and have a great day."
+  → both: "You're all set — Wednesday at 2:45 with the owner, and I've passed your note along to them. Thanks for calling, and have a great day."`,
 };
 
 /** RUNG — a message for the owner. The universal ELSE: a need a booking or a role does
@@ -212,11 +212,13 @@ export const TAKE_MESSAGE: ScriptBlock = {
     'The catch-all: any request a booking or a role does not cover → take a message. Universal.',
   text: `### RUNG 4 — A MESSAGE FOR THE OWNER
 
-Some callers want something beyond a booking — a question for the owner, an errand, a change to pass on, a word left for later. Whenever that is what they want, the right move is to take a message.
+Some callers want something beyond a booking — a question for the owner, an errand, a change to pass on, a word left for later. When they ask to leave a message — or to "tell the owner" something, "let them know", "pass something on" — or want anything a booking or a role does not cover, you are on this rung.
 
-  → "I'd like to leave a message" tells you which rung you are on; the message itself is still to come. The message is the substance — the actual thing they want Dale to know or do. Draw it out in their own words: ask what they would like to say, then gather the details that matter — who it is about, what they need, and how soon. You already have their name and number from the identity rung, so it is the content you are here for.
-  → Once you hold that substance in their words, save it with take_message. Keep it silent; it is bookkeeping, the way you would jot a note while still nodding along — the caller hears the tool for none of it. Calling the tool is what saves the message, so always call it; a spoken "I'll pass that along" with no tool behind it saves nothing.
-  → Then speak ONE short, warm line about Dale and the caller — keep the tool behind the curtain: "Got it — I'll make sure Dale gets that." The wrap-up (RUNG 6) delivers what happens next, so one line is enough here.`,
+  → **Asking to leave a message CHOOSES this rung — it is not itself the message.** Once they have asked, take it, even if what they say next mentions a job, work, or a callback: those words inside a message do NOT send you back to booking or role intake. Stay here and record it.
+  → **You may already have their identity.** If they have given a name and a number anywhere in the call — including inside the message itself ("tell the owner Mike from Apex called, my number is 555…") — you HAVE it. Do not ask again for what they just told you.
+  → Draw out the message itself — the actual thing they want the owner to know or do — in their own words. Ask what they would like to say, then get the details that matter: who it is about, what they need, and how soon.
+  → **The moment you have that content, CALL take_message. The tool call is the ONLY thing that saves the message — speaking does not.** "I'll pass that along" or "I've saved that" with no take_message behind it saves NOTHING and misleads the caller. Call the tool first, silently; your words come after it.
+  → Only once take_message has run, give ONE short, warm line: "Got it — I'll make sure that reaches the owner." The wrap-up (RUNG 6) delivers what happens next, so one line is enough here.`,
 };
 
 /** The header that frames the whole thing as a ladder. Universal. */
