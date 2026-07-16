@@ -6,10 +6,35 @@ the same thing without re-paying for the lessons.
 
 ---
 
-## ✅ VERIFIED SUCCESS POINT — 2026-07-15 (branch `spike/task-group-ladder`)
+## ✅ VERIFIED SUCCESS POINT — 2026-07-15 (rollback anchor: COMMIT HASHES, no branch)
 
 **The task-group call flow works end-to-end on a live voice call.** This is the point to
 come back to. Everything below the line is why and how.
+
+The `spike/task-group-ladder` branch was deliberately deleted (2026-07-16 branch cleanup —
+hashes beat long-lived branches; everything below is merged into main so these commits are
+permanent). To return to the verified point:
+
+```
+59651f3ec06695d483c436f2c15b5a4f9ef5a8e5   the spike tip — the exact tree re-verified live 2026-07-16
+bce7ba269a7416ebe3b7382de30d20ecbea8e40b   "task-group call works cleanly on VOICE, start to finish"
+5fb50d0bb4214183ff02a4e7ad5956c9d7ad190a   PR #264 merge commit into main
+
+git checkout 59651f3                         # inspect (detached)
+git branch spike/task-group-ladder 59651f3   # recreate the branch outright
+```
+
+Unmerged work preserved by hash in the same cleanup (recoverable, NOT in main):
+
+```
+7a61d2da164155ee9c9d6863f283cc6f6c256b66   fix/never-talk-over-the-caller tip (PR #263, closed) —
+                                           parks save_customer_preference, talk-over fixes; needs a
+                                           rebase over the #266 blocks.ts rewrite.
+                                           Recover: git fetch origin pull/263/head
+75553c253a95a34028ababd57ca1baf19ce2f6d8   chore/blueprints-plan-and-deno-cleanup tip (no PR) —
+                                           Deno/Vapi toolchain removal + blueprints design spec.
+                                           Lives only in local git objects until GC (~90 days).
+```
 
 What a real voice call did, confirmed in the database:
 
