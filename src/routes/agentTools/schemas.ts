@@ -320,6 +320,22 @@ export const CaptureJobInquirySchema = z.object({
   address: z.string().max(500).optional(),
   timezone: z.string().max(100).optional(),
   call_id: z.string().min(1).optional(),
+  // The meeting this inquiry was booked around, when the call produced one. Injected by
+  // the AGENT RUNTIME from the call-outcome tracker (the model never holds a UUID) — see
+  // agent/src/tools.ts capture_job_inquiry. Links the inquiry row to the appointment and
+  // stamps a readable summary into the appointment's description.
+  appointment_id: z.string().uuid().optional(),
+});
+
+// attach-meeting-notes — append the caller's own context to a booked appointment. The
+// meeting-goals rung asks one light wrap-up question ("anything you'd like the owner to
+// know before the meeting?"); this is where the answer lands. appointment_id is injected
+// by the agent runtime from the call-outcome tracker — the model passes only the notes.
+export const AttachMeetingNotesSchema = z.object({
+  tenant_id: z.string().uuid(),
+  appointment_id: z.string().uuid(),
+  notes: z.string().min(1).max(2000),
+  call_id: z.string().min(1).optional(),
 });
 
 // voice-session-start / -end — the LiveKit agent logs a call so the dashboard
