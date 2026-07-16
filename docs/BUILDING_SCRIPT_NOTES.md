@@ -36,10 +36,11 @@ greeting → intent (begin_call) → TASK GROUP:
 
 **What is NOT done yet (honest scope):**
 
-- **4 rungs exist**: identity, book_meeting, job_intake, and schedule_change (cancel /
+- **5 rungs exist**: identity, book_meeting, job_intake, schedule_change (cancel /
   reschedule — added 2026-07-15 on the generic `makeRung` core, the first lookup-then-act
-  rung). Still not rungs: take-message, page-owner, policy Q&A. Adding them is now config on
-  `makeRung`, not a new class.
+  rung), and take_message (added 2026-07-16 — the universal catch-all, an ACTION rung
+  wrapping the real `take_message`; see below). Still not rungs: page-owner, policy Q&A.
+  Adding them is now config on `makeRung`, not a new class.
 - **The stack is snapshotted at group start** — a NEW goal raised at the very end ("oh, and
   can you also…") is not picked up; the fixed goodbye fires. Known limit, documented.
 - **Text E2E (`sim-taskgroup.ts`) does not exercise the runtime handoff** — only a live
@@ -133,6 +134,44 @@ occasionally recorded as in-house) and closed three Copilot review nits. Two dur
   `available-slots`, then books that exact time. Also: a seed failure now skips that one run
   instead of throwing and crashing the whole suite.
 
+### The take-message rung (2026-07-16, autonomous)
+
+The 5th rung, and the clearest demonstration yet of WHY the task-group flow exists. It came
+straight off a live prompt-ladder call that failed the way the ladder always fails.
+
+**The failing call (prompt ladder).** A caller: "I'd like to leave a message for the owner…
+tell him I have a job for him, and I'd like him to give me a callback." The agent collected
+the name, the number, the message — then said *"I've passed that message along to the owner"*
+and hung up. **`take_message` never fired. Nothing was saved.** The backend log confirmed it:
+no `/agent-tools/take-message` call, no `customer_messages` row. Root cause 3 in its purest
+form (a sentence is free, a tool call is work), and two rounds of prompt wording on the ladder
+— including the exact instruction "saying it saves nothing, CALL the tool" — did not beat it.
+The model narrated the save anyway. There was also an "out of order" tell: the ladder asked
+for the message body before it had the caller's name, because the ladder sequences itself.
+
+**The fix is structural, not more prompt.** `take_message` becomes an ACTION rung
+(`takeMessageTask.ts`) wrapping the real tool; the rung completes only on a real `message_id`.
+The TaskGroup loop cannot end until it does, so "I've passed that along" advances nothing —
+the identical fix that stopped job-intake being skipped. Ordering fixes itself too: identity
+is always rung 1 (`planCallTasks`), so the "asked for the message before the name" tell cannot
+happen. `begin_call` gained a `wants_to_leave_message` boolean; the rung is placed after
+book + intake, mirroring the composed-script ELSE order.
+
+**One disambiguation the rung must carry.** A message that MENTIONS a job or a callback is
+still a message — the caller ASKED to leave one. The intent step sets `wants_to_leave_message`
+(not `has_job_inquiry`) for "leave a message… I have a job for him", and the rung's
+instructions say a job/callback word inside a message does not send it back to booking or role
+intake. Without this the widened job trigger swallows the message.
+
+**Verified (sim, not yet a live mic call).** `sim-taskgroup.ts` gained two scenarios — a plain
+message, and the job+callback message above — checked against a real `customer_messages` row
+(not the transcript). **30/30 across plain/terse/chatty/frontloader**; the job+callback case
+records a message and NO job inquiry every run. Unit: `takeMessageTask.test.ts` +
+`callPlan.test.ts` (order + tool-narrowing). Gotcha #8 applied: the rung carries NO passthrough
+tools — `take_message` is the completion and it needs nothing else, so there is nothing to
+misfire. **Still unproven:** a live voice call (STT/TTS/turn-taking + the `voice_sessions`
+row), exactly as with scheduling — the sim skips the runtime handoff.
+
 ---
 
 **Two flows exist in the codebase. Know which you are reading about:**
@@ -211,7 +250,8 @@ group.run() resolves only when the stack is EMPTY → root agent says goodbye
 | `identityTask.ts` | Rung 1 — a COLLECT rung. Name + phone via `confirm_identity`. |
 | `bookMeetingTask.ts` | Rung 2 — an ACTION rung. Wraps the real `book_with_scheduling`; completes on `appointment_id`. |
 | `jobIntakeTask.ts` | Rung 3 — an ACTION rung. Wraps the real `capture_job_inquiry`; completes on `job_inquiry_id`. |
-| `schedulingTask.ts` | Rung 4 — a LOOKUP-THEN-ACT rung. Reads `get_my_appointments`, then completes on `cancel_appointment` OR `reschedule_appointment` OR `no_appointment_change`. |
+| `takeMessageTask.ts` | Rung 4 — an ACTION rung, the universal catch-all. Wraps the real `take_message`; completes on `message_id`. Carries NO passthrough tools (take_message IS the completion). |
+| `schedulingTask.ts` | Rung 5 — a LOOKUP-THEN-ACT rung. Reads `get_my_appointments`, then completes on `cancel_appointment` OR `reschedule_appointment` OR `no_appointment_change`. |
 | `../scripts/sim-taskgroup.ts` | E2E harness — runs the real tasks/tools/backend/DB with a **live LLM caller** (a second model plays the caller across phrasing styles). `SIM_TRACE=1` logs every tool call + result. |
 
 ### The GENERIC rung — one shape, a few TYPES (`rung.ts`)

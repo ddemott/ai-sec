@@ -124,6 +124,9 @@ interface Persona {
   wantsScheduleChange?: boolean;
   scheduleAction?: 'cancel' | 'reschedule';
   existingService?: string; // what the seeded appointment is, so the caller can name it
+  // leave-a-message (the universal catch-all)
+  wantsToLeaveMessage?: boolean;
+  messageBody?: string; // what they want passed to the owner, in their own words
   // hard behaviours the persona MUST exhibit (adversarial)
   refusesPhone?: boolean; // never gives a number
 }
@@ -162,6 +165,11 @@ function personaSystem(p: Persona, style: string): string {
         `When the receptionist reads back your current appointment and asks you to confirm you want it canceled, say yes.`
       );
     }
+  }
+  if (p.wantsToLeaveMessage && p.messageBody) {
+    facts.push(
+      `You want to leave a MESSAGE for the owner: "${p.messageBody}". When the receptionist asks what you'd like to pass on, say this in your own words. You do NOT want to book a meeting and you are NOT briefing a role — you just want the message passed along and (if it mentions one) a callback.`
+    );
   }
   if (p.hasJobInquiry) {
     facts.push(`The company you work for: ${p.callerCompany}`);
@@ -227,7 +235,9 @@ async function runCall(p: Persona, style: string, deps: CallDeps): Promise<RunRe
   const shared: ChatMessage[] = [];
 
   // The caller opens the call.
-  const opener = await callerReply(personaSys, [{ role: 'assistant', content: 'Thanks for calling. How can I help you today?' }]);
+  const opener = await callerReply(personaSys, [
+    { role: 'assistant', content: 'Thanks for calling. How can I help you today?' },
+  ]);
   result.transcript.push({ who: 'agent', text: 'How can I help you today?' });
   result.transcript.push({ who: 'caller', text: opener });
   shared.push({ role: 'user', content: opener });
@@ -308,6 +318,8 @@ interface Expect {
   // schedule-change outcomes, checked against the seeded appointment
   canceled?: boolean;
   rescheduled?: boolean;
+  // leave-a-message outcome — a customer_messages row must land (take_message fired)
+  message?: boolean;
 }
 /** What a seed step handed back — the appointment the scenario will act on. */
 interface SeedInfo {
@@ -327,7 +339,10 @@ interface Scenario {
 const SEED_SERVICE_NAME = 'Programming Consultation';
 
 /** POST to a backend agent-tool the way the agent would (x-agent-secret). */
-async function postAgent(path: string, body: Record<string, unknown>): Promise<{
+async function postAgent(
+  path: string,
+  body: Record<string, unknown>
+): Promise<{
   success: boolean;
   result?: Record<string, unknown>;
   error?: string;
@@ -337,7 +352,11 @@ async function postAgent(path: string, body: Record<string, unknown>): Promise<{
     headers: { 'content-type': 'application/json', 'x-agent-secret': AGENT_SECRET },
     body: JSON.stringify(body),
   });
-  return (await res.json()) as { success: boolean; result?: Record<string, unknown>; error?: string };
+  return (await res.json()) as {
+    success: boolean;
+    result?: Record<string, unknown>;
+    error?: string;
+  };
 }
 
 /** "1:00 PM" / "4:30 PM" → local-naive 24h "13:00:00" / "16:30:00" for a booking window. */
@@ -424,7 +443,12 @@ const SCENARIOS: Scenario[] = [
       location: 'hybrid',
       address: '200 East Randolph, Chicago',
     },
-    expect: { appointment: true, jobInquiry: true, clientCompany: 'Blue Cross', representsCompany: false },
+    expect: {
+      appointment: true,
+      jobInquiry: true,
+      clientCompany: 'Blue Cross',
+      representsCompany: false,
+    },
   },
   {
     title: 'meeting only — must NOT fabricate a job inquiry',
@@ -455,7 +479,12 @@ const SCENARIOS: Scenario[] = [
       location: 'onsite',
       address: '10 South Wacker, Chicago',
     },
-    expect: { appointment: false, jobInquiry: true, clientCompany: 'Northern Trust', representsCompany: false },
+    expect: {
+      appointment: false,
+      jobInquiry: true,
+      clientCompany: 'Northern Trust',
+      representsCompany: false,
+    },
     styles: ['plain', 'chatty', 'rambler'],
   },
   {
@@ -475,7 +504,12 @@ const SCENARIOS: Scenario[] = [
       location: 'remote',
       timezone: 'Central',
     },
-    expect: { appointment: false, jobInquiry: true, clientCompany: 'Globex', representsCompany: true },
+    expect: {
+      appointment: false,
+      jobInquiry: true,
+      clientCompany: 'Globex',
+      representsCompany: true,
+    },
     styles: ['plain', 'terse'],
   },
   {
@@ -511,6 +545,39 @@ const SCENARIOS: Scenario[] = [
     expect: { appointment: false, jobInquiry: false, rescheduled: true },
     seed: seedAppointment,
     styles: ['plain', 'terse'],
+  },
+  {
+    title: 'leave a message — records it with take_message',
+    persona: {
+      name: 'Bill Turner',
+      phone: '555-901-0009',
+      goalLine: 'you want to leave a message for the owner',
+      wantsMeeting: false,
+      hasJobInquiry: false,
+      wantsToLeaveMessage: true,
+      requestedService: 'leaving a message',
+      messageBody: 'the shipment from the warehouse is running two days late',
+    },
+    expect: { appointment: false, jobInquiry: false, message: true },
+    styles: ['plain', 'terse', 'chatty'],
+  },
+  {
+    title: 'MESSAGE that mentions a job + callback — still a message, NOT a job inquiry',
+    persona: {
+      name: 'Jack Smith',
+      phone: '555-901-0010',
+      goalLine: 'you want to leave a message for the owner',
+      wantsMeeting: false,
+      hasJobInquiry: false,
+      wantsToLeaveMessage: true,
+      requestedService: 'leaving a message',
+      messageBody: 'tell him I have a job for him and I would like him to give me a callback',
+    },
+    // The 2026-07-16 live failure, made structural: the message mentions "a job" and "a
+    // callback", but the caller ASKED to leave a message — so it must record a message and
+    // must NOT open a job inquiry or book a meeting.
+    expect: { appointment: false, jobInquiry: false, message: true },
+    styles: ['plain', 'terse', 'frontloader'],
   },
   {
     title: 'STRESS: caller refuses to give a phone number',
@@ -590,8 +657,26 @@ async function verify(db: Client, p: Persona, e: Expect, seed?: SeedInfo): Promi
   if (!e.jobInquiry && job.rows[0]) fails.push('JOB INQUIRY recorded but none expected');
   if (e.clientCompany && job.rows[0] && job.rows[0].client_company !== e.clientCompany)
     fails.push(`client_company="${job.rows[0].client_company}", expected "${e.clientCompany}"`);
-  if (e.representsCompany !== undefined && job.rows[0] && job.rows[0].represents_company !== e.representsCompany)
-    fails.push(`represents_company=${job.rows[0].represents_company}, expected ${e.representsCompany}`);
+  if (
+    e.representsCompany !== undefined &&
+    job.rows[0] &&
+    job.rows[0].represents_company !== e.representsCompany
+  )
+    fails.push(
+      `represents_company=${job.rows[0].represents_company}, expected ${e.representsCompany}`
+    );
+
+  // Leave-a-message: the whole point is take_message ACTUALLY firing. Verify a
+  // customer_messages row landed for this caller (not that the agent SAID it did).
+  const msg = await db.query<{ message: string | null }>(
+    `SELECT message FROM customer_messages
+      WHERE tenant_id = $1 AND callback_phone = $2 ORDER BY created_at DESC LIMIT 1`,
+    [TENANT, e164]
+  );
+  if (e.message && !msg.rows[0])
+    fails.push('expected a MESSAGE recorded, none found (take_message never fired)');
+  if (e.message && msg.rows[0] && !msg.rows[0].message?.trim())
+    fails.push('message row recorded but the message body is empty');
 
   return fails;
 }
@@ -608,33 +693,54 @@ function makeDeps(): CallDeps {
   const tools = buildTools(ctx, client);
   const now = new Date();
   const currentDate = now.toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago',
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Chicago',
   });
   return {
     ctx,
     state: {},
-    runtime: { currentDate, timezone: 'America/Chicago', businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM', bookableThrough: null },
+    runtime: {
+      currentDate,
+      timezone: 'America/Chicago',
+      businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+      bookableThrough: null,
+    },
     tools,
   };
 }
 
 async function main(): Promise<void> {
   initializeLogger({ pretty: false, level: 'silent' });
-  const stylesEnv = (process.env.SIM_STYLES || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const stylesEnv = (process.env.SIM_STYLES || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-  const chosen = SCENARIOS.filter((s) => !CASE_FILTER || s.title.toLowerCase().includes(CASE_FILTER.toLowerCase()));
-  console.log(`${C.b}Task-group E2E — live LLM caller${C.x} ${C.d}(agent ${AGENT_MODEL}, caller ${CALLER_MODEL})${C.x}`);
+  const chosen = SCENARIOS.filter(
+    (s) => !CASE_FILTER || s.title.toLowerCase().includes(CASE_FILTER.toLowerCase())
+  );
+  console.log(
+    `${C.b}Task-group E2E — live LLM caller${C.x} ${C.d}(agent ${AGENT_MODEL}, caller ${CALLER_MODEL})${C.x}`
+  );
 
   const db = DB_URL ? new Client({ connectionString: DB_URL }) : null;
   if (db) await db.connect();
 
   let runs = 0;
   let passed = 0;
-  const failures: { title: string; style: string; fails: string[]; transcript: RunResult['transcript'] }[] = [];
+  const failures: {
+    title: string;
+    style: string;
+    fails: string[];
+    transcript: RunResult['transcript'];
+  }[] = [];
 
   try {
     for (const sc of chosen) {
-      const styles = (stylesEnv.length ? stylesEnv : sc.styles ?? DEFAULT_STYLES);
+      const styles = stylesEnv.length ? stylesEnv : (sc.styles ?? DEFAULT_STYLES);
       console.log(`\n${C.b}${sc.title}${C.x}`);
       for (const style of styles) {
         for (let r = 0; r < RUNS; r++) {
@@ -642,7 +748,14 @@ async function main(): Promise<void> {
           let seedInfo: SeedInfo | undefined;
           if (db) {
             const e164 = '+1' + sc.persona.phone.replace(/\D/g, '');
-            await db.query(`DELETE FROM job_inquiries WHERE tenant_id=$1 AND callback_phone=$2`, [TENANT, e164]);
+            await db.query(`DELETE FROM job_inquiries WHERE tenant_id=$1 AND callback_phone=$2`, [
+              TENANT,
+              e164,
+            ]);
+            await db.query(
+              `DELETE FROM customer_messages WHERE tenant_id=$1 AND callback_phone=$2`,
+              [TENANT, e164]
+            );
             await db.query(
               `DELETE FROM appointments WHERE tenant_id=$1 AND customer_id IN (SELECT customer_id FROM customers WHERE tenant_id=$1 AND phone=$2)`,
               [TENANT, e164]
@@ -672,7 +785,12 @@ async function main(): Promise<void> {
           try {
             res = await runCall(sc.persona, style, deps);
           } catch (err) {
-            failures.push({ title: sc.title, style, fails: [`THREW: ${(err as Error).message}`], transcript: [] });
+            failures.push({
+              title: sc.title,
+              style,
+              fails: [`THREW: ${(err as Error).message}`],
+              transcript: [],
+            });
             console.log(`  ${style.padEnd(11)} ${C.r}ERROR${C.x} ${(err as Error).message}`);
             continue;
           }
@@ -683,7 +801,9 @@ async function main(): Promise<void> {
             console.log(`  ${style.padEnd(11)} ${C.g}PASS${C.x} ${C.d}(${rungInfo})${C.x}`);
           } else {
             failures.push({ title: sc.title, style, fails: dbFails, transcript: res.transcript });
-            console.log(`  ${style.padEnd(11)} ${C.r}FAIL${C.x} ${C.d}(${rungInfo})${C.x} — ${dbFails.join('; ')}`);
+            console.log(
+              `  ${style.padEnd(11)} ${C.r}FAIL${C.x} ${C.d}(${rungInfo})${C.x} — ${dbFails.join('; ')}`
+            );
           }
         }
       }
