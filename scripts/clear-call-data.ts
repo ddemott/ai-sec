@@ -85,7 +85,10 @@ function hostOf(url: string): string | null {
   }
 }
 
-const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db'];
+// '' is a SUCCESSFULLY PARSED URL with no host — a local-socket DSN like
+// "postgres:///dbname" — and is safe to allow because an unparseable string is now
+// null (refused), not ''. The two used to be conflated, which was the bypass.
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db', ''];
 
 async function main() {
   const host = hostOf(DB_URL);
@@ -94,7 +97,7 @@ async function main() {
       host === null
         ? `\nRefusing: could not parse a hostname from the connection string, so it cannot be verified as local. Use a postgres:// URL, or pass --force if you are certain.\n`
         : `\nRefusing to clear call data on non-local host "${host}".\n` +
-            `Allowed: ${LOCAL_HOSTS.join(', ')}. Pass --force to override.\n`
+            `Allowed: ${LOCAL_HOSTS.filter(Boolean).join(', ')} (or a socket URL with no host). Pass --force to override.\n`
     );
     process.exit(1);
   }
