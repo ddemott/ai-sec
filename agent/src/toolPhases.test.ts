@@ -68,10 +68,11 @@ describe('toolsForPhase — narrowing', () => {
     }
     // The phases that DO have a known intent must stay genuinely narrow — this is
     // where the ceiling is real and where the win is measurable.
-    // 11/10: the escape-hatch router + send_self_service_link joined booking/manage
-    // on 2026-07-16 (a wrong door must never be a locked wing, and a complete
-    // intent must be satisfiable from any working phase). Still inside LiveKit's
-    // published 5-12 comfort band, far under OpenAI's <20.
+    // 11/10: on 2026-07-16 the escape-hatch ROUTERS joined both working phases, and
+    // send_self_service_link joined booking (manage already had it) — a wrong door
+    // must never be a locked wing, and a complete intent must be satisfiable from
+    // any working phase. Still inside LiveKit's published 5-12 comfort band, far
+    // under OpenAI's <20.
     expect(Object.keys(toolsForPhase(ALL_TOOLS, 'booking')).length).toBeLessThanOrEqual(11);
     expect(Object.keys(toolsForPhase(ALL_TOOLS, 'manage')).length).toBeLessThanOrEqual(11);
   });
