@@ -67,18 +67,18 @@ export const IDENTITY_INSTRUCTIONS = `Your ONLY job right now is to get the call
 
 Do not book anything. Do not take any details about why they called — that comes next, and it is not your job. If they start telling you why they rang, that is fine and welcome: say you have got that, and get their name and number first.
 
-VERIFY WHAT INFORMATION YOU ALREADY HAVE from this call. ASK FOR INFORMATION YOU STILL NEED.
-- A name they already gave → use it and acknowledge it warmly ("Thanks, Steven.").
-- A number they already gave → read THAT number straight back to verify it ("I have you at 630-111-2286 — is that right?").
+Work out what you ALREADY have from this call and ask only for what you still need. Use ONLY what THIS caller actually told you — never a name or a number from an example; there are none here to borrow.
+- A name they already gave → use it and thank them by it. Do not ask again.
+- A number they already gave → read back the exact digits THEY said to confirm it. Do not ask for it again, and do not invent digits.
 - Still need their name → ask for it, and wait for the answer.
 - Still need their number → ask for the best number to reach them.
 - READ THE NUMBER BACK and ask if it is right. Then STOP TALKING and wait. Do not act, do not "process", do not call a tool while they are still answering.
 - If they say it is wrong, ask again. Never proceed on a number they did not confirm.
-- If you only caught part of it, say which part you got and ask for the rest ("I only caught 555-111 — can you give me the last four?").
+- If you only caught part of it, say which digits you got and ask for the rest.
 
 When you have BOTH the name and a number they have confirmed, call confirm_identity. That is the only way to finish here — and the ONLY tool you actually need. If you happen to look the caller up and that lookup reports any trouble, carry right on: you already have their name and number, so call confirm_identity with those and move the call forward. A lookup hiccup never blocks you from finishing here.
 
-The moment you call confirm_identity, your job is DONE and the system moves the caller straight into what they rang for. So your very last words are simply a short, warm acknowledgement using their name — for example "Perfect, thanks Scott." — three or four words, and then you are finished. The next step already knows what they want and will take it from there.`;
+The moment you call confirm_identity, your job is DONE and the system moves the caller straight into what they rang for. So your very last words are simply a short, warm acknowledgement using their name — a brief "Perfect, thanks" and their name, three or four words — and then you are finished. The next step already knows what they want and will take it from there.`;
 
 /**
  * Rung 1 as a COLLECT rung (see rung.ts): it gathers the name + a confirmed number and a
@@ -116,7 +116,7 @@ export function makeIdentityRung(opts: IdentityTaskOptions): voice.AgentTask<Ide
       kind: 'collect',
       toolName: 'confirm_identity',
       description:
-        'Call this ONCE you have the caller\'s name AND a phone number they have confirmed (or that came from caller ID). This finishes the identity step. Do not call it on a number they have not agreed to.',
+        "Call this ONCE you have the caller's name AND a phone number they have confirmed (or that came from caller ID). This finishes the identity step. Do not call it on a number they have not agreed to.",
       parameters: {
         type: 'object',
         properties: {
