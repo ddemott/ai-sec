@@ -67,8 +67,13 @@ describe('toolsForPhase — narrowing', () => {
     }
     // The phases that DO have a known intent must stay genuinely narrow — this is
     // where the ceiling is real and where the win is measurable.
-    expect(Object.keys(toolsForPhase(ALL_TOOLS, 'booking')).length).toBeLessThanOrEqual(10);
-    expect(Object.keys(toolsForPhase(ALL_TOOLS, 'manage')).length).toBeLessThanOrEqual(10);
+    // 11/10: on 2026-07-16 the escape-hatch ROUTERS joined both working phases, and
+    // send_self_service_link joined booking (manage already had it) — a wrong door
+    // must never be a locked wing, and a complete intent must be satisfiable from
+    // any working phase. Still inside LiveKit's published 5-12 comfort band, far
+    // under OpenAI's <20.
+    expect(Object.keys(toolsForPhase(ALL_TOOLS, 'booking')).length).toBeLessThanOrEqual(11);
+    expect(Object.keys(toolsForPhase(ALL_TOOLS, 'manage')).length).toBeLessThanOrEqual(11);
   });
 
   it('SAD: a phase can never hand back a tool the session does not have', () => {
@@ -168,5 +173,16 @@ describe('routers', () => {
       expect(PHASES).toContain(target);
       expect(PHASE_TOOLS.intake).toContain(name);
     }
+  });
+
+  it('SAD: a wrong door is NEVER a locked wing — each working phase carries the opposite router', () => {
+    // WHY (2026-07-16): neither working phase carried a router, so a caller who
+    //      said "cancel my haircut" and tripped start_booking could never reach
+    //      get_my_appointments — the eval caught the model looping
+    //      get_available_slots ELEVEN times with no tool that could help. Same
+    //      lesson as send_self_service_link in intake: narrowing must never
+    //      remove an exit.
+    expect(PHASE_TOOLS.booking).toContain('manage_appointment');
+    expect(PHASE_TOOLS.manage).toContain('start_booking');
   });
 });

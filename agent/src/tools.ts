@@ -307,7 +307,7 @@ export function buildTools(
   const allTools: llm.ToolContext = {
     start_booking: llm.tool({
       description:
-        "The caller wants to make a NEW appointment. Call this FIRST, before asking them for a day or a time — it is what gives you the scheduling tools, and you have NO way to see the calendar until you do. You do not need their service, day, time, name or number first; call it as soon as you know they want to book, then gather the rest. Do NOT tell the caller you are 'checking' or 'looking something up' — just call this.",
+        "The caller wants to make a NEW appointment. Call this FIRST, before asking them for a day or a time — it is what gives you the scheduling tools, and you have NO way to see the calendar until you do. You do not need their service, day, time, name or number first; call it as soon as you know they want to book, then gather the rest. Do NOT tell the caller you are 'checking' or 'looking something up' — just call this. NOT for canceling, moving, or checking an appointment they ALREADY have — that is manage_appointment.",
       parameters: { type: 'object', properties: {} },
       execute: async () =>
         routeTo(
@@ -318,7 +318,7 @@ export function buildTools(
 
     manage_appointment: llm.tool({
       description:
-        "The caller wants to check, MOVE, or CANCEL an appointment they ALREADY have. Call this FIRST, before promising anything — it is what gives you the tools to look their booking up, and you cannot see a single existing appointment until you do. Do not use this for a NEW appointment (that is start_booking).",
+        'The caller wants to check, MOVE, or CANCEL an appointment they ALREADY have. Call this FIRST, before promising anything — it is what gives you the tools to look their booking up, and you cannot see a single existing appointment until you do. Do not use this for a NEW appointment (that is start_booking).',
       parameters: { type: 'object', properties: {} },
       execute: async () =>
         routeTo(
@@ -850,8 +850,7 @@ export function buildTools(
     }),
 
     identify_caller: llm.tool({
-      description:
-        `Save or update the caller's contact record, and look them up. Call this as soon as you have their number — you do not need their name first. Keeps the address book current without duplicating records.\n\nIf the number is one we already have, the response may come back with returning_customer:true plus their NAME, saved preferences and recent history — USE it (greet them by name, offer their usual). You then do NOT need to ask their name: you have it. Confirm it instead ('I have you as Camille — still right?') rather than asking them to repeat it; a name you read from the record is more reliable than one heard over a phone line.\n\nIf it returns sms_consent:true, they have ALREADY agreed to appointment texts — that permission is on file and does not expire, so do NOT ask for it again and do NOT call record_sms_consent. Just say you'll text them as usual. If sms_consent is FALSE **or the field is ABSENT** (it is omitted on a requires_verification response, and for a brand-new caller), treat that as NO consent and ask for permission using the full script. A missing field is never permission.\n\nIf it returns requires_verification:true, the number was one THEY SPOKE (we had no caller ID), so we cannot trust it yet and will tell you nothing about the account. ${hasVerification ? 'Send them a code (send_verification_code) and verify it (verify_phone_code) BEFORE calling this again — never greet them by name or mention any account until it is verified.' : 'You have NO way to verify a number on this call: do NOT mention verification, codes or texts. It does NOT stop you BOOKING — treat them as a new caller, use the name and number they gave you, and book normally. A booking reveals nothing about anyone: they supply every fact in it.'}`,
+      description: `Save or update the caller's contact record, and look them up. Call this as soon as you have their number — you do not need their name first. Keeps the address book current without duplicating records.\n\nIf the number is one we already have, the response may come back with returning_customer:true plus their NAME, saved preferences and recent history — USE it (greet them by name, offer their usual). You then do NOT need to ask their name: you have it. Confirm it instead ('I have you as Camille — still right?') rather than asking them to repeat it; a name you read from the record is more reliable than one heard over a phone line.\n\nIf it returns sms_consent:true, they have ALREADY agreed to appointment texts — that permission is on file and does not expire, so do NOT ask for it again and do NOT call record_sms_consent. Just say you'll text them as usual. If sms_consent is FALSE **or the field is ABSENT** (it is omitted on a requires_verification response, and for a brand-new caller), treat that as NO consent and ask for permission using the full script. A missing field is never permission.\n\nIf it returns requires_verification:true, the number was one THEY SPOKE (we had no caller ID), so we cannot trust it yet and will tell you nothing about the account. ${hasVerification ? 'Send them a code (send_verification_code) and verify it (verify_phone_code) BEFORE calling this again — never greet them by name or mention any account until it is verified.' : 'You have NO way to verify a number on this call: do NOT mention verification, codes or texts. It does NOT stop you BOOKING — treat them as a new caller, use the name and number they gave you, and book normally. A booking reveals nothing about anyone: they supply every fact in it.'}`,
       parameters: {
         type: 'object',
         properties: {
@@ -1246,14 +1245,19 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async () => {
-        if (!ctx.callerPhone) {
+        // Caller-ID if the carrier gave it; otherwise the number the caller confirmed in
+        // the identity step (ctx.spokenPhone). On a forwarded/blocked-ID line caller-ID is
+        // null by design, and without the spoken fallback a caller literally could not
+        // manage their own appointment — booking already trusts the same spoken number.
+        const managePhone = firstPhone(ctx.callerPhone, ctx.spokenPhone);
+        if (!managePhone) {
           return JSON.stringify({
-            error: `I can't look up appointments without caller-ID. If you'd like help canceling or rescheduling, I can ${transferOrMessage}.`,
+            error: `I can't look up appointments until I have your number. If you'd like help canceling or rescheduling, I can ${transferOrMessage}.`,
           });
         }
         const res = await client.call(
           '/agent-tools/my-appointments',
-          { tenant_id: ctx.tenantId, phone: ctx.callerPhone },
+          { tenant_id: ctx.tenantId, phone: managePhone },
           { isReadOnly: true }
         );
         return formatResponse(res);
@@ -1276,14 +1280,15 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { appointment_id: string }) => {
-        if (!ctx.callerPhone) {
+        const managePhone = firstPhone(ctx.callerPhone, ctx.spokenPhone);
+        if (!managePhone) {
           return JSON.stringify({
-            error: `I can't cancel without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
+            error: `I can't cancel until I have your number to find the appointment. Offer to ${transferOrMessage}.`,
           });
         }
         const res = await client.call('/agent-tools/cancel-appointment', {
           tenant_id: ctx.tenantId,
-          phone: ctx.callerPhone,
+          phone: managePhone,
           appointment_id: args.appointment_id,
         });
         return formatResponse(res);
@@ -1318,15 +1323,16 @@ export function buildTools(
         new_start_time: string;
         new_end_time: string;
       }) => {
-        if (!ctx.callerPhone) {
+        const managePhone = firstPhone(ctx.callerPhone, ctx.spokenPhone);
+        if (!managePhone) {
           return JSON.stringify({
-            error: `I can't reschedule without caller-ID to verify ownership. Offer to ${transferOrMessage}.`,
+            error: `I can't reschedule until I have your number to find the appointment. Offer to ${transferOrMessage}.`,
           });
         }
         speakFiller?.('One moment while I move that for you...');
         const res = await client.call('/agent-tools/reschedule-appointment', {
           tenant_id: ctx.tenantId,
-          phone: ctx.callerPhone,
+          phone: managePhone,
           appointment_id: args.appointment_id,
           new_start_time: args.new_start_time,
           new_end_time: args.new_end_time,

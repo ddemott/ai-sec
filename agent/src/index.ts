@@ -37,6 +37,7 @@ import { fetchTenantConfig } from './tenantConfig.js';
 import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { toolsForPhase, type CallPhase } from './toolPhases.js';
+import { CallRootAgent } from './tasks/callRootAgent.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
 import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
 import { attachOutputWatchdog } from './session/watchdog.js';
@@ -1000,6 +1001,20 @@ export default defineAgent({
                   minDelay: Number(process.env.ENDPOINTING_MIN_DELAY_MS ?? 1500),
                   maxDelay: Number(process.env.ENDPOINTING_MAX_DELAY_MS ?? 6000),
                 },
+                // WAIT FOR THE WHOLE UTTERANCE BEFORE REPLYING. Preemptive generation is
+                // ON by LiveKit's default: it starts composing a reply from the INTERIM
+                // transcript, before the caller finishes. On a live call the caller read a
+                // phone number in groups ("five eight six" … "one eight two" … "three two
+                // three two"); preemptive generation fired on "five eight six" alone and
+                // the agent answered "I only caught 586 — give me the next three digits",
+                // committing to a reply built from a third of the number even though the
+                // endpointer (minDelay 1300ms) went on to aggregate the FULL number into
+                // one turn. So the two fought and the fragment won. Disabling it makes the
+                // agent generate only from the endpointer's final, aggregated transcript —
+                // the cost is a little latency after the caller stops; the win is that it
+                // stops answering half-heard numbers and multi-part answers. (This is the
+                // "didn't wait for me" report, 2026-07-15.)
+                preemptiveGeneration: { enabled: false },
               },
             });
 
@@ -1115,11 +1130,42 @@ export default defineAgent({
         // offer, refuse, or invent a time before it has called a tool that returns
         // one, because the tools that return times are not in the room yet.
         const intakeTools = toolsForPhase(allTools, 'intake');
-        const agent = new SpeakingAgent({
-          instructions,
-          tools: intakeTools,
-        });
-        phaseAgent = agent;
+
+        // TASK-GROUP FLOW (spike, ENABLE_TASK_GROUP). Runs the call as a LiveKit
+        // TaskGroup of host-code rungs the model cannot skip, instead of the prompt
+        // ladder. Same tools, same backend, same tenant — only the SEQUENCING moves from
+        // prompt-space into the loop. Off by default; this is how the whole thing gets
+        // its first real call without touching the agent that answers the phone.
+        const agent = config.ENABLE_TASK_GROUP
+          ? new CallRootAgent({
+              ctx: sessionCtx,
+              tools: allTools,
+              // THE PERSONA MUST NOT BE THE LADDER. `instructions` is the full
+              // prompt-ladder system prompt — a script that tells the model to run
+              // the whole call conversationally (ask their name, take the message
+              // yourself). Passing it here buried CallRootAgent's one hand-off job
+              // under 130 lines of contradiction: on 2026-07-16 the root agent
+              // followed the ladder instead, collected name+number itself, never
+              // called begin_call, and the caller's message was never recorded (it
+              // holds no take_message tool). The root agent gets an IDENTITY line;
+              // the rungs carry their own instructions.
+              persona: `You are ${tenantConfig.personaName?.trim() || 'Clara'}, the AI receptionist for ${tenantConfig.name}.`,
+              // The date + hours the rungs must not guess. On the first live call a task
+              // with no date context booked October and every attempt failed
+              // EMPLOYEE_NOT_SCHEDULED — because each task REPLACES the system prompt
+              // (where these live) with its own.
+              runtime: {
+                currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
+                timezone: tenantConfig.timezone,
+                businessHours: tenantConfig.businessHours,
+                bookableThrough: tenantConfig.bookableThrough,
+              },
+            })
+          : new SpeakingAgent({
+              instructions,
+              tools: intakeTools,
+            });
+        if (!config.ENABLE_TASK_GROUP) phaseAgent = agent as InstanceType<typeof SpeakingAgent>;
 
         await session.start({ agent, room: ctx.room });
         callLog.info(

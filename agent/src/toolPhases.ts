@@ -121,6 +121,20 @@ export const PHASE_TOOLS: Record<CallPhase, readonly string[]> = {
     'identify_caller',
     'take_message',
     'transfer_call',
+    // THE ESCAPE HATCH (2026-07-16) — "narrowing must never remove an exit", router
+    // edition. Neither working phase used to carry a router, so a wrong door was a
+    // LOCKED WING: a caller who said "cancel my haircut" and tripped start_booking
+    // could never reach get_my_appointments — the eval caught the model looping
+    // get_available_slots ELEVEN times saying "let me check your appointment
+    // details", holding no tool that could. Each working phase now carries the
+    // OPPOSITE router, so a misroute (or a legitimate mid-call pivot: "and cancel
+    // my old one too") self-corrects with one call.
+    'manage_appointment',
+    // Same lesson as intake (2026-07-16): "text me a link" is a COMPLETE intent,
+    // and a caller who tripped the booking door before saying it was stranded —
+    // the model, holding no link tool, took a message and PROMISED a text it had
+    // no way to send. A complete intent must be satisfiable from any working phase.
+    'send_self_service_link',
   ],
 
   // An appointment that already exists. get_available_slots is here because a
@@ -135,6 +149,9 @@ export const PHASE_TOOLS: Record<CallPhase, readonly string[]> = {
     'identify_caller',
     'take_message',
     'transfer_call',
+    // The escape hatch, other direction (see booking): "I'd also like to book a
+    // new appointment" mid-manage must have a door.
+    'start_booking',
   ],
 };
 
@@ -150,7 +167,7 @@ export const PHASE_TOOLS: Record<CallPhase, readonly string[]> = {
 export function toolsForPhase<T extends Record<string, V>, V>(all: T, phase: CallPhase): T {
   const allowed = new Set<string>(PHASE_TOOLS[phase]);
   const out: Record<string, V> = {};
-  for (const [name, tool] of Object.entries(all) as [string, V][]) {
+  for (const [name, tool] of Object.entries(all)) {
     if (allowed.has(name)) out[name] = tool;
   }
   // A tool MAP with fewer keys, not a partial of a fixed shape: LiveKit's

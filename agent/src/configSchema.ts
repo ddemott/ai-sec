@@ -136,6 +136,18 @@ export const envSchema = z.object({
   // removing the TTS synthesis step (measured 2–3s/reply, non-streaming = dead
   // air). OFF by default — A/B test on Railway, instantly reversible. MODEL/VOICE
   // are the realtime model id + voice (realtime has its own voice set).
+  // TASK-GROUP CALL FLOW (the spike). When "true", the call runs through a LiveKit
+  // TaskGroup — identity → book → job-intake → schedule-change as host-code rungs the model
+  // cannot skip — instead of the prompt-based ladder. The core flow was verified on a live
+  // call 2026-07-15 (booked an appointment + recorded a job inquiry); the generic-rung core
+  // and the cancel/reschedule rung are sim-verified but not yet voice-tested. Still OFF by
+  // default and not ready to merge-and-enable — this flag lets a call be made without
+  // disturbing the agent that answers the phone today. See src/tasks/.
+  ENABLE_TASK_GROUP: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+
   ENABLE_REALTIME: z
     .string()
     .optional()

@@ -203,6 +203,12 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
   // are the two the model got wrong on real calls.
   get_available_slots: {
     success: true,
+    // Service-neutral wording, deliberately: the REAL tool echoes the service the
+    // caller asked for, but this stub was once hardcoded to a service name — so when a
+    // scenario's caller asked for something ELSE, the model would balk at the mismatch
+    // ("those are for haircuts, let me check for a meeting…"), wander, and the
+    // FULL-CALL cases flapped. A stub that contradicts the caller is testing a
+    // fiction (2026-07-16).
     result: {
       open_times: [
         '1:00 PM',
@@ -217,7 +223,7 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
       date: 'tomorrow',
       note: 'open_times is the COMPLETE and ONLY list of bookable start times. A time in this list IS available — book it, do not second-guess it. A time NOT in this list is not available.',
       spoken:
-        'Programming Consultation takes about 30 minutes. Tomorrow I have 1:00 PM, 3:00 PM or 4:30 PM. Would any of those work, or did you have another time in mind?',
+        'That appointment takes about 30 minutes. Tomorrow I have 1:00 PM, 3:00 PM or 4:30 PM. Would any of those work, or did you have another time in mind?',
     },
   },
   book_with_scheduling: {
@@ -429,21 +435,24 @@ const CASES: EvalCase[] = [
       'My name is Bob Smith.',
       'six zero eight two one seven five three zero three.',
       'Correct.',
-      // The caller reads back the texted code — the leg the real call NEVER reached,
-      // because the agent claimed to send a code it had never sent.
-      'The code is 1234.',
       'Yes, please book it.',
       'Yes, texting me is fine.',
     ],
-    // The whole forwarded-line flow: LOOK at the calendar, PROVE the spoken number
-    // (no caller-ID, so possession must be proven before we act on it), then
-    // actually BOOK — which on the real call never happened at all.
-    required: [
-      ['get_available_slots', 'get_scheduling_options'],
-      ['send_verification_code'],
-      ['verify_phone_code'],
-      ['book_with_scheduling'],
-    ],
+    // LOOK at the calendar, then actually BOOK — which on the real call never
+    // happened at all.
+    //
+    // 2026-07-16: the OTP legs (send_verification_code → verify_phone_code) were
+    // REMOVED from `required`, because they tested a fiction on two axes: this
+    // harness runs every scenario with an ATTESTED caller-ID (+15552220001 — the
+    // prompt's own rule says a carrier-attested number never needs an OTP), and
+    // production runs ENABLE_PHONE_VERIFICATION=false until 10DLC lands (a code
+    // that cannot be delivered must not block a booking). The model was behaving
+    // correctly and this case failed on every run for it. The OTP LIE ("I sent
+    // you a text" with no tool behind it) is still covered — by the claims below
+    // and by its dedicated TRUTHFULNESS case. When the verification flag flips
+    // on, restore the two legs AND give this scenario callerPhone: null so the
+    // forwarded-line flow it describes can actually occur.
+    required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
     forbidden: ['book_appointment', 'check_availability'],
     claims: [
       {
@@ -493,17 +502,20 @@ const CASES: EvalCase[] = [
       'My name is Bob Smith.',
       'six zero eight two one seven five three zero three.',
       'Yes, that is correct.',
-      // The spoken number is unverified, so the agent runs the OTP. Script the whole
-      // leg — a case that runs out of caller turns mid-flow proves nothing about what
-      // the agent would have done next.
-      'The code is 1234.',
       'Yes, texting me is fine.',
       'Yes, please book it.',
       'No, that is all. Thank you.',
     ],
     // It must CHECK the calendar (not read times off the business hours) and BOOK.
-    // The texting step is GONE: ENABLE_SMS is false until 10DLC lands, record_sms_consent
-    // does not exist on a real call, and the agent must not promise a text it cannot send.
+    //
+    // 2026-07-16: record_sms_consent was REMOVED from `required` (and the phantom
+    // "the code is 1234" turn deleted): production runs ENABLE_SMS=false until
+    // 10DLC lands, and with SMS off record_sms_consent does not even exist as a
+    // tool — the eval was demanding, in a fixed position, a tool the live agent
+    // cannot hold. The case's real teeth are its claims (never refuse a time
+    // without checking the calendar) plus slots-then-book. When ENABLE_SMS flips
+    // on, restore ['record_sms_consent'] — without pinning it before the booking;
+    // the prompt mandates consent, not its position in the sequence.
     required: [['get_available_slots', 'get_scheduling_options'], ['book_with_scheduling']],
     forbidden: ['book_appointment', 'check_availability'],
     claims: [
@@ -582,6 +594,11 @@ const CASES: EvalCase[] = [
     userTurns: [
       "Hi, it's Jane Doe, 555-222-0001 — I need to cancel my haircut tomorrow.",
       'Yes, that one — cancel it please.',
+      // A third affirmation, because cancel_appointment's contract says "always
+      // confirm with the caller first" and the model sometimes double-confirms —
+      // with only two scripted turns the caller ran out of lines and the call
+      // ended one tool short (the flake seen 2026-07-16). Real callers answer again.
+      "Yes, I'm sure — cancel it.",
     ],
     required: [['get_my_appointments'], ['cancel_appointment']],
     forbidden: ['book_appointment', 'book_with_scheduling'],
@@ -600,6 +617,20 @@ const CASES: EvalCase[] = [
     ],
     required: [['take_message']],
     forbidden: ['book_appointment', 'book_with_scheduling'],
+  },
+  {
+    // Reproduces the 2026-07-16 live failure: caller ASKS to leave a message,
+    // then the message body mentions "a job" and "a callback". The model must
+    // record it with take_message — NOT divert into role intake or booking on
+    // those words, and NOT narrate "I've saved that" with no tool behind it.
+    name: 'leave-a-message that mentions a job/callback still calls take_message',
+    userTurns: [
+      "I'd like to leave a message for the owner. It's Jack Smith, my number is 555-832-1186.",
+      'Tell him I have a job for him, and I would like him to give me a callback.',
+      "No, that's it — thanks.",
+    ],
+    required: [['take_message']],
+    forbidden: ['book_appointment', 'book_with_scheduling', 'capture_job_inquiry'],
   },
   {
     // New 2026-07-04 tool: caller explicitly wants the self-service text
@@ -846,7 +877,9 @@ async function main(): Promise<void> {
       // the story — the other half is the plausible sentence the model said
       // instead, and that is the part that reaches a customer.
       for (const line of r.said) {
-        console.log(`        ${C.d}said: "${line.replace(/\s+/g, ' ').trim().slice(0, 140)}"${C.x}`);
+        console.log(
+          `        ${C.d}said: "${line.replace(/\s+/g, ' ').trim().slice(0, 140)}"${C.x}`
+        );
       }
     }
     if (r.pass) passed++;

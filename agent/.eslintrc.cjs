@@ -38,6 +38,7 @@ module.exports = {
     // (not scripts/**/*.ts) so a future .ts file dropped in this dir still
     // gets linted by default.
     'scripts/sim-toolselect.ts',
+    'scripts/sim-taskgroup.ts',
   ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'warn',
