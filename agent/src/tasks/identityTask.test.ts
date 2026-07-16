@@ -44,7 +44,11 @@ const fakeIdentifyCaller = llm.tool({
 });
 
 /** Reach into the task's own tools and call one, the way the model would. */
-async function callTool(task: ReturnType<typeof makeIdentityRung>, name: string, args: unknown): Promise<unknown> {
+async function callTool(
+  task: ReturnType<typeof makeIdentityRung>,
+  name: string,
+  args: unknown
+): Promise<unknown> {
   const tool = (task.toolCtx as Record<string, unknown>)[name] as {
     execute: (a: unknown, o: unknown) => Promise<unknown>;
   };
@@ -101,6 +105,43 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     //      task receives it. It does not build a second one.
     const task = makeIdentityRung({ ctx: makeCtx(), identifyCaller: fakeIdentifyCaller });
     expect(Object.keys(task.toolCtx).sort()).toEqual(['confirm_identity', 'identify_caller']);
+  });
+
+  it('HAPPY: confirming identity SAVES the caller to the phone book — host code, not model choice', async () => {
+    // 2026-07-16: a live message call completed identity and saved the message, but the
+    // model never called identify_caller — the caller was not in the address book. The
+    // save is host code now: confirm_identity's completion invokes the real CRM tool.
+    const crmCalls: unknown[] = [];
+    const identifyCaller = llm.tool({
+      description: 'save the caller',
+      parameters: { type: 'object', properties: {} },
+      execute: async (args: unknown) => {
+        crmCalls.push(args);
+        return 'saved';
+      },
+    });
+    const task = makeIdentityRung({ ctx: makeCtx(), identifyCaller });
+    await callTool(task, 'confirm_identity', { name: 'Simon', phone: '+17891231769' });
+    expect(task.done).toBe(true);
+    expect(crmCalls, 'the CRM upsert must run without the model asking').toEqual([
+      { name: 'Simon', phone: '+17891231769' },
+    ]);
+  });
+
+  it('SAD: a CRM hiccup during the host save never blocks identity from completing', async () => {
+    // Rule 8: a non-load-bearing write that errors must not derail the call.
+    const identifyCaller = llm.tool({
+      description: 'save the caller',
+      parameters: { type: 'object', properties: {} },
+      execute: async () => {
+        throw new Error('backend 500');
+      },
+    });
+    const onIdentified = vi.fn();
+    const task = makeIdentityRung({ ctx: makeCtx(), identifyCaller, onIdentified });
+    await callTool(task, 'confirm_identity', { name: 'Simon', phone: '+17891231769' });
+    expect(task.done, 'the call moves on even if the CRM write failed').toBe(true);
+    expect(onIdentified).toHaveBeenCalled();
   });
 
   it('SAD: with caller ID, it must NOT ask for a number it already has', async () => {

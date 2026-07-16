@@ -136,6 +136,27 @@ export function makeIdentityRung(opts: IdentityTaskOptions): voice.AgentTask<Ide
         // it. "Spoken", not callerPhone — the caller told us; the carrier did not attest
         // it. Good enough to call back, not to unlock an account.
         ctx.spokenPhone = result.phone;
+        // HOST-CODE PHONE-BOOK SAVE. identify_caller (the CRM upsert) used to be a tool
+        // the MODEL might call — and on a live message call (2026-07-16) it didn't, so
+        // the caller was never saved to the address book: a message with no contact
+        // behind it. Confirming identity now IS saving the contact — the code calls the
+        // real tool, so the write no longer depends on the model choosing to act. Upsert
+        // by phone, so a model that also called it just re-saves the same row. Non-fatal:
+        // a CRM hiccup must never block the call (hardening rule 8).
+        if (result.name && result.phone) {
+          try {
+            await (
+              identifyCaller as unknown as {
+                execute: (a: unknown, o: unknown) => Promise<unknown>;
+              }
+            ).execute(
+              { name: result.name, phone: result.phone },
+              { toolCallId: 'host-identity-save' }
+            );
+          } catch {
+            /* saving the contact is best-effort; the call moves on regardless */
+          }
+        }
         await onIdentified?.(result);
       },
     },
