@@ -23,7 +23,8 @@ import { type llm, type voice, beta } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
 import { makeIdentityRung, type IdentityResult } from './identityTask.js';
 import { makeBookMeetingRung, type BookMeetingResult } from './bookMeetingTask.js';
-import { makeJobIntakeRung, type JobIntakeResult } from './jobIntakeTask.js';
+import type { JobIntakeResult } from './jobIntakeTask.js';
+import { makeMeetingContextRung, type MeetingContextTemplate } from './meetingContextTask.js';
 import { makeTakeMessageRung, type TakeMessageResult } from './takeMessageTask.js';
 import { makePolicyQaRung, type PolicyQaResult } from './policyQaTask.js';
 import { makeSchedulingRung, type ScheduleChangeResult } from './schedulingTask.js';
@@ -100,6 +101,10 @@ export function runtimePreamble(rt: CallRuntime): string {
 export interface CallState {
   callerName?: string;
   callerPhone?: string;
+  /** Written by the booking rung when a meeting ACTUALLY landed (not when it fell back
+   *  to a message). Read at factory time by the meeting-context rung: it decides whether
+   *  there is a meeting to attach anything to, and which opener is true. */
+  appointmentId?: string;
 }
 
 export interface CallDeps {
@@ -240,25 +245,48 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
           // Fallback so a booking that cannot happen becomes a RECORDED message, never a
           // promise with no tool behind it (the 2026-07-16 dead-end).
           takeMessage: deps.tools['take_message'],
-          onBooked: deps.onBooked,
+          onBooked: async (r) => {
+            // Carry the booked meeting forward — the meeting-context rung reads this at
+            // factory time to know whether there IS a meeting to attach anything to.
+            // Only a real booking counts; the message fallback books nothing.
+            if (r.outcome === 'booked' && r.appointmentId) {
+              deps.state.appointmentId = r.appointmentId;
+            }
+            await deps.onBooked?.(r);
+          },
           onMessageTaken: deps.onMessageTaken,
         }),
     });
   }
 
-  // RUNG 3 — the intake, if there is a role to brief. AFTER the booking, deliberately:
-  // preparation comes after the thing it prepares for. THIS is the rung the prompt ladder
-  // kept skipping; as a registered task the loop will not end without it.
-  if (goals.hasJobInquiry) {
+  // RUNG 3 — MEETING GOALS: the context the meeting needs, chosen by TEMPLATE. AFTER the
+  // booking, deliberately: preparation comes after the thing it prepares for. The 'job'
+  // template is the intake the prompt ladder kept skipping; the 'default' template is one
+  // light wrap-up question whose answer lands on the appointment as notes. Either way,
+  // as a registered task the loop will not end without it.
+  if (goals.hasJobInquiry || goals.wantsMeeting) {
+    const template: MeetingContextTemplate = goals.hasJobInquiry ? 'job' : 'default';
     specs.push({
-      id: 'job_intake',
-      description: 'Collect the role details and record them for the owner.',
+      id: 'meeting_context',
+      description:
+        template === 'job'
+          ? 'Collect the role details and record them for the owner.'
+          : 'Collect anything the caller wants noted ahead of the meeting.',
       factory: () =>
-        makeJobIntakeRung({
+        makeMeetingContextRung({
+          template,
           messagingTools: pick(deps.tools, ['capture_job_inquiry']),
+          notesTool: deps.tools['attach_meeting_notes'],
+          takeMessage: deps.tools['take_message'],
           knownCaller: knownCallerLine(deps.state),
-          meetingBooked: goals.wantsMeeting,
+          knownName: deps.state.callerName,
+          // What ACTUALLY happened, not what was asked for: the factory runs after the
+          // booking rung, so a booking that fell back to a message reads as no meeting —
+          // the job opener stops claiming "you're booked in" when nothing was booked,
+          // and the notes question is skipped entirely (no meeting to note against).
+          meetingBooked: Boolean(deps.state.appointmentId),
           onCaptured: deps.onCaptured,
+          onMessageTaken: deps.onMessageTaken,
         }),
     });
   }
