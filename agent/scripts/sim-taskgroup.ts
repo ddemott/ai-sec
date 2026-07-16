@@ -443,10 +443,15 @@ async function seedAppointment(db: Client, p: Persona): Promise<SeedInfo> {
  */
 async function seedKnowledgeBase(db: Client): Promise<SeedInfo | null> {
   await db.query(`DELETE FROM tenant_docs WHERE tenant_id = $1 AND source = 'sim-qa'`, [TENANT]);
+  // Local seed credentials (documented in CLAUDE.md's Logins section), overridable so
+  // the harness isn't welded to one account: SIM_LOGIN_EMAIL / SIM_LOGIN_PASSWORD.
   const login = await fetch(`${BACKEND_URL}/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'daledemott@gmail.com', password: 'password' }),
+    body: JSON.stringify({
+      email: process.env.SIM_LOGIN_EMAIL || 'daledemott@gmail.com',
+      password: process.env.SIM_LOGIN_PASSWORD || 'password',
+    }),
   });
   const auth = (await login.json()) as { success: boolean; token?: string };
   if (!auth.success || !auth.token) throw new Error('seedKnowledgeBase: login failed');

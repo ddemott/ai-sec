@@ -14,6 +14,8 @@ import {
   POLICY_QA_INTRO,
   QA_BOOKING_FOLLOWS,
   QA_NO_BOOKING_FOLLOWS,
+  QA_KB_MISS_WITH_MESSAGE,
+  QA_KB_MISS_NO_MESSAGE,
 } from './policyQaTask.js';
 
 beforeAll(() => {
@@ -125,9 +127,28 @@ describe('PolicyQaTask — answers come from retrieval, and the call ends proper
 
     const solo = makePolicyQaRung({
       knowledgeTools: { get_company_policy_answer: fakeTool('x') },
+      takeMessage: fakeTool('{}'),
     }) as unknown as { instructions: string };
     expect(solo.instructions).toContain(QA_NO_BOOKING_FOLLOWS);
     expect(solo.instructions).not.toContain(QA_BOOKING_FOLLOWS);
+  });
+
+  it('SAD: the instructions never name a tool the rung does not hold', () => {
+    // Copilot review catch (2026-07-16): the KB-miss guidance told the model to CALL
+    // take_message unconditionally, but takeMessage is optional — an instruction
+    // naming an absent tool is impossible to follow, and impossible instructions
+    // strand callers.
+    const withMsg = makePolicyQaRung({
+      knowledgeTools: { get_company_policy_answer: fakeTool('x') },
+      takeMessage: fakeTool('{}'),
+    }) as unknown as { instructions: string };
+    expect(withMsg.instructions).toContain(QA_KB_MISS_WITH_MESSAGE);
+
+    const withoutMsg = makePolicyQaRung({
+      knowledgeTools: { get_company_policy_answer: fakeTool('x') },
+    }) as unknown as { instructions: string };
+    expect(withoutMsg.instructions).toContain(QA_KB_MISS_NO_MESSAGE);
+    expect(withoutMsg.instructions).not.toMatch(/CALL take_message/);
   });
 
   it('SAD: instructions are retrieval-first and action-first, with no real names', () => {

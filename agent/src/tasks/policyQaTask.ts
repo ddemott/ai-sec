@@ -65,19 +65,28 @@ EVERY factual answer comes from the knowledge base. Before you answer ANY questi
 
 Answer ONE question at a time, then wait for the next. Do not volunteer information they did not ask about.
 
-If the tool says it does not have the information, tell the caller honestly and offer to take a message so the owner can get back to them with the answer:
-  → IF they want that: ask for their name and the best number to reach them, then CALL take_message with caller_name, callback_phone, and their question as the message. Calling the tool is the ONLY thing that records it — never say a message is saved before the tool has run.
-  → IF they decline: carry on with their next question, or finish.
-
 When the caller indicates they have what they need ("that's all", "no more questions", "thanks, that's it"), your VERY NEXT action is to CALL questions_answered — call it BEFORE any goodbye. The wrap-up is spoken for you after it runs.
 
 This is a PHONE CALL: short spoken sentences, no lists, no markdown.`;
 
+/** KB-miss guidance WHEN the rung holds take_message. */
+export const QA_KB_MISS_WITH_MESSAGE = `If the tool says it does not have the information, tell the caller honestly and offer to take a message so the owner can get back to them with the answer:
+  → IF they want that: ask for their name and the best number to reach them, then CALL take_message with caller_name, callback_phone, and their question as the message. Calling the tool is the ONLY thing that records it — never say a message is saved before the tool has run.
+  → IF they decline: carry on with their next question, or finish.`;
+
+/** KB-miss guidance when the rung does NOT hold take_message — it must never be told
+ *  to call a tool it does not have (that is an impossible instruction, and impossible
+ *  instructions are how callers get stranded). */
+export const QA_KB_MISS_NO_MESSAGE = `If the tool says it does not have the information, tell the caller honestly that you don't have that detail, and carry on with their next question — never invent an answer to fill the gap, and never promise that someone will follow up.`;
+
 /** Appended when a booking rung is queued right after this one (mixed-goal calls). */
 export const QA_BOOKING_FOLLOWS = `A BOOKING STEP COMES RIGHT AFTER THIS ONE — the system books meetings the moment your part is done, so NEVER say you cannot book, cannot schedule, or that they should "contact the business". If the caller says they want to book, that IS their questions being answered: your VERY NEXT action is to CALL questions_answered, and the booking step takes over in the same breath. Say nothing about booking yourself — no goodbye, no "someone will help you" — just call the tool.`;
 
-/** Appended on questions-ONLY calls (no booking rung follows). */
+/** Appended on questions-ONLY calls (no booking rung follows) WHEN take_message is held. */
 export const QA_NO_BOOKING_FOLLOWS = `If the caller decides they want an appointment, a callback, or anything beyond answers: do not claim you cannot help — ask for their name and best number, then CALL take_message with what they want, so the owner can get back to them to arrange it. The tool call is the only thing that records it.`;
+
+/** Questions-only AND no take_message: the only honest move is honesty. */
+export const QA_NO_BOOKING_NO_MESSAGE = `If the caller decides they want an appointment or a callback, tell them plainly that arranging it is beyond this call, and suggest they call back — promise nothing you have no tool to perform.`;
 
 /**
  * Built on makeRung as a COLLECT rung with an ACTION fallback. The completion tools:
@@ -124,7 +133,15 @@ export function makePolicyQaRung(opts: PolicyQaTaskOptions): voice.AgentTask<Pol
       opts.knownCaller,
       POLICY_QA_INTRO,
       POLICY_QA_INSTRUCTIONS,
-      opts.bookingFollows ? QA_BOOKING_FOLLOWS : QA_NO_BOOKING_FOLLOWS,
+      // Every line below names only tools this rung actually holds — an instruction
+      // that names an absent tool is impossible to follow, and impossible
+      // instructions strand callers (Copilot review catch, 2026-07-16).
+      takeMessage ? QA_KB_MISS_WITH_MESSAGE : QA_KB_MISS_NO_MESSAGE,
+      opts.bookingFollows
+        ? QA_BOOKING_FOLLOWS
+        : takeMessage
+          ? QA_NO_BOOKING_FOLLOWS
+          : QA_NO_BOOKING_NO_MESSAGE,
     ]
       .filter(Boolean)
       .join('\n\n'),
