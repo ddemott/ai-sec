@@ -598,9 +598,10 @@ describe('buildSystemPrompt — capability gating (Realtime tool subset)', () =>
       'send_verification_code',
       'verify_phone_code',
       'transfer_call',
-      // 'sms'-gated since 2026-07-17 (it TEXTS the caller; ENABLE_SMS off =
-      // tool absent) — and the Realtime subset has no 'sms' either.
+      // 'sms'-gated since 2026-07-17 (they TEXT the caller; ENABLE_SMS off =
+      // tools absent) — and the Realtime subset has no 'sms' either.
       'send_self_service_link',
+      'record_sms_consent',
       '# Phone Verification',
       '# Knowledge base',
     ]) {
@@ -633,6 +634,10 @@ describe('buildSystemPrompt — capability gating (Realtime tool subset)', () =>
       'send_self_service_link',
       'PROACTIVELY offer the self-service option',
       'self-service link',
+      // Caught by review on this very fix: record_sms_consent had the SAME
+      // mis-advertising (sms-gated tool, unconditionally named by the booking
+      // door and the tool list) — the pre-existing instance of the class.
+      'record_sms_consent',
     ]) {
       expect(prompt, `sms-gated reference still present: ${dropped}`).not.toContain(dropped);
     }

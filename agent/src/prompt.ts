@@ -339,6 +339,16 @@ ${
   const manageDoorTools = hasSms
     ? 'get_my_appointments, reschedule_appointment, cancel_appointment, send_self_service_link'
     : 'get_my_appointments, reschedule_appointment, cancel_appointment';
+  // record_sms_consent had the SAME mis-advertising (caught by review on the
+  // send_self_service_link refile — the pre-existing instance of the class):
+  // the tool is 'sms'-gated, but the booking door and the tool list named it
+  // unconditionally. Same rule, same fix: the pointers move with the tool.
+  const bookingDoorTools = hasSms
+    ? 'get_available_slots, get_scheduling_options, book_with_scheduling, record_sms_consent'
+    : 'get_available_slots, get_scheduling_options, book_with_scheduling';
+  const smsConsentToolLine = hasSms
+    ? `\n- record_sms_consent(phone) — record that the caller VERBALLY agreed to receive SMS appointment confirmations/reminders. Use ONLY after you asked permission with the required disclosures (see "Text reminders" below) and they clearly said yes. NEVER for marketing.`
+    : '';
   const selfServiceStep = hasSms
     ? `3. PROACTIVELY offer the self-service option before doing it live: "I can text you a secure link so you can reschedule or cancel it yourself whenever suits you — or I can take care of it right now. Which would you like?" If they want the text, call send_self_service_link(appointment_id) and confirm the text is on its way. If it reports it can't send (no consent to text, links not set up), don't dwell on it — handle the change live per the next steps.`
     : `3. Handle the change live on this call — you cannot text links, so never offer one.`;
@@ -445,7 +455,7 @@ You start with: who's calling, what we offer, our policies, and every way to rea
 
 Two tools are DOORS. They are the only way to the rest:
 
-- **start_booking()** — they want a NEW appointment. Opens the scheduling tools (get_available_slots, get_scheduling_options, book_with_scheduling, record_sms_consent).
+- **start_booking()** — they want a NEW appointment. Opens the scheduling tools (${bookingDoorTools}).
 - **manage_appointment()** — they want to check, MOVE or CANCEL one they already have. Opens ${manageDoorTools}.
 
 Call the door AS SOON AS you know which one it is — before you ask for a day, a time, a service, a name or a number. It costs the caller nothing and it is what makes the next thing possible.
@@ -462,8 +472,7 @@ Call the door AS SOON AS you know which one it is — before you ask for a day, 
 - get_scheduling_options(requirements, window) — returns valid (resource, employee) combinations for a service within a time window. Use when the caller hasn't specified a day yet.
 - check_availability(resource_id, start_time, end_time) — boolean availability for a specific resource + time. Needs a real resource_id from get_scheduling_options; do NOT use after get_available_slots.
 - book_appointment(resource_id, start_time, end_time, phone, name?, employee_id?) — direct booking to a SPECIFIC resource_id (only from get_scheduling_options). Do NOT use after get_available_slots — it has no resource_id to give you and the booking will fail.
-- book_with_scheduling(requirements, window, phone, name?, reminder_lead_minutes?) — **the default booking tool.** Single call that finds the slot, picks the resource, AND assigns a staff member — no resource_id needed. Use this to book after get_available_slots. Pass reminder_lead_minutes ONLY when the caller agreed to a text reminder (see "Text reminders").${knowledgeToolLine}${verificationToolLines}
-- record_sms_consent(phone) — record that the caller VERBALLY agreed to receive SMS appointment confirmations/reminders. Use ONLY after you asked permission with the required disclosures (see "Text reminders" below) and they clearly said yes. NEVER for marketing.
+- book_with_scheduling(requirements, window, phone, name?, reminder_lead_minutes?) — **the default booking tool.** Single call that finds the slot, picks the resource, AND assigns a staff member — no resource_id needed. Use this to book after get_available_slots. Pass reminder_lead_minutes ONLY when the caller agreed to a text reminder (see "Text reminders").${knowledgeToolLine}${verificationToolLines}${smsConsentToolLine}
 - get_my_appointments() — fetch the caller's upcoming scheduled appointments by caller-ID. Call before canceling or rescheduling.
 - cancel_appointment(appointment_id) — cancel one of the caller's appointments. Always confirm with the caller first. For rescheduling use reschedule_appointment instead.
 - reschedule_appointment(appointment_id, new_start_time, new_end_time) — move an existing appointment to a new slot. Always confirm the new time with the caller before calling. Use book_with_scheduling first if they don't have a new time yet.${selfServiceLinkToolLine}
