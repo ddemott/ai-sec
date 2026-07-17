@@ -56,6 +56,7 @@ function makeDeps(): CallDeps {
       get_my_appointments: tool,
       cancel_appointment: tool,
       reschedule_appointment: tool,
+      attach_meeting_notes: tool,
     },
   };
 }
@@ -69,17 +70,17 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     // on the stack, and the loop cannot reach its end with either one unpopped.
     const plan = ids({ wantsMeeting: true, hasJobInquiry: true });
     expect(plan).toContain('book_meeting');
-    // NOTE: job_intake is the next piece of the spike. When it lands, this asserts it too;
-    // until then the plan is honest about what it can guarantee.
+    expect(plan).toContain('meeting_context'); // the job template rides rung 3
     expect(plan[0]).toBe('identity');
   });
 
-  it('SAD: the ORDER is fixed — identity first, then the meeting', () => {
+  it('SAD: the ORDER is fixed — identity first, then the meeting, then its context', () => {
     // You cannot book on a caller you cannot name or reach, and the meeting is what they
     // rang for. A tenant does not get to reorder this, exactly as with the composed script
-    // blocks: it is what the bad calls taught us, not a preference.
+    // blocks: it is what the bad calls taught us, not a preference. Every booked meeting
+    // now also gets the meeting-context rung (default template: one light notes question).
     const plan = ids({ wantsMeeting: true, hasJobInquiry: false });
-    expect(plan).toEqual(['identity', 'book_meeting']);
+    expect(plan).toEqual(['identity', 'book_meeting', 'meeting_context']);
   });
 
   it('HAPPY: identity is ALWAYS present, even with no stated goal', () => {
@@ -148,13 +149,60 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(instr).toMatch(/resolve it against TODAY/i);
   });
 
-  it('SAD: JobIntakeTask gets ONLY capture_job_inquiry — nothing to wander into', () => {
+  it('SAD: the job template gets ONLY capture_job_inquiry — nothing to wander into', () => {
     const specs = planCallTasks({ wantsMeeting: false, hasJobInquiry: true }, makeDeps());
-    const intake = specs.find((s) => s.id === 'job_intake')!;
+    const intake = specs.find((s) => s.id === 'meeting_context')!;
     const names = Object.keys(intake.factory().toolCtx);
     expect(names).toContain('capture_job_inquiry');
     expect(names).not.toContain('book_with_scheduling');
     expect(names).not.toContain('take_message');
+    expect(names).not.toContain('attach_meeting_notes'); // the job SUMMARY is stamped by the backend, not a second tool
+  });
+
+  it('HAPPY: a plain booked meeting gets the DEFAULT template — attach notes, or bow out silently', () => {
+    // Rung 3 is MEETING GOALS, not "the job rung": with no role to brief, the template is
+    // one light wrap-up question whose answer lands on the appointment. The factory runs
+    // AFTER booking, so a booked meeting must exist in state for the real rung to build.
+    const deps = makeDeps();
+    const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: false }, deps);
+    deps.state.appointmentId = 'appt-1'; // the booking rung's onBooked wrote this
+    const notes = specs.find((s) => s.id === 'meeting_context')!;
+    const names = Object.keys(notes.factory().toolCtx).sort();
+    expect(names).toContain('attach_meeting_notes'); // the write
+    expect(names).toContain('no_notes'); // the honest "nothing to add" exit
+    expect(names).toContain('take_message'); // the fallback when attach cannot happen
+    expect(names).not.toContain('capture_job_inquiry'); // wrong template
+  });
+
+  it('SAD: no meeting actually landed → the notes rung SKIPS in host code, before any turn', () => {
+    // The booking rung fell back to a message: there is no appointment to note against,
+    // and the caller must never be asked about a meeting that does not exist. The factory
+    // reads state at pop time and returns a rung that completes on entry — no LLM, no audio.
+    const deps = makeDeps();
+    const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: false }, deps);
+    // deps.state.appointmentId deliberately NOT set — nothing was booked.
+    const notes = specs.find((s) => s.id === 'meeting_context')!;
+    const rung = notes.factory();
+    expect(rung.done).toBe(false);
+    void (rung as unknown as { onEnter: () => Promise<void> }).onEnter();
+    expect(rung.done).toBe(true);
+  });
+
+  it('SAD: the job opener tells the TRUTH about the booking — state decides, not the stated goal', () => {
+    // A "meeting about a job" call whose booking fell back to a message books NOTHING —
+    // the intake must not open with "you're booked in". The factory reads what actually
+    // happened (state.appointmentId), not what was asked for (goals.wantsMeeting).
+    const deps = makeDeps();
+    const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: true }, deps);
+    const intake = specs.find((s) => s.id === 'meeting_context')!;
+    // No appointmentId in state → the no-booking opener.
+    const unbooked = (intake.factory() as unknown as { instructions: string }).instructions;
+    expect(unbooked).toContain('no meeting was booked');
+    expect(unbooked).not.toContain('You have booked the meeting');
+    // Booking landed → the booked opener.
+    deps.state.appointmentId = 'appt-1';
+    const booked = (intake.factory() as unknown as { instructions: string }).instructions;
+    expect(booked).toContain('You have booked the meeting');
   });
 
   it('HAPPY: a caller who wants to cancel/reschedule gets the schedule_change rung', () => {
@@ -213,7 +261,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(names).not.toContain('capture_job_inquiry');
   });
 
-  it('SAD: the FULL order is fixed — identity → book → job_intake → take_message → schedule_change', () => {
+  it('SAD: the FULL order is fixed — identity → book → meeting_context → take_message → schedule_change', () => {
     // Order is not a preference (BUILDING_SCRIPT_NOTES checklist #6). take_message is the
     // ELSE catch-all, so it sits after the vertical intake and before an existing-appointment
     // change — mirroring the composed-script block order.
@@ -226,7 +274,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(plan).toEqual([
       'identity',
       'book_meeting',
-      'job_intake',
+      'meeting_context',
       'take_message',
       'schedule_change',
     ]);
@@ -245,7 +293,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     // before the booking (they cannot pick a time before hearing the price), and the
     // loop still cannot end with the meeting unbooked.
     const plan = ids({ wantsMeeting: true, hasJobInquiry: false, hasQuestions: true });
-    expect(plan).toEqual(['identity', 'policy_qa', 'book_meeting']);
+    expect(plan).toEqual(['identity', 'policy_qa', 'book_meeting', 'meeting_context']);
   });
 
   it('SAD: the Q&A rung gets retrieval + the message fallback — nothing else', () => {

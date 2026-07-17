@@ -70,6 +70,9 @@ const CAPABILITY_OF: Record<string, Capability> = {
   get_my_appointments: 'scheduling',
   cancel_appointment: 'scheduling',
   reschedule_appointment: 'scheduling',
+  // Deliberately in NO toolPhases list: only the meeting-goals rung (task-group path)
+  // holds it. The ladder path has no wrap-up-notes step, so it never sees the tool.
+  attach_meeting_notes: 'scheduling',
   send_verification_code: 'verification',
   verify_phone_code: 'verification',
   transfer_call: 'transfer',
@@ -1156,6 +1159,48 @@ export function buildTools(
           timezone: args.timezone,
           // Truthy check (not ??) so an empty-string callId is omitted — the
           // backend call_id is min(1) and would 400 on ''.
+          call_id: ctx.callId || undefined,
+          // THE SYSTEM REMEMBERS THE MEETING, not the model. If this call already
+          // booked an appointment, the outcome tracker holds its id — inject it so
+          // the inquiry row links to the meeting it was booked around and the
+          // backend stamps a job summary onto the calendar entry. The model never
+          // sees or handles the UUID (same trust model as spokenPhone).
+          appointment_id: outcome?.result().appointmentId ?? undefined,
+        });
+        return formatResponse(res);
+      },
+    }),
+
+    attach_meeting_notes: llm.tool({
+      description:
+        "Attach a short note from the caller to the meeting that was booked on THIS call, so the owner sees it on the calendar entry (context, requests, anything they want known before the meeting). Only works after a booking has happened on this call — the system knows which meeting; you pass only the note. Do NOT use this for standalone messages or callback requests when no meeting was booked — that's take_message.",
+      parameters: {
+        type: 'object',
+        properties: {
+          notes: {
+            type: 'string',
+            description:
+              'What the caller wants the owner to know ahead of the meeting, in their words. Be specific — capture what they actually said.',
+          },
+        },
+        required: ['notes'],
+        additionalProperties: false,
+      },
+      execute: async (args: { notes: string }) => {
+        // The appointment id comes from the outcome tracker — the model never holds a
+        // UUID. No booking on this call yet → nothing to attach to; say so honestly
+        // instead of 400ing at the backend.
+        const appointmentId = outcome?.result().appointmentId;
+        if (!appointmentId) {
+          return JSON.stringify({
+            error:
+              'No meeting has been booked on this call, so there is nothing to attach a note to. If the caller wants something passed along, record it as a message instead.',
+          });
+        }
+        const res = await client.call('/agent-tools/attach-meeting-notes', {
+          tenant_id: ctx.tenantId,
+          appointment_id: appointmentId,
+          notes: args.notes,
           call_id: ctx.callId || undefined,
         });
         return formatResponse(res);

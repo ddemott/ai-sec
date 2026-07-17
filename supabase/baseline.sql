@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Z0ONHRdEzqnMkxvcRo2QmPzjCvIxdInDfxAwVMUnXoZyg7pSR4kmO93uuDGpQ6C
+\restrict Bo0Qbxv3kEMvN7yI3D2b7jTHQ1wwvVgBrMsycCTC5Za7nNDsnZBTm5MaFmNLW9n
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2894,7 +2894,8 @@ CREATE TABLE public.job_inquiries (
     callback_phone text,
     call_id text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    caller_company text
+    caller_company text,
+    appointment_id uuid
 );
 
 ALTER TABLE ONLY public.job_inquiries FORCE ROW LEVEL SECURITY;
@@ -2919,6 +2920,13 @@ COMMENT ON COLUMN public.job_inquiries.represents_company IS 'True when the call
 --
 
 COMMENT ON COLUMN public.job_inquiries.caller_company IS 'The company the CALLER works for — the staffing agency placing the role. Equals client_company when represents_company is true (an in-house recruiter). NULL on rows captured before 2026-07-14, when we never asked.';
+
+
+--
+-- Name: COLUMN job_inquiries.appointment_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.job_inquiries.appointment_id IS 'The meeting this inquiry was booked around, when the call produced one. NULL for brief-the-owner-only inquiries. SET NULL on appointment delete: the lead outlives the meeting.';
 
 
 --
@@ -4920,6 +4928,14 @@ ALTER TABLE ONLY public.entity_sync_map
 
 
 --
+-- Name: job_inquiries job_inquiries_appointment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.job_inquiries
+    ADD CONSTRAINT job_inquiries_appointment_id_fkey FOREIGN KEY (appointment_id) REFERENCES public.appointments(appointment_id) ON DELETE SET NULL;
+
+
+--
 -- Name: job_inquiries job_inquiries_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5802,5 +5818,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Z0ONHRdEzqnMkxvcRo2QmPzjCvIxdInDfxAwVMUnXoZyg7pSR4kmO93uuDGpQ6C
+\unrestrict Bo0Qbxv3kEMvN7yI3D2b7jTHQ1wwvVgBrMsycCTC5Za7nNDsnZBTm5MaFmNLW9n
 

@@ -981,6 +981,181 @@ describe('agentTools /capture-job-inquiry', () => {
     expect(queries).toHaveLength(0);
     expect(vi.mocked(sendJobInquiryEmail)).not.toHaveBeenCalled();
   });
+
+  it('HAPPY: appointment_id links the inquiry to the meeting AND stamps a job summary on it', async () => {
+    // WHO: a "meeting about a job" call — the booking rung already booked, and the agent
+    //       runtime injected the appointment id from the call-outcome tracker.
+    // WHAT: the route verifies the appointment belongs to this tenant, INSERTs the
+    //        inquiry WITH the link, and appends a readable summary to the appointment's
+    //        description — so the calendar entry says what the meeting is ABOUT.
+    // WHY: before this, the owner saw a meeting on the calendar and a job inquiry in
+    //      another list, and had to correlate them by call.
+    const APPT = 'b7e42a10-92c4-4f7a-9a2d-52e9c1a4b3d6';
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] }, // customer lookup by callback phone — none
+        { rows: [{ appointment_id: APPT }] }, // appointment belongs to tenant
+        { rows: [{ job_inquiry_id: 'ji-5' }] }, // INSERT ... RETURNING
+        { rows: [], rowCount: 1 }, // description stamp UPDATE
+        { rows: [{ email: 'owner@example.com' }] }, // recipient resolve
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Rhonda Recruiter',
+      callback_phone: '3128651186',
+      caller_company: 'Insight Global',
+      client_company: 'Blue Cross',
+      represents_company: false,
+      employment_type: 'contract',
+      rate_range: '$65-82/hr',
+      duration: '6 months',
+      location_type: 'hybrid',
+      address: '300 Randolph St',
+      appointment_id: APPT,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { saved: true } });
+    const insert = queries.find((q) => q.text.includes('INSERT INTO job_inquiries'))!;
+    expect(insert.text).toContain('appointment_id');
+    expect(insert.params[14], 'the link rides the INSERT as $15').toBe(APPT);
+    const stamp = queries.find((q) => q.text.includes('UPDATE appointments'))!;
+    expect(stamp.params[1]).toBe(APPT);
+    expect(stamp.params[2]).toBe(
+      'Job details: contract, $65-82/hr, 6 months, hybrid at 300 Randolph St — work at Blue Cross via Insight Global.'
+    );
+  });
+
+  it('SAD: appointment vanishes between the verify SELECT and the stamp UPDATE → inquiry still saved, miss observable', async () => {
+    // WHO: capture-job-inquiry racing a deletion — the SELECT proved the appointment
+    //       live, nothing holds that true until the UPDATE.
+    // WHAT: the stamp UPDATE filters is_deleted = false and affects zero rows; the
+    //        route must still report saved (the inquiry row is the lead) — the lost
+    //        stamp surfaces as a metric + warn, never a silent nothing.
+    const APPT = 'b7e42a10-92c4-4f7a-9a2d-52e9c1a4b3d6';
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] }, // customer lookup
+        { rows: [{ appointment_id: APPT }] }, // appointment verifies live
+        { rows: [{ job_inquiry_id: 'ji-7' }] }, // INSERT ... RETURNING
+        { rows: [], rowCount: 0 }, // stamp UPDATE — appointment gone
+        { rows: [{ email: null }] }, // recipient resolve — none
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Rhonda Recruiter',
+      callback_phone: '3128651186',
+      client_company: 'Blue Cross',
+      appointment_id: APPT,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { saved: true } });
+    const stamp = queries.find((q) => q.text.includes('UPDATE appointments'))!;
+    expect(stamp.text, 'the stamp must skip soft-deleted appointments').toContain(
+      'is_deleted = false'
+    );
+  });
+
+  it("SAD: an appointment_id that is not this tenant's live appointment saves the inquiry UNLINKED", async () => {
+    // The id arrives from the agent runtime, so a miss is a bug — but the row is the
+    // LEAD and the link is just context: save unlinked (+ metric + 5W warn), never lose
+    // the inquiry, and never stamp someone else's appointment.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] }, // customer lookup
+        { rows: [] }, // appointment check — no match for this tenant
+        { rows: [{ job_inquiry_id: 'ji-6' }] }, // INSERT still lands
+        { rows: [{ email: null }] }, // recipient resolve — none
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Orla Orphan',
+      callback_phone: '3125554444',
+      client_company: 'Initech',
+      appointment_id: 'b7e42a10-92c4-4f7a-9a2d-52e9c1a4b3d6',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { saved: true } });
+    const insert = queries.find((q) => q.text.includes('INSERT INTO job_inquiries'))!;
+    expect(insert.params[14], 'no verified appointment → NULL link').toBeNull();
+    expect(
+      queries.find((q) => q.text.includes('UPDATE appointments')),
+      'no stamp lands on an unverified appointment'
+    ).toBeUndefined();
+  });
+});
+
+describe('agentTools /attach-meeting-notes', () => {
+  const APPT = 'b7e42a10-92c4-4f7a-9a2d-52e9c1a4b3d6';
+
+  it("HAPPY: appends the caller's note to the appointment description", async () => {
+    // WHO: the meeting-goals rung's one wrap-up question, answered.
+    // WHAT: UPDATE appends "Caller notes: …" to description and returns the id, which is
+    //        the rung's completion signal (idExtractor on appointment_id).
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ appointment_id: APPT }] }],
+    });
+    const res = await post(app, '/agent-tools/attach-meeting-notes', {
+      tenant_id: TENANT_ID,
+      appointment_id: APPT,
+      notes: 'bring the contract paperwork',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      success: true,
+      result: { appointment_id: APPT },
+    });
+    expect(queries[0].text).toContain('UPDATE appointments');
+    expect(queries[0].text).toContain('description');
+    expect(queries[0].params[2]).toBe('Caller notes: bring the contract paperwork');
+  });
+
+  it('HAPPY: a multi-line note is flattened to one line before stamping', async () => {
+    // WHO: the model answering the wrap-up question with a multi-line string.
+    // WHAT: the stamp must stay ONE line — splitCallContext() parses the description
+    //        line-by-line, so a newline inside the note would spill the remainder into
+    //        the service headline (and the edit panel's service field).
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ appointment_id: APPT }] }],
+    });
+    const res = await post(app, '/agent-tools/attach-meeting-notes', {
+      tenant_id: TENANT_ID,
+      appointment_id: APPT,
+      notes: 'bring the contract paperwork\nand the  rate\tsheet\n',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(queries[0].params[2]).toBe('Caller notes: bring the contract paperwork and the rate sheet');
+  });
+
+  it('SAD: unknown or deleted appointment → honest refusal, nothing reported saved', async () => {
+    // assertRowAffected-style honesty: a zero-row UPDATE must never read as success —
+    // the agent would tell the caller a note was saved that was not.
+    const { app } = buildApp({ queryResponses: [{ rows: [] }] });
+    const res = await post(app, '/agent-tools/attach-meeting-notes', {
+      tenant_id: TENANT_ID,
+      appointment_id: APPT,
+      notes: 'anything',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
+    expect(res.json().error).toMatch(/nothing was saved/i);
+  });
+
+  it('SAD: blank notes are rejected before any DB write', async () => {
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/attach-meeting-notes', {
+      tenant_id: TENANT_ID,
+      appointment_id: APPT,
+      notes: '',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
+    expect(res.json().error).toContain('notes');
+    expect(queries).toHaveLength(0);
+  });
 });
 
 describe('agentTools /check-availability', () => {

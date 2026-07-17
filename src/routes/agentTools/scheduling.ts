@@ -10,6 +10,7 @@
  * RPCs, and the caller-owned mutations (my-appointments, cancel, reschedule).
  */
 import {
+  AttachMeetingNotesSchema,
   BookAppointmentSchema,
   BookWithSchedulingSchema,
   CancelAppointmentSchema,
@@ -34,6 +35,7 @@ import {
 } from './helpers';
 import type { PoolClient } from 'pg';
 import { applyTimezone, toLocalWallClock } from '../../services/timezoneUtils';
+import { CALLER_NOTES_PREFIX, toStampText } from '../../../shared/callContext';
 import { validateAppointmentTimeRange } from '../../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../../services/customerLookup';
@@ -1144,5 +1146,43 @@ export function registerSchedulingRoutes({
       return ok(reply, { rescheduled: true, appointment_id: args.appointment_id });
     },
     'Failed to reschedule appointment'
+  );
+
+  // attach-meeting-notes — append the caller's own context to the meeting just booked.
+  // The meeting-goals rung asks one light wrap-up question ("anything you'd like the
+  // owner to know before the meeting?"); the answer lands here, on the appointment's
+  // description, so the calendar entry says what the meeting is ABOUT. appointment_id
+  // is injected by the agent runtime from the call-outcome tracker — the model passes
+  // only the notes — so a lookup miss is a bug surfaced honestly, never silent success.
+  toolRoute(
+    app,
+    '/agent-tools/attach-meeting-notes',
+    AttachMeetingNotesSchema,
+    async (args, reply) => {
+      const updated = await withTenantClient(args.tenant_id, async (client) => {
+        const res = await client.query<{ appointment_id: string }>(
+          `UPDATE appointments
+              SET description = COALESCE(NULLIF(description, '') || E'\n\n', '') || $3,
+                  updated_at = now()
+            WHERE tenant_id = $1 AND appointment_id = $2 AND is_deleted = false
+            RETURNING appointment_id`,
+          [args.tenant_id, args.appointment_id, `${CALLER_NOTES_PREFIX}${toStampText(args.notes)}`]
+        );
+        return res.rows[0]?.appointment_id ?? null;
+      });
+
+      if (!updated) {
+        return fail(
+          reply,
+          "I couldn't find that meeting to attach the note to — nothing was saved. Offer to pass it along as a message for the owner instead."
+        );
+      }
+
+      return ok(reply, {
+        appointment_id: updated,
+        message: "Noted — I've added that to the meeting.",
+      });
+    },
+    'Failed to attach meeting notes'
   );
 }

@@ -17,6 +17,7 @@ import {
   TakeMessageSchema,
 } from './schemas';
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
+import { JOB_DETAILS_PREFIX, toStampText } from '../../../shared/callContext';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
@@ -95,6 +96,51 @@ export function resolveJobCompanies(input: {
     callerCompany: ac,
     representsCompany: input.represents_company ?? null,
   };
+}
+
+/**
+ * The one-line job summary stamped into the linked appointment's description, so the
+ * owner opens the calendar entry and sees what the meeting is ABOUT without hunting
+ * down the inquiry row. Skips whatever the caller never gave — a partial line beats a
+ * row of blanks read as facts.
+ */
+export function jobSummaryLine(
+  companies: {
+    clientCompany: string | null;
+    callerCompany: string | null;
+    representsCompany: boolean | null;
+  },
+  args: {
+    employment_type?: string;
+    rate_range?: string;
+    duration?: string;
+    location_type?: string;
+    address?: string;
+    timezone?: string;
+  }
+): string {
+  const bits: string[] = [];
+  if (args.employment_type)
+    bits.push(args.employment_type === 'contract' ? 'contract' : 'full time');
+  if (args.rate_range) bits.push(args.rate_range);
+  if (args.duration) bits.push(args.duration);
+  if (args.location_type) {
+    bits.push(
+      args.location_type === 'remote'
+        ? `remote${args.timezone ? ` (${args.timezone})` : ''}`
+        : `${args.location_type}${args.address ? ` at ${args.address}` : ''}`
+    );
+  }
+  // The two companies, kept apart exactly as the intake keeps them: where the work is,
+  // and who rang about it.
+  const company =
+    companies.representsCompany === false && companies.clientCompany
+      ? `work at ${companies.clientCompany}${companies.callerCompany ? ` via ${companies.callerCompany}` : ''}`
+      : companies.callerCompany
+        ? `with ${companies.callerCompany}`
+        : '';
+  const detail = [bits.join(', '), company].filter(Boolean).join(' — ');
+  return `${JOB_DETAILS_PREFIX}${toStampText(detail) || 'see the job inquiry record'}.`;
 }
 
 export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {
@@ -399,12 +445,33 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
           customerId = cust.rows[0]?.customer_id ?? null;
         }
 
+        // The meeting this inquiry was booked around. The id arrives from the agent
+        // RUNTIME (call-outcome tracker), never the model — so a miss here is a bug,
+        // not caller input. On a miss, save the inquiry UNLINKED rather than lose it:
+        // the row is the lead, the link is just context.
+        let appointmentId: string | null = null;
+        if (args.appointment_id) {
+          const appt = await client.query<{ appointment_id: string }>(
+            `SELECT appointment_id FROM appointments
+              WHERE tenant_id = $1 AND appointment_id = $2 AND is_deleted = false`,
+            [args.tenant_id, args.appointment_id]
+          );
+          appointmentId = appt.rows[0]?.appointment_id ?? null;
+          if (!appointmentId) {
+            errorsTotal.inc({ event: 'job_inquiry_appointment_link_miss' });
+            app.log.warn(
+              { tenantId: args.tenant_id, appointmentId: args.appointment_id },
+              'capture_job_inquiry: appointment_id does not match a live appointment for this tenant — inquiry saved unlinked'
+            );
+          }
+        }
+
         const res = await client.query<{ job_inquiry_id: string }>(
           `INSERT INTO job_inquiries
              (tenant_id, customer_id, client_company, caller_company, represents_company,
               employment_type, rate_range, duration, location_type, address, timezone,
-              caller_name, callback_phone, call_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+              caller_name, callback_phone, call_id, appointment_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
            RETURNING job_inquiry_id`,
           [
             args.tenant_id,
@@ -421,8 +488,34 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             args.caller_name,
             callbackPhone,
             args.call_id ?? null,
+            appointmentId,
           ]
         );
+
+        // Stamp a readable summary onto the meeting itself, so the calendar entry is
+        // self-contained: the owner sees WHAT the meeting is about, not just who and
+        // when. Appended, never overwritten — the description may already carry the
+        // service name or the caller's notes.
+        if (appointmentId) {
+          const stamped = await client.query(
+            `UPDATE appointments
+                SET description = COALESCE(NULLIF(description, '') || E'\n\n', '') || $3,
+                    updated_at = now()
+              WHERE tenant_id = $1 AND appointment_id = $2 AND is_deleted = false`,
+            [args.tenant_id, appointmentId, jobSummaryLine(companies, args)]
+          );
+          // The SELECT above proved the appointment live, but nothing holds that true
+          // until here — a zero-row UPDATE means it vanished in between. The inquiry
+          // row (the lead) is already saved; only the calendar stamp was lost, and
+          // that must be observable, not silent.
+          if (stamped.rowCount === 0) {
+            errorsTotal.inc({ event: 'job_inquiry_appointment_stamp_miss' });
+            app.log.warn(
+              { tenantId: args.tenant_id, appointmentId },
+              'capture_job_inquiry: appointment disappeared before the job summary stamp — inquiry saved, calendar entry not stamped'
+            );
+          }
+        }
 
         // Resolve the notification recipient: the dedicated job_inquiry_email,
         // else the tenant owner's user email. The owner's NAME comes back too — the
