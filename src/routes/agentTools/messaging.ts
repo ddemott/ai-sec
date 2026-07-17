@@ -436,7 +436,7 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         // IDEMPOTENT PER CALL. The job-intake rung retries this tool until it
         // sees a job_inquiry_id — that is the rung contract (the completion IS
         // the write). So a slow response is indistinguishable from a failed one
-        // to the agent, and on 2026-07-17 a hung owner-email hold the response
+        // to the agent, and on 2026-07-17 a hung owner-email held the response
         // past the agent's 8s tool timeout: the rung retried four times and
         // this route dutifully wrote FOUR identical inquiries and stamped the
         // appointment four times. An ACTION-rung tool MUST be safe to retry:
@@ -510,12 +510,20 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
           }
         }
 
+        // ON CONFLICT DO NOTHING against the job_inquiries_one_per_call partial
+        // unique index (migration 20260717230000). The fast-path SELECT above
+        // catches a retry that arrives AFTER the first insert committed — but
+        // on the live call the retries were IN FLIGHT TOGETHER (each request
+        // sat 60-120s behind the hung email), so two could pass the SELECT
+        // before either INSERT landed. The index is the layer that cannot
+        // race; losing it returns zero rows and the winner is looked up below.
         const res = await client.query<{ job_inquiry_id: string }>(
           `INSERT INTO job_inquiries
              (tenant_id, customer_id, client_company, caller_company, represents_company,
               employment_type, rate_range, duration, location_type, address, timezone,
               caller_name, callback_phone, call_id, appointment_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+           ON CONFLICT (tenant_id, call_id) WHERE call_id IS NOT NULL DO NOTHING
            RETURNING job_inquiry_id`,
           [
             args.tenant_id,
@@ -535,12 +543,27 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             appointmentId,
           ]
         );
+        const inserted = Boolean(res.rows[0]);
+        let jobInquiryId = res.rows[0]?.job_inquiry_id ?? null;
+        if (!inserted && args.call_id) {
+          // Lost a concurrent-retry race — the winner's row IS this call's
+          // inquiry. Hand its id back so the rung completes.
+          const winner = await client.query<{ job_inquiry_id: string }>(
+            `SELECT job_inquiry_id FROM job_inquiries
+              WHERE tenant_id = $1 AND call_id = $2
+              ORDER BY created_at ASC LIMIT 1`,
+            [args.tenant_id, args.call_id]
+          );
+          jobInquiryId = winner.rows[0]?.job_inquiry_id ?? null;
+        }
 
         // Stamp a readable summary onto the meeting itself, so the calendar entry is
         // self-contained: the owner sees WHAT the meeting is about, not just who and
         // when. Appended, never overwritten — the description may already carry the
-        // service name or the caller's notes.
-        if (appointmentId) {
+        // service name or the caller's notes. Only the INSERT WINNER stamps —
+        // a race-losing retry stamping too is how one appointment got the same
+        // summary four times.
+        if (appointmentId && inserted) {
           const stamped = await client.query(
             `UPDATE appointments
                 SET description = COALESCE(NULLIF(description, '') || E'\n\n', '') || $3,
@@ -587,10 +610,13 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         );
 
         return {
-          job_inquiry_id: res.rows[0]?.job_inquiry_id ?? null,
+          job_inquiry_id: jobInquiryId,
           recipient: recip.rows[0]?.email ?? null,
           ownerName: recip.rows[0]?.owner_name ?? null,
-          duplicate: false,
+          // A race-losing concurrent retry is a duplicate too: the winner's
+          // request emails the owner and stamps the meeting; this one only
+          // hands back the id.
+          duplicate: !inserted,
         };
       });
 

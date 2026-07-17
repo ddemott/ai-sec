@@ -987,8 +987,11 @@ describe('agentTools /capture-job-inquiry', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { saved: true } });
-    // Generous bound: the point is "returns without the send", not a benchmark.
-    expect(Date.now() - started).toBeLessThan(2000);
+    // Generous bound (review on #280: CI jitter makes tight wall-clock bounds
+    // flaky): the point is "returns without awaiting a send that never
+    // resolves" — any finite bound proves that; 5s stays under the agent's 8s
+    // tool timeout this test exists to protect.
+    expect(Date.now() - started).toBeLessThan(5000);
   });
 
   it('HAPPY: a RETRY on the same call returns the EXISTING inquiry — no duplicate row, no second email', async () => {
@@ -1018,6 +1021,41 @@ describe('agentTools /capture-job-inquiry', () => {
     });
     // Nothing after the dedupe lookup + recipient resolve: no INSERT, no stamp.
     expect(queries.map((q) => q.text.trim().split(/\s+/)[0])).toEqual(['SELECT', 'SELECT']);
+    expect(vi.mocked(sendJobInquiryEmail)).not.toHaveBeenCalled();
+  });
+
+  it('HAPPY: a CONCURRENT retry that loses the INSERT race still gets the winning id (ON CONFLICT path)', async () => {
+    // WHO: two in-flight retries of the same call (the live failure: each
+    //       request sat 60-120s behind a hung email, so retries overlapped and
+    //       BOTH passed the fast-path dedupe SELECT before either INSERT).
+    // WHAT: the job_inquiries_one_per_call unique index makes the second
+    //        INSERT return zero rows (ON CONFLICT DO NOTHING); the route then
+    //        looks up the winner and returns ITS id — no stamp, no email from
+    //        the loser. Review catch on #280: a SELECT-only dedupe cannot be
+    //        atomic; the index is the layer that cannot race.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] }, // fast-path dedupe SELECT — no committed row YET
+        { rows: [] }, // customer lookup
+        { rows: [] }, // INSERT ... ON CONFLICT DO NOTHING — lost the race, zero rows
+        { rows: [{ job_inquiry_id: 'ji-winner' }] }, // winner lookup
+        { rows: [{ email: 'DaleDeMott@thinkinghammer.com', owner_name: 'Dale' }] }, // recipient
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Steven Bob',
+      callback_phone: '3125553333',
+      client_company: 'CBO',
+      call_id: 'room:sim-call-race',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      success: true,
+      result: { saved: true, job_inquiry_id: 'ji-winner', email_queued: false },
+    });
+    // The loser must not stamp the appointment or email the owner.
+    expect(queries.some((q) => q.text.includes('UPDATE appointments'))).toBe(false);
     expect(vi.mocked(sendJobInquiryEmail)).not.toHaveBeenCalled();
   });
 
