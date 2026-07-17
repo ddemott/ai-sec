@@ -118,6 +118,32 @@ describe('buildTools', () => {
     );
   });
 
+  it('SAD: without the sms capability, BOTH texting-the-caller tools are absent', () => {
+    // WHO: every prod session today (ENABLE_SMS=false until 10DLC).
+    // WHAT: send_self_service_link moved from 'scheduling' to 'sms'
+    //        (2026-07-17) — filed under scheduling it ESCAPED the SMS gate, so
+    //        a live agent could call it, get Telnyx's false "sent", and
+    //        truthfully relay a text that would never arrive. It must vanish
+    //        with record_sms_consent when sms is off.
+    // WHY: "it cannot promise what it has no means to do" — the gate is only a
+    //       gate if every tool that texts the CALLER is behind it.
+    const tools = buildTools(makeCtx(), makeClient([]).client, undefined, undefined, undefined, {
+      capabilities: ['identity', 'scheduling', 'messaging', 'knowledge', 'verification'],
+    });
+    expect(tools).not.toHaveProperty('send_self_service_link');
+    expect(tools).not.toHaveProperty('record_sms_consent');
+    // The live cancel/reschedule path survives.
+    expect(tools).toHaveProperty('cancel_appointment');
+    expect(tools).toHaveProperty('reschedule_appointment');
+  });
+
+  it('HAPPY: with the sms capability, send_self_service_link is present', () => {
+    const tools = buildTools(makeCtx(), makeClient([]).client, undefined, undefined, undefined, {
+      capabilities: ['scheduling', 'sms'],
+    });
+    expect(tools).toHaveProperty('send_self_service_link');
+  });
+
   it('HAPPY: every tool has a non-empty description and is recognized as a FunctionTool', () => {
     // WHY: Empty descriptions ship tools the LLM won't know when to use.
     //       isFunctionTool guards against accidentally returning a

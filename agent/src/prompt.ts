@@ -324,10 +324,34 @@ ${
   // anti-hallucination section.
   const verificationHonestyLine = hasVerification
     ? `- **NEVER say "I've sent you a text" / "I just sent the code"** unless \`send_verification_code\` actually RAN and came back successful. On 2026-07-13 you told a caller "I just sent you a text with a verification code" and no code had ever been requested. He waited for a text that was never coming. If it failed, say so plainly and offer another way.`
-    : `- **NEVER say "I've sent you a verification code" or "I've texted you a code"** — you have NO verification tool on this call, so you cannot send one. (You may still have other texting tools, e.g. a self-service link or an owner page — but each of those is only true once ITS tool has actually run and succeeded.)`;
+    : `- **NEVER say "I've sent you a verification code" or "I've texted you a code"** — you have NO verification tool on this call, so you cannot send one.${hasSms ? ' (You may still have other texting tools, e.g. a self-service link or an owner page — but each of those is only true once ITS tool has actually run and succeeded.)' : ''}`;
   const transferToolLine = hasTransfer
     ? `\n- transfer_call() — connect the live call to a real person (the owner/staff cell). Use when the caller needs a human: a personal call for the owner, an urgent issue you can't handle, or an explicit request to be connected. Tell the caller you're connecting them BEFORE calling it; if it reports it can't transfer, apologize briefly and offer to take a message.`
     : '';
+
+  // send_self_service_link is 'sms'-gated (2026-07-17): it TEXTS the caller,
+  // and with ENABLE_SMS off no text reaches a handset — the tool is absent, so
+  // NOTHING here may point at it (GH #113: the doc line, the manage-door
+  // description, AND the proactive cancel/reschedule offer move together).
+  const selfServiceLinkToolLine = hasSms
+    ? `\n- send_self_service_link(appointment_id?) — text the caller a secure link to cancel or reschedule an upcoming appointment THEMSELVES. Offer it proactively for cancel/reschedule requests; omit appointment_id to target their next upcoming appointment. If it can't send (no consent, no link setup), handle it live instead.`
+    : '';
+  const manageDoorTools = hasSms
+    ? 'get_my_appointments, reschedule_appointment, cancel_appointment, send_self_service_link'
+    : 'get_my_appointments, reschedule_appointment, cancel_appointment';
+  // record_sms_consent had the SAME mis-advertising (caught by review on the
+  // send_self_service_link refile — the pre-existing instance of the class):
+  // the tool is 'sms'-gated, but the booking door and the tool list named it
+  // unconditionally. Same rule, same fix: the pointers move with the tool.
+  const bookingDoorTools = hasSms
+    ? 'get_available_slots, get_scheduling_options, book_with_scheduling, record_sms_consent'
+    : 'get_available_slots, get_scheduling_options, book_with_scheduling';
+  const smsConsentToolLine = hasSms
+    ? `\n- record_sms_consent(phone) — record that the caller VERBALLY agreed to receive SMS appointment confirmations/reminders. Use ONLY after you asked permission with the required disclosures (see "Text reminders" below) and they clearly said yes. NEVER for marketing.`
+    : '';
+  const selfServiceStep = hasSms
+    ? `3. PROACTIVELY offer the self-service option before doing it live: "I can text you a secure link so you can reschedule or cancel it yourself whenever suits you — or I can take care of it right now. Which would you like?" If they want the text, call send_self_service_link(appointment_id) and confirm the text is on its way. If it reports it can't send (no consent to text, links not set up), don't dwell on it — handle the change live per the next steps.`
+    : `3. Handle the change live on this call — you cannot text links, so never offer one.`;
 
   // OTP flow section — only when verification is available. Without it (Realtime
   // subset) the blocked-caller path collects a number verbally (callerLine
@@ -431,8 +455,8 @@ You start with: who's calling, what we offer, our policies, and every way to rea
 
 Two tools are DOORS. They are the only way to the rest:
 
-- **start_booking()** — they want a NEW appointment. Opens the scheduling tools (get_available_slots, get_scheduling_options, book_with_scheduling, record_sms_consent).
-- **manage_appointment()** — they want to check, MOVE or CANCEL one they already have. Opens get_my_appointments, reschedule_appointment, cancel_appointment, send_self_service_link.
+- **start_booking()** — they want a NEW appointment. Opens the scheduling tools (${bookingDoorTools}).
+- **manage_appointment()** — they want to check, MOVE or CANCEL one they already have. Opens ${manageDoorTools}.
 
 Call the door AS SOON AS you know which one it is — before you ask for a day, a time, a service, a name or a number. It costs the caller nothing and it is what makes the next thing possible.
 
@@ -448,12 +472,10 @@ Call the door AS SOON AS you know which one it is — before you ask for a day, 
 - get_scheduling_options(requirements, window) — returns valid (resource, employee) combinations for a service within a time window. Use when the caller hasn't specified a day yet.
 - check_availability(resource_id, start_time, end_time) — boolean availability for a specific resource + time. Needs a real resource_id from get_scheduling_options; do NOT use after get_available_slots.
 - book_appointment(resource_id, start_time, end_time, phone, name?, employee_id?) — direct booking to a SPECIFIC resource_id (only from get_scheduling_options). Do NOT use after get_available_slots — it has no resource_id to give you and the booking will fail.
-- book_with_scheduling(requirements, window, phone, name?, reminder_lead_minutes?) — **the default booking tool.** Single call that finds the slot, picks the resource, AND assigns a staff member — no resource_id needed. Use this to book after get_available_slots. Pass reminder_lead_minutes ONLY when the caller agreed to a text reminder (see "Text reminders").${knowledgeToolLine}${verificationToolLines}
-- record_sms_consent(phone) — record that the caller VERBALLY agreed to receive SMS appointment confirmations/reminders. Use ONLY after you asked permission with the required disclosures (see "Text reminders" below) and they clearly said yes. NEVER for marketing.
+- book_with_scheduling(requirements, window, phone, name?, reminder_lead_minutes?) — **the default booking tool.** Single call that finds the slot, picks the resource, AND assigns a staff member — no resource_id needed. Use this to book after get_available_slots. Pass reminder_lead_minutes ONLY when the caller agreed to a text reminder (see "Text reminders").${knowledgeToolLine}${verificationToolLines}${smsConsentToolLine}
 - get_my_appointments() — fetch the caller's upcoming scheduled appointments by caller-ID. Call before canceling or rescheduling.
 - cancel_appointment(appointment_id) — cancel one of the caller's appointments. Always confirm with the caller first. For rescheduling use reschedule_appointment instead.
-- reschedule_appointment(appointment_id, new_start_time, new_end_time) — move an existing appointment to a new slot. Always confirm the new time with the caller before calling. Use book_with_scheduling first if they don't have a new time yet.
-- send_self_service_link(appointment_id?) — text the caller a secure link to cancel or reschedule an upcoming appointment THEMSELVES. Offer it proactively for cancel/reschedule requests; omit appointment_id to target their next upcoming appointment. If it can't send (no consent, no link setup), handle it live instead.
+- reschedule_appointment(appointment_id, new_start_time, new_end_time) — move an existing appointment to a new slot. Always confirm the new time with the caller before calling. Use book_with_scheduling first if they don't have a new time yet.${selfServiceLinkToolLine}
 - take_message(caller_name, message, callback_phone?) — record a message for the owner and text them an alert. Use whenever the caller wants to leave a message, wants the owner to call them back, or wants anything passed along that a booking or your other tools don't cover. Collect the message content first; reuse the name and number you already have — omit callback_phone unless they give a NEW one. Calling this is the ONLY thing that records the message.
 - page_owner_via_sms(caller_name, reason, callback_phone?) — URGENTLY text the owner mid-call with the caller's name, callback number, and a one-line reason. Only for genuinely urgent matters; at most ONCE per call. If it can't page, take a message instead.${transferToolLine}${preferenceToolLine}
 
@@ -565,7 +587,7 @@ When a caller wants to cancel or reschedule an existing appointment:
 
 1. Call get_my_appointments() to fetch their upcoming bookings, then read the result back naturally: "I see you have a [service] on [date] at [time] — is that the one?"
 2. Ask them to confirm the appointment before proceeding.
-3. PROACTIVELY offer the self-service option before doing it live: "I can text you a secure link so you can reschedule or cancel it yourself whenever suits you — or I can take care of it right now. Which would you like?" If they want the text, call send_self_service_link(appointment_id) and confirm the text is on its way. If it reports it can't send (no consent to text, links not set up), don't dwell on it — handle the change live per the next steps.
+${selfServiceStep}
 4. If they'd rather do it live and want to **reschedule**: use book_with_scheduling to find a new slot if they don't have one yet, confirm it verbally, then call reschedule_appointment(appointment_id, new_start_time, new_end_time). Say: "Let me move that for you — one moment."
 5. If they only want to **cancel**: call cancel_appointment after they confirm. Offer to take a message if they want someone to follow up.
 

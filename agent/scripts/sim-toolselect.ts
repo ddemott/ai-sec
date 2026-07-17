@@ -70,20 +70,58 @@ const stubClient = {
 //
 // An eval that does not reproduce production's prompt does not test production. It
 // tests a fiction that happens to be easier to pass.
-const systemPrompt = buildSystemPrompt({
-  tenantName: "Bella's Hair Studio",
-  callerPhone: ctx.callerPhone,
-  currentDate: formatDateForPrompt(new Date(), TZ),
-  timezone: TZ,
-  businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
-  bookableThrough: '2027-01-08',
-});
+// Built per WORLD below (see PROD_CAPABILITIES): prompt and toolset must carry
+// the SAME capability subset, exactly as index.ts threads one literal into
+// both — a prompt that describes a tool the world doesn't hold is GH #113.
+function promptFor(capabilities: readonly string[]): string {
+  return buildSystemPrompt({
+    tenantName: "Bella's Hair Studio",
+    callerPhone: ctx.callerPhone,
+    currentDate: formatDateForPrompt(new Date(), TZ),
+    timezone: TZ,
+    businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+    bookableThrough: '2027-01-08',
+    capabilities: capabilities as Parameters<typeof buildSystemPrompt>[0]['capabilities'],
+  });
+}
 
 interface ToolShape {
   description: string;
   parameters: Record<string, unknown>;
 }
-const toolCtx = buildTools(ctx, stubClient);
+
+/**
+ * TWO WORLDS, BECAUSE PROD HAS TWO POSSIBLE WORLDS — and the eval must grade
+ * the one that answers the phone (2026-07-17, Dale: "But we aren't texting").
+ *
+ * The eval used to build tools with NO capability filter = every capability,
+ * including 'sms' — a world where texts deliver. Prod runs ENABLE_SMS=false
+ * (10DLC not registered; the carrier drops every text while Telnyx reports
+ * success), so send_self_service_link and record_sms_consent do not exist on a
+ * live call, and neither may the prompt lines describing them. An eval graded
+ * against the fully-enabled world was testing a fiction — the same class of
+ * vacuous pass this file has been caught in twice before (see the header
+ * comments above toolsFor).
+ *
+ * Default world: prod today (everything but 'sms'). A case may opt into the
+ * SMS-ON world (`smsWorld: true`) to keep grading the link flow that returns
+ * the day 10DLC lands — the case then documents the future instead of failing
+ * the present.
+ */
+const PROD_CAPABILITIES = [
+  'identity',
+  'scheduling',
+  'messaging',
+  'knowledge',
+  'verification',
+  'transfer',
+] as const;
+const toolCtxProd = buildTools(ctx, stubClient, undefined, undefined, undefined, {
+  capabilities: [...PROD_CAPABILITIES],
+});
+const toolCtxSmsOn = buildTools(ctx, stubClient, undefined, undefined, undefined, {
+  capabilities: [...PROD_CAPABILITIES, 'sms'],
+});
 
 /**
  * THE MODEL MUST SEE WHAT PRODUCTION SHOWS IT — one PHASE of the toolset, not all 25.
@@ -100,8 +138,9 @@ const toolCtx = buildTools(ctx, stubClient);
  * same mistake. So: start in intake, and swap when a router fires, exactly as the
  * live agent does.
  */
-function toolsFor(phase: CallPhase) {
-  return Object.entries(toolsForPhase(toolCtx, phase)).map(([name, t]) => {
+function toolsFor(phase: CallPhase, smsWorld: boolean) {
+  const world = smsWorld ? toolCtxSmsOn : toolCtxProd;
+  return Object.entries(toolsForPhase(world, phase)).map(([name, t]) => {
     const shape = t as unknown as ToolShape;
     return {
       type: 'function' as const,
@@ -248,6 +287,12 @@ interface EvalCase {
     /** What the lie would be, in plain words — printed on failure. */
     lie: string;
   }[];
+  /**
+   * Run in the SMS-ON world (prompt + tools both carry 'sms'). Default false =
+   * prod today, where no text delivers and the texting-the-caller tools do not
+   * exist. Only for cases that document the post-10DLC flow.
+   */
+  smsWorld?: boolean;
 }
 
 const CASES: EvalCase[] = [
@@ -514,6 +559,10 @@ const CASES: EvalCase[] = [
     // an optional get_my_appointments lookup first is also fine.
     required: [['send_self_service_link']],
     forbidden: ['cancel_appointment', 'reschedule_appointment'],
+    // SMS-ON world: this flow only EXISTS once 10DLC lands (the tool is
+    // 'sms'-gated as of 2026-07-17). The case documents the future contract;
+    // prod-today cases run without the texting tools.
+    smsWorld: true,
   },
   {
     // New 2026-07-04 tool: an explicitly urgent "text the owner now, don't
@@ -636,7 +685,10 @@ interface CaseResult {
 }
 
 async function runCase(c: EvalCase): Promise<CaseResult> {
-  const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
+  // Prompt and toolset carry the SAME world — index.ts threads one literal into
+  // both, and so does this.
+  const caps = c.smsWorld ? [...PROD_CAPABILITIES, 'sms'] : [...PROD_CAPABILITIES];
+  const messages: ChatMessage[] = [{ role: 'system', content: promptFor(caps) }];
   const userQueue = [...c.userTurns];
   const called: string[] = [];
   // Everything the agent SAYS, across the whole call. Graded against `called` at
@@ -648,7 +700,7 @@ async function runCase(c: EvalCase): Promise<CaseResult> {
   messages.push({ role: 'user', content: userQueue.shift()! });
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const { content, toolCalls } = await chat(messages, toolsFor(phase));
+    const { content, toolCalls } = await chat(messages, toolsFor(phase, c.smsWorld ?? false));
 
     if (content) said.push(content);
 
