@@ -194,10 +194,11 @@ export function attachOutputWatchdog(
 /**
  * What the forced reply is told, when a turn dies silent (see
  * attachSilentTurnRecovery). Positive framing (gotcha G): it says what to DO —
- * speak, using what it already knows — not what went wrong. toolChoice:'none'
- * rides along in the generateReply call, so this turn CANNOT die the same
- * death: with no tools to chain there is no step cap to hit, and the model's
- * only move is to produce words.
+ * re-ask the question the caller still owes an answer to, or ask for the next
+ * thing it needs — never what went wrong. toolChoice:'none' rides along in the
+ * generateReply call, so this turn CANNOT die the same death: with no tools to
+ * chain there is no step cap to hit, and the model's only move is to produce
+ * words.
  *
  * WORDING LESSONS from the first live firing (2026-07-17 16:02 UTC — the
  * recovery WORKED, the call survived to a booking, and both flaws below were
