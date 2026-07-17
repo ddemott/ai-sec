@@ -113,8 +113,27 @@ export function speakableName(name: string | null | undefined): string {
   return spoken || trimmed;
 }
 
-export function buildDisclosure(businessName: string): string {
-  return `I'm an AI assistant for ${speakableName(businessName)}, and this call is transcribed for quality and service.`;
+/**
+ * PERSONA-AWARE since 2026-07-17 (Dale's rule: the greeting introduces the
+ * assistant's NAME and ROLE for the COMPANY). On the 16:02 UTC live call the
+ * tenant's persona ("Chris") was configured and never spoken — the caller met
+ * "an AI assistant" with no name, because the persona only ever reached the
+ * DEFAULT opener, and a tenant with a custom First Message never uses that.
+ *
+ * The persona name rides INSIDE the disclosure, in front of the role: "I'm
+ * Chris, an AI assistant for Thinking Hammer…". This is the exact coexistence
+ * the header's third wording rule anticipates — the AI identity is still
+ * disclosed, verbatim, whenever a persona name is set; a bare "Hi, this is
+ * Chris" implying a human is still impossible. Both variants are AUTHORED
+ * strings (no fragment surgery on legal wording — the #254 rule), and the
+ * legally load-bearing clauses are identical in both.
+ */
+export function buildDisclosure(businessName: string, personaName?: string | null): string {
+  const persona = personaName?.trim();
+  const business = speakableName(businessName);
+  return persona
+    ? `I'm ${persona}, an AI assistant for ${business}, and this call is transcribed for quality and service.`
+    : `I'm an AI assistant for ${business}, and this call is transcribed for quality and service.`;
 }
 
 /**
@@ -135,8 +154,11 @@ export function buildDisclosure(businessName: string): string {
  * A tenant's CUSTOM disclosure is never touched by either path — it is spoken
  * verbatim, which is the contract resolveDisclosure has always had.
  */
-export function buildDisclosureShort(): string {
-  return `I'm an AI assistant, and this call is transcribed for quality and service.`;
+export function buildDisclosureShort(personaName?: string | null): string {
+  const persona = personaName?.trim();
+  return persona
+    ? `I'm ${persona}, an AI assistant, and this call is transcribed for quality and service.`
+    : `I'm an AI assistant, and this call is transcribed for quality and service.`;
 }
 
 /**
@@ -147,7 +169,7 @@ export function buildDisclosureShort(): string {
  */
 export function resolveDisclosure(config: TenantDisplayConfig): string {
   const custom = config.callDisclosure?.trim();
-  return custom || buildDisclosure(config.name);
+  return custom || buildDisclosure(config.name, config.personaName);
 }
 
 /**
@@ -286,11 +308,23 @@ export function buildGreeting(config: TenantDisplayConfig): string {
   const name = speakableName(config.name);
   const openerNamesBusiness =
     Boolean(name) && openerWithoutClosingQuestion.toLowerCase().includes(name.toLowerCase());
+  // Don't say the PERSONA name twice either. The default opener with a persona
+  // is "Hi, this is Chris." — following it with "I'm Chris, an AI assistant…"
+  // has the same twice-in-six-seconds bug as the business name above. When the
+  // opener already introduced the persona, the disclosure carries only the role;
+  // when it didn't (any custom First Message without {{persona_name}}), the
+  // disclosure is where the caller learns the name. Same choose-between-authored-
+  // strings discipline: a custom callDisclosure is still spoken verbatim.
+  const personaName = config.personaName?.trim();
+  const openerNamesPersona =
+    Boolean(personaName) &&
+    openerWithoutClosingQuestion.toLowerCase().includes(personaName!.toLowerCase());
+  const personaForDisclosure = openerNamesPersona ? null : personaName;
   const disclosure = customDisclosure
     ? customDisclosure
     : openerNamesBusiness
-      ? buildDisclosureShort()
-      : buildDisclosure(config.name);
+      ? buildDisclosureShort(personaForDisclosure)
+      : buildDisclosure(config.name, personaForDisclosure);
 
   return [openerWithoutClosingQuestion, disclosure, closer]
     .join(' ')

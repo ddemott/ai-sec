@@ -8,6 +8,8 @@ interface CallDisclosureSectionProps {
   value: string;
   /** Tenant business name, for previewing the default line. */
   businessName: string;
+  /** Assistant persona name ('' when unset) — the default line introduces it. */
+  personaName?: string;
   /** True when `value` differs from what was loaded (i.e. an unsaved edit). */
   changed: boolean;
   /** The owner's attestation checkbox state. */
@@ -22,14 +24,18 @@ interface CallDisclosureSectionProps {
  * truth — this copy is display-only (a placeholder/hint), never sent to the
  * backend. Keep the two in sync if the default wording ever changes.
  */
-function defaultDisclosure(businessName: string): string {
+function defaultDisclosure(businessName: string, personaName?: string): string {
   const name = businessName.trim() || 'your business';
-  return `I'm an AI assistant for ${name}, and this call is transcribed for quality and service.`;
+  const persona = personaName?.trim();
+  return persona
+    ? `I'm ${persona}, an AI assistant for ${name}, and this call is transcribed for quality and service.`
+    : `I'm an AI assistant for ${name}, and this call is transcribed for quality and service.`;
 }
 
 export function CallDisclosureSection({
   value,
   businessName,
+  personaName,
   changed,
   attested,
   onChange,
@@ -52,13 +58,17 @@ export function CallDisclosureSection({
         className="border p-4 rounded-xl flex items-start"
         style={{ backgroundColor: 'var(--accent-muted)', borderColor: 'var(--accent-muted)' }}
       >
-        <Info className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-soft)' }} />
+        <Info
+          className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0"
+          style={{ color: 'var(--accent-soft)' }}
+        />
         <p className="text-sm leading-relaxed" style={{ color: 'var(--accent-soft)' }}>
           Every call opens by telling the caller they&apos;ve reached an AI assistant and that the
           call is transcribed. <strong>Leave this blank</strong> to use the standard wording:{' '}
-          <em>&quot;{defaultDisclosure(businessName)}&quot;</em> You can reword it (for a different
-          language, brand voice, or your attorney&apos;s script), but you&apos;re responsible for
-          making sure it meets the disclosure laws where your business and your callers are located.
+          <em>&quot;{defaultDisclosure(businessName, personaName)}&quot;</em> You can reword it (for
+          a different language, brand voice, or your attorney&apos;s script), but you&apos;re
+          responsible for making sure it meets the disclosure laws where your business and your
+          callers are located.
         </p>
       </div>
 
@@ -68,7 +78,7 @@ export function CallDisclosureSection({
         onChange={(e) => onChange(e.target.value)}
         rows={3}
         maxLength={600}
-        placeholder={defaultDisclosure(businessName)}
+        placeholder={defaultDisclosure(businessName, personaName)}
         className="w-full p-3 border rounded-lg text-base focus:ring-2 outline-none resize-y"
         style={{
           borderColor: 'var(--border-soft)',

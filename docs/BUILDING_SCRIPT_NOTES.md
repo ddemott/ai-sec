@@ -745,6 +745,26 @@ same branch as a forwarded line. That is a real production branch, not a sim art
 history/context lookups succeed on a direct PSTN call and refuse on browser/forwarded
 calls, so some loops only reproduce in the sim (and some only on PSTN).
 
+### K. A persona that only lives in the DEFAULT opener is a persona most tenants never speak
+
+(2026-07-17 16:02 UTC live call — Thinking Hammer's assistant is named "Chris"
+in the dashboard; the caller met "an AI assistant" with no name.)
+
+The persona name was only ever spoken by the DEFAULT opener ("Hi, this is
+Chris.") — and any tenant with a custom First Message never uses the default
+opener, so configuring both a First Message and a persona silently discarded
+the persona. Dale's rule: the greeting introduces the assistant's **name and
+role for the company**. Fix (greeting.ts, 2026-07-17): the platform-default
+DISCLOSURE is persona-aware — "I'm Chris, an AI assistant for Thinking
+Hammer…" — which is the coexistence the legal wording rules explicitly
+anticipate (the AI identity stays disclosed verbatim; a bare "Hi, this is
+Chris" implying a human remains impossible). Both variants are authored
+strings; a custom `callDisclosure` is still spoken verbatim; and the persona
+is deduped exactly like the business name (opener already names them → the
+disclosure carries only the role — no name twice in six seconds).
+**Status: unit-tested (the live-call config is pinned as a test); not yet
+heard on a live call.**
+
 ---
 
 ## A sample rung, annotated (copy this shape)

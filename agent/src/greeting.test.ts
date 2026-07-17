@@ -115,6 +115,58 @@ describe('buildOpener — tenant-controlled, name-free defaults', () => {
   });
 });
 
+describe('the greeting introduces NAME + ROLE + COMPANY (2026-07-17, Dale)', () => {
+  // WHO: the 2026-07-17 16:02 UTC live caller. WHAT: Thinking Hammer's persona
+  // ("Chris") was configured and NEVER SPOKEN — the tenant has a custom First
+  // Message, so the persona-aware default opener never runs, and the disclosure
+  // said only "I'm an AI assistant". The caller met a nameless robot. WHY: the
+  // greeting must introduce the assistant's name and role for the company —
+  // while keeping the AI identity disclosed verbatim (a bare "Hi, this is
+  // Chris" implying a human is the CIPA exposure the wording rules forbid).
+
+  test('THE LIVE-CALL CONFIG: custom First Message naming the business + persona → name, role, company all spoken', () => {
+    const g = buildGreeting(
+      tenant({
+        name: 'Thinking Hammer LLC',
+        personaName: 'Chris',
+        firstMessage: 'Hi, thank you for calling {{business_name}}!',
+      })
+    );
+    expect(g).toContain("I'm Chris, an AI assistant");
+    expect(g).toContain('Thinking Hammer'); // company (via the opener)
+    expect(g).toContain('transcribed for quality and service');
+    // The business is named by the opener, so the SHORT disclosure is chosen —
+    // no "for Thinking Hammer" repeat.
+    expect(g.split('Thinking Hammer').length - 1).toBe(1);
+  });
+
+  test('default opener + persona → persona spoken ONCE (opener introduces, disclosure keeps only the role)', () => {
+    const g = buildGreeting(tenant({ personaName: 'Beth' }));
+    expect(g).toContain('Hi, this is Beth.');
+    expect(g.match(/Beth/g)).toHaveLength(1);
+    expect(g).toContain("I'm an AI assistant for Bella's Hair Studio");
+  });
+
+  test('First Message with {{persona_name}} → persona spoken once, not re-introduced by the disclosure', () => {
+    const g = buildGreeting(
+      tenant({ personaName: 'Chris', firstMessage: 'Hi, this is {{persona_name}}!' })
+    );
+    expect(g.match(/Chris/gi)).toHaveLength(1);
+    expect(g).toContain('AI assistant');
+  });
+
+  test('no persona configured → wording unchanged (nothing to introduce)', () => {
+    const g = buildGreeting(tenant({ firstMessage: 'Hey!' }));
+    expect(g).toContain("I'm an AI assistant for Bella's Hair Studio");
+    expect(g).not.toContain("I'm ,");
+  });
+
+  test('persona dedupe is case-insensitive', () => {
+    const g = buildGreeting(tenant({ personaName: 'Chris', firstMessage: 'CHRIS here!' }));
+    expect(g.match(/chris/gi)).toHaveLength(1);
+  });
+});
+
 describe('composition hygiene', () => {
   // WHO: a caller | WHAT: no double spaces from a tenant's trailing punctuation | WHEN: firstMessage
   // ends in spaces | WHERE: the whitespace collapse in buildGreeting | WHY: TTS renders a double space

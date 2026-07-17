@@ -232,6 +232,7 @@ export default function AIConfigView() {
         <CallDisclosureSection
           value={config.call_disclosure || ''}
           businessName={config.name || ''}
+          personaName={config.persona_name || ''}
           changed={disclosureChanged}
           attested={disclosureAttested}
           onChange={(val) => handleUpdate({ call_disclosure: val })}
