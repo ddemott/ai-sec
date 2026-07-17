@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Bo0Qbxv3kEMvN7yI3D2b7jTHQ1wwvVgBrMsycCTC5Za7nNDsnZBTm5MaFmNLW9n
+\restrict kPfiFKxnyj1J9BtLk5jNBevA1MTdT7IqYMaqDEHhiykQVKp4EcopHDmSUcbhmnT
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -4554,6 +4554,13 @@ CREATE INDEX idx_voice_sessions_tenant_id ON public.voice_sessions USING btree (
 
 
 --
+-- Name: job_inquiries_one_per_call; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX job_inquiries_one_per_call ON public.job_inquiries USING btree (tenant_id, call_id) WHERE (call_id IS NOT NULL);
+
+
+--
 -- Name: knowledge_suggestion_status_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5818,5 +5825,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Bo0Qbxv3kEMvN7yI3D2b7jTHQ1wwvVgBrMsycCTC5Za7nNDsnZBTm5MaFmNLW9n
+\unrestrict kPfiFKxnyj1J9BtLk5jNBevA1MTdT7IqYMaqDEHhiykQVKp4EcopHDmSUcbhmnT
 

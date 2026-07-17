@@ -433,6 +433,50 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
 
       const row = await withTenantClient(args.tenant_id, async (client) => {
         // Link to an existing customer if the callback number matches one. Non-fatal.
+        // IDEMPOTENT PER CALL. The job-intake rung retries this tool until it
+        // sees a job_inquiry_id — that is the rung contract (the completion IS
+        // the write). So a slow response is indistinguishable from a failed one
+        // to the agent, and on 2026-07-17 a hung owner-email held the response
+        // past the agent's 8s tool timeout: the rung retried four times and
+        // this route dutifully wrote FOUR identical inquiries and stamped the
+        // appointment four times. An ACTION-rung tool MUST be safe to retry:
+        // same call already captured an inquiry → hand back the existing id
+        // and do nothing else. The retry then completes the rung instead of
+        // duplicating the lead.
+        if (args.call_id) {
+          const existing = await client.query<{ job_inquiry_id: string }>(
+            `SELECT job_inquiry_id FROM job_inquiries
+              WHERE tenant_id = $1 AND call_id = $2
+              ORDER BY created_at ASC LIMIT 1`,
+            [args.tenant_id, args.call_id]
+          );
+          if (existing.rows[0]) {
+            const recipDup = await client.query<{
+              email: string | null;
+              owner_name: string | null;
+            }>(
+              `SELECT COALESCE(
+                        t.job_inquiry_email,
+                        (SELECT u.email FROM users u
+                          WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
+                          ORDER BY u.created_at ASC LIMIT 1)
+                      ) AS email,
+                      (SELECT COALESCE(NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(u.full_name), ''))
+                         FROM users u
+                        WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
+                        ORDER BY u.created_at ASC LIMIT 1) AS owner_name
+                 FROM tenants t WHERE t.tenant_id = $1`,
+              [args.tenant_id]
+            );
+            return {
+              job_inquiry_id: existing.rows[0].job_inquiry_id,
+              recipient: recipDup.rows[0]?.email ?? null,
+              ownerName: recipDup.rows[0]?.owner_name ?? null,
+              duplicate: true,
+            };
+          }
+        }
+
         let customerId: string | null = null;
         if (callbackPhone && isValidPhone(callbackPhone)) {
           const cust = await client.query<{ customer_id: string }>(
@@ -466,12 +510,20 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
           }
         }
 
+        // ON CONFLICT DO NOTHING against the job_inquiries_one_per_call partial
+        // unique index (migration 20260717230000). The fast-path SELECT above
+        // catches a retry that arrives AFTER the first insert committed — but
+        // on the live call the retries were IN FLIGHT TOGETHER (each request
+        // sat 60-120s behind the hung email), so two could pass the SELECT
+        // before either INSERT landed. The index is the layer that cannot
+        // race; losing it returns zero rows and the winner is looked up below.
         const res = await client.query<{ job_inquiry_id: string }>(
           `INSERT INTO job_inquiries
              (tenant_id, customer_id, client_company, caller_company, represents_company,
               employment_type, rate_range, duration, location_type, address, timezone,
               caller_name, callback_phone, call_id, appointment_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+           ON CONFLICT (tenant_id, call_id) WHERE call_id IS NOT NULL DO NOTHING
            RETURNING job_inquiry_id`,
           [
             args.tenant_id,
@@ -491,12 +543,27 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             appointmentId,
           ]
         );
+        const inserted = Boolean(res.rows[0]);
+        let jobInquiryId = res.rows[0]?.job_inquiry_id ?? null;
+        if (!inserted && args.call_id) {
+          // Lost a concurrent-retry race — the winner's row IS this call's
+          // inquiry. Hand its id back so the rung completes.
+          const winner = await client.query<{ job_inquiry_id: string }>(
+            `SELECT job_inquiry_id FROM job_inquiries
+              WHERE tenant_id = $1 AND call_id = $2
+              ORDER BY created_at ASC LIMIT 1`,
+            [args.tenant_id, args.call_id]
+          );
+          jobInquiryId = winner.rows[0]?.job_inquiry_id ?? null;
+        }
 
         // Stamp a readable summary onto the meeting itself, so the calendar entry is
         // self-contained: the owner sees WHAT the meeting is about, not just who and
         // when. Appended, never overwritten — the description may already carry the
-        // service name or the caller's notes.
-        if (appointmentId) {
+        // service name or the caller's notes. Only the INSERT WINNER stamps —
+        // a race-losing retry stamping too is how one appointment got the same
+        // summary four times.
+        if (appointmentId && inserted) {
           const stamped = await client.query(
             `UPDATE appointments
                 SET description = COALESCE(NULLIF(description, '') || E'\n\n', '') || $3,
@@ -543,39 +610,50 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         );
 
         return {
-          job_inquiry_id: res.rows[0]?.job_inquiry_id ?? null,
+          job_inquiry_id: jobInquiryId,
           recipient: recip.rows[0]?.email ?? null,
           ownerName: recip.rows[0]?.owner_name ?? null,
+          // A race-losing concurrent retry is a duplicate too: the winner's
+          // request emails the owner and stamps the meeting; this one only
+          // hands back the id.
+          duplicate: !inserted,
         };
       });
 
-      // Email the owner. Best-effort: the row is already persisted, so a failure
-      // here never un-saves the inquiry — instrument it (metric + 5W log) so a
-      // silent simulation-mode / SMTP failure is diagnosable, not invisible.
-      let emailed = false;
-      if (row.recipient) {
-        try {
-          await sendJobInquiryEmail(row.recipient, {
-            clientCompany: companies.clientCompany ?? undefined,
-            callerCompany: companies.callerCompany ?? undefined,
-            representsCompany: companies.representsCompany ?? undefined,
-            employmentType: args.employment_type,
-            rateRange: args.rate_range,
-            duration: args.duration,
-            locationType: args.location_type,
-            address: args.address,
-            timezone: args.timezone,
-            callerName: args.caller_name,
-            callbackPhone,
-          });
-          emailed = true;
-        } catch (err) {
+      // Email the owner — FIRE-AND-FORGET, and that is load-bearing, not style.
+      // "Best-effort" was always the contract (the row is persisted; a mail
+      // failure never un-saves it) but the send was AWAITED, so its LATENCY
+      // rode on the response — and this is a VOICE TOOL: a caller stood in
+      // dead air behind an SMTP handshake. On 2026-07-17 prod's SMTP was
+      // unreachable (IPv6 ENETUNREACH to Gmail:465, 60-120s to fail) and every
+      // capture blew the agent's 8s tool timeout; the rung retried and wrote
+      // duplicates (see the idempotency guard above — the two fixes are a
+      // pair). The reply now returns the moment the row is durable; the mail
+      // succeeds or fails on its own time, observably (metric + 5W log).
+      // Skipped entirely on a duplicate — one inquiry, one email.
+      if (row.duplicate) {
+        // The retry that finally landed. Nothing to write, nothing to send.
+      } else if (row.recipient) {
+        const recipient = row.recipient;
+        void sendJobInquiryEmail(recipient, {
+          clientCompany: companies.clientCompany ?? undefined,
+          callerCompany: companies.callerCompany ?? undefined,
+          representsCompany: companies.representsCompany ?? undefined,
+          employmentType: args.employment_type,
+          rateRange: args.rate_range,
+          duration: args.duration,
+          locationType: args.location_type,
+          address: args.address,
+          timezone: args.timezone,
+          callerName: args.caller_name,
+          callbackPhone,
+        }).catch((err: unknown) => {
           errorsTotal.inc({ event: 'job_inquiry_email_failed' });
           app.log.error(
-            { tenantId: args.tenant_id, recipient: row.recipient, ...pgErrorFields(err) },
+            { tenantId: args.tenant_id, recipient, ...pgErrorFields(err) },
             'capture_job_inquiry: owner email failed — inquiry saved but owner not emailed'
           );
-        }
+        });
       } else {
         // No recipient configured at all — surface it; the owner gets nothing.
         errorsTotal.inc({ event: 'job_inquiry_no_recipient' });
@@ -611,7 +689,11 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
       return ok(reply, {
         saved: true,
         job_inquiry_id: row.job_inquiry_id,
-        emailed,
+        // The send is fire-and-forget now, so "emailed: true" can no longer be
+        // known at reply time — and claiming it would be the promise-what-you-
+        // cannot-know bug. This reports what is TRUE at this instant: a send
+        // was started (or not). Delivery outcome lives in the logs/metrics.
+        email_queued: !row.duplicate && Boolean(row.recipient),
         message: passedAlong + emailAsk,
         // THIS TOOL IS NOT THE END OF THE CALL, AND ITS REPLY MUST NOT SOUND LIKE IT.
         //
