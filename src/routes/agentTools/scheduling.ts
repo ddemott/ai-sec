@@ -36,7 +36,10 @@ import {
 import type { PoolClient } from 'pg';
 import { applyTimezone, toLocalWallClock } from '../../services/timezoneUtils';
 import { CALLER_NOTES_PREFIX, toStampText } from '../../../shared/callContext';
-import { validateAppointmentTimeRange } from '../../services/appointmentValidation';
+import {
+  validateAppointmentTimeRange,
+  isFifteenMinuteIncrement,
+} from '../../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../../services/customerLookup';
 import { findNextAvailableSlots, type AvailableSlot } from '../../services/availabilitySearch';
@@ -506,6 +509,25 @@ export function registerSchedulingRoutes({
         );
       }
       const normalized = normalizePhone(args.phone)!;
+
+      // Appointments live on a quarter-hour grid (appointments_start/end_time_15min
+      // CHECKs). An off-grid window used to sail through to the RPC's INSERT and
+      // come back as an unhandled 500 — which the agent relayed as "Backend
+      // returned 500" and the model retried, identically, into the same wall.
+      // Fail SPOKEN instead, naming the grid, so the model can renegotiate the time.
+      if (
+        !isFifteenMinuteIncrement(args.window.from) ||
+        !isFifteenMinuteIncrement(args.window.to)
+      ) {
+        (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'error';
+        return reply.status(200).send({
+          success: false,
+          error:
+            'We book on the quarter hour — times ending in :00, :15, :30, or :45. Please offer the caller the nearest quarter-hour time instead.',
+          error_code: 'OFF_GRID_TIME',
+          next_available: [],
+        });
+      }
 
       // Step 1 — get-or-create the customer in its own transaction. The RPC
       // would otherwise do this inside its own plpgsql function execution;

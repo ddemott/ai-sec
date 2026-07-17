@@ -1127,7 +1127,9 @@ describe('agentTools /attach-meeting-notes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    expect(queries[0].params[2]).toBe('Caller notes: bring the contract paperwork and the rate sheet');
+    expect(queries[0].params[2]).toBe(
+      'Caller notes: bring the contract paperwork and the rate sheet'
+    );
   });
 
   it('SAD: unknown or deleted appointment → honest refusal, nothing reported saved', async () => {
@@ -1927,6 +1929,28 @@ describe('agentTools /scheduling-options', () => {
 });
 
 describe('agentTools /book-with-scheduling', () => {
+  it('SAD: an off-grid window fails SPOKEN before any DB work — never a 500', async () => {
+    // WHO: the model booking "1:19 PM" — a time the old suggester offered on a
+    //       2026-07-17 live call (its slot series inherited now's minutes).
+    // WHAT: the route rejects minutes not on :00/:15/:30/:45 with a spoken
+    //        error + OFF_GRID_TIME before touching the customer or the RPC,
+    //        so the agent can renegotiate instead of relaying "Backend
+    //        returned 500" and retrying identically into the same constraint.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      name: 'Jack Smith',
+      requirements: { serviceType: 'a meeting' },
+      window: { from: '2026-07-17T13:19:00', to: '2026-07-17T13:49:00' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
+    expect(res.json().error_code).toBe('OFF_GRID_TIME');
+    expect(res.json().error).toMatch(/quarter hour/i);
+    expect(queries, 'rejected before any DB statement ran').toHaveLength(0);
+  });
+
   it('HAPPY: RPC returns success with resource + employee names', async () => {
     // WHO: Happy-path booking where the RPC found a matching slot
     // WHAT: Route returns the booked details for the agent to confirm aloud
@@ -2527,13 +2551,13 @@ describe('agentTools /available-slots', () => {
       // The today filter is ONLY about the openings phrase — the context
       // hours line legitimately quotes the shift's full span.
       // Only FUTURE slots — the elapsed part of today is gone from the list itself, so
-    // it cannot be spoken. (It used to be excluded from the prose and still reachable
-    // by reasoning over the range.)
-    const bookable3 = res.json().result.open_times as string[];
-    expect(bookable3).not.toContain('1:00 PM'); // already elapsed
-    expect(bookable3).toContain('2:30 PM');
-    const offered3 = text.match(/\d{1,2}:\d{2} (AM|PM)/g) ?? [];
-    for (const t of offered3) expect(bookable3).toContain(t);
+      // it cannot be spoken. (It used to be excluded from the prose and still reachable
+      // by reasoning over the range.)
+      const bookable3 = res.json().result.open_times as string[];
+      expect(bookable3).not.toContain('1:00 PM'); // already elapsed
+      expect(bookable3).toContain('2:30 PM');
+      const offered3 = text.match(/\d{1,2}:\d{2} (AM|PM)/g) ?? [];
+      for (const t of offered3) expect(bookable3).toContain(t);
       expect(text).not.toMatch(/openings 8 AM/);
       expect(text).not.toMatch(/openings all day from 8/);
     } finally {
