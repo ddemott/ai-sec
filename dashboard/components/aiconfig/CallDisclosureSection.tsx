@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { ShieldCheck, Info } from 'lucide-react';
+import { speakableBusinessName } from '../../../shared/name';
 
 interface CallDisclosureSectionProps {
   /** Current custom disclosure text ('' when using the platform default). */
@@ -25,7 +26,10 @@ interface CallDisclosureSectionProps {
  * backend. Keep the two in sync if the default wording ever changes.
  */
 function defaultDisclosure(businessName: string, personaName?: string): string {
-  const name = businessName.trim() || 'your business';
+  // speakableBusinessName strips the legal suffix exactly like the agent does
+  // (Copilot on #275): the agent says "Thinking Hammer", so a preview showing
+  // "Thinking Hammer LLC" would be showing tenants a line the agent never says.
+  const name = speakableBusinessName(businessName) || 'your business';
   const persona = personaName?.trim();
   return persona
     ? `I'm ${persona}, an AI assistant for ${name}, and this call is transcribed for quality and service.`
