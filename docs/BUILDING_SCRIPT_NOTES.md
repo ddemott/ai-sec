@@ -745,6 +745,27 @@ same branch as a forwarded line. That is a real production branch, not a sim art
 history/context lookups succeed on a direct PSTN call and refuse on browser/forwarded
 calls, so some loops only reproduce in the sim (and some only on PSTN).
 
+**Addendum (2026-07-17, Dale: "But we aren't texting"): honesty has TWO layers, and a
+capability gate is only a gate if every tool is filed under it.** The claim-vs-called
+grader checks layer 1 (did the model lie about what it did). Layer 2 is whether the
+TOOL told the truth about reality — and `send_self_service_link` didn't: it TEXTS the
+caller, no text this product sends reaches a handset (10DLC), yet it was filed under
+the `scheduling` capability and so ESCAPED the `ENABLE_SMS` gate. A live agent could
+call it, get Telnyx's false "sent", and truthfully relay a text that would never
+arrive. Fixed by refiling it under `sms` and gating every prompt pointer with it (the
+tool doc line, the manage-door description, the proactive offer step, the honesty-line
+parenthetical — GH #113: they move together). The toolselect eval now grades TWO
+WORLDS: prod-parity (no `sms`) by default, with per-case `smsWorld: true` for flows
+that only exist post-10DLC. **Known follow-ups surfaced by the prod-parity world:**
+(a) `page_owner_via_sms` is the same class half-solved — it persists a durable
+`customer_messages` row, but its urgency promise ("I've texted the owner") is false
+until 10DLC; (b) the no-SMS prompt branch says "you have NO tool to text with" while
+the toolset still holds page_owner_via_sms and take_message's "text them an alert" —
+a contradiction the eval caught the model tripping over (it narrated a page instead
+of calling it); (c) two eval cases FLAP at temperature 0 (OpenAI nondeterminism):
+hours-are-not-availability and the urgent page — both sit within the 80% threshold
+but rotate.
+
 ---
 
 ## A sample rung, annotated (copy this shape)

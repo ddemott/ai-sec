@@ -56,7 +56,18 @@ const CAPABILITY_OF: Record<string, Capability> = {
   page_owner_via_sms: 'messaging',
   get_customer_context: 'identity',
   get_detailed_customer_history: 'identity',
-  send_self_service_link: 'scheduling',
+  // 'sms', NOT 'scheduling' (moved 2026-07-17). This tool TEXTS the caller a
+  // link — and until 10DLC lands, no text this product sends reaches a handset
+  // (the carrier drops it; Telnyx reports success anyway). Filed under
+  // 'scheduling' it ESCAPED the ENABLE_SMS gate: on a live call the model
+  // could call it, get a success result, and truthfully relay "I've texted you
+  // a link" — for a text that dies at the carrier. The exact
+  // promise-what-you-cannot-do lie the SMS gate exists to make impossible,
+  // arriving through a mis-filed capability. Found because Dale asked, of a
+  // green eval case: "But we aren't texting." With 'sms' off this tool is now
+  // absent and the agent handles cancel/reschedule live, which is the honest
+  // path it already knows.
+  send_self_service_link: 'sms',
   find_caller_by_name: 'identity',
   identify_caller: 'identity',
   save_customer_preference: 'identity',

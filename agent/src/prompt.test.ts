@@ -598,11 +598,50 @@ describe('buildSystemPrompt — capability gating (Realtime tool subset)', () =>
       'send_verification_code',
       'verify_phone_code',
       'transfer_call',
+      // 'sms'-gated since 2026-07-17 (it TEXTS the caller; ENABLE_SMS off =
+      // tool absent) — and the Realtime subset has no 'sms' either.
+      'send_self_service_link',
       '# Phone Verification',
       '# Knowledge base',
     ]) {
       expect(prompt, `dropped reference still present: ${dropped}`).not.toContain(dropped);
     }
+  });
+
+  it('HAPPY: without the sms capability, NOTHING points at send_self_service_link (zero-occurrence)', () => {
+    // WHO: every prod call today — ENABLE_SMS=false until 10DLC lands, so no
+    //       text this product sends reaches a handset.
+    // WHAT: the link tool is 'sms'-gated (2026-07-17: it was mis-filed under
+    //        'scheduling' and ESCAPED the gate — the model could truthfully
+    //        relay a tool-reported "text sent" for a text that dies at the
+    //        carrier). With 'sms' absent the tool is gone, and per GH #113 the
+    //        doc line, the manage-door description, the PROACTIVE offer step,
+    //        and the honesty-line parenthetical must all go with it.
+    // WHY: found because Dale asked, of a green eval case: "But we aren't
+    //       texting." Layer-1 honesty (claim vs tool called) was graded;
+    //       layer-2 (tool result vs reality) was not.
+    const NO_SMS = [
+      'identity',
+      'scheduling',
+      'messaging',
+      'knowledge',
+      'verification',
+      'transfer',
+    ] as const;
+    const prompt = buildSystemPrompt({ ...BASE_CTX, capabilities: NO_SMS });
+    for (const dropped of [
+      'send_self_service_link',
+      'PROACTIVELY offer the self-service option',
+      'self-service link',
+    ]) {
+      expect(prompt, `sms-gated reference still present: ${dropped}`).not.toContain(dropped);
+    }
+    // The live path remains: changes are handled on the call.
+    expect(prompt).toContain('Handle the change live on this call');
+    // And with sms PRESENT, the offer comes back.
+    const withSms = buildSystemPrompt({ ...BASE_CTX, capabilities: [...NO_SMS, 'sms'] });
+    expect(withSms).toContain('send_self_service_link');
+    expect(withSms).toContain('PROACTIVELY offer the self-service option');
   });
 
   it('HAPPY: Realtime subset KEEPS identity + scheduling + messaging content', () => {
