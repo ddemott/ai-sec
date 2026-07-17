@@ -198,9 +198,25 @@ export function attachOutputWatchdog(
  * rides along in the generateReply call, so this turn CANNOT die the same
  * death: with no tools to chain there is no step cap to hit, and the model's
  * only move is to produce words.
+ *
+ * WORDING LESSONS from the first live firing (2026-07-17 16:02 UTC — the
+ * recovery WORKED, the call survived to a booking, and both flaws below were
+ * heard by the caller):
+ *
+ * 1. RE-ASK, NEVER ASSUME. The turn that died had just asked "that's
+ *    608-217-5303, right?". The v1 nudge said "use what you already know" —
+ *    and the model answered its OWN question ("Thank you! That's correct")
+ *    without the caller ever confirming. A pending question is not something
+ *    you know; it is something you are owed.
+ * 2. END WITH A QUESTION, NOT A PROMISE. This turn has no tools, so "I'll go
+ *    ahead and book that — one moment, please" is a promise it cannot start
+ *    keeping; the v1 nudge said exactly that and then the line sat quiet for
+ *    20 seconds until the caller said "Hello?". A question hands the turn to
+ *    the caller, and the caller's answer starts a NEW turn — one that has its
+ *    tools back. The question IS the recovery's exit.
  */
 export const NUDGE_INSTRUCTIONS =
-  'Reply to the caller RIGHT NOW in one or two short sentences, using what you already know from the conversation. Tell them plainly what you can do next or what you need from them. Never mention tools, systems, steps, or errors.';
+  'Reply to the caller RIGHT NOW in one or two short sentences, then stop. If you asked a question the caller has not answered yet, ask that question again, briefly — they never answered it, so you do not know their answer. Otherwise, ask for the one thing you need next. Always end by asking the caller a question, because your next turn begins only when they speak. This reply is words only — never say "one moment" or promise an action, and never mention tools, systems, steps, or errors.';
 
 /**
  * Silent-turn-death recovery — the backstop for a turn that ENDS without audio.
