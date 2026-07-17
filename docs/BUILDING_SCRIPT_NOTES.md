@@ -710,6 +710,25 @@ the caller is mid-utterance.
 silent-turn recovery is therefore attached UNCONDITIONALLY, not behind that flag: a
 turn that ends in permanent silence is a dropped call, not a UX polish option.
 
+> **Status: LIVE-VERIFIED 2026-07-17 16:02 UTC (first browser call after deploy).**
+> A turn died silent again on that very call — and it was a DIFFERENT killer than
+> the step cap: the phone-number read-back turn generated its text but produced **no
+> audio at all** (the #3418-class TTS/interruption edge; the caller never heard the
+> read-back). `silent_turn_recovered` fired and the call survived to a real booking
+> — on-grid 1:00 PM, service recorded, `start_booking` reached. So the recovery is
+> proven against a failure mode we did not even design it for, which is the point of
+> watching the OUTPUT rather than the cause.
+>
+> **The same firing broke two things (v1 nudge wording — both fixed same day, see
+> NUDGE_INSTRUCTIONS in watchdog.ts):** (1) told to "use what you already know," the
+> model **answered its own pending question** — "Thank you! That's correct" with the
+> caller never having confirmed the number. A pending question is not something the
+> model knows; it is something it is owed. (2) It promised "I'll go ahead and book —
+> one moment, please" from a turn that HOLDS NO TOOLS, then sat quiet ~20s until the
+> caller's "Hello?" started a tool-bearing turn. The nudge must RE-ASK the pending
+> question and END WITH A QUESTION: the caller's answer is what starts a turn that
+> has tools again. The question is the recovery's exit.
+
 ### J. Unsatisfiable advice in a TOOL RESULT is a loop generator
 
 Same call as gotcha I — this is what *made* the model burn its steps. Two tool results
@@ -765,6 +784,26 @@ a contradiction the eval caught the model tripping over (it narrated a page inst
 of calling it); (c) two eval cases FLAP at temperature 0 (OpenAI nondeterminism):
 hours-are-not-availability and the urgent page — both sit within the 80% threshold
 but rotate.
+
+### K. A persona that only lives in the DEFAULT opener is a persona most tenants never speak
+
+(2026-07-17 16:02 UTC live call — Thinking Hammer's assistant is named "Chris"
+in the dashboard; the caller met "an AI assistant" with no name.)
+
+The persona name was only ever spoken by the DEFAULT opener ("Hi, this is
+Chris.") — and any tenant with a custom First Message never uses the default
+opener, so configuring both a First Message and a persona silently discarded
+the persona. Dale's rule: the greeting introduces the assistant's **name and
+role for the company**. Fix (greeting.ts, 2026-07-17): the platform-default
+DISCLOSURE is persona-aware — "I'm Chris, an AI assistant for Thinking
+Hammer…" — which is the coexistence the legal wording rules explicitly
+anticipate (the AI identity stays disclosed verbatim; a bare "Hi, this is
+Chris" implying a human remains impossible). Both variants are authored
+strings; a custom `callDisclosure` is still spoken verbatim; and the persona
+is deduped exactly like the business name (opener already names them → the
+disclosure carries only the role — no name twice in six seconds).
+**Status: unit-tested (the live-call config is pinned as a test); not yet
+heard on a live call.**
 
 ---
 
@@ -894,6 +933,23 @@ If a script passes all seven and still misbehaves on a real call, it's almost ce
 cross-cutting gotcha (A–F) — an empty-string, a mis-heard word, or the model narrating.
 
 ---
+
+## E2E status — 2026-07-17 overnight sweep (all mic-free tiers, post silent-turn fixes)
+
+Run after PRs #272/#273 deployed and with #274–#277 in flight. Every tier that can run
+without a microphone, against a locally restored bookable Thinking Hammer (business shape
+copied from prod — see the CLAUDE.md bare-bones-seed note for why that restore is needed):
+
+| Tier | Result | Notes |
+|---|---|---|
+| `simulate.sh toolselect` (ladder) | **12/13 (92%)** | Was 10/13 (77%) — 2 of 3 fails were a GRADER false positive (fixed, PR #277). Remaining fail: take_message narrated, never called — the ladder disease the rung fixes; `ENABLE_TASK_GROUP` still off in prod. The 9×-history loop seen once did NOT recur (flaps). |
+| `sim-taskgroup.ts` full suite (rung flow) | **29/30** | Sole failure: the KNOWN notes residual — chatty style, model attached the topic label ("Consulting work discussion.") without asking; the caller's real note (COBOL) never spoken. ~1-in-30 now vs 1-in-3 pre-ASK-FIRST. Documented residual, sim keeps it visible. |
+| `simulate.sh tools` (agent-tools journey) | **16/16** | Zero gaps awaiting wiring. |
+| `simulate.sh rag` | **9/9 (100%)** | Incl. 3 out-of-scope fallbacks. |
+
+Still only provable on a live mic call: STT/TTS/turn-taking, `onEnter`, the greeting
+audio (incl. the new persona-aware disclosure, PR #275), and the silent-turn recovery's
+acoustics (its state machine is live-verified — gotcha I).
 
 ## Testing ladder (cheapest → most real)
 
