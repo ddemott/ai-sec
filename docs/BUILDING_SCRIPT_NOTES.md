@@ -710,6 +710,25 @@ the caller is mid-utterance.
 silent-turn recovery is therefore attached UNCONDITIONALLY, not behind that flag: a
 turn that ends in permanent silence is a dropped call, not a UX polish option.
 
+> **Status: LIVE-VERIFIED 2026-07-17 16:02 UTC (first browser call after deploy).**
+> A turn died silent again on that very call — and it was a DIFFERENT killer than
+> the step cap: the phone-number read-back turn generated its text but produced **no
+> audio at all** (the #3418-class TTS/interruption edge; the caller never heard the
+> read-back). `silent_turn_recovered` fired and the call survived to a real booking
+> — on-grid 1:00 PM, service recorded, `start_booking` reached. So the recovery is
+> proven against a failure mode we did not even design it for, which is the point of
+> watching the OUTPUT rather than the cause.
+>
+> **The same firing broke two things (v1 nudge wording — both fixed same day, see
+> NUDGE_INSTRUCTIONS in watchdog.ts):** (1) told to "use what you already know," the
+> model **answered its own pending question** — "Thank you! That's correct" with the
+> caller never having confirmed the number. A pending question is not something the
+> model knows; it is something it is owed. (2) It promised "I'll go ahead and book —
+> one moment, please" from a turn that HOLDS NO TOOLS, then sat quiet ~20s until the
+> caller's "Hello?" started a tool-bearing turn. The nudge must RE-ASK the pending
+> question and END WITH A QUESTION: the caller's answer is what starts a turn that
+> has tools again. The question is the recovery's exit.
+
 ### J. Unsatisfiable advice in a TOOL RESULT is a loop generator
 
 Same call as gotcha I — this is what *made* the model burn its steps. Two tool results
