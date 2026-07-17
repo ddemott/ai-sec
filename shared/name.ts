@@ -36,3 +36,48 @@ export function slugify(name: string): string {
 export function buildDisplayName(firstName?: string | null, lastName?: string | null): string {
   return [firstName, lastName].filter(Boolean).join(' ');
 }
+
+/**
+ * The business name as a PERSON would say it — legal suffix stripped from the
+ * final token ("Thinking Hammer LLC" → "Thinking Hammer").
+ *
+ * MIRRORS `speakableName()` in agent/src/greeting.ts, which is the SOURCE OF
+ * TRUTH the voice agent actually speaks with. The agent package deploys
+ * standalone and does not import from /shared, so the implementation lives in
+ * both places — keep them in sync (same suffix set, same last-token-only
+ * rule). This copy exists so the DASHBOARD can preview exactly what the agent
+ * will say (Caller Disclosure default preview): showing "Thinking Hammer LLC"
+ * when the agent says "Thinking Hammer" is a false preview.
+ *
+ * Only the LAST token is considered, so a suffix-like word that is genuinely
+ * part of the name survives ("Incorporated Designs" → kept whole). A business
+ * literally named "LLC" is returned unchanged — something odd beats nothing.
+ */
+const LEGAL_NAME_SUFFIXES = new Set([
+  'llc',
+  'inc',
+  'incorporated',
+  'ltd',
+  'limited',
+  'corp',
+  'corporation',
+  'co',
+  'company',
+  'plc',
+  'llp',
+  'lp',
+  'pllc',
+  'pc',
+]);
+
+export function speakableBusinessName(name: string | null | undefined): string {
+  const trimmed = name?.trim() ?? '';
+  if (!trimmed) return trimmed;
+  const m = /^(.*?)[\s,]+([A-Za-z.]+)$/.exec(trimmed);
+  if (!m) return trimmed;
+  const [, head, lastToken] = m;
+  const normalised = lastToken.replace(/\./g, '').toLowerCase();
+  if (!LEGAL_NAME_SUFFIXES.has(normalised)) return trimmed;
+  const spoken = head.replace(/[\s,]+$/, '').trim();
+  return spoken || trimmed;
+}
