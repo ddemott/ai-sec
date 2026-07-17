@@ -103,7 +103,11 @@ export function attachOutputWatchdog(
     const frame = getFillerFrame(opts.voice, text);
     try {
       const handle = frame
-        ? session.say(text, { audio: frameStream(frame), allowInterruptions: true, addToChatCtx: false })
+        ? session.say(text, {
+            audio: frameStream(frame),
+            allowInterruptions: true,
+            addToChatCtx: false,
+          })
         : session.say(text, { allowInterruptions: true, addToChatCtx: false });
       opts.log.info(
         { event: 'watchdog_hold_played', label, cached: frame != null },
@@ -113,7 +117,11 @@ export function attachOutputWatchdog(
     } catch (e) {
       // SchedulingPausedError (draining) or similar — nothing to play into.
       opts.log.warn(
-        { event: 'watchdog_hold_skipped', label, error_message: e instanceof Error ? e.message : String(e) },
+        {
+          event: 'watchdog_hold_skipped',
+          label,
+          error_message: e instanceof Error ? e.message : String(e),
+        },
         'watchdog hold skipped — session not accepting speech'
       );
       return null;
@@ -132,10 +140,8 @@ export function attachOutputWatchdog(
     // air is dead air) and becomes cause-HONEST about WHAT it says.
     const running = isToolRunning();
     fillerHandle =
-      speakHold(
-        running ? opts.fillerText : opts.thinkingText,
-        running ? 'filler' : 'thinking'
-      ) ?? undefined;
+      speakHold(running ? opts.fillerText : opts.thinkingText, running ? 'filler' : 'thinking') ??
+      undefined;
     // Mark when the filler's playout finishes so a later 'speaking' (the real
     // reply, which is serialized AFTER the filler) is recognized as real audio.
     fillerHandle?.addDoneCallback(() => {
@@ -181,6 +187,141 @@ export function attachOutputWatchdog(
 
   return () => {
     clearTimers();
+    session.off(voice.AgentSessionEventTypes.AgentStateChanged, onAgentState);
+  };
+}
+
+/**
+ * What the forced reply is told, when a turn dies silent (see
+ * attachSilentTurnRecovery). Positive framing (gotcha G): it says what to DO —
+ * speak, using what it already knows — not what went wrong. toolChoice:'none'
+ * rides along in the generateReply call, so this turn CANNOT die the same
+ * death: with no tools to chain there is no step cap to hit, and the model's
+ * only move is to produce words.
+ */
+export const NUDGE_INSTRUCTIONS =
+  'Reply to the caller RIGHT NOW in one or two short sentences, using what you already know from the conversation. Tell them plainly what you can do next or what you need from them. Never mention tools, systems, steps, or errors.';
+
+/**
+ * Silent-turn-death recovery — the backstop for a turn that ENDS without audio.
+ *
+ * The hold-line watchdog above covers a turn that is SLOW. This covers a turn
+ * that is OVER: on 2026-07-17 a live call hit LiveKit's maxToolSteps cap
+ * (default 3) mid-booking — the model chained three lookups, the framework
+ * ended the turn, and the agent transitioned thinking → listening having said
+ * NOTHING. The caller said "Hello?" twice into the silence and hung up. Three
+ * aggravators made it unrecoverable:
+ *
+ *  - the hold-line watchdog treats 'listening' as "turn fully resolved" and
+ *    DISARMS — the never-silent backstop stands down on exactly the transition
+ *    that IS the silence;
+ *  - the capped turn strands its last tool call with no output in history
+ *    ("function call missing the corresponding function output" on every later
+ *    turn);
+ *  - the caller's "Hello?" replays the same doomed tool loop from the same
+ *    context — the failure is STABLE, not transient.
+ *
+ * So: when a turn ends thinking → listening directly (no 'speaking' ever
+ * happened — not even a filler, which would have moved the state to
+ * 'speaking'), the RUNTIME forces a reply: generateReply with toolChoice
+ * 'none', so the model must speak and cannot re-enter the tool loop. If that
+ * forced turn ALSO dies silent (it shouldn't — no tools, no cap), we escalate
+ * once to the pre-synthesized recovery line and stop; an unbounded nudge loop
+ * would be its own bug.
+ *
+ * Honesty rules (gotcha D) hold here too: we never speak while the caller is
+ * mid-utterance (their new turn is already the recovery — nudging would talk
+ * over them), and the nudge claims nothing about work not done.
+ *
+ * DELIBERATELY SEPARATE from attachOutputWatchdog and NOT behind
+ * ENABLE_OUTPUT_WATCHDOG: prod runs with that flag OFF (found 2026-07-17), and
+ * a turn that ends in permanent silence is a dropped call, not a UX polish
+ * option. index.ts attaches this unconditionally.
+ */
+export function attachSilentTurnRecovery(
+  session: voice.AgentSession,
+  opts: {
+    /** Tenant voice id (cache key for the pre-synthesized recovery clip). */
+    voice: string;
+    /** Escalation line if the forced reply itself produces no audio. */
+    recoveryText: string;
+    log: { info: LogFn; warn: LogFn };
+  }
+): () => void {
+  // True from the moment we fire a nudge until any agent audio plays. If a
+  // second silent death arrives while this is set, the nudge itself failed —
+  // escalate to the canned line instead of nudging forever.
+  let nudgeInFlight = false;
+
+  const onAgentState = (ev: voice.AgentStateChangedEvent) => {
+    if (ev.newState === 'speaking') {
+      nudgeInFlight = false;
+      return;
+    }
+    // thinking → listening with no 'speaking' in between: the turn produced
+    // zero audio and is already over. (A slow turn passes through 'speaking'
+    // for its reply — or for the watchdog's filler — before 'listening'.)
+    if (ev.oldState !== 'thinking' || ev.newState !== 'listening') return;
+
+    // The caller is mid-utterance (barge-in / a new turn already forming):
+    // their speech will drive the next reply. Speaking now would talk over
+    // them (gotcha D) and race the incoming turn.
+    if (session.userState === 'speaking') {
+      opts.log.info(
+        { event: 'silent_turn_death_deferred' },
+        'turn ended with no audio, but the caller is speaking — their turn is the recovery'
+      );
+      return;
+    }
+
+    if (nudgeInFlight) {
+      // The forced reply ALSO died silent. Stop generating; say the canned line.
+      nudgeInFlight = false;
+      opts.log.warn(
+        { event: 'silent_turn_recovery_escalated' },
+        'forced reply also produced no audio — playing the recovery line'
+      );
+      const frame = getFillerFrame(opts.voice, opts.recoveryText);
+      try {
+        // SpeechHandle is a thenable — fire-and-forget, explicitly discarded.
+        void session.say(opts.recoveryText, {
+          ...(frame ? { audio: frameStream(frame) } : {}),
+          allowInterruptions: true,
+          addToChatCtx: false,
+        });
+      } catch {
+        // Session draining/closed — nothing to play into, nothing to do.
+      }
+      return;
+    }
+
+    nudgeInFlight = true;
+    opts.log.warn(
+      { event: 'silent_turn_recovered' },
+      'turn ended with no audio (tool-step cap or empty generation) — forcing a spoken, tool-free reply'
+    );
+    try {
+      // SpeechHandle thenable, fire-and-forget — playout is the framework's job.
+      void session.generateReply({
+        instructions: NUDGE_INSTRUCTIONS,
+        toolChoice: 'none',
+        allowInterruptions: true,
+      });
+    } catch (e) {
+      // Draining/closed. Do not retry — the session is going away.
+      nudgeInFlight = false;
+      opts.log.warn(
+        {
+          event: 'silent_turn_recovery_failed',
+          error_message: e instanceof Error ? e.message : String(e),
+        },
+        'silent-turn recovery could not speak — session not accepting speech'
+      );
+    }
+  };
+
+  session.on(voice.AgentSessionEventTypes.AgentStateChanged, onAgentState);
+  return () => {
     session.off(voice.AgentSessionEventTypes.AgentStateChanged, onAgentState);
   };
 }

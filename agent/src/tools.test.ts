@@ -266,6 +266,122 @@ describe('get_customer_context', () => {
   });
 });
 
+describe('unsatisfiable-advice gates (2026-07-17 silent-call post-mortem)', () => {
+  // WHO: the 2026-07-17 browser caller ("Ryan Seacrest", spoken number, no
+  //       carrier caller-ID — the same shape as every forwarded-line call).
+  // WHAT: two tool results handed the model advice it could not act on —
+  //       "identify the caller first" when identify_caller had ALREADY
+  //       succeeded, and "use send_verification_code" when the session held no
+  //       such tool. The model retried the lookups until the per-turn tool-step
+  //       cap ended the turn with no speech; the caller said "Hello?" twice and
+  //       hung up.
+  // WHY: an error message the model cannot act on is a loop generator. Every
+  //       message must name a step that is possible on THIS call.
+
+  it('SAD: history with no caller-ID but identity ESTABLISHED → points forward, never back at identify', async () => {
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null, spokenPhone: '5551111212' }), client);
+
+    const result = await exec(tools.get_detailed_customer_history, {});
+
+    // Satisfiable, action-directing: proceed with what the caller said, and
+    // stop re-calling the tool that cannot succeed on this line.
+    expect(result).toContain('continue with their request');
+    expect(result).toContain('do not call this tool again');
+    expect(result).not.toContain('identify the caller first');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('SAD: history with no caller-ID and NOT yet identified → still directs to identify (satisfiable now)', async () => {
+    const { client } = makeClient([]);
+    const tools = buildTools(makeCtx({ callerPhone: null }), client);
+
+    const result = await exec(tools.get_detailed_customer_history, {});
+
+    // Before identify_caller has run, "identify first" is real, actionable
+    // advice — only AFTER identity is established does it become a trap.
+    expect(result).toContain('identify the caller first');
+  });
+
+  it('SAD: get_customer_context requires_verification advice is REWRITTEN when the session has no OTP tools', async () => {
+    const { client } = makeClient([
+      {
+        ok: true,
+        result: {
+          requires_verification: true,
+          message:
+            'This number was given verbally and has not been verified on this call. Use send_verification_code, have the caller read the code back, then verify_phone_code before looking them up.',
+        },
+      },
+    ]);
+    const tools = buildTools(makeCtx(), client, undefined, undefined, undefined, {
+      capabilities: ['identity', 'scheduling', 'messaging'],
+    });
+
+    const result = await exec(tools.get_customer_context, { phone: '+16125559999' });
+
+    // GH #113: nothing may point at a tool the session does not hold — a tool
+    // RESULT is a pointer just as much as a description is.
+    expect(result).not.toContain('send_verification_code');
+    expect(result).not.toContain('verify_phone_code');
+    expect(result).toContain('treat the caller as NEW');
+    // The flag survives so the description's "sms_consent is omitted when
+    // requires_verification" contract still reads true.
+    expect(JSON.parse(result).requires_verification).toBe(true);
+  });
+
+  it('HAPPY: requires_verification advice passes through UNCHANGED when the OTP tools exist', async () => {
+    const backendMessage =
+      'Use send_verification_code, have the caller read the code back, then verify_phone_code before looking them up.';
+    const { client } = makeClient([
+      { ok: true, result: { requires_verification: true, message: backendMessage } },
+    ]);
+    const tools = buildTools(makeCtx(), client, undefined, undefined, undefined, {
+      capabilities: ['identity', 'verification'],
+    });
+
+    const result = await exec(tools.get_customer_context, { phone: '+16125559999' });
+
+    // With the tools present the advice is satisfiable — relay it as-is.
+    expect(result).toContain('send_verification_code');
+  });
+
+  it('SAD: identify_caller\'s "I\'ll text a 4-digit code" promise is rewritten when the session cannot text one', async () => {
+    const { client } = makeClient([
+      {
+        ok: true,
+        result: {
+          saved: true,
+          returning_customer: false,
+          requires_verification: true,
+          message:
+            "Before I can pull up an account for that number, I need to verify it's yours — I'll text a 4-digit code for you to read back.",
+        },
+      },
+    ]);
+    const tools = buildTools(
+      makeCtx({ callerPhone: null }),
+      client,
+      undefined,
+      undefined,
+      undefined,
+      {
+        capabilities: ['identity', 'scheduling'],
+      }
+    );
+
+    const result = await exec(tools.identify_caller, {
+      name: 'Ryan Seacrest',
+      phone: '5551111212',
+    });
+
+    // The model relays messages verbatim — a promise to text must never reach
+    // it on a session that cannot send one.
+    expect(result).not.toContain('4-digit code');
+    expect(result).toContain('treat the caller as NEW');
+  });
+});
+
 describe('find_caller_by_name', () => {
   it('HAPPY: posts tenant_id + name, returns matches for confirmation', async () => {
     // WHO: Caller on the forwarded line who gives their name first

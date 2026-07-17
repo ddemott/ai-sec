@@ -257,6 +257,34 @@ export function buildTools(
   // Removing the tool is not enough — NOTHING MAY STILL POINT AT IT.
   const hasVerification = !opts?.capabilities || opts.capabilities.includes('verification');
 
+  // The backend's requires_verification results tell the model to run the OTP
+  // flow ("use send_verification_code, then verify_phone_code…"). When this
+  // session does not HAVE those tools, that advice is unsatisfiable — and the
+  // model does not shrug at unsatisfiable advice, it LOOPS on it: on a live
+  // call 2026-07-17 it retried the context lookup until the per-turn tool-step
+  // cap ended the turn in silence. This is GH #113's rule surfacing in a new
+  // place: removing a tool is not enough — nothing may still point at it, and
+  // a tool RESULT is a pointer just as much as a tool description. The backend
+  // cannot know a session's capabilities, so the rewrite happens here, at the
+  // one layer that does. The replacement names the step the model CAN take:
+  // treat the caller as new and keep going.
+  const gateVerificationAdvice = (res: ToolResponse): string => {
+    if (
+      !hasVerification &&
+      res.ok &&
+      res.result !== null &&
+      typeof res.result === 'object' &&
+      (res.result as Record<string, unknown>).requires_verification === true
+    ) {
+      return JSON.stringify({
+        requires_verification: true,
+        message:
+          'A saved account cannot be opened on this call, and that is fine — treat the caller as NEW. Continue with the name and number they gave you (book, take a message, or answer their question), and do not retry this lookup on this call.',
+      });
+    }
+    return formatResponse(res);
+  };
+
   const canOfferTransfer =
     (!opts?.capabilities || opts.capabilities.includes('transfer')) &&
     !!transfer?.forwardPhone &&
@@ -366,7 +394,7 @@ export function buildTools(
           },
           { isReadOnly: true }
         );
-        return formatResponse(res);
+        return gateVerificationAdvice(res);
       },
     }),
 
@@ -893,7 +921,12 @@ export function buildTools(
           ctx.spokenPhone = spoken;
         }
 
-        return formatResponse(res);
+        // Same rewrite as get_customer_context: identify-caller's
+        // requires_verification message promises "I'll text a 4-digit code" —
+        // a text this session cannot send when the verification capability is
+        // off. It must not reach the model (it would relay the promise to the
+        // caller verbatim).
+        return gateVerificationAdvice(res);
       },
     }),
 
@@ -1220,6 +1253,23 @@ export function buildTools(
         // get_my_appointments) — the LLM never supplies it, so it can never
         // enumerate another caller's history.
         if (!ctx.callerPhone) {
+          // Identity already established (identify_caller succeeded with a
+          // spoken number) but this line has no carrier caller-ID — a forwarded
+          // line, or a browser call. History is simply not available on this
+          // call, and the message must SAY SO AND POINT FORWARD. The first
+          // version said "identify the caller first" unconditionally — advice
+          // the model had ALREADY satisfied and so could never act on. On a
+          // live call 2026-07-17 it responded the only way it could: by
+          // retrying this tool until the per-turn step cap killed the turn
+          // silently. Unsatisfiable advice in a tool result is a loop
+          // generator; every error message must name a step the model can
+          // actually take on THIS call.
+          if (ctx.spokenPhone) {
+            return JSON.stringify({
+              error:
+                "History is not available on this call (the line has no caller-ID). That is fine — you already have the caller's name and number, so continue with their request using what they have told you, and do not call this tool again on this call.",
+            });
+          }
           return JSON.stringify({
             error:
               'No verified caller phone yet — identify the caller first (confirm their name and number, e.g. via find_caller_by_name or identify_caller), then I can pull their history.',

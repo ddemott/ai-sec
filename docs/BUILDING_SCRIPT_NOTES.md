@@ -671,6 +671,80 @@ above passed its unit tests. **The final gate is always a real call.** `cd agent
 verify:tts` at least proves the voice makes sound; the browser sim (`simulate.sh call`)
 proves the flow.
 
+### I. A turn that hits `maxToolSteps` ends in SILENCE — and the watchdog salutes it
+
+(2026-07-17, live browser call — "Ryan Seacrest". The caller said "Monday at 1:30",
+heard nothing, said "Hello?" twice, and hung up.)
+
+LiveKit caps how many tool calls one turn may chain (`maxToolSteps`, **default 3** — we
+never overrode it). What the cap DOES is the gotcha: when a turn hits it, the framework
+ends the turn **without generating any speech**. The log line is
+`maximum number of function calls steps reached`; the state goes `thinking → listening`
+with no audio in between; the caller hears nothing, forever. On the failing call the
+model spent its 3 steps on intake lookups (catalog → history → context) without ever
+reaching the `start_booking` router, so the booking never even began.
+
+Three aggravators, each its own lesson:
+
+1. **The hold-line watchdog treated `listening` as "turn fully resolved" and DISARMED.**
+   The never-silent backstop stood down on exactly the transition that WAS the silence.
+   Watch for: any "stand down" condition in a watchdog that a *failure mode* can
+   satisfy. A watchdog must distinguish "the output happened" from "the turn is over."
+2. **The capped turn strands its last tool call with no output in chat history** —
+   every later turn logs `function call missing the corresponding function output,
+   ignoring`. The corruption is permanent for the call.
+3. **The failure is STABLE, not transient.** The caller's "Hello?" starts a new turn —
+   which replays the same doomed tool loop from the same context and dies the same
+   death. Waiting does not fix it; nothing the caller says fixes it.
+
+**Fix (three layers):** `maxToolSteps: 5` (env-tunable `MAX_TOOL_STEPS`) so a legitimate
+lookup-then-route chain fits; `attachSilentTurnRecovery` (watchdog.ts) — on a
+`thinking → listening` transition with no audio, the RUNTIME forces a reply via
+`generateReply({ toolChoice: 'none' })`, which cannot die the same death because with no
+tools there is no cap to hit; if even that turn dies silent, ONE canned recovery line,
+then stop (an unbounded nudge loop is its own bug). Honors gotcha D: never fires while
+the caller is mid-utterance.
+
+**Found while fixing it: prod runs `ENABLE_OUTPUT_WATCHDOG=false`** (Railway env,
+2026-07-17) — the hold-line watchdog was not running AT ALL on the live line. The
+silent-turn recovery is therefore attached UNCONDITIONALLY, not behind that flag: a
+turn that ends in permanent silence is a dropped call, not a UX polish option.
+
+### J. Unsatisfiable advice in a TOOL RESULT is a loop generator
+
+Same call as gotcha I — this is what *made* the model burn its steps. Two tool results
+handed it advice it could not act on:
+
+- `get_detailed_customer_history` (no carrier caller-ID on a browser/forwarded line)
+  returned *"identify the caller first (via identify_caller)"* — but `identify_caller`
+  had **already succeeded**. The advice was already satisfied and therefore impossible
+  to act on.
+- `get_customer_context` returned *"Use send_verification_code, then
+  verify_phone_code"* — tools that **were not in the session** (the `verification`
+  capability is off while SMS is off). And `identify_caller`'s variant promised *"I'll
+  text a 4-digit code"* — a text the platform cannot send.
+
+The model does not shrug at advice it can't follow — **it retries the lookup**, turn
+after turn, and with a step cap the retries eat the whole turn (see the toolPhases.ts
+header for the 9-loops-of-history ancestor of this bug). The rules:
+
+1. **Every error message must name a step the model can take on THIS call**, and be
+   positively framed (gotcha G): "you already have their name and number — continue
+   with their request, and do not call this tool again on this call."
+2. **GH #113's rule — "removing a tool is not enough; NOTHING may still point at it" —
+   applies to tool RESULTS, not just tool descriptions.** The backend cannot know a
+   session's capabilities, so the agent-side wrapper is the layer that rewrites
+   capability-dependent advice (`gateVerificationAdvice` in tools.ts).
+3. **A message the model relays verbatim is a promise to the caller.** "I'll text a
+   4-digit code" on a line that cannot text is the SMS-promising bug (configSchema.ts
+   header) arriving through a tool result instead of the prompt.
+
+Related reality check for the sim: a browser call has **no carrier caller-ID** — the
+same branch as a forwarded line. That is a real production branch, not a sim artifact;
+`simulate.sh call` exercising it is a feature. But know which branch you are testing:
+history/context lookups succeed on a direct PSTN call and refuse on browser/forwarded
+calls, so some loops only reproduce in the sim (and some only on PSTN).
+
 ---
 
 ## A sample rung, annotated (copy this shape)
@@ -844,4 +918,7 @@ BACKEND_URL=https://localhost:4001 npx tsx agent/scripts/sim-taskgroup.ts
 
 Flags that matter: `ENABLE_TASK_GROUP` (task flow vs prompt ladder), `ENABLE_SMS` (off until
 10DLC), `ENABLE_PHONE_VERIFICATION` (off until SMS works — a code that can't be delivered
-must not block a booking), `ENABLE_OUTPUT_WATCHDOG` (dead-air cover, on by default).
+must not block a booking), `ENABLE_OUTPUT_WATCHDOG` (hold-line dead-air cover, on by default
+in code — **but set `false` on prod Railway as of 2026-07-17**; the silent-turn recovery of
+gotcha I is deliberately NOT behind it), `MAX_TOOL_STEPS` (per-turn tool-call cap, default 5
+— see gotcha I for what hitting the cap does).

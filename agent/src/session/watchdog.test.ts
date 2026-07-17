@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toolStarted, toolFinished, _resetToolActivityForTest } from './toolActivity.js';
 import { voice } from '@livekit/agents';
-import { attachOutputWatchdog } from './watchdog.js';
+import { attachOutputWatchdog, attachSilentTurnRecovery, NUDGE_INSTRUCTIONS } from './watchdog.js';
 import { _resetFillerCacheForTest } from './fillerCache.js';
 
 const STATE_EV = voice.AgentSessionEventTypes.AgentStateChanged;
@@ -24,13 +24,22 @@ interface FakeHandle {
 function makeFakeSession() {
   const handlers: Record<string, Array<(ev: unknown) => void>> = {};
   let agentState = 'listening';
+  let userState = 'listening';
   const sayCalls: Array<{ text: string; opts: unknown }> = [];
+  const generateReplyCalls: Array<Record<string, unknown>> = [];
   const handles: FakeHandle[] = [];
   let n = 0;
 
   const session = {
     get agentState() {
       return agentState;
+    },
+    get userState() {
+      return userState;
+    },
+    generateReply(opts: Record<string, unknown>) {
+      generateReplyCalls.push(opts);
+      return { addDoneCallback: () => {} };
     },
     on(ev: string, cb: (ev: unknown) => void) {
       (handlers[ev] ??= []).push(cb);
@@ -59,7 +68,16 @@ function makeFakeSession() {
     );
   };
 
-  return { session: session as unknown as voice.AgentSession, sayCalls, handles, emit };
+  return {
+    session: session as unknown as voice.AgentSession,
+    sayCalls,
+    generateReplyCalls,
+    handles,
+    emit,
+    setUserState: (s: string) => {
+      userState = s;
+    },
+  };
 }
 
 describe('attachOutputWatchdog', () => {
@@ -73,7 +91,7 @@ describe('attachOutputWatchdog', () => {
     attachOutputWatchdog(s.session, {
       voice: 'eve',
       thinkingText: 'Just a moment.',
-    fillerText: FILLER,
+      fillerText: FILLER,
       recoveryText: RECOVERY,
       log: noopLog,
     });
@@ -165,5 +183,95 @@ describe('attachOutputWatchdog', () => {
     detach();
     await vi.advanceTimersByTimeAsync(5000);
     expect(f.sayCalls).toHaveLength(0);
+  });
+});
+
+describe('attachSilentTurnRecovery', () => {
+  beforeEach(() => _resetFillerCacheForTest());
+
+  const attachRecovery = (s: ReturnType<typeof makeFakeSession>) =>
+    attachSilentTurnRecovery(s.session, {
+      voice: 'eve',
+      recoveryText: RECOVERY,
+      log: noopLog,
+    });
+
+  it('SAD: turn dies thinking → listening with no audio → forces a spoken, TOOL-FREE reply', () => {
+    // WHO: the 2026-07-17 live caller ("Monday at 1:30"). WHAT: the model burned
+    // its maxToolSteps on lookups, LiveKit ended the turn with NO speech, and the
+    // agent went thinking → listening in silence. WHERE: the exact transition the
+    // hold-line watchdog treats as "resolved". WHY: the caller said "Hello?" twice
+    // into the void and hung up — the runtime, not the model, must fill this.
+    const f = makeFakeSession();
+    attachRecovery(f);
+    f.emit('thinking');
+    f.emit('listening'); // turn OVER, zero audio
+    expect(f.generateReplyCalls).toHaveLength(1);
+    // toolChoice 'none' is what makes the forced turn un-killable by the same
+    // cap — no tools, no steps, the only move is words.
+    expect(f.generateReplyCalls[0].toolChoice).toBe('none');
+    expect(f.generateReplyCalls[0].instructions).toBe(NUDGE_INSTRUCTIONS);
+  });
+
+  it('HAPPY: a normal turn (thinking → speaking → listening) never triggers it', () => {
+    const f = makeFakeSession();
+    attachRecovery(f);
+    f.emit('thinking');
+    f.emit('speaking'); // real reply
+    f.emit('listening'); // normal turn end
+    expect(f.generateReplyCalls).toHaveLength(0);
+    expect(f.sayCalls).toHaveLength(0);
+  });
+
+  it('SAD but deferred: caller is mid-utterance when the turn dies → stays quiet (gotcha D)', () => {
+    // WHO: a caller who barged in while the agent was thinking. WHAT: their own
+    // new turn IS the recovery; speaking now would talk over them. WHY: gotcha D —
+    // the runtime must never fill silence by talking over a human.
+    const f = makeFakeSession();
+    attachRecovery(f);
+    f.setUserState('speaking');
+    f.emit('thinking');
+    f.emit('listening');
+    expect(f.generateReplyCalls).toHaveLength(0);
+    expect(f.sayCalls).toHaveLength(0);
+  });
+
+  it('SAD, twice: the forced reply ALSO dies silent → escalates ONCE to the canned recovery line', () => {
+    // WHAT: if the nudged turn somehow produces no audio either, we must not
+    // nudge forever (an unbounded generate loop is its own bug) — one canned
+    // line, then stop.
+    const f = makeFakeSession();
+    attachRecovery(f);
+    f.emit('thinking');
+    f.emit('listening'); // death #1 → nudge
+    expect(f.generateReplyCalls).toHaveLength(1);
+    f.emit('thinking');
+    f.emit('listening'); // death #2, nudge still unresolved → canned line, no second nudge
+    expect(f.generateReplyCalls).toHaveLength(1);
+    expect(f.sayCalls.map((c) => c.text)).toEqual([RECOVERY]);
+  });
+
+  it('recovers repeatedly across the call: audio between deaths re-arms the nudge', () => {
+    // WHAT: once ANY agent audio plays, the in-flight flag clears — a later,
+    // unrelated silent death gets its own fresh nudge (not the escalation path).
+    const f = makeFakeSession();
+    attachRecovery(f);
+    f.emit('thinking');
+    f.emit('listening'); // death #1 → nudge
+    f.emit('speaking'); // the nudged reply plays — cycle resolved
+    f.emit('listening');
+    f.emit('thinking');
+    f.emit('listening'); // death #2, fresh cycle → nudge again
+    expect(f.generateReplyCalls).toHaveLength(2);
+    expect(f.sayCalls).toHaveLength(0);
+  });
+
+  it('detach() removes the listener (no nudge after teardown)', () => {
+    const f = makeFakeSession();
+    const detach = attachRecovery(f);
+    detach();
+    f.emit('thinking');
+    f.emit('listening');
+    expect(f.generateReplyCalls).toHaveLength(0);
   });
 });
