@@ -117,6 +117,49 @@ describe('findNextAvailableSlots', () => {
     expect(first.skill_count).toBe(3);
   });
 
+  it('HAPPY: an off-grid fromTime is snapped UP to the next quarter-hour boundary', async () => {
+    if (!dbAvailable) return;
+    // WHO: the "soonest I can get you in" fallback, whose fromTime is a raw
+    //        new Date() — minutes and seconds land wherever the wall clock is.
+    // WHAT: every suggested slot must sit on the :00/:15/:30/:45 grid with
+    //        zero seconds, and the first slot is the NEXT boundary at or after
+    //        fromTime — never fromTime's own off-grid minutes carried forward.
+    // WHY: 2026-07-17 live call — a 4:34 AM search offered "1:04 PM" and
+    //        "1:19 PM"; the caller picked 1:19, and the booking INSERT died on
+    //        appointments_end_time_15min (unhandled 500, agent went silent).
+    //        The suggester must only offer times booking can accept.
+    const tenantId = await createTenant(root, 'TireCo', 'mobile_tire', 'America/Chicago');
+    await createResource(root, tenantId, 'Truck 1');
+    const carlos = await createEmployee(root, tenantId, 'Carlos', ['tire-rotation']);
+    const date = '2026-06-15'; // Monday
+    await createScheduleEntry(root, tenantId, carlos, date, '09:00', '17:00');
+
+    const fromTime = `${date}T15:04:05.123Z`; // 10:04:05 CDT — off-grid on purpose
+    const slots = await findNextAvailableSlots(
+      root as unknown as Parameters<typeof findNextAvailableSlots>[0],
+      {
+        tenantId,
+        fromTime,
+        durationMinutes: 30,
+        requiredSkills: ['tire-rotation'],
+        count: 3,
+      }
+    );
+
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots[0].start_time).toBe(`${date}T15:15:00.000Z`);
+    for (const slot of slots) {
+      for (const t of [slot.start_time, slot.end_time]) {
+        const d = new Date(t);
+        expect([0, 15, 30, 45], `${t} must be on the quarter-hour grid`).toContain(
+          d.getUTCMinutes()
+        );
+        expect(d.getUTCSeconds()).toBe(0);
+        expect(d.getUTCMilliseconds()).toBe(0);
+      }
+    }
+  });
+
   it('HAPPY: lower-skill busy — first slot uses higher-skill emp at SAME time', async () => {
     if (!dbAvailable) return;
     // WHO: Carlos is mid-job; Mike is idle; caller wants a tire rotation now

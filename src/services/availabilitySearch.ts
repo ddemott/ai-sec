@@ -94,12 +94,23 @@ export async function findNextAvailableSlots(
   // the lowest-skill candidate per slot. The outer SELECT returns the N
   // earliest slots that had at least one candidate.
   const sql = `
-    WITH slot_starts AS (
+    WITH grid_start AS (
+      -- Snap the search origin UP to the next quarter-hour CLOCK boundary.
+      -- generate_series steps 15 minutes from whatever instant it is given, so
+      -- starting from a raw "now" made every suggested slot inherit now's
+      -- minutes and seconds (a 4:34 AM search offered 1:04 PM) — times the
+      -- appointments_start/end_time_15min CHECKs can never accept. The booking
+      -- then 500'd on a slot WE suggested. Epoch/900 keeps the grid aligned to
+      -- the same UTC quarter-hours the CHECK constraints measure.
+      SELECT to_timestamp(ceil(extract(epoch from $1::timestamptz) / 900.0) * 900) AS g
+    ),
+    slot_starts AS (
       SELECT generate_series(
-        $1::timestamptz,
-        $1::timestamptz + ($2 || ' hours')::interval,
+        gs.g,
+        gs.g + ($2 || ' hours')::interval,
         interval '15 minutes'
       ) AS s
+      FROM grid_start gs
     ),
     candidates AS (
       SELECT
