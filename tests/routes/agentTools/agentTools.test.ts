@@ -1026,6 +1026,37 @@ describe('agentTools /capture-job-inquiry', () => {
     );
   });
 
+  it('SAD: appointment vanishes between the verify SELECT and the stamp UPDATE → inquiry still saved, miss observable', async () => {
+    // WHO: capture-job-inquiry racing a deletion — the SELECT proved the appointment
+    //       live, nothing holds that true until the UPDATE.
+    // WHAT: the stamp UPDATE filters is_deleted = false and affects zero rows; the
+    //        route must still report saved (the inquiry row is the lead) — the lost
+    //        stamp surfaces as a metric + warn, never a silent nothing.
+    const APPT = 'b7e42a10-92c4-4f7a-9a2d-52e9c1a4b3d6';
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] }, // customer lookup
+        { rows: [{ appointment_id: APPT }] }, // appointment verifies live
+        { rows: [{ job_inquiry_id: 'ji-7' }] }, // INSERT ... RETURNING
+        { rows: [], rowCount: 0 }, // stamp UPDATE — appointment gone
+        { rows: [{ email: null }] }, // recipient resolve — none
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Rhonda Recruiter',
+      callback_phone: '3128651186',
+      client_company: 'Blue Cross',
+      appointment_id: APPT,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { saved: true } });
+    const stamp = queries.find((q) => q.text.includes('UPDATE appointments'))!;
+    expect(stamp.text, 'the stamp must skip soft-deleted appointments').toContain(
+      'is_deleted = false'
+    );
+  });
+
   it("SAD: an appointment_id that is not this tenant's live appointment saves the inquiry UNLINKED", async () => {
     // The id arrives from the agent runtime, so a miss is a bug — but the row is the
     // LEAD and the link is just context: save unlinked (+ metric + 5W warn), never lose
@@ -1079,6 +1110,24 @@ describe('agentTools /attach-meeting-notes', () => {
     expect(queries[0].text).toContain('UPDATE appointments');
     expect(queries[0].text).toContain('description');
     expect(queries[0].params[2]).toBe('Caller notes: bring the contract paperwork');
+  });
+
+  it('HAPPY: a multi-line note is flattened to one line before stamping', async () => {
+    // WHO: the model answering the wrap-up question with a multi-line string.
+    // WHAT: the stamp must stay ONE line — splitCallContext() parses the description
+    //        line-by-line, so a newline inside the note would spill the remainder into
+    //        the service headline (and the edit panel's service field).
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ appointment_id: APPT }] }],
+    });
+    const res = await post(app, '/agent-tools/attach-meeting-notes', {
+      tenant_id: TENANT_ID,
+      appointment_id: APPT,
+      notes: 'bring the contract paperwork\nand the  rate\tsheet\n',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(queries[0].params[2]).toBe('Caller notes: bring the contract paperwork and the rate sheet');
   });
 
   it('SAD: unknown or deleted appointment → honest refusal, nothing reported saved', async () => {

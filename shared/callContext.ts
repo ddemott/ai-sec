@@ -17,6 +17,17 @@
 export const JOB_DETAILS_PREFIX = 'Job details: ';
 export const CALLER_NOTES_PREFIX = 'Caller notes: ';
 
+/**
+ * Flatten free text into the single line a stamp must be. The splitter below is
+ * line-based, so a newline inside the stamped text would spill the remainder into
+ * `serviceText` — the headline, and the edit panel's service field. Every stamp
+ * writer passes its text through here; the model's strings are not trusted to be
+ * one line.
+ */
+export function toStampText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 export interface SplitDescription {
   /** The description with the call-context lines removed — the service/booking label
    *  the views were already using as the headline. */

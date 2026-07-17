@@ -17,7 +17,7 @@ import {
   TakeMessageSchema,
 } from './schemas';
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
-import { JOB_DETAILS_PREFIX } from '../../../shared/callContext';
+import { JOB_DETAILS_PREFIX, toStampText } from '../../../shared/callContext';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
@@ -140,7 +140,7 @@ export function jobSummaryLine(
         ? `with ${companies.callerCompany}`
         : '';
   const detail = [bits.join(', '), company].filter(Boolean).join(' — ');
-  return `${JOB_DETAILS_PREFIX}${detail || 'see the job inquiry record'}.`;
+  return `${JOB_DETAILS_PREFIX}${toStampText(detail) || 'see the job inquiry record'}.`;
 }
 
 export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {
@@ -497,13 +497,24 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         // when. Appended, never overwritten — the description may already carry the
         // service name or the caller's notes.
         if (appointmentId) {
-          await client.query(
+          const stamped = await client.query(
             `UPDATE appointments
                 SET description = COALESCE(NULLIF(description, '') || E'\n\n', '') || $3,
                     updated_at = now()
-              WHERE tenant_id = $1 AND appointment_id = $2`,
+              WHERE tenant_id = $1 AND appointment_id = $2 AND is_deleted = false`,
             [args.tenant_id, appointmentId, jobSummaryLine(companies, args)]
           );
+          // The SELECT above proved the appointment live, but nothing holds that true
+          // until here — a zero-row UPDATE means it vanished in between. The inquiry
+          // row (the lead) is already saved; only the calendar stamp was lost, and
+          // that must be observable, not silent.
+          if (stamped.rowCount === 0) {
+            errorsTotal.inc({ event: 'job_inquiry_appointment_stamp_miss' });
+            app.log.warn(
+              { tenantId: args.tenant_id, appointmentId },
+              'capture_job_inquiry: appointment disappeared before the job summary stamp — inquiry saved, calendar entry not stamped'
+            );
+          }
         }
 
         // Resolve the notification recipient: the dedicated job_inquiry_email,
