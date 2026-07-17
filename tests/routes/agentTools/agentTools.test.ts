@@ -847,7 +847,7 @@ describe('agentTools /capture-job-inquiry', () => {
       timezone: 'America/Chicago',
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ success: true, result: { emailed: true } });
+    expect(res.json()).toMatchObject({ success: true, result: { email_queued: true } });
     expect(queries[1].text).toContain('INSERT INTO job_inquiries');
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
       'DaleDeMott@thinkinghammer.com',
@@ -912,7 +912,7 @@ describe('agentTools /capture-job-inquiry', () => {
       address: '1 Globex Plaza, Chicago IL',
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ success: true, result: { emailed: true } });
+    expect(res.json()).toMatchObject({ success: true, result: { email_queued: true } });
     expect(queries).toHaveLength(3);
     expect(queries[1].text).toContain('INSERT INTO job_inquiries');
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
@@ -924,14 +924,23 @@ describe('agentTools /capture-job-inquiry', () => {
     );
   });
 
-  it('SAD: email send failure still saves the inquiry and returns success', async () => {
+  it('SAD: email send failure still saves the inquiry and returns success (fire-and-forget)', async () => {
     // WHO: a valid inquiry where SMTP / the transporter throws.
-    // WHAT: the row is already persisted, so the route swallows the email error
-    //        (metric + 5W log) and returns success with emailed:false — the call
-    //        must NOT fail just because the notification didn't go out.
+    // WHAT: the send is fire-and-forget since 2026-07-17, so the response is
+    //        already gone when the rejection lands — the route reports
+    //        email_queued:true (a send was STARTED; delivery is not knowable at
+    //        reply time) and the async catch logs the failure without touching
+    //        the reply. The call must NOT fail because the notification didn't
+    //        go out.
     vi.mocked(sendJobInquiryEmail).mockRejectedValueOnce(new Error('SMTP unavailable'));
     const { app } = buildApp({
       queryResponses: [
+        // The old queue here skipped the customer lookup, so every later
+        // response was off by one and the recipient resolved to null — the
+        // pre-2026-07-17 version of this test passed VACUOUSLY (emailed:false
+        // because no email was ever attempted, not because the failure was
+        // handled). Queue now matches the route's actual query order.
+        { rows: [] }, // customer lookup by callback phone
         { rows: [{ job_inquiry_id: 'ji-3' }] }, // INSERT
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient
       ],
@@ -943,15 +952,82 @@ describe('agentTools /capture-job-inquiry', () => {
       client_company: 'Initech',
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ success: true, result: { emailed: false } });
+    expect(res.json()).toMatchObject({
+      success: true,
+      result: { saved: true, email_queued: true },
+    });
+    // Let the rejected promise's catch handler run so the unhandled-rejection
+    // detector (vitest) sees it handled.
+    await new Promise((r) => setImmediate(r));
+  });
+
+  it('SAD: a HUNG email transport cannot delay the reply (2026-07-17 regression)', async () => {
+    // WHO: the 2026-07-17 live caller ("Steven Bob"). WHAT: prod SMTP was
+    //       unreachable (IPv6 ENETUNREACH to Gmail:465 — 60-120s per attempt)
+    //       and the send was AWAITED, so every capture blew the agent's 8s tool
+    //       timeout; the job-intake rung retried and wrote FOUR duplicate
+    //       inquiries while the caller was told "having issues writing to the
+    //       system". WHY: a voice tool's reply must return the moment the row
+    //       is durable — a never-resolving send must not hold it hostage.
+    vi.mocked(sendJobInquiryEmail).mockImplementationOnce(() => new Promise(() => {}));
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [] }, // customer lookup
+        { rows: [{ job_inquiry_id: 'ji-hang' }] }, // INSERT
+        { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient
+      ],
+    });
+    const started = Date.now();
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Steven Bob',
+      callback_phone: '3125553333',
+      client_company: 'CBO',
+      caller_company: 'XYZ Consulting',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ success: true, result: { saved: true } });
+    // Generous bound: the point is "returns without the send", not a benchmark.
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it('HAPPY: a RETRY on the same call returns the EXISTING inquiry — no duplicate row, no second email', async () => {
+    // WHO: the job-intake rung retrying after a tool timeout — its contract is
+    //       to retry until it holds a job_inquiry_id, so the tool MUST be
+    //       idempotent per call. On 2026-07-17 it wasn't: four retries, four
+    //       identical rows, four "Job details:" stamps on one appointment.
+    // WHAT: same (tenant, call_id) already has an inquiry → return its id,
+    //        write nothing, email nobody, and say duplicate.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ job_inquiry_id: 'ji-first' }] }, // dedupe lookup — HIT
+        { rows: [{ email: 'DaleDeMott@thinkinghammer.com', owner_name: 'Dale' }] }, // recipient (for the spoken message)
+      ],
+    });
+    const res = await post(app, '/agent-tools/capture-job-inquiry', {
+      tenant_id: TENANT_ID,
+      caller_name: 'Steven Bob',
+      callback_phone: '3125553333',
+      client_company: 'CBO',
+      call_id: 'room:sim-call-retry',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      success: true,
+      result: { saved: true, job_inquiry_id: 'ji-first', email_queued: false },
+    });
+    // Nothing after the dedupe lookup + recipient resolve: no INSERT, no stamp.
+    expect(queries.map((q) => q.text.trim().split(/\s+/)[0])).toEqual(['SELECT', 'SELECT']);
+    expect(vi.mocked(sendJobInquiryEmail)).not.toHaveBeenCalled();
   });
 
   it('SAD: no recipient configured saves the inquiry but does not email', async () => {
     // WHO: a tenant with neither job_inquiry_email nor an owner email.
     // WHAT: recipient resolves to null → route does not call the email sender,
-    //        increments job_inquiry_no_recipient, and returns emailed:false.
+    //        increments job_inquiry_no_recipient, and returns email_queued:false.
     const { app } = buildApp({
       queryResponses: [
+        { rows: [] }, // customer lookup by callback phone (queue was off by one pre-2026-07-17)
         { rows: [{ job_inquiry_id: 'ji-4' }] }, // INSERT
         { rows: [{ email: null }] }, // recipient resolve — none
       ],
@@ -962,7 +1038,7 @@ describe('agentTools /capture-job-inquiry', () => {
       callback_phone: '3125553333',
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ success: true, result: { emailed: false } });
+    expect(res.json()).toMatchObject({ success: true, result: { email_queued: false } });
     expect(vi.mocked(sendJobInquiryEmail)).not.toHaveBeenCalled();
   });
 

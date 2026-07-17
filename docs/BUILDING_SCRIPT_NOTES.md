@@ -474,6 +474,21 @@ lives on the function.")
     context.** A task's system prompt is fresh; the chat history carries the conversation but
     the model acts on its *instructions*. Inject the caller's name/number/prior-answers
     explicitly so the rung doesn't re-ask (root cause 1 / gotcha #6).
+12. **An ACTION rung's tool MUST be idempotent per call, and its reply must not carry
+    side-effect latency.** (2026-07-17, the first live firing of the job-linked meeting
+    rung.) The rung contract is "retry until you hold the success id" — which means a SLOW
+    response is indistinguishable from a FAILED one: prod's SMTP was unreachable, the
+    capture route AWAITED the owner email (60–120s to fail), every reply blew the agent's
+    8s tool timeout, and the rung did exactly its job — retried — while the route did
+    exactly its job — inserted. FOUR identical `job_inquiries` rows, four "Job details:"
+    stamps on one appointment, and the caller heard "having issues writing to the system"
+    about writes that had all succeeded. Two rules, a pair: (a) dedupe on `(tenant_id,
+    call_id)` — a retry returns the EXISTING id and writes nothing, so retrying converges
+    instead of multiplying; (b) best-effort side effects (owner email) are fire-and-forget
+    with a metric + 5W log — "best-effort" awaited inline is not best-effort, it is a
+    caller standing in dead air behind an SMTP handshake. Audit every ACTION-rung tool for
+    both properties (take_message and page_owner_via_sms await `sendSms` inline — Telnyx is
+    fast today, but the class is the same).
 
 ### How to duplicate for a new vertical
 
