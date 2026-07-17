@@ -40,7 +40,7 @@ import { toolsForPhase, type CallPhase } from './toolPhases.js';
 import { CallRootAgent } from './tasks/callRootAgent.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
 import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
-import { attachOutputWatchdog } from './session/watchdog.js';
+import { attachOutputWatchdog, attachSilentTurnRecovery } from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
 import { TranscriptRecorder } from './transcript.js';
 import { CallOutcomeTracker } from './callOutcome.js';
@@ -48,6 +48,19 @@ import { summarizeCall } from './callSummary.js';
 import { classifyCallOutcome } from './callClassify.js';
 import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
+
+/**
+ * Per-turn tool-call cap (see gotcha I in docs/BUILDING_SCRIPT_NOTES.md for
+ * what hitting it does: the turn ends WITHOUT SPEECH). Parsed defensively —
+ * `Number("")` is 0 and `Number("abc")` is NaN, and either handed to LiveKit
+ * as maxToolSteps would cripple tool calling outright, which is a worse
+ * outage than the one this knob exists to tune. Gotcha A's blank-string
+ * lesson, env-var edition: a misconfigured value falls back to 5, never to 0.
+ */
+const MAX_TOOL_STEPS = (() => {
+  const parsed = Number.parseInt(process.env.MAX_TOOL_STEPS ?? '', 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 5;
+})();
 
 /**
  * The tenant's saved voice, mapped to its nearest Deepgram Aura equivalent.
@@ -824,8 +837,21 @@ export default defineAgent({
                 voice: config.REALTIME_VOICE,
                 inputAudioTranscription: { model: 'whisper-1' },
               }),
+              // See the pipeline branch below for why 5, not LiveKit's default 3.
+              maxToolSteps: MAX_TOOL_STEPS,
             })
           : new voice.AgentSession({
+              // 5 TOOL STEPS PER TURN, not LiveKit's default 3 — and know what the
+              // cap DOES: a turn that hits it ends WITHOUT GENERATING SPEECH.
+              // On a live call 2026-07-17 the caller said "Monday at 1:30", the
+              // model spent its 3 steps on intake lookups (catalog → history →
+              // context) without ever reaching the start_booking router, and the
+              // turn simply ENDED — thinking → listening, no audio, "Hello?"
+              // twice, hang-up. 5 lets a legitimate lookup-then-route chain fit
+              // in one turn; the silent-turn recovery below covers whatever
+              // still hits the cap. Tunable without a deploy (MAX_TOOL_STEPS,
+              // parsed + clamped at module scope).
+              maxToolSteps: MAX_TOOL_STEPS,
               vad: ctx.proc.userData.vad as silero.VAD,
               stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
               // temperature: 0 — PICKING A TOOL IS NOT A CREATIVE ACT.
@@ -1352,6 +1378,19 @@ export default defineAgent({
           });
           session.on(voice.AgentSessionEventTypes.Close, detachWatchdog);
         }
+
+        // Silent-turn-death recovery — UNCONDITIONAL, deliberately NOT behind
+        // ENABLE_OUTPUT_WATCHDOG (prod runs with that flag off; found 2026-07-17
+        // when a maxToolSteps-capped turn ended in permanent silence and nothing
+        // covered it). A turn that ends with zero audio is a dropped call, not a
+        // polish option: the runtime forces a spoken, tool-free reply. See
+        // attachSilentTurnRecovery for the full post-mortem.
+        const detachTurnRecovery = attachSilentTurnRecovery(session, {
+          voice: ttsVoiceKey,
+          recoveryText: RECOVERY_LINE,
+          log: callLog,
+        });
+        session.on(voice.AgentSessionEventTypes.Close, detachTurnRecovery);
 
         // Thinking-sound bed (never-silent polish) — OFF unless ENABLE_THINKING_SOUND.
         // A looping keyboard-typing ambiance plays while the agent is 'thinking'
