@@ -893,6 +893,23 @@ cross-cutting gotcha (A–F) — an empty-string, a mis-heard word, or the model
 
 ---
 
+## E2E status — 2026-07-17 overnight sweep (all mic-free tiers, post silent-turn fixes)
+
+Run after PRs #272/#273 deployed and with #274–#277 in flight. Every tier that can run
+without a microphone, against a locally restored bookable Thinking Hammer (business shape
+copied from prod — see the CLAUDE.md bare-bones-seed note for why that restore is needed):
+
+| Tier | Result | Notes |
+|---|---|---|
+| `simulate.sh toolselect` (ladder) | **12/13 (92%)** | Was 10/13 (77%) — 2 of 3 fails were a GRADER false positive (fixed, PR #277). Remaining fail: take_message narrated, never called — the ladder disease the rung fixes; `ENABLE_TASK_GROUP` still off in prod. The 9×-history loop seen once did NOT recur (flaps). |
+| `sim-taskgroup.ts` full suite (rung flow) | **29/30** | Sole failure: the KNOWN notes residual — chatty style, model attached the topic label ("Consulting work discussion.") without asking; the caller's real note (COBOL) never spoken. ~1-in-30 now vs 1-in-3 pre-ASK-FIRST. Documented residual, sim keeps it visible. |
+| `simulate.sh tools` (agent-tools journey) | **16/16** | Zero gaps awaiting wiring. |
+| `simulate.sh rag` | **9/9 (100%)** | Incl. 3 out-of-scope fallbacks. |
+
+Still only provable on a live mic call: STT/TTS/turn-taking, `onEnter`, the greeting
+audio (incl. the new persona-aware disclosure, PR #275), and the silent-turn recovery's
+acoustics (its state machine is live-verified — gotcha I).
+
 ## Testing ladder (cheapest → most real)
 
 1. **Unit tests** (`vitest`) — task logic, plan completeness, tool wiring. Fast, but blind
