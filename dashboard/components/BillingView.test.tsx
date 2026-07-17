@@ -66,10 +66,16 @@ describe('BillingView — current plan display', () => {
       subscription_plan: 'growth',
     });
     render(<BillingView />);
-    // Plan name appears in the header span (capitalize = "growth")
-    // Plus plan card heading "Growth" — use getAllByText since it matches both
-    await waitFor(() => expect(screen.getAllByText(/^growth$/i).length).toBeGreaterThan(0));
-    expect(screen.getByText('Active')).toBeInTheDocument();
+    // ANCHOR THE WAIT ON API-DEPENDENT TEXT. The static plan card renders
+    // "Growth" before the mocked status resolves, so a waitFor on /^growth$/i
+    // could pass immediately and the 'Active' badge assertion then raced the
+    // fetch — green locally for weeks, failed on a slower CI runner (PR #274,
+    // whose diff touched no dashboard file at all). 'Active' only renders from
+    // the API response, so waiting on IT is waiting on the thing under test.
+    await waitFor(() => expect(screen.getByText('Active')).toBeInTheDocument());
+    // Plan name appears in the header span (capitalize = "growth") plus the
+    // static plan card heading "Growth" — getAllByText matches both.
+    expect(screen.getAllByText(/^growth$/i).length).toBeGreaterThan(0);
   });
 
   test('HAPPY: shows Past Due badge when status is past_due', async () => {
