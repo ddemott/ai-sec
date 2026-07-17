@@ -50,6 +50,19 @@ import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
 
 /**
+ * Per-turn tool-call cap (see gotcha I in docs/BUILDING_SCRIPT_NOTES.md for
+ * what hitting it does: the turn ends WITHOUT SPEECH). Parsed defensively —
+ * `Number("")` is 0 and `Number("abc")` is NaN, and either handed to LiveKit
+ * as maxToolSteps would cripple tool calling outright, which is a worse
+ * outage than the one this knob exists to tune. Gotcha A's blank-string
+ * lesson, env-var edition: a misconfigured value falls back to 5, never to 0.
+ */
+const MAX_TOOL_STEPS = (() => {
+  const parsed = Number.parseInt(process.env.MAX_TOOL_STEPS ?? '', 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 5;
+})();
+
+/**
  * The tenant's saved voice, mapped to its nearest Deepgram Aura equivalent.
  *
  * The dashboard picker stores OpenAI voice ids (shimmer/nova/…), and owners have
@@ -825,7 +838,7 @@ export default defineAgent({
                 inputAudioTranscription: { model: 'whisper-1' },
               }),
               // See the pipeline branch below for why 5, not LiveKit's default 3.
-              maxToolSteps: Number(process.env.MAX_TOOL_STEPS ?? 5),
+              maxToolSteps: MAX_TOOL_STEPS,
             })
           : new voice.AgentSession({
               // 5 TOOL STEPS PER TURN, not LiveKit's default 3 — and know what the
@@ -836,8 +849,9 @@ export default defineAgent({
               // turn simply ENDED — thinking → listening, no audio, "Hello?"
               // twice, hang-up. 5 lets a legitimate lookup-then-route chain fit
               // in one turn; the silent-turn recovery below covers whatever
-              // still hits the cap. Tunable without a deploy.
-              maxToolSteps: Number(process.env.MAX_TOOL_STEPS ?? 5),
+              // still hits the cap. Tunable without a deploy (MAX_TOOL_STEPS,
+              // parsed + clamped at module scope).
+              maxToolSteps: MAX_TOOL_STEPS,
               vad: ctx.proc.userData.vad as silero.VAD,
               stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
               // temperature: 0 — PICKING A TOOL IS NOT A CREATIVE ACT.
