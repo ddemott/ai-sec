@@ -3,6 +3,7 @@ import { Clock, AlertTriangle, User, Wrench } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import type { SchedulerAppointment } from './useSchedulerData';
 import { formatTimeFromISO } from '../../lib/utils';
+import { splitCallContext } from '../../../shared/callContext';
 
 interface SchedulerEmployee {
   employee_id: string;
@@ -115,7 +116,10 @@ export const AppointmentListView: React.FC<AppointmentListViewProps> = ({
                   {appt.customers?.name || 'Unknown Customer'}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                  {appt.description}
+                  {/* Headline only — the stamped call context ("Job details: …",
+                      "Caller notes: …") renders in the popover, not garbled into
+                      this one-line label. */}
+                  {splitCallContext(appt.description).serviceText || appt.description}
                 </div>
               </div>
 

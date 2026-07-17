@@ -35,6 +35,7 @@ import {
 } from './helpers';
 import type { PoolClient } from 'pg';
 import { applyTimezone, toLocalWallClock } from '../../services/timezoneUtils';
+import { CALLER_NOTES_PREFIX } from '../../../shared/callContext';
 import { validateAppointmentTimeRange } from '../../services/appointmentValidation';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { getOrCreateCustomerByPhone } from '../../services/customerLookup';
@@ -1165,7 +1166,7 @@ export function registerSchedulingRoutes({
                   updated_at = now()
             WHERE tenant_id = $1 AND appointment_id = $2 AND is_deleted = false
             RETURNING appointment_id`,
-          [args.tenant_id, args.appointment_id, `Caller notes: ${args.notes}`]
+          [args.tenant_id, args.appointment_id, `${CALLER_NOTES_PREFIX}${args.notes}`]
         );
         return res.rows[0]?.appointment_id ?? null;
       });

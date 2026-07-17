@@ -1,4 +1,5 @@
 import React from 'react';
+import { splitCallContext } from '../../shared/callContext';
 import { type Appointment } from '../lib/types';
 import { Button } from './ui/Button';
 import { RefreshCw, ChevronRight, Plus } from 'lucide-react';
@@ -136,7 +137,9 @@ export function AppointmentListSidebar({
                 className="text-[11px] font-bold uppercase tracking-tighter mt-1 truncate max-w-[180px]"
                 style={{ color: 'var(--text-muted)' }}
               >
-                {apt.description}
+                {/* Headline only — the stamped call context has its own display in the
+                    detail panel; here it would just garble the one-line label. */}
+                {splitCallContext(apt.description).serviceText || apt.description}
               </p>
               <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
                 {(() => {

@@ -17,6 +17,7 @@ import {
   TakeMessageSchema,
 } from './schemas';
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
+import { JOB_DETAILS_PREFIX } from '../../../shared/callContext';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
@@ -139,7 +140,7 @@ export function jobSummaryLine(
         ? `with ${companies.callerCompany}`
         : '';
   const detail = [bits.join(', '), company].filter(Boolean).join(' — ');
-  return `Job details: ${detail || 'see the job inquiry record'}.`;
+  return `${JOB_DETAILS_PREFIX}${detail || 'see the job inquiry record'}.`;
 }
 
 export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {

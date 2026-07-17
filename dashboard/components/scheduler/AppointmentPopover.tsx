@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { Clock, User, MapPin, Wrench, Calendar, Edit, Trash2, X } from 'lucide-react';
+import { Clock, User, MapPin, Wrench, Calendar, Edit, Trash2, X, StickyNote } from 'lucide-react';
 import { formatPhone } from '../../lib/phone';
+import { splitCallContext } from '../../../shared/callContext';
 import type { SchedulerAppointment } from './useSchedulerData';
 
 export interface AppointmentPopoverProps {
@@ -113,6 +114,9 @@ export function AppointmentPopover({
 
   const customerName = appointment.customers?.name || 'Unknown';
   const customerPhone = appointment.customers?.phone || null;
+  // The voice agent stamps call context ("Job details: …", "Caller notes: …") onto the
+  // description; the headline shows only the service line, the context gets its own block.
+  const { serviceText, callContext } = splitCallContext(appointment.description);
   const statusLabel =
     appointment.status === 'canceled'
       ? 'Canceled'
@@ -131,7 +135,7 @@ export function AppointmentPopover({
       ref={cardRef}
       data-testid="appointment-popover"
       role="dialog"
-      aria-label={`Appointment details: ${appointment.description || 'Appointment'}`}
+      aria-label={`Appointment details: ${serviceText || 'Appointment'}`}
       tabIndex={-1}
       className="fixed z-50 rounded-lg shadow-xl outline-none"
       style={{
@@ -148,7 +152,7 @@ export function AppointmentPopover({
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-            {appointment.description || 'Appointment'}
+            {serviceText || 'Appointment'}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <span
@@ -214,6 +218,23 @@ export function AppointmentPopover({
             <span className="truncate" style={{ color: 'var(--text-secondary, #aaa)' }}>
               {appointment.location}
             </span>
+          </div>
+        )}
+
+        {/* Call context — what the caller told the voice agent this meeting needs
+            (job summary, notes). Stamped onto the description by the agent tools;
+            shown here so the owner sees WHY the meeting exists, next to who it's with. */}
+        {callContext.length > 0 && (
+          <div className="flex items-start gap-2 text-xs" data-testid="popover-call-context">
+            <StickyNote
+              className="w-3.5 h-3.5 shrink-0 mt-0.5"
+              style={{ color: 'var(--text-muted, #888)' }}
+            />
+            <div className="flex flex-col gap-1" style={{ color: 'var(--text-secondary, #aaa)' }}>
+              {callContext.map((line, i) => (
+                <span key={i}>{line}</span>
+              ))}
+            </div>
           </div>
         )}
       </div>

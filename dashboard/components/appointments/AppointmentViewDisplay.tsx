@@ -5,6 +5,7 @@ import { MapPin, Navigation, Copy, StickyNote } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { formatPhone } from '../../lib/phone';
+import { splitCallContext } from '../../../shared/callContext';
 import { format } from 'date-fns';
 import type { Appointment } from '../../lib/types';
 
@@ -29,6 +30,10 @@ export function AppointmentViewDisplay({
     (e) => e.employee_id.toString() === selectedAppointment.employee_id?.toString()
   );
   const { start, end } = getServiceBaseTimes(selectedAppointment);
+  // The voice agent stamps call context ("Job details: …", "Caller notes: …") onto the
+  // description. The summary sentence uses only the service line; the context gets its
+  // own section next to the caller's name and phone.
+  const { serviceText, callContext } = splitCallContext(selectedAppointment.description);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -104,11 +109,31 @@ export function AppointmentViewDisplay({
                 {employee?.name || 'Unassigned'}
               </span>
             </div>
-            {!!selectedAppointment.customers?.metadata?.notes && (
+            {callContext.length > 0 && (
               <div
                 className="mt-4 pt-4"
                 style={{ borderTop: '1px solid var(--border-soft)' }}
+                data-testid="appointment-call-context"
               >
+                <p
+                  className="text-xs font-bold uppercase tracking-widest mb-1 flex items-center"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <StickyNote className="w-3 h-3 mr-1" /> From the Call
+                </p>
+                {callContext.map((line, i) => (
+                  <p
+                    key={i}
+                    className="text-sm leading-relaxed"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {line}
+                  </p>
+                ))}
+              </div>
+            )}
+            {!!selectedAppointment.customers?.metadata?.notes && (
+              <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--border-soft)' }}>
                 <p
                   className="text-xs font-bold uppercase tracking-widest mb-1 flex items-center"
                   style={{ color: 'var(--text-muted)' }}
@@ -131,7 +156,7 @@ export function AppointmentViewDisplay({
 
       <Card title="Summary" variant="dark">
         <p className="text-lg leading-relaxed font-medium italic">
-          {`This appointment for ${selectedAppointment.customers?.name} is scheduled for ${selectedAppointment.description.toLowerCase()} on ${resourceName}${employee ? `, assigned to ${employee.name}` : ''}.`}
+          {`This appointment for ${selectedAppointment.customers?.name} is scheduled for ${(serviceText || selectedAppointment.description).toLowerCase()} on ${resourceName}${employee ? `, assigned to ${employee.name}` : ''}.`}
         </p>
       </Card>
     </div>
