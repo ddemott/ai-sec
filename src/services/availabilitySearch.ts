@@ -136,20 +136,30 @@ export async function findNextAvailableSlots(
        AND es.shift_date = (ss.s AT TIME ZONE $5)::date
        AND es.is_off = false
        AND es.start_time <= (ss.s AT TIME ZONE $5)::time
-       -- WRAP-AWARE (2026-07-17 22:13 CDT live call): a slot crossing local
-       -- midnight has an end whose ::time is 00:00-ish — "before" any
-       -- afternoon shift end once the date is dropped, so 11:30 PM was offered
-       -- against a 1-5 PM shift (and only the midnight-wrapping slots leaked,
-       -- which is why the offers were exactly 11:30/11:45 PM). '24:00:00' is a
-       -- valid Postgres TIME: an end past the shift's local date now demands a
-       -- shift ending at midnight sharp. The booking RPC ships the identical
-       -- fix (migration 20260718003000) — suggest and enforce must read the
-       -- same clock AND the same calendar.
-       AND es.end_time >= CASE
-             WHEN ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::date
-                  > (ss.s AT TIME ZONE $5)::date
-             THEN '24:00:00'::time
-             ELSE ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::time
+       -- WRAP-AWARE, SHIFT-SHAPE-AWARE (2026-07-17 22:13 CDT live call; night
+       -- shifts preserved per Fix #30's tests). A slot crossing local midnight
+       -- has an end whose ::time is 00:00-ish — "before" any afternoon shift
+       -- end once the date is dropped, so 11:30 PM was offered against a
+       -- 1-5 PM DAY shift (and only the wrapping slots leaked: the offers were
+       -- exactly 11:30/11:45 PM). But that same comparison IS how cross-
+       -- midnight NIGHT shifts (23:00-06:00, end < start) book their post-
+       -- midnight stretch — the first version of this fix used '24:00:00' and
+       -- killed them (CI caught it). So the rule is per shift SHAPE:
+       --   DAY shift  (end > start): a wrapping slot is NEVER covered.
+       --   NIGHT shift (end < start): pre-midnight slots are covered by the
+       --     start check alone; a wrapping slot must end by the shift's
+       --     morning end. (Slots STARTING after midnight remain unsupported,
+       --     as they always were — the shift row lives on the previous date.)
+       -- The booking RPC ships the identical rule (migration 20260718003000).
+       AND CASE
+             WHEN es.end_time < es.start_time THEN
+               ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::date
+                 = (ss.s AT TIME ZONE $5)::date
+               OR es.end_time >= ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::time
+             ELSE
+               ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::date
+                 = (ss.s AT TIME ZONE $5)::date
+               AND es.end_time >= ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::time
            END
       WHERE res.tenant_id = $4
         AND res.is_active = true

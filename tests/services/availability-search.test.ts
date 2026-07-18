@@ -608,6 +608,46 @@ describe('findNextAvailableSlots', () => {
     });
   });
 
+  describe('NIGHT SHIFTS keep their midnight (suggest-side parity with Fix #30)', () => {
+    it('HAPPY: a 23:00–06:00 shift still offers its pre-midnight wrapping slots', async () => {
+      if (!dbAvailable) return;
+      // WHO: a night-shift business (the RPC's Fix #30 tests are the enforce
+      //       side; this is the suggest side of the same contract).
+      // WHAT: the shape-aware wrap rule must NOT hide 23:30 → 00:00 on a shift
+      //        whose end < start — only DAY shifts lose their wraps.
+      // WHY: the first version of the wrap fix ('24:00:00' unconditionally)
+      //       killed night shifts and CI caught it in the RPC; this pins the
+      //       suggester against the same regression.
+      const tenantId = await createTenant(
+        root,
+        'Night Suggest Co',
+        'auto-repair',
+        'America/Chicago'
+      );
+      await createResource(root, tenantId, 'Bay 1');
+      const emp = await createEmployee(root, tenantId, 'Night Worker', []);
+      const date = '2026-06-15';
+      await createScheduleEntry(root, tenantId, emp, date, '23:00', '06:00');
+
+      const slots = await findNextAvailableSlots(
+        root as unknown as Parameters<typeof findNextAvailableSlots>[0],
+        {
+          tenantId,
+          // 11:00 PM CDT on the shift date — which is 04:00Z on the FOLLOWING
+          // UTC date (CDT = UTC-5).
+          fromTime: `2026-06-16T04:00:00.000Z`,
+          durationMinutes: 30,
+          requiredSkills: [],
+          count: 5,
+          searchHorizonHours: 2,
+        }
+      );
+      // 11:30 PM CDT on the shift date = 04:30Z on the following UTC date.
+      const starts = slots.map((s) => s.start_time);
+      expect(starts).toContain(`2026-06-16T04:30:00.000Z`);
+    });
+  });
+
   describe('TENANT-CLOCK RENDERING (Dale, 2026-07-17): the caller hears THEIR wall-clock', () => {
     // WHO: any non-Chicago tenant. WHAT: a New-York tenant's 1:00 PM shift
     //       (17:00Z in June) must surface as 1:00 PM — a UTC-leak would say

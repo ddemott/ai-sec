@@ -29,6 +29,7 @@ DECLARE
     v_start_time_of_day TIME;
     v_end_time_of_day TIME;
     v_shift_date DATE;
+    v_end_wraps BOOLEAN;
     v_tenant_tz TEXT;
     v_found BOOLEAN := FALSE;
     r RECORD;
@@ -79,21 +80,20 @@ BEGIN
     v_shift_date := (v_start AT TIME ZONE v_tenant_tz)::DATE;
     v_day_of_week := EXTRACT(DOW FROM v_start AT TIME ZONE v_tenant_tz)::INTEGER;
     v_start_time_of_day := (v_start AT TIME ZONE v_tenant_tz)::TIME;
-    -- WRAP-AWARE END TIME (2026-07-17 22:13 CDT live call). A slot that
-    -- crosses local midnight has an end whose ::TIME compares as TINY once the
-    -- date is dropped: a 11:30 PM -> midnight booking yields 00:00:00, and
-    -- "shift end 17:00 >= 00:00" PASSES. Both the suggester and this RPC had
-    -- the hole, so a caller was OFFERED 11:30 PM against a 1-5 PM shift and
-    -- the booking was ACCEPTED (EMPLOYEE_NOT_SCHEDULED never fired). '24:00:00'
-    -- is a valid Postgres TIME: an end that lands past the shift's local date
-    -- now demands a shift ending at midnight sharp, which day shifts never do.
-    -- (Cross-midnight NIGHT shifts were never supported by these start<=/end>=
-    -- comparisons; their behavior is unchanged.)
-    v_end_time_of_day := CASE
-        WHEN (v_end AT TIME ZONE v_tenant_tz)::DATE > v_shift_date
-        THEN '24:00:00'::TIME
-        ELSE (v_end AT TIME ZONE v_tenant_tz)::TIME
-    END;
+    -- WRAP-AWARE, SHIFT-SHAPE-AWARE (2026-07-17 22:13 CDT live call; night
+    -- shifts preserved per Fix #30's tests). A slot ending past local midnight
+    -- has an end whose ::TIME compares as tiny once the date is dropped: an
+    -- 11:30 PM -> midnight booking yields 00:00:00 and "shift end 17:00 >=
+    -- 00:00" PASSED — so a DAY-shift tenant was offered and booked 11:30 PM.
+    -- But the very same comparison is how cross-midnight NIGHT shifts
+    -- (23:00-06:00, end < start) book their post-midnight stretch; the first
+    -- version of this fix ('24:00:00' unconditionally) killed them and CI
+    -- caught it. v_end_wraps carries the fact; the coverage joins apply it per
+    -- shift shape: DAY shift -> a wrapping slot is never covered; NIGHT shift
+    -- -> pre-midnight slots covered by the start check, wrapping slots must
+    -- end by the shift's morning end.
+    v_end_wraps := (v_end AT TIME ZONE v_tenant_tz)::DATE > v_shift_date;
+    v_end_time_of_day := (v_end AT TIME ZONE v_tenant_tz)::TIME;
 
     IF array_length(p_required_skills, 1) IS NOT NULL AND array_length(p_required_skills, 1) > 0 THEN
         FOR r IN
@@ -110,7 +110,9 @@ BEGIN
                 AND es.shift_date = v_shift_date
                 AND es.is_off = false
                 AND es.start_time <= v_start_time_of_day
-                AND es.end_time >= v_end_time_of_day
+                AND CASE WHEN es.end_time < es.start_time
+                         THEN (NOT v_end_wraps) OR es.end_time >= v_end_time_of_day
+                         ELSE (NOT v_end_wraps) AND es.end_time >= v_end_time_of_day END
             WHERE res.tenant_id = p_tenant_id
                 AND res.is_active = true
                 AND emp.tenant_id = p_tenant_id
@@ -197,7 +199,9 @@ BEGIN
                AND es.shift_date = v_shift_date
                AND es.is_off = false
                AND es.start_time <= v_start_time_of_day
-               AND es.end_time >= v_end_time_of_day
+               AND CASE WHEN es.end_time < es.start_time
+                         THEN (NOT v_end_wraps) OR es.end_time >= v_end_time_of_day
+                         ELSE (NOT v_end_wraps) AND es.end_time >= v_end_time_of_day END
                AND emp.tenant_id = p_tenant_id
                AND emp.is_active = true
                AND (emp.is_deleted IS NULL OR emp.is_deleted = false)
@@ -236,7 +240,9 @@ BEGIN
                     AND es.shift_date = v_shift_date
                     AND es.is_off = false
                     AND es.start_time <= v_start_time_of_day
-                    AND es.end_time >= v_end_time_of_day
+                    AND CASE WHEN es.end_time < es.start_time
+                         THEN (NOT v_end_wraps) OR es.end_time >= v_end_time_of_day
+                         ELSE (NOT v_end_wraps) AND es.end_time >= v_end_time_of_day END
                 WHERE emp.tenant_id = p_tenant_id
                 AND emp.is_active = true
                 AND (emp.is_deleted IS NULL OR emp.is_deleted = false)

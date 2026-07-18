@@ -145,7 +145,15 @@ describe("alternatives search — searching from the caller's guess vs from NOW"
     const slots = await withTenant<{ start_time: string }[]>((client) =>
       findNextAvailableSlots(client, {
         tenantId,
-        fromTime: `${dayThree}T18:00:00Z`, // 1pm Chicago on a working day
+        // 15:00 UTC — INSIDE the 13:00–17:00 shift. This tenant has no timezone
+        // set, so it runs on the column default 'UTC' — the old value here was
+        // 18:00Z with a comment claiming "1pm Chicago", which is AFTER this
+        // tenant's close… and the test still passed, because the midnight-wrap
+        // bug leaked a 23:30Z slot onto the requested day. The assertion below
+        // was satisfied BY THE BUG from the day it was written (caught when
+        // the wrap fix landed and CI went red). A time inside the shift makes
+        // the "prefers nearby" property real.
+        fromTime: `${dayThree}T15:00:00Z`,
         durationMinutes: 30,
         count: 3,
         searchHorizonHours: 168,
