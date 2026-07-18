@@ -27,7 +27,13 @@ import { llm, voice } from '@livekit/agents';
 import { sanitizeStream } from '../speechSanitizer.js';
 import { getLogger } from '../logger.js';
 import type { SessionContext } from '../sessionContext.js';
-import { planCallTasks, buildCallTaskGroup, type CallDeps, type CallRuntime } from './callPlan.js';
+import {
+  planCallTasks,
+  buildCallTaskGroup,
+  type CallDeps,
+  type CallRuntime,
+  type CallState,
+} from './callPlan.js';
 import type { IdentityResult } from './identityTask.js';
 import type { BookMeetingResult } from './bookMeetingTask.js';
 import type { JobIntakeResult } from './jobIntakeTask.js';
@@ -51,7 +57,16 @@ export interface CallRootOptions {
 
 export class CallRootAgent extends voice.Agent {
   #opts: CallRootOptions;
-  #started = false;
+  // THE LOOP-BACK (roadmap step 3, commissioned by Dale 2026-07-18). begin_call
+  // may fire more than once: each firing plans a group for the NEW goals, with
+  // identity carried over in #state (planCallTasks skips the identity rung when
+  // the state already holds a confirmed name + number). Capped so a confused
+  // model cannot ask "anything else?" forever.
+  #rounds = 0;
+  static readonly #MAX_ROUNDS = 3;
+  // Shared across rounds ON PURPOSE: the identity rung writes it in round 1 and
+  // every later round's rungs (and the goodbye) read it.
+  #state: CallState = {};
 
   constructor(opts: CallRootOptions) {
     super({
@@ -73,7 +88,12 @@ As soon as you know what they are calling about, call begin_call with:
 
 When in doubt, say YES to a goal — it is far better to ask an extra question later than to miss what they rang for. If a caller says "I'd like a meeting to talk about a job", that is BOTH: wants_meeting=true AND has_job_inquiry=true. "I need to move my appointment" is wants_schedule_change=true. Booking a NEW time is wants_meeting; changing an EXISTING one is wants_schedule_change — a reschedule is the latter. "I'd like to leave a message" or "tell the owner…" is wants_to_leave_message=true — even if the message mentions a job or a callback, leaving a message is the goal, so set wants_to_leave_message (not has_job_inquiry) unless they also clearly want the role briefed for a meeting. "What are your hours?" or "how much do you charge?" is has_questions=true — and a caller who ONLY has questions gets answers immediately, without being asked for a name or number first, so classify it and hand off just as fast.
 
-Do not try to book, or take details, or collect their name yet. Just understand the ask and call begin_call. Everything after that is handled for you.`,
+Do not try to book, or take details, or collect their name yet. Just understand the ask and call begin_call. Everything after that is handled for you.
+
+# After the work is done
+When begin_call's result tells you everything the caller asked for is DONE, your job CHANGES — nothing from the start of the call is yours to redo. Ask exactly one thing: "Anything else I can help you with?" Then:
+- They raise something NEW → your very next action is to CALL begin_call again with the new goals. Their name and number are already on file — NEVER ask for either again.
+- They say no / that's all / thank you → your very next action is to CALL finish_call. finish_call speaks the goodbye — do not say goodbye yourself, and do not ask anything further.`,
       tools: {
         begin_call: llm.tool({
           description:
@@ -120,6 +140,12 @@ Do not try to book, or take details, or collect their name yet. Just understand 
             requested_service?: string;
           }): Promise<string> => this.#runGroup(args),
         }),
+        finish_call: llm.tool({
+          description:
+            "Call when the caller has nothing further ('no thanks', 'that's all'). Speaks the goodbye and ends the call. Only valid AFTER begin_call reported the work done.",
+          parameters: { type: 'object', properties: {}, additionalProperties: false },
+          execute: async (): Promise<string> => this.#finishCall(),
+        }),
       },
     });
     this.#opts = opts;
@@ -137,19 +163,19 @@ Do not try to book, or take details, or collect their name yet. Just understand 
     has_questions?: boolean;
     requested_service?: string;
   }): Promise<string> {
-    // begin_call can only fire once. A second classification mid-call is the
-    // goal-discovery case the snapshotted stack cannot handle — logged, not acted on, so
-    // the spike's known limit is visible rather than silent.
-    if (this.#started) {
+    // Rounds are capped, not forbidden (this used to hard-refuse a second
+    // begin_call — the "snapshotted stack" limit, retired 2026-07-18 by the
+    // loop-back). At the cap, end the call instead of looping forever.
+    this.#rounds += 1;
+    if (this.#rounds > CallRootAgent.#MAX_ROUNDS) {
       getLogger().warn(
-        { event: 'task_group_begin_twice' },
-        'begin_call fired again mid-call — the running group cannot take a new goal (known spike limit)'
+        { event: 'task_group_round_cap' },
+        `begin_call fired more than ${CallRootAgent.#MAX_ROUNDS} times — closing the call`
       );
-      return 'Already handling this call.';
+      return this.#finishCall();
     }
-    this.#started = true;
 
-    const state = {}; // filled by the identity rung, read by the rest AND by the goodbye
+    const state = this.#state; // round 1 fills it; later rounds reuse it
     const deps: CallDeps = {
       ctx: this.#opts.ctx,
       runtime: this.#opts.runtime,
@@ -190,19 +216,31 @@ Do not try to book, or take details, or collect their name yet. Just understand 
       `task group complete — every rung done: ${Object.keys(result.taskResults).join(', ')}`
     );
 
-    // THE CALL IS OVER. END IT — do not hand back to the free-running root agent.
-    //
-    // When the group returns, control would otherwise fall back to THIS agent, whose
-    // instructions are the START-of-call intent step ("understand the ask, collect
-    // identity"). It has no memory that the sub-agents already did all of that, so with
-    // nothing left to do it reverts to its opening job and asks for the name and number
-    // AGAIN — which is exactly what a real call did after everything was booked and
-    // recorded ("I'll need your name and the best phone number...").
-    //
-    // So we speak a fixed, definitive goodbye (no LLM generation, no question that invites
-    // more) and CLOSE the session. The rungs already confirmed the concrete outcomes (the
-    // booked time, the recorded inquiry) as they happened, so there is nothing left to say.
-    const name = (state as { callerName?: string }).callerName;
+    // THE LOOP-BACK (2026-07-18, Dale: "it should have asked, is there anything
+    // else"). Control now returns to the root agent ON PURPOSE — but through
+    // the narrow door gotcha H demands: this tool result IS the phase change.
+    // The model is told the work is done, told the one question to ask, and
+    // told its only two next actions are tools (begin_call again, or
+    // finish_call — which owns the fixed goodbye). Identity persists in #state,
+    // so a second round's plan SKIPS the identity rung and re-collection —
+    // gotcha H's original failure — is structurally off the table.
+    const doneName = (state as { callerName?: string }).callerName;
+    return [
+      `EVERYTHING THE CALLER ASKED FOR IS DONE (completed: ${Object.keys(result.taskResults).join(', ')}).`,
+      doneName ? `The caller is ${doneName}; their number is on file.` : '',
+      `Your job has CHANGED (see "# After the work is done"). Ask the caller exactly: "Anything else I can help you with?" and WAIT for their answer.`,
+      `A NEW request → CALL begin_call with the new goals (never re-ask their name or number).`,
+      `"No" / "that's all" / thanks → CALL finish_call. Do not say goodbye yourself — finish_call says it.`,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  /** The fixed, definitive goodbye + close — no LLM generation, no question
+   *  that invites more. Owned by a TOOL so "nothing else, thanks" has an
+   *  ACTION to complete the call with, exactly like every other rung exit. */
+  async #finishCall(): Promise<string> {
+    const name = this.#state.callerName;
     const goodbye = name
       ? `You're all set, ${name}. Thanks for calling, and have a great day!`
       : `You're all set. Thanks for calling, and have a great day!`;

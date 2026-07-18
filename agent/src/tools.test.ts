@@ -292,6 +292,55 @@ describe('get_customer_context', () => {
   });
 });
 
+describe('attach_meeting_notes — the FULFILLMENT GATE (2026-07-18 address curveball)', () => {
+  // WHO: Dale's off-script live caller — "he needs to know my address". The
+  //       model attached exactly that: a POINTER containing no address.
+  // WHAT: a note that NAMES an address/number/code but carries no digit is
+  //        bounced with the action the model can take (ask for the thing,
+  //        attach the answer). Genuine values carry digits and pass.
+  // WHY: the instruction-level judgment flaps (sim 2/2 then 1/2); this gate is
+  //       the deterministic layer under it.
+  const trackerWith = () => {
+    const t = new CallOutcomeTracker();
+    t.recordBooking('11111111-1111-4111-8111-111111111111');
+    return t;
+  };
+
+  it('SAD: a pointer note ("he will need my address") is bounced, not attached', async () => {
+    const { client, calls } = makeClient([]);
+    const tools = buildTools(makeCtx(), client, undefined, trackerWith());
+    const result = await exec(tools.attach_meeting_notes, {
+      notes: "He'll need my address, since he's coming out to fix the computer.",
+    });
+    expect(result).toContain('does not CONTAIN one');
+    expect(result).toContain('Ask the caller for the thing itself');
+    expect(calls).toHaveLength(0); // nothing reached the backend
+  });
+
+  it('HAPPY: a note CONTAINING the address passes straight through', async () => {
+    const { client, calls } = makeClient([
+      { ok: true, result: { appointment_id: '11111111-1111-4111-8111-111111111111' } },
+    ]);
+    const tools = buildTools(makeCtx(), client, undefined, trackerWith());
+    const result = await exec(tools.attach_meeting_notes, {
+      notes: 'The address is 1060 West Addison Street in Chicago.',
+    });
+    expect(calls).toHaveLength(1);
+    expect(String(result)).toContain('appointment_id');
+  });
+
+  it('HAPPY: a note with no address/number/code vocabulary is untouched by the gate', async () => {
+    const { client, calls } = makeClient([
+      { ok: true, result: { appointment_id: '11111111-1111-4111-8111-111111111111' } },
+    ]);
+    const tools = buildTools(makeCtx(), client, undefined, trackerWith());
+    await exec(tools.attach_meeting_notes, {
+      notes: 'Please use the back entrance; the dog is friendly.',
+    });
+    expect(calls).toHaveLength(1);
+  });
+});
+
 describe('unsatisfiable-advice gates (2026-07-17 silent-call post-mortem)', () => {
   // WHO: the 2026-07-17 browser caller ("Ryan Seacrest", spoken number, no
   //       carrier caller-ID — the same shape as every forwarded-line call).

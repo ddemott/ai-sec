@@ -320,3 +320,34 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(typeof group.run).toBe('function');
   });
 });
+
+describe('LOOP-BACK rounds — identity is done ONCE (2026-07-18)', () => {
+  it('HAPPY: a plan built with a filled state SKIPS the identity rung', () => {
+    // WHO: round 2 of a call — the caller already gave and confirmed name +
+    //       number in round 1; the shared CallState carries them.
+    // WHAT: planCallTasks must not re-collect identity — that is gotcha H's
+    //        original failure ("I'll need your name and the best phone
+    //        number..." after everything was booked), now structurally
+    //        impossible: no identity rung is even planned.
+    // WHY: the anything-else loop-back (Dale, 2026-07-18) re-enters
+    //       begin_call; the plan must respect what earlier rounds learned.
+    const deps = makeDeps();
+    deps.state.callerName = 'Chris Jensen';
+    deps.state.callerPhone = '3126301234';
+    const specs = planCallTasks(
+      { wantsMeeting: false, hasJobInquiry: false, wantsToLeaveMessage: true },
+      deps
+    );
+    expect(specs.map((s) => s.id)).not.toContain('identity');
+    expect(specs.map((s) => s.id)).toContain('take_message');
+  });
+
+  it('SAD: a HALF-known caller (name but no number) still runs identity', () => {
+    // A name without a confirmed number is not identity — the floor under a
+    // contact-needing goal is BOTH.
+    const deps = makeDeps();
+    deps.state.callerName = 'Chris Jensen';
+    const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: false }, deps);
+    expect(specs.map((s) => s.id)).toContain('identity');
+  });
+});

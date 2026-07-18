@@ -1231,6 +1231,26 @@ export function buildTools(
         additionalProperties: false,
       },
       execute: async (args: { notes: string }) => {
+        // THE FULFILLMENT GATE (2026-07-18, Dale's off-script call). The caller
+        // said "he'll need my address"; the model attached exactly that — a
+        // POINTER to an address, containing none — and the owner would have
+        // opened the calendar with nowhere to go. The instructions now tell the
+        // model to ask for the thing itself, but that judgment FLAPS (sim:
+        // 2/2, then 1/2). This gate is the deterministic layer: a note that
+        // NAMES an address / phone number / code and contains no digit almost
+        // certainly mentions the thing without containing it — bounce it with
+        // the action the model can take (rule: every error names a satisfiable
+        // next step). A real address, number, or code carries digits ("1060
+        // West Addison", "312-630-1234", "gate code 4417"), so genuine notes
+        // pass untouched.
+        const namesAThing = /\b(address|phone|number|code)\b/i.test(args.notes);
+        const containsDigits = /\d/.test(args.notes);
+        if (namesAThing && !containsDigits) {
+          return JSON.stringify({
+            error:
+              'This note mentions an address, number, or code but does not CONTAIN one — a note saying the information is needed gives the owner nothing to use. Ask the caller for the thing itself ("Sure — what\'s the address?"), then call attach_meeting_notes again with what they say.',
+          });
+        }
         // The appointment id comes from the outcome tracker — the model never holds a
         // UUID. No booking on this call yet → nothing to attach to; say so honestly
         // instead of 400ing at the backend.
