@@ -182,4 +182,26 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/do NOT ask for them again/i);
     expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/ONE job/i);
   });
+
+  it('SAD: on a booking ERROR the caller re-chooses — the model never substitutes a time', () => {
+    // WHO: the 2026-07-17 evening caller. She said "give me the first one"
+    //       (1:00); the slot had been taken (pre-fix, the availability list
+    //       even offered it); book_with_scheduling refused TIMESLOT_OCCUPIED —
+    //       and the model silently rebooked 2:45 and announced it as done.
+    // WHAT: the instructions pin the renegotiation contract: say what
+    //        happened, offer the remaining times, WAIT for a new choice. The
+    //        time booked must always be one the caller said yes to.
+    // WHEN: any booking-tool error mid-rung — post-#281 that is a genuine
+    //        two-caller race, which a sim cannot stage deterministically, so
+    //        the instruction text IS the honest test layer.
+    // WHERE: BOOK_MEETING_INSTRUCTIONS (rung); prompt.ts carries the same
+    //        rule in the ladder's TIMESLOT_OCCUPIED translation.
+    // WHY: a caller who asked for one time and was told "you're booked" at
+    //       another never agreed to the appointment on the calendar — quiet
+    //       substitution is a consent bug, not a UX nit.
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/TIMESLOT_OCCUPIED/);
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/choosing the replacement is THEIRS/i);
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/WAIT for them to pick again/i);
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/one the caller said yes to/i);
+  });
 });
