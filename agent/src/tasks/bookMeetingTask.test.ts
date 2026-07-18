@@ -191,6 +191,14 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     // WHAT: the instructions pin the renegotiation contract: say what
     //        happened, offer the remaining times, WAIT for a new choice. The
     //        time booked must always be one the caller said yes to.
+    // WHEN: any booking-tool error mid-rung — post-#281 that is a genuine
+    //        two-caller race, which a sim cannot stage deterministically, so
+    //        the instruction text IS the honest test layer.
+    // WHERE: BOOK_MEETING_INSTRUCTIONS (rung); prompt.ts carries the same
+    //        rule in the ladder's TIMESLOT_OCCUPIED translation.
+    // WHY: a caller who asked for one time and was told "you're booked" at
+    //       another never agreed to the appointment on the calendar — quiet
+    //       substitution is a consent bug, not a UX nit.
     expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/TIMESLOT_OCCUPIED/);
     expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/choosing the replacement is THEIRS/i);
     expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/WAIT for them to pick again/i);
