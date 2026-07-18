@@ -138,6 +138,20 @@ const CASES: Case[] = [
     expectFlags: { has_job_inquiry: true },
   },
   {
+    // Another service-request phrasing — no overlap with the pinned live opener,
+    // so the fix generalizes past one sentence.
+    name: 'broken-laptop request is a service call, not a job inquiry',
+    opener: "My laptop's broken and I need somebody to take a look at it.",
+    expectFlags: { wants_meeting: true, has_job_inquiry: false },
+  },
+  {
+    // THE HARD ONE: the caller literally says "a job" about a repair. The new
+    // definition names this exact trap ('even if they call it "a job"').
+    name: 'a repair the caller CALLS "a job" is still a service call',
+    opener: "I've got a job for Dale — my printer's been acting up and I need him to come sort it out.",
+    expectFlags: { wants_meeting: true, has_job_inquiry: false },
+  },
+  {
     name: 'cancel opener hands off as a schedule change',
     opener: 'I need to cancel my appointment tomorrow.',
     expectFlags: { wants_schedule_change: true },
@@ -180,9 +194,26 @@ for (const c of CASES) {
   for (let r = 0; r < RUNS; r++) {
     runs++;
     const { called, args } = await turn(c.opener);
+    // A REQUIRED flag (or any flag expected true) must be EXPLICIT — the old
+    // Boolean(args[k]) check treated a missing argument as false, so
+    // "has_job_inquiry: false" could pass vacuously when the model omitted the
+    // required flag entirely (review on #288). Omitting an OPTIONAL flag
+    // expected false is legitimate — optional-and-absent means false. The
+    // required list is read off the REAL schema above, so it cannot drift.
+    const requiredFlags = new Set(
+      ((beginCall.parameters as { required?: string[] }).required ?? []).filter(Boolean)
+    );
     const flagMisses = Object.entries(c.expectFlags)
-      .filter(([k, v]) => Boolean(args[k]) !== v)
-      .map(([k, v]) => `${k}=${String(args[k])} (want ${v})`);
+      .filter(
+        ([k, v]) =>
+          (args[k] === undefined && (v === true || requiredFlags.has(k))) ||
+          (args[k] !== undefined && Boolean(args[k]) !== v)
+      )
+      .map(([k, v]) =>
+        args[k] === undefined
+          ? `${k} MISSING (want explicit ${v})`
+          : `${k}=${String(args[k])} (want ${v})`
+      );
     if (called && flagMisses.length === 0) {
       passed++;
       console.log(`PASS  ${c.name}`);
