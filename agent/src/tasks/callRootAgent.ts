@@ -80,13 +80,13 @@ This applies to a MESSAGE exactly as much as a booking: you never take the messa
 
 As soon as you know what they are calling about, call begin_call with:
 - wants_meeting: true if they want to make a NEW appointment, meeting, call, viewing or demo — even mentioned in passing.
-- has_job_inquiry: true if they mentioned a job, role, contract, project, or hiring.
+- has_job_inquiry: true ONLY if they are bringing a job, role, contract position, or hiring opportunity TO the owner — a recruiter, staffing agency, or someone pitching work for the owner to take or a position to fill. A caller asking the BUSINESS to come do work for THEM (fix, repair, build, install, look at something) is a service request — that is wants_meeting, NOT has_job_inquiry, even if they call it "a job".
 - wants_schedule_change: true if they want to CANCEL or RESCHEDULE an appointment they ALREADY have.
 - wants_to_leave_message: true if they want to leave a message, have the owner call them back, or pass something along that is not a booking or a role.
 - has_questions: true if they are asking about the business — hours, pricing, services, policies, location, or anything else factual.
 - requested_service: their OWN WORDS for what they want ("a meeting about a contract role", "a call with the owner"). Leave blank if unclear.
 
-When in doubt, say YES to a goal — it is far better to ask an extra question later than to miss what they rang for. If a caller says "I'd like a meeting to talk about a job", that is BOTH: wants_meeting=true AND has_job_inquiry=true. "I need to move my appointment" is wants_schedule_change=true. Booking a NEW time is wants_meeting; changing an EXISTING one is wants_schedule_change — a reschedule is the latter. "I'd like to leave a message" or "tell the owner…" is wants_to_leave_message=true — even if the message mentions a job or a callback, leaving a message is the goal, so set wants_to_leave_message (not has_job_inquiry) unless they also clearly want the role briefed for a meeting. "What are your hours?" or "how much do you charge?" is has_questions=true — and a caller who ONLY has questions gets answers immediately, without being asked for a name or number first, so classify it and hand off just as fast.
+When in doubt, say YES to a goal — it is far better to ask an extra question later than to miss what they rang for. If a caller says "I'd like a meeting to talk about a job", that is BOTH: wants_meeting=true AND has_job_inquiry=true. "I need to move my appointment" is wants_schedule_change=true. Booking a NEW time is wants_meeting; changing an EXISTING one is wants_schedule_change — a reschedule is the latter. "I'd like to leave a message" or "tell the owner…" is wants_to_leave_message=true — even if the message mentions a job or a callback, leaving a message is the goal, so set wants_to_leave_message (not has_job_inquiry) unless they also clearly want the role briefed for a meeting. "What are your hours?" or "how much do you charge?" is has_questions=true — and a caller who ONLY has questions gets answers immediately, without being asked for a name or number first, so classify it and hand off just as fast. The doubt rule does not manufacture job inquiries: "can someone come fix my computer" is wants_meeting=true and has_job_inquiry=false — the "job" there is the work they want done, not a role for the owner.
 
 Do not try to book, or take details, or collect their name yet. Just understand the ask and call begin_call. Everything after that is handled for you.
 
@@ -107,7 +107,8 @@ When begin_call's result tells you everything the caller asked for is DONE, your
               },
               has_job_inquiry: {
                 type: 'boolean',
-                description: 'They mentioned a job, role, contract, project, or hiring.',
+                description:
+                  'They are bringing a job/role/position TO the owner (recruiting, staffing, hiring). False for a caller asking the business to do work for them — that is a service request (wants_meeting).',
               },
               wants_schedule_change: {
                 type: 'boolean',

@@ -120,6 +120,38 @@ const CASES: Case[] = [
     expectFlags: { wants_meeting: true },
   },
   {
+    // THE FLAP (two live calls, 2026-07-18): a service request — someone asking the
+    // BUSINESS to come do work — kept classifying has_job_inquiry=true, planning a
+    // job rung, and interrogating a repair caller about "the role" ("which company
+    // are you calling from?"). The not_a_job escape saves the call, but the router
+    // should never have sent it there: has_job_inquiry is a role brought TO the
+    // owner (recruiting/staffing), not work requested FROM the business.
+    name: 'service request is NOT a job inquiry (2026-07-18 live flap)',
+    opener: 'Hi. I was wondering if someone can come to my house and fix my computer.',
+    expectFlags: { wants_meeting: true, has_job_inquiry: false },
+  },
+  {
+    // The other direction must not regress: a recruiter pitching a role IS a job
+    // inquiry even though the word "job" never appears.
+    name: 'recruiter pitch stays a job inquiry (guard the other direction)',
+    opener: "I'm calling from a staffing agency — we have a contract position we'd like Dale to consider.",
+    expectFlags: { has_job_inquiry: true },
+  },
+  {
+    // Another service-request phrasing — no overlap with the pinned live opener,
+    // so the fix generalizes past one sentence.
+    name: 'broken-laptop request is a service call, not a job inquiry',
+    opener: "My laptop's broken and I need somebody to take a look at it.",
+    expectFlags: { wants_meeting: true, has_job_inquiry: false },
+  },
+  {
+    // THE HARD ONE: the caller literally says "a job" about a repair. The new
+    // definition names this exact trap ('even if they call it "a job"').
+    name: 'a repair the caller CALLS "a job" is still a service call',
+    opener: "I've got a job for Dale — my printer's been acting up and I need him to come sort it out.",
+    expectFlags: { wants_meeting: true, has_job_inquiry: false },
+  },
+  {
     name: 'cancel opener hands off as a schedule change',
     opener: 'I need to cancel my appointment tomorrow.',
     expectFlags: { wants_schedule_change: true },
@@ -162,9 +194,26 @@ for (const c of CASES) {
   for (let r = 0; r < RUNS; r++) {
     runs++;
     const { called, args } = await turn(c.opener);
+    // A REQUIRED flag (or any flag expected true) must be EXPLICIT — the old
+    // Boolean(args[k]) check treated a missing argument as false, so
+    // "has_job_inquiry: false" could pass vacuously when the model omitted the
+    // required flag entirely (review on #288). Omitting an OPTIONAL flag
+    // expected false is legitimate — optional-and-absent means false. The
+    // required list is read off the REAL schema above, so it cannot drift.
+    const requiredFlags = new Set(
+      ((beginCall.parameters as { required?: string[] }).required ?? []).filter(Boolean)
+    );
     const flagMisses = Object.entries(c.expectFlags)
-      .filter(([k, v]) => Boolean(args[k]) !== v)
-      .map(([k, v]) => `${k}=${String(args[k])} (want ${v})`);
+      .filter(
+        ([k, v]) =>
+          (args[k] === undefined && (v === true || requiredFlags.has(k))) ||
+          (args[k] !== undefined && Boolean(args[k]) !== v)
+      )
+      .map(([k, v]) =>
+        args[k] === undefined
+          ? `${k} MISSING (want explicit ${v})`
+          : `${k}=${String(args[k])} (want ${v})`
+      );
     if (called && flagMisses.length === 0) {
       passed++;
       console.log(`PASS  ${c.name}`);

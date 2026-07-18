@@ -566,6 +566,21 @@ lives on the function.")
     a MID-INTAKE BAIL scenario (real job caller who refuses the detail questions):
     customer_messages row lands, no job_inquiries row, rung completes.
 
+    **Second corollary: the escape is the net, not the fix — teach the router the
+    boundary.** A SECOND live call (2026-07-18, ~7 AM) flapped "can someone come to my
+    house and fix my computer" into has_job_inquiry=true again; the escape fired
+    (booking preserved, no fabricated row) but the caller still heard "which company
+    are you calling from?" after booking a repair visit, and the escape turn deflected
+    to "reach out to technical support" — at the business that IS the technical
+    support. The flag's DEFINITION was the bug: "mentioned a job, role, contract,
+    project, or hiring" matches a service request, where "the job" is the work, not a
+    role. Redefined in both places the model sees it (instruction bullet + schema
+    description) as a role brought TO the owner (recruiting/staffing/hiring) vs work
+    requested FROM the business, with an explicit carve-out on the when-in-doubt rule.
+    Pinned in sim-begincall (the eval that reads the REAL instructions off the
+    instance): the repair opener failed 2/3 runs pre-fix, 30/30 post-fix, including a
+    recruiter-pitch guard so the true direction cannot regress.
+
 ### How to duplicate for a new vertical
 
 The intake rung is the only vertical-specific piece. A real-estate line is the same
