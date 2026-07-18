@@ -142,6 +142,10 @@ interface Persona {
   questionFacts?: string; // what they want to know, and when they're satisfied
   // hard behaviours the persona MUST exhibit (adversarial)
   refusesPhone?: boolean; // never gives a number
+  // THE MISROUTE (2026-07-18): the SCENARIO plans a job rung (simulating an
+  // intent flap), but this caller has NO job — if asked about roles, companies,
+  // hiring, rates, they say plainly it is not about a job.
+  deniesJob?: boolean;
 }
 
 const STYLES: Record<string, string> = {
@@ -191,6 +195,9 @@ function personaSystem(p: Persona, style: string): string {
   }
   if (p.wantsMeeting) {
     facts.push(
+      p.deniesJob
+        ? `You are NOT calling about a job, a role, or hiring — you have no such thing. If the receptionist asks which company you are from, whether you are hiring, about rates, or anything job-related, say plainly (in your own words): "No — this isn't about a job, I just want my computer fixed." Repeat it as often as needed; never invent job details to be polite.`
+        : '',
       p.meetingNotesHint && !p.meetingNotesFact
         ? (() => {
             // Fail fast (review on #286): a hint without its fact would
@@ -607,6 +614,25 @@ const SCENARIOS: Scenario[] = [
       jobInquiry: false,
       descriptionMatch: /Caller notes:.*(1060|Addison)/is,
     },
+    styles: ['plain', 'chatty'],
+  },
+  {
+    title: 'MISROUTE: intent flapped a repair into a job — not_a_job escapes, nobody is trapped',
+    persona: {
+      name: 'Jan Smith',
+      phone: '555-901-0031',
+      goalLine: 'you want to book a time for Dale to come fix your computer at your house',
+      wantsMeeting: true,
+      // TRUE ON PURPOSE: this simulates the intent step's flap (the live
+      // 2026-07-18 call classified "fix my computer at my house" as a job).
+      hasJobInquiry: true,
+      requestedService: 'fixing my computer',
+      deniesJob: true,
+    },
+    // The booking lands; NO job inquiry row exists (the rung escaped via
+    // not_a_job instead of interrogating or fabricating); the run completes
+    // instead of hanging on an unfinishable rung.
+    expect: { appointment: true, jobInquiry: false },
     styles: ['plain', 'chatty'],
   },
   {

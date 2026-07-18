@@ -13,6 +13,7 @@ import {
   makeMeetingNotesRung,
   MEETING_NOTES_INSTRUCTIONS,
 } from './meetingContextTask.js';
+import { JOB_INTAKE_INSTRUCTIONS } from './jobIntakeTask.js';
 
 beforeAll(() => {
   initializeLogger({ pretty: false, level: 'silent' });
@@ -152,7 +153,39 @@ describe('MeetingContextTask — template dispatch', () => {
       messagingTools: { capture_job_inquiry: fakeTool('{}') },
       meetingBooked: true,
     });
-    expect(Object.keys(task.toolCtx)).toEqual(['capture_job_inquiry']);
+    // not_a_job joined 2026-07-18 — the escape hatch for a misrouted call
+    // (intent flapped "fix my computer" into has_job_inquiry and the caller
+    // was trapped in a job interrogation with no exit).
+    expect(Object.keys(task.toolCtx).sort()).toEqual(['capture_job_inquiry', 'not_a_job']);
+  });
+
+  it('HAPPY: not_a_job ESCAPES a misrouted job rung — no backend call, rung done (2026-07-18)', async () => {
+    // WHO: the live caller who wanted a computer repair; intent flapped
+    //       has_job_inquiry=true and the unskippable rung became a trap ("I
+    //       can only assist with job inquiries… I can't take messages" → hung
+    //       up). WHAT: calling not_a_job completes the rung immediately with
+    //       outcome 'not_a_job'; capture_job_inquiry is never invoked, and the
+    //       group can move on to the anything-else loop-back.
+    const capture = fakeTool(JSON.stringify({ job_inquiry_id: 'never' }));
+    const task = makeMeetingContextRung({
+      template: 'job',
+      messagingTools: { capture_job_inquiry: capture },
+      meetingBooked: true,
+    });
+    expect(task.done).toBe(false);
+    const tool = (task.toolCtx as Record<string, unknown>).not_a_job as {
+      execute: (a: unknown, c: unknown) => Promise<unknown>;
+    };
+    await tool.execute({}, { ctx: {}, toolCallId: 'tc' });
+    expect(task.done, 'not_a_job completes the rung').toBe(true);
+  });
+
+  it('SAD: the escape is taught FIRST — it outranks the interview', () => {
+    expect(JOB_INTAKE_INSTRUCTIONS.indexOf('CALL not_a_job')).toBeGreaterThan(-1);
+    expect(JOB_INTAKE_INSTRUCTIONS.indexOf('CALL not_a_job')).toBeLessThan(
+      JOB_INTAKE_INSTRUCTIONS.indexOf('caller_company')
+    );
+    expect(JOB_INTAKE_INSTRUCTIONS).toMatch(/outranks everything below/i);
   });
 
   it('HAPPY: template "default" builds the notes rung (attach + no_notes, plus the fallback)', () => {

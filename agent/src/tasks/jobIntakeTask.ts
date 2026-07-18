@@ -23,8 +23,13 @@ import { type llm, type voice } from '@livekit/agents';
 import { makeRung, idExtractor } from './rung.js';
 
 export interface JobIntakeResult {
-  jobInquiryId: string;
-  raw: unknown;
+  /** 'captured' when a real job_inquiries row landed; 'not_a_job' when the
+   *  intent step over-counted and the caller has no role to discuss (the
+   *  escape hatch — see NOT_A_JOB below). */
+  outcome: 'captured' | 'not_a_job';
+  /** Present when outcome is 'captured'. */
+  jobInquiryId?: string;
+  raw?: unknown;
 }
 
 export interface JobIntakeTaskOptions {
@@ -49,7 +54,9 @@ export interface JobIntakeTaskOptions {
 export const JOB_INTAKE_INTRO_BOOKED = `You have booked the meeting. NOW take the details of the role, so the owner can come to it prepared. Open with something like: "Great — you're booked in. While I have you, let me grab a few details about the role."`;
 export const JOB_INTAKE_INTRO_NO_BOOKING = `The caller wants to pass a role to the owner (no meeting was booked). Take the details so the owner has them. Open with something like: "Sure — let me grab a few details about the role so I can pass them along."`;
 
-export const JOB_INTAKE_INSTRUCTIONS = `Take the details of the role so the owner can come prepared. You already have the caller's name and number — do NOT ask again.
+export const JOB_INTAKE_INSTRUCTIONS = `FIRST, one check that outranks everything below: if the caller says — or has already said — that this is NOT about a job, a role, or hiring ("no, this is for fixing my computer", "I'm not calling about a job"), your VERY NEXT action is to CALL not_a_job. Never insist on the role questions, never explain that you "only handle job inquiries", never refuse what they actually asked for. The routing step deliberately over-counts jobs; this exit is how a mistaken route costs one sentence instead of the whole call. (A live caller who wanted a computer repair was interrogated about companies and rates, asked to leave a message, was told "I can't take messages", and hung up — every one of those sentences was the absence of this exit.)
+
+Otherwise: take the details of the role so the owner can come prepared. You already have the caller's name and number — do NOT ask again.
 
 Then work these questions ONE AT A TIME. Skip any they have already answered. Acknowledge each answer before the next.
 
@@ -91,12 +98,37 @@ export function makeJobIntakeRung(opts: JobIntakeTaskOptions): voice.AgentTask<J
   return makeRung<JobIntakeResult>({
     instructions: [opts.knownCaller, intro, JOB_INTAKE_INSTRUCTIONS].filter(Boolean).join('\n\n'),
     tools: passthrough,
-    completion: {
-      kind: 'action',
-      toolName: 'capture_job_inquiry',
-      realTool: realCapture,
-      extract: idExtractor('job_inquiry_id', (id, raw) => ({ jobInquiryId: id, raw })),
-      onDone: onCaptured,
-    },
+    completion: [
+      {
+        kind: 'action',
+        toolName: 'capture_job_inquiry',
+        realTool: realCapture,
+        extract: idExtractor('job_inquiry_id', (id, raw) => ({
+          outcome: 'captured' as const,
+          jobInquiryId: id,
+          raw,
+        })),
+        onDone: onCaptured,
+      },
+      {
+        // THE ESCAPE HATCH (2026-07-18 live call). An unskippable rung is the
+        // architecture's whole point — but a MISPLANNED rung is unskippable
+        // too: intent flapped "fix my computer" into has_job_inquiry=true and
+        // the caller was trapped in a job interrogation with no way out (and,
+        // holding no take_message tool, the model truthfully said "I can't
+        // take messages"). Same pattern as the scheduling rung's
+        // no_appointment_change and the phase routers' escape doors:
+        // narrowing must never remove an exit. With the loop-back live, the
+        // recovery is complete: not_a_job pops the rung, the group finishes,
+        // "anything else?" fires, and a message request re-enters begin_call.
+        kind: 'collect',
+        toolName: 'not_a_job',
+        description:
+          'Call the INSTANT it is clear the caller does NOT have a job or role to discuss — the call was routed here by mistake. Completes this step immediately so the call can move on to what they actually want.',
+        parameters: { type: 'object', properties: {}, additionalProperties: false },
+        build: () => ({ outcome: 'not_a_job' as const }),
+        ack: 'Understood — moving on.',
+      },
+    ],
   });
 }

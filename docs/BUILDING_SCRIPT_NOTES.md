@@ -538,6 +538,22 @@ lives on the function.")
     both properties (take_message and page_owner_via_sms await `sendSms` inline — Telnyx is
     fast today, but the class is the same).
 
+13. **An unskippable rung must carry an escape for the case where the RUNG was the
+    mistake.** (2026-07-18, a live call.) Intent flapped "fix my computer at my house"
+    into has_job_inquiry=true — deliberately, since the router over-counts on purpose —
+    and the job rung's great virtue (the model cannot skip it) became a trap: the caller
+    said "this is for fixing my computer" three times, asked to leave a message, was
+    told "I can't take messages" (the rung holds no such tool — honest and terrible),
+    and hung up. The cure is the scheduling rung's no_appointment_change pattern,
+    generalized: every rung whose PLANNING can be wrong gets a narrow synthetic exit
+    (not_a_job) whose instruction OUTRANKS the interview and sits FIRST (the ordering
+    lesson: a rule below an imperative never runs). With the loop-back live the
+    recovery is complete: escape → group finishes → "anything else?" → the caller's
+    real need re-enters begin_call. Sim-pinned with a MISROUTE scenario that plans the
+    job rung against a caller who denies having one: booking lands, no inquiry row is
+    fabricated, the run completes. "Narrowing must never remove an exit" — and neither
+    may certainty of purpose.
+
 ### How to duplicate for a new vertical
 
 The intake rung is the only vertical-specific piece. A real-estate line is the same
