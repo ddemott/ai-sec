@@ -174,6 +174,42 @@ BEGIN
         END LOOP;
     END IF;
 
+    -- NARROW SHIFT GUARD for the skill-less path (review on #285). The ELSE
+    -- branch above historically books a resource with NO shift check at all
+    -- ("fall open") — which re-opens the midnight-wrap hole for services
+    -- without required skills. Fall-open is kept ONLY for tenants with no
+    -- schedule data on the date; when non-off schedule rows exist for the day
+    -- and none of them cover the window (wrap-aware, same v_*_time_of_day as
+    -- the skills branch), the building is closed at that time and the booking
+    -- is refused.
+    IF v_found
+       AND (array_length(p_required_skills, 1) IS NULL OR array_length(p_required_skills, 1) = 0)
+       AND EXISTS (
+            SELECT 1 FROM employee_schedule es
+             WHERE es.tenant_id = p_tenant_id
+               AND es.shift_date = v_shift_date
+               AND es.is_off = false
+       )
+       AND NOT EXISTS (
+            SELECT 1 FROM employee_schedule es
+              JOIN employees emp ON emp.employee_id = es.employee_id
+             WHERE es.tenant_id = p_tenant_id
+               AND es.shift_date = v_shift_date
+               AND es.is_off = false
+               AND es.start_time <= v_start_time_of_day
+               AND es.end_time >= v_end_time_of_day
+               AND emp.tenant_id = p_tenant_id
+               AND emp.is_active = true
+               AND (emp.is_deleted IS NULL OR emp.is_deleted = false)
+       )
+    THEN
+        RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, NULL::TEXT, NULL::UUID, NULL::TEXT,
+            NULL::TIMESTAMPTZ, NULL::TIMESTAMPTZ, v_customer_id,
+            'No employee available during requested time'::TEXT,
+            'EMPLOYEE_NOT_SCHEDULED'::TEXT;
+        RETURN;
+    END IF;
+
     IF NOT v_found THEN
         IF array_length(p_required_skills, 1) IS NOT NULL AND array_length(p_required_skills, 1) > 0 THEN
             SELECT EXISTS(

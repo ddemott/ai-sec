@@ -532,6 +532,60 @@ describe('findNextAvailableSlots', () => {
       expect(r.error_code).toBe('EMPLOYEE_NOT_SCHEDULED');
     });
 
+    it('SAD: the SKILL-LESS path refuses a midnight wrap when schedules exist (review on #285)', async () => {
+      if (!dbAvailable) return;
+      // WHO: a service with no required skills — the RPC's ELSE branch, which
+      //       historically booked a resource with NO shift check at all.
+      // WHAT: with non-off schedule rows on the date and none covering the
+      //        window, the booking is refused — the narrow guard closes the
+      //        wrap hole for skill-less services too.
+      const t = await seedTenant();
+      const res = await root.query<{ success: boolean; error_code: string | null }>(
+        `SELECT success, error_code FROM book_with_scheduling_atomic(
+           p_tenant_id => $1, p_phone => '+15550007777', p_customer_name => 'Skilless',
+           p_start_time => '2026-06-16T04:30:00Z'::timestamptz,
+           p_end_time => '2026-06-16T05:00:00Z'::timestamptz,
+           p_duration_minutes => 30
+         )`,
+        [t]
+      );
+      expect(res.rows[0].success).toBe(false);
+      expect(res.rows[0].error_code).toBe('EMPLOYEE_NOT_SCHEDULED');
+
+      // ...and the same skill-less path INSIDE the shift still books.
+      const okRes = await root.query<{ success: boolean; error_code: string | null }>(
+        `SELECT success, error_code FROM book_with_scheduling_atomic(
+           p_tenant_id => $1, p_phone => '+15550007777', p_customer_name => 'Skilless',
+           p_start_time => '${DATE}T19:00:00Z'::timestamptz,
+           p_end_time => '${DATE}T19:30:00Z'::timestamptz,
+           p_duration_minutes => 30
+         )`,
+        [t]
+      );
+      expect(okRes.rows[0].error_code).toBeNull();
+      expect(okRes.rows[0].success).toBe(true);
+    });
+
+    it('HAPPY: a tenant with NO schedule data on the date keeps the historical fall-open', async () => {
+      if (!dbAvailable) return;
+      // WHY: the guard is deliberately NARROW — a tenant that does not manage
+      //       schedules must keep booking exactly as before; only a day with
+      //       schedule rows enforces them.
+      const tenantId = await createTenant(root, 'NoSchedule Co', 'ai-platform', TZCO);
+      await createResource(root, tenantId, 'Line 1');
+      const res = await root.query<{ success: boolean; error_code: string | null }>(
+        `SELECT success, error_code FROM book_with_scheduling_atomic(
+           p_tenant_id => $1, p_phone => '+15550006666', p_customer_name => 'Open',
+           p_start_time => '2026-06-16T04:30:00Z'::timestamptz,
+           p_end_time => '2026-06-16T05:00:00Z'::timestamptz,
+           p_duration_minutes => 30
+         )`,
+        [tenantId]
+      );
+      expect(res.rows[0].error_code).toBeNull();
+      expect(res.rows[0].success).toBe(true);
+    });
+
     it("SUGGESTER: the day's LAST offer is 4:30 PM — never 4:45, never a wrap", async () => {
       if (!dbAvailable) return;
       const t = await seedTenant();
