@@ -34,6 +34,7 @@ import {
   type CallRuntime,
   type CallState,
 } from './callPlan.js';
+import { sanitizeVolunteered } from './sanitize.js';
 import type { IdentityResult } from './identityTask.js';
 import type { BookMeetingResult } from './bookMeetingTask.js';
 import type { JobIntakeResult } from './jobIntakeTask.js';
@@ -195,11 +196,16 @@ When begin_call's result tells you everything the caller asked for is DONE, your
     // Volunteered identity facts survive the hand-off: each rung is its own agent, so a
     // name spoken in the opener is invisible to the identity rung unless carried here.
     // Confirmed values always win; volunteered ones only fill gaps.
-    if (goals.caller_name?.trim() && !state.callerName) {
-      state.volunteeredName = goals.caller_name.trim();
+    // Sanitized at the choke point: these strings are caller-derived and get
+    // interpolated into rung PROMPTS downstream — flatten and cap before they
+    // enter shared state (review on #289).
+    const volunteeredName = sanitizeVolunteered(goals.caller_name, 80);
+    const volunteeredPhone = sanitizeVolunteered(goals.caller_phone, 30);
+    if (volunteeredName && !state.callerName) {
+      state.volunteeredName = volunteeredName;
     }
-    if (goals.caller_phone?.trim() && !state.callerPhone) {
-      state.volunteeredPhone = goals.caller_phone.trim();
+    if (volunteeredPhone && !state.callerPhone) {
+      state.volunteeredPhone = volunteeredPhone;
     }
     const deps: CallDeps = {
       ctx: this.#opts.ctx,

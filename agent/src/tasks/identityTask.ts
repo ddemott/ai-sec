@@ -36,6 +36,7 @@
 import { type llm, type voice } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
 import { makeRung } from './rung.js';
+import { sanitizeVolunteered } from './sanitize.js';
 
 export interface IdentityResult {
   name: string;
@@ -109,8 +110,12 @@ export function makeIdentityRung(opts: IdentityTaskOptions): voice.AgentTask<Ide
     ? `You already know why the caller rang: "${opts.requestedService.trim()}". Your only task here is their name and number; the system will act on their request the instant you confirm their identity.`
     : '';
 
-  const volunteeredName = opts.volunteeredName?.trim();
-  const volunteeredPhone = opts.volunteeredPhone?.trim();
+  // Defense in depth: the root agent sanitizes before state, but THIS is the site
+  // where caller-derived text meets a prompt — so it flattens and caps again. A
+  // future caller of makeIdentityRung must not be able to reintroduce injection by
+  // skipping the state path (review on #289).
+  const volunteeredName = sanitizeVolunteered(opts.volunteeredName, 80);
+  const volunteeredPhone = sanitizeVolunteered(opts.volunteeredPhone, 30);
 
   return makeRung<IdentityResult>({
     instructions: [

@@ -21,6 +21,7 @@
  */
 import { type llm, type voice, beta } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
+export { sanitizeVolunteered } from './sanitize.js';
 import { makeIdentityRung, type IdentityResult } from './identityTask.js';
 import { makeBookMeetingRung, type BookMeetingResult } from './bookMeetingTask.js';
 import type { JobIntakeResult } from './jobIntakeTask.js';
