@@ -159,6 +159,34 @@ describe('MeetingContextTask — template dispatch', () => {
     expect(Object.keys(task.toolCtx).sort()).toEqual(['capture_job_inquiry', 'not_a_job']);
   });
 
+  it('HAPPY: mid-intake "just take a message" is a REAL exit — take_message completes the job rung', async () => {
+    // WHO: Dale's question, 2026-07-18: "in the middle of asking for a job can
+    //       someone ask just to leave a message instead?" Before this, the job
+    //       rung held no message tool, so the honest answer was a refusal.
+    // WHAT: with takeMessage wired, the fallback mirrors the booking and notes
+    //        rungs — a real write, and a real message_id completes the rung
+    //        with outcome 'message'.
+    const onMessageTaken = vi.fn();
+    const captureCalled = vi.fn();
+    const capture = fakeTool(JSON.stringify({ job_inquiry_id: 'never' }), captureCalled);
+    const takeMessage = fakeTool(JSON.stringify({ saved: true, message_id: 'msg-77' }));
+    const task = makeMeetingContextRung({
+      template: 'job',
+      messagingTools: { capture_job_inquiry: capture },
+      takeMessage,
+      meetingBooked: true,
+      onMessageTaken,
+    });
+    expect(Object.keys(task.toolCtx)).toContain('take_message');
+    const tool = (task.toolCtx as Record<string, unknown>).take_message as {
+      execute: (a: unknown, c: unknown) => Promise<unknown>;
+    };
+    await tool.execute({ message: 'have Dale call me about the role' }, { ctx: {}, toolCallId: 'tc' });
+    expect(task.done, 'a real message_id ends the rung').toBe(true);
+    expect(onMessageTaken).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'msg-77' }));
+    expect(captureCalled, 'no job row when the caller bailed to a message').not.toHaveBeenCalled();
+  });
+
   it('HAPPY: not_a_job ESCAPES a misrouted job rung — no backend call, rung done (2026-07-18)', async () => {
     // WHO: the live caller who wanted a computer repair; intent flapped
     //       has_job_inquiry=true and the unskippable rung became a trap ("I
@@ -166,7 +194,8 @@ describe('MeetingContextTask — template dispatch', () => {
     //       up). WHAT: calling not_a_job completes the rung immediately with
     //       outcome 'not_a_job'; capture_job_inquiry is never invoked, and the
     //       group can move on to the anything-else loop-back.
-    const capture = fakeTool(JSON.stringify({ job_inquiry_id: 'never' }));
+    const captureCalled = vi.fn();
+    const capture = fakeTool(JSON.stringify({ job_inquiry_id: 'never' }), captureCalled);
     const task = makeMeetingContextRung({
       template: 'job',
       messagingTools: { capture_job_inquiry: capture },
@@ -178,6 +207,7 @@ describe('MeetingContextTask — template dispatch', () => {
     };
     await tool.execute({}, { ctx: {}, toolCallId: 'tc' });
     expect(task.done, 'not_a_job completes the rung').toBe(true);
+    expect(captureCalled, 'the escape must not touch the backend').not.toHaveBeenCalled();
   });
 
   it('SAD: the escape is taught FIRST — it outranks the interview', () => {

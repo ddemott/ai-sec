@@ -149,13 +149,16 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(instr).toMatch(/resolve it against TODAY/i);
   });
 
-  it('SAD: the job template gets ONLY capture_job_inquiry — nothing to wander into', () => {
+  it('SAD: the job template gets only its LOAD-BEARING tools — nothing to wander into', () => {
     const specs = planCallTasks({ wantsMeeting: false, hasJobInquiry: true }, makeDeps());
     const intake = specs.find((s) => s.id === 'meeting_context')!;
     const names = Object.keys(intake.factory().toolCtx);
     expect(names).toContain('capture_job_inquiry');
+    // take_message joined 2026-07-18 as a COMPLETION (the mid-intake "just take a
+    // message instead" fallback, mirroring the booking rung's) — load-bearing, so
+    // rule 8 still holds: every tool here can END the rung.
+    expect(names).toContain('take_message');
     expect(names).not.toContain('book_with_scheduling');
-    expect(names).not.toContain('take_message');
     expect(names).not.toContain('attach_meeting_notes'); // the job SUMMARY is stamped by the backend, not a second tool
   });
 

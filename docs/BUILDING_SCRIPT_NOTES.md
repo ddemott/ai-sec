@@ -554,6 +554,18 @@ lives on the function.")
     fabricated, the run completes. "Narrowing must never remove an exit" — and neither
     may certainty of purpose.
 
+    **Corollary (same day): the escape covers "wrong rung"; a caller on the RIGHT rung
+    can still refuse to walk it.** Dale's question — "in the middle of asking for a job
+    can someone ask just to leave a message instead?" — and the answer was no: the job
+    rung held no take_message, so a real recruiter in a hurry got the same refusal as
+    the misrouted repair caller. take_message is now a third COMPLETION of the job rung
+    (mirroring the booking and notes rungs' fallback — an offer to "pass it along" must
+    always have a write behind it), with an instruction bullet: never refuse a message;
+    calling take_message IS taking one. Rule 8 ("a rung sees only its load-bearing
+    tools") is unviolated — a completion is load-bearing by definition. Sim-pinned with
+    a MID-INTAKE BAIL scenario (real job caller who refuses the detail questions):
+    customer_messages row lands, no job_inquiries row, rung completes.
+
 ### How to duplicate for a new vertical
 
 The intake rung is the only vertical-specific piece. A real-estate line is the same

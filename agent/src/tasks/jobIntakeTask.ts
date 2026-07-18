@@ -25,10 +25,14 @@ import { makeRung, idExtractor } from './rung.js';
 export interface JobIntakeResult {
   /** 'captured' when a real job_inquiries row landed; 'not_a_job' when the
    *  intent step over-counted and the caller has no role to discuss (the
-   *  escape hatch — see NOT_A_JOB below). */
-  outcome: 'captured' | 'not_a_job';
+   *  escape hatch); 'message' when the caller preferred to leave a message
+   *  mid-intake and one was really recorded (the same honest fallback the
+   *  booking and notes rungs carry). */
+  outcome: 'captured' | 'not_a_job' | 'message';
   /** Present when outcome is 'captured'. */
   jobInquiryId?: string;
+  /** Present when outcome is 'message'. */
+  messageId?: string;
   raw?: unknown;
 }
 
@@ -41,7 +45,13 @@ export interface JobIntakeTaskOptions {
   /** Was a meeting booked before this rung? Controls the opener — on a JOB-ONLY call there
    *  is no booking, so "you're booked in" would be a lie (the E2E caught it). */
   meetingBooked?: boolean;
+  /** take_message — the mid-intake fallback (2026-07-18, Dale: "can someone ask
+   *  just to leave a message instead?"). A caller who would rather leave a
+   *  message than answer the role questions gets a REAL write, not a refusal —
+   *  the same honest fallback the booking and notes rungs already carry. */
+  takeMessage?: llm.ToolContext[string];
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
+  onMessageTaken?: (r: { messageId: string; raw: unknown }) => Promise<void> | void;
 }
 
 /**
@@ -55,6 +65,8 @@ export const JOB_INTAKE_INTRO_BOOKED = `You have booked the meeting. NOW take th
 export const JOB_INTAKE_INTRO_NO_BOOKING = `The caller wants to pass a role to the owner (no meeting was booked). Take the details so the owner has them. Open with something like: "Sure — let me grab a few details about the role so I can pass them along."`;
 
 export const JOB_INTAKE_INSTRUCTIONS = `FIRST, one check that outranks everything below: if the caller says — or has already said — that this is NOT about a job, a role, or hiring ("no, this is for fixing my computer", "I'm not calling about a job"), your VERY NEXT action is to CALL not_a_job. Never insist on the role questions, never explain that you "only handle job inquiries", never refuse what they actually asked for. The routing step deliberately over-counts jobs; this exit is how a mistaken route costs one sentence instead of the whole call. (A live caller who wanted a computer repair was interrogated about companies and rates, asked to leave a message, was told "I can't take messages", and hung up — every one of those sentences was the absence of this exit.)
+
+If at ANY point they would rather just leave a message than answer the questions ("just have him call me", "can you pass it along instead", "I don't have time for this") — your VERY NEXT action is to CALL take_message with their name and what they want passed on. Never refuse a message, and never say you can't take one: calling take_message IS taking one, and it finishes this step.
 
 Otherwise: take the details of the role so the owner can come prepared. You already have the caller's name and number — do NOT ask again.
 
@@ -110,6 +122,24 @@ export function makeJobIntakeRung(opts: JobIntakeTaskOptions): voice.AgentTask<J
         })),
         onDone: onCaptured,
       },
+      ...(opts.takeMessage
+        ? [
+            {
+              kind: 'action' as const,
+              toolName: 'take_message',
+              realTool: opts.takeMessage,
+              extract: idExtractor('message_id', (id, raw) => ({
+                outcome: 'message' as const,
+                messageId: id,
+                raw,
+              })),
+              onDone: opts.onMessageTaken
+                ? (r: JobIntakeResult) =>
+                    opts.onMessageTaken?.({ messageId: r.messageId ?? '', raw: r.raw })
+                : undefined,
+            },
+          ]
+        : []),
       {
         // THE ESCAPE HATCH (2026-07-18 live call). An unskippable rung is the
         // architecture's whole point — but a MISPLANNED rung is unskippable
