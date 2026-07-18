@@ -136,7 +136,21 @@ export async function findNextAvailableSlots(
        AND es.shift_date = (ss.s AT TIME ZONE $5)::date
        AND es.is_off = false
        AND es.start_time <= (ss.s AT TIME ZONE $5)::time
-       AND es.end_time >= ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::time
+       -- WRAP-AWARE (2026-07-17 22:13 CDT live call): a slot crossing local
+       -- midnight has an end whose ::time is 00:00-ish — "before" any
+       -- afternoon shift end once the date is dropped, so 11:30 PM was offered
+       -- against a 1-5 PM shift (and only the midnight-wrapping slots leaked,
+       -- which is why the offers were exactly 11:30/11:45 PM). '24:00:00' is a
+       -- valid Postgres TIME: an end past the shift's local date now demands a
+       -- shift ending at midnight sharp. The booking RPC ships the identical
+       -- fix (migration 20260718003000) — suggest and enforce must read the
+       -- same clock AND the same calendar.
+       AND es.end_time >= CASE
+             WHEN ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::date
+                  > (ss.s AT TIME ZONE $5)::date
+             THEN '24:00:00'::time
+             ELSE ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::time
+           END
       WHERE res.tenant_id = $4
         AND res.is_active = true
         AND (res.is_deleted IS NULL OR res.is_deleted = false)

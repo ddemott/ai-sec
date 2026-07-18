@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict kPfiFKxnyj1J9BtLk5jNBevA1MTdT7IqYMaqDEHhiykQVKp4EcopHDmSUcbhmnT
+\restrict C0IKYyOPI6wGH6ymiYXABXD3rrUMdSSWCqMvNpPZ0yq5b9DerNh4MosSmAiMXVB
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -506,7 +506,21 @@ BEGIN
     v_shift_date := (v_start AT TIME ZONE v_tenant_tz)::DATE;
     v_day_of_week := EXTRACT(DOW FROM v_start AT TIME ZONE v_tenant_tz)::INTEGER;
     v_start_time_of_day := (v_start AT TIME ZONE v_tenant_tz)::TIME;
-    v_end_time_of_day := (v_end AT TIME ZONE v_tenant_tz)::TIME;
+    -- WRAP-AWARE END TIME (2026-07-17 22:13 CDT live call). A slot that
+    -- crosses local midnight has an end whose ::TIME compares as TINY once the
+    -- date is dropped: a 11:30 PM -> midnight booking yields 00:00:00, and
+    -- "shift end 17:00 >= 00:00" PASSES. Both the suggester and this RPC had
+    -- the hole, so a caller was OFFERED 11:30 PM against a 1-5 PM shift and
+    -- the booking was ACCEPTED (EMPLOYEE_NOT_SCHEDULED never fired). '24:00:00'
+    -- is a valid Postgres TIME: an end that lands past the shift's local date
+    -- now demands a shift ending at midnight sharp, which day shifts never do.
+    -- (Cross-midnight NIGHT shifts were never supported by these start<=/end>=
+    -- comparisons; their behavior is unchanged.)
+    v_end_time_of_day := CASE
+        WHEN (v_end AT TIME ZONE v_tenant_tz)::DATE > v_shift_date
+        THEN '24:00:00'::TIME
+        ELSE (v_end AT TIME ZONE v_tenant_tz)::TIME
+    END;
 
     IF array_length(p_required_skills, 1) IS NOT NULL AND array_length(p_required_skills, 1) > 0 THEN
         FOR r IN
@@ -5825,5 +5839,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict kPfiFKxnyj1J9BtLk5jNBevA1MTdT7IqYMaqDEHhiykQVKp4EcopHDmSUcbhmnT
+\unrestrict C0IKYyOPI6wGH6ymiYXABXD3rrUMdSSWCqMvNpPZ0yq5b9DerNh4MosSmAiMXVB
 
