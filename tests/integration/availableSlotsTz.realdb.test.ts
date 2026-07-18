@@ -164,6 +164,11 @@ describe('available-slots → real DB, non-UTC tenant, UTC session', () => {
     expect(openTimes).toContain('3:00 PM');
     // And the spoken text never offers the taken time.
     expect(String(body.result.spoken ?? '')).not.toMatch(/\b1:00 PM\b/);
+
+    // offer_times (Dale's spec): earliest OPEN times stepped by the 30-min
+    // service duration — with [1:00,1:30) booked, the offers start at the
+    // first real opening. "That's assuming those times are open" — they are.
+    expect(body.result.offer_times).toEqual(['1:30 PM', '2:00 PM', '2:30 PM']);
   });
 
   it('HAPPY: with no appointments on the day, the full shift grid is offered', async () => {

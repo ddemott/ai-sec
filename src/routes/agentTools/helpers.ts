@@ -288,3 +288,37 @@ export function subtractIntervals(coverage: Interval[], booked: Interval[]): Int
   }
   return open;
 }
+
+/**
+ * The times to OFFER out loud: earliest-first, stepped by the SERVICE DURATION,
+ * walking only through OPEN times (Dale's spec, 2026-07-17 evening call).
+ *
+ * The model used to pick its own sample from open_times and chose a spread
+ * (first / middle / last) — "1:00, 2:45, or 4:30" — which callers heard as
+ * arbitrary. The offers are now computed HERE (the model does no arithmetic —
+ * the same rule that created open_times) as consecutive meeting-length steps:
+ * a 30-minute service offers "1:00, 1:30, 2:00"; a 15-minute one "1:00, 1:15,
+ * 1:30"; an hour-long one "1:00, 2:00, 3:00".
+ *
+ * Stepping walks the OPEN list, not the clock: if 1:00 is booked the offers
+ * start at the first real opening ("1:30, 2:00, 2:30"), and a booked block
+ * mid-afternoon is skipped to the next open time at or past the step. The
+ * full open_times grid stays alongside as the membership authority, so a
+ * caller who counter-proposes "how about 1:15?" still gets an honest yes.
+ */
+export function pickOfferTimes(
+  openMinutes: number[],
+  openTimes: string[],
+  durationMinutes: number,
+  count = 3
+): string[] {
+  const offers: string[] = [];
+  let nextEligible = -Infinity;
+  for (let i = 0; i < openMinutes.length && offers.length < count; i++) {
+    if (openMinutes[i] >= nextEligible) {
+      offers.push(openTimes[i]);
+      nextEligible = openMinutes[i] + durationMinutes;
+    }
+  }
+  return offers;
+}
