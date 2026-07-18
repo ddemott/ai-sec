@@ -28,7 +28,6 @@ import {
   captureRequestedService,
   bookingOutcomeFromAgentError,
   timeToMinutes,
-  dateTimeToMinutes,
   mergeIntervals,
   subtractIntervals,
   type AgentToolDeps,
@@ -804,11 +803,24 @@ export function registerSchedulingRoutes({
                 AND es.start_time IS NOT NULL
            ),
            day_appointments AS (
-             SELECT start_time::text, end_time::text
-               FROM appointments
-              WHERE tenant_id = $1 AND status = 'scheduled'
-                AND (is_deleted IS NULL OR is_deleted = false)
-                AND start_time::date = $2::date
+             -- TENANT-LOCAL WALL-CLOCK, both the filter and the rendering.
+             -- start_time is timestamptz; the un-annotated casts here rendered
+             -- it in the SESSION timezone — UTC on the prod pooler — while the
+             -- shifts above are local TIME columns. So Jack's 1:00 PM Monday
+             -- booking came back as "18:00", fell OUTSIDE the 13:00-17:00
+             -- shift coverage, and subtracted NOTHING: on 2026-07-17 this
+             -- route offered his exact taken slot to the next caller, who
+             -- picked it and bounced off TIMESLOT_OCCUPIED (the GiST layer
+             -- knew). The suggest layer and the enforce layer must read the
+             -- same clock: the tenant's. (The date filter needs it too, or a
+             -- late-evening local booking files under the wrong UTC day.)
+             SELECT ((a.start_time AT TIME ZONE t.timezone)::time)::text AS start_time,
+                    ((a.end_time   AT TIME ZONE t.timezone)::time)::text AS end_time
+               FROM appointments a
+               JOIN tenants t ON t.tenant_id = a.tenant_id
+              WHERE a.tenant_id = $1 AND a.status = 'scheduled'
+                AND (a.is_deleted IS NULL OR a.is_deleted = false)
+                AND (a.start_time AT TIME ZONE t.timezone)::date = $2::date
            )
            SELECT 'shift'::text AS source, start_time, end_time FROM effective_shifts
            UNION ALL
@@ -894,9 +906,15 @@ export function registerSchedulingRoutes({
       // Expand each booking by the tenant's buffer on both sides before
       // subtracting it from shift coverage, so the open windows we offer keep
       // the required gap around existing appointments (matches the booking RPC).
+      // timeToMinutes, NOT dateTimeToMinutes: the query renders appointments as
+      // tenant-local bare times ('13:00:00'), same shape as the shifts. The old
+      // dateTimeToMinutes path was the SECOND half of the timezone bug — it ran
+      // new Date(dt).getHours(), which renders in the SERVER's timezone (UTC on
+      // Railway), so even a correctly-fetched timestamp would have been read on
+      // the wrong clock.
       const booked = data.appointments.map((a) => ({
-        start: dateTimeToMinutes(a.start_time) - data.bufferMinutes,
-        end: dateTimeToMinutes(a.end_time) + data.bufferMinutes,
+        start: timeToMinutes(a.start_time) - data.bufferMinutes,
+        end: timeToMinutes(a.end_time) + data.bufferMinutes,
       }));
       const open = subtractIntervals(coverage, booked);
       const usable = open.filter((slot) => slot.end - slot.start >= duration_minutes);
