@@ -538,6 +538,34 @@ lives on the function.")
     both properties (take_message and page_owner_via_sms await `sendSms` inline — Telnyx is
     fast today, but the class is the same).
 
+13. **An unskippable rung must carry an escape for the case where the RUNG was the
+    mistake.** (2026-07-18, a live call.) Intent flapped "fix my computer at my house"
+    into has_job_inquiry=true — deliberately, since the router over-counts on purpose —
+    and the job rung's great virtue (the model cannot skip it) became a trap: the caller
+    said "this is for fixing my computer" three times, asked to leave a message, was
+    told "I can't take messages" (the rung holds no such tool — honest and terrible),
+    and hung up. The cure is the scheduling rung's no_appointment_change pattern,
+    generalized: every rung whose PLANNING can be wrong gets a narrow synthetic exit
+    (not_a_job) whose instruction OUTRANKS the interview and sits FIRST (the ordering
+    lesson: a rule below an imperative never runs). With the loop-back live the
+    recovery is complete: escape → group finishes → "anything else?" → the caller's
+    real need re-enters begin_call. Sim-pinned with a MISROUTE scenario that plans the
+    job rung against a caller who denies having one: booking lands, no inquiry row is
+    fabricated, the run completes. "Narrowing must never remove an exit" — and neither
+    may certainty of purpose.
+
+    **Corollary (same day): the escape covers "wrong rung"; a caller on the RIGHT rung
+    can still refuse to walk it.** Dale's question — "in the middle of asking for a job
+    can someone ask just to leave a message instead?" — and the answer was no: the job
+    rung held no take_message, so a real recruiter in a hurry got the same refusal as
+    the misrouted repair caller. take_message is now a third COMPLETION of the job rung
+    (mirroring the booking and notes rungs' fallback — an offer to "pass it along" must
+    always have a write behind it), with an instruction bullet: never refuse a message;
+    calling take_message IS taking one. Rule 8 ("a rung sees only its load-bearing
+    tools") is unviolated — a completion is load-bearing by definition. Sim-pinned with
+    a MID-INTAKE BAIL scenario (real job caller who refuses the detail questions):
+    customer_messages row lands, no job_inquiries row, rung completes.
+
 ### How to duplicate for a new vertical
 
 The intake rung is the only vertical-specific piece. A real-estate line is the same

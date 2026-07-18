@@ -142,6 +142,14 @@ interface Persona {
   questionFacts?: string; // what they want to know, and when they're satisfied
   // hard behaviours the persona MUST exhibit (adversarial)
   refusesPhone?: boolean; // never gives a number
+  // THE MISROUTE (2026-07-18): the SCENARIO plans a job rung (simulating an
+  // intent flap), but this caller has NO job — if asked about roles, companies,
+  // hiring, rates, they say plainly it is not about a job.
+  deniesJob?: boolean;
+  // THE MID-INTAKE BAIL (2026-07-18, Dale: "can someone ask just to leave a
+  // message instead?"): a REAL job caller who, once the role questions start,
+  // refuses the interview and asks for a plain message to be passed instead.
+  bailsToMessage?: string; // the message they want passed
 }
 
 const STYLES: Record<string, string> = {
@@ -191,6 +199,9 @@ function personaSystem(p: Persona, style: string): string {
   }
   if (p.wantsMeeting) {
     facts.push(
+      p.deniesJob
+        ? `You are NOT calling about a job, a role, or hiring — you have no such thing. If the receptionist asks which company you are from, whether you are hiring, about rates, or anything job-related, say plainly (in your own words): "No — this isn't about a job, I just want my computer fixed." Repeat it as often as needed; never invent job details to be polite.`
+        : '',
       p.meetingNotesHint && !p.meetingNotesFact
         ? (() => {
             // Fail fast (review on #286): a hint without its fact would
@@ -222,6 +233,11 @@ function personaSystem(p: Persona, style: string): string {
     if (p.location) facts.push(`Location: ${p.location}`);
     if (p.address) facts.push(`Address of the position: ${p.address}`);
     if (p.timezone) facts.push(`Timezone: ${p.timezone}`);
+    if (p.bailsToMessage) {
+      facts.push(
+        `IMPORTANT: you do NOT want to answer a string of questions about the role. The FIRST time the receptionist asks you a detail question about the job (which company, rate, contract length, location — any of them), refuse politely and pivot, in your own words: "Actually, I don't have time to go through all that — can you just take a message and have Dale call me back?" The message you want passed: "${p.bailsToMessage}". If they keep asking role questions anyway, repeat that you just want to leave a message. Never answer the detail questions.`
+      );
+    }
   }
   return `You are a person calling a small business's phone receptionist. You are the CALLER, not the assistant. Speak like a real person on the phone — short spoken turns, no lists, no markdown.
 
@@ -608,6 +624,49 @@ const SCENARIOS: Scenario[] = [
       descriptionMatch: /Caller notes:.*(1060|Addison)/is,
     },
     styles: ['plain', 'chatty'],
+  },
+  {
+    title: 'MISROUTE: intent flapped a repair into a job — not_a_job escapes, nobody is trapped',
+    persona: {
+      name: 'Jan Smith',
+      phone: '555-901-0031',
+      goalLine: 'you want to book a time for Dale to come fix your computer at your house',
+      wantsMeeting: true,
+      // TRUE ON PURPOSE: this simulates the intent step's flap (the live
+      // 2026-07-18 call classified "fix my computer at my house" as a job).
+      hasJobInquiry: true,
+      requestedService: 'fixing my computer',
+      deniesJob: true,
+    },
+    // The booking lands; NO job inquiry row exists (the rung escaped via
+    // not_a_job instead of interrogating or fabricating); the run completes
+    // instead of hanging on an unfinishable rung.
+    expect: { appointment: true, jobInquiry: false },
+    styles: ['plain', 'chatty'],
+  },
+  {
+    title: 'MID-INTAKE BAIL: real job caller refuses the interview — "just take a message" is a real write',
+    persona: {
+      name: 'Priya Nair',
+      phone: '555-901-0032',
+      goalLine:
+        'you have a role you want Dale to hear about, but you are in a hurry and will not sit through detail questions',
+      wantsMeeting: false,
+      hasJobInquiry: true,
+      requestedService: 'a role for Dale',
+      callerCompany: 'Insight Global',
+      clientCompany: 'Allstate',
+      employmentType: 'contract',
+      bailsToMessage:
+        'Priya from Insight Global called about a contract role at Allstate — please call her back at this number',
+    },
+    // The live 2026-07-18 trap in its OTHER direction: a real job call where the
+    // caller pivots mid-questions. Before the fallback, the rung held no
+    // take_message and the agent refused ("I'm unable to take messages"). Now
+    // the pivot must land a customer_messages row; no job_inquiries row (the
+    // interview never finished) and no fabricated answers.
+    expect: { appointment: false, jobInquiry: false, message: true },
+    styles: ['plain'],
   },
   {
     title: 'job only — records it, does NOT book a meeting',

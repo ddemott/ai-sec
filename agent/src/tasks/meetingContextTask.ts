@@ -164,7 +164,9 @@ export function makeMeetingContextRung(opts: MeetingContextOptions): voice.Agent
       messagingTools: opts.messagingTools,
       knownCaller: opts.knownCaller,
       meetingBooked: opts.meetingBooked,
+      takeMessage: opts.takeMessage,
       onCaptured: opts.onCaptured,
+      onMessageTaken: opts.onMessageTaken,
     });
   }
   return makeMeetingNotesRung(opts);
