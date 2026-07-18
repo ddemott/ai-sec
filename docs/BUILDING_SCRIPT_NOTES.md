@@ -70,8 +70,12 @@ greeting → intent (begin_call) → TASK GROUP:
   (added 2026-07-16 — the caller's QUESTIONS, answered from the knowledge base via RAG;
   see its section below). Still not a rung: page-owner. Adding one is config on
   `makeRung`, not a new class.
-- **The stack is snapshotted at group start** — a NEW goal raised at the very end ("oh, and
-  can you also…") is not picked up; the fixed goodbye fires. Known limit, documented.
+- ~~The stack is snapshotted at group start~~ **RETIRED 2026-07-18** — the loop-back
+  (roadmap step 3) is implemented: after the group completes, the root agent asks
+  "Anything else I can help you with?", a NEW goal re-enters begin_call and runs a
+  second group (identity carried over — planCallTasks skips the identity rung when
+  the shared state already holds a confirmed name + number), and "no thanks" exits
+  through a finish_call TOOL that owns the fixed goodbye. Rounds capped at 3.
 - **Text E2E (`sim-taskgroup.ts`) does not exercise the runtime handoff** — only a live
   call does. Keep both.
 - **Behind `ENABLE_TASK_GROUP` only.** The agent answering the real phone is the prompt
@@ -83,9 +87,12 @@ You do NOT code per-request. You code per goal TYPE (a rung), and `begin_call` r
 1. Build a rung per goal the business actually gets — same 5-part pattern, reuse existing
    tools (`cancel_appointment`, `take_message`, `get_company_policy_answer` all exist).
 2. Add one boolean to `begin_call` for each, so intent detects it.
-3. Add "loop back after the group" plumbing ONCE — re-run intent after `group.run()`, and if
-   a new goal appeared, run a second group. That generically handles any known goal type
-   raised late (the snapshotted-stack limit).
+3. ~~Add "loop back after the group" plumbing ONCE~~ **DONE 2026-07-18** (Dale: "it
+   should have asked, is there anything else"): begin_call is round-capped instead of
+   once-only; the group-complete tool result IS the phase change (ask anything-else →
+   new goals re-enter begin_call / "no" exits via finish_call, which owns the fixed
+   goodbye); identity persists across rounds so re-collection — gotcha H's original
+   failure — is structurally off the table.
 
 Each rung is small, safe, isolated (the loop keeps rungs from breaking each other), and has
 its own tests. Adding a capability is bounded work, not a rewrite. That is the payoff.
@@ -320,6 +327,47 @@ never asked about a meeting that does not exist. Same state also fixed the job o
    Pre-existing wording bug in `BOOK_MEETING_INSTRUCTIONS`, exposed by running the sim
    in the evening. Fix: "no open times on ONE day does NOT mean the booking cannot
    happen — check the next day and offer those times." Full suite 30/30 after.
+
+### The address curveball — the information is the note; the mention of it is not (2026-07-18)
+
+Dale went off script on a live call: "he needs to know my address because he's
+gonna be fixing my computer." The agent attached exactly that sentence as the
+note — a POINTER to an address, containing no address — said "I've added that
+to the meeting," and the owner would have opened the calendar with nowhere to
+go. Everything else on the call was perfect (intent correctly classified as
+NOT a job, the notes rung fired, the tool really ran); the note was just
+useless.
+
+Two instruction lessons, both proven by the sim's new two-stage persona (the
+caller says only the pointer, and reveals "1060 West Addison" ONLY if asked):
+
+1. **A conditional must live INSIDE the imperative bullet, ahead of the
+   action.** The first fix added a beautiful "ask for the thing itself" rule
+   as its own bullet BELOW "your VERY NEXT action is to CALL
+   attach_meeting_notes" — and lost 2/2 sim runs: the model executed the
+   imperative it read first. Restructured so the pointer-check is step 1 of
+   the same bullet and the CALL is step 2 ("otherwise"), it passed. A rule
+   that arrives after an imperative is a rule that never runs.
+2. **The ask itself needs the same imperative armor as the action.** The
+   remaining failures were the model attaching a topic label WITHOUT ever
+   asking the wrap-up question. "ASK FIRST" (a description) became "your VERY
+   NEXT action is to ASK" plus a hard gate — "attach_meeting_notes may only
+   run AFTER the caller has ANSWERED" — and the full suite went 32/32,
+   including the historical ~1-in-30 topic-label residual going quiet in the
+   same run.
+
+3. **When the judgment flaps, add the deterministic layer under it.** With both
+   wording fixes in, the pointer-check still flapped (2/2, then 1/2 across sim
+   runs — gpt-4o-mini judgment at instruction level). The FULFILLMENT GATE in
+   attach_meeting_notes is the code layer: a note that NAMES an address/number/
+   code and contains NO DIGIT is bounced with the action the model can take
+   ("ask the caller for the thing itself, then attach what they say" — the
+   satisfiable-error rule). The sim log shows the whole loop working: pointer
+   attached → gate bounces → model ASKS → real address attached. Escalation
+   order, generalized: instruction → instruction ordering → code gate.
+
+**Status: sim-verified 32/32 with the gate (two-stage persona, both styles); the
+live-call replay is the remaining gate.**
 
 ---
 
@@ -661,6 +709,13 @@ concrete outcomes as they happened, so there is nothing left to say.
 **Watch for:** any point where a sub-flow returns control to an agent whose instructions
 are for a DIFFERENT phase of the call. The returning agent doesn't know what the
 sub-flow did — end the call, or update its instructions to match the phase.
+**Evolution (2026-07-18):** the fixed-goodbye-immediately rule is superseded by the
+loop-back — control DOES return to the root agent now, but through the narrow door
+this gotcha demands: the begin_call tool RESULT is the phase change (the JS SDK has no
+updateInstructions), the base instructions carry a "# After the work is done" section,
+identity persists so a second round plans NO identity rung, and the goodbye lives in a
+finish_call TOOL. The prescription generalizes: a phase change must arrive as a tool
+result plus a pre-declared phase section — not as hope.
 
 ### G. Tell the model what TO DO, not what NOT to do
 

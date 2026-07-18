@@ -55,16 +55,18 @@ export interface MeetingContextOptions {
   onMessageTaken?: (r: { messageId: string; raw: unknown }) => Promise<void> | void;
 }
 
-export const MEETING_NOTES_INSTRUCTIONS = `The meeting is booked. ONE light step before wrapping up: ask if there is anything they'd like noted ahead of the meeting — for example "Before I let you go — anything you'd like us to know ahead of the meeting?"
+export const MEETING_NOTES_INSTRUCTIONS = `The meeting is booked. Your VERY NEXT action is to ASK — out loud, before any tool call: "Before I let you go — anything you'd like us to know ahead of the meeting?"
 
-ASK FIRST, then act on their ANSWER. The note is what THEY said — their words from this call, not your summary and not a topic label. Never attach a note whose content the caller did not actually say.
+attach_meeting_notes may only run AFTER the caller has ANSWERED that question. A note attached before they answer is a note you INVENTED — that is how "consulting work discussion" (a topic label the caller never spoke) reached a real calendar. The note is what THEY said in their answer — their words from this call, not your summary and not a topic label.
 
-- If they give you something: your VERY NEXT action is to CALL attach_meeting_notes with what they said, in their own words — call it BEFORE you tell them it's noted. CALLING the tool is the only thing that saves the note; a spoken "I'll make a note of that" saves NOTHING and is true only AFTER the tool has run. Then confirm in ONE short sentence.
+- If they give you something, look at WHAT it is before you act:
+  1. Their answer only POINTS AT a concrete thing they have not actually spoken — "he'll need my address" contains no address, "I'll give you the gate code" contains no code, "call my other number" contains no number. Then your VERY NEXT action is to ASK FOR THE THING ITSELF — "Sure — what's the address?" — and the answer THEY give is the note. (This one follow-up is part of the notes question, not a second question.) A live caller said the owner would need their address; the note that reached the calendar was "his address is needed", and the owner opened the meeting with nowhere to go. The information is the note; the mention of it is not.
+  2. Otherwise — they gave you the substance itself — your VERY NEXT action is to CALL attach_meeting_notes with what they said, in their own words, BEFORE you tell them it's noted. CALLING the tool is the only thing that saves the note; a spoken "I'll make a note of that" saves NOTHING and is true only AFTER the tool has run. Then confirm in ONE short sentence.
 - If they say no BUT earlier in the call they gave SPECIFIC context the owner should have (what the project involves, something to look at first, a constraint, a request), attach THAT — their earlier words. Context they already spoke must not be lost just because it arrived before your question.
 - The MEETING TOPIC is NOT a note. A consulting meeting gains nothing from the note "consulting work discussion" — if all you have is what the meeting is about, that is already on the calendar. Call no_notes.
 - If they say no and there is nothing specific beyond the topic, call no_notes immediately and move on.
 
-Ask ONCE. This is not an interview — whatever they give in one answer is the note. Do not re-ask their name or number, and do not re-confirm the booking; both are done.`;
+Ask the notes question ONCE — plus, at most, the single follow-up from point 1 when their answer only points at a missing concrete detail. Nothing beyond those two: this is not an interview, and whatever they give is the note. Do not re-ask their name or number, and do not re-confirm the booking; both are done.`;
 
 /**
  * A rung that is over before it speaks: complete() fires in onEnter, in host code,

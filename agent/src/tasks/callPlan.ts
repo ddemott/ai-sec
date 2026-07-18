@@ -179,7 +179,12 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
   // RUNG 1 — for every call with a contact-needing goal. You cannot book a meeting or
   // brief the owner on a caller you cannot name or reach. Identity is not a goal the
   // caller states; it is the floor under all of them (except questions-only — above).
-  if (!questionsOnly) {
+  // LOOP-BACK ROUNDS (2026-07-18): when the shared state already holds a
+  // confirmed name AND number from an earlier round, identity is DONE — a
+  // second group must not re-collect it (gotcha H's original failure). The
+  // knownCallerLine injection gives every later rung the same facts.
+  const identityDone = Boolean(deps.state.callerName && deps.state.callerPhone);
+  if (!questionsOnly && !identityDone) {
     specs.push({
       id: 'identity',
       description: "Get and confirm the caller's name and phone number.",

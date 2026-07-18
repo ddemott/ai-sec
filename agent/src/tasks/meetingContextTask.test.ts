@@ -113,10 +113,23 @@ describe('MeetingContextTask — notes template: the attach IS the transition', 
     // Rule 9 (reorder beats prohibition): the tool call comes before the confirmation
     // sentence, and one light question is the WHOLE step — not an interview.
     expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/VERY NEXT action is to CALL attach_meeting_notes/);
-    expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/Ask ONCE/);
+    // Tightened on #286 review: ONE notes question + at most the single point-1
+    // follow-up — anything further is forbidden explicitly.
+    expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/Ask the notes question ONCE/);
+    expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/at most, the single follow-up/);
+    // The 2026-07-18 curveball: "he'll need my address" was attached AS the
+    // note — a pointer, not the address. The rule: when the answer refers to a
+    // concrete thing the caller hasn't spoken, ask for the thing itself.
+    expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/ASK FOR THE THING ITSELF/);
+    expect(MEETING_NOTES_INSTRUCTIONS).toMatch(
+      /The information is the note; the mention of it is not/
+    );
     // The sim caught the model attaching its own summary ("Consulting work discussion")
     // as a note the caller never spoke — the ask-first rule is load-bearing.
-    expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/ASK FIRST/);
+    // Strengthened 2026-07-18: asking is now the mandated VERY NEXT action, and
+    // the tool is forbidden before an answer exists (the topic-label bug).
+    expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/VERY NEXT action is to ASK/);
+    expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/only run AFTER the caller has ANSWERED/);
     expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/not your summary/);
     expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/no_notes/);
     expect(MEETING_NOTES_INSTRUCTIONS).toMatch(/Do not re-ask their name or number/);
