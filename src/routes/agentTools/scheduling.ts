@@ -997,6 +997,21 @@ export function registerSchedulingRoutes({
         }
       }
 
+      // A window can survive the futureSlots duration filter and still yield ZERO
+      // grid starts: rounding its start up to the quarter-hour can leave no t
+      // with t + duration <= end (an odd-minute window from buffer arithmetic).
+      // Review catch on #283: an empty openTimes fed the sentence builder
+      // " or undefined". An empty grid IS "fully booked" — say that.
+      if (openTimes.length === 0) {
+        return ok(reply, {
+          spoken: `${serviceInfo} Unfortunately, we're fully booked on ${dayName}. Would you like to try a different day?`,
+          date: args.date,
+          open_times: [],
+          offer_times: [],
+          note: 'Fully booked. open_times is empty — do NOT offer any time on this day.',
+        });
+      }
+
       // ONE SOURCE OF TRUTH. NEVER TWO.
       //
       // The first version of this fix returned BOTH the list AND the old prose
