@@ -93,6 +93,23 @@ describe('has_job_inquiry draws the boundary: a role TO the owner, never work FR
     expect(instr).toMatch(/can someone come fix my computer/);
   });
 
+  it('HAPPY: begin_call can carry a volunteered name and number — and never requires them', () => {
+    // WHO: the 2026-07-18 caller who opened with "I'm Dale" and was asked "Can I
+    // get your name, please?". The root agent is the only agent that HEARS the
+    // opener; if begin_call cannot carry the name, it evaporates before the
+    // identity rung exists. Optional on purpose: most callers do not front-load,
+    // and a required field would make the model INVENT one.
+    const schema = beginCallSchema(makeAgent());
+    const props = schema.parameters.properties;
+    expect(props['caller_name']?.description).toMatch(/ONLY if the caller stated/);
+    expect(props['caller_phone']?.description).toMatch(/ONLY if the caller spoke/);
+    expect(schema.parameters.required).not.toContain('caller_name');
+    expect(schema.parameters.required).not.toContain('caller_phone');
+    // And the instructions teach the relay, in reach of the flag definitions.
+    const instr = (makeAgent() as unknown as { instructions: string }).instructions;
+    expect(instr).toMatch(/pass them along exactly as spoken/);
+  });
+
   it('SAD: has_job_inquiry stays REQUIRED in the schema — sim-begincall\'s strict check depends on it', () => {
     // The eval fails a case when a required flag is omitted (review on #288: a
     // missing flag must not read as an explicit false). That strictness is only

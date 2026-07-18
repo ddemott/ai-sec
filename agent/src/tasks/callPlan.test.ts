@@ -238,6 +238,20 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     expect(names).not.toContain('book_with_scheduling');
   });
 
+  it('HAPPY: volunteered identity facts thread from state into the identity rung', () => {
+    // The carrier is CallState (rule: rungs are separate agents; nothing spoken
+    // before a rung exists reaches it except through state). begin_call writes
+    // volunteeredName/Phone; the plan must hand them to the rung factory.
+    const deps = makeDeps();
+    deps.state.volunteeredName = 'Dale';
+    deps.state.volunteeredPhone = '608-217-5303';
+    const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: false }, deps);
+    const identity = specs.find((s) => s.id === 'identity')!;
+    const instr = (identity.factory() as unknown as { instructions: string }).instructions;
+    expect(instr).toContain('ALREADY introduced themselves as Dale');
+    expect(instr).toContain('ALREADY said their number: 608-217-5303');
+  });
+
   it('HAPPY: a caller who wants to leave a message gets the take_message rung', () => {
     // The universal catch-all becomes a registered rung, so the loop enforces the
     // take_message WRITE — the exact fix for the ladder narrating "I've passed that along"

@@ -196,3 +196,58 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     expect(IDENTITY_INSTRUCTIONS).toMatch(/only caught part of it/i); // digits come in groups
   });
 });
+
+describe('volunteered identity survives the hand-off (2026-07-18 live call: "I\'m Dale" → "Can I get your name, please?")', () => {
+  // WHO: a live caller who introduced themselves in their opening sentence and was
+  //       immediately asked their name — each rung is a separate agent, so anything
+  //       spoken before the rung exists is invisible unless threaded in.
+  // WHAT: begin_call captures volunteered facts; the rung's instructions must greet,
+  //       not re-ask. A volunteered PHONE still gets the read-back confirm (it is not
+  //       carrier-attested), but must not be asked for from scratch.
+  it('HAPPY: a volunteered name is greeted with, never re-asked', () => {
+    const rung = makeIdentityRung({
+      ctx: makeCtx(),
+      identifyCaller: fakeIdentifyCaller,
+      volunteeredName: 'Dale',
+    });
+    const instr = (rung as unknown as { instructions: string }).instructions;
+    expect(instr).toContain('ALREADY introduced themselves as Dale');
+    expect(instr).toContain('do NOT ask for their name');
+  });
+
+  it('HAPPY: a volunteered phone is read back to confirm, not re-asked from scratch', () => {
+    const rung = makeIdentityRung({
+      ctx: makeCtx(),
+      identifyCaller: fakeIdentifyCaller,
+      volunteeredPhone: '608-217-5303',
+    });
+    const instr = (rung as unknown as { instructions: string }).instructions;
+    expect(instr).toContain('ALREADY said their number: 608-217-5303');
+    expect(instr).toContain('read those exact digits back');
+  });
+
+  it('SAD: caller-ID wins over a volunteered phone — no read-back of an attested number', () => {
+    // Caller ID is carrier-attested; the volunteered line must not appear alongside it
+    // (two competing instructions about the same number is how models pick the wrong one).
+    const rung = makeIdentityRung({
+      ctx: makeCtx('+16082175303'),
+      identifyCaller: fakeIdentifyCaller,
+      volunteeredPhone: '608-217-5303',
+    });
+    const instr = (rung as unknown as { instructions: string }).instructions;
+    expect(instr).toContain('caller ID');
+    expect(instr).not.toContain('ALREADY said their number');
+  });
+
+  it('SAD: blank/whitespace volunteered values add no instruction lines', () => {
+    const rung = makeIdentityRung({
+      ctx: makeCtx(),
+      identifyCaller: fakeIdentifyCaller,
+      volunteeredName: '   ',
+      volunteeredPhone: '',
+    });
+    const instr = (rung as unknown as { instructions: string }).instructions;
+    expect(instr).not.toContain('ALREADY introduced');
+    expect(instr).not.toContain('ALREADY said their number');
+  });
+});

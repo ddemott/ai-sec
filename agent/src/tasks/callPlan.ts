@@ -101,6 +101,11 @@ export function runtimePreamble(rt: CallRuntime): string {
 export interface CallState {
   callerName?: string;
   callerPhone?: string;
+  /** Identity facts the caller VOLUNTEERED to the root agent (begin_call captures
+   *  them) before the identity rung existed. Seed the rung so it confirms instead of
+   *  re-asking; cleared conceptually once callerName/callerPhone are confirmed. */
+  volunteeredName?: string;
+  volunteeredPhone?: string;
   /** Written by the booking rung when a meeting ACTUALLY landed (not when it fell back
    *  to a message). Read at factory time by the meeting-context rung: it decides whether
    *  there is a meeting to attach anything to, and which opener is true. */
@@ -193,6 +198,8 @@ export function planCallTasks(goals: CallerGoals, deps: CallDeps): TaskSpec[] {
           ctx: deps.ctx,
           identifyCaller: deps.tools['identify_caller'],
           requestedService,
+          volunteeredName: deps.state.volunteeredName,
+          volunteeredPhone: deps.state.volunteeredPhone,
           onIdentified: async (r) => {
             // Carry the confirmed identity forward to every later rung.
             deps.state.callerName = r.name;

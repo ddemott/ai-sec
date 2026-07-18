@@ -100,6 +100,8 @@ const tools = [
 interface Case {
   name: string;
   opener: string;
+  /** Substrings that must appear in the named string args (case-insensitive). */
+  expectArgSubstr?: Record<string, string>;
   expectFlags: Record<string, boolean>;
 }
 const CASES: Case[] = [
@@ -136,6 +138,15 @@ const CASES: Case[] = [
     name: 'recruiter pitch stays a job inquiry (guard the other direction)',
     opener: "I'm calling from a staffing agency — we have a contract position we'd like Dale to consider.",
     expectFlags: { has_job_inquiry: true },
+  },
+  {
+    // THE FRONT-LOADER (2026-07-18 live call): "I'm Dale" in the opening sentence,
+    // then "Can I get your name, please?" — the name must survive the hand-off by
+    // riding begin_call's caller_name.
+    name: 'front-loaded name is relayed through begin_call',
+    opener: "Hi Chris, I'm Dale — I'd like to have my computer fixed.",
+    expectFlags: { wants_meeting: true, has_job_inquiry: false },
+    expectArgSubstr: { caller_name: 'dale' },
   },
   {
     // Another service-request phrasing — no overlap with the pinned live opener,
@@ -214,6 +225,10 @@ for (const c of CASES) {
           ? `${k} MISSING (want explicit ${v})`
           : `${k}=${String(args[k])} (want ${v})`
       );
+    const argMisses = Object.entries(c.expectArgSubstr ?? {})
+      .filter(([k, sub]) => !String(args[k] ?? '').toLowerCase().includes(sub.toLowerCase()))
+      .map(([k, sub]) => `${k}="${String(args[k] ?? '')}" (want substring "${sub}")`);
+    flagMisses.push(...argMisses);
     if (called && flagMisses.length === 0) {
       passed++;
       console.log(`PASS  ${c.name}`);
