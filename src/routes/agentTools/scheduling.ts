@@ -759,6 +759,114 @@ export function registerSchedulingRoutes({
         resolveServiceForBooking(client, args.tenant_id, args.service_type, getEmbedding)
       );
 
+      // NO DATE = THE SOONEST-OPENINGS OPENER (Dale's design, 2026-07-17).
+      //
+      // An open "what day works for you?" is a question against a calendar the
+      // caller cannot see — the 2026-07-12 caller guessed impossibly three
+      // times and hung up. The agent now LEADS with the next three real times
+      // and closes with the invitation to name their own: options first, open
+      // question last. The offers are duration-stepped (same rule as
+      // offer_times), span days when the soonest day runs short, and respect a
+      // lead buffer so a caller is never offered a meeting that starts in ten
+      // minutes.
+      if (service && !args.date) {
+        const { name: svcName, duration_minutes: svcDur, price: svcPrice } = service;
+        const svcInfo =
+          svcPrice && svcPrice > 0
+            ? `${svcName} takes about ${svcDur} minutes and costs $${svcPrice.toFixed(0)}.`
+            : `${svcName} takes about ${svcDur} minutes.`;
+        // One hour: enough that "soonest" never means "leave for it right now".
+        // A fixed platform default on purpose — becomes a tenant knob when a
+        // real tenant asks for a different one (build-for-real-customers).
+        const SOONEST_LEAD_MINUTES = 60;
+        const { slots, ianaTimezone } = await withTenantClient(args.tenant_id, async (client) => {
+          const tzRes = await client.query<{ timezone: string }>(
+            `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE tenant_id = $1`,
+            [args.tenant_id]
+          );
+          const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
+          return {
+            ianaTimezone: tzRes.rows[0]?.timezone || 'America/Chicago',
+            slots: await findNextAvailableSlots(client, {
+              tenantId: args.tenant_id,
+              fromTime: new Date(Date.now() + SOONEST_LEAD_MINUTES * 60_000).toISOString(),
+              durationMinutes: svcDur,
+              requiredSkills: [],
+              requiredCapabilities: [],
+              // Enough grid slots to step three duration-length offers across
+              // booked gaps and day boundaries.
+              count: 12,
+              searchHorizonHours: 168,
+              bufferMinutes,
+            }),
+          };
+        });
+
+        if (slots.length === 0) {
+          return ok(reply, {
+            spoken: `${svcInfo} I'm not finding anything open in the next week. Would you like me to take a message so someone can call you back?`,
+            date: null,
+            open_times: [],
+            offer_times: [],
+            note: 'Nothing is open in the next week. Do NOT offer any time. Offer to take a message.',
+          });
+        }
+
+        // Relative day label in the TENANT's clock: "today" / "tomorrow" /
+        // "Monday". Beyond a week is unreachable (168h horizon).
+        const dayKey = (iso: string): string =>
+          new Date(iso).toLocaleDateString('en-CA', { timeZone: ianaTimezone });
+        const todayKey = dayKey(new Date().toISOString());
+        const tomorrowKey = dayKey(new Date(Date.now() + 86_400_000).toISOString());
+        const dayLabel = (iso: string): string => {
+          const k = dayKey(iso);
+          if (k === todayKey) return 'today';
+          if (k === tomorrowKey) return 'tomorrow';
+          return new Date(iso).toLocaleDateString('en-US', {
+            timeZone: ianaTimezone,
+            weekday: 'long',
+          });
+        };
+        const timeLabel = (iso: string): string =>
+          new Date(iso).toLocaleTimeString('en-US', {
+            timeZone: ianaTimezone,
+            hour: 'numeric',
+            minute: '2-digit',
+          });
+
+        // Duration-step across the grid slots (epoch minutes feed the same
+        // pickOfferTimes the day view uses), then keep the picked slots' ISO
+        // order for grouping.
+        const mins = slots.map((s) => Math.floor(new Date(s.start_time).getTime() / 60_000));
+        const isoLabels = slots.map((s) => s.start_time);
+        const pickedIso = pickOfferTimes(mins, isoLabels, svcDur);
+        const offers = pickedIso.map((iso) => ({ day: dayLabel(iso), time: timeLabel(iso) }));
+        const offerTimes = offers.map((o) => `${o.day} at ${o.time}`);
+
+        // Group consecutive same-day offers so the sentence reads the way a
+        // person says it: "today at 4:30 PM, or tomorrow at 1:00 PM or 1:30 PM".
+        const groups: string[] = [];
+        for (const o of offers) {
+          const last = groups.length - 1;
+          if (groups.length > 0 && groups[last].startsWith(`${o.day} at `)) {
+            groups[last] += ` or ${o.time}`;
+          } else {
+            groups.push(`${o.day} at ${o.time}`);
+          }
+        }
+        const spokenOffers = groups.join(', or ');
+
+        return ok(reply, {
+          spoken: `${svcInfo} The soonest I can get you in is ${spokenOffers}. Would any of those work, or is there another day or time that suits you better?`,
+          date: null,
+          // Day-scoped membership does not exist in a cross-day answer — the
+          // note routes a caller-named day or time to a dated call.
+          open_times: [],
+          offer_times: offerTimes,
+          note: 'These offer_times are the SOONEST bookable openings. Offer exactly these, as ONE natural sentence with commas — never a bulleted or numbered list. If the caller picks one, book it. If the caller names their OWN day or time, call get_available_slots again WITH that date to check it — open_times is empty here because this answer spans days, not because nothing is open.',
+        });
+      }
+
       // Format date for speech ("Wednesday, April 2")
       const dateObj = new Date(args.date + 'T12:00:00');
       const dayName = dateObj.toLocaleDateString('en-US', {

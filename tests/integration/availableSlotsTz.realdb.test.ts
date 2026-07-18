@@ -171,6 +171,57 @@ describe('available-slots → real DB, non-UTC tenant, UTC session', () => {
     expect(body.result.offer_times).toEqual(['1:30 PM', '2:00 PM', '2:30 PM']);
   });
 
+  it('HAPPY: NO DATE = the soonest-openings opener — duration-stepped, day-labelled, lead-buffered', async () => {
+    // WHO: the lead-with-times opener (Dale's design 2026-07-17): the agent
+    //       opens with the next real times instead of "what day works for you?".
+    // WHAT: a shift seeded ~3 days out (inside the 168h search horizon, past
+    //        the 60-min lead buffer) yields offer_times stepped by the 30-min
+    //        service, labelled with the weekday, and a spoken line that closes
+    //        with the name-your-own invitation.
+    // WHERE: scheduling.ts no-date branch → findNextAvailableSlots →
+    //        pickOfferTimes.
+    // WHY: the opener must only ever speak REAL bookable times — it inherits
+    //       every suggest-layer guarantee this file exists to pin.
+    const soonDate = new Date(Date.now() + 3 * 86_400_000).toLocaleDateString('en-CA', {
+      timeZone: TZ,
+    });
+    const empRes = await setup.query<{ employee_id: string }>(
+      `SELECT employee_id FROM employees WHERE tenant_id = $1 LIMIT 1`,
+      [tenantId]
+    );
+    await createScheduleEntry(
+      setup,
+      tenantId,
+      empRes.rows[0].employee_id,
+      soonDate,
+      '13:00',
+      '17:00'
+    );
+
+    const res = await post('/agent-tools/available-slots', {
+      tenant_id: tenantId,
+      service_type: 'a meeting',
+      // no date
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    const offers: string[] = body.result.offer_times;
+    // Three offers, stepped by the 30-minute duration from the shift start,
+    // each carrying a day label ("Monday at 1:00 PM" — or today/tomorrow).
+    expect(offers).toHaveLength(3);
+    expect(offers[0]).toMatch(/at 1:00 PM$/);
+    expect(offers[1]).toMatch(/at 1:30 PM$/);
+    expect(offers[2]).toMatch(/at 2:00 PM$/);
+    // The spoken line closes with the caller's own-choice invitation.
+    expect(String(body.result.spoken)).toMatch(/another day or time that suits you better/i);
+    // Cleanup: the added shift must not leak into the dated tests.
+    await setup.query(
+      `DELETE FROM employee_schedule WHERE tenant_id = $1 AND shift_date = $2::date`,
+      [tenantId, soonDate]
+    );
+  });
+
   it('HAPPY: with no appointments on the day, the full shift grid is offered', async () => {
     const res = await post('/agent-tools/available-slots', {
       tenant_id: tenantId,

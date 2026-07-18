@@ -468,7 +468,7 @@ Call the door AS SOON AS you know which one it is — before you ask for a day, 
 - find_caller_by_name(name) — look up callers by name and get the phone on file, so you can confirm "is this still your number?". Empty result = new caller.
 - identify_caller(name, phone) — save the caller to the address book under the phone number they gave you out loud. Call as soon as you have their name and number, even if they don't book. Silent — don't announce it.
 - get_service_catalog() — list the services this business offers.
-- get_available_slots(service_type, date) — spoken description of open times for a service on a given date.
+- get_available_slots(service_type, date?) — open times. OMIT date when the caller has not named a day: it returns the SOONEST real openings (offer_times) so you can LEAD with concrete times and close with "or is there another day or time that suits you better?" — never open a booking with "what day works for you?". Pass a date to check a specific day the caller named.
 - get_scheduling_options(requirements, window) — returns valid (resource, employee) combinations for a service within a time window. Use when the caller hasn't specified a day yet.
 - check_availability(resource_id, start_time, end_time) — boolean availability for a specific resource + time. Needs a real resource_id from get_scheduling_options; do NOT use after get_available_slots.
 - book_appointment(resource_id, start_time, end_time, phone, name?, employee_id?) — direct booking to a SPECIFIC resource_id (only from get_scheduling_options). Do NOT use after get_available_slots — it has no resource_id to give you and the booking will fail.

@@ -68,7 +68,8 @@ export const BOOK_MEETING_INSTRUCTIONS = `Your ONE job right now is to get a mee
 You already have their name and number. Do NOT ask for them again.
 
 - If you do not yet know what the meeting is for, offer the services with get_service_catalog and let them choose — but if their own words already make it clear ("a meeting about a contract role", "a call with the owner"), just pass those words along; the system matches them to the right service.
-- Call get_available_slots to see what is actually open. Offer ONLY the times it returns in open_times. Never state a time that is not in that list, and never refuse one that is.
+- LEAD WITH TIMES, not with a question. When the caller has NOT named a day, call get_available_slots WITHOUT a date — it returns the soonest real openings — and open with them: read offer_times as ONE natural sentence with commas, ending with the invitation to name their own ("The soonest I can get you in is tomorrow at 1:00, 1:30, or 2:00 — would any of those work, or is there another day or time that suits you better?"). Never open the booking with "what day works for you?" — that is a question about a calendar the caller cannot see.
+- When the caller HAS named a day (or names one after hearing the soonest), call get_available_slots WITH that date. Offer ONLY the times it returns in open_times, offering the ones in offer_times. Never state a time that is not in that list, and never refuse one that is.
 - WAIT for them to CHOOSE a time. "Yeah", "okay" and "sure" are not a choice — a time is chosen only when they name one, or say something clearly tied to one ("the 4:30", "the first one"). If you did not clearly hear one of the times you offered, ASK AGAIN. Never guess, and never take the first or last option as a default.
 - When they have picked, your VERY NEXT action is to CALL book_with_scheduling — call it BEFORE you say the booking is done. Only CALLING the tool books the meeting; saying "you're booked in" without calling it books NOTHING. Run it first, then confirm the ACTUAL booked time it returns, out loud.
 - If the booking comes back with an ERROR instead of an appointment (TIMESLOT_OCCUPIED — someone took that time; or anything else): their chosen time did NOT book, and choosing the replacement is THEIRS to do, not yours. Say what happened in plain words ("Ah — 1 o'clock just got taken"), offer the other open times, and WAIT for them to pick again. The time you book must ALWAYS be one the caller said yes to: a caller who asked for 1:00 and hears "you're booked at 2:45" was handed an appointment they never agreed to.
@@ -100,7 +101,7 @@ export function makeBookMeetingRung(
   // going straight to get_available_slots — instead of asking "what would you like to
   // book?" when they already said. Only ask what the meeting is for if they never said.
   const alreadyAsked = opts.requestedService?.trim()
-    ? `The caller has already told you what they want: "${opts.requestedService.trim()}". Open immediately by finding them a time for it — call get_available_slots right away and offer the open times.`
+    ? `The caller has already told you what they want: "${opts.requestedService.trim()}". Open immediately by finding them a time for it — call get_available_slots right away (WITHOUT a date unless they named a day) and lead with the soonest openings it returns.`
     : '';
 
   // The passthrough scheduling tools, minus the completion tool (makeRung re-adds it).
