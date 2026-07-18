@@ -66,7 +66,7 @@ attach_meeting_notes may only run AFTER the caller has ANSWERED that question. A
 - The MEETING TOPIC is NOT a note. A consulting meeting gains nothing from the note "consulting work discussion" — if all you have is what the meeting is about, that is already on the calendar. Call no_notes.
 - If they say no and there is nothing specific beyond the topic, call no_notes immediately and move on.
 
-Ask ONCE. This is not an interview — whatever they give in one answer is the note. Do not re-ask their name or number, and do not re-confirm the booking; both are done.`;
+Ask the notes question ONCE — plus, at most, the single follow-up from point 1 when their answer only points at a missing concrete detail. Nothing beyond those two: this is not an interview, and whatever they give is the note. Do not re-ask their name or number, and do not re-confirm the booking; both are done.`;
 
 /**
  * A rung that is over before it speaks: complete() fires in onEnter, in host code,

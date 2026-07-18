@@ -191,11 +191,18 @@ function personaSystem(p: Persona, style: string): string {
   }
   if (p.wantsMeeting) {
     facts.push(
-      p.meetingNotesHint
-        ? `If, after your booking is confirmed, the receptionist asks whether there's anything you'd like noted or known ahead of the meeting, FIRST say only: "${p.meetingNotesHint}" (in your own words) — do NOT state the concrete details yet. ONLY if they then ask you for the specific information itself (the actual address, number, etc.), give it: "${p.meetingNotesFact}". If they never ask for it, never volunteer it.`
-        : p.meetingNotes
-        ? `If, after your booking is confirmed, the receptionist asks whether there's anything you'd like noted or known ahead of the meeting, tell them: "${p.meetingNotes}" (in your own words). Do not volunteer it before they ask.`
-        : `If asked whether there's anything you'd like noted ahead of the meeting, say no — you've covered everything.`
+      p.meetingNotesHint && !p.meetingNotesFact
+        ? (() => {
+            // Fail fast (review on #286): a hint without its fact would
+            // interpolate the literal string "undefined" into the caller's
+            // script and hollow the two-stage test out silently.
+            throw new Error(`persona "${p.name}": meetingNotesHint requires meetingNotesFact`);
+          })()
+        : p.meetingNotesHint
+          ? `If, after your booking is confirmed, the receptionist asks whether there's anything you'd like noted or known ahead of the meeting, FIRST say only: "${p.meetingNotesHint}" (in your own words) — do NOT state the concrete details yet. ONLY if they then ask you for the specific information itself (the actual address, number, etc.), give it: "${p.meetingNotesFact}". If they never ask for it, never volunteer it.`
+          : p.meetingNotes
+            ? `If, after your booking is confirmed, the receptionist asks whether there's anything you'd like noted or known ahead of the meeting, tell them: "${p.meetingNotes}" (in your own words). Do not volunteer it before they ask.`
+            : `If asked whether there's anything you'd like noted ahead of the meeting, say no — you've covered everything.`
     );
   }
   if (p.hasJobInquiry) {
