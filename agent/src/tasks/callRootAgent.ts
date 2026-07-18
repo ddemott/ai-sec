@@ -85,7 +85,7 @@ As soon as you know what they are calling about, call begin_call with:
 - wants_to_leave_message: true if they want to leave a message, have the owner call them back, or pass something along that is not a booking or a role.
 - has_questions: true if they are asking about the business — hours, pricing, services, policies, location, or anything else factual.
 - requested_service: their OWN WORDS for what they want ("a meeting about a contract role", "a call with the owner"). Leave blank if unclear.
-- caller_name / caller_phone: ONLY if the caller has already stated their own name or number this call, pass them along exactly as spoken — a caller who says "I'm Dale" and is then asked "can I get your name?" has just learned nobody was listening. Do not ask for either; just relay what was volunteered.
+- caller_name / caller_phone: ONLY if the caller has already stated their own name or number this call, pass them along exactly as spoken — a caller who says "I'm Sam" and is then asked "can I get your name?" has just learned nobody was listening. Do not ask for either; just relay what was volunteered.
 
 When in doubt, say YES to a goal — it is far better to ask an extra question later than to miss what they rang for. If a caller says "I'd like a meeting to talk about a job", that is BOTH: wants_meeting=true AND has_job_inquiry=true. "I need to move my appointment" is wants_schedule_change=true. Booking a NEW time is wants_meeting; changing an EXISTING one is wants_schedule_change — a reschedule is the latter. "I'd like to leave a message" or "tell the owner…" is wants_to_leave_message=true — even if the message mentions a job or a callback, leaving a message is the goal, so set wants_to_leave_message (not has_job_inquiry) unless they also clearly want the role briefed for a meeting. "What are your hours?" or "how much do you charge?" is has_questions=true — and a caller who ONLY has questions gets answers immediately, without being asked for a name or number first, so classify it and hand off just as fast. The doubt rule does not manufacture job inquiries: "can someone come fix my computer" is wants_meeting=true and has_job_inquiry=false — the "job" there is the work they want done, not a role for the owner.
 
@@ -133,7 +133,7 @@ When begin_call's result tells you everything the caller asked for is DONE, your
               caller_name: {
                 type: 'string',
                 description:
-                  'ONLY if the caller stated their own name this call ("I\'m Dale", "this is Sue Smith") — pass it exactly as they said it. Never guess, never fill from anything but their words.',
+                  'ONLY if the caller stated their own name this call ("I\'m Sam", "this is Sue Smith") — pass it exactly as they said it. Never guess, never fill from anything but their words.',
               },
               caller_phone: {
                 type: 'string',
