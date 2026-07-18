@@ -321,6 +321,37 @@ never asked about a meeting that does not exist. Same state also fixed the job o
    in the evening. Fix: "no open times on ONE day does NOT mean the booking cannot
    happen — check the next day and offer those times." Full suite 30/30 after.
 
+### The address curveball — the information is the note; the mention of it is not (2026-07-18)
+
+Dale went off script on a live call: "he needs to know my address because he's
+gonna be fixing my computer." The agent attached exactly that sentence as the
+note — a POINTER to an address, containing no address — said "I've added that
+to the meeting," and the owner would have opened the calendar with nowhere to
+go. Everything else on the call was perfect (intent correctly classified as
+NOT a job, the notes rung fired, the tool really ran); the note was just
+useless.
+
+Two instruction lessons, both proven by the sim's new two-stage persona (the
+caller says only the pointer, and reveals "1060 West Addison" ONLY if asked):
+
+1. **A conditional must live INSIDE the imperative bullet, ahead of the
+   action.** The first fix added a beautiful "ask for the thing itself" rule
+   as its own bullet BELOW "your VERY NEXT action is to CALL
+   attach_meeting_notes" — and lost 2/2 sim runs: the model executed the
+   imperative it read first. Restructured so the pointer-check is step 1 of
+   the same bullet and the CALL is step 2 ("otherwise"), it passed. A rule
+   that arrives after an imperative is a rule that never runs.
+2. **The ask itself needs the same imperative armor as the action.** The
+   remaining failures were the model attaching a topic label WITHOUT ever
+   asking the wrap-up question. "ASK FIRST" (a description) became "your VERY
+   NEXT action is to ASK" plus a hard gate — "attach_meeting_notes may only
+   run AFTER the caller has ANSWERED" — and the full suite went 32/32,
+   including the historical ~1-in-30 topic-label residual going quiet in the
+   same run.
+
+**Status: sim-verified 32/32 (two-stage persona, both styles); the live-call
+replay is the remaining gate.**
+
 ---
 
 **Two flows exist in the codebase. Know which you are reading about:**

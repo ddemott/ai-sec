@@ -131,6 +131,12 @@ interface Persona {
   // something to say when the wrap-up asks "anything you'd like noted ahead of the
   // meeting?" — omit and the persona says no (the notes step must cost ONE question)
   meetingNotes?: string;
+  // THE CURVEBALL (2026-07-18 live call): the caller first says only a POINTER
+  // to information ("he'll need my address") and reveals the concrete fact
+  // ONLY if the receptionist asks for the thing itself. The agent that
+  // attaches the pointer has saved nothing the owner can use.
+  meetingNotesHint?: string;
+  meetingNotesFact?: string;
   // questions about the business (answered from the knowledge base)
   hasQuestions?: boolean;
   questionFacts?: string; // what they want to know, and when they're satisfied
@@ -185,7 +191,9 @@ function personaSystem(p: Persona, style: string): string {
   }
   if (p.wantsMeeting) {
     facts.push(
-      p.meetingNotes
+      p.meetingNotesHint
+        ? `If, after your booking is confirmed, the receptionist asks whether there's anything you'd like noted or known ahead of the meeting, FIRST say only: "${p.meetingNotesHint}" (in your own words) — do NOT state the concrete details yet. ONLY if they then ask you for the specific information itself (the actual address, number, etc.), give it: "${p.meetingNotesFact}". If they never ask for it, never volunteer it.`
+        : p.meetingNotes
         ? `If, after your booking is confirmed, the receptionist asks whether there's anything you'd like noted or known ahead of the meeting, tell them: "${p.meetingNotes}" (in your own words). Do not volunteer it before they ask.`
         : `If asked whether there's anything you'd like noted ahead of the meeting, say no — you've covered everything.`
     );
@@ -567,6 +575,30 @@ const SCENARIOS: Scenario[] = [
       appointment: true,
       jobInquiry: false,
       descriptionMatch: /Caller notes:.*COBOL/is,
+    },
+    styles: ['plain', 'chatty'],
+  },
+  {
+    title: 'CURVEBALL: a note that only POINTS at info — the agent must ask for the thing itself',
+    persona: {
+      name: 'Wade Boggs',
+      phone: '555-901-0021',
+      goalLine: 'you want to book a meeting for Dale to come fix your computer',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'fixing my computer',
+      meetingNotesHint: "he'll need my address, since he's coming out to fix the computer",
+      meetingNotesFact: 'the address is 1060 West Addison Street in Chicago',
+    },
+    // The live 2026-07-18 call: the caller said "he needs to know my address"
+    // and the agent attached "his address is needed" — a pointer, not the
+    // address. The owner opened the meeting with nowhere to go. "Addison" can
+    // only reach the description if the agent ASKED for the address and
+    // attached what the caller then said.
+    expect: {
+      appointment: true,
+      jobInquiry: false,
+      descriptionMatch: /Caller notes:.*(1060|Addison)/is,
     },
     styles: ['plain', 'chatty'],
   },
