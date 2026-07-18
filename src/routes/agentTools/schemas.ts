@@ -210,7 +210,15 @@ export const IdentifyCallerSchema = z.object({
 export const GetAvailableSlotsSchema = z.object({
   tenant_id: z.string().uuid(),
   service_type: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  // OPTIONAL since 2026-07-17 (Dale's lead-with-times opener): omitted = "the
+  // SOONEST openings from now" — the route returns the next three real times
+  // (cross-day, duration-stepped, with a lead buffer) so the agent can OPEN
+  // with concrete options instead of asking "what day works for you?" against
+  // a calendar the caller cannot see. With a date = that day's slots, as ever.
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+    .optional(),
   // Optional — see GetSchedulingOptionsSchema.call_id (pure-inquiry attribution).
   call_id: z.string().min(1).optional(),
 });

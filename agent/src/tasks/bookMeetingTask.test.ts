@@ -183,6 +183,27 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/ONE job/i);
   });
 
+  it('HAPPY: the rung LEADS with the soonest times — never "what day works for you?"', () => {
+    // WHO: every booking caller who has not named a day.
+    // WHAT: the instructions mandate options-first: call get_available_slots
+    //        WITHOUT a date, read offer_times as one comma-paced sentence, and
+    //        close with the invitation to name their own day or time.
+    // WHEN: rung entry, before any day question.
+    // WHERE: BOOK_MEETING_INSTRUCTIONS + the alreadyAsked injection; the
+    //        route's no-date branch computes the offers (lead buffer,
+    //        duration-stepped, cross-day).
+    // WHY: Dale's design 2026-07-17 — "what day works for you?" is a question
+    //       about a calendar the caller cannot see (the 2026-07-12 caller
+    //       guessed impossibly three times and gave up). Options first, open
+    //       question last.
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/LEAD WITH TIMES/i);
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/WITHOUT a date/);
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/another day or time that suits you better/i);
+    expect(BOOK_MEETING_INSTRUCTIONS).toMatch(
+      /Never open the booking with "what day works for you\?"/i
+    );
+  });
+
   it('SAD: on a booking ERROR the caller re-chooses — the model never substitutes a time', () => {
     // WHO: the 2026-07-17 evening caller. She said "give me the first one"
     //       (1:00); the slot had been taken (pre-fix, the availability list
