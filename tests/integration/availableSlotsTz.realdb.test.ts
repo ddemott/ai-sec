@@ -198,28 +198,34 @@ describe('available-slots → real DB, non-UTC tenant, UTC session', () => {
       '17:00'
     );
 
-    const res = await post('/agent-tools/available-slots', {
-      tenant_id: tenantId,
-      service_type: 'a meeting',
-      // no date
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    const offers: string[] = body.result.offer_times;
-    // Three offers, stepped by the 30-minute duration from the shift start,
-    // each carrying a day label ("Monday at 1:00 PM" — or today/tomorrow).
-    expect(offers).toHaveLength(3);
-    expect(offers[0]).toMatch(/at 1:00 PM$/);
-    expect(offers[1]).toMatch(/at 1:30 PM$/);
-    expect(offers[2]).toMatch(/at 2:00 PM$/);
-    // The spoken line closes with the caller's own-choice invitation.
-    expect(String(body.result.spoken)).toMatch(/another day or time that suits you better/i);
-    // Cleanup: the added shift must not leak into the dated tests.
-    await setup.query(
-      `DELETE FROM employee_schedule WHERE tenant_id = $1 AND shift_date = $2::date`,
-      [tenantId, soonDate]
-    );
+    // try/finally (review on #284): a failing assertion must not leak the
+    // seeded shift into the dated tests — order-dependent failures are the
+    // exact "stray row" class the bare-bones-DB rule exists to kill.
+    try {
+      const res = await post('/agent-tools/available-slots', {
+        tenant_id: tenantId,
+        service_type: 'a meeting',
+        // no date
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      const offers: string[] = body.result.offer_times;
+      // Three offers, stepped by the 30-minute duration from the shift start,
+      // each carrying a day label ("Monday at 1:00 PM" — or today/tomorrow).
+      expect(offers).toHaveLength(3);
+      expect(offers[0]).toMatch(/at 1:00 PM$/);
+      expect(offers[1]).toMatch(/at 1:30 PM$/);
+      expect(offers[2]).toMatch(/at 2:00 PM$/);
+      // The spoken line closes with the caller's own-choice invitation.
+      expect(String(body.result.spoken)).toMatch(/another day or time that suits you better/i);
+    } finally {
+      // Cleanup: the added shift must not leak into the dated tests.
+      await setup.query(
+        `DELETE FROM employee_schedule WHERE tenant_id = $1 AND shift_date = $2::date`,
+        [tenantId, soonDate]
+      );
+    }
   });
 
   it('HAPPY: with no appointments on the day, the full shift grid is offered', async () => {
