@@ -30,6 +30,7 @@ import {
   timeToMinutes,
   mergeIntervals,
   subtractIntervals,
+  pickOfferTimes,
   type AgentToolDeps,
 } from './helpers';
 import type { PoolClient } from 'pg';
@@ -983,13 +984,32 @@ export function registerSchedulingRoutes({
         return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
       };
       const openTimes: string[] = [];
+      // Parallel minutes array — pickOfferTimes steps through the OPEN list by
+      // service duration, and minutes are what it steps in.
+      const openMinutes: number[] = [];
       for (const win of futureSlots) {
         // Round the window start UP to the grid — the booking RPC rejects off-grid
         // times, so offering one would be offering a slot that cannot be booked.
         const first = Math.ceil(win.start / GRID_MINUTES) * GRID_MINUTES;
         for (let t = first; t + duration_minutes <= win.end; t += GRID_MINUTES) {
           openTimes.push(gridTime(t));
+          openMinutes.push(t);
         }
+      }
+
+      // A window can survive the futureSlots duration filter and still yield ZERO
+      // grid starts: rounding its start up to the quarter-hour can leave no t
+      // with t + duration <= end (an odd-minute window from buffer arithmetic).
+      // Review catch on #283: an empty openTimes fed the sentence builder
+      // " or undefined". An empty grid IS "fully booked" — say that.
+      if (openTimes.length === 0) {
+        return ok(reply, {
+          spoken: `${serviceInfo} Unfortunately, we're fully booked on ${dayName}. Would you like to try a different day?`,
+          date: args.date,
+          open_times: [],
+          offer_times: [],
+          note: 'Fully booked. open_times is empty — do NOT offer any time on this day.',
+        });
       }
 
       // ONE SOURCE OF TRUTH. NEVER TWO.
@@ -1008,26 +1028,27 @@ export function registerSchedulingRoutes({
       // can utter are times that are actually bookable, because they are the only times
       // in the sentence.
       //
-      // A sample of concrete times, not the whole list: reading fourteen options at a
-      // caller is its own failure. Spread them across the day so the choice is real.
-      const sample: string[] = [];
-      if (openTimes.length <= 3) {
-        sample.push(...openTimes);
-      } else {
-        const step = (openTimes.length - 1) / 2;
-        sample.push(openTimes[0], openTimes[Math.round(step)], openTimes[openTimes.length - 1]);
-      }
+      // A few concrete times, not the whole list: reading fourteen options at a
+      // caller is its own failure. WHICH few changed 2026-07-17 (Dale's spec,
+      // from a live call): the old sample spread first/middle/last across the
+      // day ("1:00, 2:45, or 4:30"), which callers heard as arbitrary jumps.
+      // Offers are now the earliest open times stepped by the SERVICE
+      // DURATION — consecutive meetings a caller can actually picture
+      // ("1:00, 1:30, or 2:00") — computed here, not by the model (the same
+      // no-arithmetic rule that created open_times). See pickOfferTimes.
+      const offerTimes = pickOfferTimes(openMinutes, openTimes, duration_minutes);
       const spokenTimes =
-        sample.length === 1
-          ? sample[0]
-          : `${sample.slice(0, -1).join(', ')} or ${sample[sample.length - 1]}`;
+        offerTimes.length === 1
+          ? offerTimes[0]
+          : `${offerTimes.slice(0, -1).join(', ')} or ${offerTimes[offerTimes.length - 1]}`;
 
       return ok(reply, {
         // The LIST first, and the prose derived FROM it. Order matters: it is what the
         // model reads first, and there is no longer a range for it to reason about.
         open_times: openTimes,
+        offer_times: offerTimes,
         date: args.date,
-        note: 'open_times is the COMPLETE and ONLY list of bookable start times. A time in this list IS available — book it, do not second-guess it. A time NOT in this list is not available. Never state a time that is not in this list, and never refuse one that is. Do NOT reason about opening hours or ranges — they do not tell you what is free.',
+        note: 'open_times is the COMPLETE and ONLY list of bookable start times. A time in this list IS available — book it, do not second-guess it. A time NOT in this list is not available. Never state a time that is not in this list, and never refuse one that is. Do NOT reason about opening hours or ranges — they do not tell you what is free. When OFFERING times, offer exactly offer_times, speaking them as ONE natural sentence with commas ("I have 1:00, 1:30, or 2:00 — which works for you?") — never a bulleted or numbered list, and never more than these; a caller who names a different time from open_times gets a yes.',
         spoken: `${serviceInfo} On ${dayName} I have ${spokenTimes}. Would any of those work, or did you have another time in mind?`,
       });
     },
