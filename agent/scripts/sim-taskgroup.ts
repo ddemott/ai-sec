@@ -150,6 +150,10 @@ interface Persona {
   // message instead?"): a REAL job caller who, once the role questions start,
   // refuses the interview and asks for a plain message to be passed instead.
   bailsToMessage?: string; // the message they want passed
+  // THE FRONT-LOADED NAME (2026-07-18 live call): the caller introduced themselves
+  // in their opening sentence; begin_call relayed it into state.volunteeredName.
+  // The harness seeds it the same way, and the scenario forbids a re-ask.
+  volunteeredName?: string;
 }
 
 const STYLES: Record<string, string> = {
@@ -168,6 +172,11 @@ const STYLES: Record<string, string> = {
 function personaSystem(p: Persona, style: string): string {
   const facts = [
     `Your name: ${p.name}`,
+    ...(p.volunteeredName
+      ? [
+          `You ALREADY introduced yourself as ${p.volunteeredName} at the very start of the call — if the receptionist greets you by name, that is expected. If they ask for your name anyway, give it, but do not re-introduce yourself unprompted.`,
+        ]
+      : []),
     p.refusesPhone
       ? `You will NOT give your phone number, no matter how many times asked. Politely decline every time.`
       : `Your phone number: ${p.phone} (give THIS exact number when asked; you may phrase the digits naturally, but the number itself is always ${p.phone}).`,
@@ -669,6 +678,29 @@ const SCENARIOS: Scenario[] = [
     styles: ['plain'],
   },
   {
+    title: 'FRONT-LOADED NAME: the caller already introduced themselves — never re-asked',
+    persona: {
+      name: 'Marcus Webb',
+      phone: '555-901-0033',
+      goalLine: 'you want to book a meeting with Dale about some consulting work',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a consulting meeting',
+      volunteeredName: 'Marcus Webb',
+    },
+    // The live 2026-07-18 call: "I'm Dale" → "Can I get your name, please?".
+    // begin_call now relays the volunteered name into state; the identity rung is
+    // seeded with it and must GREET, not re-ask. The forbid catches the exact
+    // phrasings of a re-ask; the booking must still land (the rung still collects
+    // and confirms the number).
+    expect: {
+      appointment: true,
+      jobInquiry: false,
+      transcriptForbid: /(get|have|what'?s|catch) your name|your name, please/i,
+    },
+    styles: ['plain'],
+  },
+  {
     title: 'job only — records it, does NOT book a meeting',
     persona: {
       name: 'Sam Devlin',
@@ -1060,6 +1092,7 @@ async function main(): Promise<void> {
           }
           runs++;
           const deps = makeDeps();
+          if (sc.persona.volunteeredName) deps.state.volunteeredName = sc.persona.volunteeredName;
           let res: RunResult;
           try {
             res = await runCall(sc.persona, style, deps);

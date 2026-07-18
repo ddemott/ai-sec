@@ -36,6 +36,7 @@
 import { type llm, type voice } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
 import { makeRung } from './rung.js';
+import { sanitizeVolunteered } from './sanitize.js';
 
 export interface IdentityResult {
   name: string;
@@ -53,6 +54,16 @@ export interface IdentityTaskOptions {
    *  does not re-ask "how can I help?" after confirming — it knows, and the next rung
    *  handles it. */
   requestedService?: string;
+  /** A name the caller VOLUNTEERED before this rung started (usually in their opening
+   *  sentence, captured by begin_call). Each rung is a separate agent, so a name spoken
+   *  to the root agent is invisible here unless threaded in — on a 2026-07-18 live call
+   *  the caller opened with "I'm Dale" and the very next words were "Can I get your
+   *  name, please?". A volunteered name is greeted with, never re-asked. */
+  volunteeredName?: string;
+  /** A number the caller volunteered before this rung started. Unlike caller ID it is
+   *  NOT attested, so it still gets the read-back confirm — but it must not be asked
+   *  for from scratch as if never spoken. */
+  volunteeredPhone?: string;
   /** Called with the confirmed values, so the caller record is saved exactly as today. */
   onIdentified?: (r: IdentityResult) => Promise<void> | void;
 }
@@ -99,13 +110,25 @@ export function makeIdentityRung(opts: IdentityTaskOptions): voice.AgentTask<Ide
     ? `You already know why the caller rang: "${opts.requestedService.trim()}". Your only task here is their name and number; the system will act on their request the instant you confirm their identity.`
     : '';
 
+  // Defense in depth: the root agent sanitizes before state, but THIS is the site
+  // where caller-derived text meets a prompt — so it flattens and caps again. A
+  // future caller of makeIdentityRung must not be able to reintroduce injection by
+  // skipping the state path (review on #289).
+  const volunteeredName = sanitizeVolunteered(opts.volunteeredName, 80);
+  const volunteeredPhone = sanitizeVolunteered(opts.volunteeredPhone, 30);
+
   return makeRung<IdentityResult>({
     instructions: [
       IDENTITY_INSTRUCTIONS,
       askLine,
+      volunteeredName
+        ? `The caller ALREADY introduced themselves as ${volunteeredName}. Greet them by that name and do NOT ask for their name — you have it.`
+        : '',
       known
         ? `You ALREADY have their number (${known}) from caller ID. Do NOT ask for it and do NOT read it back. You need only their NAME — then call confirm_identity with the name and that number.`
-        : '',
+        : volunteeredPhone
+          ? `The caller ALREADY said their number: ${volunteeredPhone}. Do NOT ask for it again — read those exact digits back to confirm them, and only re-ask if the caller says they are wrong.`
+          : '',
     ]
       .filter(Boolean)
       .join('\n\n'),

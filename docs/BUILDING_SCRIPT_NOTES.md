@@ -581,6 +581,24 @@ lives on the function.")
     instance): the repair opener failed 2/3 runs pre-fix, 30/30 post-fix, including a
     recruiter-pitch guard so the true direction cannot regress.
 
+14. **Anything the caller says BEFORE a rung exists is invisible to that rung — thread
+    volunteered facts through state, or they evaporate.** (2026-07-18 live call.) The
+    caller opened with "I'm Dale. And I would like to have my computer fixed"; the very
+    next agent line was "Can I get your name, please?" Each rung is a separate agent
+    with its own prompt (that is the architecture's strength), so the identity rung
+    never HEARD the opener — only the root agent did, and begin_call had no way to
+    carry a name. The fix is the CallState pattern from the first E2E (a confirmed
+    number was invisible to the booking rung) applied one layer earlier: begin_call
+    gained optional caller_name/caller_phone ("ONLY if the caller stated it — never
+    guess"), the root agent seeds state.volunteeredName/Phone (confirmed values always
+    win), and the identity rung greets a volunteered name instead of asking, while a
+    volunteered PHONE still gets the read-back confirm (spoken ≠ carrier-attested; the
+    trust ladder is untouched). Caller-ID beats a volunteered number — two competing
+    instructions about the same digits is how a model picks the wrong one. Pinned at
+    every layer: unit (rung wording, schema optionality, state threading), eval
+    (front-loaded opener must relay caller_name), and a live E2E scenario whose
+    transcriptForbid catches the re-ask phrasings verbatim.
+
 ### How to duplicate for a new vertical
 
 The intake rung is the only vertical-specific piece. A real-estate line is the same
