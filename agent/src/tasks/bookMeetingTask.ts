@@ -76,7 +76,7 @@ You already have their name and number. Do NOT ask for them again.
 
 No open times on ONE day does NOT mean the booking cannot happen — evenings, today is often already over. When a day comes back empty, say so and CHECK THE NEXT DAY (call get_available_slots again) and offer those times. Only a caller who declines them — or several days with nothing — means the booking is off.
 
-If — and ONLY if — a booking genuinely cannot happen (several days of get_available_slots come back with no open times, or the caller says they would rather just leave a message than pick a time), take a message instead: CALL take_message with their name and what they want passed on. Calling take_message is the ONLY thing that records it — offering to "pass it along" or "have someone get back to them" WITHOUT calling take_message saves NOTHING and misleads the caller. So if you say it, call it. Do NOT drop to a message just because they are slow to choose; a message is for when a booking truly is not going to happen.
+If — and ONLY if — a booking genuinely cannot happen (several days of get_available_slots come back with no open times, the caller says they would rather just leave a message than pick a time, or book_with_scheduling itself keeps FAILING — a result telling you the booking system is down means stop offering times immediately), take a message instead: CALL take_message with their name and what they want passed on. Calling take_message is the ONLY thing that records it — offering to "pass it along" or "have someone get back to them" WITHOUT calling take_message saves NOTHING and misleads the caller. So if you say it, call it. Do NOT drop to a message just because they are slow to choose; a message is for when a booking truly is not going to happen.
 
 Booking the meeting — or, when it cannot happen, recording a message — is what finishes this step. There is nothing to say or do after it.`;
 
@@ -92,10 +92,59 @@ export function makeBookMeetingRung(
 ): voice.AgentTask<BookMeetingResult> {
   const { schedulingTools, onBooked } = opts;
 
-  const realBooking = schedulingTools['book_with_scheduling'];
-  if (!realBooking) {
+  const realBookingTool = schedulingTools['book_with_scheduling'];
+  if (!realBookingTool) {
     throw new Error('makeBookMeetingRung requires book_with_scheduling in schedulingTools');
   }
+
+  // THE HARD-DOWN GATE (2026-07-19 failure-injection E2E). When the booking WRITE is
+  // broken but availability still looks healthy, the instructions' fallback trigger
+  // ("several days with no open times") never fires — and the model death-marched:
+  // fail → offer NEW times → caller accepts → fail → offer more, four days deep on one
+  // sim run. Persistent write failure is a CODE-detectable condition, so code detects
+  // it: after two consecutive failures the tool RESULT itself redirects the model to
+  // take_message (the tool result is the phase change — same mechanism as the loop-back).
+  // The counter resets on any success, so two flaky-but-recoverable failures spread
+  // across a call do not force a message when a booking can still land.
+  let consecutiveBookFailures = 0;
+  const realBookingExec = realBookingTool as unknown as {
+    execute: (a: unknown, o: unknown) => Promise<unknown>;
+  };
+  const realBooking = {
+    ...(realBookingTool as object),
+    execute: async (a: unknown, o: unknown): Promise<unknown> => {
+      const res = await realBookingExec.execute(a, o);
+      const text = typeof res === 'string' ? res : JSON.stringify(res);
+      // What failure ACTUALLY looks like from this tool (review on #290): the
+      // formatter emits {"error": "...", "error_code"?} with NO success field —
+      // {success:false} only exists in older shapes. Count BOTH; a non-JSON
+      // string is a success-path raw result, never counted.
+      let failed = false;
+      try {
+        const parsed = JSON.parse(text) as { success?: boolean; error?: unknown };
+        failed =
+          parsed.success === false ||
+          (typeof parsed.error === 'string' && parsed.success !== true);
+      } catch {
+        failed = false;
+      }
+      if (!failed) {
+        consecutiveBookFailures = 0;
+        return res;
+      }
+      consecutiveBookFailures++;
+      if (consecutiveBookFailures >= 2) {
+        return JSON.stringify({
+          success: false,
+          error:
+            'BOOKING SYSTEM DOWN: this is the ' +
+            String(consecutiveBookFailures) +
+            'th consecutive booking failure. The problem is the booking system, NOT the times — do NOT offer any more times and do NOT try to book again. Your VERY NEXT action: tell the caller plainly that you cannot complete the booking right now, and CALL take_message with their name and a callback request so the owner can book them directly.',
+        });
+      }
+      return res;
+    },
+  } as llm.ToolContext[string];
 
   // What the caller ALREADY told us they want. Injected so the rung opens by acting on it —
   // going straight to get_available_slots — instead of asking "what would you like to
