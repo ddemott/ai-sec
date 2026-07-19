@@ -226,3 +226,68 @@ describe('BookMeetingTask — the booking IS the transition', () => {
     expect(BOOK_MEETING_INSTRUCTIONS).toMatch(/one the caller said yes to/i);
   });
 });
+
+function fakeTakeMessage() {
+  return llm.tool({
+    description: 'take message',
+    parameters: { type: 'object', properties: {} },
+    execute: async () => JSON.stringify({ saved: true, message_id: 'm-1' }),
+  });
+}
+
+describe('HARD-DOWN gate: persistent booking failure redirects to take_message via the tool result', () => {
+  // WHO: the 2026-07-19 failure-injection sim — booking write down, availability
+  //       healthy, model death-marched four days deep re-offering times.
+  // WHAT: after 2 consecutive failures the tool RESULT tells the model the SYSTEM is
+  //       broken and to call take_message. Code detects what instructions cannot.
+  function bookToolReturning(results: string[]) {
+    let i = 0;
+    return llm.tool({
+      description: 'book',
+      parameters: { type: 'object', properties: {} },
+      execute: async () => results[Math.min(i++, results.length - 1)],
+    });
+  }
+  async function callBook(task: unknown, n: number): Promise<string[]> {
+    const tool = ((task as { toolCtx: Record<string, unknown> }).toolCtx)['book_with_scheduling'] as {
+      execute: (a: unknown, o: unknown) => Promise<unknown>;
+    };
+    const out: string[] = [];
+    for (let k = 0; k < n; k++) out.push(String(await tool.execute({}, { ctx: {}, toolCallId: 't' + k })));
+    return out;
+  }
+
+  it('SAD: two consecutive failures flip the result to BOOKING SYSTEM DOWN', async () => {
+    const task = makeBookMeetingRung({
+      schedulingTools: {
+        book_with_scheduling: bookToolReturning([
+          JSON.stringify({ success: false, error: 'TIMESLOT_OCCUPIED' }),
+          JSON.stringify({ success: false, error: 'TIMESLOT_OCCUPIED' }),
+        ]),
+      },
+      requestedService: 'a meeting',
+      takeMessage: fakeTakeMessage(),
+    });
+    const [first, second] = await callBook(task, 2);
+    expect(first).toContain('TIMESLOT_OCCUPIED'); // first failure passes through untouched
+    expect(first).not.toContain('BOOKING SYSTEM DOWN');
+    expect(second).toContain('BOOKING SYSTEM DOWN');
+    expect(second).toContain('take_message');
+  });
+
+  it('HAPPY: a success RESETS the counter — flaky-but-recoverable never forces a message', async () => {
+    const task = makeBookMeetingRung({
+      schedulingTools: {
+        book_with_scheduling: bookToolReturning([
+          JSON.stringify({ success: false, error: 'TIMESLOT_OCCUPIED' }),
+          JSON.stringify({ success: true, result: { appointment_id: 'a-1' } }),
+          JSON.stringify({ success: false, error: 'TIMESLOT_OCCUPIED' }),
+        ]),
+      },
+      requestedService: 'a meeting',
+      takeMessage: fakeTakeMessage(),
+    });
+    const out = await callBook(task, 3);
+    expect(out[2]).not.toContain('BOOKING SYSTEM DOWN'); // failure #1 of a NEW streak
+  });
+});

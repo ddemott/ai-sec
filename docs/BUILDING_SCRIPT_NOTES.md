@@ -599,6 +599,21 @@ lives on the function.")
     (front-loaded opener must relay caller_name), and a live E2E scenario whose
     transcriptForbid catches the re-ask phrasings verbatim.
 
+15. **A fallback whose trigger can't fire is no fallback — enumerate the triggers, then
+    gate the one only code can see.** (2026-07-19, found by the failure-injection E2E
+    Dale commissioned, not by a live call — the first bug this project caught BEFORE a
+    caller did.) The booking rung's message fallback triggered on "several days with no
+    open times" or caller preference. But when the booking WRITE is down and
+    availability is healthy, neither fires: the sim showed the agent four days deep in
+    fail → offer new times → caller accepts → fail again, forever. The model cannot
+    count its own failures reliably — code can. The gate: the wrapped booking tool
+    counts consecutive failures; at 2 the tool RESULT becomes "BOOKING SYSTEM DOWN —
+    stop offering times, call take_message now" (the tool result is the phase change,
+    the same mechanism as the loop-back). Counter resets on success so a flaky-but-
+    recoverable path never forces a message. Harness note: sim-taskgroup scenarios can
+    now inject failures via `wrapTools` (failTool) — the sad paths of the BACKEND are
+    E2E-testable without breaking the backend.
+
 ### How to duplicate for a new vertical
 
 The intake rung is the only vertical-specific piece. A real-estate line is the same

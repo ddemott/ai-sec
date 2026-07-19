@@ -154,6 +154,21 @@ interface Persona {
   // in their opening sentence; begin_call relayed it into state.volunteeredName.
   // The harness seeds it the same way, and the scenario forbids a re-ask.
   volunteeredName?: string;
+  // ── batch 1-3 (2026-07-19, Dale: "more E2E with different types of calls") ──
+  // A2 MIND-CHANGE: agree to an offered time, then in the SAME breath correct the
+  // day ("actually, could we do Tuesday instead?"). Value = the day to correct to.
+  correctsToDay?: string;
+  // A3 MID-BOOKING BAIL: after hearing the offered times, abandon the booking and
+  // ask for a callback message instead. Value = what to pass on.
+  bailsFromBooking?: string;
+  // B1 STUBBORN: reject the first offers and push ("anything earlier?") before
+  // accepting the earliest time offered in the SECOND round.
+  stubborn?: boolean;
+  // B2 CLOSED-DAY: insist on a Saturday first (twice), then take a weekday.
+  insistsClosedDay?: boolean;
+  // C2: if the receptionist says booking is not possible and offers a message or
+  // callback instead, accept it.
+  acceptsMessageFallback?: boolean;
 }
 
 const STYLES: Record<string, string> = {
@@ -199,6 +214,31 @@ function personaSystem(p: Persona, style: string): string {
   if (p.wantsToLeaveMessage && p.messageBody) {
     facts.push(
       `You want to leave a MESSAGE for the owner: "${p.messageBody}". When the receptionist asks what you'd like to pass on, say this in your own words. You do NOT want to book a meeting and you are NOT briefing a role — you just want the message passed along and (if it mentions one) a callback.`
+    );
+  }
+  if (p.correctsToDay) {
+    facts.push(
+      `IMPORTANT: when they offer you meeting times and you pick one, in the SAME sentence change your mind about the DAY: "That time works — actually, wait, could we do ${p.correctsToDay} at that time instead?" You want ${p.correctsToDay}, not the day first offered. If they then offer times on ${p.correctsToDay}, take one. Do this correction exactly ONCE.`
+    );
+  }
+  if (p.bailsFromBooking) {
+    facts.push(
+      `IMPORTANT: when they offer you meeting times, do NOT pick one. Say none of those work and you'd rather not book anything — ask them to just have the owner call you back. The message you want passed: "${p.bailsFromBooking}". Refuse any further times they offer; you only want the callback.`
+    );
+  }
+  if (p.stubborn) {
+    facts.push(
+      `IMPORTANT: reject ALL the times in their FIRST offer — say none of those work and ask "is there anything earlier?" or "what else do you have?". When they come back with more times (or explain those are the earliest), accept the earliest time they name in that SECOND exchange. Do not drag it past two rounds.`
+    );
+  }
+  if (p.insistsClosedDay) {
+    facts.push(
+      `IMPORTANT: you first want a SATURDAY appointment. Ask for Saturday explicitly. If they say Saturday is not available, push once more ("nothing at all on Saturday?"). After the second no, give in and accept an offered weekday time. Never accept a fabricated Saturday: if they DO offer you a Saturday time, take it (that is their mistake to make).`
+    );
+  }
+  if (p.acceptsMessageFallback) {
+    facts.push(
+      `If the receptionist says the booking cannot be completed and offers to take a message or have the owner call you back, accept that offer and give your callback request.`
     );
   }
   if (p.hasQuestions && p.questionFacts) {
@@ -398,6 +438,10 @@ interface Expect {
   descriptionMatch?: RegExp;
   // the job inquiry row must be LINKED to the appointment booked on this call
   jobLinked?: boolean;
+  // the booked appointment's TENANT-LOCAL weekday must / must not be these
+  // (0=Sun … 6=Sat). B2: a closed-day demand must never produce a weekend row.
+  appointmentWeekday?: number[];
+  appointmentWeekdayNot?: number[];
 }
 /** What a seed step handed back — the appointment the scenario will act on. */
 interface SeedInfo {
@@ -412,6 +456,12 @@ interface Scenario {
   /** Insert the state the scenario acts on (e.g. an existing appointment to cancel). Runs
    *  AFTER the per-run cleanup, so each run acts on a fresh row. */
   seed?: (db: Client, p: Persona) => Promise<SeedInfo | null>;
+  /** FAILURE INJECTION (batch 3): wrap the real tools before the run — e.g. make
+   *  book_with_scheduling fail once with TIMESLOT_OCCUPIED (a lost race, as the DB
+   *  would report it) or fail every time (backend hard-down). The wrapper returns
+   *  what the REAL backend returns on failure: {success:false, error:"..."} — the
+   *  same shape helpers.fail() sends, so the agent sees exactly production's sad path. */
+  wrapTools?: (tools: llm.ToolContext) => llm.ToolContext;
 }
 
 const SEED_SERVICE_NAME = 'Programming Consultation';
@@ -546,6 +596,34 @@ async function seedKnowledgeBase(db: Client): Promise<SeedInfo | null> {
 }
 
 const DEFAULT_STYLES = ['plain', 'terse', 'chatty', 'frontloader', 'corrector', 'rambler'];
+
+/** Wrap ONE tool so its first N calls fail with a REAL backend failure shape, then pass
+ *  through. failures=Infinity → hard-down. The wrapper counts per RUN (wrapTools is
+ *  called fresh from makeDeps each run), so scenarios stay independent. */
+function failTool(
+  toolName: string,
+  failures: number,
+  errorBody: string
+): (tools: llm.ToolContext) => llm.ToolContext {
+  return (tools) => {
+    let failed = 0;
+    const real = tools[toolName] as { execute: (a: unknown, o: unknown) => Promise<unknown> };
+    if (!real) throw new Error(`failTool: no such tool ${toolName}`);
+    return {
+      ...tools,
+      [toolName]: {
+        ...(real as object),
+        execute: async (a: unknown, o: unknown) => {
+          if (failed < failures) {
+            failed++;
+            return JSON.stringify({ success: false, error: errorBody });
+          }
+          return real.execute(a, o);
+        },
+      } as llm.ToolContext[string],
+    };
+  };
+}
 
 const SCENARIOS: Scenario[] = [
   {
@@ -697,6 +775,141 @@ const SCENARIOS: Scenario[] = [
       appointment: true,
       jobInquiry: false,
       transcriptForbid: /(get|have|what'?s|catch) your name|your name, please/i,
+    },
+    styles: ['plain'],
+  },
+  {
+    // ── BATCH 1 (2026-07-19): mid-call pivots ──
+    title: 'MULTI-GOAL: book a NEW meeting AND cancel the existing one — both writes land',
+    persona: {
+      name: 'Elena Ruiz',
+      phone: '555-901-0034',
+      goalLine:
+        'you want TWO things on this one call: book a NEW meeting with Dale about a website project, AND cancel the other appointment you already have booked',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      wantsScheduleChange: true,
+      scheduleAction: 'cancel',
+      existingService: 'Programming Consultation',
+      requestedService: 'a meeting about a website project',
+    },
+    seed: seedAppointment,
+    // The plan runs book THEN schedule_change; the seeded row must end canceled AND a
+    // new row must exist. verify() checks the new row is NOT the seeded one.
+    expect: { appointment: true, jobInquiry: false, canceled: true },
+    styles: ['plain'],
+  },
+  {
+    title: 'MIND-CHANGE: caller agrees to a time then corrects the day in the same breath',
+    persona: {
+      name: 'Tom Baker',
+      phone: '555-901-0035',
+      goalLine: 'you want to book a consulting meeting with Dale, ideally Monday',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a consulting meeting',
+      correctsToDay: 'Tuesday',
+    },
+    // The agent must book what the caller MEANS (Tuesday), not what they first agreed
+    // to — a booking fired on the first "that works" ignores the correction that
+    // followed it. dow 2 = Tuesday in tenant-local time.
+    expect: { appointment: true, jobInquiry: false, appointmentWeekday: [2] },
+    styles: ['plain'],
+  },
+  {
+    title: 'MID-BOOKING BAIL: none of the times work — callback message instead, no booking',
+    persona: {
+      name: 'Rita Chow',
+      phone: '555-901-0036',
+      goalLine: 'you wanted to see about a meeting with Dale, but no offered time will suit you',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a meeting with Dale',
+      bailsFromBooking: 'Rita called about working together — please have Dale call her back',
+    },
+    // The booking rung's take_message FALLBACK is the honest exit: no appointment row,
+    // a real customer_messages row. "I'll have him call you" without the write is the
+    // exact lie the fallback exists to prevent.
+    expect: { appointment: false, jobInquiry: false, message: true },
+    styles: ['plain'],
+  },
+  {
+    // ── BATCH 2 (2026-07-19): renegotiation exhaustion ──
+    title: 'STUBBORN: rejects the first offers, asks for earlier — booking still lands honestly',
+    persona: {
+      name: 'Hank Voss',
+      phone: '555-901-0037',
+      goalLine: 'you want a consulting meeting with Dale, but you are picky about the time',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a consulting meeting',
+      stubborn: true,
+    },
+    expect: { appointment: true, jobInquiry: false },
+    styles: ['plain'],
+  },
+  {
+    title: 'CLOSED-DAY: insists on Saturday — never booked on a weekend, lands on a weekday',
+    persona: {
+      name: 'Gwen Park',
+      phone: '555-901-0038',
+      goalLine: 'you want a consulting meeting with Dale, and Saturday is your strong preference',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a consulting meeting',
+      insistsClosedDay: true,
+    },
+    // The business is Mon-Fri. A Saturday row would mean the agent invented an opening
+    // the grid never offered (dow 0/6 forbidden); the caller gives in after two nos.
+    expect: { appointment: true, jobInquiry: false, appointmentWeekdayNot: [0, 6] },
+    styles: ['plain'],
+  },
+  {
+    // ── BATCH 3 (2026-07-19): failure injection ──
+    title: 'RACE: booking fails once with TIMESLOT_OCCUPIED — agent re-offers and lands it',
+    persona: {
+      name: 'Omar Haddad',
+      phone: '555-901-0039',
+      goalLine: 'you want to book a consulting meeting with Dale; be flexible about times',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a consulting meeting',
+    },
+    wrapTools: failTool(
+      'book_with_scheduling',
+      1,
+      'TIMESLOT_OCCUPIED: that time was just taken by another booking. Offer the caller a different time.'
+    ),
+    // Exactly what a lost race looks like in production (GiST exclusion under
+    // READ COMMITTED): first attempt fails, the slot is gone. The agent must
+    // recover WITHIN the call — re-offer, book again — not claim success.
+    expect: { appointment: true, jobInquiry: false },
+    styles: ['plain'],
+  },
+  {
+    title: 'HARD-DOWN: booking fails every attempt — honest fallback to a message, no false "you\'re booked"',
+    persona: {
+      name: 'June Adler',
+      phone: '555-901-0040',
+      goalLine: 'you want to book a consulting meeting with Dale',
+      wantsMeeting: true,
+      hasJobInquiry: false,
+      requestedService: 'a consulting meeting',
+      acceptsMessageFallback: true,
+    },
+    wrapTools: failTool(
+      'book_with_scheduling',
+      Number.POSITIVE_INFINITY,
+      'INTERNAL_ERROR: the booking system is temporarily unavailable.'
+    ),
+    // The worst case: the write path is down. The ONLY honest exits are a real
+    // message row or a truthful "I could not book it" — a spoken confirmation with
+    // no row behind it is the cardinal sin. transcriptForbid pins the phrasings.
+    expect: {
+      appointment: false,
+      jobInquiry: false,
+      message: true,
+      transcriptForbid: /you'?re (all set|booked)|booked you in|your appointment is (set|confirmed)/i,
     },
     styles: ['plain'],
   },
@@ -915,7 +1128,10 @@ async function verify(db: Client, p: Persona, e: Expect, seed?: SeedInfo): Promi
   }
 
   let bookedApptId: string | null = null;
-  if (!isScheduleChange) {
+  // A multi-goal call (book AND cancel, batch 1) expects BOTH: the seeded row checked
+  // above, and a NEW appointment below. Pure schedule-change scenarios keep skipping
+  // the generic block — the seeded row would satisfy it vacuously.
+  if (!isScheduleChange || e.appointment) {
     const appt = await db.query<{
       service: string | null;
       appointment_id: string;
@@ -927,19 +1143,28 @@ async function verify(db: Client, p: Persona, e: Expect, seed?: SeedInfo): Promi
         WHERE a.tenant_id = $1 AND c.phone = $2 ORDER BY a.created_at DESC LIMIT 1`,
       [TENANT, e164]
     );
-    if (e.appointment && !appt.rows[0]) fails.push('expected APPOINTMENT, none found');
-    if (!e.appointment && appt.rows[0]) fails.push('APPOINTMENT booked but none expected');
-    if (e.appointment && appt.rows[0] && !appt.rows[0].service)
-      fails.push('appointment service is NULL');
-    bookedApptId = appt.rows[0]?.appointment_id ?? null;
+    // On a multi-goal call the latest row must be a NEW booking, not the seeded one.
+    const newest = appt.rows[0] && appt.rows[0].appointment_id !== seed?.appointmentId ? appt.rows[0] : undefined;
+    if (e.appointment && !newest) fails.push('expected a NEW APPOINTMENT, none found');
+    if (!e.appointment && newest) fails.push('APPOINTMENT booked but none expected');
+    if (e.appointment && newest && !newest.service) fails.push('appointment service is NULL');
+    bookedApptId = newest?.appointment_id ?? null;
+    if ((e.appointmentWeekday || e.appointmentWeekdayNot) && newest) {
+      const dowRow = await db.query<{ dow: number }>(
+        `SELECT extract(dow from start_time AT TIME ZONE 'America/Chicago')::int AS dow
+           FROM appointments WHERE appointment_id = $1`,
+        [newest.appointment_id]
+      );
+      const dow = dowRow.rows[0]?.dow;
+      if (e.appointmentWeekday && dow !== undefined && !e.appointmentWeekday.includes(dow))
+        fails.push(`appointment landed on weekday ${dow}, expected one of ${e.appointmentWeekday}`);
+      if (e.appointmentWeekdayNot && dow !== undefined && e.appointmentWeekdayNot.includes(dow))
+        fails.push(`appointment landed on FORBIDDEN weekday ${dow} (closed day)`);
+    }
     // The WRITE, not the words: the note / job summary must be ON the calendar entry.
-    if (
-      e.descriptionMatch &&
-      appt.rows[0] &&
-      !e.descriptionMatch.test(appt.rows[0].description ?? '')
-    )
+    if (e.descriptionMatch && newest && !e.descriptionMatch.test(newest.description ?? ''))
       fails.push(
-        `appointment description does not match ${e.descriptionMatch} — got "${appt.rows[0].description ?? ''}"`
+        `appointment description does not match ${e.descriptionMatch} — got "${newest.description ?? ''}"`
       );
   }
 
@@ -1093,6 +1318,7 @@ async function main(): Promise<void> {
           runs++;
           const deps = makeDeps();
           if (sc.persona.volunteeredName) deps.state.volunteeredName = sc.persona.volunteeredName;
+          if (sc.wrapTools) deps.tools = sc.wrapTools(deps.tools);
           let res: RunResult;
           try {
             res = await runCall(sc.persona, style, deps);
