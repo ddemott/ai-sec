@@ -115,12 +115,18 @@ export function makeBookMeetingRung(
     execute: async (a: unknown, o: unknown): Promise<unknown> => {
       const res = await realBookingExec.execute(a, o);
       const text = typeof res === 'string' ? res : JSON.stringify(res);
+      // What failure ACTUALLY looks like from this tool (review on #290): the
+      // formatter emits {"error": "...", "error_code"?} with NO success field —
+      // {success:false} only exists in older shapes. Count BOTH; a non-JSON
+      // string is a success-path raw result, never counted.
       let failed = false;
       try {
-        const parsed = JSON.parse(text) as { success?: boolean };
-        failed = parsed.success === false;
+        const parsed = JSON.parse(text) as { success?: boolean; error?: unknown };
+        failed =
+          parsed.success === false ||
+          (typeof parsed.error === 'string' && parsed.success !== true);
       } catch {
-        failed = false; // unparseable → let the extractor decide; do not count it
+        failed = false;
       }
       if (!failed) {
         consecutiveBookFailures = 0;

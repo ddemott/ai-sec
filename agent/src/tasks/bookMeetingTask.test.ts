@@ -257,12 +257,14 @@ describe('HARD-DOWN gate: persistent booking failure redirects to take_message v
     return out;
   }
 
-  it('SAD: two consecutive failures flip the result to BOOKING SYSTEM DOWN', async () => {
+  it('SAD: two consecutive failures flip the result to BOOKING SYSTEM DOWN (REAL shape: {error, error_code}, no success field)', async () => {
+    // The formatter emits {"error", "error_code"} on failure — no success:false.
+    // Review on #290: a gate that only matched success:false never fired in prod.
     const task = makeBookMeetingRung({
       schedulingTools: {
         book_with_scheduling: bookToolReturning([
-          JSON.stringify({ success: false, error: 'TIMESLOT_OCCUPIED' }),
-          JSON.stringify({ success: false, error: 'TIMESLOT_OCCUPIED' }),
+          JSON.stringify({ error: 'That time was just taken.', error_code: 'TIMESLOT_OCCUPIED' }),
+          JSON.stringify({ error: 'That time was just taken.', error_code: 'TIMESLOT_OCCUPIED' }),
         ]),
       },
       requestedService: 'a meeting',
@@ -275,13 +277,46 @@ describe('HARD-DOWN gate: persistent booking failure redirects to take_message v
     expect(second).toContain('take_message');
   });
 
+  it('SAD: the legacy {success:false} shape still counts', async () => {
+    const task = makeBookMeetingRung({
+      schedulingTools: {
+        book_with_scheduling: bookToolReturning([
+          JSON.stringify({ success: false, error: 'nope' }),
+          JSON.stringify({ success: false, error: 'nope' }),
+        ]),
+      },
+      requestedService: 'a meeting',
+      takeMessage: fakeTakeMessage(),
+    });
+    const out = await callBook(task, 2);
+    expect(out[1]).toContain('BOOKING SYSTEM DOWN');
+  });
+
+  it('HAPPY: success shapes never count — raw-string results and success:true both reset/skip', async () => {
+    const task = makeBookMeetingRung({
+      schedulingTools: {
+        book_with_scheduling: bookToolReturning([
+          'Booked with Dale for 2:30 PM.', // raw string success (legacy formatter path)
+          JSON.stringify({ error: 'x', error_code: 'TIMESLOT_OCCUPIED' }),
+          JSON.stringify({ success: true, appointment_id: 'a-2' }),
+          JSON.stringify({ error: 'x', error_code: 'TIMESLOT_OCCUPIED' }),
+        ]),
+      },
+      requestedService: 'a meeting',
+      takeMessage: fakeTakeMessage(),
+    });
+    const out = await callBook(task, 4);
+    expect(out[1]).not.toContain('BOOKING SYSTEM DOWN'); // failure #1 (raw string did not count)
+    expect(out[3]).not.toContain('BOOKING SYSTEM DOWN'); // success:true reset the streak
+  });
+
   it('HAPPY: a success RESETS the counter — flaky-but-recoverable never forces a message', async () => {
     const task = makeBookMeetingRung({
       schedulingTools: {
         book_with_scheduling: bookToolReturning([
-          JSON.stringify({ success: false, error: 'TIMESLOT_OCCUPIED' }),
+          JSON.stringify({ error: 'taken', error_code: 'TIMESLOT_OCCUPIED' }),
           JSON.stringify({ success: true, result: { appointment_id: 'a-1' } }),
-          JSON.stringify({ success: false, error: 'TIMESLOT_OCCUPIED' }),
+          JSON.stringify({ error: 'taken', error_code: 'TIMESLOT_OCCUPIED' }),
         ]),
       },
       requestedService: 'a meeting',

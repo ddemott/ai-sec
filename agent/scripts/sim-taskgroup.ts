@@ -597,13 +597,15 @@ async function seedKnowledgeBase(db: Client): Promise<SeedInfo | null> {
 
 const DEFAULT_STYLES = ['plain', 'terse', 'chatty', 'frontloader', 'corrector', 'rambler'];
 
-/** Wrap ONE tool so its first N calls fail with a REAL backend failure shape, then pass
- *  through. failures=Infinity → hard-down. The wrapper counts per RUN (wrapTools is
- *  called fresh from makeDeps each run), so scenarios stay independent. */
+/** Wrap ONE tool so its first N calls fail with the REAL failure shape the agent's
+ *  formatter emits — {"error": "...", "error_code"?} with NO success field (review on
+ *  #290: injecting {success:false} proved a gate that production shapes never fire).
+ *  failures=Infinity → hard-down. Counts per RUN, so scenarios stay independent. */
 function failTool(
   toolName: string,
   failures: number,
-  errorBody: string
+  errorBody: string,
+  errorCode?: string
 ): (tools: llm.ToolContext) => llm.ToolContext {
   return (tools) => {
     let failed = 0;
@@ -616,7 +618,9 @@ function failTool(
         execute: async (a: unknown, o: unknown) => {
           if (failed < failures) {
             failed++;
-            return JSON.stringify({ success: false, error: errorBody });
+            return JSON.stringify(
+              errorCode ? { error: errorBody, error_code: errorCode } : { error: errorBody }
+            );
           }
           return real.execute(a, o);
         },
@@ -878,7 +882,8 @@ const SCENARIOS: Scenario[] = [
     wrapTools: failTool(
       'book_with_scheduling',
       1,
-      'TIMESLOT_OCCUPIED: that time was just taken by another booking. Offer the caller a different time.'
+      'That time was just taken by another booking. Offer the caller a different time.',
+      'TIMESLOT_OCCUPIED'
     ),
     // Exactly what a lost race looks like in production (GiST exclusion under
     // READ COMMITTED): first attempt fails, the slot is gone. The agent must
@@ -900,7 +905,8 @@ const SCENARIOS: Scenario[] = [
     wrapTools: failTool(
       'book_with_scheduling',
       Number.POSITIVE_INFINITY,
-      'INTERNAL_ERROR: the booking system is temporarily unavailable.'
+      'The booking system is temporarily unavailable.',
+      'INTERNAL_ERROR'
     ),
     // The worst case: the write path is down. The ONLY honest exits are a real
     // message row or a truthful "I could not book it" — a spoken confirmation with
