@@ -85,7 +85,10 @@ const TARGET_TABLES = [
   // Audit trails + version history + stale auth tokens (added 2026-07-20):
   // "clean the system as though just set up" includes the paper trail of the
   // data being removed — an audit row describing a deleted appointment is
-  // itself residue. These are FULL truncates even with --tenant, see below.
+  // itself residue. audit_log and record_versions carry tenant_id, so a
+  // --tenant run scopes them like everything else; password_resets has no
+  // tenant_id and is therefore cleared only on full (all-tenant) runs — the
+  // per-tenant path skips it (see the column check below).
   'record_versions',
   'audit_log',
   'password_resets',

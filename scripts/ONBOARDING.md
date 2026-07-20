@@ -1,17 +1,18 @@
 # Client Onboarding Runbook
 
-The exact order of operations to take a new client from "signed up" to "their AI answers the phone" — and the cleanup tools around it. Every destructive script here is **dry-run by default** and refuses non-local databases without `--force`.
+The exact order of operations to take a new client from "signed up" to "their AI answers the phone" — and the cleanup tools around it. Safety model: the **data-destroying** scripts (`clear-call-data`, `remove-customer`, `purge-soft-deleted`) are dry-run by default and need `--execute --yes` to act; the **script installers** (`setup-voice-script`, `ladder-builder --build`, `install-script`) always diff against and print the script they replace (and `ladder-builder` backs it up to `scripts/script-backups/` first). Everything that writes refuses a non-local database without `--force`.
 
 ## The scripts at a glance
 
-| Script                  | What it does                                                                                                                      | Safety                                       |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `onboard-tenant.ts`     | Tenant + secured owner login (+ optional voice preset) in one shot                                                                | Local-only guard; temp password printed once |
-| `setup-voice-script.ts` | Install a business-type voice script preset (`--list` to see them)                                                                | Diffs + prints what it replaces; `--dry-run` |
-| `install-script.ts`     | Fully bespoke voice script from a JSON composition                                                                                | Same diff behavior                           |
-| `remove-customer.ts`    | Remove ONE customer + everything of theirs                                                                                        | Dry-run default; `--execute --yes` to act    |
-| `clear-call-data.ts`    | Wipe ALL transactional data (customers, appointments, calls, audit trails) leaving the business shape intact; `--tenant` to scope | Dry-run default; `--execute --yes` to act    |
-| `purge-soft-deleted.ts` | Hard-destroy soft-deleted tenants (maintenance window act)                                                                        | Dry-run default                              |
+| Script                  | What it does                                                                                                                      | Safety                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `onboard-tenant.ts`     | Tenant + secured owner login (+ optional voice preset) in one shot                                                                | Local-only guard; temp password printed once     |
+| `setup-voice-script.ts` | Install a business-type voice script preset (`--list` to see them)                                                                | Diffs + prints what it replaces; `--dry-run`     |
+| `install-script.ts`     | Fully bespoke voice script from a JSON composition                                                                                | Same diff behavior                               |
+| `ladder-builder.ts`     | Rung catalog (`--list`/`--show`), generated `docs/CALL_LADDER.md` (`--docs`), build+install (`--build`)                           | Diff + automatic pre-install backup; `--dry-run` |
+| `remove-customer.ts`    | Remove ONE customer + everything of theirs                                                                                        | Dry-run default; `--execute --yes` to act        |
+| `clear-call-data.ts`    | Wipe ALL transactional data (customers, appointments, calls, audit trails) leaving the business shape intact; `--tenant` to scope | Dry-run default; `--execute --yes` to act        |
+| `purge-soft-deleted.ts` | Hard-destroy soft-deleted tenants (maintenance window act)                                                                        | Dry-run default                                  |
 
 ## Onboarding a client, step by step
 

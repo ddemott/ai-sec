@@ -170,7 +170,28 @@ if (!tenantId) {
   process.exit(2);
 }
 
+/** Same local-host guard as clear-call-data.ts (Copilot review, PR #291):
+ *  --build overwrites a tenant's LIVE script in whatever DB it is pointed at,
+ *  so a remote target must be deliberate. Unknown is not local. Dry runs are
+ *  exempt — composing + diffing writes nothing. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db', ''];
+
 async function build(): Promise<void> {
+  const host = hostOf(DB_URL);
+  if (!DRY_RUN && (host === null || !LOCAL_HOSTS.includes(host)) && !has('--force')) {
+    console.error(
+      `\nRefusing to install a script on non-local host "${host ?? '(unparseable)'}" without --force.\n` +
+        `(--dry-run is always allowed; installing to production is legitimate — the guard just makes it deliberate.)\n`
+    );
+    process.exit(1);
+  }
   const script = composeScript(recipe);
   const pool = new Pool({ connectionString: DB_URL });
   try {

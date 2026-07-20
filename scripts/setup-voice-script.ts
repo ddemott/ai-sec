@@ -154,7 +154,27 @@ if (!TENANT || !TYPE || !PRESETS[TYPE]) {
   process.exit(2);
 }
 
+/** Same local-host guard as clear-call-data.ts (Copilot review, PR #291):
+ *  overwriting a tenant's LIVE script on a remote DB must be deliberate.
+ *  Unknown is not local — an unparseable DSN refuses too. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db', ''];
+
 async function main(): Promise<void> {
+  const host = hostOf(DB_URL);
+  if ((host === null || !LOCAL_HOSTS.includes(host)) && !has('--force')) {
+    console.error(
+      `\nRefusing to install a voice script on non-local host "${host ?? '(unparseable)'}" without --force.\n` +
+        `(Installing to production is legitimate — the guard just makes it deliberate.)\n`
+    );
+    process.exit(1);
+  }
   const preset = PRESETS[TYPE!];
   const script = composeScript({
     persona: preset.persona,

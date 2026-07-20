@@ -89,6 +89,51 @@ const BY_CUSTOMER = [
 
 const BY_APPOINTMENT = ['reminder_schedules', 'appointment_sync_map'] as const;
 
+/**
+ * Not every trace of a person hangs off customer_id (Copilot review, PR #291):
+ * opt_out_records and phone_verifications are keyed by tenant + phone/email,
+ * and entity_sync_map tracks the customer as (entity_type='customer',
+ * local_id). Each entry: [table, WHERE clause, params-builder]. digits10 is
+ * the customer's phone reduced to its right 10 digits (matching the lookup's
+ * tolerance); rows with no phone on file skip the phone-keyed deletes.
+ */
+type Keyed = {
+  table: string;
+  where: string;
+  params: (c: {
+    customer_id: string;
+    tenant_id: string;
+    phone: string | null;
+    email: string | null;
+  }) => unknown[] | null;
+};
+const BY_OTHER_KEYS: Keyed[] = [
+  {
+    table: 'opt_out_records',
+    where: `tenant_id = $1 AND (
+              ($2 <> '' AND RIGHT(REGEXP_REPLACE(COALESCE(customer_phone,''), '\\D', '', 'g'), 10) = $2)
+              OR ($3 <> '' AND LOWER(COALESCE(customer_email,'')) = LOWER($3)))`,
+    params: (c) => {
+      const digits = (c.phone ?? '').replace(/\D/g, '').slice(-10);
+      if (!digits && !c.email) return null;
+      return [c.tenant_id, digits, c.email ?? ''];
+    },
+  },
+  {
+    table: 'phone_verifications',
+    where: `tenant_id = $1 AND RIGHT(REGEXP_REPLACE(COALESCE(phone,''), '\\D', '', 'g'), 10) = $2`,
+    params: (c) => {
+      const digits = (c.phone ?? '').replace(/\D/g, '').slice(-10);
+      return digits ? [c.tenant_id, digits] : null;
+    },
+  },
+  {
+    table: 'entity_sync_map',
+    where: `tenant_id = $1 AND entity_type = 'customer' AND local_id = $2`,
+    params: (c) => [c.tenant_id, c.customer_id],
+  },
+];
+
 async function main() {
   const host = hostOf(DB_URL);
   if ((host === null || !LOCAL_HOSTS.includes(host)) && !FORCE) {
@@ -187,6 +232,18 @@ async function main() {
       );
       counts.push({ table: t, n: rows[0]?.n ?? 0 });
     }
+    for (const k of BY_OTHER_KEYS) {
+      const p = k.params(row);
+      if (!p) {
+        counts.push({ table: `${k.table} (skipped — no phone/email on file)`, n: 0 });
+        continue;
+      }
+      const { rows } = await client.query<{ n: number }>(
+        `SELECT COUNT(*)::int AS n FROM ${k.table} WHERE ${k.where}`,
+        p
+      );
+      counts.push({ table: k.table, n: rows[0]?.n ?? 0 });
+    }
     const { rows: apptCount } = await client.query<{ n: number }>(
       `SELECT COUNT(*)::int AS n FROM appointments WHERE customer_id = $1`,
       [row.customer_id]
@@ -225,6 +282,12 @@ async function main() {
           row.customer_id,
         ]);
         console.log(`  ✔ ${String(res.rowCount ?? 0).padStart(6)}  ${t}`);
+      }
+      for (const k of BY_OTHER_KEYS) {
+        const p = k.params(row);
+        if (!p) continue;
+        const res = await client.query(`DELETE FROM ${k.table} WHERE ${k.where}`, p);
+        console.log(`  ✔ ${String(res.rowCount ?? 0).padStart(6)}  ${k.table}`);
       }
       const appts = await client.query(`DELETE FROM appointments WHERE customer_id = $1`, [
         row.customer_id,

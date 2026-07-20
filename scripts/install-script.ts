@@ -73,12 +73,34 @@ function parseArgs(): Args {
   };
 }
 
+/** Local-host guard, same pattern as clear-call-data.ts (2026-07-20): this
+ *  tool overwrites a tenant's LIVE script, so a remote DB must be deliberate.
+ *  Unknown is not local — an unparseable DSN refuses too. Dry runs exempt. */
+function hostOf(u: string): string | null {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return null;
+  }
+}
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db', ''];
+
 async function main(): Promise<void> {
   const args = parseArgs();
   const script = composeScript(args);
 
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL not set');
+  const host = hostOf(url);
+  if (
+    !args.dryRun &&
+    (host === null || !LOCAL_HOSTS.includes(host)) &&
+    !process.argv.includes('--force')
+  ) {
+    throw new Error(
+      `refusing to install on non-local host "${host ?? '(unparseable)'}" without --force (--dry-run is always allowed)`
+    );
+  }
   const pool = new Pool({ connectionString: url });
 
   try {
