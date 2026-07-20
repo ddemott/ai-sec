@@ -33,6 +33,12 @@
  * PRESERVES (never touched): tenants, users, services, employees, resources,
  * skills, employee_schedule, service_employee, service_resource, templates,
  * calendar settings — everything that makes an empty business exist.
+ *
+ * SCOPE WIDENED 2026-07-20 (Dale: "clean the system as though just set up"):
+ * now also clears audit_log, record_versions, password_resets, transcripts/
+ * summaries, communications history + delivery statuses, entity_sync_map,
+ * soft_reservations, and unanswered_questions — the paper trail of the data
+ * being removed is itself residue. Knowledge (tenant_docs) is still kept.
  */
 import { Client } from 'pg';
 
@@ -61,6 +67,11 @@ const DB_URL =
 const TARGET_TABLES = [
   'reminder_schedules',
   'appointment_sync_map',
+  'entity_sync_map',
+  'message_delivery_status',
+  'communications_history',
+  'call_transcripts',
+  'call_summaries',
   'voice_sessions',
   'customer_messages',
   'job_inquiries',
@@ -68,7 +79,19 @@ const TARGET_TABLES = [
   'consent_records',
   'opt_out_records',
   'phone_verifications',
+  'soft_reservations',
+  'unanswered_questions',
   'ai_cost_events',
+  // Audit trails + version history + stale auth tokens (added 2026-07-20):
+  // "clean the system as though just set up" includes the paper trail of the
+  // data being removed — an audit row describing a deleted appointment is
+  // itself residue. audit_log and record_versions carry tenant_id, so a
+  // --tenant run scopes them like everything else; password_resets has no
+  // tenant_id and is therefore cleared only on full (all-tenant) runs — the
+  // per-tenant path skips it (see the column check below).
+  'record_versions',
+  'audit_log',
+  'password_resets',
   'appointments',
   'customers',
 ];
@@ -113,6 +136,9 @@ async function main() {
     console.log(`\n══ CALL DATA on ${host || '(local socket)'} — ${scope} ══`);
 
     // Blast radius: only count tables that actually exist in this schema.
+    // A --tenant run additionally skips tables with no tenant_id column
+    // (currently just password_resets, which is keyed by email) — a scoped
+    // clear must not wipe other tenants' rows there.
     const present: { table: string; n: number }[] = [];
     for (const table of TARGET_TABLES) {
       const { rows: reg } = await client.query<{ exists: string | null }>(
@@ -120,6 +146,17 @@ async function main() {
         [`public.${table}`]
       );
       if (!reg[0]?.exists) continue; // table not in this schema — skip silently
+      if (TENANT) {
+        const { rows: col } = await client.query<{ n: number }>(
+          `SELECT COUNT(*)::int AS n FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'tenant_id'`,
+          [table]
+        );
+        if (!col[0]?.n) {
+          console.log(`  (skip)  ${table} — no tenant_id column, not clearable per-tenant`);
+          continue;
+        }
+      }
       const { rows } = await client.query<{ n: number }>(
         `SELECT COUNT(*)::int AS n FROM ${table} ${where}`,
         params

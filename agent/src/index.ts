@@ -867,9 +867,17 @@ export default defineAgent({
               // which is exactly the signature we spent days chasing. Warmth in this
               // product comes from the persona and the voice, not from the token
               // sampler.
+              // gpt-4.1-mini (2026-07-20, was gpt-4o-mini): same mini-class
+              // latency/cost tier, one generation newer instruction-following.
+              // Eval evidence with the Thinking Hammer ladder loaded: 4o-mini
+              // never exceeded 13/14 and reliably failed the third-person
+              // one-breath-message case; 4.1-mini passed that case in every
+              // run and scored the suite's first 14/14. The auxiliary models
+              // (summary/classify/fallback) stay on 4o-mini — cheap and
+              // uncritical there.
               llm: new openai.LLM({
                 apiKey: config.OPENAI_API_KEY,
-                model: 'gpt-4o-mini',
+                model: 'gpt-4.1-mini',
                 temperature: 0,
               }),
               // TTS IS DEEPGRAM AURA — native WebSocket streaming.
