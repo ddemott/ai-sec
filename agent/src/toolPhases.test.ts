@@ -73,7 +73,12 @@ describe('toolsForPhase — narrowing', () => {
     // must never be a locked wing, and a complete intent must be satisfiable from
     // any working phase. Still inside LiveKit's published 5-12 comfort band, far
     // under OpenAI's <20.
-    expect(Object.keys(toolsForPhase(ALL_TOOLS, 'booking')).length).toBeLessThanOrEqual(11);
+    // 12 (booking): 2026-07-20 — capture_job_inquiry joined booking. The script's
+    // canonical order is book FIRST, intake AFTER, so a "meeting about a job"
+    // opener guarantees the model is in this phase when it reaches the intake
+    // rung; with the tool only in 'intake' that rung was a locked wing (live sim
+    // call: booked and closed with zero role questions asked).
+    expect(Object.keys(toolsForPhase(ALL_TOOLS, 'booking')).length).toBeLessThanOrEqual(12);
     expect(Object.keys(toolsForPhase(ALL_TOOLS, 'manage')).length).toBeLessThanOrEqual(11);
   });
 

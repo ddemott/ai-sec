@@ -136,6 +136,16 @@ export const PHASE_TOOLS: Record<CallPhase, readonly string[]> = {
     // the model, holding no link tool, took a message and PROMISED a text it had
     // no way to send. A complete intent must be satisfiable from any working phase.
     'send_self_service_link',
+    // Same class again (2026-07-20, live sim call): the call script's canonical
+    // order is book FIRST, intake AFTER — so a caller whose opening sentence is
+    // "a meeting about a job" (the staffing tenant's most common caller) trips
+    // start_booking immediately and spends the REST of the call in this phase.
+    // With capture_job_inquiry only in 'intake', RUNG 3's tool sat in a locked
+    // wing: Chris booked the meeting and closed without asking a single role
+    // question, because the tool his script ordered him to call did not exist
+    // in his hand. The intake capture must be reachable from the phase the
+    // script guarantees the model is in when it reaches the intake rung.
+    'capture_job_inquiry',
   ],
 
   // An appointment that already exists. get_available_slots is here because a

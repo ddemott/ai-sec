@@ -73,6 +73,23 @@ const stubClient = {
 // Built per WORLD below (see PROD_CAPABILITIES): prompt and toolset must carry
 // the SAME capability subset, exactly as index.ts threads one literal into
 // both — a prompt that describes a tool the world doesn't hold is GH #113.
+//
+// SIM_CUSTOM_PROMPT_FILE (2026-07-20): same lesson, next field. In production a
+// tenant's composed call ladder rides in as `customPrompt` — for a tenant with
+// an installed script, THAT is the prompt answering the phone, and an eval
+// without it grades the default-Clara world instead. Point this env var at a
+// file holding the tenant's system_prompt (e.g. exported from the DB, or a
+// ladder-builder --dry-run capture) to replay the eval WITH the ladder.
+// SIM_PERSONA_NAME optionally sets the assistant name the same way prod does.
+import { readFileSync } from 'node:fs';
+const CUSTOM_PROMPT_FILE = process.env.SIM_CUSTOM_PROMPT_FILE;
+const CUSTOM_PROMPT = CUSTOM_PROMPT_FILE ? readFileSync(CUSTOM_PROMPT_FILE, 'utf8') : null;
+if (CUSTOM_PROMPT_FILE) {
+  console.log(
+    `using tenant custom prompt from ${CUSTOM_PROMPT_FILE} (${CUSTOM_PROMPT!.length} chars)`
+  );
+}
+
 function promptFor(capabilities: readonly string[]): string {
   return buildSystemPrompt({
     tenantName: "Bella's Hair Studio",
@@ -81,6 +98,8 @@ function promptFor(capabilities: readonly string[]): string {
     timezone: TZ,
     businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
     bookableThrough: '2027-01-08',
+    customPrompt: CUSTOM_PROMPT,
+    personaName: process.env.SIM_PERSONA_NAME ?? null,
     capabilities: capabilities as Parameters<typeof buildSystemPrompt>[0]['capabilities'],
   });
 }
@@ -158,7 +177,7 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
   // thing. (The phase SWAP itself is applied in runCase, not here.)
   start_booking: {
     ok: true,
-    next: 'Scheduling tools are now available. Use get_available_slots (they have a day in mind) or get_scheduling_options (they do not) to find real openings. Never state or refuse a time you have not seen in a tool result.',
+    next: 'Scheduling tools are now available. NOTHING IS BOOKED YET — do not say "booked", "you\'re booked in", or "all set" until book_with_scheduling returns success. Use get_available_slots (they have a day in mind) or get_scheduling_options (they do not) to find real openings. Never state or refuse a time you have not seen in a tool result.',
   },
   manage_appointment: {
     ok: true,
@@ -223,6 +242,14 @@ const DEFAULT_TOOL_RESULTS: Record<string, unknown> = {
   },
   cancel_appointment: { success: true, result: { canceled: true } },
   take_message: { success: true, result: { recorded: true } },
+  capture_job_inquiry: {
+    success: true,
+    result: {
+      recorded: true,
+      message:
+        'Role details recorded and linked to the meeting. Job descriptions can be emailed to jobs@thinkinghammer.example.',
+    },
+  },
   send_self_service_link: {
     success: true,
     result: {
@@ -293,6 +320,14 @@ interface EvalCase {
    * exist. Only for cases that document the post-10DLC flow.
    */
   smsWorld?: boolean;
+  /**
+   * Only meaningful when a tenant ladder is loaded (SIM_CUSTOM_PROMPT_FILE):
+   * the behavior under test is ordered by the tenant's SCRIPT, not the platform
+   * prompt — e.g. the staffing intake rung calling capture_job_inquiry. Without
+   * the ladder the default prompt never orders it, so running the case would
+   * grade a fiction. Skipped (with a note) when no custom prompt is loaded.
+   */
+  requiresCustomPrompt?: boolean;
 }
 
 const CASES: EvalCase[] = [
@@ -371,7 +406,8 @@ const CASES: EvalCase[] = [
       },
       {
         // The CODE claim, strict: only send_verification_code makes it honest.
-        pattern: /\b(sent|texted|texting)\s+(you\s+)?(a\s+)?(verification\s+)?code\b|\bverification (text|code)\b/i,
+        pattern:
+          /\b(sent|texted|texting)\s+(you\s+)?(a\s+)?(verification\s+)?code\b|\bverification (text|code)\b/i,
         requiresTool: ['send_verification_code'],
         lie: 'told the caller a verification code was sent without ever sending one',
       },
@@ -384,6 +420,51 @@ const CASES: EvalCase[] = [
         pattern: /\b(saved|taken|noted)\s+(your\s+)?message\b/i,
         requiresTool: ['take_message'],
         lie: 'told the caller a message was saved without ever saving it',
+      },
+    ],
+  },
+  {
+    // ── THE 2026-07-20 SIM CALL — the locked wing ───────────────────────────
+    //
+    // "I'd like to talk to Dale about a job" is TWO goals (a meeting + the role
+    // details), and it is this tenant's most common opener. On the live sim call
+    // the model booked the meeting and closed WITHOUT ASKING A SINGLE ROLE
+    // QUESTION — not disobedience: capture_job_inquiry lived only in the
+    // 'intake' phase toolset, and the (correct) book-first flow had already
+    // swapped the model to 'booking', where the tool did not exist. The script
+    // ordered RUNG 3; the hand held no tool for it.
+    //
+    // Fixed by adding capture_job_inquiry to the booking phase. This case pins
+    // that: booking first, then the role capture MUST still happen.
+    name: 'FULL CALL: job opener books the meeting AND captures the role (2026-07-20 locked wing)',
+    requiresCustomPrompt: true,
+    userTurns: [
+      "Hi, I'd like to talk to Dale about a job.",
+      'Sammy Salsa.',
+      'Three one two, eight six one, one eight three five.',
+      "Yes, that's right.",
+      // 3:30 matches the get_available_slots stub ("3:00 PM and 3:30 PM open") —
+      // a scripted caller who insists on a time the stub does not offer turns
+      // this into an unbookable call and fails the case on the WRONG thing
+      // (first draft asked for 1 PM and did exactly that).
+      'Tomorrow at 3:30 works great.',
+      "I'm calling from Apex Staffing — we're placing someone with a client. The client is Initech.",
+      "It's a contract role, seventy dollars an hour, six months.",
+      'Hybrid — the office is at 100 Main Street in Chicago.',
+      "No, that's everything, thanks.",
+    ],
+    required: [
+      ['get_available_slots', 'get_scheduling_options'],
+      ['book_with_scheduling'],
+      ['capture_job_inquiry'],
+    ],
+    forbidden: ['book_appointment', 'check_availability'],
+    claims: [
+      {
+        pattern:
+          /\b(booked|scheduled|confirmed)\s+(you|your|it|that)\b|\byou'?re all set\b|\byou'?re booked\b/i,
+        requiresTool: ['book_with_scheduling'],
+        lie: 'told the caller the meeting was booked without ever booking it',
       },
     ],
   },
@@ -469,7 +550,8 @@ const CASES: EvalCase[] = [
         // send_self_service_link — same false positive as the full-call case. A
         // link is not a code, so claiming a CODE stays honest only via
         // send_verification_code.
-        pattern: /\b(sent|texted|texting)\s+(you\s+)?(a\s+)?(verification\s+)?code\b|\bverification (text|code)\b/i,
+        pattern:
+          /\b(sent|texted|texting)\s+(you\s+)?(a\s+)?(verification\s+)?code\b|\bverification (text|code)\b/i,
         requiresTool: ['send_verification_code'],
         lie: 'told the caller a verification code was sent without ever sending one',
       },
@@ -627,7 +709,9 @@ async function chat(
         headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
         body: JSON.stringify({
           model: MODEL,
-          temperature: 0,
+          // gpt-5-family models reject temperature values other than the
+          // default — omit the param there, pin 0 elsewhere for repeatability.
+          ...(MODEL.startsWith('gpt-5') ? {} : { temperature: 0 }),
           messages,
           tools,
           tool_choice: 'auto',
@@ -774,7 +858,15 @@ async function main(): Promise<void> {
     `${C.b}SecretaryHQ — agent tool-selection eval${C.x} ${C.d}(model: ${MODEL}, ${CASES.length} cases)${C.x}`
   );
   let passed = 0;
+  let skipped = 0;
   for (const c of CASES) {
+    if (c.requiresCustomPrompt && !CUSTOM_PROMPT) {
+      skipped++;
+      console.log(
+        `  ${C.d}SKIP  ${c.name} — needs a tenant ladder (set SIM_CUSTOM_PROMPT_FILE)${C.x}`
+      );
+      continue;
+    }
     let r: CaseResult;
     try {
       r = await runCase(c);
@@ -797,10 +889,11 @@ async function main(): Promise<void> {
     }
     if (r.pass) passed++;
   }
-  const rate = passed / CASES.length;
+  const ran = CASES.length - skipped;
+  const rate = ran > 0 ? passed / ran : 0;
   const ok = rate >= THRESHOLD;
   console.log(
-    `\n  ${ok ? C.g : C.r}${passed}/${CASES.length} cases passed (${Math.round(rate * 100)}%, threshold ${Math.round(THRESHOLD * 100)}%)${C.x}`
+    `\n  ${ok ? C.g : C.r}${passed}/${ran} cases passed (${Math.round(rate * 100)}%, threshold ${Math.round(THRESHOLD * 100)}%)${skipped ? `${C.d} — ${skipped} skipped (need a tenant ladder)${C.x}` : ''}${C.x}`
   );
   process.exit(ok ? 0 : 1);
 }

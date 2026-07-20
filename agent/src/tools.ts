@@ -355,7 +355,7 @@ export function buildTools(
       execute: async () =>
         routeTo(
           'booking',
-          'Scheduling tools are now available. Use get_available_slots (they have a day in mind) or get_scheduling_options (they do not) to find real openings. Never state or refuse a time you have not seen in a tool result.'
+          'Scheduling tools are now available. NOTHING IS BOOKED YET — do not say "booked", "you\'re booked in", or "all set" until book_with_scheduling returns success. Use get_available_slots (they have a day in mind) or get_scheduling_options (they do not) to find real openings. Never state or refuse a time you have not seen in a tool result.'
         ),
     }),
 

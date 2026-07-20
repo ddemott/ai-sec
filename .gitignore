@@ -84,3 +84,4 @@ test-results/
 
 # Local Obsidian vault config (editor state — not source)
 .obsidian/
+scripts/script-backups/
