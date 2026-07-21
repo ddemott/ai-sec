@@ -11,6 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ChecklistTracker } from './tracker.js';
+import { buildChecklistPrompt } from './checklistAgent.js';
 import {
   BOOKING_TREE,
   FIX_COMPUTER_TREE,
@@ -44,10 +45,38 @@ describe('library integrity', () => {
     expect(FIX_COMPUTER_TREE.description).toMatch(/never the job tree/i);
   });
 
-  it('identity ask text carries the 2026-07-21 phone read-back rules', () => {
+  it('identity ask text carries the 2026-07-21 phone rules (ask plainly; record first, read back once)', () => {
+    // The read-back protocol moved host-side that same day (the double-read-back
+    // fix): the NODE now forbids the pre-read and defers to the recording
+    // result's directive — which is where the 3-3-4 string lives now
+    // (readbackDirective, pinned in checklistTools.test.ts).
     const phone = IDENTITY_TREE.nodes.find((n) => n.node_id === 'caller_phone');
-    expect(phone && 'ask' in phone ? phone.ask : '').toMatch(/One read-back, one yes/);
-    expect(phone && 'ask' in phone ? phone.ask : '').toMatch(/3-3-4/);
+    const ask = phone && 'ask' in phone ? phone.ask : '';
+    expect(ask).toMatch(/NEVER tell the caller how to say it/i);
+    expect(ask).toMatch(/record_answer it IMMEDIATELY/);
+    expect(ask).toMatch(/do NOT read it back first/i);
+    expect(ask).toMatch(/one read-back, one yes/i);
+  });
+
+  it('the prompt carries THE ELSE — nothing fits → take a message for the owner (Dale, 2026-07-21)', () => {
+    // "If you can't find a tool, the ELSE statement: leave a message for the
+    // owner." The question-tree heir of the ladder's universal RUNG 4: no call
+    // may end empty-handed — a saved message is the floor, not a failure.
+    const prompt = buildChecklistPrompt({
+      persona: 'You are Chris, the AI receptionist for Thinking Hammer.',
+      runtime: {
+        currentDate: 'Tuesday, July 21, 2026',
+        timezone: 'America/Chicago',
+        businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+        bookableThrough: 'Friday, August 15, 2026',
+      },
+      library: PLATFORM_TREE_LIBRARY,
+    });
+    // \s+ between words — the prompt template hard-wraps lines, so a phrase can
+    // split across a newline + indent.
+    expect(prompt).toMatch(/THE ELSE/);
+    expect(prompt).toMatch(/ALWAYS\s+a\s+message\s+for\s+the\s+owner/i);
+    expect(prompt).toMatch(/Never\s+end\s+a\s+call\s+empty-handed/i);
   });
 
   it('every tree is selectable by id, alone and together', () => {
@@ -148,7 +177,21 @@ describe('composition (trees stacking on one call)', () => {
     expect(t.status('book')).toBe('blocked'); // no name/phone yet — cross-tree requires
     t.record('caller_name', { value: 'Pat' });
     t.record('caller_phone', { value: '2624979039' });
+    // Identity satisfied — but the DROP-OFF STATEMENT hasn't been made: the
+    // policy is stated BEFORE the visit is booked (Dale, 2026-07-21), so
+    // drop_off_ok gates book on repair calls.
+    expect(t.status('book')).toBe('blocked');
+    t.record('drop_off_ok', { value: 'yes, dropping it off works' });
     expect(t.status('book')).toBe('ready');
+  });
+
+  it('a NON-repair booking never waits on drop_off_ok — absent ids are satisfied', () => {
+    const t = make();
+    t.select(['identity', 'booking']);
+    t.record('caller_name', { value: 'Sue' });
+    t.record('caller_phone', { value: '2624979039' });
+    t.record('meeting_topic', { value: 'a job opportunity' });
+    expect(t.status('book')).toBe('ready'); // drop_off_ok isn't on this call
   });
 
   it('mid-call purpose addition: booking joins with identity already satisfied', () => {

@@ -37,6 +37,16 @@ import type { NodeStatus } from '../src/checklist/types.js';
 const API_KEY = process.env.OPENAI_API_KEY;
 const AGENT_MODEL = process.env.SIM_QT_MODEL || 'gpt-4.1-mini';
 const CALLER_MODEL = process.env.SIM_CALLER_MODEL || 'gpt-4o-mini';
+
+// PROVIDER BAKE-OFF (2026-07-21): the AGENT (the thing under test) can point at
+// any OpenAI-compatible endpoint — DeepSeek, Groq, Together, a local model —
+// while the simulated CALLER stays on OpenAI (only the variable under test may
+// change). Set all three to test a provider:
+//   SIM_QT_BASE_URL=https://api.deepseek.com/v1 SIM_QT_API_KEY=$DEEPSEEK_API_KEY SIM_QT_MODEL=deepseek-chat
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+const AGENT_BASE = (process.env.SIM_QT_BASE_URL || '').replace(/\/+$/, '');
+const AGENT_URL = AGENT_BASE ? `${AGENT_BASE}/chat/completions` : OPENAI_URL;
+const AGENT_KEY = process.env.SIM_QT_API_KEY || API_KEY;
 const CASE_FILTER = process.env.SIM_CASE || '';
 const RUNS = Number(process.env.SIM_RUNS || 1);
 const TRACE = !!process.env.SIM_TRACE;
@@ -66,10 +76,16 @@ async function openai(
   messages: ChatMessage[],
   tools?: { type: 'function'; function: unknown }[]
 ): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
+  // The AGENT model (passed AGENT_MODEL) uses the configurable endpoint; every
+  // other call (the caller model) stays on OpenAI. Route by which model this is.
+  const isAgent = model === AGENT_MODEL;
+  const url = isAgent ? AGENT_URL : OPENAI_URL;
+  const key = isAgent ? AGENT_KEY : API_KEY;
+  const who = isAgent && AGENT_BASE ? `agent-provider(${new URL(AGENT_URL).host})` : 'OpenAI';
   for (let attempt = 1; attempt <= 5; attempt++) {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model,
         temperature,
@@ -85,11 +101,11 @@ async function openai(
       return { content: m?.content ?? null, toolCalls: m?.tool_calls ?? [] };
     }
     if (res && res.status !== 429 && res.status < 500) {
-      throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      throw new Error(`${who} ${res.status}: ${(await res.text()).slice(0, 200)}`);
     }
     await sleep(Math.min(1500 * 2 ** (attempt - 1), 15_000));
   }
-  throw new Error('OpenAI unreachable after retries');
+  throw new Error(`${who} unreachable after retries`);
 }
 
 function toolSchemas(ctx: llm.ToolContext): { type: 'function'; function: unknown }[] {
@@ -235,6 +251,8 @@ async function callerReply(personaSys: string, shared: ChatMessage[]): Promise<s
 interface RunOutcome {
   tracker: ChecklistTracker;
   fakes: Record<string, Fake>;
+  /** Backend tool names in the order they fired — for ordering graders. */
+  toolOrder: string[];
   transcript: { who: 'agent' | 'caller'; text: string }[];
   closed: boolean;
   goodbye: string;
@@ -243,6 +261,14 @@ interface RunOutcome {
 async function runCall(p: Persona, callerPhone?: string): Promise<RunOutcome> {
   const tracker = new ChecklistTracker(PLATFORM_TREE_LIBRARY);
   const fakes = makeFakeBackend();
+  const toolOrder: string[] = [];
+  for (const [name, f] of Object.entries(fakes)) {
+    const orig = f.execute;
+    f.execute = async (a, o) => {
+      toolOrder.push(name);
+      return orig(a, o);
+    };
+  }
   let closed = false;
   let goodbye = '';
   const toolkit = createChecklistTools({
@@ -336,7 +362,7 @@ async function runCall(p: Persona, callerPhone?: string): Promise<RunOutcome> {
     if (TRACE) process.stderr.write(`   caller: ${reply}\n`);
   }
 
-  return { tracker, fakes, transcript, closed, goodbye };
+  return { tracker, fakes, toolOrder, transcript, closed, goodbye };
 }
 
 // ── Scenarios + graders (snapshot-first, transcript only for forbids) ─────────
@@ -363,6 +389,64 @@ const mustResolve = (o: RunOutcome): string[] =>
   o.tracker.isResolved() ? [] : ['checklist never resolved'];
 
 const SCENARIOS: Scenario[] = [
+  {
+    // A replay of the 2026-07-20/21 live test calls — the call that broke four ways.
+    // Every grader below is a defect Dale reported on a real call:
+    //   - only the job tree selected, no meeting ever offered (call 2)
+    //   - intake questions before the meeting was booked ("you just blew right
+    //     past that", call 3) → get_available_slots must fire before capture
+    //   - dictated number never read back (calls 3 AND 4)
+    //   - "what would you like to discuss?" after the opener named the topic (call 4)
+    //   - caller's name never used between hello and goodbye (call 5 report)
+    title: "DALE'S CALL — meeting about a job: book FIRST, read back, use the name",
+    persona: {
+      opener: "Hi, I'd like to set up a meeting with Dale to talk about a job opportunity.",
+      facts: `Your name: Marcus Webb. Your callback number: 262-497-9039 — give it naturally
+("262 497 9039"), and confirm when it is read back correctly.
+Your company: Bell Labs — you are hiring for your OWN company.
+The role: full-time senior software engineer, 120 to 150 thousand salary, fully remote,
+team on Central time. You WANT the meeting — accept the first offered time.`,
+      behaviour:
+        'Friendly and direct. Answer one thing at a time. If asked what you want to ' +
+        'discuss, point out you already said — a job opportunity.',
+    },
+    grade: (o) => {
+      const slotsAt = o.toolOrder.indexOf('get_available_slots');
+      const captureAt = o.toolOrder.indexOf('capture_job_inquiry');
+      return [
+        ...has(o, 'book', ['done']),
+        ...has(o, 'capture', ['done']),
+        ...(slotsAt >= 0 && captureAt >= 0 && slotsAt < captureAt
+          ? []
+          : [
+              `booking must come BEFORE intake — toolOrder: ${o.toolOrder.join(' → ') || '(none)'}`,
+            ]),
+        // EXACTLY once — zero is the unconfirmed-number bug (calls 3+4), two is
+        // the double read-back the unconditional host directive caused (call 7).
+        ...(() => {
+          const readbacks = o.transcript.filter(
+            (t) => t.who === 'agent' && /2\s*6\s*2\D{0,3}4\s*9\s*7\D{0,3}9\s*0\s*3\s*9/.test(t.text)
+          ).length;
+          return readbacks === 1
+            ? []
+            : [`dictated number read back ${readbacks} times — must be exactly once`];
+        })(),
+        ...(agentSaid(o, /\bMarcus\b/)
+          ? []
+          : ["the caller's name was never used in conversation"]),
+        ...(agentSaid(o, /what would you like to (discuss|talk about)/i)
+          ? ['asked for the topic the opener already gave']
+          : []),
+        ...valueMatch(o, 'callers_company', /bell/i),
+        ...valueMatch(o, 'hiring_for', /own_company/),
+        ...valueMatch(o, 'employment_type', /full_time/),
+        ...valueMatch(o, 'work_mode', /remote/),
+        ...has(o, 'caller_phone', ['answered']),
+        ...mustResolve(o),
+        ...mustClose(o),
+      ];
+    },
+  },
   {
     title: 'JOB-DIRECT — recruiter placing with a client, asked step by step',
     persona: {
@@ -474,12 +558,14 @@ give your name or number — if asked, say you're just curious.`,
     ],
   },
   {
-    title: 'CALLER-ID BOOKING — attested number never asked for, meeting booked',
+    title: 'CALLER-ID BOOKING — attested number never asked for, repair intake + booking',
     persona: {
       opener: "My laptop won't boot after an update — can someone take a look at it?",
       facts: `Your name: Pat Nguyen. You are calling from your own phone (they may already
-have the number — do NOT recite it unless asked). You'd like to bring the laptop in;
-Tuesday afternoon works. Any offered Tuesday time is fine — take the first one.`,
+have the number — do NOT recite it unless asked). Dropping the laptop off is fine if
+they say that's how it works; Tuesday afternoon works. Any offered Tuesday time is
+fine — take the first one. Your data is backed up to OneDrive, nothing irreplaceable
+on the machine.`,
       behaviour: 'Easygoing; picks the first offered time.',
     },
     callerPhone: '2624979039',
@@ -487,8 +573,35 @@ Tuesday afternoon works. Any offered Tuesday time is fine — take the first one
       ...has(o, 'book', ['done']),
       ...has(o, 'caller_phone', ['answered']),
       ...has(o, 'issue_description', ['answered']),
+      ...has(o, 'drop_off_ok', ['answered']),
+      // STATED, not asked (Dale): the agent must say drop-off is how it works —
+      // never pose it as a choice of service modes.
+      ...(agentSaid(o, /drop[- ]?off/i) ? [] : ['drop-off policy was never stated to the caller']),
+      ...has(o, 'data_backup', ['answered']),
       ...(agentSaid(o, /best (number|phone)|number to reach/i)
         ? ['agent asked for a number it already had from caller ID']
+        : []),
+      ...mustResolve(o),
+      ...mustClose(o),
+    ],
+  },
+  {
+    title: "THE ELSE — a need no tree covers still ends in a saved message, never a dead end",
+    persona: {
+      opener:
+        "This is an odd one — my nephew's getting married and I want to know if Dale " +
+        'would MC the reception. Is that something he does?',
+      facts: `Your name: Rosa Delgado. Number: 262-497-9039.
+You know this is unusual. If they can't answer, you'd like Dale to call you back about
+it — leave whatever message gets him to call. The date is October 3rd.`,
+      behaviour: 'Good-humored about the odd request; happy to leave a message.',
+    },
+    grade: (o) => [
+      ...(o.tracker.selectedTrees().includes('message') ? [] : ['message tree never selected']),
+      ...has(o, 'take_message_action', ['done']),
+      ...has(o, 'caller_name', ['answered']),
+      ...(agentSaid(o, /can'?t help (you )?with that/i)
+        ? ['said "can\'t help with that" — the ELSE forbids a dead end']
         : []),
       ...mustResolve(o),
       ...mustClose(o),

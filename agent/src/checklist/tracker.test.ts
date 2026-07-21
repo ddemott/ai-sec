@@ -191,6 +191,29 @@ describe('tree selection', () => {
     expect(t.frontier().map((f) => f.node_id)).not.toContain('caller_name');
   });
 
+  it('BOOK FIRST: booking outranks other goal trees in the walk, whatever order selection came in', () => {
+    // WHO: the ask order the model works top-down from renderState/frontier.
+    // WHAT: identity first, booking second, intake trees after — host-enforced.
+    // WHEN: 2026-07-21 live call — selection order [identity, job, booking]
+    //       queued SIX role-intake questions ahead of the meeting; the caller
+    //       had to protest "you never let me set up a meeting, you just blew
+    //       right past that." The meeting is what they rang for.
+    // WHY: no selection order the model chooses may put preparation before
+    //      the thing it prepares.
+    const t = make();
+    t.select(['job']); // intake selected FIRST — the adversarial order
+    t.select(['identity', 'booking']);
+    const state = t.renderState();
+    const pos = (needle: string) => state.indexOf(needle);
+    // All three present…
+    expect(pos('caller_name')).toBeGreaterThan(-1);
+    expect(pos('book')).toBeGreaterThan(-1);
+    expect(pos('callers_company')).toBeGreaterThan(-1);
+    // …and ordered identity → booking → job, despite job being selected first.
+    expect(pos('caller_name')).toBeLessThan(pos('book'));
+    expect(pos('book')).toBeLessThan(pos('callers_company'));
+  });
+
   it('re-selecting is a no-op that does not reset anything', () => {
     const t = make();
     t.select(['identity']);

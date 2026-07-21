@@ -43,12 +43,15 @@ const callerPhoneNode = {
   node_id: CALLER_PHONE,
   type: 'text',
   ask:
-    'the best callback number. Read it back ONCE — digit by digit, three groups (3-3-4), ' +
-    'no "+1" — and ask if it is right, then STOP and wait for the yes. One read-back, one ' +
-    'yes, never more: a number they just dictated needs exactly one confirmation, and a ' +
-    'ten-digit number is complete — never ask for "the rest" of it. If they say the number ' +
-    'you have (caller ID) is wrong, drop it entirely and collect fresh — never argue, never ' +
-    'repeat the disputed number',
+    'the best callback number — ask PLAINLY ("What\'s the best number to reach you?") and ' +
+    'NEVER tell the caller how to say it: no "digit by digit", no "in three groups", no ' +
+    'format coaching of any kind. People know how to say their own phone number (2026-07-21 ' +
+    'live call: the agent lectured the 3-3-4 format at the caller twice and he hung up). ' +
+    'When they give it, record_answer it IMMEDIATELY — do NOT read it back first: the ' +
+    'recording result hands you the exact read-back to speak (one read-back, one yes, ' +
+    'never more — a ten-digit number is complete; never ask for "the rest" of it). If ' +
+    'they say the number you have (caller ID) is wrong, drop it entirely and collect ' +
+    'fresh — never argue, never repeat the disputed number',
 } as const;
 
 /** WHO IS THIS — the floor under every goal that needs a contact. */
@@ -81,8 +84,18 @@ export const BOOKING_TREE: QuestionTreeDef = {
       node_id: 'book',
       type: 'action',
       tool: 'book_with_scheduling',
-      description: 'book the meeting — offer real open times, settle one, book it',
-      requires: [CALLER_NAME, CALLER_PHONE, 'meeting_topic'],
+      description:
+        'book the meeting. NEVER ask "when would you like to meet?" against a calendar ' +
+        'the caller cannot see (2026-07-21 live call) — fetch real open times FIRST ' +
+        '(get_available_slots), OFFER the nearest ones, and settle on one. If the caller ' +
+        'names a day or time on their own, check THAT time and confirm it if open — never ' +
+        'answer a named time with a menu that contains it',
+      // drop_off_ok is CROSS-TREE: it exists only when fix_computer is selected
+      // (ids absent from the call's selected trees are treated as satisfied), and
+      // it gates the booking so the "drop-off only" statement is made BEFORE the
+      // visit lands on the calendar — never announced after the fact (Dale,
+      // 2026-07-21: state the policy, then book).
+      requires: [CALLER_NAME, CALLER_PHONE, 'meeting_topic', 'drop_off_ok'],
     },
   ],
 };
@@ -93,7 +106,9 @@ export const MESSAGE_TREE: QuestionTreeDef = {
   description:
     'The caller wants to leave a message, have the owner call back, or pass something along ' +
     'that a booking or a role does not cover. Leaving a message stays a message even when ' +
-    'it MENTIONS a job or a callback.',
+    'it MENTIONS a job in passing — but a call whose SUBJECT is a role, position, or ' +
+    'opening to fill is the job tree, no matter how it is phrased ("run it past him", ' +
+    '"let him know about a role" included).',
   nodes: [
     callerNameNode,
     {
@@ -159,7 +174,13 @@ export const JOB_TREE: QuestionTreeDef = {
     'The caller is BRINGING a job, role, contract position, or hiring opportunity TO the ' +
     'owner — a recruiter, staffing agency, or someone pitching work for the owner to take. ' +
     'NOT a caller asking the business to do work for THEM ("can someone fix my computer" is ' +
-    'a service request → booking/fix_computer, even if they call it "a job").',
+    'a service request → booking/fix_computer, even if they call it "a job"). ' +
+    '"I have a position / role / opening I want to run past him" IS this tree — pass-it-along ' +
+    'phrasing does not make it a plain message; the role questions ARE the message. ' +
+    '"TALK TO / speak with / meet [the owner] about a job" is TWO goals — select job AND ' +
+    'booking together: the meeting is what they rang for, the role details are preparation ' +
+    'for it (2026-07-21 live call: job alone was selected, the full intake ran, and the ' +
+    'caller hung up with nothing in the diary — the oldest failure this product has).',
   nodes: [
     {
       node_id: 'callers_company',
@@ -282,10 +303,11 @@ export const SCHEDULE_CHANGE_TREE: QuestionTreeDef = {
 };
 
 /**
- * DRAFT — the computer-repair vertical. The branch details are STILL OPEN WITH
- * DALE (drop-off vs in-home service area, durations, homeowner-vs-resident);
- * this stub collects what is safe to collect today and composes with the
- * booking tree for the visit itself. Flesh out before any live call routes here.
+ * The computer-repair vertical (built out 2026-07-21 on Dale's go-ahead — was a
+ * stub). Three questions and one branch: what's wrong, how they want it
+ * serviced, and whether their data is safe. Composes with identity + booking so
+ * the repair always ends with a scheduled visit, drop-off, or remote session on
+ * the calendar — never a vague "someone will call you".
  */
 export const FIX_COMPUTER_TREE: QuestionTreeDef = {
   tree_id: 'fix_computer',
@@ -298,22 +320,34 @@ export const FIX_COMPUTER_TREE: QuestionTreeDef = {
     {
       node_id: 'issue_description',
       type: 'text',
-      ask: "what's wrong, in the caller's own words — device, symptom, when it started",
+      ask:
+        "what's wrong, in the caller's own words — the device (laptop, desktop, phone…), " +
+        'the symptom, when it started, and anything they already tried. One open question ' +
+        '("what\'s going on with it?") usually gets all of this; record the pieces, ask ' +
+        'only for what is still missing',
     },
     {
-      node_id: 'service_mode',
-      type: 'choice',
-      ask: 'would they rather drop it off, or have someone come to them?',
-      options: {
-        drop_off: [],
-        in_home: [
-          {
-            node_id: 'service_address',
-            type: 'text',
-            ask: 'the address the visit would be at (service-area rules TBD with the owner)',
-          },
-        ],
-      },
+      node_id: 'drop_off_ok',
+      type: 'text',
+      // NOT a choice — Dale (2026-07-21): "There should not be a question of
+      // will it be dropped off. Just state that only drop-off fixes are
+      // available right now." (Remote and in-home were removed the same day.)
+      ask:
+        'STATE — do not ask — that only DROP-OFF repairs are available right now ("right ' +
+        'now we do drop-off repairs — you\'d bring the machine to us"), then record whether ' +
+        'that works for them. Say it BEFORE the visit is booked. If it does NOT work for ' +
+        'them, do not push and do not problem-solve: record their no, remove the ' +
+        'fix_computer and booking trees with set_purpose wrong_trees, thank them warmly ' +
+        'for calling, and finish_call',
+    },
+    {
+      node_id: 'data_backup',
+      type: 'text',
+      ask:
+        'whether their data is backed up, and whether anything on the machine is ' +
+        'irreplaceable (photos, documents, work files). Ask it plainly ("is your data ' +
+        'backed up anywhere?") — repairs can involve wiping a drive, and finding out ' +
+        'AFTER is the worst conversation this business can have',
     },
   ],
 };

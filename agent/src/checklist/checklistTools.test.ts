@@ -192,6 +192,139 @@ describe('record_answer', () => {
     });
     expect(fakes.identify_caller.execute).toHaveBeenCalledOnce(); // never re-fires
   });
+
+  it('HOST TOPIC: booking + a subject tree auto-answers meeting_topic — never re-ask the opener', async () => {
+    // WHO: three live calls running (2026-07-21) — "talk to Dale about a job"
+    //      was followed by "What is the meeting about, in your own words?".
+    // WHAT: the subject tree IS the topic; set_purpose records it host-side the
+    //      moment booking + job are co-selected. Prompt-tier rule failed twice →
+    //      promoted to the runtime (the promotion ladder).
+    const { toolkit, tracker } = makeKit();
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['identity', 'job', 'booking'],
+    });
+    expect(tracker.status('meeting_topic')).toBe('answered');
+    expect(tracker.value('meeting_topic')).toBe('a job opportunity');
+    expect(res).not.toContain('[ASK] meeting_topic'); // the question no longer exists
+  });
+
+  it('HOST TOPIC: booking alone (no subject tree) still asks — only a known subject answers it', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'booking'] });
+    expect(tracker.status('meeting_topic')).toBe('open'); // nothing to infer from
+  });
+
+  it('PIN: an empty volunteered caller_name never records (set_purpose passed "" live)', async () => {
+    // 2026-07-21: the model passed caller_name: "" in set_purpose args. The
+    // sanitizer dropped it — pin that so an empty string can never become a
+    // recorded "answer" that suppresses the real name question.
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['identity', 'message'],
+      caller_name: '',
+    });
+    expect(tracker.status('caller_name')).toBe('open'); // still asked
+  });
+
+  it('HOST NEXT POINTER: a ready action outranks open questions — the state block says do it now', async () => {
+    // WHO: the E2E replay of the 2026-07-21 call — the model ran the entire job
+    //      intake past a ready `book` action because [ACTION NOW] read as scenery
+    //      next to rule 2's "ask the next [ASK] item".
+    // WHAT: every state block ends with NEXT naming the FIRST frontier item in
+    //      walk order; when that item is an action, it says so in imperative form.
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job', 'booking'] });
+    await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Sue' });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_topic',
+      value: 'a job opportunity',
+    });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '262-497-9039',
+    });
+    // Identity + topic done → book is ready → it outranks every open job [ASK].
+    expect(res).toContain('NEXT: book — an ACTION');
+    expect(res).toContain('Do it now, before asking anything else.');
+  });
+
+  it('HOST NAME NUDGE: recording the caller name tells the model to USE it — first name only', async () => {
+    // WHO: the 2026-07-21 test caller — gave his name, never heard it again until
+    //      the goodbye. WHAT: the tool result nudges at the exact moment the name
+    //      lands, with the FIRST name ("Thanks, Dale."), never the full name.
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Dale DeMott',
+    });
+    expect(res).toContain('"Thanks, Dale."');
+    expect(res).not.toContain('DeMott.'); // never address by full name
+    const other = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'message_body',
+      value: 'call me back',
+    });
+    expect(other).not.toContain('Thanks,'); // fires only on the name node
+  });
+
+  it('HOST READ-BACK: a dictated ten-digit number returns the exact 3-3-4 string to speak', async () => {
+    // WHO: the 2026-07-21 test caller — two calls running, the dictated number went
+    //      straight into the record unconfirmed BOTH times despite the prompt rule.
+    // WHAT: a style rule the model skips twice gets promoted to the runtime — the
+    //      tool RESULT now carries the read-back directive with the host-formatted
+    //      digits, one instruction away instead of one remembered rule away.
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '(262) 497-9039',
+    });
+    // Imperative with a narrow skip clause (2026-07-21, both failure modes
+    // observed live): fully conditional → the model skipped the read-back on
+    // 2 of 3 eval runs; fully unconditional → a double when it had pre-read.
+    expect(res).toContain('READ THE NUMBER BACK NOW');
+    expect(res).toContain('do not repeat it');
+    expect(res).toContain('"2 6 2, 4 9 7, 9 0 3 9"');
+  });
+
+  it('HOST READ-BACK: a number volunteered through set_purpose gets the SAME directive (the second door)', async () => {
+    // WHO: the eval caller who gives their number in the OPENER. WHAT: set_purpose's
+    // volunteered caller_phone recorded silently — no directive, no read-back, 0/1
+    // on the grader (2026-07-21). A dictated number has two doors into the tracker;
+    // both must carry the read-back.
+    const { toolkit } = makeKit();
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['identity', 'job', 'booking'],
+      caller_name: 'Marcus Webb',
+      caller_phone: '262 497 9039',
+    });
+    expect(res).toContain('READ THE NUMBER BACK NOW');
+    expect(res).toContain('"2 6 2, 4 9 7, 9 0 3 9"');
+  });
+
+  it('HOST READ-BACK: a caller-ID number is NEVER read back — not from either door', async () => {
+    const { toolkit } = makeKit({ callerPhone: '2624979039' });
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['identity', 'booking'],
+    });
+    expect(res).not.toContain('READ THE NUMBER BACK'); // attested, not dictated
+    expect(res).toContain('never ask for it');
+  });
+
+  it('HOST READ-BACK: an 11-digit dictation drops the leading 1; non-phone values get no directive', async () => {
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    const eleven = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '1-262-497-9039',
+    });
+    expect(eleven).toContain('"2 6 2, 4 9 7, 9 0 3 9"'); // never speak the +1
+    const salary = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'rate_range',
+      value: '100000 to 120000',
+    });
+    expect(salary).not.toContain('READ THE NUMBER BACK'); // a salary is not a phone
+  });
 });
 
 describe('wrapped actions', () => {
@@ -230,6 +363,102 @@ describe('wrapped actions', () => {
     expect(res).toContain('ji_1');
     expect(res).toContain('CHECKLIST STATE');
     expect(tracker.status('capture')).toBe('done');
+  });
+
+  it('HOST BACKFILL: args the model omits are filled from the tracker (2026-07-21 live data loss)', async () => {
+    // WHO: the capture write on the first live question-tree call.
+    // WHAT: the caller crisply answered "On-site" (work_mode ✓ on the checklist)
+    //       and gave a salary range — and the model, retyping the tool args from
+    //       memory, silently dropped both. location_type and rate_range landed
+    //       NULL in prod. Host-owned answers the write ignores is state theater.
+    // WHERE: wrapAction's ACTION_ARG_BACKFILL merge, model args always winning.
+    // WHY: every recorded answer must reach the row — the checklist is the
+    //      source of truth, not the model's short-term memory.
+    const { toolkit, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    for (const [node_id, value] of [
+      ['caller_name', 'Jack'],
+      ['caller_phone', '1112223344'],
+      ['callers_company', 'Apex'],
+      ['hiring_for', 'own_company'],
+      ['role_description', 'senior software engineer'],
+      ['employment_type', 'full_time'],
+      ['salary_range', '130 to 200 thousand'],
+      ['work_mode', 'onsite'],
+      ['position_address', '123 Main Street'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    // The model retypes only two args — exactly what happened live.
+    await call(toolkit.selectedTools(), 'capture_job_inquiry', {
+      caller_name: 'Jack',
+      caller_company: 'Apex',
+    });
+    const sent = fakes.capture_job_inquiry.execute.mock.calls[0][0] as Record<string, unknown>;
+    expect(sent.location_type).toBe('onsite'); // the live NULL, backfilled
+    expect(sent.rate_range).toBe('130 to 200 thousand'); // salary_range → rate_range
+    expect(sent.employment_type).toBe('full_time');
+    expect(sent.represents_company).toBe(true); // own_company → boolean
+    expect(sent.address).toBe('123 Main Street');
+    expect(sent.callback_phone).toBe('1112223344');
+    expect(sent.caller_name).toBe('Jack'); // model-provided survives untouched
+  });
+
+  it('HOST BACKFILL: contract_to_hire passes through UNCOLLAPSED (2026-07-21 live mislabel)', async () => {
+    // WHO: the live caller with a contract-to-hire Java role. WHAT: this map used
+    // to collapse contract_to_hire → 'contract' (the backend enum lacked it); the
+    // backend now takes it first-class, so the honest value must survive the seam.
+    const { toolkit, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    for (const [node_id, value] of [
+      ['caller_name', 'Carl'],
+      ['caller_phone', '1112221256'],
+      ['callers_company', 'Apex Systems'],
+      ['hiring_for', 'own_company'],
+      ['role_description', 'mid-level Java'],
+      ['employment_type', 'contract_to_hire'],
+      ['rate_range', '65 an hour'],
+      ['conversion_terms', 'converts after six months'],
+      ['work_mode', 'remote'],
+      ['team_timezone', 'Central'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    await call(toolkit.selectedTools(), 'capture_job_inquiry', {});
+    const sent = fakes.capture_job_inquiry.execute.mock.calls[0][0] as Record<string, unknown>;
+    expect(sent.employment_type).toBe('contract_to_hire'); // not 'contract'
+    expect(sent.duration).toBe('converts after six months'); // conversion_terms → duration
+  });
+
+  it('HOST BACKFILL: a model-provided arg beats the tracker, and declines never fill', async () => {
+    const { toolkit, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    for (const [node_id, value] of [
+      ['caller_name', 'Jack'],
+      ['caller_phone', '1112223344'],
+      ['callers_company', 'Apex'],
+      ['hiring_for', 'own_company'],
+      ['role_description', 'engineer'],
+      ['employment_type', 'contract'],
+      ['work_mode', 'remote'],
+      ['team_timezone', 'Central'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    // Declined nodes stay unfilled (rate declined live too — that null was honest).
+    for (const node_id of ['rate_range', 'contract_length'] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, declined: true });
+    }
+    await call(toolkit.selectedTools(), 'capture_job_inquiry', {
+      caller_name: 'Jack',
+      // Model normalized the timezone answer — its version must win.
+      timezone: 'America/Chicago',
+    });
+    const sent = fakes.capture_job_inquiry.execute.mock.calls[0][0] as Record<string, unknown>;
+    expect(sent.timezone).toBe('America/Chicago'); // model wins over tracker's "Central"
+    expect(sent.location_type).toBe('remote');
+    expect(sent.rate_range).toBeUndefined(); // declined — an honest null, never invented
+    expect(sent.duration).toBeUndefined();
   });
 
   it('a landed write refuses a repeat — the anti-double-book gate', async () => {

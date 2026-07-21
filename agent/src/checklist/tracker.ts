@@ -415,11 +415,29 @@ export class ChecklistTracker {
     return items;
   }
 
-  /** Every selected node once, in selection order then tree definition order. */
+  /**
+   * Every selected node once — identity first, BOOKING second, everything else
+   * in selection order after.
+   *
+   * The walk order IS the ask order: the model works the rendered checklist
+   * top-down. It used to be pure selection order, so `[identity, job, booking]`
+   * queued the entire role intake ahead of the meeting — and on the 2026-07-21
+   * live call the caller had to protest "you never let me set up a meeting, you
+   * just blew right past that" after answering six intake questions. The
+   * product's oldest lesson is BOOK FIRST: the meeting is what they rang for;
+   * every other question is preparation for it, and preparation comes after
+   * the thing it prepares. Host-enforced here so no selection order the model
+   * chooses can put an intake ahead of the diary. (Bonus: capture actions that
+   * link to the appointment — job_inquiries.appointment_id — only link when
+   * the booking lands first.)
+   */
   #selectedWalk(): NodeId[] {
+    const priority = (treeId: string): number =>
+      treeId === 'identity' ? 0 : treeId === 'booking' ? 1 : 2;
+    const ordered = [...this.#selected].sort((a, b) => priority(a) - priority(b));
     const seen = new Set<NodeId>();
     const out: NodeId[] = [];
-    for (const treeId of this.#selected) {
+    for (const treeId of ordered) {
       for (const nodeId of this.#treeWalks.get(treeId) ?? []) {
         if (!seen.has(nodeId)) {
           seen.add(nodeId);

@@ -121,7 +121,13 @@ export function jobSummaryLine(
 ): string {
   const bits: string[] = [];
   if (args.employment_type)
-    bits.push(args.employment_type === 'contract' ? 'contract' : 'full time');
+    bits.push(
+      args.employment_type === 'contract'
+        ? 'contract'
+        : args.employment_type === 'contract_to_hire'
+          ? 'contract to hire'
+          : 'full time'
+    );
   if (args.rate_range) bits.push(args.rate_range);
   if (args.duration) bits.push(args.duration);
   if (args.location_type) {
@@ -680,7 +686,10 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
       //    caller cannot possibly follow is worse than no instruction; they will go
       //    away and do it, and nothing will arrive. So the email sentence now exists
       //    ONLY when there is somewhere for it to go.
-      const who = row.ownerName ?? 'the owner';
+      // First name only — this sentence is SPOKEN. "passed along to Dale", never
+      // "to Dale DeMott": a receptionist doesn't full-name her own boss on the
+      // phone (caller-reported, 2026-07-21).
+      const who = row.ownerName?.trim().split(/\s+/)[0] || 'the owner';
       const passedAlong = `Thanks — I've passed those details along to ${who} and they'll get back to you.`;
       const emailAsk = row.recipient
         ? ` Please also email a job description to ${row.recipient}, and put your name and company in the subject line.`

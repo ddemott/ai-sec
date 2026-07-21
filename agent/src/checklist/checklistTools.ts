@@ -49,7 +49,56 @@ const TREE_PASSTHROUGH_TOOLS: Record<string, string[]> = {
   schedule_change: ['get_my_appointments', 'get_available_slots'],
 };
 
+/**
+ * HOST-SIDE ARG BACKFILL (2026-07-21, first live tree call): the tracker HOLDS
+ * every recorded answer, but wrapAction forwarded only what the model RETYPED
+ * into the action's args — and on the first live call it silently dropped
+ * location_type (the caller crisply answered "On-site"; the checklist showed
+ * work_mode ✓) and rate_range. Host-owned state that the write ignores is
+ * state theater. So: any arg the model omits is filled from the tracker's
+ * answer for the mapped node(s); the model's own args win when present
+ * (it may legitimately normalize phrasing). Declined/empty answers never fill.
+ */
+type ArgFill = { arg: string; from: readonly string[]; map?: (v: string) => unknown };
+const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
+  capture_job_inquiry: [
+    { arg: 'caller_name', from: ['caller_name'] },
+    { arg: 'callback_phone', from: ['caller_phone'] },
+    { arg: 'caller_company', from: ['callers_company'] },
+    { arg: 'client_company', from: ['client_company'] },
+    { arg: 'represents_company', from: ['hiring_for'], map: (v) => v === 'own_company' },
+    {
+      arg: 'employment_type',
+      from: ['employment_type'],
+      // contract_to_hire is first-class end to end since 2026-07-21 — this map
+      // used to collapse it into 'contract' because the backend enum lacked it,
+      // and when the MODEL passed the honest value instead, the backend bounced
+      // the whole capture mid-call. Known values pass through untouched.
+      map: (v) => (['contract', 'full_time', 'contract_to_hire'].includes(v) ? v : 'contract'),
+    },
+    { arg: 'rate_range', from: ['rate_range', 'salary_range'] },
+    { arg: 'duration', from: ['contract_length', 'conversion_terms'] },
+    {
+      arg: 'location_type',
+      from: ['work_mode'],
+      map: (v) => (['onsite', 'remote', 'hybrid'].includes(v) ? v : undefined),
+    },
+    { arg: 'address', from: ['position_address'] },
+    { arg: 'timezone', from: ['team_timezone'] },
+  ],
+  book_with_scheduling: [{ arg: 'phone', from: ['caller_phone'] }],
+};
+
 /** How many times set_purpose may fire before the call is told to wrap up. */
+/** Subject trees whose co-selection with booking ANSWERS the meeting-topic
+ *  question — the caller who asked to "talk to Dale about a job" has already
+ *  said what the meeting is about. generic_subject is absent on purpose: its
+ *  subject is whatever the caller says it is, and only they can say it. */
+const TREE_TOPIC: Record<string, string> = {
+  job: 'a job opportunity',
+  fix_computer: 'a computer repair',
+};
+
 const DEFAULT_MAX_PURPOSE_ROUNDS = 5;
 
 /** After this many consecutive failures an action is told to stop retrying. */
@@ -126,7 +175,21 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   let identifySent = false;
   const failCounts = new Map<string, number>();
 
-  const stateBlock = (): string => `CHECKLIST STATE:\n${tracker.renderState()}`;
+  // Every state block ends with an explicit NEXT pointer — the first frontier
+  // item in walk order. Without it the model treats a ready [ACTION NOW] as
+  // scenery and keeps asking questions: on the E2E replay of the 2026-07-21
+  // call it ran the entire job intake past a ready book action (the exact
+  // "you just blew right past that" failure the walk order exists to prevent).
+  // The walk order is host truth; this line makes it an instruction, not a hint.
+  const stateBlock = (): string => {
+    const next = tracker.frontier()[0];
+    const pointer = !next
+      ? ''
+      : next.kind === 'action'
+        ? `\nNEXT: ${next.node_id} — an ACTION, not a question. Do it now, before asking anything else.`
+        : `\nNEXT: ask ${next.node_id}.`;
+    return `CHECKLIST STATE:\n${tracker.renderState()}${pointer}`;
+  };
 
   /** Host-code phone-book save the moment both identity facts are in — never
    *  the model's job, never skipped when the caller only leaves a message. */
@@ -218,6 +281,17 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       }
       recordIfOpen(CALLER_NAME, sanitizeVolunteered(args.caller_name, 80));
       recordIfOpen(CALLER_PHONE, sanitizeVolunteered(args.caller_phone, 30));
+      // The subject tree IS the meeting topic (2026-07-21, the third re-ask on a
+      // live call): when booking rides along with a known-subject tree, the
+      // caller already said what the meeting is about — asking "What is the
+      // meeting about, in your own words?" after "talk to Dale about a job"
+      // tells them nobody listened. Host-recorded because the prompt-tier rule
+      // failed three calls running (the promotion ladder).
+      if (tracker.selectedTrees().includes('booking')) {
+        for (const [treeId, topic] of Object.entries(TREE_TOPIC)) {
+          if (tracker.selectedTrees().includes(treeId)) recordIfOpen('meeting_topic', topic);
+        }
+      }
       // Caller-ID seeding: on an attested line the phone question never exists.
       let callerIdNote = '';
       if (deps.callerPhone && tracker.status(CALLER_PHONE) === 'open') {
@@ -228,8 +302,46 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       }
       maybeIdentify();
       deps.onSelectionChanged();
-      return `Purpose set: ${tracker.selectedTrees().join(' + ')}.${callerIdNote}\n${stateBlock()}`;
+      // A number VOLUNTEERED through this door still needs its read-back — only
+      // if it actually landed as this node's value (not blocked by caller ID).
+      const volunteered = sanitizeVolunteered(args.caller_phone, 30);
+      const dictated =
+        volunteered && tracker.value(CALLER_PHONE) === volunteered ? volunteered : undefined;
+      return `Purpose set: ${tracker.selectedTrees().join(' + ')}.${callerIdNote}\n${stateBlock()}${readbackDirective(dictated)}`;
     }
+  }
+
+  // A dictated value that IS a ten-digit US phone number → the exact spoken
+  // read-back string ("2 6 2, 4 9 7, 9 0 3 9"): digits spaced individually,
+  // 3-3-4 groups, leading 1 dropped. Anything else (prices, partial numbers,
+  // words) returns null and gets no directive.
+  function phoneReadback(raw: string): string | null {
+    const digits = raw.replace(/\D/g, '');
+    const ten = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+    if (ten.length !== 10) return null;
+    const spaced = (s: string) => s.split('').join(' ');
+    return `${spaced(ten.slice(0, 3))}, ${spaced(ten.slice(3, 6))}, ${spaced(ten.slice(6))}`;
+  }
+
+  // The read-back directive for a DICTATED number — appended to whichever tool
+  // result recorded it. A dictated number has TWO doors into the tracker
+  // (record_answer, and set_purpose's volunteered caller_phone); the 2026-07-21
+  // eval caught the read-back silently skipped whenever the caller volunteered
+  // the number in their opener, because only one door carried the directive.
+  // Imperative with a narrow skip clause: fully conditional phrasing let the
+  // model skip the read-back on 2 of 3 runs; fully unconditional produced a
+  // double when it had pre-read. The pre-read is forbidden at the node, so this
+  // is the read-back's ONE source. Caller-ID numbers never pass through either
+  // door and are never read back.
+  function readbackDirective(value: string | undefined): string {
+    const readback = value ? phoneReadback(value) : null;
+    if (!readback) return '';
+    return (
+      `\n\nREAD THE NUMBER BACK NOW, digit by digit, before your next question — say ` +
+      `exactly: "${readback}" — and wait for a yes. One read-back, one yes: only if ` +
+      `you ALREADY read this exact number back and heard their yes, do not repeat it. ` +
+      `If they correct it, record_answer again with the corrected number.`
+    );
   }
 
   const record_answer = llm.tool({
@@ -263,7 +375,26 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       throw err;
     }
     maybeIdentify();
-    return stateBlock();
+    // HOST-ENFORCED READ-BACK (2026-07-21): the prompt rule "read a dictated number
+    // back exactly once" was skipped on two consecutive live calls — a prompt-tier
+    // rule the model ignores twice gets promoted to the runtime. When the recorded
+    // value IS a ten-digit phone number, the tool result hands back the exact 3-3-4
+    // string to speak, so the read-back is one instruction away instead of one
+    // remembered style rule away. (Caller-ID-prefilled numbers never pass through
+    // record_answer, so this fires only on genuinely dictated numbers.)
+    let directive = readbackDirective(args.value);
+    if (!directive && args.node_id === CALLER_NAME && args.value && !args.declined) {
+      // 2026-07-21 live call: the caller gave his name and never heard it again
+      // until the goodbye. A receptionist who learns a name USES it — nudge at
+      // the exact moment it lands, when the acknowledgement is being composed.
+      // First name only: "Thanks, Dale." — never "Thanks, Dale DeMott."
+      const first = args.value.trim().split(/\s+/)[0];
+      directive =
+        `\n\nUse their first name in your acknowledgement right now ("Thanks, ${first}.") ` +
+        `and again at natural moments later — confirming the booking, wrapping up. ` +
+        `Not every sentence; that reads as salesy.`;
+    }
+    return stateBlock() + directive;
   }
 
   const finish_call = llm.tool({
@@ -277,7 +408,8 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       if (tracker.hasSelection() && !tracker.isResolved()) {
         return `Not yet — the checklist is not complete. Finish these first. ${stateBlock()}`;
       }
-      const name = tracker.value(CALLER_NAME);
+      // First name only — "You're all set, Dale", never "…, Dale DeMott".
+      const name = tracker.value(CALLER_NAME)?.trim().split(/\s+/)[0];
       const goodbye = name
         ? `You're all set, ${name}. Thanks for calling, and have a great day!`
         : `You're all set. Thanks for calling, and have a great day!`;
@@ -333,7 +465,26 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         if (status === 'not_applicable' || status === 'latent' || status === 'unselected') {
           return `That action is not applicable right now. ${stateBlock()}`;
         }
-        const raw = await shape(real).execute(args, toolCtx);
+        // Backfill omitted args from the tracker's recorded answers (see
+        // ACTION_ARG_BACKFILL) — model-provided values always win.
+        const provided: Record<string, unknown> = {
+          ...((args as Record<string, unknown> | null) ?? {}),
+        };
+        for (const f of ACTION_ARG_BACKFILL[def.tool] ?? []) {
+          const cur = provided[f.arg];
+          if (cur !== undefined && cur !== null && cur !== '') continue;
+          delete provided[f.arg];
+          for (const nodeId of f.from) {
+            const v = tracker.value(nodeId);
+            if (v === undefined || v === '') continue;
+            const mapped = f.map ? f.map(v) : v;
+            if (mapped !== undefined) {
+              provided[f.arg] = mapped;
+              break;
+            }
+          }
+        }
+        const raw = await shape(real).execute(provided, toolCtx);
         const id = extractSuccessId(raw, idField);
         const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw);
         if (id) {

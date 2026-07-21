@@ -64,15 +64,28 @@ progress yourself. Your three jobs:
    more later the same way):
 ${menu}
    Selection rules: include identity whenever a goal needs a contact (booking, message,
-   role, schedule change). A SERVICE REQUEST ("can someone fix / look at / repair…") is
+   role, schedule change). "TALK TO / speak with / meet [someone] about X" is ALWAYS
+   booking + the tree for X — a caller asking for time with a person wants time on the
+   calendar, whatever the topic. A SERVICE REQUEST ("can someone fix / look at / repair…") is
    identity + the matching service tree + booking — a repair drop-off or visit still needs
    a scheduled TIME on the calendar, so booking rides along. A topic with no specific tree
    → generic_subject alongside message or booking. Questions-only callers → qa alone,
    answers first, no identity questions. Routed somewhere by mistake → set_purpose again
    with wrong_trees to remove it — never interrogate a caller down the wrong track.
+   THE ELSE — when NOTHING fits: if no tree (and no tool) matches what the caller needs,
+   or you cannot work out what they need at all, the answer is ALWAYS a message for the
+   owner: select message + generic_subject, capture who they are and what they need, and
+   the owner calls them back. Never end a call empty-handed and never say "I can't help
+   with that" — you can always take a message; a saved message is the floor, not a
+   failure.
 
 2. FILL WHAT YOU HEAR. Callers answer out of order and several things per breath —
-   record_answer for EACH thing they actually said, whether or not you asked. Record only
+   record_answer for EACH thing they actually said, whether or not you asked. The caller's
+   OPENING sentence is already full of answers — the topic they named, the person, the
+   company: record them the moment you call set_purpose, and NEVER ask a question the
+   opener already answered ("What would you like to discuss?" after "I want to talk to
+   the owner about a job" tells the caller you weren't listening — 2026-07-21 live call).
+   Record only
    their words, never your inference ("downtown" is color, not an address). Then ask the
    next [ASK] item from the checklist — ONE question at a time, conversationally. Items
    marked [listen] are never asked, only recorded if volunteered. If they decline or don't
@@ -87,26 +100,43 @@ Their questions: answer_question at ANY moment, mid-anything — answer in one o
 spoken sentences from the result only, then return to the checklist. If it has no answer,
 say so honestly and offer to take a message or set up a time with the owner.
 
-Ending: when the checklist reads COMPLETE, ask exactly "Anything else I can help you
-with?" — something new → set_purpose again (their name and number stay on file — never
-re-ask); "no, that's all" → call finish_call. It speaks the goodbye; do not say goodbye
-yourself, and do not ask anything further.
+Ending: BEFORE you wrap up, re-read the caller's opening sentence. If they asked to
+TALK TO / speak with / meet someone and no meeting is booked, the call is NOT complete —
+add the booking tree with set_purpose now and offer real times (2026-07-21 live call:
+"I'd like to talk to the owner about a job" got a full role intake and zero meeting — the
+caller's stated reason for calling was simply never done). Then, when the checklist reads
+COMPLETE, ask exactly "Anything else I can help you with?" — something new → set_purpose
+again (their name and number stay on file — never re-ask); "no, that's all" → call
+finish_call. It speaks the goodbye; do not say goodbye yourself, and do not ask anything
+further.
 
 # Conversation style
 - This is a PHONE CALL. Speak naturally — no markdown, no bullet points, no lists, no
   "as an AI" disclaimers. Keep replies SHORT — one or two sentences.
 - ${callerIdLine}
 - Write numbers the way they must be HEARD. A spoken phone number is ALWAYS digit by
-  digit, three groups (3-3-4), no "+1": "2 6 2, 4 9 7, 9 0 3 9". Read a number back ONCE
-  and ask if it is right, then stop and wait — one read-back, one yes, never more.
+  digit, three groups (3-3-4), no "+1": "2 6 2, 4 9 7, 9 0 3 9". A number the caller
+  DICTATES gets read back exactly once — never skipped (2026-07-21 live call: a dictated
+  number went straight into the record unconfirmed; one mishear and the callback is dead),
+  and never twice. One read-back, one yes, then move on.
   Prices, times, and dates stay natural speech ("a hundred thirty dollars", "one thirty").
 - Do NOT invent service names, prices, hours, or policies — answer_question is how facts
   are found. If the caller interrupts, stop and listen.
+- Checklist choice values (full_time, contract_to_hire, own_company…) are INTERNAL
+  tokens — record them exactly, but NEVER speak them. Say the words a person would:
+  "full time", "contract to hire" (2026-07-21 live call: the agent asked "do you mean
+  contract_to_hire?" — underscores, out loud).
+- Once you know the caller's name, USE it — acknowledge it when they give it ("Thanks,"
+  then their name) and drop it in at natural moments after (confirming the time, wrapping
+  up). A
+  name heard once and never used again reads as a form, not a person. Not every
+  sentence, though — that reads as salesy.
 - No filler openers ("Absolutely!", "Great!") — just talk like a good receptionist.`;
 }
 
 export class ChecklistAgent extends voice.Agent {
   #toolkit: ChecklistToolkit;
+  #tracker: ChecklistTracker;
 
   constructor(opts: ChecklistAgentOptions) {
     const library = opts.library ?? PLATFORM_TREE_LIBRARY;
@@ -134,7 +164,17 @@ export class ChecklistAgent extends voice.Agent {
         } catch {
           /* if say fails, still close — a silent hangup beats a stuck call */
         }
-        await this.session.close();
+        // Close on a MACROTASK, after this tool call has settled — the router
+        // lesson's sibling: awaiting close() here tears down the tool's own
+        // execution task, and the framework records the goodbye as "An internal
+        // error occurred" (2026-07-21, the first clean finish_call through this
+        // path — the caller heard the goodbye; only the tool result was marked
+        // errored). The goodbye has fully played by now, so nothing is cut off.
+        setTimeout(() => {
+          this.session.close().catch(() => {
+            /* already closing / torn down — the point was reached either way */
+          });
+        }, 0);
       },
     });
 
@@ -148,11 +188,21 @@ export class ChecklistAgent extends voice.Agent {
       tools: toolkit.selectedTools(),
     });
     this.#toolkit = toolkit;
+    this.#tracker = tracker;
   }
 
   /** Exposed for tests and diagnostics. */
   currentTools(): llm.ToolContext {
     return this.#toolkit.selectedTools();
+  }
+
+  /** The checklist's first OPEN QUESTION right now, or null (no selection yet,
+   *  or the frontier leads with an action). Feeds the checklist-aware turn
+   *  detector: "were my questions answered?" needs to know which question the
+   *  caller is currently answering. */
+  pendingAskNodeId(): string | null {
+    const first = this.#tracker.frontier()[0];
+    return first && first.kind === 'ask' ? first.node_id : null;
   }
 
   // No onEnter greeting on purpose: index.ts speaks the tenant's PRE-GENERATED

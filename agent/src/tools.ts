@@ -1131,8 +1131,8 @@ export function buildTools(
           },
           employment_type: {
             type: 'string',
-            enum: ['contract', 'full_time'],
-            description: 'Whether the position is a contract or full time.',
+            enum: ['contract', 'full_time', 'contract_to_hire'],
+            description: 'Whether the position is contract, full time, or contract-to-hire.',
           },
           rate_range: {
             type: 'string',
@@ -1166,7 +1166,7 @@ export function buildTools(
         caller_company?: string;
         client_company?: string;
         represents_company?: boolean;
-        employment_type?: 'contract' | 'full_time';
+        employment_type?: 'contract' | 'full_time' | 'contract_to_hire';
         rate_range?: string;
         duration?: string;
         location_type?: 'onsite' | 'remote' | 'hybrid';
