@@ -113,10 +113,13 @@ written for the purpose selector (including the intent-boundary examples ported 
   `generic_subject`, `qa`. **Vertical trees** per tenant: `job`, `fix_computer`, …
   The identity tree's ask-hints carry the blocks.ts wording verbatim (one read-back
   one yes, 3-3-4 digits, disputed caller-ID dropped fresh).
-- **Storage:** phase 1 ships trees as code (`src/services/trees/*.json`), served to
-  the agent through the existing `/agent-tools/tenant-config` payload — same
-  delivery as persona/voice config. A DB table (owner-editable trees) is deferred
-  until a real tenant asks (build-for-real-customers rule).
+- **Storage (decided in phase 2, 2026-07-21):** the platform library lives in the
+  agent as typed TS (`agent/src/checklist/trees.ts`) — the compiler validates every
+  node against the schema and `trees.test.ts` constructs the real tracker from the
+  real library in CI, so a malformed tree is a red build, never a mid-call surprise.
+  Per-tenant tree delivery (via `/agent-tools/tenant-config`) and owner-editable
+  trees are BOTH deferred until a real tenant needs a tree the platform doesn't
+  have (build-for-real-customers rule).
 
 ### 3.2 ChecklistTracker (host code, pure, the heart)
 
@@ -206,12 +209,14 @@ worker).
    pre-branch `pending` promotion AND discard, sibling-✗ recursion, mind-change
    reopen + ghost-answer discard, declined vs ✗, merge dedupe preserving state,
    accumulator selection, `requires` gating, resolution.
-2. **Tree definitions** — `src/services/trees/*.json` + zod schema + loader; port
-   the wording: identity (blocks.ts RUNG 1, incl. the 2026-07-21 one-read-back
-   rules once that parked branch ships), job (two-companies, work-mode branch),
-   message, generic_subject, booking, qa, fix_computer (Dale's drop-off vs in-home
-   tree — parked repair-intake design finally has its home). Boundary examples
-   ported from `begin_call` into descriptions. Delivery via tenant-config payload.
+2. **Tree definitions** — ✅ DONE 2026-07-21: `agent/src/checklist/trees.ts` (typed
+   TS, see Storage above — the JSON-loader plan was dropped for compiler + real-
+   tracker validation). Ported: identity (blocks.ts RUNG 1 + the 2026-07-21
+   one-read-back rules), job (two-companies, employment fork incl. Dale's
+   contract_to_hire, work-mode fork), message, generic_subject, booking, qa,
+   schedule_change, fix_computer (DRAFT — service-area/duration details still open
+   with Dale). Boundary examples ported from `begin_call` into descriptions.
+   Tracker gained `deselect()` — the not_a_job wrong-door escape at tree level.
 3. **Conversation agent** — `agent/src/checklist/checklistAgent.ts`: set_purpose,
    record_answer, gated finish_call, node-driven action-tool swapping, always-on
    answer_question; wire into `index.ts` behind `ENABLE_QUESTION_TREE`, reusing

@@ -170,6 +170,18 @@ export class ChecklistTracker {
     return { added };
   }
 
+  /**
+   * Remove a mis-selected tree — the not_a_job lesson (2026-07-18 live call):
+   * an unskippable obligation is the architecture's point, but a MISROUTED one
+   * is unskippable too, and without this exit a wrongly-attached tree would
+   * hold the goodbye gate shut forever. Node values are KEPT — shared nodes
+   * (caller_name) belong to the call, not the tree; nodes exclusive to the
+   * removed tree simply drop out of the walk and the gate.
+   */
+  deselect(treeId: string): void {
+    this.#selected = this.#selected.filter((t) => t !== treeId);
+  }
+
   hasSelection(): boolean {
     return this.#selected.length > 0;
   }
