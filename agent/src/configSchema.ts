@@ -148,6 +148,16 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
 
+  // QUESTION-TREE CALL FLOW (docs/QUESTION_TREE_ARCHITECTURE.md). When "true",
+  // the call runs as ONE conversation over a host-tracked checklist of
+  // purpose-selected question trees (src/checklist/) — supersedes both the
+  // prompt ladder and the TaskGroup rungs on this worker. OFF by default;
+  // takes precedence over ENABLE_TASK_GROUP when both are set.
+  ENABLE_QUESTION_TREE: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+
   ENABLE_REALTIME: z
     .string()
     .optional()

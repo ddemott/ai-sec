@@ -38,6 +38,7 @@ import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { toolsForPhase, type CallPhase } from './toolPhases.js';
 import { CallRootAgent } from './tasks/callRootAgent.js';
+import { ChecklistAgent } from './checklist/checklistAgent.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
 import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
 import { attachOutputWatchdog, attachSilentTurnRecovery } from './session/watchdog.js';
@@ -1130,13 +1131,31 @@ export default defineAgent({
         // one, because the tools that return times are not in the room yet.
         const intakeTools = toolsForPhase(allTools, 'intake');
 
-        // TASK-GROUP FLOW (spike, ENABLE_TASK_GROUP). Runs the call as a LiveKit
+        // QUESTION-TREE FLOW (ENABLE_QUESTION_TREE — takes precedence). ONE
+        // conversation over a host-tracked checklist of purpose-selected question
+        // trees (docs/QUESTION_TREE_ARCHITECTURE.md). Same tools, same backend;
+        // sequencing is gone entirely — the tracker's completion gate replaces it.
+        // TASK-GROUP FLOW (ENABLE_TASK_GROUP). Runs the call as a LiveKit
         // TaskGroup of host-code rungs the model cannot skip, instead of the prompt
         // ladder. Same tools, same backend, same tenant — only the SEQUENCING moves from
-        // prompt-space into the loop. Off by default; this is how the whole thing gets
-        // its first real call without touching the agent that answers the phone.
-        const agent = config.ENABLE_TASK_GROUP
-          ? new CallRootAgent({
+        // prompt-space into the loop. Both off by default; each got (gets) its first
+        // real call without touching the agent that answers the phone.
+        const agent = config.ENABLE_QUESTION_TREE
+          ? new ChecklistAgent({
+              tools: allTools,
+              persona: `You are ${tenantConfig.personaName?.trim() || 'Clara'}, the AI receptionist for ${tenantConfig.name}.`,
+              runtime: {
+                currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
+                timezone: tenantConfig.timezone,
+                businessHours: tenantConfig.businessHours,
+                bookableThrough: tenantConfig.bookableThrough,
+              },
+              // Carrier-attested number (nulled upstream on forwarded lines) —
+              // seeds the caller_phone node so the question never exists.
+              callerPhone: sessionCtx.callerPhone,
+            })
+          : config.ENABLE_TASK_GROUP
+            ? new CallRootAgent({
               ctx: sessionCtx,
               tools: allTools,
               // THE PERSONA MUST NOT BE THE LADDER. `instructions` is the full
@@ -1160,11 +1179,12 @@ export default defineAgent({
                 bookableThrough: tenantConfig.bookableThrough,
               },
             })
-          : new SpeakingAgent({
-              instructions,
-              tools: intakeTools,
-            });
-        if (!config.ENABLE_TASK_GROUP) phaseAgent = agent as InstanceType<typeof SpeakingAgent>;
+            : new SpeakingAgent({
+                instructions,
+                tools: intakeTools,
+              });
+        if (!config.ENABLE_TASK_GROUP && !config.ENABLE_QUESTION_TREE)
+          phaseAgent = agent as InstanceType<typeof SpeakingAgent>;
 
         await session.start({ agent, room: ctx.room });
         callLog.info(

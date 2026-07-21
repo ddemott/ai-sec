@@ -217,10 +217,16 @@ worker).
    schedule_change, fix_computer (DRAFT — service-area/duration details still open
    with Dale). Boundary examples ported from `begin_call` into descriptions.
    Tracker gained `deselect()` — the not_a_job wrong-door escape at tree level.
-3. **Conversation agent** — `agent/src/checklist/checklistAgent.ts`: set_purpose,
-   record_answer, gated finish_call, node-driven action-tool swapping, always-on
-   answer_question; wire into `index.ts` behind `ENABLE_QUESTION_TREE`, reusing
-   greeting/transcript/outcome/summary/silent-turn plumbing as-is.
+3. **Conversation agent** — ✅ DONE 2026-07-21: `agent/src/checklist/checklistTools.ts`
+   (the injectable toolset: set_purpose with wrong_trees + rounds cap, record_answer
+   with corrective-error results, host-gated finish_call, wrapped actions with the
+   anti-double-book refusal + two-failures message advice, always-on answer_question,
+   host-code identify_caller, caller-ID phone seeding) + `checklistAgent.ts` (one
+   voice.Agent, whole call; prompt = persona + runtime + tree menu + ported style
+   rules; toolset swaps only on selection change, macrotask-deferred). Wired into
+   `index.ts` behind `ENABLE_QUESTION_TREE` (precedence over ENABLE_TASK_GROUP),
+   reusing greeting/transcript/summary/silent-turn plumbing untouched. 24 toolset
+   unit tests drive the executes directly.
 4. **Eval battery** — `agent/scripts/sim-questiontree.ts` on the LLM-plays-caller
    harness: the ported 43-scenario battery (MULTI-GOAL, MIND-CHANGE, STUBBORN,
    CLOSED-DAY, RACE, HARD-DOWN, one-breath opener…) + new tree cases (out-of-order
