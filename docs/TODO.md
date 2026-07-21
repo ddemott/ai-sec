@@ -266,5 +266,20 @@ Each screen below has had NO dedicated UX review (owner-judgment items). Most al
 
 ## 🎙️ Voice — Phase 2 (after live, needs agent code + redeploy)
 
+### Question-tree call review — 2026-07-21 07:34 call (branch `feat/question-tree-architecture`, room sim-call-1784637271290)
+
+The call succeeded end-to-end (booked 4:30 PM ✓ linked job_inquiries.appointment_id ✓ semantic service match ✓ E.164 phone ✓ "Dale" not "Dale DeMott" ✓ no snake_case spoken ✓) — these are the conversation-layer snags it still had:
+
+- [ ] **(code) Double read-back of the dictated number.** The model read the number back on its own BEFORE calling `record_answer`, got a yes — then the host READ-BACK-NOW directive (added that morning) commanded a second read-back, and the caller confirmed the same number twice. The directive must be conditional: "if you have not already read it back and heard a yes". Add a sim-questiontree grader: agent lines matching the digit pattern == exactly 1.
+- [ ] **(code) Redundant "What is the meeting about?" — third strike.** Opener was "talk to Dale about a job position"; the topic was asked anyway. Prompt-tier rule has now failed twice — promote to host: when `set_purpose` selects booking + a subject tree, auto-record `meeting_topic` from the subject tree (job → "a job opportunity"). Grader: forbid the topic question when the opener names one.
+- [ ] **(code) Silent-turn recovery fires during close.** After `finish_call`'s goodbye, the post-close thinking→listening flap triggered the nudge → `silent_turn_recovery_failed: "AgentSession is closing, cannot use generateReply()"`. Cosmetic (caller unaffected) but noisy — guard the nudge on session closing/draining.
+- [ ] **(code, polish) `set_purpose` passed `caller_name: ""`.** Sanitizer dropped it (no empty record) — pin that with a unit test so an empty volunteered string can never record.
+- [ ] **(polish) Salary stored verbatim as words** — "one forty to one hundred and sixty thousand" in `rate_range`. Their-words capture is by design; consider a normalized display form ("$140–160k") for the owner email/dashboard alongside the verbatim.
+- [ ] **(polish) Wrap-up turn is 12s long** — passed-along + email instruction + anything-else in one breath. Consider splitting the email ask from the closing question.
+
+- [ ] **(code) OUTAGE VOICE — a caller must never get silence when the LLM is down.** 2026-07-21 08:56 call: OpenAI quota exhausted (`insufficient_quota`), 7 consecutive `agent_session_error`s, and the caller heard NOTHING — greeting, then dead air, "Hello?… can you hear me?", hang-up. Every speaking path was starved: the watchdog's queue probe saw the errored generation's doomed speech handle as "audio imminent" and skipped its holds; the silent-turn nudge is itself a `generateReply` (also 429s, and asynchronously — its catch never fires); the canned escalation line needs a SECOND silent death which got deferred because the caller was speaking. Fix: subscribe to the session error event — on the 2nd consecutive LLM API error in one call, play the CACHED (no-LLM, pre-synthesized) line "I'm having technical trouble on my end — please call back in a few minutes," then close. Also teach the watchdog probe that a speech handle belonging to an errored generation is not "audio imminent."
+
+### Phase 2 backlog
+
 - [ ] Recording disclaimer → deterministic verbatim greeting (Illinois 2-party consent). Needs a `tenants.greeting` column + tenant-config route + `agent/src/index.ts` greeting line (currently hardcoded).
 - [x] ~~`get_my_appointments` transfer-fallback string~~ — DONE 2026-07-05 (PR #198): the no-caller-ID fallbacks in `get_my_appointments`/cancel/reschedule now capability-gate the transfer offer (offer a message only when transfer is unwired).

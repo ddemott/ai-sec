@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict C0IKYyOPI6wGH6ymiYXABXD3rrUMdSSWCqMvNpPZ0yq5b9DerNh4MosSmAiMXVB
+\restrict CcZe0r2HzzQpdZc2OezOO0IEkKNixzdSF5ySeZEATEF7brDAbJdXB4mISmNy86J
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -456,6 +456,7 @@ DECLARE
     v_start_time_of_day TIME;
     v_end_time_of_day TIME;
     v_shift_date DATE;
+    v_end_wraps BOOLEAN;
     v_tenant_tz TEXT;
     v_found BOOLEAN := FALSE;
     r RECORD;
@@ -506,21 +507,20 @@ BEGIN
     v_shift_date := (v_start AT TIME ZONE v_tenant_tz)::DATE;
     v_day_of_week := EXTRACT(DOW FROM v_start AT TIME ZONE v_tenant_tz)::INTEGER;
     v_start_time_of_day := (v_start AT TIME ZONE v_tenant_tz)::TIME;
-    -- WRAP-AWARE END TIME (2026-07-17 22:13 CDT live call). A slot that
-    -- crosses local midnight has an end whose ::TIME compares as TINY once the
-    -- date is dropped: a 11:30 PM -> midnight booking yields 00:00:00, and
-    -- "shift end 17:00 >= 00:00" PASSES. Both the suggester and this RPC had
-    -- the hole, so a caller was OFFERED 11:30 PM against a 1-5 PM shift and
-    -- the booking was ACCEPTED (EMPLOYEE_NOT_SCHEDULED never fired). '24:00:00'
-    -- is a valid Postgres TIME: an end that lands past the shift's local date
-    -- now demands a shift ending at midnight sharp, which day shifts never do.
-    -- (Cross-midnight NIGHT shifts were never supported by these start<=/end>=
-    -- comparisons; their behavior is unchanged.)
-    v_end_time_of_day := CASE
-        WHEN (v_end AT TIME ZONE v_tenant_tz)::DATE > v_shift_date
-        THEN '24:00:00'::TIME
-        ELSE (v_end AT TIME ZONE v_tenant_tz)::TIME
-    END;
+    -- WRAP-AWARE, SHIFT-SHAPE-AWARE (2026-07-17 22:13 CDT live call; night
+    -- shifts preserved per Fix #30's tests). A slot ending past local midnight
+    -- has an end whose ::TIME compares as tiny once the date is dropped: an
+    -- 11:30 PM -> midnight booking yields 00:00:00 and "shift end 17:00 >=
+    -- 00:00" PASSED — so a DAY-shift tenant was offered and booked 11:30 PM.
+    -- But the very same comparison is how cross-midnight NIGHT shifts
+    -- (23:00-06:00, end < start) book their post-midnight stretch; the first
+    -- version of this fix ('24:00:00' unconditionally) killed them and CI
+    -- caught it. v_end_wraps carries the fact; the coverage joins apply it per
+    -- shift shape: DAY shift -> a wrapping slot is never covered; NIGHT shift
+    -- -> pre-midnight slots covered by the start check, wrapping slots must
+    -- end by the shift's morning end.
+    v_end_wraps := (v_end AT TIME ZONE v_tenant_tz)::DATE > v_shift_date;
+    v_end_time_of_day := (v_end AT TIME ZONE v_tenant_tz)::TIME;
 
     IF array_length(p_required_skills, 1) IS NOT NULL AND array_length(p_required_skills, 1) > 0 THEN
         FOR r IN
@@ -537,7 +537,9 @@ BEGIN
                 AND es.shift_date = v_shift_date
                 AND es.is_off = false
                 AND es.start_time <= v_start_time_of_day
-                AND es.end_time >= v_end_time_of_day
+                AND CASE WHEN es.end_time < es.start_time
+                         THEN (NOT v_end_wraps) OR es.end_time >= v_end_time_of_day
+                         ELSE (NOT v_end_wraps) AND es.end_time >= v_end_time_of_day END
             WHERE res.tenant_id = p_tenant_id
                 AND res.is_active = true
                 AND emp.tenant_id = p_tenant_id
@@ -601,6 +603,44 @@ BEGIN
         END LOOP;
     END IF;
 
+    -- NARROW SHIFT GUARD for the skill-less path (review on #285). The ELSE
+    -- branch above historically books a resource with NO shift check at all
+    -- ("fall open") — which re-opens the midnight-wrap hole for services
+    -- without required skills. Fall-open is kept ONLY for tenants with no
+    -- schedule data on the date; when non-off schedule rows exist for the day
+    -- and none of them cover the window (wrap-aware, same v_*_time_of_day as
+    -- the skills branch), the building is closed at that time and the booking
+    -- is refused.
+    IF v_found
+       AND (array_length(p_required_skills, 1) IS NULL OR array_length(p_required_skills, 1) = 0)
+       AND EXISTS (
+            SELECT 1 FROM employee_schedule es
+             WHERE es.tenant_id = p_tenant_id
+               AND es.shift_date = v_shift_date
+               AND es.is_off = false
+       )
+       AND NOT EXISTS (
+            SELECT 1 FROM employee_schedule es
+              JOIN employees emp ON emp.employee_id = es.employee_id
+             WHERE es.tenant_id = p_tenant_id
+               AND es.shift_date = v_shift_date
+               AND es.is_off = false
+               AND es.start_time <= v_start_time_of_day
+               AND CASE WHEN es.end_time < es.start_time
+                         THEN (NOT v_end_wraps) OR es.end_time >= v_end_time_of_day
+                         ELSE (NOT v_end_wraps) AND es.end_time >= v_end_time_of_day END
+               AND emp.tenant_id = p_tenant_id
+               AND emp.is_active = true
+               AND (emp.is_deleted IS NULL OR emp.is_deleted = false)
+       )
+    THEN
+        RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, NULL::TEXT, NULL::UUID, NULL::TEXT,
+            NULL::TIMESTAMPTZ, NULL::TIMESTAMPTZ, v_customer_id,
+            'No employee available during requested time'::TEXT,
+            'EMPLOYEE_NOT_SCHEDULED'::TEXT;
+        RETURN;
+    END IF;
+
     IF NOT v_found THEN
         IF array_length(p_required_skills, 1) IS NOT NULL AND array_length(p_required_skills, 1) > 0 THEN
             SELECT EXISTS(
@@ -627,7 +667,9 @@ BEGIN
                     AND es.shift_date = v_shift_date
                     AND es.is_off = false
                     AND es.start_time <= v_start_time_of_day
-                    AND es.end_time >= v_end_time_of_day
+                    AND CASE WHEN es.end_time < es.start_time
+                         THEN (NOT v_end_wraps) OR es.end_time >= v_end_time_of_day
+                         ELSE (NOT v_end_wraps) AND es.end_time >= v_end_time_of_day END
                 WHERE emp.tenant_id = p_tenant_id
                 AND emp.is_active = true
                 AND (emp.is_deleted IS NULL OR emp.is_deleted = false)
@@ -1102,6 +1144,8 @@ $$;
 CREATE FUNCTION public.end_voice_session(p_tenant_id uuid, p_call_id text, p_duration_seconds integer DEFAULT NULL::integer, p_outcome text DEFAULT NULL::text, p_transcript text DEFAULT NULL::text, p_summary text DEFAULT NULL::text, p_appointment_id uuid DEFAULT NULL::uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
+DECLARE
+    v_found boolean;
 BEGIN
     UPDATE voice_sessions
     SET
@@ -1115,7 +1159,20 @@ BEGIN
         updated_at = now()
     WHERE tenant_id = p_tenant_id AND call_id = p_call_id;
 
-    RETURN FOUND;
+    v_found := FOUND;
+
+    -- Re-capture the context to reflect actions taken DURING the call (a booking
+    -- just made, a cancellation). Recomputed from the customer's phone via the
+    -- same function the dashboard/agent use, so the stored snapshot matches a
+    -- live read taken the instant the call ended.
+    UPDATE voice_sessions vs
+    SET customer_context = get_customer_context_for_call(p_tenant_id, c.phone)
+    FROM customers c
+    WHERE vs.tenant_id = p_tenant_id
+      AND vs.call_id = p_call_id
+      AND vs.customer_id = c.customer_id;
+
+    RETURN v_found;
 END;
 $$;
 
@@ -3469,7 +3526,8 @@ CREATE TABLE public.tenants (
     call_disclosure_attested_by uuid,
     is_deleted boolean DEFAULT false NOT NULL,
     deleted_at timestamp with time zone,
-    deleted_by uuid
+    deleted_by uuid,
+    greeting_menu text
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3592,6 +3650,13 @@ COMMENT ON COLUMN public.tenants.is_deleted IS 'Soft delete. The application NEV
 --
 
 COMMENT ON COLUMN public.tenants.deleted_at IS 'When the tenant was soft-deleted. The (unbuilt, opt-in) purge worker would use this as the retention clock.';
+
+
+--
+-- Name: COLUMN tenants.greeting_menu; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.greeting_menu IS 'Optional spoken services-menu line for the call greeting (between disclosure and closer). NULL/blank = omitted.';
 
 
 --
@@ -5839,5 +5904,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict C0IKYyOPI6wGH6ymiYXABXD3rrUMdSSWCqMvNpPZ0yq5b9DerNh4MosSmAiMXVB
+\unrestrict CcZe0r2HzzQpdZc2OezOO0IEkKNixzdSF5ySeZEATEF7brDAbJdXB4mISmNy86J
 

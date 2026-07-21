@@ -84,6 +84,14 @@ export interface TenantDisplayConfig {
    */
   callDisclosure: string | null;
   /**
+   * The spoken services menu — the "what I can help with" line at the top of
+   * every call, between the disclosure and "How can I help you today?".
+   * Dale (2026-07-21): callers should hear the business's CORE lanes up front
+   * (job, computer repair, message, buying this AI-secretary service). Owner
+   * data, never platform code. NULL/blank = no menu line.
+   */
+  greetingMenu: string | null;
+  /**
    * The shop's opening hours, spoken ("Monday to Friday, 1:00 PM to 5:00 PM"),
    * derived from who is actually on the schedule. NULL when nobody is scheduled —
    * the agent must NOT claim to be open in that case.
@@ -116,6 +124,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   forwardPhone: null,
   forwardedFromPhone: null,
   callDisclosure: null,
+  greetingMenu: null,
   businessHours: null,
   bookableThrough: null,
 };
@@ -144,6 +153,7 @@ export async function fetchTenantConfig(
     forward_phone?: string | null;
     forwarded_from_phone?: string | null;
     call_disclosure?: string | null;
+    greeting_menu?: string | null;
     business_hours?: string | null;
     bookable_through?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
@@ -166,6 +176,7 @@ export async function fetchTenantConfig(
       forwardPhone: res.result.forward_phone ?? null,
       forwardedFromPhone: res.result.forwarded_from_phone ?? null,
       callDisclosure: res.result.call_disclosure ?? null,
+      greetingMenu: res.result.greeting_menu ?? null,
       businessHours: res.result.business_hours ?? null,
       bookableThrough: res.result.bookable_through ?? null,
     };

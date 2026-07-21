@@ -18,10 +18,25 @@ export interface RecordAiCostParams {
   estimatedCostUsd?: number;
 }
 
+// Per-TOKEN USD rates. VERIFY against the current OpenAI pricing page when a
+// model is added — these drift, and a stale rate lies quietly.
+//
+// gpt-4.1-mini was MISSING here until 2026-07-21, which meant estimateCost()
+// fell through to {input:0, output:0} for the PRODUCTION VOICE LLM — so every
+// call's dominant cost (77-83% of the total, all of it gpt-4.1-mini input
+// tokens) recorded as $0.00. The ledger looked nearly free while the real bill
+// was ~$0.06/call average. A cost table missing the thing that costs the most
+// is worse than no table: it reports confidence in a number that is wrong.
 const PRICING: Record<string, { input: number; output: number }> = {
-  'gpt-4o-mini': { input: 0.15e-6, output: 0.6e-6 },
+  'gpt-4.1-mini': { input: 0.4e-6, output: 1.6e-6 }, // current production voice LLM
+  'gpt-4.1-nano': { input: 0.1e-6, output: 0.4e-6 }, // cheapest 4.1 (cost-down candidate)
+  'gpt-4o-mini': { input: 0.15e-6, output: 0.6e-6 }, // summaries / classify / fallback
   'text-embedding-3-small': { input: 0.02e-6, output: 0 },
 };
+
+// Deepgram unit rates (not token-based).
+const DEEPGRAM_STT_PER_MINUTE = 0.0043; // nova-3 streaming
+const DEEPGRAM_AURA_PER_CHAR = 0.015 / 1000; // Aura TTS, ~$0.015 per 1k characters
 
 function estimateCost(params: {
   provider: string;
@@ -33,10 +48,17 @@ function estimateCost(params: {
 }): number {
   const p = PRICING[params.model] || { input: 0, output: 0 };
   let cost = (params.inputTokens || 0) * p.input + (params.outputTokens || 0) * p.output;
-  if (params.provider === 'deepgram' && params.audioDurationMs) {
-    cost += (params.audioDurationMs / 1000 / 60) * 0.0043; // per the constant in agentTools
+  // Provider/model casing varies at the call site (recorded as "Deepgram" /
+  // "deepgram"), so key the audio branches off the MODEL name, case-insensitively
+  // — the previous `provider === 'deepgram'` check silently missed capitalized
+  // rows, and TTS (Aura, char-priced) was never costed at all → $0.00.
+  const model = params.model.toLowerCase();
+  if (model.includes('nova') && params.audioDurationMs) {
+    cost += (params.audioDurationMs / 1000 / 60) * DEEPGRAM_STT_PER_MINUTE;
   }
-  // xAI TTS: pricing not public in the code comments; leave as caller-provided or 0
+  if (model.includes('aura') && params.charactersCount) {
+    cost += params.charactersCount * DEEPGRAM_AURA_PER_CHAR;
+  }
   return cost;
 }
 

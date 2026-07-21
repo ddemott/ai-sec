@@ -174,6 +174,35 @@ describe('capture-job-inquiry → real job_inquiries row', () => {
     expect(row.rows[0].location_type).toBe('remote');
   });
 
+  it('HAPPY: contract_to_hire is a first-class employment type — accepted and stored verbatim', async () => {
+    // WHO: the 2026-07-21 live caller with a contract-to-hire Java role.
+    // WHAT: the checklist tree accepted "contract to hire", but this route's enum
+    //       only knew contract|full_time — it bounced the WHOLE capture mid-call,
+    //       the agent had to re-interrogate the caller, and the role was finally
+    //       mislabeled "contract". The truth the caller told us must fit the row.
+    const res = await post('/agent-tools/capture-job-inquiry', {
+      tenant_id: tenantId,
+      caller_name: 'CTH Carl',
+      callback_phone: '5551112233',
+      caller_company: 'Apex Systems',
+      represents_company: true,
+      employment_type: 'contract_to_hire',
+      rate_range: '$65/hr',
+      duration: 'converts after six months',
+      location_type: 'remote',
+      timezone: 'America/Chicago',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+
+    const row = await setup.query(
+      `SELECT employment_type FROM job_inquiries WHERE tenant_id = $1 AND caller_name = 'CTH Carl'`,
+      [tenantId]
+    );
+    expect(row.rows).toHaveLength(1);
+    expect(row.rows[0].employment_type).toBe('contract_to_hire');
+  });
+
   it('SAD: the spoken reply names the REAL inbox and the REAL owner — never "his inbox", never "Dale"', async () => {
     // WHO: a recruiter who called a business and was asked to send a job description.
     // WHAT: the `message` this route returns is spoken to the caller almost verbatim —

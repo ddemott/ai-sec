@@ -321,7 +321,10 @@ export const CaptureJobInquirySchema = z.object({
   caller_company: z.string().max(300).optional(),
   client_company: z.string().max(300).optional(),
   represents_company: z.boolean().optional(),
-  employment_type: z.enum(['contract', 'full_time']).optional(),
+  // contract_to_hire added 2026-07-21: a live caller answered "contract to hire",
+  // the tree accepted it, and THIS enum bounced the whole capture — the agent had
+  // to ask the caller to re-answer and then mislabeled the role "contract".
+  employment_type: z.enum(['contract', 'full_time', 'contract_to_hire']).optional(),
   rate_range: z.string().max(200).optional(),
   duration: z.string().max(200).optional(),
   location_type: z.enum(['onsite', 'remote', 'hybrid']).optional(),

@@ -262,6 +262,12 @@ export function buildOpener(config: TenantDisplayConfig): string {
 export function buildGreeting(config: TenantDisplayConfig): string {
   const opener = buildOpener(config);
   const closer = config.forwardPhone?.trim() ? CLOSER_WITH_TRANSFER : CLOSER_NO_TRANSFER;
+  // The owner's spoken services menu (2026-07-21, Dale: list the CORE lanes up
+  // front — job, computer repair, message, buying the AI-secretary service).
+  // Placed AFTER the disclosure (legal first) and BEFORE the closing question,
+  // so the menu flows straight into "How can I help you today?". Blank = the
+  // greeting composes exactly as it always has.
+  const menu = config.greetingMenu?.trim() ?? '';
 
   // Don't ask the same question twice.
   //
@@ -326,7 +332,8 @@ export function buildGreeting(config: TenantDisplayConfig): string {
       ? buildDisclosureShort(personaForDisclosure)
       : buildDisclosure(config.name, personaForDisclosure);
 
-  return [openerWithoutClosingQuestion, disclosure, closer]
+  return [openerWithoutClosingQuestion, disclosure, menu, closer]
+    .filter(Boolean)
     .join(' ')
     .replace(/\s{2,}/g, ' ')
     .trim();

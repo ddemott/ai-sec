@@ -49,8 +49,9 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           forward_phone: string | null;
           forwarded_from_phone: string | null;
           call_disclosure: string | null;
+          greeting_menu: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, call_disclosure FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, call_disclosure, greeting_menu FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         if (!res.rows[0]) return null;
@@ -119,6 +120,10 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         // notice). NULL/blank means the agent speaks the platform default from
         // greeting.ts; a set value is spoken verbatim (attestation-gated on write).
         call_disclosure: row.call_disclosure ?? null,
+        // 2026-07-21: owner-editable spoken services menu ("I can help with a
+        // job opportunity, a drop-off computer repair…") — spoken between the
+        // disclosure and "How can I help you today?". NULL/blank = no menu line.
+        greeting_menu: row.greeting_menu ?? null,
       });
     },
     'Failed to fetch tenant config'

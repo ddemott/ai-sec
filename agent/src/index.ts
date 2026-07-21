@@ -38,6 +38,8 @@ import { ToolsClient } from './toolsClient.js';
 import { buildTools } from './tools.js';
 import { toolsForPhase, type CallPhase } from './toolPhases.js';
 import { CallRootAgent } from './tasks/callRootAgent.js';
+import { ChecklistAgent } from './checklist/checklistAgent.js';
+import { createChecklistTurnDetector } from './session/turnDetector.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
 import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
 import { attachOutputWatchdog, attachSilentTurnRecovery } from './session/watchdog.js';
@@ -158,11 +160,35 @@ export default defineAgent({
     //
     // A phone number is the single most important string a receptionist collects, and
     // it is the one most likely to contain a pause. Bias the whole call toward
-    // patience: 1300ms costs a beat before every reply, and buys us never cutting
-    // someone off mid-number. Being a little slow reads as "listening". Talking over
-    // someone reads as "not listening", and here it is unrecoverable — barge-in is off,
-    // so once the agent starts, the caller must sit and listen to the end.
-    const minSilenceMs = Number(process.env.VAD_MIN_SILENCE_MS ?? 1300);
+    // patience: being a little slow reads as "listening". Talking over someone reads
+    // as "not listening", and here it is unrecoverable — barge-in is off, so once the
+    // agent starts, the caller must sit and listen to the end.
+    //
+    // 1300ms IS THE CEILING — 1800 was tried and REVERTED the same day (2026-07-21).
+    // The raise to 1800 (bought by yet another mid-number cutoff) created a LIVELOCK
+    // on the very next call: the caller finished a sentence, waited about a second for
+    // a reply, got silence (the VAD still counting to 1.8s), assumed he wasn't heard,
+    // and resumed talking — which reset the counter. His patience threshold (~1–1.5s)
+    // was SHORTER than the endpoint, so no turn could EVER commit: 13 seconds of
+    // speech, 14 STT fragments, zero response, hang-up. A silence threshold above the
+    // caller's own re-speak reflex is not "patient", it is deaf.
+    //
+    // So the two failure modes now box the value in from both sides: below ~1300 the
+    // agent cuts off number-recall pauses; above ~1500 it livelocks against normal
+    // conversational pacing. A single fixed threshold cannot serve both — the real fix
+    // is semantic/content-aware endpointing. Until then 1300 is the least bad point:
+    // cutoffs are rarer than every-turn conversation, and a cutoff has a recovery
+    // path ("it seems you got cut off — please finish") while a livelock has none.
+    //
+    // AND NOW THE REAL FIX EXISTS (2026-07-21, prototype): under the question-tree
+    // flow with ENABLE_SEMANTIC_TURN, the checklist-aware turn detector
+    // (src/session/turnDetector.ts) reads the WORDS — a partial phone number waits,
+    // a crisp "yes" commits — so the VAD can drop back near Silero's default and
+    // stop being the only judge of "done". The 1300 fallback stands whenever the
+    // detector is off.
+    const semanticTurn =
+      process.env.ENABLE_QUESTION_TREE === 'true' && process.env.ENABLE_SEMANTIC_TURN !== 'false';
+    const minSilenceMs = Number(process.env.VAD_MIN_SILENCE_MS ?? (semanticTurn ? 600 : 1300));
     proc.userData.vad = await silero.VAD.load({
       minSilenceDuration: Number.isFinite(minSilenceMs) ? minSilenceMs : 900,
     });
@@ -816,6 +842,17 @@ export default defineAgent({
         );
       }
 
+      // CHECKLIST-AWARE TURN DETECTION (prototype 2026-07-21): "were my
+      // questions answered?" — the detector reads the live transcript plus the
+      // checklist's pending question to decide if the caller is done talking.
+      // The session is constructed BEFORE the agent, so the pending-question
+      // accessor is a ref that the ChecklistAgent fills in below.
+      const pendingAskRef: { get: () => string | null } = { get: () => null };
+      const semanticTurnDetector =
+        config.ENABLE_QUESTION_TREE && config.ENABLE_SEMANTIC_TURN && !config.ENABLE_REALTIME
+          ? createChecklistTurnDetector(() => pendingAskRef.get(), callLog)
+          : undefined;
+
       try {
         // ttsVoiceKey + greeting were resolved the moment the tenant was known (see
         // the warm block above) — the live TTS, the pre-generation cache and the
@@ -996,10 +1033,16 @@ export default defineAgent({
                 // __PERSONA_NAME__ never finishes a reply → freeze. Wait ~1.3s of silence so a
                 // multi-part answer AGGREGATES into one turn → one reply. maxDelay
                 // caps the wait so a truly-finished caller isn't left hanging.
-                endpointing: {
-                  minDelay: 1300,
-                  maxDelay: 4000,
-                },
+                //
+                // WITH THE CHECKLIST-AWARE DETECTOR (semanticTurnDetector below), the
+                // detector chooses per utterance: a complete-looking answer commits at
+                // minDelay (900 — SNAPPIER than the flat 1300), a visibly mid-thought
+                // one (six digits of a phone number, a trailing "I'd like to…") gets
+                // maxDelay grace (4500) — and any resumed speech cancels the commit.
+                ...(semanticTurnDetector ? { turnDetection: semanticTurnDetector } : {}),
+                endpointing: semanticTurnDetector
+                  ? { minDelay: 900, maxDelay: 4500 }
+                  : { minDelay: 1300, maxDelay: 4000 },
                 // WAIT FOR THE WHOLE UTTERANCE BEFORE REPLYING. Preemptive generation is
                 // ON by LiveKit's default: it starts composing a reply from the INTERIM
                 // transcript, before the caller finishes. On a live call the caller read a
@@ -1130,41 +1173,66 @@ export default defineAgent({
         // one, because the tools that return times are not in the room yet.
         const intakeTools = toolsForPhase(allTools, 'intake');
 
-        // TASK-GROUP FLOW (spike, ENABLE_TASK_GROUP). Runs the call as a LiveKit
+        // QUESTION-TREE FLOW (ENABLE_QUESTION_TREE — takes precedence). ONE
+        // conversation over a host-tracked checklist of purpose-selected question
+        // trees (docs/QUESTION_TREE_ARCHITECTURE.md). Same tools, same backend;
+        // sequencing is gone entirely — the tracker's completion gate replaces it.
+        // TASK-GROUP FLOW (ENABLE_TASK_GROUP). Runs the call as a LiveKit
         // TaskGroup of host-code rungs the model cannot skip, instead of the prompt
         // ladder. Same tools, same backend, same tenant — only the SEQUENCING moves from
-        // prompt-space into the loop. Off by default; this is how the whole thing gets
-        // its first real call without touching the agent that answers the phone.
-        const agent = config.ENABLE_TASK_GROUP
-          ? new CallRootAgent({
-              ctx: sessionCtx,
+        // prompt-space into the loop. Both off by default; each got (gets) its first
+        // real call without touching the agent that answers the phone.
+        const agent = config.ENABLE_QUESTION_TREE
+          ? new ChecklistAgent({
               tools: allTools,
-              // THE PERSONA MUST NOT BE THE LADDER. `instructions` is the full
-              // prompt-ladder system prompt — a script that tells the model to run
-              // the whole call conversationally (ask their name, take the message
-              // yourself). Passing it here buried CallRootAgent's one hand-off job
-              // under 130 lines of contradiction: on 2026-07-16 the root agent
-              // followed the ladder instead, collected name+number itself, never
-              // called begin_call, and the caller's message was never recorded (it
-              // holds no take_message tool). The root agent gets an IDENTITY line;
-              // the rungs carry their own instructions.
               persona: `You are ${tenantConfig.personaName?.trim() || 'Clara'}, the AI receptionist for ${tenantConfig.name}.`,
-              // The date + hours the rungs must not guess. On the first live call a task
-              // with no date context booked October and every attempt failed
-              // EMPLOYEE_NOT_SCHEDULED — because each task REPLACES the system prompt
-              // (where these live) with its own.
               runtime: {
                 currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
                 timezone: tenantConfig.timezone,
                 businessHours: tenantConfig.businessHours,
                 bookableThrough: tenantConfig.bookableThrough,
               },
+              // Carrier-attested number (nulled upstream on forwarded lines) —
+              // seeds the caller_phone node so the question never exists.
+              callerPhone: sessionCtx.callerPhone,
             })
-          : new SpeakingAgent({
-              instructions,
-              tools: intakeTools,
-            });
-        if (!config.ENABLE_TASK_GROUP) phaseAgent = agent as InstanceType<typeof SpeakingAgent>;
+          : config.ENABLE_TASK_GROUP
+            ? new CallRootAgent({
+                ctx: sessionCtx,
+                tools: allTools,
+                // THE PERSONA MUST NOT BE THE LADDER. `instructions` is the full
+                // prompt-ladder system prompt — a script that tells the model to run
+                // the whole call conversationally (ask their name, take the message
+                // yourself). Passing it here buried CallRootAgent's one hand-off job
+                // under 130 lines of contradiction: on 2026-07-16 the root agent
+                // followed the ladder instead, collected name+number itself, never
+                // called begin_call, and the caller's message was never recorded (it
+                // holds no take_message tool). The root agent gets an IDENTITY line;
+                // the rungs carry their own instructions.
+                persona: `You are ${tenantConfig.personaName?.trim() || 'Clara'}, the AI receptionist for ${tenantConfig.name}.`,
+                // The date + hours the rungs must not guess. On the first live call a task
+                // with no date context booked October and every attempt failed
+                // EMPLOYEE_NOT_SCHEDULED — because each task REPLACES the system prompt
+                // (where these live) with its own.
+                runtime: {
+                  currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
+                  timezone: tenantConfig.timezone,
+                  businessHours: tenantConfig.businessHours,
+                  bookableThrough: tenantConfig.bookableThrough,
+                },
+              })
+            : new SpeakingAgent({
+                instructions,
+                tools: intakeTools,
+              });
+        if (!config.ENABLE_TASK_GROUP && !config.ENABLE_QUESTION_TREE)
+          phaseAgent = agent as InstanceType<typeof SpeakingAgent>;
+
+        // Late-bind the turn detector's pending-question accessor to the live
+        // checklist (the session — and thus the detector — was built first).
+        if (semanticTurnDetector && agent instanceof ChecklistAgent) {
+          pendingAskRef.get = () => agent.pendingAskNodeId();
+        }
 
         await session.start({ agent, room: ctx.room });
         callLog.info(
