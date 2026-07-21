@@ -128,11 +128,46 @@ export function attachOutputWatchdog(
     }
   };
 
+  // Is a speech already scheduled or playing? The agentState only flips to
+  // 'speaking' when AUDIO starts, but the reply's SpeechHandle joins the queue
+  // hundreds of ms earlier (LLM done → TTS still spinning up). A filler spoken
+  // inside that window queues BEHIND the reply and plays as a stray
+  // after-thought — on the 2026-07-21 call the caller heard the read-back
+  // question, then "Just a moment.", then the recovery line, run together:
+  // "you're running all these sentences together and not giving them any time
+  // to respond". This reads the session's internal activity (not in the public
+  // typings, stable in our pinned version) defensively: unknown shape → false,
+  // which is the pre-guard behavior.
+  const speechScheduledOrPlaying = (): boolean => {
+    const activity = (
+      session as unknown as {
+        activity?: { currentSpeech?: unknown; speechQueue?: { size?: () => number } };
+      }
+    ).activity;
+    if (!activity) return false;
+    if (activity.currentSpeech != null) return true;
+    try {
+      return (activity.speechQueue?.size?.() ?? 0) > 0;
+    } catch {
+      return false;
+    }
+  };
+
   const fireFiller = () => {
     timer1 = undefined;
     // Re-check: the real reply may have started between the timer scheduling and
     // now. Only hold the line if the agent is still thinking (no audio yet).
     if (session.agentState !== 'thinking') return;
+    // …and if the reply is already queued (audio imminent), a filler is not
+    // cover, it's clutter — skip it AND the recovery escalation. If that queued
+    // reply somehow dies silent, the silent-turn recovery path owns that case.
+    if (speechScheduledOrPlaying()) {
+      opts.log.info(
+        { event: 'watchdog_hold_skipped', label: 'thinking', reason: 'reply_already_queued' },
+        'watchdog hold skipped — reply already scheduled, audio imminent'
+      );
+      return;
+    }
     fillerDone = false;
     // SAY THE TRUE THING. A tool really running earns "let me check that for you";
     // an LLM that is merely slow gets "just a moment", which promises nothing and so
@@ -146,6 +181,19 @@ export function attachOutputWatchdog(
     // reply, which is serialized AFTER the filler) is recognized as real audio.
     fillerHandle?.addDoneCallback(() => {
       fillerDone = true;
+      // THE STOMP FIX (2026-07-21, first live question-tree call): when the real
+      // reply is queued BEHIND the still-playing filler, the agent state never
+      // LEAVES 'speaking' between the two playouts — no transition, so the
+      // onAgentState disarm can never fire, and timer2's recovery line then
+      // played OVER the live slot offer (the caller heard the agent talk over
+      // itself). After the filler's playout, give the state a beat to settle:
+      // if the agent is still 'speaking', that audio IS the real reply → disarm.
+      // If nothing was queued, the state drops to 'listening' within the beat
+      // and that branch disarms anyway — either way the recovery only survives
+      // into genuine dead air.
+      setTimeout(() => {
+        if (timer2 !== undefined && session.agentState === 'speaking') disarm();
+      }, 300);
     });
     // Arm deadline 2 — if STILL no real audio, escalate to the recovery line.
     timer2 = setTimeout(fireRecovery, deadline2);
@@ -153,11 +201,29 @@ export function attachOutputWatchdog(
 
   const fireRecovery = () => {
     timer2 = undefined;
-    // No agentState gate here: disarm() clears timer2 the moment real audio plays
-    // (or the turn ends), so if this timer SURVIVED to fire, no real audio has
-    // happened since the filler — we're still in dead air and should recover.
-    // (Gating on agentState==='thinking' would wrongly skip recovery, because the
-    // filler we just played transitions the agent into 'speaking'.)
+    // AUDIO IS ROLLING → the caller is not in dead air. The filler is ~1.2s, so
+    // 'speaking' at deadline2 (4s after the filler) cannot be the filler — it is
+    // the real reply (which slipped into the queue around the filler). Speaking
+    // the recovery now stacks a third line onto live output (the 2026-07-21
+    // triple run-on). The only useful act is to cancel our own queued filler so
+    // it doesn't play as a stray after the reply, then stand down.
+    if (session.agentState === 'speaking') {
+      if (fillerHandle && !fillerDone) {
+        try {
+          fillerHandle.interrupt();
+        } catch {
+          /* not interruptible — let it play, it's short */
+        }
+      }
+      opts.log.info(
+        { event: 'watchdog_recovery_skipped', reason: 'audio_already_playing' },
+        'watchdog recovery skipped — real audio is playing; queued filler cancelled'
+      );
+      disarm();
+      return;
+    }
+    // Otherwise: still dead air (gating on agentState==='thinking' instead would
+    // wrongly skip recovery when the filler's own playout ended mid-transition).
     // Return value (the SpeechHandle thenable) intentionally unused — fire-and-forget.
     void speakHold(opts.recoveryText, 'recovery');
   };
@@ -279,6 +345,14 @@ export function attachSilentTurnRecovery(
     // zero audio and is already over. (A slow turn passes through 'speaking'
     // for its reply — or for the watchdog's filler — before 'listening'.)
     if (ev.oldState !== 'thinking' || ev.newState !== 'listening') return;
+
+    // The session is closing (finish_call's goodbye has played): the teardown
+    // state flap looks exactly like a silent death, but there is no turn left
+    // to recover — generateReply would only throw "AgentSession is closing"
+    // (logged as a failure on every clean 2026-07-21 hang-up). `closing` is a
+    // plain field on AgentSession (not in the typings); unknown shape → falsy
+    // → the pre-guard behavior.
+    if ((session as unknown as { closing?: boolean }).closing) return;
 
     // The caller is mid-utterance (barge-in / a new turn already forming):
     // their speech will drive the next reply. Speaking now would talk over

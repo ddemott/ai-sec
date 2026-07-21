@@ -158,6 +158,17 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
 
+  // CHECKLIST-AWARE TURN DETECTION (prototype 2026-07-21, src/session/
+  // turnDetector.ts). ON by default but only ACTIVE under ENABLE_QUESTION_TREE:
+  // a heuristic end-of-turn detector reads the live transcript + the
+  // checklist's pending question and chooses, per utterance, between a snappy
+  // commit (complete answer) and a patient wait (six digits of a phone number
+  // is visibly incomplete). Set "false" to fall back to pure silence timing.
+  ENABLE_SEMANTIC_TURN: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false'),
+
   ENABLE_REALTIME: z
     .string()
     .optional()

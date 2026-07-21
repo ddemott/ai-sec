@@ -19,6 +19,8 @@ interface FakeHandle {
   id: string;
   addDoneCallback: (cb: () => void) => void;
   fireDone: () => void;
+  interrupted: boolean;
+  interrupt: () => void;
 }
 
 function makeFakeSession() {
@@ -54,10 +56,17 @@ function makeFakeSession() {
         id: `h${n++}`,
         addDoneCallback: (cb) => cbs.push(cb),
         fireDone: () => cbs.forEach((c) => c()),
+        interrupted: false,
+        interrupt: () => {
+          handle.interrupted = true;
+        },
       };
       handles.push(handle);
       return handle;
     },
+    // The internal activity the watchdog probes for an already-queued reply.
+    // Absent by default (pre-guard behavior); tests set it via setActivity.
+    activity: undefined as unknown,
   };
 
   const emit = (newState: string) => {
@@ -76,6 +85,9 @@ function makeFakeSession() {
     emit,
     setUserState: (s: string) => {
       userState = s;
+    },
+    setActivity: (a: unknown) => {
+      (session as { activity: unknown }).activity = a;
     },
   };
 }
@@ -176,6 +188,78 @@ describe('attachOutputWatchdog', () => {
     expect(f.sayCalls).toHaveLength(1); // filler only, NO recovery
   });
 
+  it('SAD, live: reply queued BEHIND the filler → same continuous speaking state → recovery must NOT stomp it', async () => {
+    // WHO: the 2026-07-21 question-tree test caller, mid slot-offer.
+    // WHAT: the filler played at 93.6s, the real reply started at 94.6s while the
+    //       agent was ALREADY in 'speaking' — the state never transitioned again, so
+    //       the "a later 'speaking' disarms" assumption never got its event, timer2
+    //       survived, and the recovery line played at 97.6s OVER the live slot offer.
+    // WHERE: the speech queue serializes filler → reply inside ONE 'speaking' span.
+    // WHY: the disarm must key off the FILLER'S PLAYOUT COMPLETING while audio is
+    //       still rolling (that audio IS the reply), not off a transition that only
+    //       exists when the reply starts from silence.
+    _resetToolActivityForTest();
+    const f = makeFakeSession();
+    attach(f);
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500); // filler plays (handle h0)
+    f.emit('speaking'); // the filler's own audio — one transition, never another
+    f.handles[0].fireDone(); // filler playout completes; agent STILL 'speaking' = the real reply
+    await vi.advanceTimersByTimeAsync(300); // the settle beat → disarm
+    await vi.advanceTimersByTimeAsync(4000); // recovery window passes
+    expect(f.sayCalls).toHaveLength(1); // filler only — the reply is never talked over
+  });
+
+  it('SAD, still covered: filler done while agent NOT speaking (genuine dead air) → recovery still fires', async () => {
+    // The settle-beat disarm must not swallow real dead air: the filler's playout
+    // completes while the agent state is still 'thinking' (no reply audio ever
+    // came) → the beat finds no speaking → timer2 survives → recovery.
+    _resetToolActivityForTest();
+    const f = makeFakeSession();
+    attach(f);
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500); // filler plays; state stays 'thinking'
+    f.handles[0].fireDone(); // filler playout over, still dead air
+    await vi.advanceTimersByTimeAsync(300); // settle beat: NOT speaking → no disarm
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(f.sayCalls.map((c) => c.text)).toEqual(['Just a moment.', RECOVERY]);
+  });
+
+  it('SAD, live 2: reply already QUEUED at deadline 1 → no filler, no recovery — audio is imminent', async () => {
+    // WHO: the 2026-07-21 second stomp call. The reply's SpeechHandle joins the
+    // queue ~300ms before its audio starts; the filler fired inside that window,
+    // queued BEHIND the reply, and the caller heard question + "Just a moment."
+    // + recovery run together ("you're running all these sentences together").
+    // WHAT: with a speech scheduled or playing, the filler is clutter — skip it
+    // and the escalation entirely.
+    _resetToolActivityForTest();
+    const f = makeFakeSession();
+    attach(f);
+    f.setActivity({ currentSpeech: {}, speechQueue: { size: () => 0 } });
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500 + 4000);
+    expect(f.sayCalls).toHaveLength(0);
+  });
+
+  it('SAD, live 2 race: reply slips in AFTER the filler → recovery skipped, stray filler cancelled', async () => {
+    // The narrower race: the queue was empty when the filler fired, but the
+    // reply got scheduled moments later — at deadline2 the agent is 'speaking'
+    // (the ~1.2s filler cannot still be playing 4s on, so that audio IS the
+    // reply). The recovery must NOT stack a third line onto live output, and
+    // the filler still queued behind the reply must be interrupted so it never
+    // plays as a stray after-thought.
+    _resetToolActivityForTest();
+    const f = makeFakeSession();
+    attach(f);
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500); // filler fires (queue looked empty)
+    expect(f.sayCalls).toHaveLength(1);
+    f.emit('speaking'); // audio starts — actually the REPLY; filler never plays
+    await vi.advanceTimersByTimeAsync(4000); // deadline2
+    expect(f.sayCalls).toHaveLength(1); // no recovery line
+    expect(f.handles[0].interrupted).toBe(true); // stray filler cancelled
+  });
+
   it('detach() clears a pending timer (no filler after teardown)', async () => {
     const f = makeFakeSession();
     const detach = attach(f);
@@ -273,6 +357,21 @@ describe('attachSilentTurnRecovery', () => {
     f.emit('thinking');
     f.emit('listening');
     expect(f.generateReplyCalls).toHaveLength(0);
+  });
+
+  it('a CLOSING session never gets nudged — the teardown flap is not a silent death', () => {
+    // WHO: every clean hang-up on 2026-07-21. finish_call's goodbye plays, the
+    // session tears down, and the closing state flap (thinking → listening with
+    // no speech) looked exactly like the failure this recovery exists for —
+    // generateReply then threw "AgentSession is closing" and logged a failure
+    // on every successful call. A goodbye is not a death.
+    const f = makeFakeSession();
+    attachRecovery(f);
+    (f.session as unknown as { closing?: boolean }).closing = true;
+    f.emit('thinking');
+    f.emit('listening');
+    expect(f.generateReplyCalls).toHaveLength(0);
+    expect(f.sayCalls).toHaveLength(0);
   });
 
   it('the nudge wording carries the two live-firing lessons (re-ask; end with a question)', () => {
