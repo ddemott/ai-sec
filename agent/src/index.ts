@@ -186,8 +186,10 @@ export default defineAgent({
     // a crisp "yes" commits — so the VAD can drop back near Silero's default and
     // stop being the only judge of "done". The 1300 fallback stands whenever the
     // detector is off.
+    // Mirror configSchema's defaults exactly (question-tree ON unless 'false',
+    // semantic-turn ON unless 'false') — config isn't loaded yet in prewarm.
     const semanticTurn =
-      process.env.ENABLE_QUESTION_TREE === 'true' && process.env.ENABLE_SEMANTIC_TURN !== 'false';
+      process.env.ENABLE_QUESTION_TREE !== 'false' && process.env.ENABLE_SEMANTIC_TURN !== 'false';
     const minSilenceMs = Number(process.env.VAD_MIN_SILENCE_MS ?? (semanticTurn ? 600 : 1300));
     proc.userData.vad = await silero.VAD.load({
       minSilenceDuration: Number.isFinite(minSilenceMs) ? minSilenceMs : 900,
