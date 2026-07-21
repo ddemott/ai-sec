@@ -413,3 +413,33 @@ describe('REGRESSION: the legal suffix is never spoken', () => {
     expect(greeting.split('Thinking Hammer').length - 1).toBe(1);
   });
 });
+
+describe('the services menu (greeting_menu, 2026-07-21)', () => {
+  // WHO: every caller to a tenant that set a menu | WHAT: the owner's "what I
+  // can help with" line is spoken between the disclosure and the closing
+  // question | WHEN: greetingMenu is set | WHERE: buildGreeting composition
+  // | WHY: Dale — "people do not know the services, especially that I am
+  // selling the AI secretary as a service." A caller can't ask for a lane they
+  // don't know exists.
+  const MENU =
+    'I can help with a job opportunity, a drop-off computer repair, or setting your ' +
+    'business up with an AI secretary like me — and I can always take a message.';
+
+  test('spoken AFTER the disclosure and BEFORE the closing question', () => {
+    const g = buildGreeting(tenant({ greetingMenu: MENU }));
+    const disclosureAt = g.indexOf('transcribed for quality and service');
+    const menuAt = g.indexOf('job opportunity');
+    const closerAt = g.indexOf(CLOSER_NO_TRANSFER);
+    expect(disclosureAt).toBeGreaterThanOrEqual(0);
+    expect(menuAt).toBeGreaterThan(disclosureAt); // legal first, then the menu
+    expect(closerAt).toBeGreaterThan(menuAt); // menu flows into the question
+  });
+
+  test('NULL / blank menu leaves the greeting exactly as it always was', () => {
+    const withoutField = buildGreeting(tenant());
+    const withNull = buildGreeting(tenant({ greetingMenu: null }));
+    const withBlank = buildGreeting(tenant({ greetingMenu: '   ' }));
+    expect(withNull).toBe(withoutField);
+    expect(withBlank).toBe(withoutField);
+  });
+});
