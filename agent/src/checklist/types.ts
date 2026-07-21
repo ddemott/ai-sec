@@ -52,6 +52,14 @@ export interface ActionNodeDef {
    * treated as satisfied for the same reason.
    */
   requires?: NodeId[];
+  /**
+   * When true, the action is ready only once EVERY question node in its own
+   * tree(s) is resolved — "finish the intake, then write". Found by the first
+   * mock call (2026-07-21): capture_job_inquiry fired the moment its 3 requires
+   * were met, with contract length / work mode / timezone still uncollected —
+   * a write that would have gone to the owner incomplete.
+   */
+  await_tree?: boolean;
 }
 
 export type QuestionNodeDef = TextNodeDef | ChoiceNodeDef | ActionNodeDef;

@@ -238,6 +238,9 @@ export const JOB_TREE: QuestionTreeDef = {
       // Declined answers SATISFY these (2026-07-21 live call: three declines,
       // capture still landed); the tool's own refuse-gate stays authoritative.
       requires: ['callers_company', 'hiring_for', 'employment_type'],
+      // Finish the WHOLE intake before the write: the first mock call fired
+      // capture with contract length / work mode / timezone still uncollected.
+      await_tree: true,
     },
   ],
 };

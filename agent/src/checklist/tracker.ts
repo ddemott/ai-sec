@@ -237,19 +237,49 @@ export class ChecklistTracker {
     if (entry.def.type === 'action') {
       if (this.#declined.has(nodeId)) return 'declined';
       if (this.#actionDone.has(nodeId)) return 'done';
-      return this.#requiresMet(entry.def) ? 'ready' : 'blocked';
+      return this.unmet(nodeId).length === 0 ? 'ready' : 'blocked';
     }
     if (this.#values.has(nodeId)) return 'answered';
     if (this.#declined.has(nodeId)) return 'declined';
     return 'open';
   }
 
-  #requiresMet(def: ActionNodeDef): boolean {
-    // declined and not_applicable SATISFY a requirement: on a real call the
-    // caller declined three intake questions and the capture still had to land
-    // (2026-07-21, call 3). The gate is ordering UX; the real tool enforces its
-    // own hard needs.
-    return (def.requires ?? []).every((req) => RESOLVED_STATUSES.has(this.status(req)));
+  /**
+   * What still stands between an action node and 'ready'. Two gates compose:
+   * explicit `requires`, and `await_tree` — every question node in the action's
+   * own selected tree(s) must be resolved ("finish the intake, then write" —
+   * the first mock call fired capture with half the role uncollected).
+   * declined and not_applicable SATISFY both gates: on a real call the caller
+   * declined three intake questions and the capture still had to land
+   * (2026-07-21, call 3). The gate is ordering UX; the real tool enforces its
+   * own hard needs.
+   */
+  unmet(nodeId: NodeId): NodeId[] {
+    const entry = this.#entries.get(nodeId);
+    if (!entry || entry.def.type !== 'action') return [];
+    const def = entry.def;
+    const out: NodeId[] = [];
+    for (const req of def.requires ?? []) {
+      if (!RESOLVED_STATUSES.has(this.status(req))) out.push(req);
+    }
+    if (def.await_tree) {
+      const ownTrees = new Set(
+        entry.placements.filter((p) => this.#selected.includes(p.treeId)).map((p) => p.treeId)
+      );
+      for (const treeId of ownTrees) {
+        for (const sibling of this.#treeWalks.get(treeId) ?? []) {
+          if (sibling === nodeId || out.includes(sibling)) continue;
+          const siblingEntry = this.#entries.get(sibling);
+          if (siblingEntry?.def.type === 'action') continue; // other actions gate themselves
+          const status = this.status(sibling);
+          // latent/pending are gated transitively — their parent choice is the
+          // open item; naming the invisible children would only confuse.
+          if (status === 'latent' || status === 'pending') continue;
+          if (!RESOLVED_STATUSES.has(status)) out.push(sibling);
+        }
+      }
+    }
+    return out;
   }
 
   value(nodeId: NodeId): string | undefined {
@@ -438,9 +468,7 @@ export class ChecklistTracker {
           );
           break;
         case 'blocked': {
-          const unmet = ((def as ActionNodeDef).requires ?? []).filter(
-            (r) => !RESOLVED_STATUSES.has(this.status(r))
-          );
+          const unmet = this.unmet(nodeId);
           lines.push(
             `[action later] ${nodeId} — ${(def as ActionNodeDef).description} (first: ${unmet.join(', ')})`
           );

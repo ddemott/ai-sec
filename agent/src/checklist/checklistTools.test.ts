@@ -219,6 +219,13 @@ describe('wrapped actions', () => {
       node_id: 'employment_type',
       declined: true,
     });
+    // await_tree holds the write until the WHOLE intake is resolved — the first
+    // mock call fired capture with half the role uncollected.
+    const early = await call(toolkit.selectedTools(), 'capture_job_inquiry', {});
+    expect(early).toContain('first resolve:');
+    for (const node_id of ['caller_name', 'caller_phone', 'role_description', 'work_mode']) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, declined: true });
+    }
     const res = await call(toolkit.selectedTools(), 'capture_job_inquiry', {});
     expect(res).toContain('ji_1');
     expect(res).toContain('CHECKLIST STATE');

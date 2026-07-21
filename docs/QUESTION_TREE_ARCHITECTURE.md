@@ -227,12 +227,19 @@ worker).
    `index.ts` behind `ENABLE_QUESTION_TREE` (precedence over ENABLE_TASK_GROUP),
    reusing greeting/transcript/summary/silent-turn plumbing untouched. 24 toolset
    unit tests drive the executes directly.
-4. **Eval battery** — `agent/scripts/sim-questiontree.ts` on the LLM-plays-caller
-   harness: the ported 43-scenario battery (MULTI-GOAL, MIND-CHANGE, STUBBORN,
-   CLOSED-DAY, RACE, HARD-DOWN, one-breath opener…) + new tree cases (out-of-order
-   volunteer, branch-✗ never asked, declined-three-questions, RAG mid-intake, RAG
-   miss → message pivot, wedding→generic). Target: parity with the rung battery
-   before any live call.
+4. **Eval battery** — ⏳ STEP 1 DONE 2026-07-21: `agent/scripts/sim-questiontree.ts` —
+   a live caller-LLM improvises against the REAL prompt + toolset + tracker (backend
+   tools faked; grading on the tracker's final SNAPSHOT, not transcript matching).
+   First battery: JOB-DIRECT, ONE-BREATH, WEDDING MESSAGE, MIND-CHANGE, QA-ONLY,
+   CALLER-ID BOOKING — **12/12 across two randomized runs** (gpt-4.1-mini agent).
+   The first-ever mock call caught a real bug: capture fired with half the intake
+   uncollected → `await_tree` gate added to action nodes ("finish the intake, then
+   write"); a later run caught the selector skipping booking on a service request →
+   selection-rule fix in the prompt. STILL TO DO: port the remaining rung-battery
+   scenarios (STUBBORN, CLOSED-DAY, RACE, HARD-DOWN failure injection, multi-goal
+   mid-call addition, RAG-miss→message pivot) and a real-backend/DB-verified tier
+   (the sim-taskgroup pattern). Parity with the 43-scenario rung battery before any
+   live call.
 5. **Live verification** — browser call (`simulate.sh call`), then real PSTN calls
    (timestamped, per standing rule), on a worker with the flag on. Same bar the
    rung system had to clear: booking + intake + message + Q&A legs on voice, rows

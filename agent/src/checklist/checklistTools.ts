@@ -31,7 +31,7 @@ import {
   UnknownNodeError,
   UnknownTreeError,
 } from './tracker.js';
-import { RESOLVED_STATUSES, type ActionNodeDef, type QuestionTreeDef } from './types.js';
+import type { ActionNodeDef, QuestionTreeDef } from './types.js';
 import { CALLER_NAME, CALLER_PHONE } from './trees.js';
 
 /** The JSON field whose presence in a tool's result proves the write LANDED. */
@@ -328,10 +328,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
           );
         }
         if (status === 'blocked') {
-          const unmet = (def.requires ?? []).filter(
-            (r) => !RESOLVED_STATUSES.has(tracker.status(r))
-          );
-          return `Not yet — first resolve: ${unmet.join(', ')}. ${stateBlock()}`;
+          return `Not yet — first resolve: ${tracker.unmet(def.node_id).join(', ')}. ${stateBlock()}`;
         }
         if (status === 'not_applicable' || status === 'latent' || status === 'unselected') {
           return `That action is not applicable right now. ${stateBlock()}`;

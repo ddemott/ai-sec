@@ -64,10 +64,12 @@ progress yourself. Your three jobs:
    more later the same way):
 ${menu}
    Selection rules: include identity whenever a goal needs a contact (booking, message,
-   role, schedule change). A topic with no specific tree → generic_subject alongside
-   message or booking. Questions-only callers → qa alone, answers first, no identity
-   questions. Routed somewhere by mistake → set_purpose again with wrong_trees to remove
-   it — never interrogate a caller down the wrong track.
+   role, schedule change). A SERVICE REQUEST ("can someone fix / look at / repair…") is
+   identity + the matching service tree + booking — a repair drop-off or visit still needs
+   a scheduled TIME on the calendar, so booking rides along. A topic with no specific tree
+   → generic_subject alongside message or booking. Questions-only callers → qa alone,
+   answers first, no identity questions. Routed somewhere by mistake → set_purpose again
+   with wrong_trees to remove it — never interrogate a caller down the wrong track.
 
 2. FILL WHAT YOU HEAR. Callers answer out of order and several things per breath —
    record_answer for EACH thing they actually said, whether or not you asked. Record only
