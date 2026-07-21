@@ -148,15 +148,20 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
 
-  // QUESTION-TREE CALL FLOW (docs/QUESTION_TREE_ARCHITECTURE.md). When "true",
-  // the call runs as ONE conversation over a host-tracked checklist of
-  // purpose-selected question trees (src/checklist/) — supersedes both the
-  // prompt ladder and the TaskGroup rungs on this worker. OFF by default;
-  // takes precedence over ENABLE_TASK_GROUP when both are set.
+  // QUESTION-TREE CALL FLOW (docs/QUESTION_TREE_ARCHITECTURE.md). The call runs
+  // as ONE conversation over a host-tracked checklist of purpose-selected
+  // question trees (src/checklist/) — it supersedes both the prompt ladder and
+  // the TaskGroup rungs, and takes precedence over ENABLE_TASK_GROUP.
+  //
+  // ON BY DEFAULT since 2026-07-21 (Dale: "we aren't going back to the rung
+  // system"). The flag is now a ROLLBACK ESCAPE HATCH, not an opt-in: set
+  // ENABLE_QUESTION_TREE=false to fall back to the ladder without a redeploy
+  // during the first real prod calls. Once question-tree has proven itself on
+  // live PSTN traffic, stage 2 removes this flag AND the dead ladder/rung code.
   ENABLE_QUESTION_TREE: z
     .string()
     .optional()
-    .transform((v) => v === 'true'),
+    .transform((v) => v !== 'false'),
 
   // CHECKLIST-AWARE TURN DETECTION (prototype 2026-07-21, src/session/
   // turnDetector.ts). ON by default but only ACTIVE under ENABLE_QUESTION_TREE:
