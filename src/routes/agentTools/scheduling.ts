@@ -948,7 +948,17 @@ export function registerSchedulingRoutes({
         }
         // Buffer so the openings we read aloud match what booking will accept.
         const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
-        return { shifts, appointments, bufferMinutes };
+        // The tenant timezone drives the past-time filter below. Without it the
+        // "is today / what time is it now" check runs on the SERVER clock (UTC
+        // on Railway), which at 7pm Chicago has already rolled to tomorrow — so
+        // the filter was skipped and past slots were offered. Same clock as the
+        // shift/appointment rendering above: the tenant's.
+        const tzRes = await client.query<{ timezone: string }>(
+          `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE tenant_id = $1`,
+          [args.tenant_id]
+        );
+        const timezone = tzRes.rows[0]?.timezone || 'America/Chicago';
+        return { shifts, appointments, bufferMinutes, timezone };
       });
 
       const { name: serviceName, duration_minutes, price } = service;
@@ -1028,10 +1038,27 @@ export function registerSchedulingRoutes({
       const open = subtractIntervals(coverage, booked);
       const usable = open.filter((slot) => slot.end - slot.start >= duration_minutes);
 
-      // If today, filter out past times.
+      // If today, filter out past times — in the TENANT's timezone, not the
+      // server's. `now.getHours()` / `now.toLocaleDateString` render in the
+      // process tz (UTC on Railway). At 7pm America/Chicago that is 00:00 the
+      // NEXT day, so `isToday` went false, `currentMinutes` fell to 0, and the
+      // whole past-time filter was bypassed — the route offered slots from
+      // earlier that same afternoon (already in the past). Reading "today" and
+      // the current minute-of-day in `data.timezone` matches the tenant-local
+      // wall-clock the slots themselves are built in. `% 24` guards the '24:00'
+      // midnight spelling some runtimes emit for a 2-digit hour.
       const now = new Date();
-      const isToday = args.date === now.toLocaleDateString('en-CA');
-      const currentMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : 0;
+      const todayKey = now.toLocaleDateString('en-CA', { timeZone: data.timezone });
+      const isToday = args.date === todayKey;
+      const nowParts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: data.timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(now);
+      const nowHour = Number(nowParts.find((p) => p.type === 'hour')?.value ?? '0') % 24;
+      const nowMinute = Number(nowParts.find((p) => p.type === 'minute')?.value ?? '0');
+      const currentMinutes = isToday ? nowHour * 60 + nowMinute : 0;
       const futureSlots = isToday
         ? usable
             .filter((s) => s.end > currentMinutes)

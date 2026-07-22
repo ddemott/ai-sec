@@ -27,7 +27,7 @@
 // makes this test reproduce the production condition on every machine.
 process.env.TZ = 'UTC';
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { type Client, Pool } from 'pg';
@@ -236,5 +236,67 @@ describe('available-slots → real DB, non-UTC tenant, UTC session', () => {
     });
     // No shift that day → open_times must be empty (and never invent times).
     expect(res.json().result.open_times).toEqual([]);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // WHO  : the "if today, filter out past times" branch of available-slots.
+  // WHAT : at 7:30 PM tenant-local, the route must NOT offer slots from earlier
+  //        that same day (5:00–7:00 PM are in the PAST), only 7:30 PM onward.
+  // WHEN : regression guard for the live report — "at 7pm my wife was offered a
+  //        meeting earlier that day." The past-time filter computed "now" on the
+  //        SERVER clock (UTC on Railway). At 7:30 PM America/Chicago the UTC
+  //        date has already rolled to tomorrow, so `isToday` went false,
+  //        `currentMinutes` fell to 0, and the filter was skipped ENTIRELY —
+  //        every open slot that afternoon, already past, was read aloud.
+  // WHERE: src/routes/agentTools/scheduling.ts — the `now` / `isToday` /
+  //        `currentMinutes` block, now computed in the tenant timezone.
+  // WHY  : the clock is frozen (Date-only fake, so pg's real timers keep
+  //        working) at 01:30 UTC 2027-03-11 = 7:30 PM CST 2027-03-10, which is
+  //        exactly the "local evening, UTC already tomorrow" condition. Under
+  //        the pre-fix code this test FAILS (5:00 PM is offered); under the fix
+  //        it passes.
+  // ───────────────────────────────────────────────────────────────────────
+  it('SAD→FIXED: at 7:30 PM local, earlier-today slots are NOT offered (tz past-time filter)', async () => {
+    const EVENING_DATE = '2027-03-10'; // Wednesday, still CST (DST starts 03-14)
+    const empRes = await setup.query<{ employee_id: string }>(
+      `SELECT employee_id FROM employees WHERE tenant_id = $1 LIMIT 1`,
+      [tenantId]
+    );
+    // A LATE shift (5–9 PM) so "now" can sit mid-shift while the UTC date has
+    // already rolled over — the exact shape that disabled the old filter.
+    await createScheduleEntry(setup, tenantId, empRes.rows[0].employee_id, EVENING_DATE, '17:00', '21:00');
+
+    // Date-only fake: `new Date()` is frozen, but setTimeout/setInterval (which
+    // pg relies on) stay real. 01:30 UTC = 19:30 the PREVIOUS day in CST.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2027-03-11T01:30:00Z'));
+    try {
+      const res = await post('/agent-tools/available-slots', {
+        tenant_id: tenantId,
+        date: EVENING_DATE,
+        service_type: 'a meeting',
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      const openTimes: string[] = body.result.open_times;
+
+      // The past is gone: nothing before 7:30 PM (the frozen "now") is offered.
+      for (const past of ['5:00 PM', '5:30 PM', '6:00 PM', '6:30 PM', '7:00 PM']) {
+        expect(openTimes).not.toContain(past);
+      }
+      // The remaining shift IS offered — proves we filtered the past, not the
+      // whole day (which would also make the assertions above vacuously pass).
+      expect(openTimes).toContain('7:30 PM');
+      expect(openTimes).toContain('8:30 PM');
+      // And the spoken line never reads a past time back to the caller.
+      expect(String(body.result.spoken ?? '')).not.toMatch(/\b5:00 PM\b/);
+    } finally {
+      vi.useRealTimers();
+      await setup.query(
+        `DELETE FROM employee_schedule WHERE tenant_id = $1 AND shift_date = $2::date`,
+        [tenantId, EVENING_DATE]
+      );
+    }
   });
 });
