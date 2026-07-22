@@ -405,6 +405,11 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     execute: async (): Promise<string> => {
       // The gate: a selected-but-unresolved checklist holds the door shut. A
       // call with NO selection may close (wrong number, instant hang-up ask).
+      // A selected-but-empty checklist deliberately REFUSES here — a message the
+      // caller wanted to leave must not be dropped half-taken. The wrong-business
+      // caller escapes not by weakening this gate but by never selecting a tree
+      // (or deselecting one) in the first place — see the prompt's WRONG BUSINESS
+      // branch and the wrong_trees exit.
       if (tracker.hasSelection() && !tracker.isResolved()) {
         return `Not yet — the checklist is not complete. Finish these first. ${stateBlock()}`;
       }

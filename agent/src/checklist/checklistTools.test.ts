@@ -531,6 +531,32 @@ describe('finish_call (the goodbye gate)', () => {
     await call(toolkit.selectedTools(), 'finish_call', {});
     expect(closeCall).toHaveBeenCalledOnce();
   });
+
+  it('SAD→FIXED: a wrong-business caller escapes by deselecting the speculative trees, then finishing', async () => {
+    // WHO:   the wrong-number caller ("Is this Bob's waxing service?") the old
+    //        "THE ELSE" speculatively routed to identity+message.
+    // WHAT:  with nothing to leave, the goodbye gate (correctly) holds the call
+    //        open — and with no way out that was dead air, then a hangup
+    //        (2026-07-22 freeze). The recovery the prompt now instructs: remove
+    //        every selected tree with wrong_trees, then finish_call closes.
+    // WHY:   the gate stays strict (a real half-taken message must not drop);
+    //        the escape is deselecting the tree that never should have been
+    //        selected — this test pins that that path actually frees the caller.
+    const { toolkit, closeCall } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    // The deadlock, still by design: selected + unresolved refuses to close.
+    const blocked = await call(toolkit.selectedTools(), 'finish_call', {});
+    expect(blocked).toContain('not complete');
+    expect(closeCall).not.toHaveBeenCalled();
+    // The escape: deselect the mistaken trees, then the gate opens.
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: [],
+      wrong_trees: ['identity', 'message'],
+    });
+    const res = await call(toolkit.selectedTools(), 'finish_call', {});
+    expect(closeCall).toHaveBeenCalledOnce();
+    expect(res).toBe('Call complete.');
+  });
 });
 
 describe('answer_question (always-on RAG)', () => {

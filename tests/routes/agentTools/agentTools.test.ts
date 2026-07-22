@@ -2633,10 +2633,12 @@ describe('agentTools /available-slots', () => {
     //        reject it. This test nails down the time-of-day filter
     //        against a mocked system clock.
     vi.useFakeTimers({ toFake: ['Date'] });
-    // Local-time-constructed Date: 2:30 PM on June 15, 2030 in whatever TZ
-    // the test runner uses. `toLocaleDateString('en-CA')` then returns the
-    // matching YYYY-MM-DD string, so isToday flips true.
-    vi.setSystemTime(new Date(2030, 5, 15, 14, 30, 0));
+    // The route reads "now" in the TENANT's timezone (the mocked tenant has no
+    // timezone row, so the route's COALESCE default — America/Chicago — applies).
+    // Pin the clock to an ABSOLUTE instant = 2:30 PM CDT, tz-deterministic on any
+    // runner. A local-time constructor (new Date(2030,5,15,14,30)) would be 2:30
+    // PM UTC in CI = 9:30 AM Chicago, and 1:00 PM would wrongly read as future.
+    vi.setSystemTime(new Date('2030-06-15T19:30:00Z')); // 2:30 PM America/Chicago
     try {
       const { app } = buildApp({
         queryResponses: [
@@ -2695,7 +2697,9 @@ describe('agentTools /available-slots', () => {
     //       call — the agent would hear a tool error and confuse the
     //       caller. This pins the graceful-fallback behavior.
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date(2030, 5, 15, 18, 0, 0)); // 6 PM, shop closed
+    // Absolute instant = 6 PM CDT (America/Chicago, the mocked tenant's default
+    // tz); tz-deterministic on any runner. See the partial-day test above.
+    vi.setSystemTime(new Date('2030-06-15T23:00:00Z')); // 6 PM America/Chicago, shop closed
     try {
       const { app } = buildApp({
         queryResponses: [

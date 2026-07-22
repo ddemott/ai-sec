@@ -62,6 +62,10 @@ describe('library integrity', () => {
     // "If you can't find a tool, the ELSE statement: leave a message for the
     // owner." The question-tree heir of the ladder's universal RUNG 4: no call
     // may end empty-handed — a saved message is the floor, not a failure.
+    // SCOPED 2026-07-22: THE ELSE now applies only when the caller wants
+    // something FROM THIS business — a wrong-number/"is this X?" caller is the
+    // exception and gets no speculative message (which used to jam the goodbye
+    // gate). So the phrase is no longer the unconditional "ALWAYS a message".
     const prompt = buildChecklistPrompt({
       persona: 'You are Chris, the AI receptionist for Thinking Hammer.',
       runtime: {
@@ -75,8 +79,11 @@ describe('library integrity', () => {
     // \s+ between words — the prompt template hard-wraps lines, so a phrase can
     // split across a newline + indent.
     expect(prompt).toMatch(/THE ELSE/);
-    expect(prompt).toMatch(/ALWAYS\s+a\s+message\s+for\s+the\s+owner/i);
+    expect(prompt).toMatch(/a\s+message\s+for\s+the\s+owner/i);
     expect(prompt).toMatch(/Never\s+end\s+a\s+call\s+empty-handed/i);
+    // The scoping is load-bearing — THE ELSE fires only for a caller who wants
+    // something FROM THIS business, not a wrong-number identity question.
+    expect(prompt).toMatch(/wants something FROM THIS business/i);
   });
 
   it('every tree is selectable by id, alone and together', () => {
