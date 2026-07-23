@@ -22,7 +22,7 @@ import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
 import { sendJobInquiryEmail } from '../../services/communications/systemEmail';
-import { isPlaceholderName } from '../../services/customerLookup';
+import { isPlaceholderName, backfillCustomerName } from '../../services/customerLookup';
 import { SMSService } from '../../services/communications/smsService';
 import { ConsentService } from '../../services/consentService';
 import { createDatabaseService } from '../../database/index';
@@ -175,6 +175,22 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             [args.tenant_id, lookupPhone]
           );
           customerId = cust.rows[0]?.customer_id ?? null;
+          // THE NAME ARRIVES HERE AND MUST NOT STOP HERE. Every messaging rung
+          // is handed a real caller_name, while the customer row was very likely
+          // created minutes earlier by a NAMELESS booking — scheduling.ts writes
+          // `args.name || 'Caller'` — and would otherwise keep that placeholder
+          // forever, because these routes write the name to their own table and
+          // never back to customers.
+          //
+          // Ashutosh, 2026-07-22: booked at turn 3 as "Caller", gave his name at
+          // turn 17, and stayed "Caller" in the phonebook because the write went
+          // only to job_inquiries. The customer row's updated_at still equalled
+          // its created_at.
+          //
+          // Unconditional by design — backfillCustomerName no-ops on a
+          // placeholder, so a nameless rung cannot overwrite a good name.
+          // 2026-07-23.
+          await backfillCustomerName(client, customerId, args.caller_name);
         }
 
         const res = await client.query<{ message_id: string }>(
@@ -333,6 +349,22 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             [args.tenant_id, lookupPhone]
           );
           customerId = cust.rows[0]?.customer_id ?? null;
+          // THE NAME ARRIVES HERE AND MUST NOT STOP HERE. Every messaging rung
+          // is handed a real caller_name, while the customer row was very likely
+          // created minutes earlier by a NAMELESS booking — scheduling.ts writes
+          // `args.name || 'Caller'` — and would otherwise keep that placeholder
+          // forever, because these routes write the name to their own table and
+          // never back to customers.
+          //
+          // Ashutosh, 2026-07-22: booked at turn 3 as "Caller", gave his name at
+          // turn 17, and stayed "Caller" in the phonebook because the write went
+          // only to job_inquiries. The customer row's updated_at still equalled
+          // its created_at.
+          //
+          // Unconditional by design — backfillCustomerName no-ops on a
+          // placeholder, so a nameless rung cannot overwrite a good name.
+          // 2026-07-23.
+          await backfillCustomerName(client, customerId, args.caller_name);
         }
         const res = await client.query<{ message_id: string }>(
           `INSERT INTO customer_messages
@@ -493,6 +525,22 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             [args.tenant_id, callbackPhone]
           );
           customerId = cust.rows[0]?.customer_id ?? null;
+          // THE NAME ARRIVES HERE AND MUST NOT STOP HERE. Every messaging rung
+          // is handed a real caller_name, while the customer row was very likely
+          // created minutes earlier by a NAMELESS booking — scheduling.ts writes
+          // `args.name || 'Caller'` — and would otherwise keep that placeholder
+          // forever, because these routes write the name to their own table and
+          // never back to customers.
+          //
+          // Ashutosh, 2026-07-22: booked at turn 3 as "Caller", gave his name at
+          // turn 17, and stayed "Caller" in the phonebook because the write went
+          // only to job_inquiries. The customer row's updated_at still equalled
+          // its created_at.
+          //
+          // Unconditional by design — backfillCustomerName no-ops on a
+          // placeholder, so a nameless rung cannot overwrite a good name.
+          // 2026-07-23.
+          await backfillCustomerName(client, customerId, args.caller_name);
         }
 
         // The meeting this inquiry was booked around. The id arrives from the agent

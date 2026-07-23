@@ -78,7 +78,18 @@ describe('toolsForPhase — narrowing', () => {
     // opener guarantees the model is in this phase when it reaches the intake
     // rung; with the tool only in 'intake' that rung was a locked wing (live sim
     // call: booked and closed with zero role questions asked).
-    expect(Object.keys(toolsForPhase(ALL_TOOLS, 'booking')).length).toBeLessThanOrEqual(12);
+    // 13 (booking): 2026-07-23 — cancel_appointment joined booking, same argument
+    // a third time. RUNG 2 now orders a cancellation when the caller turns down a
+    // meeting that was already booked, and that refusal ALWAYS lands in this phase
+    // because the booking just happened here. Routing via the manage_appointment
+    // router instead would keep the count at 12, but it costs a round trip at the
+    // exact moment the caller is objecting, and the 2026-07-20 lesson is that a
+    // rung's own tool must be in the phase the script guarantees the model is in.
+    // NOTE this counts ALL_TOOLS — the worst case. Production runs ENABLE_SMS=false,
+    // which drops record_sms_consent and send_self_service_link, so the real booking
+    // phase is 11 and still inside LiveKit's published 5-12 band. If SMS ever ships,
+    // splitting this phase stops being optional.
+    expect(Object.keys(toolsForPhase(ALL_TOOLS, 'booking')).length).toBeLessThanOrEqual(13);
     expect(Object.keys(toolsForPhase(ALL_TOOLS, 'manage')).length).toBeLessThanOrEqual(11);
   });
 

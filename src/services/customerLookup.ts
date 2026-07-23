@@ -66,6 +66,43 @@ export function isPlaceholderName(name: string | null | undefined): boolean {
   );
 }
 
+/**
+ * Overwrite a PLACEHOLDER name with a real one, on an EXISTING client so it can
+ * join a transaction already in flight.
+ *
+ * THE BUG THIS FIXES (a real call, 2026-07-22): Ashutosh rang about a Java
+ * contract. The agent booked at turn 3 before asking who he was, so
+ * scheduling.ts stored him as "Caller". At turn 17 it finally asked, he said
+ * "Ashutosh", and capture_job_inquiry wrote that name to `job_inquiries` —
+ * a DIFFERENT TABLE. Nothing carried it across, so the phonebook kept a row
+ * called "Caller" with a phone number and nothing else. The customer row's
+ * updated_at still equalled its created_at: nothing touched it after booking.
+ *
+ * The overwrite predicate lives HERE, once, and every path that later learns a
+ * caller's name calls this instead of copying the WHERE clause — copying it is
+ * precisely how the 2026-07-12 placeholder bug happened, and the comment above
+ * PLACEHOLDER_NAMES says the drift IS the bug.
+ *
+ * Safe to call unconditionally: no-ops when `name` is itself a placeholder, so
+ * a nameless call cannot overwrite a good name with "Caller". Returns true when
+ * a row was actually corrected.
+ */
+export async function backfillCustomerName(
+  client: PoolClient,
+  customerId: string | null | undefined,
+  name: string | null | undefined
+): Promise<boolean> {
+  if (!customerId || isPlaceholderName(name)) return false;
+  const real = (name as string).trim();
+  const res = await client.query(
+    `UPDATE customers SET name = $1
+      WHERE customer_id = $2
+        AND (name IS NULL OR name = '' OR name = ANY($3::text[]))`,
+    [real, customerId, PLACEHOLDER_NAMES]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
 export async function getOrCreateCustomerByPhone(
   withTenantClient: WithTenantClient,
   tenantId: string,
@@ -84,14 +121,7 @@ export async function getOrCreateCustomerByPhone(
       // A real name always beats a placeholder — including one we stored ourselves
       // on an earlier turn of THIS call, which is the common case: the agent books
       // (or tries to) before the caller has said who they are.
-      if (!isPlaceholderName(name)) {
-        await client.query(
-          `UPDATE customers SET name = $1
-           WHERE customer_id = $2
-             AND (name IS NULL OR name = '' OR name = ANY($3::text[]))`,
-          [name, customerId, PLACEHOLDER_NAMES]
-        );
-      }
+      await backfillCustomerName(client, customerId, name);
       return customerId;
     }
     const inserted = await client.query<{ customer_id: string }>(

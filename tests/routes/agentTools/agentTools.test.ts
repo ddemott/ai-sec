@@ -349,6 +349,9 @@ describe('agentTools /tenant-config', () => {
       forward_phone: null,
       // 2026-06-29 forwarded_from_phone defaults null → no forwarded-line match.
       forwarded_from_phone: null,
+      // 2026-07-23: THE resolved transfer capability. No forward_phone configured
+      // here, so there is nothing to transfer to — and a loop is impossible.
+      transfer_available: false,
       // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
       call_disclosure: null,
       greeting_menu: null,
@@ -417,6 +420,9 @@ describe('agentTools /tenant-config', () => {
       forward_phone: null,
       // 2026-06-29 forwarded_from_phone defaults null → no forwarded-line match.
       forwarded_from_phone: null,
+      // 2026-07-23: THE resolved transfer capability. No forward_phone configured
+      // here, so there is nothing to transfer to — and a loop is impossible.
+      transfer_available: false,
       // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
       call_disclosure: null,
       greeting_menu: null,

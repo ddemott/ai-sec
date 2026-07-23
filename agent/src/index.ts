@@ -1108,7 +1108,15 @@ export default defineAgent({
           sessionCtx,
           client,
           {
-            forwardPhone: tenantConfig.forwardPhone,
+            // Gated on the backend-resolved capability, not on the raw column.
+            // A forward_phone equal to the line that forwards INTO us rings
+            // straight back through the carrier — so when transfer is not
+            // available we hand the tool NO destination, which is already the
+            // signal every downstream check reads (tools.ts gates the transfer
+            // affordance on `!!transfer?.forwardPhone`, and greeting.ts offers
+            // the human opt-out on the same field). One boolean, decided once,
+            // and the whole chain follows it. 2026-07-23.
+            forwardPhone: tenantConfig.transferAvailable ? tenantConfig.forwardPhone : null,
             execute: transferExecutor,
           },
           outcomeTracker,

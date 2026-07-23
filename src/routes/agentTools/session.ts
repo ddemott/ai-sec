@@ -17,6 +17,11 @@ import {
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
 import { getBusinessHours } from '../../services/businessHours';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
+// Direct from shared/ per phoneUtils' own note ("all new code should import
+// directly from shared/phone"). canTransfer is THE resolved transfer capability
+// — see the transfer_available field below for why the agent gets a boolean
+// rather than the two raw numbers.
+import { canTransfer } from '../../../shared/phone';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
 
@@ -48,11 +53,12 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           tts_concise: boolean | null;
           forward_phone: string | null;
           forwarded_from_phone: string | null;
+          inbound_phone: string | null;
           call_disclosure: string | null;
           greeting_menu: string | null;
           greeting_closer: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, call_disclosure, greeting_menu, greeting_closer FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, inbound_phone, call_disclosure, greeting_menu, greeting_closer FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         if (!res.rows[0]) return null;
@@ -117,6 +123,25 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         // The line the tenant forwards INTO the assistant — caller-ID match
         // tells the agent to collect the caller's real number by voice.
         forwarded_from_phone: row.forwarded_from_phone ?? null,
+        // 2026-07-23: THE resolved transfer capability, decided here so the
+        // agent never re-derives it from raw numbers.
+        //
+        // "Is forwarding on?" is the WRONG question — a tenant may forward from
+        // a home line and transfer to a shop line, which is two different
+        // numbers and a perfectly valid setup. The disqualifying condition is
+        // SAMENESS: a transfer target equal to the line that forwards in (or to
+        // our own inbound number) rings straight back into the assistant.
+        // canTransfer() owns that comparison for every caller, normalized.
+        //
+        // Handed over as ONE boolean on purpose. The agent already received
+        // forward_phone and forwarded_from_phone and did nothing with them; a
+        // prompt that re-derives the rule is a second copy of the rule, and a
+        // second copy drifts.
+        transfer_available: canTransfer(
+          row.forward_phone,
+          row.forwarded_from_phone,
+          row.inbound_phone
+        ),
         // 2026-07-11: owner-editable spoken caller disclosure (AI + transcription
         // notice). NULL/blank means the agent speaks the platform default from
         // greeting.ts; a set value is spoken verbatim (attestation-gated on write).

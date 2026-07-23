@@ -32,7 +32,7 @@ describe('script composition — the invariants a copy-pasted script would lose'
     //      cannot be got wrong by a config, only by editing this file on purpose.
     const script = composeScript({ persona: PERSONA, intake: ['intake_job_inquiry'] });
 
-    const bookAt = script.indexOf('BOOK IT FIRST');
+    const bookAt = script.indexOf('RUNG 2 —');
     const intakeAt = script.indexOf('What company are you calling from?');
     expect(bookAt).toBeGreaterThan(-1);
     expect(intakeAt).toBeGreaterThan(-1);
@@ -105,14 +105,14 @@ describe('script composition — the invariants a copy-pasted script would lose'
     });
     expect(script).toContain('ASK ABOUT THE DOG');
     // Still wrapped in every universal rung, in order.
-    expect(script.indexOf('BOOK IT FIRST')).toBeLessThan(script.indexOf('ASK ABOUT THE DOG'));
+    expect(script.indexOf('RUNG 2 —')).toBeLessThan(script.indexOf('ASK ABOUT THE DOG'));
     expect(script.indexOf('ASK ABOUT THE DOG')).toBeLessThan(script.indexOf('IS EVERY GOAL'));
   });
 
   it('HAPPY: a script with NO intake is still a complete, valid call', () => {
     // WHY: a salon does not interview anybody. It books, and that is the whole call.
     const script = composeScript({ persona: PERSONA });
-    expect(script).toContain('BOOK IT FIRST');
+    expect(script).toContain('RUNG 2 —');
     expect(script).toContain('IS EVERY GOAL');
     expect(script.startsWith(PERSONA)).toBe(true);
   });

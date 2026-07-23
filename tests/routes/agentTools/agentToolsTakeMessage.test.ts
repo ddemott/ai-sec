@@ -92,6 +92,11 @@ describe('/agent-tools/take-message', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [{ customer_id: CUSTOMER_ID }] }, // customer lookup
+        // 2026-07-23: name back-fill. A real caller_name overwrites a PLACEHOLDER
+        // customer name ("Caller" from a nameless booking) so the phonebook stops
+        // keeping the placeholder forever. Zero rows here = the stored name was
+        // already real, which is the no-op case.
+        { rows: [] },
         { rows: [{ message_id: MESSAGE_ID }] }, // INSERT customer_messages
         { rows: [{ forward_phone: null, inbound_phone: null }] }, // tenant fetch
       ],
