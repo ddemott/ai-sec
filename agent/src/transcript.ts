@@ -34,6 +34,20 @@ const SPEAKER_LABEL: Record<TranscriptRole, string> = {
 export const MAX_TRANSCRIPT_CHARS = 100_000;
 const TRUNCATION_MARKER = '\n…[transcript truncated]';
 
+/**
+ * Does a RENDERED transcript string contain at least one caller line? The
+ * string-level twin of TranscriptRecorder.hasCallerTurn(), for the post-call
+ * enrichment functions (summarizeCall / classifyCallOutcome) that receive the
+ * rendered text, not the recorder. Both guard on this so a greeting-only
+ * transcript never reaches the LLM to be fabricated into an outcome (see
+ * hasCallerTurn's note). Anchored to the start of a line so "Caller:" appearing
+ * inside the assistant's own words can't trip it.
+ */
+const CALLER_LINE = new RegExp(`^${SPEAKER_LABEL.user}: `, 'm');
+export function renderedHasCallerTurn(rendered: string | null | undefined): boolean {
+  return !!rendered && CALLER_LINE.test(rendered);
+}
+
 /** Accumulates spoken turns and renders a human-readable transcript. */
 export class TranscriptRecorder {
   private readonly turns: TranscriptTurn[] = [];
@@ -53,6 +67,24 @@ export class TranscriptRecorder {
   /** Number of spoken turns recorded so far. */
   get size(): number {
     return this.turns.length;
+  }
+
+  /**
+   * Did the CALLER actually say anything? A transcript that holds only the
+   * assistant's greeting is not a conversation — the caller hung up, sat
+   * silent, or their audio never reached us.
+   *
+   * THE BUG THIS GUARDS (a real call, 2026-07-23, +1 650-770-0302): a
+   * greeting-only call was handed to the post-call summary model, whose prompt
+   * asks it to pick an outcome ("booked / left a message / asked a question").
+   * The greeting itself lists "hiring Dale … or leaving a message", so the
+   * model echoed that menu back as fact — "The caller inquired about hiring
+   * Dale and left a message." No message existed; customer_messages was empty.
+   * The owner read "left a message" and went looking for one that was never
+   * left. Summarizing a call with no caller turn can only fabricate — so don't.
+   */
+  hasCallerTurn(): boolean {
+    return this.turns.some((t) => t.role === 'user');
   }
 
   /**

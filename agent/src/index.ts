@@ -473,9 +473,22 @@ export default defineAgent({
             //    Both are bounded + failsafe (resolve null on timeout/error), so
             //    they can never undo the finalize above. classifyCallOutcome
             //    names WHY the caller reached out when no tool set an outcome.
-            const summaryResult = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
+            //
+            //    GUARD: only enrich when the CALLER actually spoke. A
+            //    greeting-only call has nothing to summarize, and handing the
+            //    greeting alone to the summary model makes it FABRICATE an
+            //    outcome from the greeting's own menu ("left a message" when no
+            //    message exists — real call 2026-07-23). No caller turn → no
+            //    LLM summary/classify; the finalize above already stored the
+            //    real duration + (greeting-only) transcript.
+            const callerSpoke = transcript.hasCallerTurn();
+            const summaryResult = callerSpoke
+              ? await summarizeCall(rendered ?? '', config.OPENAI_API_KEY)
+              : { summary: null };
             const summary = summaryResult.summary;
-            const classifyResult = await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY);
+            const classifyResult = callerSpoke
+              ? await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY)
+              : { outcome: null };
             const outcome = trackedOutcome ?? classifyResult.outcome;
 
             // 3. ENRICH PASS — re-call only when there's something new (a summary,

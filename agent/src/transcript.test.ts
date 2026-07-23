@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_TRANSCRIPT_CHARS, TranscriptRecorder } from './transcript.js';
+import { MAX_TRANSCRIPT_CHARS, TranscriptRecorder, renderedHasCallerTurn } from './transcript.js';
 
 // WHO: the agent's conversation_item_added listener (index.ts) feeding spoken
 //      turns to the recorder, drained by the shutdown callback.
@@ -73,5 +73,89 @@ describe('TranscriptRecorder', () => {
     expect(out!.length).toBeLessThanOrEqual(MAX_TRANSCRIPT_CHARS);
     expect(out!.startsWith('Assistant: aaaa')).toBe(true);
     expect(out!.endsWith('[transcript truncated]')).toBe(true);
+  });
+});
+
+// hasCallerTurn() gates the post-call summary. A real call (2026-07-23,
+// +1 650-770-0302) hung up after the greeting; the summary model, handed only
+// the greeting — which lists "hiring Dale … or leaving a message" — fabricated
+// "The caller inquired about hiring Dale and left a message." No message
+// existed. Summarizing a call with no caller turn can only invent, so index.ts
+// (and summarizeCall/classifyCallOutcome) skip enrichment when the caller never
+// spoke. These cases walk the ways a real call ends.
+const GREETING =
+  "Thanks for calling! I'm Piper, Dale's AI Assistant. This call is transcribed for quality and service. What do you need help with: hiring Dale, getting a computer fixed, or maybe just leaving a message?";
+
+describe('TranscriptRecorder.hasCallerTurn — how real calls end', () => {
+  it('SAD: immediate hang-up — greeting plays, caller drops', () => {
+    // The 2026-07-23 call. Greeting only; nothing to summarize.
+    const rec = new TranscriptRecorder();
+    rec.add('assistant', GREETING);
+    expect(rec.hasCallerTurn()).toBe(false);
+    expect(rec.render()).not.toContain('Caller:');
+  });
+
+  it('SAD: long silent pause then hang-up — duration does NOT imply speech', () => {
+    // A 36-second call where the caller sat silent then dropped renders the
+    // SAME greeting-only transcript as a 5-second hang-up. The guard keys on
+    // whether the caller SPOKE, never on how long the line was open — so a long
+    // empty call must still read as no-caller-turn.
+    const rec = new TranscriptRecorder();
+    rec.add('assistant', GREETING);
+    // No caller turn is ever added — STT produced nothing across 36s.
+    expect(rec.hasCallerTurn()).toBe(false);
+  });
+
+  it('SAD: only STT noise for the caller (empty/whitespace finals) is not speech', () => {
+    // Background noise / a muffled line can make STT emit empty finals. add()
+    // drops them, so the caller must still read as not-yet-spoken.
+    const rec = new TranscriptRecorder();
+    rec.add('assistant', GREETING);
+    rec.add('user', '');
+    rec.add('user', '   \n ');
+    expect(rec.hasCallerTurn()).toBe(false);
+  });
+
+  it('HAPPY: caller says only "hello? anyone there?" then hangs — that IS speech', () => {
+    // Short and inconclusive, but the caller spoke. This one legitimately gets
+    // summarized (the model can honestly say the caller asked if anyone was
+    // there and got no further) — the guard must NOT suppress it.
+    const rec = new TranscriptRecorder();
+    rec.add('assistant', GREETING);
+    rec.add('user', 'Hello? Anyone there?');
+    expect(rec.hasCallerTurn()).toBe(true);
+  });
+
+  it('HAPPY: caller mumbles filler then rings off', () => {
+    const rec = new TranscriptRecorder();
+    rec.add('assistant', GREETING);
+    rec.add('user', 'Uh, yeah, hi, um…');
+    expect(rec.hasCallerTurn()).toBe(true);
+  });
+
+  it('HAPPY: caller leaves a real message', () => {
+    const rec = new TranscriptRecorder();
+    rec.add('assistant', GREETING);
+    rec.add('user', 'Tell Dale that Sam from Apex called about the invoice, 555-0102.');
+    rec.add('assistant', "Got it — I'll pass that along.");
+    expect(rec.hasCallerTurn()).toBe(true);
+  });
+
+  it('empty transcript (never connected) has no caller turn', () => {
+    expect(new TranscriptRecorder().hasCallerTurn()).toBe(false);
+  });
+});
+
+describe('renderedHasCallerTurn — the string-level twin used by the enrichers', () => {
+  it('matches only a caller line at the START of a line', () => {
+    // "Caller:" buried inside the assistant's own words must not count.
+    expect(renderedHasCallerTurn('Assistant: I can note "Caller:" style labels.')).toBe(false);
+    expect(renderedHasCallerTurn(`Assistant: ${GREETING}`)).toBe(false);
+    expect(renderedHasCallerTurn(`Assistant: ${GREETING}\nCaller: Hi there.`)).toBe(true);
+  });
+
+  it('null / empty is not a caller turn', () => {
+    expect(renderedHasCallerTurn(null)).toBe(false);
+    expect(renderedHasCallerTurn('')).toBe(false);
   });
 });

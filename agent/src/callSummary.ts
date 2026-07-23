@@ -10,6 +10,8 @@
  * working call-logging write.
  */
 
+import { renderedHasCallerTurn } from './transcript.js';
+
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const DEFAULT_TIMEOUT_MS = 8000;
 
@@ -19,6 +21,10 @@ export async function summarizeCall(
   opts: { timeoutMs?: number } = {}
 ): Promise<{ summary: string | null; usage?: { inputTokens: number; outputTokens: number } }> {
   if (!transcript || transcript.trim().length === 0) return { summary: null };
+  // A transcript with no CALLER line is just the greeting. Summarizing it can
+  // only invent an outcome from the greeting's own menu ("left a message" when
+  // no message exists — real call 2026-07-23). Refuse before spending a token.
+  if (!renderedHasCallerTurn(transcript)) return { summary: null };
   if (!apiKey) return { summary: null };
 
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -35,7 +41,7 @@ export async function summarizeCall(
           {
             role: 'system',
             content:
-              'Summarize this phone call between a receptionist AI and a caller in 1-2 sentences. State the outcome plainly (booked an appointment / left a message / asked a question / no action). No preamble, no quotes.',
+              'Summarize this phone call between a receptionist AI and a caller in 1-2 sentences. Describe ONLY what the caller actually said and what was actually done in the transcript. Do NOT infer actions from the assistant greeting or its menu of options — if the caller asked to leave a message, only say so when the caller actually did. If the caller said little or nothing, say exactly that (e.g. "Caller did not state a reason"). State the outcome plainly (booked an appointment / left a message / asked a question / no action). No preamble, no quotes.',
           },
           { role: 'user', content: transcript.slice(0, 8000) },
         ],
