@@ -92,6 +92,13 @@ export interface TenantDisplayConfig {
    */
   greetingMenu: string | null;
   /**
+   * Owner-configurable CLOSING QUESTION — replaces the generic "How can I help
+   * you today?" at the end of the greeting with a guiding one that names the
+   * services ("What do you need help with: hiring Dale, a computer fix, or a
+   * message?"). NULL/blank = the default closer. 2026-07-23.
+   */
+  greetingCloser: string | null;
+  /**
    * The shop's opening hours, spoken ("Monday to Friday, 1:00 PM to 5:00 PM"),
    * derived from who is actually on the schedule. NULL when nobody is scheduled —
    * the agent must NOT claim to be open in that case.
@@ -125,6 +132,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   forwardedFromPhone: null,
   callDisclosure: null,
   greetingMenu: null,
+  greetingCloser: null,
   businessHours: null,
   bookableThrough: null,
 };
@@ -154,6 +162,7 @@ export async function fetchTenantConfig(
     forwarded_from_phone?: string | null;
     call_disclosure?: string | null;
     greeting_menu?: string | null;
+    greeting_closer?: string | null;
     business_hours?: string | null;
     bookable_through?: string | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
@@ -177,6 +186,7 @@ export async function fetchTenantConfig(
       forwardedFromPhone: res.result.forwarded_from_phone ?? null,
       callDisclosure: res.result.call_disclosure ?? null,
       greetingMenu: res.result.greeting_menu ?? null,
+      greetingCloser: res.result.greeting_closer ?? null,
       businessHours: res.result.business_hours ?? null,
       bookableThrough: res.result.bookable_through ?? null,
     };

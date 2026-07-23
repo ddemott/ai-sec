@@ -443,3 +443,35 @@ describe('the services menu (greeting_menu, 2026-07-21)', () => {
     expect(withBlank).toBe(withoutField);
   });
 });
+
+describe('the configurable closing question (greeting_closer, 2026-07-23)', () => {
+  // WHO: every caller | WHAT: the tenant can replace the generic "How can I help
+  // you today?" with a guiding question that names the services | WHY: Dale — a
+  // lost caller freezes on a generic "how can I help" and hangs up; concrete
+  // choices ("hiring Dale, a computer fix, or a message") rescue them.
+  const CLOSER = 'What do you need help with: hiring Dale, a computer fix, or maybe just leaving a message?';
+
+  test('a custom closer replaces the default AND ends the greeting', () => {
+    const g = buildGreeting(tenant({ greetingCloser: CLOSER }));
+    expect(g).toContain(CLOSER);
+    expect(g).not.toContain(CLOSER_NO_TRANSFER); // the generic default is gone
+    expect(g.trimEnd().endsWith(CLOSER)).toBe(true); // it's the last thing said
+  });
+
+  test('NULL / blank closer keeps the default "How can I help you today?"', () => {
+    expect(buildGreeting(tenant({ greetingCloser: null }))).toContain(CLOSER_NO_TRANSFER);
+    expect(buildGreeting(tenant({ greetingCloser: '   ' }))).toContain(CLOSER_NO_TRANSFER);
+  });
+
+  test('the disclosure is STILL present with a custom closer (legal not dropped)', () => {
+    const g = buildGreeting(tenant({ greetingCloser: CLOSER }));
+    expect(g).toContain('AI assistant');
+    expect(g).toContain('transcribed for quality and service');
+  });
+
+  test('with a transfer number, the representative opt-out is prepended to the custom closer', () => {
+    const g = buildGreeting(tenant({ greetingCloser: CLOSER, forwardPhone: '+16308229086' }));
+    expect(g).toMatch(/say "representative/i);
+    expect(g).toContain('Otherwise, what do you need help with'); // custom closer, lowercased after "Otherwise,"
+  });
+})

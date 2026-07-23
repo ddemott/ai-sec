@@ -50,8 +50,9 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           forwarded_from_phone: string | null;
           call_disclosure: string | null;
           greeting_menu: string | null;
+          greeting_closer: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, call_disclosure, greeting_menu FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, call_disclosure, greeting_menu, greeting_closer FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         if (!res.rows[0]) return null;
@@ -124,6 +125,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         // job opportunity, a drop-off computer repair…") — spoken between the
         // disclosure and "How can I help you today?". NULL/blank = no menu line.
         greeting_menu: row.greeting_menu ?? null,
+        greeting_closer: row.greeting_closer ?? null,
       });
     },
     'Failed to fetch tenant config'

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict CcZe0r2HzzQpdZc2OezOO0IEkKNixzdSF5ySeZEATEF7brDAbJdXB4mISmNy86J
+\restrict i1DKTFD4REx2gFlUrYHwHHdUkIVquwpuuFGz3rux2UtQlaeKxY6XetyApg6c42v
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3527,7 +3527,8 @@ CREATE TABLE public.tenants (
     is_deleted boolean DEFAULT false NOT NULL,
     deleted_at timestamp with time zone,
     deleted_by uuid,
-    greeting_menu text
+    greeting_menu text,
+    greeting_closer text
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3657,6 +3658,13 @@ COMMENT ON COLUMN public.tenants.deleted_at IS 'When the tenant was soft-deleted
 --
 
 COMMENT ON COLUMN public.tenants.greeting_menu IS 'Optional spoken services-menu line for the call greeting (between disclosure and closer). NULL/blank = omitted.';
+
+
+--
+-- Name: COLUMN tenants.greeting_closer; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.greeting_closer IS 'Optional spoken closing question for the call greeting, replacing the default "How can I help you today?". NULL/blank = default.';
 
 
 --
@@ -5904,5 +5912,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict CcZe0r2HzzQpdZc2OezOO0IEkKNixzdSF5ySeZEATEF7brDAbJdXB4mISmNy86J
+\unrestrict i1DKTFD4REx2gFlUrYHwHHdUkIVquwpuuFGz3rux2UtQlaeKxY6XetyApg6c42v
 

@@ -352,6 +352,7 @@ describe('agentTools /tenant-config', () => {
       // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
       call_disclosure: null,
       greeting_menu: null,
+      greeting_closer: null,
       // 2026-07-12: hours derived from who is actually scheduled. Null here because
       // the mock pool returns no shift rows — and null is exactly right: a shop with
       // nobody scheduled has no hours to state, and the agent must NOT invent any.
@@ -419,6 +420,7 @@ describe('agentTools /tenant-config', () => {
       // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
       call_disclosure: null,
       greeting_menu: null,
+      greeting_closer: null,
       // 2026-07-12: hours derived from who is actually scheduled. Null here because
       // the mock pool returns no shift rows — and null is exactly right: a shop with
       // nobody scheduled has no hours to state, and the agent must NOT invent any.
