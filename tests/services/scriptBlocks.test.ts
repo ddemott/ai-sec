@@ -10,12 +10,15 @@
  * the composer working and more about the invariants it exists to protect — the ones a
  * copy-pasted script would quietly lose.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   BLOCKS,
   CANONICAL_ORDER,
   composeScript,
   INTAKE_JOB_INQUIRY,
+  type ScriptComposition,
 } from '../../src/services/scripts/blocks';
 
 const PERSONA = 'You are the receptionist for Acme.';
@@ -129,5 +132,46 @@ describe('script composition — the invariants a copy-pasted script would lose'
     for (const id of CANONICAL_ORDER) {
       expect(BLOCKS[id], `CANONICAL_ORDER names a block that does not exist: ${id}`).toBeDefined();
     }
+  });
+});
+
+/**
+ * The shipped regular-tenant template — the default script a NEW ordinary
+ * business is installed with. These guard the two properties that make it
+ * "regular", either of which a careless edit could silently break:
+ *   1. it interviews nobody (no intake block — that is staffing-only), and
+ *   2. its persona does not contradict the message-by-default rungs.
+ */
+describe('regular-tenant.template.json — the default script for an ordinary business', () => {
+  const template = JSON.parse(
+    readFileSync(join(__dirname, '../../scripts/scripts/regular-tenant.template.json'), 'utf8')
+  ) as ScriptComposition & { tenant?: string };
+  const script = composeScript(template);
+
+  it('carries every universal rung but NO intake', () => {
+    // WHY: a salon/shop/trades caller is booked or messaged, never interviewed.
+    //      intake_job_inquiry is the staffing vertical's block and must not ride
+    //      along on the generic template.
+    expect(script).not.toContain(INTAKE_JOB_INQUIRY.text);
+    for (const id of ['identity', 'book_meeting', 'take_message', 'close']) {
+      expect(script, `regular template missing universal rung ${id}`).toContain(BLOCKS[id].text);
+    }
+  });
+
+  it('is message-by-default and its persona does not tell the model to book', () => {
+    // WHY: the persona is prepended AHEAD of the rungs. A persona that says
+    //      "book them a meeting" would fight RUNG 2's message-default and keep
+    //      the old book-on-any-mention behavior alive (exactly the Thinking
+    //      Hammer contradiction, 2026-07-23). Guard both halves.
+    expect(script).toContain('DEFAULT OUTCOME OF A CALL IS A MESSAGE');
+    expect(template.persona.toLowerCase()).not.toContain('book them a meeting');
+    expect(template.persona).toMatch(/only when the caller asks/i);
+  });
+
+  it('omits a hard-coded tenant so it can be reused across tenants', () => {
+    // WHY: the whole point of a template is that one file installs onto many
+    //      tenants via --tenant. A pinned tenant here would silently target the
+    //      wrong business.
+    expect(template.tenant).toBeUndefined();
   });
 });
