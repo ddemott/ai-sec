@@ -191,6 +191,12 @@ export const CLOSER_NO_TRANSFER = 'How can I help you today?';
 export const CLOSER_WITH_TRANSFER =
   'If you\'d rather speak with a person, just say "representative." Otherwise, how can I help you today?';
 
+/** The transfer opt-out sentence, prepended to WHATEVER closing question is in
+ *  effect (default or a tenant's custom `greetingCloser`) when a transfer number
+ *  is configured. Kept separate so a custom closer still gets the representative
+ *  option. */
+const TRANSFER_PREFIX = 'If you\'d rather speak with a person, just say "representative." Otherwise, ';
+
 /**
  * Build the tenant-controlled opener.
  *
@@ -261,7 +267,20 @@ export function buildOpener(config: TenantDisplayConfig): string {
  */
 export function buildGreeting(config: TenantDisplayConfig): string {
   const opener = buildOpener(config);
-  const closer = config.forwardPhone?.trim() ? CLOSER_WITH_TRANSFER : CLOSER_NO_TRANSFER;
+  // The closing question is OWNER-CONFIGURABLE (2026-07-23, Dale: swap the
+  // generic "How can I help you today?" for a guiding one that names the
+  // services — "What do you need help with: hiring Dale, a computer fix, or a
+  // message?" — so a lost caller is handed concrete choices instead of a blank
+  // "how can I help"). NULL/blank = the historical default. When a transfer
+  // number exists, the representative opt-out is prepended to whichever closer
+  // is in effect (custom question lowercased to read after "Otherwise,").
+  const customCloser = config.greetingCloser?.trim();
+  const closerQuestion = customCloser || CLOSER_NO_TRANSFER;
+  const closer = config.forwardPhone?.trim()
+    ? customCloser
+      ? TRANSFER_PREFIX + closerQuestion.charAt(0).toLowerCase() + closerQuestion.slice(1)
+      : CLOSER_WITH_TRANSFER
+    : closerQuestion;
   // The owner's spoken services menu (2026-07-21, Dale: list the CORE lanes up
   // front — job, computer repair, message, buying the AI-secretary service).
   // Placed AFTER the disclosure (legal first) and BEFORE the closing question,
