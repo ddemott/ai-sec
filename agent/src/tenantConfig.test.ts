@@ -67,6 +67,7 @@ describe('fetchTenantConfig', () => {
       forwardedFromPhone: null,
       callDisclosure: null,
       greetingMenu: null,
+      greetingCloser: null,
       businessHours: null,
       bookableThrough: null,
     });
