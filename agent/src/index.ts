@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 import { config } from './config.js';
 import { runFallback } from './fallback.js';
+import { reportDispatchNoParticipant } from './dispatchReport.js';
 import { buildGreeting } from './greeting.js';
 import { getLogger } from './logger.js';
 import { sanitizeStream } from './speechSanitizer.js';
@@ -232,17 +233,32 @@ export default defineAgent({
       return;
     }
 
-    // 2. Wait for SIP participant to get caller-ID phone + callID
-    //    Timeout is short — if it doesn't come in quickly the call is
-    //    probably malformed and we should bail rather than hang silent.
+    // 2. Wait for the SIP participant (the caller) to join, to get caller-ID
+    //    phone + callID.
+    //
+    //    THE GHOST-DISPATCH GUARD (2026-07-23). A REAL inbound call — or a
+    //    browser-sim join — always produces a participant. A room that never
+    //    gets one is a DUPLICATE/GHOST dispatch: the double-dispatch bug creates
+    //    a second, empty room per call, and the old code here greeted it and
+    //    opened a voice_sessions row anyway — the phantom 300s / 0-turn "call"
+    //    in the Calls tab that then got a fabricated summary. The comment used to
+    //    say "bail rather than hang silent"; it never did. Now it does: if no
+    //    participant joins within the window, LEAVE without greeting or opening a
+    //    session (returning ends the job and closes the empty room now, not at
+    //    the 300s reaper). The window is generous (config.PARTICIPANT_WAIT_MS,
+    //    default 20s) so a slow-but-real participant is never cut off —
+    //    waitForParticipant resolves the instant one joins, so a real call is
+    //    not delayed; the window only bounds the ABSENT case.
     let participantAttributes: Record<string, string> | null = null;
     let participantIdentity: string | null = null;
+    let sawParticipant = false;
     try {
       const sipParticipant = await Promise.race([
         ctx.waitForParticipant(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), config.PARTICIPANT_WAIT_MS)),
       ]);
       if (sipParticipant) {
+        sawParticipant = true;
         participantAttributes = sipParticipant.attributes;
         // Identity is the handle the SIP transfer (cold REFER) targets — capture
         // it now so transfer_call can hand the live leg off to a human.
@@ -276,6 +292,27 @@ export default defineAgent({
     } catch {
       // Non-fatal — we can still greet without a caller phone
       participantAttributes = null;
+    }
+
+    if (!sawParticipant) {
+      // No caller ever joined this room — a ghost/duplicate dispatch. Do NOT
+      // open a voice_sessions row and do NOT greet an empty room. Emit the
+      // metric (durable counter on the backend /metrics board) + a 5W log, then
+      // return: that ends the LiveKit job and closes the room now.
+      log.warn(
+        {
+          event: 'dispatch_no_participant',
+          tenant_id: preliminaryCtx.tenantId,
+          room: ctx.room.name,
+          waited_ms: config.PARTICIPANT_WAIT_MS,
+        },
+        'no SIP participant joined within the window — treating as a ghost/duplicate dispatch, leaving without greeting'
+      );
+      void reportDispatchNoParticipant(config, {
+        tenantId: preliminaryCtx.tenantId,
+        room: ctx.room.name,
+      });
+      return;
     }
 
     const sessionCtx = buildSessionContext({
@@ -473,9 +510,22 @@ export default defineAgent({
             //    Both are bounded + failsafe (resolve null on timeout/error), so
             //    they can never undo the finalize above. classifyCallOutcome
             //    names WHY the caller reached out when no tool set an outcome.
-            const summaryResult = await summarizeCall(rendered ?? '', config.OPENAI_API_KEY);
+            //
+            //    GUARD: only enrich when the CALLER actually spoke. A
+            //    greeting-only call has nothing to summarize, and handing the
+            //    greeting alone to the summary model makes it FABRICATE an
+            //    outcome from the greeting's own menu ("left a message" when no
+            //    message exists — real call 2026-07-23). No caller turn → no
+            //    LLM summary/classify; the finalize above already stored the
+            //    real duration + (greeting-only) transcript.
+            const callerSpoke = transcript.hasCallerTurn();
+            const summaryResult = callerSpoke
+              ? await summarizeCall(rendered ?? '', config.OPENAI_API_KEY)
+              : { summary: null };
             const summary = summaryResult.summary;
-            const classifyResult = await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY);
+            const classifyResult = callerSpoke
+              ? await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY)
+              : { outcome: null };
             const outcome = trackedOutcome ?? classifyResult.outcome;
 
             // 3. ENRICH PASS — re-call only when there's something new (a summary,
@@ -1108,7 +1158,15 @@ export default defineAgent({
           sessionCtx,
           client,
           {
-            forwardPhone: tenantConfig.forwardPhone,
+            // Gated on the backend-resolved capability, not on the raw column.
+            // A forward_phone equal to the line that forwards INTO us rings
+            // straight back through the carrier — so when transfer is not
+            // available we hand the tool NO destination, which is already the
+            // signal every downstream check reads (tools.ts gates the transfer
+            // affordance on `!!transfer?.forwardPhone`, and greeting.ts offers
+            // the human opt-out on the same field). One boolean, decided once,
+            // and the whole chain follows it. 2026-07-23.
+            forwardPhone: tenantConfig.transferAvailable ? tenantConfig.forwardPhone : null,
             execute: transferExecutor,
           },
           outcomeTracker,

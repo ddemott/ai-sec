@@ -65,6 +65,10 @@ describe('fetchTenantConfig', () => {
       ttsCheerful: null,
       forwardPhone: null,
       forwardedFromPhone: null,
+      // Absent from the response ⇒ false. A missing capability must never read
+      // as "yes you can transfer" — a false positive dials a number that loops
+      // the call straight back into the assistant. 2026-07-23.
+      transferAvailable: false,
       callDisclosure: null,
       greetingMenu: null,
       greetingCloser: null,

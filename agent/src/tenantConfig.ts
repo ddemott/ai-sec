@@ -75,6 +75,17 @@ export interface TenantDisplayConfig {
    */
   forwardedFromPhone: string | null;
   /**
+   * Can this call actually be transferred to a human? THE resolved capability,
+   * decided by the backend (shared/phone.ts canTransfer) — never re-derived here.
+   *
+   * False when no transfer target is configured, AND when the configured target
+   * would LOOP: a `forward_phone` equal to `forwarded_from_phone` rings the very
+   * line that forwards into this assistant, and the carrier sends it straight
+   * back. Note that forwarding IN does not by itself disable transfer — home
+   * line in, shop line out is two different numbers and works fine. 2026-07-23.
+   */
+  transferAvailable: boolean;
+  /**
    * Owner-editable spoken caller disclosure (the AI + transcription notice).
    * NULL or blank means "use the platform default" — buildDisclosure() in
    * greeting.ts composes the compliant fallback. A tenant can reword it (brand
@@ -130,6 +141,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   ttsCheerful: null,
   forwardPhone: null,
   forwardedFromPhone: null,
+  transferAvailable: false,
   callDisclosure: null,
   greetingMenu: null,
   greetingCloser: null,
@@ -160,6 +172,7 @@ export async function fetchTenantConfig(
     tts_cheerful?: boolean | null;
     forward_phone?: string | null;
     forwarded_from_phone?: string | null;
+    transfer_available?: boolean | null;
     call_disclosure?: string | null;
     greeting_menu?: string | null;
     greeting_closer?: string | null;
@@ -184,6 +197,10 @@ export async function fetchTenantConfig(
       ttsCheerful: res.result.tts_cheerful ?? null,
       forwardPhone: res.result.forward_phone ?? null,
       forwardedFromPhone: res.result.forwarded_from_phone ?? null,
+      // Absent (older backend) is treated as "no transfer" rather than
+      // "transfer": a false negative costs a caller one offered transfer, a
+      // false positive dials a number that loops the call back into us.
+      transferAvailable: res.result.transfer_available === true,
       callDisclosure: res.result.call_disclosure ?? null,
       greetingMenu: res.result.greeting_menu ?? null,
       greetingCloser: res.result.greeting_closer ?? null,

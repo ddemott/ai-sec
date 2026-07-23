@@ -4,9 +4,17 @@
  *   npx tsx scripts/install-script.ts --tenant <uuid> --intake intake_job_inquiry \
  *     --persona "You are Chris, the receptionist for Thinking Hammer..." [--dry-run]
  *
- * Or point it at a JSON file describing the whole composition:
+ * Or point it at a JSON file describing the whole composition. Naming convention:
+ *   *.tenant.json    — pinned to ONE named business (carries its own `tenant`)
+ *   *.template.json  — reusable across tenants (omits `tenant`; pass --tenant)
  *
- *   npx tsx scripts/install-script.ts --file scripts/scripts/thinking-hammer.json
+ *   npx tsx scripts/install-script.ts --file scripts/scripts/thinking-hammer.tenant.json
+ *
+ * A *.template.json omits its tenant and is reused across businesses — pass the
+ * target on the command line. This is how a new ordinary business is set up:
+ *
+ *   npx tsx scripts/install-script.ts --file scripts/scripts/regular-tenant.template.json \
+ *     --tenant <uuid> [--persona-name "Robin"]
  *
  * WHY: the first script was hand-written straight into the database, and it worked. The
  * second one is where that approach starts to cost: "read the number back and WAIT for
@@ -43,10 +51,19 @@ function parseArgs(): Args {
   const file = get('--file');
   if (file) {
     const json = JSON.parse(readFileSync(file, 'utf8')) as Partial<Args>;
-    if (!json.tenant || !json.persona) {
-      throw new Error(`${file} must contain at least "tenant" and "persona"`);
+    // CLI --tenant / --persona-name OVERRIDE the file. This is what lets ONE
+    // template file (e.g. regular-tenant.template.json, which omits `tenant`) be
+    // installed onto any number of tenants: the reusable composition lives in the
+    // file, the per-tenant target comes in on the command line. A file that DOES
+    // pin a tenant (thinking-hammer.tenant.json) still works — the flag is absent.
+    const tenant = get('--tenant') ?? json.tenant;
+    const personaName = get('--persona-name') ?? json.personaName;
+    if (!tenant || !json.persona) {
+      throw new Error(
+        `${file} must contain "persona", and a "tenant" — either in the file or via --tenant`
+      );
     }
-    return { ...json, dryRun: argv.includes('--dry-run') } as Args;
+    return { ...json, tenant, personaName, dryRun: argv.includes('--dry-run') } as Args;
   }
 
   const tenant = get('--tenant');

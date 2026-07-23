@@ -360,6 +360,14 @@ export const VoiceSessionStartSchema = z.object({
   caller_phone: z.string().min(1).nullable().optional(),
 });
 
+// The agent posts this when a dispatch produced NO SIP participant and it is
+// leaving without opening a session (ghost/duplicate dispatch, 2026-07-23).
+// Observability only — bumps errors_total{event="dispatch_no_participant"}.
+export const ReportDispatchNoParticipantSchema = z.object({
+  tenant_id: z.string().uuid(),
+  room: z.string().min(1).max(200),
+});
+
 export const VoiceSessionEndSchema = z.object({
   tenant_id: z.string().uuid(),
   call_id: z.string().min(1),

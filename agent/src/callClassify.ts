@@ -15,6 +15,8 @@
 const CATEGORIES = ['no_availability', 'wrong_service', 'price', 'message', 'info'] as const;
 const ALLOWED = new Set<string>(CATEGORIES);
 
+import { renderedHasCallerTurn } from './transcript.js';
+
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const DEFAULT_TIMEOUT_MS = 3000;
 
@@ -24,6 +26,9 @@ export async function classifyCallOutcome(
   opts: { timeoutMs?: number } = {}
 ): Promise<{ outcome: string | null; usage?: { inputTokens: number; outputTokens: number } }> {
   if (!transcript || transcript.trim().length === 0) return { outcome: null };
+  // Greeting-only (no caller line): the greeting names "leaving a message", so
+  // the classifier would return 'message' for a call where nobody spoke. Refuse.
+  if (!renderedHasCallerTurn(transcript)) return { outcome: null };
   if (!apiKey) return { outcome: null };
 
   const controller = new AbortController();

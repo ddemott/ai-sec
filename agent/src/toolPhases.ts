@@ -146,6 +146,15 @@ export const PHASE_TOOLS: Record<CallPhase, readonly string[]> = {
     // in his hand. The intake capture must be reachable from the phase the
     // script guarantees the model is in when it reaches the intake rung.
     'capture_job_inquiry',
+    // Same class AGAIN (2026-07-23, live call). RUNG 2 now says: if the caller
+    // turns down a meeting you already booked, CANCEL IT. That refusal always
+    // lands in THIS phase — the booking just happened here — and cancellation
+    // lived only in 'manage', so the rung ordered a tool the model was not
+    // holding. Ashutosh asked to speak to the owner, was told a meeting had
+    // been booked 73 seconds out, said "No. No. No. I just want to speak with
+    // him" — and the appointment stayed in the diary through the end of the
+    // call and beyond. A rule the toolset cannot satisfy is not a rule.
+    'cancel_appointment',
   ],
 
   // An appointment that already exists. get_available_slots is here because a

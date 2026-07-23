@@ -15,6 +15,18 @@ import type { PoolClient } from 'pg';
 
 import { registerAgentToolRoutes } from '../../../src/routes/agentTools';
 import { sendJobInquiryEmail } from '../../../src/services/communications/systemEmail';
+import { registry } from '../../../src/services/metrics';
+
+/** Read the current value of errors_total{event="..."} from the live registry. */
+function errorCount(event: string): number {
+  const line = registry
+    .expose()
+    .split('\n')
+    .find((l) => l.startsWith(`errors_total{`) && l.includes(`event="${event}"`));
+  if (!line) return 0;
+  const n = Number(line.trim().split(/\s+/).pop());
+  return Number.isFinite(n) ? n : 0;
+}
 
 // The capture-job-inquiry route emails the owner via systemEmail. Mock it so we
 // can (a) assert it's called with the resolved recipient + collected fields and
@@ -349,6 +361,9 @@ describe('agentTools /tenant-config', () => {
       forward_phone: null,
       // 2026-06-29 forwarded_from_phone defaults null → no forwarded-line match.
       forwarded_from_phone: null,
+      // 2026-07-23: THE resolved transfer capability. No forward_phone configured
+      // here, so there is nothing to transfer to — and a loop is impossible.
+      transfer_available: false,
       // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
       call_disclosure: null,
       greeting_menu: null,
@@ -417,6 +432,9 @@ describe('agentTools /tenant-config', () => {
       forward_phone: null,
       // 2026-06-29 forwarded_from_phone defaults null → no forwarded-line match.
       forwarded_from_phone: null,
+      // 2026-07-23: THE resolved transfer capability. No forward_phone configured
+      // here, so there is nothing to transfer to — and a loop is impossible.
+      transfer_available: false,
       // 2026-07-11 call_disclosure defaults null → agent speaks the platform default.
       call_disclosure: null,
       greeting_menu: null,
@@ -3579,5 +3597,92 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true, result: { updated: false } });
+  });
+});
+
+// The 2026-07-23 double-dispatch observability: the agent reports a ghost
+// dispatch (no participant) it left, and the backend flags a forked call (two
+// sessions, same caller, within 30s). Both are metric-only.
+const TID = '11111111-1111-4111-8111-111111111111';
+
+describe('/agent-tools/report-dispatch-no-participant', () => {
+  it('HAPPY: bumps errors_total{dispatch_no_participant} and writes no DB row', async () => {
+    // WHO: the agent leaving a ghost/duplicate dispatch (empty room).
+    // WHY: the ghost-leg RATE must be visible on /metrics; there is deliberately
+    //      no voice_sessions row for a call nobody was ever on.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const before = errorCount('dispatch_no_participant');
+
+    const res = await post(app, '/agent-tools/report-dispatch-no-participant', {
+      tenant_id: TID,
+      room: 'room:call-_6505551234_abc',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { recorded: true } });
+    expect(errorCount('dispatch_no_participant')).toBe(before + 1);
+    expect(queries).toHaveLength(0); // no DB write for a participant-less dispatch
+  });
+
+  it('SAD: rejects a missing room before doing anything', async () => {
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/report-dispatch-no-participant', { tenant_id: TID });
+    expectValidationFailure(res, queries);
+  });
+});
+
+describe('/agent-tools/voice-session-start — duplicate-dispatch detector', () => {
+  it('SAD: a second session for the same caller within 30s bumps the counter', async () => {
+    // WHO: a forked inbound call — two SIP legs, same caller_phone, seconds apart
+    //      (the 1:46 PM 2026-07-23 call). WHY: surface the fork RATE without
+    //      affecting call logging.
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ context: {} }] }, // start_voice_session
+        { rows: [{ n: 2 }] }, // duplicate-detector count: two prior live sessions
+      ],
+    });
+    const before = errorCount('duplicate_dispatch_detected');
+
+    const res = await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TID,
+      call_id: 'SCL_secondLeg',
+      caller_phone: '+16505551234',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(errorCount('duplicate_dispatch_detected')).toBe(before + 1);
+  });
+
+  it('HAPPY: a lone session for a caller does NOT bump the counter', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ context: {} }] }, // start_voice_session
+        { rows: [{ n: 0 }] }, // no prior sessions
+      ],
+    });
+    const before = errorCount('duplicate_dispatch_detected');
+
+    await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TID,
+      call_id: 'SCL_only',
+      caller_phone: '+16505559999',
+    });
+
+    expect(errorCount('duplicate_dispatch_detected')).toBe(before);
+  });
+
+  it('HAPPY: an anonymous caller (no phone) skips the detector query entirely', async () => {
+    // No caller_phone → nothing to correlate on → the detector must not run.
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ context: {} }] }] });
+
+    await post(app, '/agent-tools/voice-session-start', {
+      tenant_id: TID,
+      call_id: 'room:call-_anon',
+    });
+
+    // Exactly one query (start_voice_session); no duplicate-count SELECT.
+    expect(queries.filter((q) => q.text.includes('count(*)'))).toHaveLength(0);
   });
 });

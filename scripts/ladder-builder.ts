@@ -9,7 +9,7 @@
  *   npx tsx scripts/ladder-builder.ts --show identity        # one rung's full text
  *   npx tsx scripts/ladder-builder.ts --docs                 # regenerate docs/CALL_LADDER.md
  *
- *   npx tsx scripts/ladder-builder.ts --build --tenant <id> --recipe scripts/scripts/thinking-hammer.json [--dry-run]
+ *   npx tsx scripts/ladder-builder.ts --build --tenant <id> --recipe scripts/scripts/thinking-hammer.tenant.json [--dry-run]
  *   npx tsx scripts/ladder-builder.ts --build --tenant <id> --persona "You are …" [--intake intake_job_inquiry] [--assistant-name Chris] [--dry-run]
  *
  * BUILD behavior:

@@ -13,10 +13,16 @@ import {
   VoiceSessionStartSchema,
   VoiceSessionEndSchema,
   VoiceSessionTranscriptSchema,
+  ReportDispatchNoParticipantSchema,
 } from './schemas';
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
 import { getBusinessHours } from '../../services/businessHours';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
+// Direct from shared/ per phoneUtils' own note ("all new code should import
+// directly from shared/phone"). canTransfer is THE resolved transfer capability
+// — see the transfer_available field below for why the agent gets a boolean
+// rather than the two raw numbers.
+import { canTransfer } from '../../../shared/phone';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
 
@@ -48,11 +54,12 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           tts_concise: boolean | null;
           forward_phone: string | null;
           forwarded_from_phone: string | null;
+          inbound_phone: string | null;
           call_disclosure: string | null;
           greeting_menu: string | null;
           greeting_closer: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, call_disclosure, greeting_menu, greeting_closer FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, inbound_phone, call_disclosure, greeting_menu, greeting_closer FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         if (!res.rows[0]) return null;
@@ -117,6 +124,25 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         // The line the tenant forwards INTO the assistant — caller-ID match
         // tells the agent to collect the caller's real number by voice.
         forwarded_from_phone: row.forwarded_from_phone ?? null,
+        // 2026-07-23: THE resolved transfer capability, decided here so the
+        // agent never re-derives it from raw numbers.
+        //
+        // "Is forwarding on?" is the WRONG question — a tenant may forward from
+        // a home line and transfer to a shop line, which is two different
+        // numbers and a perfectly valid setup. The disqualifying condition is
+        // SAMENESS: a transfer target equal to the line that forwards in (or to
+        // our own inbound number) rings straight back into the assistant.
+        // canTransfer() owns that comparison for every caller, normalized.
+        //
+        // Handed over as ONE boolean on purpose. The agent already received
+        // forward_phone and forwarded_from_phone and did nothing with them; a
+        // prompt that re-derives the rule is a second copy of the rule, and a
+        // second copy drifts.
+        transfer_available: canTransfer(
+          row.forward_phone,
+          row.forwarded_from_phone,
+          row.inbound_phone
+        ),
         // 2026-07-11: owner-editable spoken caller disclosure (AI + transcription
         // notice). NULL/blank means the agent speaks the platform default from
         // greeting.ts; a set value is spoken verbatim (attestation-gated on write).
@@ -149,6 +175,46 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
             args.caller_phone ?? null,
           ])
         );
+        // DUPLICATE-DISPATCH DETECTOR (2026-07-23). The double-dispatch bug can
+        // create TWO sessions for one inbound call — the 1:46 PM call had two
+        // SIP legs 3s apart, both with the same caller_phone. The participant
+        // guard in the agent kills the EMPTY-room variant, but a genuine
+        // two-leg fork (both legs have a participant) still reaches here twice.
+        // When a second live session appears for the same tenant+phone within a
+        // short window, bump errors_total{event="duplicate_dispatch_detected"}
+        // so the fork RATE is visible on /metrics. Observability ONLY — never
+        // affects the session start (own try/catch, swallowed), because a false
+        // positive (a real quick call-back) must not break call logging.
+        if (args.caller_phone) {
+          try {
+            const dup = await withTenantClient(args.tenant_id, (client) =>
+              client.query<{ n: number }>(
+                `SELECT count(*)::int AS n FROM voice_sessions
+                  WHERE tenant_id = $1 AND caller_phone = $2 AND call_id <> $3
+                    AND started_at > now() - interval '30 seconds'
+                    AND (is_deleted IS NULL OR is_deleted = false)`,
+                [args.tenant_id, args.caller_phone, args.call_id]
+              )
+            );
+            const priorCount = dup.rows[0]?.n ?? 0;
+            if (priorCount > 0) {
+              errorsTotal.inc({ event: 'duplicate_dispatch_detected' });
+              app.log.warn(
+                {
+                  event: 'duplicate_dispatch_detected',
+                  tenant_id: args.tenant_id,
+                  call_id: args.call_id,
+                  prior_sessions: priorCount,
+                  caller_phone_last4: args.caller_phone.slice(-4),
+                },
+                'a second voice session opened for the same caller within 30s — likely a duplicate/forked dispatch'
+              );
+            }
+          } catch {
+            // Detector is best-effort; a failed observability query must never
+            // fail the call-logging write above.
+          }
+        }
       } catch (err) {
         // 5W sad-path log so a call that fails to log is diagnosable from ONE
         // line. WHO: tenant_id. WHAT: voice_session_start (caller_phone null =
@@ -172,6 +238,32 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
       return ok(reply, { started: true });
     },
     'Failed to start voice session'
+  );
+
+  // report-dispatch-no-participant — the agent posts this when a dispatch landed
+  // on a room that never got a SIP participant (a ghost/duplicate dispatch) and
+  // it left without opening a session. Observability ONLY: bumps
+  // errors_total{event="dispatch_no_participant"} so the ghost-leg RATE is on the
+  // /metrics board and alertable, and writes a 5W line. No DB write — there is
+  // deliberately no voice_sessions row for a call nobody was on. (2026-07-23.)
+  toolRoute(
+    app,
+    '/agent-tools/report-dispatch-no-participant',
+    ReportDispatchNoParticipantSchema,
+    // eslint-disable-next-line @typescript-eslint/require-await
+    async (args, reply) => {
+      errorsTotal.inc({ event: 'dispatch_no_participant' });
+      app.log.warn(
+        {
+          event: 'dispatch_no_participant',
+          tenant_id: args.tenant_id,
+          room: args.room,
+        },
+        'agent left a dispatch with no SIP participant (ghost/duplicate dispatch) — no session opened'
+      );
+      return ok(reply, { recorded: true });
+    },
+    'Failed to record dispatch-no-participant'
   );
 
   // voice-session-end — agent calls this from its shutdown callback when the

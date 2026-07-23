@@ -219,5 +219,25 @@ export const envSchema = z.object({
     .optional()
     .transform((v) => v === 'true'),
 
+  // How long to wait for a SIP participant (the caller) to join before treating
+  // the dispatch as a GHOST and leaving without greeting or opening a session.
+  //
+  // A real inbound PSTN call produces a participant in ~1-2s; a browser-sim join
+  // (a human opening the meet URL) can take longer. This bounds the ABSENT case
+  // only — waitForParticipant resolves the instant a participant joins, so a
+  // real call is never delayed. The window must be generous enough that a
+  // slow-but-real participant is never cut off (the OLD 5s behavior fell through
+  // and greeted anyway, which quietly tolerated a late join; leaving does not,
+  // so err long). Default 20s. Raise it (PARTICIPANT_WAIT_MS=30000) for leisurely
+  // sim testing. Origin: 2026-07-23 double-dispatch — ghost legs greeted an empty
+  // room and sat 300s to the reaper; this caps the ghost's life at the window.
+  PARTICIPANT_WAIT_MS: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const n = v?.trim() ? Number(v.trim()) : NaN;
+      return Number.isFinite(n) && n >= 1000 && n <= 60000 ? n : 20000;
+    }),
+
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 });

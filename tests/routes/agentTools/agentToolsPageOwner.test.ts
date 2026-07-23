@@ -100,6 +100,9 @@ describe('/agent-tools/page-owner', () => {
           ],
         }, // tenant pageability check
         { rows: [{ customer_id: CUSTOMER_ID }] }, // customer lookup
+        // 2026-07-23: name back-fill — a real caller_name overwrites a PLACEHOLDER
+        // customer name left by a nameless booking. Zero rows = already a real name.
+        { rows: [] },
         { rows: [{ message_id: MESSAGE_ID }] }, // INSERT customer_messages
       ],
     });
