@@ -153,7 +153,11 @@ describe('Square Sync — Push Happy Paths', () => {
     );
 
     // Verify sync map INSERT was called with correct external_id
-    const insertQuery = mockClient.query.mock.calls[3];
+    // Located by CONTENT, not position (see withTenantContext, 2026-07-27).
+    const insertQuery = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('INSERT INTO entity_sync_map')
+    )!;
+    expect(insertQuery, 'no query matched: INSERT INTO entity_sync_map').toBeDefined();
     expect(insertQuery[0]).toContain('INSERT INTO entity_sync_map');
     expect(insertQuery[1]).toContain(SQUARE_CUSTOMER_ID);
   });
@@ -286,6 +290,15 @@ describe('Square Sync — Push Happy Paths', () => {
     const mockClient = {
       query: vi.fn(async (text: string, params?: unknown[]) => {
         queries.push({ text, params: params || [] });
+        // RLS-context scaffolding never consumes a scripted response — same rule
+        // as createMockClient in tests/mock.ts. This mock is inline (it shares
+        // one response queue across the recursive cascade), so it needs the rule
+        // spelled out here too, or withTenantContext shifts the whole queue.
+        if (text.includes('app.current_tenant_id')) {
+          return text.includes('current_setting')
+            ? { rows: [{ v: '' }], rowCount: 1 }
+            : { rows: [], rowCount: 0 };
+        }
         return allResponses.shift() || { rows: [], rowCount: 0 };
       }),
       release: vi.fn(),
@@ -573,7 +586,11 @@ describe('Square Sync — Sad Paths', () => {
     );
 
     // Should have issued UPDATE to set is_active = false
-    const updateCall = mockClient.query.mock.calls[1];
+    // Located by CONTENT, not position (see withTenantContext, 2026-07-27).
+    const updateCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('is_active = false')
+    )!;
+    expect(updateCall, 'no query matched: is_active = false').toBeDefined();
     expect(updateCall[0]).toContain('is_active = false');
     expect(mockClient.release).toHaveBeenCalled();
   });

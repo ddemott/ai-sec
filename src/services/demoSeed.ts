@@ -11,6 +11,8 @@
 
 import type { Pool, PoolClient } from 'pg';
 
+import { withTenantContext } from '../database/index';
+
 export interface DemoSeedParams {
   tenantId: string;
   userId: string;
@@ -19,13 +21,28 @@ export interface DemoSeedParams {
 /**
  * Insert demo business data for the given tenant.
  * Must be called after the tenant + owner user rows already exist.
- * Uses the raw pool (no RLS context) — admin-level write.
+ *
+ * RUNS UNDER THE TENANT'S RLS CONTEXT. This used to say "uses the raw pool (no
+ * RLS context) — admin-level write", which was true only because the app
+ * connected as a BYPASSRLS role and every policy was inert. The first time
+ * production ran as `app_user` (2026-07-27) this function was the first thing to
+ * break — `POST /demo/start`, the public "Try live demo" button, 500'd with
+ *
+ *     new row violates row-level security policy for table "tenant_skills"
+ *
+ * because `tenant_skills` (like every tenant-scoped table except tenants/users/
+ * business_templates) has an isolation policy and no admin bypass: with no
+ * context `tenant_ctx_uuid()` is NULL and the WITH CHECK denies every row.
+ *
+ * There was never a reason for this write to be context-free — it seeds data for
+ * ONE known tenant. Setting the context is both the fix and the honest
+ * description of what it does.
  */
 export async function seedDemoTenant(pool: Pool, params: DemoSeedParams): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await insertDemoData(client, params);
+    await withTenantContext(client, params.tenantId, () => insertDemoData(client, params));
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');

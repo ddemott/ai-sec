@@ -64,9 +64,16 @@ export interface MockClientHandle {
  * context never see those queries; tests that do get the right behavior
  * automatically.
  *
+ * The RLS-context statements from `withTenantContext` (a `current_setting`
+ * read and a `set_config` write) are treated the same way — they never consume
+ * from the queue, so a service that gains a tenant-context wrapper does not
+ * break every mocked test that scripted responses positionally.
+ *
  * To assert against data queries only (excluding session-variable noise):
  *   const dataQueries = queries.filter(q =>
- *     !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET'));
+ *     !q.text.startsWith('SET LOCAL') && !q.text.startsWith('RESET') &&
+ *     !q.text.includes('set_config(') &&
+ *     !q.text.includes("current_setting('app.current_tenant_id'"));
  */
 export function createMockClient(): MockClientHandle {
   const queries: MockQuery[] = [];
@@ -76,6 +83,23 @@ export function createMockClient(): MockClientHandle {
       queries.push({ text, params: params || [] });
       if (text.startsWith('SET LOCAL') || text.startsWith('RESET')) {
         return { rows: [], rowCount: 0 };
+      }
+      // RLS-context scaffolding emitted by withTenantContext (src/database/index.ts).
+      // Same rule as SET LOCAL / RESET above: infrastructure, not scripted data.
+      // Without this, adding a context wrapper to any service SHIFTS THE QUEUE and
+      // every mocked test downstream of it fails on a response meant for a
+      // different query — which is exactly what happened to calendar-sync.test.ts
+      // when tokenManagement gained its wrapper (2026-07-27).
+      // NARROW ON PURPOSE — it must match the TENANT context GUC and nothing
+      // else. A blanket `set_config(` match also swallowed versionHistory's
+      // own set_config('app.change_source', ...) calls, whose responses ARE
+      // scripted, and four restore-fields tests started returning 500.
+      if (text.includes('app.current_tenant_id')) {
+        // A read returns the previous context (empty = none was set); the
+        // write returns nothing. Both bypass the scripted queue.
+        return text.includes('current_setting')
+          ? { rows: [{ v: '' }], rowCount: 1 }
+          : { rows: [], rowCount: 0 };
       }
       return queryResponses.shift() || { rows: [], rowCount: 0 };
     }),

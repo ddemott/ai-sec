@@ -19,6 +19,8 @@
 
 import type { Pool } from 'pg';
 
+import { withTenantContext } from '../database/index';
+
 /** Minimal logger interface used by all sync services */
 export interface SyncLogger {
   warn: (msg: string) => void;
@@ -96,68 +98,75 @@ export async function getIntegrationTokens(
   const prefix = syncCtx(provider, tenantId);
   const client = await pool.connect();
 
+  // RLS CONTEXT REQUIRED. tenant_integration_settings is tenant-scoped with an
+  // isolation policy and no admin bypass, so under a non-bypassing role every
+  // read AND the refresh UPDATE below silently match zero rows without it —
+  // which reads as "no integration configured" and quietly stops all syncing.
+  // See withTenantContext in src/database/index.ts (2026-07-27).
   try {
-    const cols = extraColumns
-      ? `access_token, refresh_token, token_expires_at, is_active, ${extraColumns}`
-      : 'access_token, refresh_token, token_expires_at, is_active';
+    return await withTenantContext(client, tenantId, async () => {
+      const cols = extraColumns
+        ? `access_token, refresh_token, token_expires_at, is_active, ${extraColumns}`
+        : 'access_token, refresh_token, token_expires_at, is_active';
 
-    // FOR UPDATE locks the row to prevent concurrent token refresh races
-    const res = await client.query(
-      `SELECT ${cols} FROM tenant_integration_settings
+      // FOR UPDATE locks the row to prevent concurrent token refresh races
+      const res = await client.query(
+        `SELECT ${cols} FROM tenant_integration_settings
        WHERE tenant_id = $1 AND provider = $2 FOR UPDATE`,
-      [tenantId, provider]
-    );
+        [tenantId, provider]
+      );
 
-    const row = res.rows[0];
-    if (!row) return null;
+      const row = res.rows[0];
+      if (!row) return null;
 
-    if (!row.is_active) {
-      log.warn(`${prefix} — skipped: integration inactive (user needs to reconnect)`);
-      return null;
-    }
-    if (!row.access_token || !row.refresh_token) {
-      log.warn(`${prefix} — skipped: missing tokens`);
-      return null;
-    }
-
-    let accessToken = row.access_token;
-    const expiresAt = row.token_expires_at ? new Date(row.token_expires_at).getTime() : 0;
-
-    // Refresh if within buffer period
-    if (Date.now() > expiresAt - bufferMs) {
-      try {
-        const refreshed = await refreshFn(row.refresh_token);
-        accessToken = refreshed.access_token;
-        await client.query(
-          `UPDATE tenant_integration_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
-           WHERE tenant_id = $3 AND provider = $4`,
-          [
-            refreshed.access_token,
-            new Date(refreshed.expiry_date).toISOString(),
-            tenantId,
-            provider,
-          ]
-        );
-        log.info(`${prefix} — token refreshed`);
-      } catch (err) {
-        // Mark inactive so user sees "Reconnect" in dashboard
-        await client.query(
-          `UPDATE tenant_integration_settings SET is_active = false, updated_at = NOW()
-           WHERE tenant_id = $1 AND provider = $2`,
-          [tenantId, provider]
-        );
-        log.error(
-          `${prefix} — token refresh FAILED, integration marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${provider} OAuth grant likely revoked | HOW: user will see "Reconnect" in dashboard | ERROR: ${String(err)})`
-        );
+      if (!row.is_active) {
+        log.warn(`${prefix} — skipped: integration inactive (user needs to reconnect)`);
         return null;
       }
-    }
+      if (!row.access_token || !row.refresh_token) {
+        log.warn(`${prefix} — skipped: missing tokens`);
+        return null;
+      }
 
-    return {
-      accessToken,
-      refreshToken: row.refresh_token,
-      settings: row.settings || null,
-    };
+      let accessToken = row.access_token;
+      const expiresAt = row.token_expires_at ? new Date(row.token_expires_at).getTime() : 0;
+
+      // Refresh if within buffer period
+      if (Date.now() > expiresAt - bufferMs) {
+        try {
+          const refreshed = await refreshFn(row.refresh_token);
+          accessToken = refreshed.access_token;
+          await client.query(
+            `UPDATE tenant_integration_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
+           WHERE tenant_id = $3 AND provider = $4`,
+            [
+              refreshed.access_token,
+              new Date(refreshed.expiry_date).toISOString(),
+              tenantId,
+              provider,
+            ]
+          );
+          log.info(`${prefix} — token refreshed`);
+        } catch (err) {
+          // Mark inactive so user sees "Reconnect" in dashboard
+          await client.query(
+            `UPDATE tenant_integration_settings SET is_active = false, updated_at = NOW()
+           WHERE tenant_id = $1 AND provider = $2`,
+            [tenantId, provider]
+          );
+          log.error(
+            `${prefix} — token refresh FAILED, integration marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${provider} OAuth grant likely revoked | HOW: user will see "Reconnect" in dashboard | ERROR: ${String(err)})`
+          );
+          return null;
+        }
+      }
+
+      return {
+        accessToken,
+        refreshToken: row.refresh_token,
+        settings: row.settings || null,
+      };
+    });
   } finally {
     client.release();
   }
@@ -290,65 +299,73 @@ export async function getCalendarTokens(
   const prefix = `[calendar-sync] tenant=${tenantId}`;
   const client = await pool.connect();
 
+  // RLS CONTEXT REQUIRED — same reasoning as getIntegrationTokens above:
+  // tenant_calendar_settings is isolation-only, so without context the SELECT
+  // finds nothing and the refresh UPDATE writes nothing, presenting as "no
+  // calendar connected" rather than as an error.
   try {
-    // FOR UPDATE locks the row to prevent concurrent token refresh races
-    const settingsRes = await client.query(
-      `SELECT provider, external_calendar_id, access_token, refresh_token, token_expires_at, is_active
+    return await withTenantContext(client, tenantId, async () => {
+      // FOR UPDATE locks the row to prevent concurrent token refresh races
+      const settingsRes = await client.query(
+        `SELECT provider, external_calendar_id, access_token, refresh_token, token_expires_at, is_active
        FROM tenant_calendar_settings WHERE tenant_id = $1
        FOR UPDATE`,
-      [tenantId]
-    );
+        [tenantId]
+      );
 
-    const settings = settingsRes.rows[0];
-    if (!settings) return null;
-    if (!settings.is_active) {
-      log.warn(`${prefix} — skipped: calendar marked inactive`);
-      return null;
-    }
-    if (settings.provider !== 'google' && settings.provider !== 'outlook') {
-      log.warn(`${prefix} — skipped: provider="${settings.provider}" not supported`);
-      return null;
-    }
-    if (!settings.access_token || !settings.refresh_token) {
-      log.warn(`${prefix} — skipped: missing tokens`);
-      return null;
-    }
-
-    const provider = settings.provider as 'google' | 'outlook';
-    const providerName = provider === 'google' ? 'Google' : 'Outlook';
-    const refreshFn = refreshMap[provider];
-
-    let accessToken = settings.access_token;
-    const expiresAt = settings.token_expires_at ? new Date(settings.token_expires_at).getTime() : 0;
-
-    if (Date.now() > expiresAt - TOKEN_BUFFER_MS.STANDARD) {
-      try {
-        const refreshed = await refreshFn(settings.refresh_token);
-        accessToken = refreshed.access_token;
-        await client.query(
-          `UPDATE tenant_calendar_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
-           WHERE tenant_id = $3`,
-          [refreshed.access_token, new Date(refreshed.expiry_date).toISOString(), tenantId]
-        );
-        log.info(`${prefix} — ${providerName} token refreshed`);
-      } catch (err) {
-        await client.query(
-          `UPDATE tenant_calendar_settings SET is_active = false, updated_at = NOW() WHERE tenant_id = $1`,
-          [tenantId]
-        );
-        log.error(
-          `${prefix} — ${providerName} token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${providerName} OAuth grant likely revoked | HOW: is_active set to false | ERROR: ${String(err)})`
-        );
+      const settings = settingsRes.rows[0];
+      if (!settings) return null;
+      if (!settings.is_active) {
+        log.warn(`${prefix} — skipped: calendar marked inactive`);
         return null;
       }
-    }
+      if (settings.provider !== 'google' && settings.provider !== 'outlook') {
+        log.warn(`${prefix} — skipped: provider="${settings.provider}" not supported`);
+        return null;
+      }
+      if (!settings.access_token || !settings.refresh_token) {
+        log.warn(`${prefix} — skipped: missing tokens`);
+        return null;
+      }
 
-    return {
-      accessToken,
-      refreshToken: settings.refresh_token,
-      calendarId: settings.external_calendar_id,
-      provider,
-    };
+      const provider = settings.provider as 'google' | 'outlook';
+      const providerName = provider === 'google' ? 'Google' : 'Outlook';
+      const refreshFn = refreshMap[provider];
+
+      let accessToken = settings.access_token;
+      const expiresAt = settings.token_expires_at
+        ? new Date(settings.token_expires_at).getTime()
+        : 0;
+
+      if (Date.now() > expiresAt - TOKEN_BUFFER_MS.STANDARD) {
+        try {
+          const refreshed = await refreshFn(settings.refresh_token);
+          accessToken = refreshed.access_token;
+          await client.query(
+            `UPDATE tenant_calendar_settings SET access_token = $1, token_expires_at = $2, updated_at = NOW()
+           WHERE tenant_id = $3`,
+            [refreshed.access_token, new Date(refreshed.expiry_date).toISOString(), tenantId]
+          );
+          log.info(`${prefix} — ${providerName} token refreshed`);
+        } catch (err) {
+          await client.query(
+            `UPDATE tenant_calendar_settings SET is_active = false, updated_at = NOW() WHERE tenant_id = $1`,
+            [tenantId]
+          );
+          log.error(
+            `${prefix} — ${providerName} token refresh FAILED, calendar marked inactive (WHO: tenant=${tenantId} | WHAT: refreshAccessToken rejected | WHY: ${providerName} OAuth grant likely revoked | HOW: is_active set to false | ERROR: ${String(err)})`
+          );
+          return null;
+        }
+      }
+
+      return {
+        accessToken,
+        refreshToken: settings.refresh_token,
+        calendarId: settings.external_calendar_id,
+        provider,
+      };
+    });
   } finally {
     client.release();
   }
