@@ -2,19 +2,94 @@ import nodemailer, { type Transporter } from 'nodemailer';
 
 let transporter: Transporter | null = null;
 
+/**
+ * Hard ceiling on any single system-email send.
+ *
+ * THE INCIDENT (2026-07-27): POST /forgot-password on production wrote its
+ * token row and then HUNG inside sendMail — 30s later the request had still
+ * not answered (HTTP 000), and the logs held an "incoming request" line with
+ * no completion and no error, because a hang is not an error. The user gets a
+ * spinner; a locked-out owner cannot recover their account; nothing alerts.
+ *
+ * Same transport as the 2026-07-17 job-inquiry incident: nodemailer → Gmail
+ * SMTP from Railway, IPv6 ENETUNREACH, 60–120s per attempt. Whatever the
+ * socket does, no caller waits longer than this.
+ */
+const EMAIL_SEND_DEADLINE_MS = Number(process.env.EMAIL_SEND_DEADLINE_MS ?? 20_000);
+
 function getTransporter(): Transporter {
   if (transporter) return transporter;
-  if (process.env.NODE_ENV === 'test' || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    // A STUB THAT RESOLVES IS A MAILER THAT LIES. In production it reports
+    // every send as delivered while no mail exists anywhere — the same shape as
+    // Telnyx returning success for texts the carriers dropped, and as
+    // outcome='message' promising a row that had never been written. Refuse
+    // instead: every caller already has a catch path, so this surfaces as a
+    // metered, logged failure rather than a 500 or a silence.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('EMAIL_USER/EMAIL_PASS unset in production — system email is not configured');
+    }
     transporter = {
       sendMail: () => Promise.resolve({ messageId: 'test-message-id' }),
     } as unknown as Transporter;
     return transporter;
   }
   transporter = nodemailer.createTransport({
-    service: 'gmail',
+    // Explicit host/port rather than the `service: 'gmail'` shorthand, so
+    // SMTP_HOST / SMTP_PORT can repoint at any provider with no code change.
+    host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT ?? 465),
+    secure: Number(process.env.SMTP_PORT ?? 465) === 465,
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-  });
+    // 2026-07-17: Railway → Gmail resolved over IPv6 and every attempt died on
+    // ENETUNREACH after 60–120s. Prefer IPv4 and fail fast. These are a
+    // mitigation, not the guarantee — sendSystemMail's deadline is the
+    // guarantee, because a transport that ignores its own timeouts is exactly
+    // what produced the incident.
+    family: 4,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  } as Parameters<typeof nodemailer.createTransport>[0]);
   return transporter;
+}
+
+/**
+ * The single choke point every system email goes through: applies the From
+ * line and the hard deadline.
+ *
+ * A send that outlives the deadline REJECTS, so a caller's existing catch turns
+ * it into a metric and a 5W log instead of an unbounded await. Transport
+ * knowledge lives here and nowhere else — swapping Gmail SMTP for an HTTPS
+ * provider (Resend/Postmark, the durable fix for Railway's SMTP egress)
+ * replaces this function's internals and touches no call site.
+ */
+async function sendSystemMail(opts: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}): Promise<void> {
+  const send = getTransporter().sendMail({
+    from: `"SecretaryHQ" <${process.env.EMAIL_USER ?? 'no-reply@secretaryhq.com'}>`,
+    ...opts,
+  });
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`system email send exceeded ${EMAIL_SEND_DEADLINE_MS}ms deadline`)),
+      EMAIL_SEND_DEADLINE_MS
+    );
+  });
+  try {
+    await Promise.race([send, deadline]);
+  } finally {
+    clearTimeout(timer);
+    // The losing `send` may still reject minutes later (that is the whole
+    // problem being fixed); swallow it so it cannot surface as an unhandled
+    // rejection and take the process down.
+    void Promise.resolve(send).catch(() => {});
+  }
 }
 
 /**
@@ -49,13 +124,7 @@ If you weren't expecting this invitation, you can safely ignore this email — n
 <p style="color:#666;font-size:14px">If you weren't expecting this, you can safely ignore the email — no account will be created against your name.</p>
 </body></html>`;
 
-  await getTransporter().sendMail({
-    from: `"SecretaryHQ" <${process.env.EMAIL_USER ?? 'no-reply@secretaryhq.com'}>`,
-    to,
-    subject,
-    text,
-    html,
-  });
+  await sendSystemMail({ to, subject, text, html });
 }
 
 export async function sendPasswordResetEmail(
@@ -80,13 +149,7 @@ If you did not request this, you can safely ignore this email — your password 
 <p style="color:#666;font-size:14px">If you did not request this, you can safely ignore this email — your password will not change.</p>
 </body></html>`;
 
-  await getTransporter().sendMail({
-    from: `"SecretaryHQ" <${process.env.EMAIL_USER ?? 'no-reply@secretaryhq.com'}>`,
-    to,
-    subject,
-    text,
-    html,
-  });
+  await sendSystemMail({ to, subject, text, html });
 }
 
 /** Structured fields captured during a voice job-inquiry intake. */
@@ -181,13 +244,7 @@ export async function sendJobInquiryEmail(to: string, fields: JobInquiryFields):
 <p style="color:#666;font-size:14px">The caller was asked to email a full job description with their name and company in the subject line.</p>
 </body></html>`;
 
-  await getTransporter().sendMail({
-    from: `"SecretaryHQ" <${process.env.EMAIL_USER ?? 'no-reply@secretaryhq.com'}>`,
-    to,
-    subject,
-    text,
-    html,
-  });
+  await sendSystemMail({ to, subject, text, html });
 }
 
 /** Fields captured when an owner asks to port their existing number into Telnyx. */
@@ -237,11 +294,5 @@ export async function sendPortRequestEmail(to: string, fields: PortRequestFields
 <p style="color:#666;font-size:14px">This requires a manual port in the Telnyx portal — no automated action was taken.</p>
 </body></html>`;
 
-  await getTransporter().sendMail({
-    from: `"SecretaryHQ" <${process.env.EMAIL_USER ?? 'no-reply@secretaryhq.com'}>`,
-    to,
-    subject,
-    text,
-    html: portHtml,
-  });
+  await sendSystemMail({ to, subject, text, html: portHtml });
 }

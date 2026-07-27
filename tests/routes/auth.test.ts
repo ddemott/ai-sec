@@ -567,6 +567,47 @@ describe('Auth Routes — Handler-Level', () => {
       expect(link).toMatch(/\/reset-password\?token=[A-Za-z0-9_-]{30,}/);
     });
 
+    it('THE HANG: answers 200 even when the email send NEVER settles', async () => {
+      // WHO: a locked-out owner clicking "Forgot password?".
+      // WHAT: on production 2026-07-27 this endpoint answered HTTP 000 after 30s
+      //       — the handler AWAITED an SMTP send that hung (Railway cannot reach
+      //       Gmail SMTP; the same transport failed on 2026-07-17). The token row
+      //       was written, so the work was done; only the reply was hostage.
+      // WHEN: every reset request while the mail transport is unreachable.
+      // WHERE: routes/auth.ts /forgot-password — `void ... .catch()`, not `await`.
+      // WHY: the token is durable before the send, so the response owes the mail
+      //       transport nothing. A hang is not an error, so nothing logged and
+      //       nothing alerted — the user just watched a spinner.
+      //
+      // This test FAILS BY TIMEOUT against the pre-fix code, which is the point:
+      // a never-settling send must not be able to hold the handler open.
+      const sysmail = await import('../../src/services/communications/systemEmail');
+      vi.mocked(sysmail.sendPasswordResetEmail).mockClear();
+      // Never settles — a hung SMTP socket, exactly as seen in production.
+      vi.mocked(sysmail.sendPasswordResetEmail).mockReturnValueOnce(new Promise(() => {}));
+
+      const { mockClient: client, queryResponses } = createMockClient();
+      const pool = createMockPool(client);
+      const { app, routes } = captureRoutes();
+      registerAuthRoutes(app, pool, generateToken);
+
+      queryResponses.push({ rows: [{ user_id: USER_ID_MOCK }] }); // SELECT user
+      queryResponses.push({ rows: [] }); // INSERT password_resets
+
+      const route = findRoute(routes, '/forgot-password');
+      const req = createMockRequest({ email: 'me@test.com' });
+      const reply = createMockReply();
+
+      await route.handler(req, reply);
+
+      expect(reply.body, 'the reply must not wait on the mail transport').toEqual({
+        success: true,
+      });
+      expect(sysmail.sendPasswordResetEmail, 'the send is still attempted').toHaveBeenCalledTimes(
+        1
+      );
+    }, 5000);
+
     it('returns 200 silently when user does NOT exist (WHO: stranger | WHAT: probes for account | WHERE: /forgot-password | WHY: prevent email enumeration)', async () => {
       const sysmail = await import('../../src/services/communications/systemEmail');
       vi.mocked(sysmail.sendPasswordResetEmail).mockClear();

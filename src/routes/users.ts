@@ -17,6 +17,7 @@ import {
   type UserRole,
 } from '../middleware';
 import { sendUserInviteEmail } from '../services/communications/systemEmail';
+import { errorsTotal } from '../services/metrics';
 import { assertRowAffected } from './routeHelpers';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
@@ -212,6 +213,13 @@ export function registerUserRoutes(
       } catch (err) {
         // Log but don't roll back — owner can resend if delivery fails.
         // The user row + reset token already exist; resend reuses the row.
+        //
+        // METERED since 2026-07-27: an invite that never arrives looked exactly
+        // like an invite that did, and the same transport that hung
+        // /forgot-password serves this path. The await stays — the owner is
+        // watching this response — but sendSystemMail's deadline now bounds it,
+        // so the worst case is a slow 201, not an unbounded hang.
+        errorsTotal.inc({ event: 'user_invite_email_failed' });
         req.log.error({ err, userId, email: normalizedEmail }, 'Failed to send invite email');
       }
 

@@ -16,6 +16,7 @@ import {
   type UserRole,
 } from '../middleware';
 import { sendPasswordResetEmail } from '../services/communications/systemEmail';
+import { errorsTotal } from '../services/metrics';
 import { createTenantWithOwner } from '../services/tenants/bootstrap';
 
 const RESET_TTL_MINUTES = 30;
@@ -218,11 +219,28 @@ export function registerAuthRoutes(
         });
         const dashboardUrl = process.env.DASHBOARD_URL || 'https://localhost:4000';
         const resetLink = `${dashboardUrl}/reset-password?token=${rawToken}`;
-        try {
-          await sendPasswordResetEmail(email, resetLink, RESET_TTL_MINUTES);
-        } catch (err) {
-          req.log.error({ err }, 'Failed to send password reset email');
-        }
+        // FIRE-AND-FORGET (2026-07-27). This send was AWAITED, and on production
+        // the SMTP connection hung: the token row was written, the request never
+        // answered (HTTP 000 after 30s), and nothing was logged — because a hang
+        // is not an error and the catch below only fires on one. The user is left
+        // watching a spinner, and a locked-out owner has no way back in.
+        //
+        // The token row is already durable at this point, so the response owes
+        // the caller nothing further. Same fix, same transport, same failure as
+        // the 2026-07-17 job-inquiry email (routes/agentTools/messaging.ts) —
+        // that incident named this transport and only one of its two call-site
+        // classes got repaired.
+        //
+        // A failure is now VISIBLE (metric + 5W log) instead of silent. It is
+        // still a failure: the user gets no link. That is deliberate — the
+        // durable fix is moving off Railway→Gmail SMTP entirely.
+        void sendPasswordResetEmail(email, resetLink, RESET_TTL_MINUTES).catch((err: unknown) => {
+          errorsTotal.inc({ event: 'password_reset_email_failed' });
+          req.log.error(
+            { err, email },
+            'password reset email FAILED — the token row exists but the user never got a link; they will retry into the 3/hour rate limit'
+          );
+        });
       }
       return reply.send({ success: true });
     }, 'Forgot password failed')

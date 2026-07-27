@@ -1,0 +1,133 @@
+/**
+ * SYSTEM EMAIL TRANSPORT — the guarantees that keep a mail failure loud and bounded.
+ *
+ * THE INCIDENT (2026-07-27): POST /forgot-password on production wrote its
+ * reset token and then HUNG inside nodemailer's sendMail. Thirty seconds later
+ * the request had still not answered (HTTP 000); the logs held an "incoming
+ * request" line with no completion and no error, because a hang is not an
+ * error. A locked-out owner had no way back into their account and nothing
+ * anywhere said so.
+ *
+ * Two properties are pinned here, and neither can be proved by the route tests:
+ *
+ *   1. A send that never settles REJECTS at the deadline. This is the property
+ *      that turns an unbounded hang into a catchable failure.
+ *   2. In PRODUCTION, missing credentials THROW rather than silently
+ *      substituting a stub that resolves. A stub that reports success is a
+ *      mailer that lies — the same shape as Telnyx reporting delivery for texts
+ *      the carriers dropped, and as outcome='message' promising a row that had
+ *      never been written.
+ *
+ * Each test re-imports the module (vi.resetModules) because the transporter is
+ * a module-level singleton — without that, the first test's transport decision
+ * would silently answer for all the others.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const ENV_KEYS = ['NODE_ENV', 'EMAIL_USER', 'EMAIL_PASS', 'EMAIL_SEND_DEADLINE_MS'] as const;
+let saved: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
+
+/** nodemailer mock whose sendMail behaviour each test chooses. */
+const sendMailMock = vi.fn();
+vi.mock('nodemailer', () => ({
+  default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock })) },
+  createTransport: vi.fn(() => ({ sendMail: sendMailMock })),
+}));
+
+beforeEach(() => {
+  saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+  sendMailMock.mockReset();
+  vi.resetModules();
+});
+
+afterEach(() => {
+  for (const k of ENV_KEYS) {
+    if (saved[k] === undefined) delete process.env[k];
+    else process.env[k] = saved[k];
+  }
+});
+
+describe('system email transport', () => {
+  it('THE HANG: a send that never settles rejects at the deadline', async () => {
+    // WHO: any caller of a system email — /forgot-password is the one that bit.
+    // WHAT: sendMail returns a promise that never settles (a hung SMTP socket).
+    // WHEN: 2026-07-27 in production, and every time Railway cannot reach Gmail.
+    // WHERE: sendSystemMail's Promise.race deadline in systemEmail.ts.
+    // WHY: without this the await is unbounded — the caller's catch never runs,
+    //      no metric fires, and the user watches a spinner until the browser
+    //      gives up. The deadline is what makes the failure CATCHABLE.
+    process.env.NODE_ENV = 'development';
+    process.env.EMAIL_USER = 'sender@example.test';
+    process.env.EMAIL_PASS = 'app-password';
+    process.env.EMAIL_SEND_DEADLINE_MS = '50';
+    sendMailMock.mockImplementation(() => new Promise(() => {})); // never settles
+
+    const { sendPasswordResetEmail } =
+      await import('../../src/services/communications/systemEmail');
+
+    await expect(
+      sendPasswordResetEmail('user@example.test', 'https://example.test/reset?token=x', 30)
+    ).rejects.toThrow(/deadline/i);
+  });
+
+  it('a send that resolves normally still resolves (the deadline is not a tax)', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.EMAIL_USER = 'sender@example.test';
+    process.env.EMAIL_PASS = 'app-password';
+    process.env.EMAIL_SEND_DEADLINE_MS = '5000';
+    sendMailMock.mockResolvedValue({ messageId: 'ok-1' });
+
+    const { sendPasswordResetEmail } =
+      await import('../../src/services/communications/systemEmail');
+
+    await expect(
+      sendPasswordResetEmail('user@example.test', 'https://example.test/reset?token=x', 30)
+    ).resolves.toBeUndefined();
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    const call = sendMailMock.mock.calls[0][0] as { to: string; subject: string; html: string };
+    expect(call.to).toBe('user@example.test');
+    expect(call.subject).toMatch(/reset/i);
+    // The link has to survive into the body — an email without it is useless.
+    expect(call.html).toContain('https://example.test/reset?token=x');
+  });
+
+  it('PRODUCTION + missing credentials REFUSES instead of pretending to send', async () => {
+    // WHO: anyone deploying without EMAIL_USER/EMAIL_PASS.
+    // WHAT: the old code substituted a stub resolving { messageId: 'test-message-id' }.
+    // WHERE: getTransporter's production guard.
+    // WHY: in production that stub means every send "succeeds" and no mail
+    //      exists. Callers catch this throw, so it becomes a metric and a log
+    //      line — a configuration gap you can SEE, rather than one that looks
+    //      exactly like a working mailer.
+    process.env.NODE_ENV = 'production';
+    delete process.env.EMAIL_USER;
+    delete process.env.EMAIL_PASS;
+
+    const { sendPasswordResetEmail } =
+      await import('../../src/services/communications/systemEmail');
+
+    await expect(
+      sendPasswordResetEmail('user@example.test', 'https://example.test/reset?token=x', 30)
+    ).rejects.toThrow(/not configured/i);
+    expect(
+      sendMailMock,
+      'nothing may be handed to a transport that does not exist'
+    ).not.toHaveBeenCalled();
+  });
+
+  it('SAD: non-production without credentials still stubs, so dev and CI are unaffected', async () => {
+    // The stub is legitimate off-production: local dev and CI have no mail
+    // account and must not need one. Only the production case is a lie.
+    process.env.NODE_ENV = 'test';
+    delete process.env.EMAIL_USER;
+    delete process.env.EMAIL_PASS;
+
+    const { sendPasswordResetEmail } =
+      await import('../../src/services/communications/systemEmail');
+
+    await expect(
+      sendPasswordResetEmail('user@example.test', 'https://example.test/reset?token=x', 30)
+    ).resolves.toBeUndefined();
+  });
+});
