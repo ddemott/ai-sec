@@ -35,4 +35,50 @@ describe('CallOutcomeTracker', () => {
     t.recordBooking('bbbbbbbb-2222-4222-8222-222222222222');
     expect(t.result().appointmentId).toBe('bbbbbbbb-2222-4222-8222-222222222222');
   });
+
+  it('recordMessage sets outcome=message', () => {
+    // WHO: Camille, 2026-07-25. WHAT: take_message wrote her message row, and the
+    //      post-call LLM classifier still filed the call `wrong_service` (groceries
+    //      are indeed not a service here — a true statement about a different
+    //      question). WHY: what a tool DID outranks a guess about why they called.
+    const t = new CallOutcomeTracker();
+    t.recordMessage();
+    expect(t.result()).toEqual({ outcome: 'message', appointmentId: null });
+  });
+
+  it('booking overrides a message taken earlier on the same call', () => {
+    // A call that took a message and then booked is a BOOKED call; the message is
+    // a detail of it.
+    const t = new CallOutcomeTracker();
+    t.recordMessage();
+    t.recordBooking('cccccccc-3333-4333-8333-333333333333');
+    expect(t.result()).toEqual({
+      outcome: 'booked',
+      appointmentId: 'cccccccc-3333-4333-8333-333333333333',
+    });
+  });
+
+  it('a message taken AFTER a booking/transfer cannot demote it', () => {
+    const booked = new CallOutcomeTracker();
+    booked.recordBooking('dddddddd-4444-4444-8444-444444444444');
+    booked.recordMessage();
+    expect(booked.result().outcome).toBe('booked');
+    // ...and the appointment link survives regardless.
+    expect(booked.result().appointmentId).toBe('dddddddd-4444-4444-8444-444444444444');
+
+    const transferred = new CallOutcomeTracker();
+    transferred.recordTransfer();
+    transferred.recordMessage();
+    expect(transferred.result().outcome).toBe('transferred');
+  });
+
+  it('booked/transferred keep last-write-wins between themselves (unchanged)', () => {
+    // Only 'message' is rank-limited. Booking→transfer stays last-write-wins so
+    // this change alters nothing about calls that never take a message.
+    const t = new CallOutcomeTracker();
+    t.recordBooking('eeeeeeee-5555-4555-8555-555555555555');
+    t.recordTransfer();
+    expect(t.result().outcome).toBe('transferred');
+    expect(t.result().appointmentId).toBe('eeeeeeee-5555-4555-8555-555555555555');
+  });
 });

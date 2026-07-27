@@ -19,7 +19,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, createTenant, skipIfDbDown } from '../utils';
 import { createWithTenantClient } from '../../src/database';
-import { getOrCreateCustomerByPhone } from '../../src/services/customerLookup';
+import {
+  getOrCreateCustomerByPhone,
+  getOrCreateCustomerByPhoneOnClient,
+} from '../../src/services/customerLookup';
 
 let setup: Client;
 let pool: Pool;
@@ -108,5 +111,69 @@ describe('getOrCreateCustomerByPhone — placeholder names must be correctable',
   it('HAPPY: a real name is written on first contact', async () => {
     await upsert('Reba Jones');
     expect(await storedName()).toBe('Reba Jones');
+  });
+});
+
+/**
+ * getOrCreateCustomerByPhoneOnClient — the variant the MESSAGING routes call from
+ * inside a withTenantClient block they already own.
+ *
+ * THE BUG (Camille again, 2026-07-25): take-message / page-owner /
+ * capture-job-inquiry only ever SELECTed a customer and left customer_id NULL on a
+ * miss. Only the booking path created customers. So she left a message, never
+ * booked, and prod ended the day with 1 message row and 0 customers.
+ */
+describe('getOrCreateCustomerByPhoneOnClient — messaging routes create the caller', () => {
+  async function onClient(name: string | null): Promise<string | null> {
+    const withTenantClient = createWithTenantClient(pool);
+    return withTenantClient(tenantId, (client) =>
+      getOrCreateCustomerByPhoneOnClient(client, tenantId, PHONE, name)
+    );
+  }
+
+  it('HAPPY: an unknown caller is CREATED and the id comes back', async () => {
+    const id = await onClient('Camille');
+    expect(id).toBeTruthy();
+    expect(await storedName()).toBe('Camille');
+  });
+
+  it('HAPPY: a second call for the same phone returns the SAME id (idempotent)', async () => {
+    const first = await onClient('Camille');
+    const second = await onClient('Camille');
+    expect(second).toBe(first);
+  });
+
+  it('HAPPY: concurrent retries of one call converge on one customer row', async () => {
+    // An ACTION-rung tool is retried until it returns success, so two retries can
+    // both pass the SELECT before either INSERT lands. ON CONFLICT is the layer
+    // that cannot race; without it the loser raised a 23505 and lost the message.
+    const ids = await Promise.all([onClient('Camille'), onClient('Camille'), onClient('Camille')]);
+    expect(new Set(ids.filter(Boolean)).size).toBe(1);
+    const count = await setup.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM customers WHERE tenant_id = $1 AND phone = $2`,
+      [tenantId, PHONE]
+    );
+    expect(count.rows[0].n).toBe('1');
+  });
+
+  it('HAPPY: a nameless message stores the correctable placeholder, not NULL', async () => {
+    await onClient(null);
+    expect(await storedName()).toBe('Caller');
+    // ...and the real name still lands when she gives it.
+    await onClient('Camille');
+    expect(await storedName()).toBe('Camille');
+  });
+
+  it('SAD: a soft-deleted row holding the phone yields NULL, not a crash', async () => {
+    // The (tenant_id, phone) unique key is held by the deleted row, so the INSERT
+    // DO-NOTHINGs and no live row exists. Returning null keeps the message saveable
+    // (unlinked) instead of 500ing it away; reviving deleted data stays deliberate.
+    await onClient('Camille');
+    await setup.query(
+      `UPDATE customers SET is_deleted = true, deleted_at = now()
+        WHERE tenant_id = $1 AND phone = $2`,
+      [tenantId, PHONE]
+    );
+    await expect(onClient('Camille')).resolves.toBeNull();
   });
 });

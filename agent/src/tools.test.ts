@@ -694,6 +694,54 @@ describe('CallOutcomeTracker wiring (call -> appointment link + outcome)', () =>
     await exec(tools.transfer_call, {});
     expect(tracker.result()).toEqual({ outcome: 'transferred', appointmentId: null });
   });
+
+  it('take_message success records outcome=message', async () => {
+    // WHO: Camille, 2026-07-25 — the message was written, the call was filed
+    //       `wrong_service` by the post-call LLM classifier.
+    // WHAT: the tool that DID the thing records the outcome, so the classifier
+    //       is never consulted about a call whose outcome is already a fact.
+    // WHERE: tools.ts take_message execute -> CallOutcomeTracker.recordMessage.
+    const tracker = new CallOutcomeTracker();
+    const { client } = makeClient([{ ok: true, result: { saved: true, message_id: 'msg-1' } }]);
+    const tools = buildTools(makeCtx(), client, undefined, tracker);
+    await exec(tools.take_message, { caller_name: 'Camille', message: 'help with groceries' });
+    expect(tracker.result()).toEqual({ outcome: 'message', appointmentId: null });
+  });
+
+  it('a FAILED take_message records nothing (no message row = no message outcome)', async () => {
+    const tracker = new CallOutcomeTracker();
+    const { client } = makeClient([{ ok: false, error: 'db down' }]);
+    const tools = buildTools(makeCtx(), client, undefined, tracker);
+    await exec(tools.take_message, { caller_name: 'Camille', message: 'help with groceries' });
+    expect(tracker.result()).toEqual({ outcome: null, appointmentId: null });
+  });
+
+  it('page_owner_via_sms success records outcome=message', async () => {
+    // A page writes a customer_messages row flagged [URGENT PAGE] — same class.
+    const tracker = new CallOutcomeTracker();
+    const { client } = makeClient([{ ok: true, result: { paged: true } }]);
+    const tools = buildTools(makeCtx(), client, undefined, tracker);
+    await exec(tools.page_owner_via_sms, { caller_name: 'Camille', reason: 'water leak' });
+    expect(tracker.result()).toEqual({ outcome: 'message', appointmentId: null });
+  });
+
+  it('a message taken BEFORE a booking does not mask the booking', async () => {
+    // The call that takes a message and then books is a BOOKED call.
+    const tracker = new CallOutcomeTracker();
+    const { client } = makeClient([
+      { ok: true, result: { saved: true } },
+      { ok: true, result: { success: true, appointment_id: 'appt-after-msg' } },
+    ]);
+    const tools = buildTools(makeCtx(), client, undefined, tracker);
+    await exec(tools.take_message, { caller_name: 'Camille', message: 'call me' });
+    await exec(tools.book_appointment, {
+      resource_id: RESOURCE_ID,
+      start_time: '2026-05-01T14:00:00',
+      end_time: '2026-05-01T15:00:00',
+      phone: '+15559998888',
+    });
+    expect(tracker.result()).toEqual({ outcome: 'booked', appointmentId: 'appt-after-msg' });
+  });
 });
 
 describe('book_with_scheduling', () => {

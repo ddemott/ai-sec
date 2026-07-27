@@ -1049,7 +1049,14 @@ export function buildTools(
           // backend call_id is min(1) and would 400 on ''.
           call_id: ctx.callId || undefined,
         });
-        if (res.ok) ctx.ownerPaged = true;
+        if (res.ok) {
+          ctx.ownerPaged = true;
+          // A page IS a message for the owner (it writes a customer_messages row
+          // flagged [URGENT PAGE]). Recording it here means the call's outcome is
+          // a FACT from the tool, not the post-call classifier's guess about why
+          // the caller rang. See callOutcome.ts.
+          outcome?.recordMessage();
+        }
         return formatResponse(res);
       },
     }),
@@ -1099,6 +1106,11 @@ export function buildTools(
           message: args.message,
           call_id: ctx.callId ?? undefined,
         });
+        // The message row is written → the outcome of this call IS 'message'.
+        // Camille (2026-07-25) left one and the call was filed `wrong_service`,
+        // because the LLM classifier was answering a different question. A tool
+        // that succeeded outranks a guess. See callOutcome.ts.
+        if (res.ok) outcome?.recordMessage();
         return formatResponse(res);
       },
     }),

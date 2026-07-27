@@ -22,7 +22,10 @@ import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
 import { sendJobInquiryEmail } from '../../services/communications/systemEmail';
-import { isPlaceholderName, backfillCustomerName } from '../../services/customerLookup';
+import {
+  isPlaceholderName,
+  getOrCreateCustomerByPhoneOnClient,
+} from '../../services/customerLookup';
 import { SMSService } from '../../services/communications/smsService';
 import { ConsentService } from '../../services/consentService';
 import { createDatabaseService } from '../../database/index';
@@ -163,34 +166,30 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
       const callerPhone = args.caller_phone ? normalizePhone(args.caller_phone) : null;
 
       const row = await withTenantClient(args.tenant_id, async (client) => {
-        // Resolve customer_id if we have a phone. Non-fatal if lookup fails.
+        // GET-OR-CREATE, not look-up-and-shrug. A caller who leaves a message is
+        // a lead: the owner will call them back, and the next time they ring the
+        // agent must know them. Until 2026-07-27 this route only SELECTed, so a
+        // message-only caller never entered the CRM — prod held one message row
+        // and ZERO customers (Camille, 2026-07-25).
+        //
+        // The helper also carries the name-backfill: every messaging rung is
+        // handed a real caller_name, while the customer row was very likely
+        // created minutes earlier by a NAMELESS booking — scheduling.ts writes
+        // `args.name || 'Caller'` — and would otherwise keep that placeholder
+        // forever (Ashutosh, 2026-07-22: booked at turn 3 as "Caller", gave his
+        // name at turn 17, stayed "Caller" in the phonebook).
+        //
+        // Non-fatal: on a NULL id the message is still saved, unlinked, with the
+        // phone and name on the row itself.
         let customerId: string | null = null;
         const lookupPhone = callerPhone ?? callbackPhone;
         if (lookupPhone && isValidPhone(lookupPhone)) {
-          const cust = await client.query<{ customer_id: string }>(
-            `SELECT customer_id FROM customers
-             WHERE tenant_id = $1 AND phone = $2
-               AND (is_deleted IS NULL OR is_deleted = false)
-             LIMIT 1`,
-            [args.tenant_id, lookupPhone]
+          customerId = await getOrCreateCustomerByPhoneOnClient(
+            client,
+            args.tenant_id,
+            lookupPhone,
+            args.caller_name
           );
-          customerId = cust.rows[0]?.customer_id ?? null;
-          // THE NAME ARRIVES HERE AND MUST NOT STOP HERE. Every messaging rung
-          // is handed a real caller_name, while the customer row was very likely
-          // created minutes earlier by a NAMELESS booking — scheduling.ts writes
-          // `args.name || 'Caller'` — and would otherwise keep that placeholder
-          // forever, because these routes write the name to their own table and
-          // never back to customers.
-          //
-          // Ashutosh, 2026-07-22: booked at turn 3 as "Caller", gave his name at
-          // turn 17, and stayed "Caller" in the phonebook because the write went
-          // only to job_inquiries. The customer row's updated_at still equalled
-          // its created_at.
-          //
-          // Unconditional by design — backfillCustomerName no-ops on a
-          // placeholder, so a nameless rung cannot overwrite a good name.
-          // 2026-07-23.
-          await backfillCustomerName(client, customerId, args.caller_name);
         }
 
         const res = await client.query<{ message_id: string }>(
@@ -338,33 +337,17 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
 
       // 2. Durable trace — a customer_messages row flagged as an urgent page.
       const row = await withTenantClient(args.tenant_id, async (client) => {
+        // Same get-or-create as take-message: a caller urgent enough to page the
+        // owner is certainly worth a phonebook row. See that route's note.
         let customerId: string | null = null;
         const lookupPhone = callerPhone ?? callbackPhone;
         if (lookupPhone && isValidPhone(lookupPhone)) {
-          const cust = await client.query<{ customer_id: string }>(
-            `SELECT customer_id FROM customers
-             WHERE tenant_id = $1 AND phone = $2
-               AND (is_deleted IS NULL OR is_deleted = false)
-             LIMIT 1`,
-            [args.tenant_id, lookupPhone]
+          customerId = await getOrCreateCustomerByPhoneOnClient(
+            client,
+            args.tenant_id,
+            lookupPhone,
+            args.caller_name
           );
-          customerId = cust.rows[0]?.customer_id ?? null;
-          // THE NAME ARRIVES HERE AND MUST NOT STOP HERE. Every messaging rung
-          // is handed a real caller_name, while the customer row was very likely
-          // created minutes earlier by a NAMELESS booking — scheduling.ts writes
-          // `args.name || 'Caller'` — and would otherwise keep that placeholder
-          // forever, because these routes write the name to their own table and
-          // never back to customers.
-          //
-          // Ashutosh, 2026-07-22: booked at turn 3 as "Caller", gave his name at
-          // turn 17, and stayed "Caller" in the phonebook because the write went
-          // only to job_inquiries. The customer row's updated_at still equalled
-          // its created_at.
-          //
-          // Unconditional by design — backfillCustomerName no-ops on a
-          // placeholder, so a nameless rung cannot overwrite a good name.
-          // 2026-07-23.
-          await backfillCustomerName(client, customerId, args.caller_name);
         }
         const res = await client.query<{ message_id: string }>(
           `INSERT INTO customer_messages
@@ -515,32 +498,17 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
           }
         }
 
+        // Same get-or-create as take-message. A job inquiry IS a lead — the row
+        // the owner calls back. Ashutosh (2026-07-22) reached the phonebook only
+        // because he also booked; an inquiry without a booking left nothing.
         let customerId: string | null = null;
         if (callbackPhone && isValidPhone(callbackPhone)) {
-          const cust = await client.query<{ customer_id: string }>(
-            `SELECT customer_id FROM customers
-             WHERE tenant_id = $1 AND phone = $2
-               AND (is_deleted IS NULL OR is_deleted = false)
-             LIMIT 1`,
-            [args.tenant_id, callbackPhone]
+          customerId = await getOrCreateCustomerByPhoneOnClient(
+            client,
+            args.tenant_id,
+            callbackPhone,
+            args.caller_name
           );
-          customerId = cust.rows[0]?.customer_id ?? null;
-          // THE NAME ARRIVES HERE AND MUST NOT STOP HERE. Every messaging rung
-          // is handed a real caller_name, while the customer row was very likely
-          // created minutes earlier by a NAMELESS booking — scheduling.ts writes
-          // `args.name || 'Caller'` — and would otherwise keep that placeholder
-          // forever, because these routes write the name to their own table and
-          // never back to customers.
-          //
-          // Ashutosh, 2026-07-22: booked at turn 3 as "Caller", gave his name at
-          // turn 17, and stayed "Caller" in the phonebook because the write went
-          // only to job_inquiries. The customer row's updated_at still equalled
-          // its created_at.
-          //
-          // Unconditional by design — backfillCustomerName no-ops on a
-          // placeholder, so a nameless rung cannot overwrite a good name.
-          // 2026-07-23.
-          await backfillCustomerName(client, customerId, args.caller_name);
         }
 
         // The meeting this inquiry was booked around. The id arrives from the agent

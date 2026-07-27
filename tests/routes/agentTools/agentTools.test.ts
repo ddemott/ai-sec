@@ -851,6 +851,7 @@ describe('agentTools /capture-job-inquiry', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [] }, // customer lookup by callback phone — none
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ job_inquiry_id: 'ji-1' }] }, // INSERT ... RETURNING
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient resolve
       ],
@@ -870,7 +871,7 @@ describe('agentTools /capture-job-inquiry', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { email_queued: true } });
-    expect(queries[1].text).toContain('INSERT INTO job_inquiries');
+    expect(queries[2].text).toContain('INSERT INTO job_inquiries');
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
       'DaleDeMott@thinkinghammer.com',
       expect.objectContaining({
@@ -919,6 +920,7 @@ describe('agentTools /capture-job-inquiry', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [] }, // customer lookup by callback phone — no match
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ job_inquiry_id: 'ji-2' }] }, // INSERT
         { rows: [{ email: 'owner@example.com' }] }, // recipient (fell back to owner email)
       ],
@@ -935,8 +937,10 @@ describe('agentTools /capture-job-inquiry', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { email_queued: true } });
-    expect(queries).toHaveLength(3);
-    expect(queries[1].text).toContain('INSERT INTO job_inquiries');
+    // 4 queries since 2026-07-27: lookup MISS now creates the customer (a lead
+    // the owner must be able to call back is a phonebook row), then the inquiry.
+    expect(queries).toHaveLength(4);
+    expect(queries[2].text).toContain('INSERT INTO job_inquiries');
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
       'owner@example.com',
       expect.objectContaining({
@@ -963,6 +967,7 @@ describe('agentTools /capture-job-inquiry', () => {
         // because no email was ever attempted, not because the failure was
         // handled). Queue now matches the route's actual query order.
         { rows: [] }, // customer lookup by callback phone
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ job_inquiry_id: 'ji-3' }] }, // INSERT
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient
       ],
@@ -995,6 +1000,7 @@ describe('agentTools /capture-job-inquiry', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [] }, // customer lookup
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ job_inquiry_id: 'ji-hang' }] }, // INSERT
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient
       ],
@@ -1059,6 +1065,7 @@ describe('agentTools /capture-job-inquiry', () => {
       queryResponses: [
         { rows: [] }, // fast-path dedupe SELECT — no committed row YET
         { rows: [] }, // customer lookup
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [] }, // INSERT ... ON CONFLICT DO NOTHING — lost the race, zero rows
         { rows: [{ job_inquiry_id: 'ji-winner' }] }, // winner lookup
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com', owner_name: 'Dale' }] }, // recipient
@@ -1088,6 +1095,7 @@ describe('agentTools /capture-job-inquiry', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [] }, // customer lookup by callback phone (queue was off by one pre-2026-07-17)
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ job_inquiry_id: 'ji-4' }] }, // INSERT
         { rows: [{ email: null }] }, // recipient resolve — none
       ],
@@ -1130,6 +1138,7 @@ describe('agentTools /capture-job-inquiry', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [] }, // customer lookup by callback phone — none
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ appointment_id: APPT }] }, // appointment belongs to tenant
         { rows: [{ job_inquiry_id: 'ji-5' }] }, // INSERT ... RETURNING
         { rows: [], rowCount: 1 }, // description stamp UPDATE
@@ -1172,6 +1181,7 @@ describe('agentTools /capture-job-inquiry', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [] }, // customer lookup
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ appointment_id: APPT }] }, // appointment verifies live
         { rows: [{ job_inquiry_id: 'ji-7' }] }, // INSERT ... RETURNING
         { rows: [], rowCount: 0 }, // stamp UPDATE — appointment gone
@@ -1200,6 +1210,7 @@ describe('agentTools /capture-job-inquiry', () => {
     const { app, queries } = buildApp({
       queryResponses: [
         { rows: [] }, // customer lookup
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [] }, // appointment check — no match for this tenant
         { rows: [{ job_inquiry_id: 'ji-6' }] }, // INSERT still lands
         { rows: [{ email: null }] }, // recipient resolve — none
@@ -3482,6 +3493,111 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
       null,
       null,
     ]);
+  });
+
+  it('SAD: a long call whose transcript holds no Caller line bumps errors_total{no_caller_audio}', async () => {
+    // WHO: a real caller who dialed in, heard the greeting, and spoke.
+    // WHAT: the finalized transcript holds ONLY the agent's greeting — not one
+    //        caller turn — on a call that ran well past the greeting. The route
+    //        counts it as no_caller_audio.
+    // WHEN: 2026-07-24. Dale's wife called the live line twice, spoke both
+    //        times, and both calls stored exactly this shape: 31 seconds,
+    //        status 'completed', greeting-only transcript. Telnyx was handing
+    //        LiveKit codecs it cannot decode (G729; G722 suspected), so nothing
+    //        decodable ever reached the agent — Silero VAD never fired once.
+    // WHERE: /agent-tools/voice-session-end, after end_voice_session returns.
+    // WHY: the product said NOTHING. Three of four real calls failed this way
+    //        and every one of them was recorded 'completed'. It surfaced only
+    //        because she mentioned the call in conversation. A call that
+    //        captures zero caller speech is a failure and must be counted.
+    const before = errorCount('no_caller_audio');
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'SCL_mjZqwTvfCjcC',
+      duration_seconds: 31,
+      transcript: "Assistant: Thanks for calling! I'm Piper, Dale's AI Assistant.",
+    });
+    expect(res.statusCode).toBe(200);
+    // The call still finalizes normally — the alarm observes, it never blocks.
+    expect(res.json()).toEqual({ success: true, result: { ended: true } });
+    expect(errorCount('no_caller_audio')).toBe(before + 1);
+  });
+
+  it('SAD: a long call with NO transcript at all counts as no_caller_audio', async () => {
+    // WHO: a call where not even the greeting was recorded.
+    // WHAT: transcript omitted entirely → SQL NULL. Still zero caller speech on
+    //        a 45-second call, so it counts.
+    // WHERE: /agent-tools/voice-session-end.
+    // WHY: null is the MORE broken case, not an exemption — guarding only on a
+    //        non-null transcript would let the worst calls through silently.
+    const before = errorCount('no_caller_audio');
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-silent-null',
+      duration_seconds: 45,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(errorCount('no_caller_audio')).toBe(before + 1);
+  });
+
+  it('HAPPY: a normal two-sided call does NOT bump errors_total{no_caller_audio}', async () => {
+    // WHO: a caller who was heard.
+    // WHAT: the transcript carries a real Caller line → no alarm.
+    // WHERE: /agent-tools/voice-session-end.
+    // WHY: the alarm is only useful if it is silent on healthy calls; a counter
+    //        that ticks on every call is a counter nobody reads.
+    const before = errorCount('no_caller_audio');
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-healthy',
+      duration_seconds: 120,
+      transcript: 'Assistant: How can I help?\nCaller: I need an oil change.',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(errorCount('no_caller_audio')).toBe(before);
+  });
+
+  it('HAPPY: a short hang-up does NOT bump errors_total{no_caller_audio}', async () => {
+    // WHO: a caller who hung up during the greeting.
+    // WHAT: 12 seconds, greeting-only transcript — under SILENT_CALL_MIN_SECONDS,
+    //        so it is NOT counted as broken audio.
+    // WHERE: /agent-tools/voice-session-end.
+    // WHY: the cached greeting alone runs ~12s. A caller who never got a turn
+    //        proves nothing about the audio path, and a false "your phone line
+    //        is broken" alarm would train the owner to ignore the real one.
+    const before = errorCount('no_caller_audio');
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-quick-hangup',
+      duration_seconds: 12,
+      transcript: "Assistant: Thanks for calling! I'm Piper.",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(errorCount('no_caller_audio')).toBe(before);
+  });
+
+  it('SAD: "Caller:" inside the agent\'s own words does not fake a caller turn', async () => {
+    // WHO: an agent turn that happens to speak the word "Caller:" mid-sentence.
+    // WHAT: the match is anchored to the start of a line, so an inline
+    //        occurrence still counts as no_caller_audio.
+    // WHERE: /agent-tools/voice-session-end — mirrors the anchored CALLER_LINE
+    //        regex in agent/src/transcript.ts.
+    // WHY: an unanchored regex would silently suppress the alarm on exactly the
+    //        broken calls it exists to catch.
+    const before = errorCount('no_caller_audio');
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-inline-label',
+      duration_seconds: 40,
+      transcript: 'Assistant: I will note that as Caller: unknown for now.',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(errorCount('no_caller_audio')).toBe(before + 1);
   });
 
   it('HAPPY: end forwards outcome, summary, and appointment_id (params 4,6,7)', async () => {

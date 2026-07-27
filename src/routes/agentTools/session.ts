@@ -26,6 +26,15 @@ import { canTransfer } from '../../../shared/phone';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
 
+/**
+ * How long a call must last before "the caller never spoke" is evidence of a
+ * fault rather than of a caller who hung up. The cached greeting runs ~12s, so
+ * anything under that never gave them a turn; 20s clears the greeting plus a
+ * beat. Deliberately conservative — a false "your phone line is broken" alarm
+ * is worse than a missed short call, and a genuinely broken audio path repeats.
+ */
+const SILENT_CALL_MIN_SECONDS = 20;
+
 export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps): void {
   // tenant-config — minimal display info the agent worker needs at the
   // start of every call (business name + IANA timezone). Read on connect
@@ -324,6 +333,47 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         return fail(reply, 'Failed to end voice session', 500);
       }
       const { ended, forwardPhone, inboundPhone } = sessionEnd;
+
+      // SILENT CALL — the caller was on the line long enough to speak and not
+      // one word of theirs reached us. The call still finalizes 'completed'
+      // with a transcript holding only the agent's own greeting, which reads
+      // like a caller who hung up. It is not: it is the shape a BROKEN INBOUND
+      // AUDIO PATH makes.
+      //
+      // ORIGIN (2026-07-24, tenant Thinking Hammer): three of four real calls
+      // arrived this way. Dale's wife called twice, spoke both times, and the
+      // agent received 15 seconds of digital silence per call — Silero VAD
+      // (local, on raw frames) never fired once, so nothing reached Deepgram
+      // and the transcript held the greeting alone. Telnyx was offering
+      // codecs LiveKit SIP cannot decode (G729 outright; G722 suspected),
+      // negotiated per-caller — so it broke for mobile callers and worked for
+      // the one overseas VoIP dialer. Nothing in the product said a word about
+      // it. We found out because his wife mentioned the call in conversation.
+      //
+      // A call that produces zero caller speech is never a success. Count it
+      // and say so, so the next one surfaces in `errors_total` within minutes
+      // instead of being discovered socially.
+      if (ended && (args.duration_seconds ?? 0) >= SILENT_CALL_MIN_SECONDS) {
+        const transcript = args.transcript ?? '';
+        // Anchored to line start — "Caller:" inside the assistant's own words
+        // must not count as a caller turn. Mirrors renderedHasCallerTurn() in
+        // agent/src/transcript.ts, which owns the rendering side of this
+        // contract; the two regexes must stay in step.
+        if (!/^Caller: /m.test(transcript)) {
+          errorsTotal.inc({ event: 'no_caller_audio' });
+          app.log.warn(
+            {
+              event: 'no_caller_audio',
+              tenant_id: args.tenant_id,
+              call_id: args.call_id,
+              duration_seconds: args.duration_seconds ?? null,
+              has_transcript: args.transcript != null,
+              transcript_chars: transcript.length,
+            },
+            'call completed with ZERO caller speech after the greeting — inbound audio path is likely broken (codec negotiation / RTP), not a caller who hung up'
+          );
+        }
+      }
 
       if (ended && forwardPhone && inboundPhone) {
         const normalizedForward = normalizePhone(forwardPhone);
