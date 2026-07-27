@@ -119,6 +119,29 @@ if [ -f "$BASELINE" ]; then
   echo "[rebuild-db] Marking historical migrations as applied (baseline mode)..."
   bash "$ROOT_DIR/scripts/setup-db.sh" --baseline "$DB_URL" > /dev/null
   echo "[rebuild-db] schema_migrations populated."
+
+  # RE-APPLY THE ROLE + GRANTS. baseline.sql is `pg_dump --schema-only
+  # --no-owner --no-privileges`, and pg_dump NEVER dumps roles — so a
+  # baseline-built database has every policy and no app_user, and no GRANTs for
+  # it even if the role survived (roles are cluster-wide; the grants died with
+  # DROP SCHEMA). Connecting as app_user then fails with
+  #
+  #     error: permission denied for table customers
+  #
+  # which reads like an RLS failure and is not one — the same trap as the
+  # 2026-07-17 api_user incident in docs/LESSONS_LEARNED.md, where schema-scoped
+  # GRANTs vanished in a rebuild while `SELECT rolname` still said the role was
+  # fine. Measured here, not assumed: rlsIsolation.test.ts went red with exactly
+  # that message after a baseline rebuild.
+  #
+  # The migration is idempotent (CREATE ROLE guarded by an existence check, the
+  # rest is GRANT), so re-running it is the whole fix.
+  APP_USER_MIGRATION="$ROOT_DIR/supabase/migrations/20260724000100_app_user_role.sql"
+  if [ -f "$APP_USER_MIGRATION" ]; then
+    echo "[rebuild-db] Re-applying app_user role + grants (pg_dump omits both)..."
+    psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$APP_USER_MIGRATION" > /dev/null
+    echo "[rebuild-db] app_user grants restored."
+  fi
 else
   echo "[rebuild-db] baseline.sql not found — falling back to cumulative migrations..."
   bash "$ROOT_DIR/scripts/setup-db.sh" "$DB_URL"
