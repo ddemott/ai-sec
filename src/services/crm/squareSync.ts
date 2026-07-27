@@ -8,6 +8,7 @@
 
 import type { Pool } from 'pg';
 import * as square from './squareClient';
+import { withTenantContext } from '../../database/index';
 import {
   type SyncLogger,
   syncCtx,
@@ -81,73 +82,82 @@ export async function syncCustomerToSquare(
   if (!tokens) return;
 
   const client = await pool.connect();
+  // RLS CONTEXT for everything below, including the syncMapHelpers calls that
+  // borrow this client. entity_sync_map / customers / appointments are all
+  // isolation-only, so under a non-bypassing role a context-free sync writes
+  // nothing and reads nothing — silently, which for a sync job means "no
+  // changes" rather than an error. See withTenantContext (2026-07-27).
   try {
-    if (action === 'delete') {
-      await syncMapDeleteByLocalId(client, tenantId, 'square', 'customer', customerId);
-      log.info(`${prefix} — sync map entry removed`);
-      return;
-    }
+    return await withTenantContext(client, tenantId, async () => {
+      if (action === 'delete') {
+        await syncMapDeleteByLocalId(client, tenantId, 'square', 'customer', customerId);
+        log.info(`${prefix} — sync map entry removed`);
+        return;
+      }
 
-    // Read sync_map BEFORE customers — lock order
-    const syncEntry = await syncMapFindByLocalId(
-      client,
-      tenantId,
-      'square',
-      'customer',
-      customerId
-    );
-
-    const custRes = await client.query(
-      `SELECT customer_id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
-      [customerId, tenantId]
-    );
-    const cust = custRes.rows[0];
-    if (!cust) {
-      log.warn(`${prefix} — skipped: customer not found in DB`);
-      return;
-    }
-
-    const nameParts = splitName(cust.name);
-    const customerData: Record<string, string> = {
-      given_name: nameParts.firstName,
-      family_name: nameParts.lastName,
-    };
-    if (cust.phone) customerData.phone_number = cust.phone;
-    if (cust.email) customerData.email_address = cust.email;
-
-    if (!syncEntry || action === 'create') {
-      // Create in Square
-      const result = await square.createCustomer(tokens.accessToken, customerData);
-      const squareCustomer = result.customer;
-
-      await syncMapUpsertOnCreate(
+      // Read sync_map BEFORE customers — lock order
+      const syncEntry = await syncMapFindByLocalId(
         client,
         tenantId,
         'square',
         'customer',
-        customerId,
-        squareCustomer.id,
-        cust.updated_at,
-        squareCustomer.updated_at || new Date().toISOString()
+        customerId
       );
-      log.info(
-        `${prefix} — customer pushed to Square (squareId=${squareCustomer.id} name=${cust.name})`
-      );
-    } else {
-      // Update in Square
-      const externalId = syncEntry.external_id;
-      await square.updateCustomer(tokens.accessToken, externalId, customerData);
 
-      await syncMapUpdateAfterPush(
-        client,
-        tenantId,
-        'square',
-        'customer',
-        customerId,
-        cust.updated_at
+      const custRes = await client.query(
+        `SELECT customer_id, name, phone, email, address, updated_at FROM customers WHERE customer_id = $1 AND tenant_id = $2`,
+        [customerId, tenantId]
       );
-      log.info(`${prefix} — customer updated in Square (squareId=${externalId} name=${cust.name})`);
-    }
+      const cust = custRes.rows[0];
+      if (!cust) {
+        log.warn(`${prefix} — skipped: customer not found in DB`);
+        return;
+      }
+
+      const nameParts = splitName(cust.name);
+      const customerData: Record<string, string> = {
+        given_name: nameParts.firstName,
+        family_name: nameParts.lastName,
+      };
+      if (cust.phone) customerData.phone_number = cust.phone;
+      if (cust.email) customerData.email_address = cust.email;
+
+      if (!syncEntry || action === 'create') {
+        // Create in Square
+        const result = await square.createCustomer(tokens.accessToken, customerData);
+        const squareCustomer = result.customer;
+
+        await syncMapUpsertOnCreate(
+          client,
+          tenantId,
+          'square',
+          'customer',
+          customerId,
+          squareCustomer.id,
+          cust.updated_at,
+          squareCustomer.updated_at || new Date().toISOString()
+        );
+        log.info(
+          `${prefix} — customer pushed to Square (squareId=${squareCustomer.id} name=${cust.name})`
+        );
+      } else {
+        // Update in Square
+        const externalId = syncEntry.external_id;
+        await square.updateCustomer(tokens.accessToken, externalId, customerData);
+
+        await syncMapUpdateAfterPush(
+          client,
+          tenantId,
+          'square',
+          'customer',
+          customerId,
+          cust.updated_at
+        );
+        log.info(
+          `${prefix} — customer updated in Square (squareId=${externalId} name=${cust.name})`
+        );
+      }
+    });
   } finally {
     client.release();
   }
@@ -174,8 +184,41 @@ export async function syncAppointmentToSquare(
   if (!tokens) return;
 
   const client = await pool.connect();
+  // RLS context — same reasoning as syncCustomerToSquare above.
   try {
-    if (action === 'delete') {
+    return await withTenantContext(client, tenantId, async () => {
+      if (action === 'delete') {
+        const syncEntry = await syncMapFindByLocalId(
+          client,
+          tenantId,
+          'square',
+          'appointment',
+          appointmentId
+        );
+
+        if (syncEntry) {
+          try {
+            await square.cancelBooking(tokens.accessToken, syncEntry.external_id);
+          } catch (err) {
+            log.warn(
+              `${prefix} — failed to cancel Square booking (squareId=${syncEntry.external_id} | ERROR: ${String(err)})`
+            );
+          }
+
+          await syncMapMarkDeleted(
+            client,
+            tenantId,
+            'square',
+            'appointment',
+            appointmentId,
+            'deleted'
+          );
+        }
+        log.info(`${prefix} — sync map entry updated (canceled)`);
+        return;
+      }
+
+      // Read sync_map BEFORE appointments — lock order
       const syncEntry = await syncMapFindByLocalId(
         client,
         tenantId,
@@ -184,108 +227,78 @@ export async function syncAppointmentToSquare(
         appointmentId
       );
 
-      if (syncEntry) {
-        try {
-          await square.cancelBooking(tokens.accessToken, syncEntry.external_id);
-        } catch (err) {
-          log.warn(
-            `${prefix} — failed to cancel Square booking (squareId=${syncEntry.external_id} | ERROR: ${String(err)})`
-          );
-        }
+      const apptRes = await client.query(
+        `SELECT a.*, c.name as customer_name, c.phone as customer_phone, r.name as resource_name
+       FROM appointments a
+       LEFT JOIN customers c ON c.customer_id = a.customer_id
+       LEFT JOIN resources r ON r.resource_id = a.resource_id
+       WHERE a.appointment_id = $1 AND a.tenant_id = $2`,
+        [appointmentId, tenantId]
+      );
+      const appt = apptRes.rows[0];
+      if (!appt) {
+        log.warn(`${prefix} — skipped: appointment not found in DB`);
+        return;
+      }
 
-        await syncMapMarkDeleted(
+      // Ensure customer is synced to Square first
+      const squareCustomerId = await ensureRemoteCustomer(
+        client,
+        pool,
+        tenantId,
+        'square',
+        appt.customer_id,
+        syncCustomerToSquare,
+        logger,
+        prefix
+      );
+
+      // Calculate duration in minutes
+      const startTime = new Date(appt.start_time);
+      const endTime = new Date(appt.end_time);
+      const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
+
+      const bookingData: {
+        start_at: string;
+        appointment_segments: Array<{ duration_minutes: number }>;
+        customer_id?: string;
+      } = {
+        start_at: startTime.toISOString(),
+        appointment_segments: [{ duration_minutes: durationMinutes }],
+      };
+      if (squareCustomerId) bookingData.customer_id = squareCustomerId;
+
+      if (!syncEntry || action === 'create') {
+        const result = await square.createBooking(tokens.accessToken, bookingData);
+        const squareBooking = result.booking;
+
+        await syncMapUpsertOnCreate(
           client,
           tenantId,
           'square',
           'appointment',
           appointmentId,
-          'deleted'
+          squareBooking.id,
+          appt.updated_at || new Date().toISOString()
         );
+        log.info(
+          `${prefix} — appointment pushed to Square as booking (squareId=${squareBooking.id} customer=${appt.customer_name})`
+        );
+      } else {
+        const externalId = syncEntry.external_id;
+        await square.updateBooking(tokens.accessToken, externalId, bookingData);
+
+        await syncMapUpdateAfterPush(
+          client,
+          tenantId,
+          'square',
+          'appointment',
+          appointmentId,
+          appt.updated_at
+        );
+        log.info(`${prefix} — booking updated in Square (squareId=${externalId})`);
       }
-      log.info(`${prefix} — sync map entry updated (canceled)`);
-      return;
-    }
-
-    // Read sync_map BEFORE appointments — lock order
-    const syncEntry = await syncMapFindByLocalId(
-      client,
-      tenantId,
-      'square',
-      'appointment',
-      appointmentId
-    );
-
-    const apptRes = await client.query(
-      `SELECT a.*, c.name as customer_name, c.phone as customer_phone, r.name as resource_name
-       FROM appointments a
-       LEFT JOIN customers c ON c.customer_id = a.customer_id
-       LEFT JOIN resources r ON r.resource_id = a.resource_id
-       WHERE a.appointment_id = $1 AND a.tenant_id = $2`,
-      [appointmentId, tenantId]
-    );
-    const appt = apptRes.rows[0];
-    if (!appt) {
-      log.warn(`${prefix} — skipped: appointment not found in DB`);
-      return;
-    }
-
-    // Ensure customer is synced to Square first
-    const squareCustomerId = await ensureRemoteCustomer(
-      client,
-      pool,
-      tenantId,
-      'square',
-      appt.customer_id,
-      syncCustomerToSquare,
-      logger,
-      prefix
-    );
-
-    // Calculate duration in minutes
-    const startTime = new Date(appt.start_time);
-    const endTime = new Date(appt.end_time);
-    const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000);
-
-    const bookingData: {
-      start_at: string;
-      appointment_segments: Array<{ duration_minutes: number }>;
-      customer_id?: string;
-    } = {
-      start_at: startTime.toISOString(),
-      appointment_segments: [{ duration_minutes: durationMinutes }],
-    };
-    if (squareCustomerId) bookingData.customer_id = squareCustomerId;
-
-    if (!syncEntry || action === 'create') {
-      const result = await square.createBooking(tokens.accessToken, bookingData);
-      const squareBooking = result.booking;
-
-      await syncMapUpsertOnCreate(
-        client,
-        tenantId,
-        'square',
-        'appointment',
-        appointmentId,
-        squareBooking.id,
-        appt.updated_at || new Date().toISOString()
-      );
-      log.info(
-        `${prefix} — appointment pushed to Square as booking (squareId=${squareBooking.id} customer=${appt.customer_name})`
-      );
-    } else {
-      const externalId = syncEntry.external_id;
-      await square.updateBooking(tokens.accessToken, externalId, bookingData);
-
-      await syncMapUpdateAfterPush(
-        client,
-        tenantId,
-        'square',
-        'appointment',
-        appointmentId,
-        appt.updated_at
-      );
-      log.info(`${prefix} — booking updated in Square (squareId=${externalId})`);
-    }
+    });
   } finally {
     client.release();
   }
@@ -341,100 +354,104 @@ export async function pullSquareBooking(
   const prefix = ctx(tenantId, 'appointment', 'pull');
 
   const client = await pool.connect();
+  // RLS context wraps the audit/version context: the INSERT INTO appointments
+  // and UPDATE appointments below are tenant-scoped writes.
   try {
-    await withSyncContext(client, 'square', 'sync-square', async () => {
-      const squareId = bookingData.id;
-      const remoteUpdatedAt = bookingData.updated_at || new Date().toISOString();
+    return await withTenantContext(client, tenantId, async () => {
+      await withSyncContext(client, 'square', 'sync-square', async () => {
+        const squareId = bookingData.id;
+        const remoteUpdatedAt = bookingData.updated_at || new Date().toISOString();
 
-      if (!bookingData.start_at) {
-        log.warn(`${prefix} — skipped: Square booking ${squareId} has no start_at`);
-        return;
-      }
-
-      // Look up local customer via sync map if booking has customer_id
-      let localCustomerId: string | null = null;
-      if (bookingData.customer_id) {
-        const custSync = await syncMapFindByExternalId(
-          client,
-          tenantId,
-          'square',
-          'customer',
-          bookingData.customer_id
-        );
-        localCustomerId = custSync?.local_id || null;
-      }
-
-      const syncEntry = await syncMapFindByExternalId(
-        client,
-        tenantId,
-        'square',
-        'appointment',
-        squareId
-      );
-
-      const startTime = new Date(bookingData.start_at);
-      const durationMinutes = bookingData.appointment_segments?.[0]?.duration_minutes || 60;
-      const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
-
-      const status =
-        bookingData.status === 'CANCELLED_BY_CUSTOMER' ||
-        bookingData.status === 'CANCELLED_BY_SELLER'
-          ? 'canceled'
-          : 'scheduled';
-
-      if (!syncEntry) {
-        const insertRes = await client.query(
-          `INSERT INTO appointments (tenant_id, customer_id, start_time, end_time, status)
-           VALUES ($1, $2, $3, $4, $5) RETURNING appointment_id`,
-          [tenantId, localCustomerId, startTime.toISOString(), endTime.toISOString(), status]
-        );
-        const localId = insertRes.rows[0].appointment_id;
-
-        await syncMapUpsertOnPull(
-          client,
-          tenantId,
-          'square',
-          'appointment',
-          localId,
-          squareId,
-          remoteUpdatedAt
-        );
-        log.info(
-          `${prefix} — created local appointment from Square booking (squareId=${squareId} localId=${localId})`
-        );
-      } else {
-        const { local_id: localId, remote_updated_at: lastRemoteUpdate } = syncEntry;
-
-        if (isAlreadySynced(remoteUpdatedAt, lastRemoteUpdate)) {
-          log.info(`${prefix} — skipped: already synced this version (squareId=${squareId})`);
+        if (!bookingData.start_at) {
+          log.warn(`${prefix} — skipped: Square booking ${squareId} has no start_at`);
           return;
         }
 
-        await client.query(
-          `UPDATE appointments SET start_time = $1, end_time = $2, status = $3, customer_id = COALESCE($4, customer_id)
-           WHERE appointment_id = $5 AND tenant_id = $6`,
-          [
-            startTime.toISOString(),
-            endTime.toISOString(),
-            status,
-            localCustomerId,
-            localId,
+        // Look up local customer via sync map if booking has customer_id
+        let localCustomerId: string | null = null;
+        if (bookingData.customer_id) {
+          const custSync = await syncMapFindByExternalId(
+            client,
             tenantId,
-          ]
-        );
+            'square',
+            'customer',
+            bookingData.customer_id
+          );
+          localCustomerId = custSync?.local_id || null;
+        }
 
-        await syncMapUpdateAfterPull(
+        const syncEntry = await syncMapFindByExternalId(
           client,
           tenantId,
           'square',
           'appointment',
-          squareId,
-          remoteUpdatedAt
+          squareId
         );
-        log.info(
-          `${prefix} — updated local appointment from Square (squareId=${squareId} localId=${localId})`
-        );
-      }
+
+        const startTime = new Date(bookingData.start_at);
+        const durationMinutes = bookingData.appointment_segments?.[0]?.duration_minutes || 60;
+        const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
+
+        const status =
+          bookingData.status === 'CANCELLED_BY_CUSTOMER' ||
+          bookingData.status === 'CANCELLED_BY_SELLER'
+            ? 'canceled'
+            : 'scheduled';
+
+        if (!syncEntry) {
+          const insertRes = await client.query(
+            `INSERT INTO appointments (tenant_id, customer_id, start_time, end_time, status)
+           VALUES ($1, $2, $3, $4, $5) RETURNING appointment_id`,
+            [tenantId, localCustomerId, startTime.toISOString(), endTime.toISOString(), status]
+          );
+          const localId = insertRes.rows[0].appointment_id;
+
+          await syncMapUpsertOnPull(
+            client,
+            tenantId,
+            'square',
+            'appointment',
+            localId,
+            squareId,
+            remoteUpdatedAt
+          );
+          log.info(
+            `${prefix} — created local appointment from Square booking (squareId=${squareId} localId=${localId})`
+          );
+        } else {
+          const { local_id: localId, remote_updated_at: lastRemoteUpdate } = syncEntry;
+
+          if (isAlreadySynced(remoteUpdatedAt, lastRemoteUpdate)) {
+            log.info(`${prefix} — skipped: already synced this version (squareId=${squareId})`);
+            return;
+          }
+
+          await client.query(
+            `UPDATE appointments SET start_time = $1, end_time = $2, status = $3, customer_id = COALESCE($4, customer_id)
+           WHERE appointment_id = $5 AND tenant_id = $6`,
+            [
+              startTime.toISOString(),
+              endTime.toISOString(),
+              status,
+              localCustomerId,
+              localId,
+              tenantId,
+            ]
+          );
+
+          await syncMapUpdateAfterPull(
+            client,
+            tenantId,
+            'square',
+            'appointment',
+            squareId,
+            remoteUpdatedAt
+          );
+          log.info(
+            `${prefix} — updated local appointment from Square (squareId=${squareId} localId=${localId})`
+          );
+        }
+      });
     });
   } finally {
     client.release();

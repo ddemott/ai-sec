@@ -172,6 +172,55 @@ export function createWithTenantClient(pool: Pool): WithTenantClient {
 }
 
 /**
+ * Run `fn` with the tenant RLS context set on a client the caller ALREADY owns,
+ * restoring whatever context was there before.
+ *
+ * WHY THIS EXISTS (2026-07-27, measured in production). The app connected as a
+ * BYPASSRLS role for its whole life, so every policy was inert and a write with
+ * no tenant context was indistinguishable from a correct one. Several services
+ * therefore take the raw pool and write tenant-scoped rows with no context at
+ * all — `demoSeed.ts` even documents it: "Uses the raw pool (no RLS context) —
+ * admin-level write." Under enforcement that is not an admin write, it is a
+ * REFUSED write:
+ *
+ *     new row violates row-level security policy for table "tenant_skills"
+ *
+ * That is the real error from the real switch: `POST /demo/start` — the public
+ * "Try live demo" button — 500'd within seconds of `DATABASE_URL` moving to
+ * `app_user`. Only `tenants`, `users` and `business_templates` carry an
+ * admin_bypass policy; every other tenant-scoped table has isolation ONLY, so an
+ * unset context means `tenant_ctx_uuid()` is NULL and the WITH CHECK denies.
+ *
+ * SAVE-AND-RESTORE, not set-and-clear. `createWithTenantClient` clears to '' on
+ * the way out because it owns the connection and is handing it back to the pool.
+ * A helper that runs INSIDE someone else's flow must not do that: clearing would
+ * silently strip an outer context and the next statement in the caller's own
+ * transaction would start failing, which is a far nastier bug than the one being
+ * fixed. So we read the current value first and put it back.
+ *
+ * Session-level (`is_local = false`) so it works whether or not the caller has
+ * a transaction open; the restore in `finally` is what bounds it.
+ */
+export async function withTenantContext<T>(
+  client: PoolClient,
+  tenantId: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const prev = await client.query<{ v: string }>(
+    "SELECT coalesce(current_setting('app.current_tenant_id', true), '') AS v"
+  );
+  const previous = prev.rows[0]?.v ?? '';
+  await client.query("SELECT set_config('app.current_tenant_id', $1, false)", [tenantId]);
+  try {
+    return await fn();
+  } finally {
+    await client
+      .query("SELECT set_config('app.current_tenant_id', $1, false)", [previous])
+      .catch(() => {});
+  }
+}
+
+/**
  * Lead time for the four legacy reminder types, for writers that predate the
  * lead_minutes column. Confirmation fires at booking, so its lead is 0.
  */

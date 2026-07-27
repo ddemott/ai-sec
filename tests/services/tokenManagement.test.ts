@@ -184,7 +184,11 @@ describe('getIntegrationTokens — happy paths', () => {
     expect(result!.settings).toEqual({ tenant_sid: '12345' });
 
     // Verify the query included the extra column
-    const queryText = mockClient.query.mock.calls[0][0];
+    // By CONTENT, not position — withTenantContext adds RLS-context statements
+    // to the call log and a fixed index silently retargets the assertion.
+    const queryText = String(
+      mockClient.query.mock.calls.find((c) => String(c[0]).includes('FOR UPDATE'))?.[0]
+    );
     expect(queryText).toContain('settings');
     expect(queryText).toContain('FOR UPDATE');
   });
@@ -275,7 +279,11 @@ describe('getIntegrationTokens — sad paths', () => {
     expect(refreshFn).toHaveBeenCalledOnce();
 
     // Verify is_active was set to false
-    const updateCall = mockClient.query.mock.calls[1];
+    // Located by CONTENT, not position (see withTenantContext, 2026-07-27).
+    const updateCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('is_active = false')
+    )!;
+    expect(updateCall, 'no query matched: is_active = false').toBeDefined();
     expect(updateCall[0]).toContain('is_active = false');
 
     // Verify error was logged with 5W context
@@ -503,7 +511,11 @@ describe('getCalendarTokens — sad paths', () => {
     expect(result).toBeNull();
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('token refresh FAILED'));
 
-    const updateCall = mockClient.query.mock.calls[1];
+    // Located by CONTENT, not position (see withTenantContext, 2026-07-27).
+    const updateCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('is_active = false')
+    )!;
+    expect(updateCall, 'no query matched: is_active = false').toBeDefined();
     expect(updateCall[0]).toContain('is_active = false');
   });
 

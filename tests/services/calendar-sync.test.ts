@@ -109,7 +109,13 @@ describe('Calendar Sync — Happy Paths', () => {
     expect(event.end).toBe('2026-03-26T11:00:00Z');
 
     // Verify sync map INSERT was called with appointment ID, external event ID, and provider
-    const insertCall = mockClient.query.mock.calls[2];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const insertCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('INSERT INTO appointment_sync_map')
+    )!;
+    expect(insertCall, 'no query matched: INSERT INTO appointment_sync_map').toBeDefined();
     expect(insertCall[0]).toContain('INSERT INTO appointment_sync_map');
     expect(insertCall[1]).toEqual([APPOINTMENT_ID, EXTERNAL_EVENT_ID, 'google']);
 
@@ -152,7 +158,13 @@ describe('Calendar Sync — Happy Paths', () => {
     expect(event.summary).toBe('Oil Change - John Doe');
 
     // Verify sync map was updated
-    const updateCall = mockClient.query.mock.calls[3];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const updateCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('UPDATE appointment_sync_map')
+    )!;
+    expect(updateCall, 'no query matched: UPDATE appointment_sync_map').toBeDefined();
     expect(updateCall[0]).toContain('UPDATE appointment_sync_map');
     expect(updateCall[1]).toEqual([APPOINTMENT_ID]);
 
@@ -190,7 +202,13 @@ describe('Calendar Sync — Happy Paths', () => {
     expect(eventId).toBe(EXTERNAL_EVENT_ID);
 
     // Verify sync map DELETE
-    const deleteCall = mockClient.query.mock.calls[2];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const deleteCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('DELETE FROM appointment_sync_map')
+    )!;
+    expect(deleteCall, 'no query matched: DELETE FROM appointment_sync_map').toBeDefined();
     expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
     expect(deleteCall[1]).toEqual([APPOINTMENT_ID]);
 
@@ -235,7 +253,16 @@ describe('Calendar Sync — Happy Paths', () => {
     expect(gcal.refreshAccessToken).toHaveBeenCalledWith('valid-refresh-token');
 
     // Verify DB was updated with new token
-    const tokenUpdateCall = mockClient.query.mock.calls[1];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const tokenUpdateCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('UPDATE tenant_calendar_settings SET access_token')
+    )!;
+    expect(
+      tokenUpdateCall,
+      'no query matched: UPDATE tenant_calendar_settings SET access_token'
+    ).toBeDefined();
     expect(tokenUpdateCall[0]).toContain('UPDATE tenant_calendar_settings SET access_token');
     expect(tokenUpdateCall[1][0]).toBe('new-access-token');
     expect(tokenUpdateCall[1][2]).toBe(TENANT_ID);
@@ -473,7 +500,16 @@ describe('Calendar Sync — Sad Paths', () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
 
     // Verify calendar was marked inactive
-    const deactivateCall = mockClient.query.mock.calls[1];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const deactivateCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('UPDATE tenant_calendar_settings SET is_active = false')
+    )!;
+    expect(
+      deactivateCall,
+      'no query matched: UPDATE tenant_calendar_settings SET is_active = false'
+    ).toBeDefined();
     expect(deactivateCall[0]).toContain('UPDATE tenant_calendar_settings SET is_active = false');
     expect(deactivateCall[1]).toEqual([TENANT_ID]);
 
@@ -538,7 +574,13 @@ describe('Calendar Sync — Sad Paths', () => {
     expect(gcal.deleteEvent).toHaveBeenCalledOnce();
 
     // Sync map entry was still cleaned up
-    const deleteCall = mockClient.query.mock.calls[2];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const deleteCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('DELETE FROM appointment_sync_map')
+    )!;
+    expect(deleteCall, 'no query matched: DELETE FROM appointment_sync_map').toBeDefined();
     expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
     expect(deleteCall[1]).toEqual([APPOINTMENT_ID]);
 
@@ -715,7 +757,13 @@ describe('Calendar Sync — Outlook Happy Paths', () => {
     expect(event.summary).toBe('Oil Change - John Doe');
 
     // Verify sync map INSERT uses 'outlook' provider
-    const insertCall = mockClient.query.mock.calls[2];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const insertCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('INSERT INTO appointment_sync_map')
+    )!;
+    expect(insertCall, 'no query matched: INSERT INTO appointment_sync_map').toBeDefined();
     expect(insertCall[0]).toContain('INSERT INTO appointment_sync_map');
     expect(insertCall[1]).toEqual([APPOINTMENT_ID, OUTLOOK_EVENT_ID, 'outlook']);
 
@@ -786,7 +834,13 @@ describe('Calendar Sync — Outlook Happy Paths', () => {
     expect(accessToken).toBe('outlook-access-token');
     expect(eventId).toBe(OUTLOOK_EVENT_ID);
 
-    const deleteCall = mockClient.query.mock.calls[2];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const deleteCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('DELETE FROM appointment_sync_map')
+    )!;
+    expect(deleteCall, 'no query matched: DELETE FROM appointment_sync_map').toBeDefined();
     expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
 
     expect(silentLogger.info).toHaveBeenCalledWith(
@@ -889,7 +943,16 @@ describe('Calendar Sync — Outlook Sad Paths', () => {
     await syncAppointmentToCalendar(pool, TENANT_ID, APPOINTMENT_ID, 'create', silentLogger);
 
     // Calendar marked inactive
-    const deactivateCall = mockClient.query.mock.calls[1];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const deactivateCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('UPDATE tenant_calendar_settings SET is_active = false')
+    )!;
+    expect(
+      deactivateCall,
+      'no query matched: UPDATE tenant_calendar_settings SET is_active = false'
+    ).toBeDefined();
     expect(deactivateCall[0]).toContain('UPDATE tenant_calendar_settings SET is_active = false');
 
     // No Outlook or Google API calls
@@ -944,7 +1007,13 @@ describe('Calendar Sync — Outlook Sad Paths', () => {
     expect(outlookCal.deleteEvent).toHaveBeenCalledOnce();
 
     // Sync map entry was still cleaned up
-    const deleteCall = mockClient.query.mock.calls[2];
+    // Located by CONTENT, not position: withTenantContext adds RLS-context
+    // statements to the call log, and a positional index silently retargets
+    // the assertion at an unrelated query (2026-07-27).
+    const deleteCall = mockClient.query.mock.calls.find((c) =>
+      String(c[0]).includes('DELETE FROM appointment_sync_map')
+    )!;
+    expect(deleteCall, 'no query matched: DELETE FROM appointment_sync_map').toBeDefined();
     expect(deleteCall[0]).toContain('DELETE FROM appointment_sync_map');
 
     // Warning logged with Outlook context
