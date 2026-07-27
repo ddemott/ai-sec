@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict i1DKTFD4REx2gFlUrYHwHHdUkIVquwpuuFGz3rux2UtQlaeKxY6XetyApg6c42v
+\restrict uHM8rN4dwE8eMktabRfsF1gFOGmXi5nAxbSMonQQ9rmMif4K4IYB17VEC7YafxY
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2115,6 +2115,28 @@ $$;
 
 
 --
+-- Name: tenant_ctx(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tenant_ctx() RETURNS text
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT coalesce(current_setting('app.current_tenant_id', true), '');
+$$;
+
+
+--
+-- Name: tenant_ctx_uuid(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tenant_ctx_uuid() RETURNS uuid
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT NULLIF(tenant_ctx(), '')::uuid;
+$$;
+
+
+--
 -- Name: update_appointment_customer(uuid, uuid, timestamp with time zone, timestamp with time zone, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3040,6 +3062,8 @@ CREATE TABLE public.message_delivery_status (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+ALTER TABLE ONLY public.message_delivery_status FORCE ROW LEVEL SECURITY;
 
 
 --
@@ -5337,21 +5361,21 @@ ALTER TABLE ONLY public.voice_sessions
 -- Name: employee_schedule Admin bypass for employee_schedule; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admin bypass for employee_schedule" ON public.employee_schedule USING ((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text) IS NULL));
+CREATE POLICY "Admin bypass for employee_schedule" ON public.employee_schedule USING ((public.tenant_ctx_uuid() IS NULL));
 
 
 --
 -- Name: entity_sync_map Admin bypass for entity sync map; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admin bypass for entity sync map" ON public.entity_sync_map USING (((current_setting('app.current_tenant_id'::text, true) IS NULL) OR (current_setting('app.current_tenant_id'::text, true) = ''::text)));
+CREATE POLICY "Admin bypass for entity sync map" ON public.entity_sync_map USING (((public.tenant_ctx() IS NULL) OR (public.tenant_ctx() = ''::text)));
 
 
 --
 -- Name: tenant_integration_settings Admin bypass for integration settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admin bypass for integration settings" ON public.tenant_integration_settings USING (((current_setting('app.current_tenant_id'::text, true) IS NULL) OR (current_setting('app.current_tenant_id'::text, true) = ''::text)));
+CREATE POLICY "Admin bypass for integration settings" ON public.tenant_integration_settings USING (((public.tenant_ctx() IS NULL) OR (public.tenant_ctx() = ''::text)));
 
 
 --
@@ -5365,42 +5389,42 @@ CREATE POLICY "Publicly readable templates" ON public.business_templates FOR SEL
 -- Name: tenant_docs Tenant docs are isolated by tenant_id; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant docs are isolated by tenant_id" ON public.tenant_docs USING ((tenant_id = (( SELECT current_setting('app.current_tenant_id'::text, true) AS current_setting))::uuid));
+CREATE POLICY "Tenant docs are isolated by tenant_id" ON public.tenant_docs USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: tenant_calendar_settings Tenant isolation for calendar settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation for calendar settings" ON public.tenant_calendar_settings USING ((tenant_id = (( SELECT current_setting('app.current_tenant_id'::text, true) AS current_setting))::uuid));
+CREATE POLICY "Tenant isolation for calendar settings" ON public.tenant_calendar_settings USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: employee_schedule Tenant isolation for employee_schedule; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation for employee_schedule" ON public.employee_schedule USING ((tenant_id = (( SELECT current_setting('app.current_tenant_id'::text, true) AS current_setting))::uuid));
+CREATE POLICY "Tenant isolation for employee_schedule" ON public.employee_schedule USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: entity_sync_map Tenant isolation for entity sync map; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation for entity sync map" ON public.entity_sync_map USING ((tenant_id = (( SELECT current_setting('app.current_tenant_id'::text, true) AS current_setting))::uuid));
+CREATE POLICY "Tenant isolation for entity sync map" ON public.entity_sync_map USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: tenant_integration_settings Tenant isolation for integration settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation for integration settings" ON public.tenant_integration_settings USING ((tenant_id = (( SELECT current_setting('app.current_tenant_id'::text, true) AS current_setting))::uuid));
+CREATE POLICY "Tenant isolation for integration settings" ON public.tenant_integration_settings USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: tenant_skills Tenant isolation for master skills; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation for master skills" ON public.tenant_skills USING ((tenant_id = (( SELECT current_setting('app.current_tenant_id'::text, true) AS current_setting))::uuid));
+CREATE POLICY "Tenant isolation for master skills" ON public.tenant_skills USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5409,28 +5433,28 @@ CREATE POLICY "Tenant isolation for master skills" ON public.tenant_skills USING
 
 CREATE POLICY "Tenant isolation for sync map" ON public.appointment_sync_map USING ((EXISTS ( SELECT 1
    FROM public.appointments a
-  WHERE ((a.appointment_id = appointment_sync_map.appointment_id) AND (a.tenant_id = (( SELECT current_setting('app.current_tenant_id'::text, true) AS current_setting))::uuid)))));
+  WHERE ((a.appointment_id = appointment_sync_map.appointment_id) AND (a.tenant_id = public.tenant_ctx_uuid())))));
 
 
 --
 -- Name: business_templates admin_bypass_business_templates; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY admin_bypass_business_templates ON public.business_templates USING ((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text) IS NULL));
+CREATE POLICY admin_bypass_business_templates ON public.business_templates USING ((public.tenant_ctx_uuid() IS NULL));
 
 
 --
 -- Name: tenants admin_bypass_tenants; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY admin_bypass_tenants ON public.tenants USING ((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text) IS NULL));
+CREATE POLICY admin_bypass_tenants ON public.tenants USING ((public.tenant_ctx_uuid() IS NULL));
 
 
 --
 -- Name: users admin_bypass_users; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY admin_bypass_users ON public.users USING ((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text) IS NULL));
+CREATE POLICY admin_bypass_users ON public.users USING ((public.tenant_ctx_uuid() IS NULL));
 
 
 --
@@ -5443,7 +5467,7 @@ ALTER TABLE public.ai_cost_events ENABLE ROW LEVEL SECURITY;
 -- Name: ai_cost_events ai_cost_events_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY ai_cost_events_tenant_isolation ON public.ai_cost_events USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY ai_cost_events_tenant_isolation ON public.ai_cost_events USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5468,7 +5492,7 @@ ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
 -- Name: audit_log audit_log_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY audit_log_tenant_isolation ON public.audit_log USING (((tenant_id)::text = current_setting('app.current_tenant_id'::text, true)));
+CREATE POLICY audit_log_tenant_isolation ON public.audit_log USING (((tenant_id)::text = public.tenant_ctx()));
 
 
 --
@@ -5499,14 +5523,14 @@ ALTER TABLE public.communications_history ENABLE ROW LEVEL SECURITY;
 -- Name: communications_history communications_history_admin_bypass; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY communications_history_admin_bypass ON public.communications_history USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+CREATE POLICY communications_history_admin_bypass ON public.communications_history USING ((public.tenant_ctx() = ''::text));
 
 
 --
 -- Name: communications_history communications_history_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY communications_history_tenant_isolation ON public.communications_history USING (((tenant_id)::text = current_setting('app.current_tenant_id'::text, true)));
+CREATE POLICY communications_history_tenant_isolation ON public.communications_history USING (((tenant_id)::text = public.tenant_ctx()));
 
 
 --
@@ -5519,14 +5543,14 @@ ALTER TABLE public.consent_records ENABLE ROW LEVEL SECURITY;
 -- Name: consent_records consent_records_admin_bypass; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY consent_records_admin_bypass ON public.consent_records USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+CREATE POLICY consent_records_admin_bypass ON public.consent_records USING ((public.tenant_ctx() = ''::text));
 
 
 --
 -- Name: consent_records consent_records_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY consent_records_tenant_isolation ON public.consent_records USING (((tenant_id)::text = current_setting('app.current_tenant_id'::text, true)));
+CREATE POLICY consent_records_tenant_isolation ON public.consent_records USING (((tenant_id)::text = public.tenant_ctx()));
 
 
 --
@@ -5539,7 +5563,7 @@ ALTER TABLE public.customer_messages ENABLE ROW LEVEL SECURITY;
 -- Name: customer_messages customer_messages_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY customer_messages_tenant_isolation ON public.customer_messages USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY customer_messages_tenant_isolation ON public.customer_messages USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5552,14 +5576,14 @@ ALTER TABLE public.customer_preferences ENABLE ROW LEVEL SECURITY;
 -- Name: customer_preferences customer_preferences_admin_bypass; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY customer_preferences_admin_bypass ON public.customer_preferences USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+CREATE POLICY customer_preferences_admin_bypass ON public.customer_preferences USING ((public.tenant_ctx() = ''::text));
 
 
 --
 -- Name: customer_preferences customer_preferences_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY customer_preferences_tenant_isolation ON public.customer_preferences USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY customer_preferences_tenant_isolation ON public.customer_preferences USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5584,7 +5608,7 @@ ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 -- Name: employees employees_tenant_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY employees_tenant_access ON public.employees USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY employees_tenant_access ON public.employees USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5597,7 +5621,7 @@ ALTER TABLE public.entity_sync_map ENABLE ROW LEVEL SECURITY;
 -- Name: user_feedback feedback_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY feedback_tenant_isolation ON public.user_feedback USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY feedback_tenant_isolation ON public.user_feedback USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5610,7 +5634,7 @@ ALTER TABLE public.job_inquiries ENABLE ROW LEVEL SECURITY;
 -- Name: job_inquiries job_inquiries_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY job_inquiries_tenant_isolation ON public.job_inquiries USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY job_inquiries_tenant_isolation ON public.job_inquiries USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5623,14 +5647,34 @@ ALTER TABLE public.knowledge_suggestion ENABLE ROW LEVEL SECURITY;
 -- Name: knowledge_suggestion knowledge_suggestion_admin_bypass; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY knowledge_suggestion_admin_bypass ON public.knowledge_suggestion USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+CREATE POLICY knowledge_suggestion_admin_bypass ON public.knowledge_suggestion USING ((public.tenant_ctx() = ''::text));
 
 
 --
 -- Name: knowledge_suggestion knowledge_suggestion_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY knowledge_suggestion_tenant_isolation ON public.knowledge_suggestion USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY knowledge_suggestion_tenant_isolation ON public.knowledge_suggestion USING ((tenant_id = public.tenant_ctx_uuid()));
+
+
+--
+-- Name: message_delivery_status; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.message_delivery_status ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: message_delivery_status message_delivery_status_admin_bypass; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY message_delivery_status_admin_bypass ON public.message_delivery_status USING ((public.tenant_ctx() = ''::text)) WITH CHECK ((public.tenant_ctx() = ''::text));
+
+
+--
+-- Name: message_delivery_status message_delivery_status_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY message_delivery_status_tenant_isolation ON public.message_delivery_status USING ((tenant_id = public.tenant_ctx_uuid())) WITH CHECK ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5643,14 +5687,14 @@ ALTER TABLE public.opt_out_records ENABLE ROW LEVEL SECURITY;
 -- Name: opt_out_records opt_out_records_admin_bypass; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY opt_out_records_admin_bypass ON public.opt_out_records USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+CREATE POLICY opt_out_records_admin_bypass ON public.opt_out_records USING ((public.tenant_ctx() = ''::text));
 
 
 --
 -- Name: opt_out_records opt_out_records_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY opt_out_records_tenant_isolation ON public.opt_out_records USING (((tenant_id)::text = current_setting('app.current_tenant_id'::text, true)));
+CREATE POLICY opt_out_records_tenant_isolation ON public.opt_out_records USING (((tenant_id)::text = public.tenant_ctx()));
 
 
 --
@@ -5663,14 +5707,7 @@ ALTER TABLE public.password_resets ENABLE ROW LEVEL SECURITY;
 -- Name: password_resets password_resets_unauthenticated_only; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY password_resets_unauthenticated_only ON public.password_resets USING ((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text) IS NULL)) WITH CHECK ((NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text) IS NULL));
-
-
---
--- Name: POLICY password_resets_unauthenticated_only ON password_resets; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON POLICY password_resets_unauthenticated_only ON public.password_resets IS 'Only the unauthenticated forgot-password / reset-password flow can read or write this table. Authenticated tenant sessions (with app.current_tenant_id set) cannot. Added 2026-05-09 — closes RLS gap from migration 20260422.';
+CREATE POLICY password_resets_unauthenticated_only ON public.password_resets USING ((public.tenant_ctx_uuid() IS NULL)) WITH CHECK ((public.tenant_ctx_uuid() IS NULL));
 
 
 --
@@ -5683,14 +5720,14 @@ ALTER TABLE public.phone_verifications ENABLE ROW LEVEL SECURITY;
 -- Name: phone_verifications phone_verifications_admin_bypass; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY phone_verifications_admin_bypass ON public.phone_verifications USING (((current_setting('app.current_tenant_id'::text, true) = ''::text) OR (current_setting('app.current_tenant_id'::text, true) IS NULL)));
+CREATE POLICY phone_verifications_admin_bypass ON public.phone_verifications USING (((public.tenant_ctx() = ''::text) OR (public.tenant_ctx() IS NULL)));
 
 
 --
 -- Name: phone_verifications phone_verifications_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY phone_verifications_tenant_isolation ON public.phone_verifications USING ((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid));
+CREATE POLICY phone_verifications_tenant_isolation ON public.phone_verifications USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5703,7 +5740,7 @@ ALTER TABLE public.record_versions ENABLE ROW LEVEL SECURITY;
 -- Name: record_versions record_versions_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY record_versions_tenant_isolation ON public.record_versions USING (((tenant_id = COALESCE((current_setting('app.current_tenant_id'::text, true))::uuid, '00000000-0000-0000-0000-000000000000'::uuid)) OR (current_setting('app.current_tenant_id'::text, true) = '00000000-0000-0000-0000-000000000000'::text)));
+CREATE POLICY record_versions_tenant_isolation ON public.record_versions USING (((tenant_id = COALESCE(public.tenant_ctx_uuid(), '00000000-0000-0000-0000-000000000000'::uuid)) OR (public.tenant_ctx() = '00000000-0000-0000-0000-000000000000'::text)));
 
 
 --
@@ -5716,14 +5753,14 @@ ALTER TABLE public.reminder_schedules ENABLE ROW LEVEL SECURITY;
 -- Name: reminder_schedules reminder_schedules_admin_bypass; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY reminder_schedules_admin_bypass ON public.reminder_schedules USING ((current_setting('app.current_tenant_id'::text, true) = ''::text));
+CREATE POLICY reminder_schedules_admin_bypass ON public.reminder_schedules USING ((public.tenant_ctx() = ''::text));
 
 
 --
 -- Name: reminder_schedules reminder_schedules_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY reminder_schedules_tenant_isolation ON public.reminder_schedules USING (((tenant_id)::text = current_setting('app.current_tenant_id'::text, true)));
+CREATE POLICY reminder_schedules_tenant_isolation ON public.reminder_schedules USING (((tenant_id)::text = public.tenant_ctx()));
 
 
 --
@@ -5742,7 +5779,7 @@ ALTER TABLE public.service_employee ENABLE ROW LEVEL SECURITY;
 -- Name: service_employee service_employee_tenant_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY service_employee_tenant_access ON public.service_employee USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY service_employee_tenant_access ON public.service_employee USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5755,7 +5792,7 @@ ALTER TABLE public.service_resource ENABLE ROW LEVEL SECURITY;
 -- Name: service_resource service_resource_tenant_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY service_resource_tenant_access ON public.service_resource USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY service_resource_tenant_access ON public.service_resource USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5768,7 +5805,7 @@ ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
 -- Name: services services_tenant_access; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY services_tenant_access ON public.services USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY services_tenant_access ON public.services USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5799,49 +5836,49 @@ ALTER TABLE public.tenant_integration_settings ENABLE ROW LEVEL SECURITY;
 -- Name: appointments tenant_isolation_appointments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_appointments ON public.appointments USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY tenant_isolation_appointments ON public.appointments USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: call_summaries tenant_isolation_call_summaries; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_call_summaries ON public.call_summaries USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY tenant_isolation_call_summaries ON public.call_summaries USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: call_transcripts tenant_isolation_call_transcripts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_call_transcripts ON public.call_transcripts USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY tenant_isolation_call_transcripts ON public.call_transcripts USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: customers tenant_isolation_customers; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_customers ON public.customers USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY tenant_isolation_customers ON public.customers USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: resources tenant_isolation_resources; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_resources ON public.resources USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY tenant_isolation_resources ON public.resources USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: soft_reservations tenant_isolation_soft_reservations; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_soft_reservations ON public.soft_reservations USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY tenant_isolation_soft_reservations ON public.soft_reservations USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
 -- Name: tenants tenant_isolation_tenants; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_tenants ON public.tenants USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY tenant_isolation_tenants ON public.tenants USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5866,14 +5903,14 @@ ALTER TABLE public.unanswered_questions ENABLE ROW LEVEL SECURITY;
 -- Name: unanswered_questions unanswered_questions_admin_bypass; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY unanswered_questions_admin_bypass ON public.unanswered_questions USING (((current_setting('app.current_tenant_id'::text, true) = ''::text) OR (current_setting('app.current_tenant_id'::text, true) IS NULL)));
+CREATE POLICY unanswered_questions_admin_bypass ON public.unanswered_questions USING (((public.tenant_ctx() = ''::text) OR (public.tenant_ctx() IS NULL)));
 
 
 --
 -- Name: unanswered_questions unanswered_questions_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY unanswered_questions_tenant_isolation ON public.unanswered_questions USING ((tenant_id = (current_setting('app.current_tenant_id'::text, true))::uuid));
+CREATE POLICY unanswered_questions_tenant_isolation ON public.unanswered_questions USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5886,7 +5923,7 @@ ALTER TABLE public.user_feedback ENABLE ROW LEVEL SECURITY;
 -- Name: users user_isolation_users; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY user_isolation_users ON public.users USING ((tenant_id = (NULLIF(current_setting('app.current_tenant_id'::text, true), ''::text))::uuid));
+CREATE POLICY user_isolation_users ON public.users USING ((tenant_id = public.tenant_ctx_uuid()));
 
 
 --
@@ -5905,12 +5942,12 @@ ALTER TABLE public.voice_sessions ENABLE ROW LEVEL SECURITY;
 -- Name: voice_sessions voice_sessions_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((tenant_id)::text = current_setting('app.current_tenant_id'::text, true)));
+CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((tenant_id)::text = public.tenant_ctx()));
 
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict i1DKTFD4REx2gFlUrYHwHHdUkIVquwpuuFGz3rux2UtQlaeKxY6XetyApg6c42v
+\unrestrict uHM8rN4dwE8eMktabRfsF1gFOGmXi5nAxbSMonQQ9rmMif4K4IYB17VEC7YafxY
 

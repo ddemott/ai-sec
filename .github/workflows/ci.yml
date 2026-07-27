@@ -138,6 +138,17 @@ jobs:
           # build instead of reporting a green run that exercised half
           # the suite. Helper lives in src/test-utils.ts.
           REQUIRE_DB_TESTS: '1'
+          # rlsIsolation.test.ts connects TWICE: as a privileged role to seed
+          # fixtures, and as the non-bypassing app_user to prove the policies
+          # actually filter. Its defaults point at the local `postgres`
+          # database; CI's service container builds `test_db` and leaves
+          # `postgres` empty, so without these the RLS suite would run against
+          # a schema-less database. app_user itself is created by
+          # 20260724000100_app_user_role.sql, which the "Apply migrations" step
+          # above runs — with the placeholder password that migration documents
+          # as local/CI-only (production sets a real one out of band).
+          TEST_ADMIN_DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
+          TEST_APP_USER_DATABASE_URL: postgres://app_user:app_user@localhost:5433/test_db
 
   dashboard:
     name: Dashboard (typecheck + tests)

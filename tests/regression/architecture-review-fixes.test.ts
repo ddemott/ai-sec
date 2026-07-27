@@ -293,19 +293,33 @@ describe('Fix #4: RLS admin bypass policy', () => {
       // Should have exactly 2 policies
       expect(policies.rows.length).toBe(2);
 
-      // Tenant isolation policy should use app.current_tenant_id
+      // Tenant isolation must scope by the tenant context.
+      //
+      // UPDATED 2026-07-24: the context read moved out of the policy text and
+      // into tenant_ctx_uuid() (migration 20260724000000). The policies used to
+      // inline `current_setting('app.current_tenant_id', true)::uuid`, which
+      // RAISED "invalid input syntax for type uuid" whenever the GUC held the
+      // empty string — which clearTenantContext() sets on every pool release.
+      // Centralising the read fixed that once instead of in fifty expressions.
+      //
+      // This assertion follows the intent rather than the old spelling: the
+      // policy must scope by the tenant context helper.
       const tenantPolicy = policies.rows.find((p: { policyname: string }) =>
         p.policyname.includes('Tenant isolation')
       );
       expect(tenantPolicy).toBeDefined();
-      expect(tenantPolicy.qual).toContain('app.current_tenant_id');
+      expect(tenantPolicy.qual).toContain('tenant_ctx_uuid()');
 
-      // Admin bypass should use NULLIF pattern (not raw IS NULL)
+      // Admin bypass must be NULL-SAFE. The old NULLIF spelling was checked
+      // here because it was the shape of the day; what actually matters is that
+      // an unset context (NULL, not '') still takes the bypass path. Reading
+      // through tenant_ctx()/tenant_ctx_uuid() is what guarantees that — see
+      // tests/regression/rlsIsolation.test.ts for the runtime proof.
       const adminPolicy = policies.rows.find((p: { policyname: string }) =>
         p.policyname.includes('Admin bypass')
       );
       expect(adminPolicy).toBeDefined();
-      expect(adminPolicy.qual.toLowerCase()).toContain('nullif');
+      expect(adminPolicy.qual).toMatch(/tenant_ctx(_uuid)?\(\)/);
     });
   });
 });
