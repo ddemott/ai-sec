@@ -306,12 +306,26 @@ cmd_tools() {
     echo "  ${YELLOW}      unless it matches prod's. Set SIM_AGENT_SECRET=<prod secret> to target prod.${RESET}" >&2
   fi
   # Local backend uses self-signed certs → let node fetch accept them.
-  # Local also gets SIM_DB_URL so the journey can read voice_sessions back and
-  # prove the call->appointment link persisted (prod has no direct DB access here).
-  local tls="" dburl=""
+  #
+  # SIM_DB_URL lets the journey READ voice_sessions back and prove the
+  # call→appointment link actually persisted, rather than trusting that the
+  # endpoint returned ok. Local gets it from .env automatically.
+  #
+  # For prod this used to be hard-blanked ("prod has no direct DB access here"),
+  # which was an assumption about the OPERATOR, not a fact about the run — and it
+  # cost us: every prod journey reported `[GAP] call → appointment link (DB)`, so
+  # the single most important write of a booking call — the row that ties a call
+  # to the appointment it produced — was UNVERIFIED IN PRODUCTION, while the
+  # output said "known gap, awaiting wiring". The feature was wired the whole
+  # time. A missing credential had been rendered as a missing feature.
+  #
+  # Now: whoever HAS prod DB access can pass SIM_DB_URL explicitly and the
+  # read-back runs anywhere. The env-derived default stays local-only, so the
+  # behaviour without the flag is unchanged. The read-back is SELECT-only.
+  local tls="" dburl="${SIM_DB_URL:-}"
   if [ "$ENV" = "local" ]; then
     tls="NODE_TLS_REJECT_UNAUTHORIZED=0"
-    dburl="$(env_get DATABASE_URL)"
+    dburl="${SIM_DB_URL:-$(env_get DATABASE_URL)}"
   fi
   env $tls SIM_BACKEND="$BACKEND" SIM_AGENT_SECRET="$secret" SIM_TENANT="${TENANT:-}" \
     SIM_DB_URL="$dburl" \

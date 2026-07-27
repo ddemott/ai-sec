@@ -33,6 +33,76 @@ const BACKEND_URL = process.env.BACKEND_URL ?? 'https://localhost:4001';
 const REPO_ROOT = resolve(__dirname, '..', '..');
 
 /**
+ * Hosts an E2E run is allowed to touch. Mirrors the allowlist in
+ * scripts/rebuild-db.sh so the two guards cannot drift into disagreeing about
+ * what "local" means. `db` / `postgres` / `ai-sec-db` are container hostnames
+ * (docker-compose, CI service containers).
+ */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '', 'db', 'postgres', 'ai-sec-db']);
+
+function hostOf(url: string): string {
+  try {
+    // postgres:// URLs parse fine as URL; hostname strips creds/port/db name.
+    return new URL(url).hostname.replace(/^\[|\]$/g, '');
+  } catch {
+    // Unparseable → treat as suspicious rather than safe.
+    return url;
+  }
+}
+
+/**
+ * REFUSE TO RUN AGAINST ANYTHING THAT ISN'T LOCAL.
+ *
+ * rebuild-db.sh already refuses to DROP SCHEMA a non-local host without
+ * --force, and globalSetup never passes --force — so the database WIPE was
+ * already guarded. This closes the other half, which was not guarded at all:
+ * the SPECS' own targets. Every spec builds its world through
+ * `registerFreshTenant` (POST /register against BACKEND_URL) and tears it down
+ * through `cleanTenantData` (DELETE FROM tenants against PG_URL, which cascades
+ * to every appointment, customer, message and consent record beneath it).
+ *
+ * Point BACKEND_URL or DATABASE_URL at production and the suite does not fail —
+ * it succeeds, against the wrong database, creating ~40 junk tenants and
+ * cascade-deleting each one. Nothing in the run would look wrong.
+ *
+ * There is deliberately NO bypass flag. Testing a remote deployment is a real
+ * need, and it already has the right tool: `scripts/simulate.sh --env prod`,
+ * which drives an ephemeral demo tenant instead of assuming a disposable
+ * database. A destructive default with an easy override is how the accident
+ * happens; if you genuinely mean to aim these specs elsewhere, edit this list
+ * and say so in the commit.
+ */
+function assertLocalTargets(): void {
+  const targets: Array<{ label: string; value: string }> = [
+    { label: 'BACKEND_URL', value: BACKEND_URL },
+    {
+      label: 'DATABASE_URL',
+      value: process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres',
+    },
+  ];
+  if (process.env.DASHBOARD_URL) {
+    targets.push({ label: 'DASHBOARD_URL', value: process.env.DASHBOARD_URL });
+  }
+
+  const remote = targets.filter((t) => !LOCAL_HOSTS.has(hostOf(t.value)));
+  if (remote.length === 0) return;
+
+  throw new Error(
+    [
+      '[globalSetup] REFUSING TO RUN — the E2E suite is pointed at a non-local target.',
+      ...remote.map((t) => `  ${t.label} → host "${hostOf(t.value)}"`),
+      '',
+      'These specs register tenants and then DELETE FROM tenants, which cascades to',
+      'every appointment, customer, message and consent record under them. Against a',
+      'real deployment the suite would PASS while destroying data.',
+      '',
+      `Allowed hosts: ${[...LOCAL_HOSTS].filter(Boolean).join(', ')}`,
+      'To exercise a deployed environment, use: ./scripts/simulate.sh tools --env prod',
+    ].join('\n')
+  );
+}
+
+/**
  * Recursively find the newest mtime under a directory tree. Used to
  * detect when source files have been edited after the backend process
  * was last started (which means dist/ AND the running process are both
@@ -120,6 +190,11 @@ async function assertBackendFresh(): Promise<void> {
 }
 
 export default async function globalSetup() {
+  // FIRST, before anything reaches out or rebuilds: prove we are aimed at a
+  // disposable local stack. Everything below this line is destructive or
+  // assumes it may be.
+  assertLocalTargets();
+
   await assertBackendFresh();
 
   if (process.env.PLAYWRIGHT_SKIP_DB_RESET === '1') {
