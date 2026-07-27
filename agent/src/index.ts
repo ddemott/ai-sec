@@ -380,6 +380,26 @@ export default defineAgent({
     // — above both the shutdown registration and the session listener — so both
     // close over the same recorder.
     const transcript = new TranscriptRecorder();
+    // INBOUND-AUDIO EVIDENCE. Two independent counters that, read together at
+    // finalize, say WHERE a caller's speech was lost — the one distinction that
+    // matters when a call comes back empty, and the one that is impossible to
+    // recover after the fact because both signals are in-memory only.
+    //
+    //   vadSpeechEvents  — Silero VAD transitions to 'speaking'. Silero runs
+    //                      LOCALLY on the raw decoded frames (see the session's
+    //                      `vad:` option), BEFORE any network hop to Deepgram.
+    //   sttTranscribed   — LiveKit UserInputTranscribed events (Deepgram output).
+    //
+    // Reading the pair:
+    //   vad=0, stt=0  → NO DECODABLE AUDIO REACHED THE PROCESS. Media/codec/RTP,
+    //                   upstream of us. Not the caller, not Deepgram, not the
+    //                   prompt. This is what the 2026-07-24 silent calls looked
+    //                   like and it took a manual log dig to establish.
+    //   vad>0, stt=0  → audio arrived and Deepgram returned nothing: STT socket,
+    //                   API key, or model. A completely different fix.
+    //   vad>0, stt>0  → speech was captured; any emptiness is downstream.
+    let vadSpeechEvents = 0;
+    let sttTranscribed = 0;
     // Tracks what happened on the call (booked / transferred + appointment_id),
     // mutated by the booking/transfer tools, read at shutdown for session-end.
     const outcomeTracker = new CallOutcomeTracker();
@@ -464,6 +484,29 @@ export default defineAgent({
             const { outcome: trackedOutcome, appointmentId } = outcomeTracker.result();
             const durationSeconds = Math.round((Date.now() - startedAtMs) / 1000);
 
+            // The caller said nothing we could hear. Emit the verdict WITH the
+            // evidence, while the counters still exist — they are in-memory and
+            // die with this process. The backend raises the alarm (errors_total
+            // no_caller_audio); this line is what tells you which layer to fix.
+            if (!transcript.hasCallerTurn()) {
+              callLog.warn(
+                {
+                  event: 'no_caller_audio',
+                  vad_speech_events: vadSpeechEvents,
+                  stt_transcribed_events: sttTranscribed,
+                  duration_seconds: durationSeconds,
+                  agent_spoke: rendered != null,
+                  likely_layer:
+                    vadSpeechEvents === 0
+                      ? 'inbound_media' // codec/RTP — nothing decodable arrived
+                      : sttTranscribed === 0
+                        ? 'stt' // audio arrived, Deepgram returned nothing
+                        : 'downstream', // speech captured but no turn committed
+                },
+                'call ended with NO caller turn — see likely_layer for where the speech was lost'
+              );
+            }
+
             // 1. FINALIZE FIRST — close the row with the data we already have,
             //    BEFORE the slow LLM steps below. An abrupt disconnect/process
             //    teardown during summarize/classify must not strand the row
@@ -471,7 +514,7 @@ export default defineAgent({
             //    first real __PERSONA_NAME__ call). end_voice_session overwrites by
             //    (tenant_id, call_id) with no status guard, so the enrich pass
             //    can safely add summary/outcome afterward. trackedOutcome is only
-            //    ever a real tool outcome (booked/transferred) — never the
+            //    ever a real tool outcome (booked/transferred/message) — never the
             //    classify-only price/no_availability that triggers the owner SMS
             //    — so this first write can't double-send that alert.
             const finalizeRes = await client.call('/agent-tools/voice-session-end', {
@@ -523,9 +566,15 @@ export default defineAgent({
               ? await summarizeCall(rendered ?? '', config.OPENAI_API_KEY)
               : { summary: null };
             const summary = summaryResult.summary;
-            const classifyResult = callerSpoke
-              ? await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY)
-              : { outcome: null };
+            // Classify ONLY when no tool established the outcome. A call that
+            // booked, transferred, or took a message already has its answer from
+            // the system's own records — asking the model WHY on top of that is
+            // both wasted latency/tokens and a chance to be overruled by a guess
+            // (Camille, 2026-07-25: message taken, filed `wrong_service`).
+            const classifyResult =
+              callerSpoke && trackedOutcome == null
+                ? await classifyCallOutcome(rendered ?? '', config.OPENAI_API_KEY)
+                : { outcome: null };
             const outcome = trackedOutcome ?? classifyResult.outcome;
 
             // 3. ENRICH PASS — re-call only when there's something new (a summary,
@@ -1380,6 +1429,7 @@ export default defineAgent({
         //  - error: STT/LLM/TTS/realtime errors surfaced by the session — the most
         //    likely direct cause of a mid-call hang.
         session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (ev) => {
+          sttTranscribed += 1;
           // Mask digit runs (phone numbers, card numbers) before logging the
           // caller's transcribed speech to centralized logs — keep the words
           // (names/intent, what we need to debug the turn) but not raw PII digits.
@@ -1401,6 +1451,10 @@ export default defineAgent({
           );
         });
         session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
+          // 'speaking' is Silero's verdict on the raw frames — count only the
+          // transitions INTO it, so one long utterance counts once rather than
+          // per frame.
+          if (ev.newState === 'speaking') vadSpeechEvents += 1;
           callLog.info(
             { event: 'user_state_changed', from: ev.oldState, to: ev.newState },
             `caller state ${ev.oldState} -> ${ev.newState}`

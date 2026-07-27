@@ -103,32 +103,83 @@ export async function backfillCustomerName(
   return (res.rowCount ?? 0) > 0;
 }
 
+/**
+ * Get-or-create on an EXISTING client, so a route that is already inside a
+ * withTenantClient block can use it without nesting a second pool checkout.
+ *
+ * THE BUG THIS FIXES (Camille, 2026-07-25): every messaging route — take-message,
+ * page-owner, capture-job-inquiry — only ever LOOKED UP a customer by phone and
+ * left `customer_id` NULL when there wasn't one. Only the BOOKING path created
+ * customers. So a caller who left a message but never booked never entered the
+ * CRM at all: the owner got the message, and the phonebook stayed empty (prod:
+ * 1 message row, 0 customers). The next call from that number was a stranger
+ * again — no history, no name, no preferences.
+ *
+ * Returns NULL rather than throwing when the (tenant, phone) unique key is held
+ * by a SOFT-DELETED row: reviving deleted customer data is a deliberate act, not
+ * something a message should do behind the owner's back, and losing the whole
+ * message to a 500 over a missing back-link is worse than saving it unlinked.
+ */
+export async function getOrCreateCustomerByPhoneOnClient(
+  client: PoolClient,
+  tenantId: string,
+  phoneNormalized: string,
+  name: string | null | undefined
+): Promise<string | null> {
+  const existing = await client.query<{ customer_id: string }>(
+    `SELECT customer_id FROM customers
+      WHERE tenant_id = $1 AND phone = $2
+        AND (is_deleted IS NULL OR is_deleted = false)`,
+    [tenantId, phoneNormalized]
+  );
+  if (existing.rows.length > 0) {
+    const customerId = existing.rows[0].customer_id;
+    // A real name always beats a placeholder — including one we stored ourselves
+    // on an earlier turn of THIS call, which is the common case: the agent books
+    // (or tries to) before the caller has said who they are.
+    await backfillCustomerName(client, customerId, name);
+    return customerId;
+  }
+  // ON CONFLICT, not a bare INSERT: an ACTION-rung tool is retried until it
+  // returns success, so two retries of the SAME call can both pass the SELECT
+  // above before either INSERT lands. customers_tenant_id_phone_key is the layer
+  // that cannot race; the loser re-reads the winner's row.
+  const inserted = await client.query<{ customer_id: string }>(
+    `INSERT INTO customers (tenant_id, phone, name)
+       VALUES ($1, $2, $3)
+     ON CONFLICT (tenant_id, phone) DO NOTHING
+     RETURNING customer_id`,
+    [tenantId, phoneNormalized, isPlaceholderName(name) ? 'Caller' : (name as string).trim()]
+  );
+  if (inserted.rows.length > 0) return inserted.rows[0].customer_id;
+
+  const winner = await client.query<{ customer_id: string }>(
+    `SELECT customer_id FROM customers
+      WHERE tenant_id = $1 AND phone = $2
+        AND (is_deleted IS NULL OR is_deleted = false)`,
+    [tenantId, phoneNormalized]
+  );
+  const customerId = winner.rows[0]?.customer_id ?? null;
+  if (customerId) await backfillCustomerName(client, customerId, name);
+  return customerId;
+}
+
 export async function getOrCreateCustomerByPhone(
   withTenantClient: WithTenantClient,
   tenantId: string,
   phoneNormalized: string,
   name: string
 ): Promise<string> {
-  return withTenantClient(tenantId, async (client) => {
-    const existing = await client.query<{ customer_id: string }>(
-      `SELECT customer_id FROM customers
-        WHERE tenant_id = $1 AND phone = $2
-          AND (is_deleted IS NULL OR is_deleted = false)`,
-      [tenantId, phoneNormalized]
+  const customerId = await withTenantClient(tenantId, (client) =>
+    getOrCreateCustomerByPhoneOnClient(client, tenantId, phoneNormalized, name)
+  );
+  if (!customerId) {
+    // Only reachable when a soft-deleted row holds the (tenant, phone) key. The
+    // booking path needs a real id, so surface it as a named error instead of
+    // letting a NULL customer_id reach the booking RPC.
+    throw new Error(
+      `Cannot create customer for ${phoneNormalized}: a soft-deleted customer holds this phone number for tenant ${tenantId}`
     );
-    if (existing.rows.length > 0) {
-      const customerId = existing.rows[0].customer_id;
-      // A real name always beats a placeholder — including one we stored ourselves
-      // on an earlier turn of THIS call, which is the common case: the agent books
-      // (or tries to) before the caller has said who they are.
-      await backfillCustomerName(client, customerId, name);
-      return customerId;
-    }
-    const inserted = await client.query<{ customer_id: string }>(
-      `INSERT INTO customers (tenant_id, phone, name)
-         VALUES ($1, $2, $3) RETURNING customer_id`,
-      [tenantId, phoneNormalized, name]
-    );
-    return inserted.rows[0].customer_id;
-  });
+  }
+  return customerId;
 }
