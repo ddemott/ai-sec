@@ -5,11 +5,13 @@
  * sendSms is mocked at the module level to avoid real Telnyx calls.
  *
  * Query sequence per call (when caller_phone provided):
- *   1. SELECT customer_id FROM customers (resolve link — optional)
+ *   1. SELECT customer_id FROM customers (get-or-create step 1)
+ *   1b. hit  → UPDATE customers SET name (placeholder back-fill; no-op on a real name)
+ *       miss → INSERT INTO customers ... ON CONFLICT DO NOTHING RETURNING customer_id
  *   2. INSERT INTO customer_messages RETURNING message_id
- *   3. SELECT forward_phone, inbound_phone FROM tenants
+ *   3. SELECT owner_phone, forward_phone, inbound_phone FROM tenants
  *
- * When no phone provided, query 1 is skipped → only 2 + 3 fire.
+ * When no phone provided, queries 1/1b are skipped → only 2 + 3 fire.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Fastify from 'fastify';
@@ -123,6 +125,72 @@ describe('/agent-tools/take-message', () => {
     expect(vi.mocked(telnyxSms.sendSms)).not.toHaveBeenCalled();
   });
 
+  it('HAPPY: unknown caller is CREATED as a customer and the message links to them', async () => {
+    // WHO: Camille, 2026-07-25 — asked for help with groceries, left a message,
+    //       never booked, and never appeared in the CRM.
+    // WHAT: no customer row for the phone → INSERT INTO customers, and the
+    //       customer_messages row carries that new customer_id (not NULL).
+    // WHEN: any message-only call from a number the tenant has never seen.
+    // WHERE: getOrCreateCustomerByPhoneOnClient, called from take-message.
+    // WHY: prod held 1 message and 0 customers. The owner had a callback to make
+    //       and no lead record, and the caller was a stranger on her next call.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] }, // SELECT customers → miss
+        { rows: [{ customer_id: CUSTOMER_ID }] }, // INSERT INTO customers
+        { rows: [{ message_id: MESSAGE_ID }] }, // INSERT customer_messages
+        { rows: [{ owner_phone: null, forward_phone: null, inbound_phone: null }] },
+      ],
+    });
+
+    const res = await post(app, {
+      tenant_id: TENANT_ID,
+      caller_name: 'Camille',
+      caller_phone: '+12624979039',
+      message: 'Come and help me with the groceries',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const customerInsert = queries.find((q) => q.text.includes('INSERT INTO customers'));
+    expect(customerInsert).toBeDefined();
+    expect(customerInsert?.params).toEqual([TENANT_ID, '+12624979039', 'Camille']);
+    // ON CONFLICT, so two in-flight retries of the same call converge on one row.
+    expect(customerInsert?.text).toContain('ON CONFLICT (tenant_id, phone) DO NOTHING');
+    const messageInsert = queries.find((q) => q.text.includes('INSERT INTO customer_messages'));
+    expect(messageInsert?.params[1]).toBe(CUSTOMER_ID);
+  });
+
+  it('SAD: soft-deleted row holds the phone → message still saves, unlinked', async () => {
+    // WHO: a number whose customer was deleted; same number calls and leaves a message.
+    // WHAT: SELECT misses (soft-deleted excluded), INSERT hits the (tenant, phone)
+    //       unique key and DO-NOTHINGs, the re-SELECT still misses → customer_id NULL.
+    // WHEN: only after a customer purge/soft-delete on that number.
+    // WHERE: getOrCreateCustomerByPhoneOnClient's null return.
+    // WHY: reviving deleted customer data is a deliberate act, and losing the whole
+    //       message to a unique-violation 500 is worse than saving it unlinked.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [] }, // SELECT customers → miss (soft-deleted excluded)
+        { rows: [] }, // INSERT ... ON CONFLICT DO NOTHING → no row
+        { rows: [] }, // re-SELECT winner → still nothing live
+        { rows: [{ message_id: MESSAGE_ID }] }, // INSERT customer_messages
+        { rows: [{ owner_phone: null, forward_phone: null, inbound_phone: null }] },
+      ],
+    });
+
+    const res = await post(app, {
+      tenant_id: TENANT_ID,
+      caller_name: 'Dana',
+      caller_phone: '+15558675309',
+      message: 'Call me back please',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ result: { saved: boolean } }>().result.saved).toBe(true);
+    const messageInsert = queries.find((q) => q.text.includes('INSERT INTO customer_messages'));
+    expect(messageInsert?.params[1]).toBeNull();
+  });
+
   it('HAPPY: SMS-notifies owner when forward_phone + inbound_phone both valid', async () => {
     // WHO: Caller whose message triggers an immediate text to the business owner
     // WHAT: INSERT succeeds → fetch tenant phones → sendSms → notified:true
@@ -132,6 +200,7 @@ describe('/agent-tools/take-message', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [] }, // customer not found (new caller, no customer row yet)
+        { rows: [{ customer_id: CUSTOMER_ID }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ message_id: MESSAGE_ID }] },
         { rows: [{ forward_phone: '+16082175303', inbound_phone: '+16308229086' }] },
       ],
@@ -171,6 +240,7 @@ describe('/agent-tools/take-message', () => {
     const { app } = buildApp({
       queryResponses: [
         { rows: [] }, // customer not found
+        { rows: [{ customer_id: CUSTOMER_ID }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ message_id: MESSAGE_ID }] },
         {
           rows: [

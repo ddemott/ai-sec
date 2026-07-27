@@ -121,9 +121,15 @@ describe('take-message → real customer_messages row', () => {
     expect(row.rows[0].message).toContain('invoice');
   });
 
-  it('HAPPY: an unknown caller-phone stores the message with a NULL customer_id (no crash)', async () => {
-    // WHY: the customer lookup is best-effort; a stranger still gets a message
-    // row, just unlinked.
+  it('HAPPY: an unknown caller-phone is CREATED as a customer and the message links to them', async () => {
+    // CONTRACT CHANGE, 2026-07-27. This test used to assert customer_id was NULL —
+    // "the lookup is best-effort; a stranger still gets a message row, just
+    // unlinked." That contract is exactly what left prod with 1 message row and
+    // ZERO customers (Camille, 2026-07-25): she left a message, never booked, and
+    // so never entered the CRM at all. The owner had a callback to make and no
+    // lead record, and she was a stranger again on her next call.
+    //
+    // A caller who leaves a message IS a lead. The route now get-or-creates.
     const res = await post('/agent-tools/take-message', {
       tenant_id: tenantId,
       caller_name: 'Stranger Sue',
@@ -133,13 +139,20 @@ describe('take-message → real customer_messages row', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
 
-    const row = await setup.query(
+    const row = await setup.query<{ customer_id: string | null }>(
       `SELECT customer_id FROM customer_messages
         WHERE tenant_id = $1 AND caller_name = 'Stranger Sue'`,
       [tenantId]
     );
     expect(row.rows).toHaveLength(1);
-    expect(row.rows[0].customer_id).toBeNull();
+    expect(row.rows[0].customer_id).not.toBeNull();
+
+    // ...and that id is a real customer carrying her name + normalized number.
+    const cust = await setup.query<{ name: string; phone: string }>(
+      `SELECT name, phone FROM customers WHERE customer_id = $1`,
+      [row.rows[0].customer_id]
+    );
+    expect(cust.rows[0]).toMatchObject({ name: 'Stranger Sue', phone: '+15556669999' });
   });
 });
 
