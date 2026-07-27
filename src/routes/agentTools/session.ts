@@ -18,6 +18,7 @@ import {
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
 import { getBusinessHours } from '../../services/businessHours';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
+import { getOrCreateCustomerByPhoneOnClient } from '../../services/customerLookup';
 // Direct from shared/ per phoneUtils' own note ("all new code should import
 // directly from shared/phone"). canTransfer is THE resolved transfer capability
 // — see the transfer_available field below for why the agent gets a boolean
@@ -177,13 +178,63 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
     VoiceSessionStartSchema,
     async (args, reply) => {
       try {
-        await withTenantClient(args.tenant_id, (client) =>
-          client.query('SELECT start_voice_session($1, $2, $3) AS context', [
+        await withTenantClient(args.tenant_id, async (client) => {
+          await client.query('SELECT start_voice_session($1, $2, $3) AS context', [
             args.tenant_id,
             args.call_id,
             args.caller_phone ?? null,
-          ])
-        );
+          ]);
+
+          // EVERY IDENTIFIED CALLER ENTERS THE CRM, on the call itself.
+          //
+          // start_voice_session resolves customer context via
+          // get_customer_context_for_call, which LOOKS UP a customer by phone and
+          // stores NULL when there isn't one. So a caller was recorded in the CRM
+          // only if they went on to book, leave a message, page the owner or file a
+          // job inquiry — and a caller who asked a question, or hung up mid-flow,
+          // existed nowhere but the Calls tab.
+          //
+          // Measured in production 2026-07-27: 10 calls, 10 with caller ID, and
+          // ZERO linked to a customer. The owner's phonebook did not contain a
+          // single person who had actually phoned the business.
+          //
+          // This is the same look-up-and-shrug shape fixed in messaging earlier the
+          // same day, one layer up — which is the tell that the seam was the lookup
+          // habit itself, not the individual routes.
+          //
+          // The name is a PLACEHOLDER ('Caller'): caller ID gives us a number, not a
+          // person. It is deliberately one of PLACEHOLDER_NAMES so the first rung
+          // that learns their real name overwrites it (backfillCustomerName), rather
+          // than the phonebook keeping "Caller" forever.
+          //
+          // Deliberate limits:
+          //   - No caller ID (blocked/withheld, or a forwarded line) → nothing is
+          //     created. We will not invent an identity we do not have.
+          //   - This DOES create a row for a wrong number or a hang-up. That is the
+          //     cost of "every call is in the CRM"; the alternative — deciding
+          //     mid-call whose call was worth recording — is how the 10-for-10 gap
+          //     happened. The Calls tab still distinguishes them by outcome.
+          //   - Non-fatal by design, inside the existing best-effort try/catch: a
+          //     CRM write must never take down a live call.
+          const phone = args.caller_phone ? normalizePhone(args.caller_phone) : null;
+          if (phone && isValidPhone(phone)) {
+            const customerId = await getOrCreateCustomerByPhoneOnClient(
+              client,
+              args.tenant_id,
+              phone,
+              null // no name yet — the greeting hasn't even finished
+            );
+            if (customerId) {
+              // Link the CALL to the person, so the Calls tab and the customer's
+              // history are two views of one fact instead of two disconnected lists.
+              await client.query(
+                `UPDATE voice_sessions SET customer_id = $1
+                  WHERE tenant_id = $2 AND call_id = $3 AND customer_id IS NULL`,
+                [customerId, args.tenant_id, args.call_id]
+              );
+            }
+          }
+        });
         // DUPLICATE-DISPATCH DETECTOR (2026-07-23). The double-dispatch bug can
         // create TWO sessions for one inbound call — the 1:46 PM call had two
         // SIP legs 3s apart, both with the same caller_phone. The participant
