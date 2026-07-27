@@ -3755,6 +3755,12 @@ describe('/agent-tools/voice-session-start — duplicate-dispatch detector', () 
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ context: {} }] }, // start_voice_session
+        // 2026-07-27: the route now get-or-creates the CALLER as a customer and
+        // links the session to them, so an inbound call is recorded in the CRM.
+        // Those two writes sit between start_voice_session and the detector.
+        { rows: [] }, // SELECT customers → miss
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers
+        { rows: [], rowCount: 1 }, // UPDATE voice_sessions SET customer_id
         { rows: [{ n: 2 }] }, // duplicate-detector count: two prior live sessions
       ],
     });
@@ -3775,6 +3781,9 @@ describe('/agent-tools/voice-session-start — duplicate-dispatch detector', () 
     const { app } = buildApp({
       queryResponses: [
         { rows: [{ context: {} }] }, // start_voice_session
+        { rows: [] }, // SELECT customers → miss (see note above)
+        { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers
+        { rows: [], rowCount: 1 }, // UPDATE voice_sessions SET customer_id
         { rows: [{ n: 0 }] }, // no prior sessions
       ],
     });
