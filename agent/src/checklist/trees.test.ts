@@ -296,6 +296,7 @@ describe('buy_service — the caller who wants to BUY the AI receptionist', () =
       'wants_handled',
       'current_setup',
       'best_email',
+      'demo_offer',
     ]);
   });
 
@@ -318,6 +319,8 @@ describe('buy_service — the caller who wants to BUY the AI receptionist', () =
     t.record('wants_handled', { value: 'booking' });
     t.record('current_setup', { value: 'voicemail' });
     t.record('best_email', { value: 'sam@example.com' });
+    expect(t.isResolved()).toBe(false); // the demo has not been offered yet
+    t.record('demo_offer', { value: 'not_now' });
     expect(t.isResolved()).toBe(true);
   });
 
@@ -345,6 +348,7 @@ describe('buy_service — the caller who wants to BUY the AI receptionist', () =
     t.record('wants_handled', { value: 'everything' });
     t.record('current_setup', { value: 'nothing' });
     t.record('best_email', { value: 'kim@example.com' });
+    t.record('demo_offer', { value: 'wants_demo' });
     t.record('meeting_topic', { value: 'see a demo of the AI receptionist' });
     t.record('caller_name', { value: 'Kim' });
     expect(t.status('book')).toBe('blocked'); // phone still open

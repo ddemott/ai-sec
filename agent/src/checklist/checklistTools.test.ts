@@ -122,6 +122,136 @@ describe('the toolset composition', () => {
   });
 });
 
+describe('the work-direction gate — declared axis checked against the selection', () => {
+  // WHY (2026-07-28 sim): a buyer opening with "a business opportunity" got the
+  // job tree alongside buy_service; the blocked capture held the goodbye gate and
+  // the agent repeated one sentence nine times on a call that could not end.
+  // The gate turns that prompt hope into a deterministic host-side bounce.
+  it('SAD: job + buy_service together is refused outright', async () => {
+    const { toolkit, tracker } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['job', 'buy_service'],
+    })) as string;
+    expect(out).toMatch(/REFUSED/);
+    expect(out).toMatch(/looking to hire him|which it is/i); // names the next step
+    expect(tracker.selectedTrees()).toEqual([]); // nothing selected on a bounce
+  });
+
+  it('SAD: caller_pays_us + job contradicts and bounces', async () => {
+    const { toolkit, tracker } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'job'],
+    })) as string;
+    expect(out).toMatch(/REFUSED/);
+    expect(out).toMatch(/buy_service/); // points at the likely-right tree
+    expect(tracker.selectedTrees()).toEqual([]);
+  });
+
+  it('SAD: caller_offers_owner_work + buy_service contradicts and bounces', async () => {
+    const { toolkit, tracker } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['buy_service'],
+    })) as string;
+    expect(out).toMatch(/REFUSED/);
+    expect(out).toMatch(/select job/);
+    expect(tracker.selectedTrees()).toEqual([]);
+  });
+
+  it('SAD: unclear direction may not pick either confusable tree — ask first', async () => {
+    const { toolkit, tracker } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['job'],
+    })) as string;
+    expect(out).toMatch(/REFUSED/);
+    expect(out).toMatch(/clarifying question/i);
+    expect(tracker.selectedTrees()).toEqual([]);
+  });
+
+  it('HAPPY: unclear direction still selects the unambiguous trees', async () => {
+    // A message or a question has no work-direction stakes — unclear must not
+    // paralyze the whole selection, only the confusable pair.
+    const { toolkit, tracker } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['identity', 'message'],
+    })) as string;
+    expect(out).not.toMatch(/REFUSED/);
+    expect(tracker.selectedTrees()).toContain('message');
+  });
+
+  it('HAPPY: a consistent declaration passes straight through', async () => {
+    const { toolkit, tracker } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'buy_service', 'booking'],
+    })) as string;
+    expect(out).not.toMatch(/REFUSED/);
+    expect(tracker.selectedTrees()).toContain('buy_service');
+  });
+
+  it('HAPPY: an omitted direction never blocks (compat with non-LLM callers)', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    expect(tracker.selectedTrees()).toContain('job');
+  });
+
+  it('SAD: owner-gets-paid direction with no job tree gets the under-selection nudge', async () => {
+    // WHY (2026-07-27 live call, 17:57 UTC): "talk with Jane about the job
+    //      opportunities" selected booking ONLY — the meeting was booked, zero
+    //      role questions were asked, and the owner got a calendar entry with no
+    //      role behind it. The gate blocks contradictions; this nudge covers the
+    //      omission, in the tool result the model actually re-reads.
+    const { toolkit } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'booking'],
+    })) as string;
+    expect(out).toMatch(/job tree is not selected/i);
+    expect(out).toMatch(/ADD job/);
+  });
+
+  it('HAPPY: the nudge is silent once job IS selected', async () => {
+    const { toolkit } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job', 'booking'],
+    })) as string;
+    expect(out).not.toMatch(/job tree is not selected/i);
+  });
+
+  it('HAPPY: the nudge never fires on the other directions', async () => {
+    // A buyer or a message-leaver without job selected is CORRECT, not an omission.
+    const { toolkit } = makeKit();
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'buy_service'],
+    })) as string;
+    expect(out).not.toMatch(/job tree is not selected/i);
+  });
+
+  it('SAD: a bounce does not burn a purpose round', async () => {
+    // maxRounds exists to stop churn; a REFUSED selection changed nothing, so
+    // charging it a round would let repeated bounces exhaust legitimate selection.
+    const { toolkit, tracker } = makeKit({ maxPurposeRounds: 2 });
+    for (let i = 0; i < 3; i++) {
+      await call(toolkit.selectedTools(), 'set_purpose', {
+        work_direction: 'caller_pays_us',
+        trees: ['job'],
+      });
+    }
+    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'buy_service'],
+    })) as string;
+    expect(out).not.toMatch(/purpose has changed enough/i);
+    expect(tracker.selectedTrees()).toContain('buy_service');
+  });
+});
+
 describe('set_purpose', () => {
   it('selects, reports, and schedules the toolset swap', async () => {
     const { toolkit, onSelectionChanged } = makeKit();

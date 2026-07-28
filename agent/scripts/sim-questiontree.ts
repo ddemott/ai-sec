@@ -538,6 +538,120 @@ The role: DevOps engineer.`,
     ],
   },
   {
+    title: 'JAYA REPLAY — "talk with Dale about job opportunities" books AND intakes',
+    persona: {
+      opener: 'I want to talk with Dale.',
+      facts: `Your name: Jaya from Connolly Systems, a staffing agency — you are a
+recruiter with a ROLE for Dale. When asked what the meeting is about, say: "About the
+job opportunities — he shared the resume." The
+role: a Java developer contract in Illinois, 6 months, 75 to 85 an hour, onsite in
+Naperville at 120 Water Street. You are hiring for a CLIENT called Midwest Grain
+Systems. Your number: 262-497-9039. You want to meet as soon as possible today — take
+the first time offered. Answer role questions briskly when asked.`,
+      behaviour:
+        'Direct, slightly hurried, English is a second language — short sentences. You ' +
+        'never volunteer the role details unprompted; they must be drawn out.',
+    },
+    grade: (o) => [
+      // The 2026-07-27 live miss: the meeting was booked and the role never was.
+      // BOTH must land — the booking AND the capture.
+      ...has(o, 'book', ['done']),
+      ...has(o, 'capture', ['done']),
+      ...valueMatch(o, 'client_company', /midwest|grain/i),
+      ...has(o, 'rate_range', ['answered', 'declined']),
+      ...mustResolve(o),
+      ...mustClose(o),
+    ],
+  },
+  {
+    title: 'AVAILABILITY-ASK — "Is Dale available for contract work?" is a job call, not qa',
+    persona: {
+      opener: 'Hi, quick question — is Dale available for contract work at the moment?',
+      facts: `Your name: Priya Raman. Number: 262-497-9039. You are a recruiter at Northgate
+Talent, placing a contractor with a client called Fermilab Systems. The role: senior
+TypeScript engineer, six-month contract, 85 to 95 an hour, fully remote, team is in
+Central time. You expect a yes/no answer at first, but you are happy to leave the details
+when told it is the owner's decision. If offered a meeting, you would rather just leave
+the details this time.`,
+      behaviour:
+        'Brisk, friendly recruiter. You open with the availability question and only ' +
+        'unpack the role when the agent asks for details.',
+    },
+    grade: (o) => [
+      // The whole point: an availability question about PAID WORK is the job tree.
+      ...has(o, 'capture', ['done']),
+      ...valueMatch(o, 'employment_type', /contract/),
+      ...has(o, 'client_company', ['answered']),
+      // The agent must never answer the availability question itself — that is the
+      // owner's decision, not a knowledge-base fact.
+      ...(agentSaid(o, /(yes|no).{0,30}available|he (is|isn't|is not) available/i)
+        ? ['the agent answered the availability question for the owner']
+        : []),
+      ...mustResolve(o),
+      ...mustClose(o),
+    ],
+  },
+  {
+    title: 'BUY THE SERVICE — a prospect qualifies, then books the demo',
+    persona: {
+      opener: 'Hi — I heard your phone is answered by an AI? I want something like that for my shop.',
+      facts: `Your name: Dana Whitfield. Number: 262-497-9039. Email: dana@whitfieldauto.com.
+You run an independent auto repair shop, two bays. You take maybe twenty-five calls a day.
+What you want handled is APPOINTMENT BOOKING and nothing else — messages and questions
+you are fine handling yourself. You keep missing booking calls while under a car.
+Right now calls go to an answering service that costs you about 300 a month and gets
+messages wrong. You are happy to book a demo when offered, any time they have.`,
+      behaviour:
+        'Interested but practical. You answer what you are asked and do not volunteer ' +
+        'the whole story at once. You are NOT offering anyone a job — if the agent starts ' +
+        'asking about rates or contract length for a ROLE, say "no, no — I want to BUY this ' +
+        'for my shop".',
+    },
+    grade: (o) => [
+      // The boundary that matters most: a buyer is not a recruiter.
+      ...has(o, 'capture', ['unselected', 'not_applicable', 'blocked']),
+      ...has(o, 'business_type', ['answered']),
+      // 'declined' is a legitimate resolved answer, not a defect — a caller who will
+      // not estimate their volume must not be pushed (the sim's caller LLM declines
+      // this one occasionally, and the product behaviour on a decline is correct).
+      ...has(o, 'call_volume', ['answered', 'declined']),
+      ...valueMatch(o, 'wants_handled', /booking|everything/),
+      ...valueMatch(o, 'demo_offer', /wants_demo/),
+      ...valueMatch(o, 'current_setup', /answering_service/),
+      ...has(o, 'current_cost', ['answered', 'declined']),
+      ...has(o, 'best_email', ['answered']),
+      // The sales call's WRITE is the demo booking — this tree has no action of its own.
+      ...has(o, 'book', ['done']),
+      ...mustResolve(o),
+      ...mustClose(o),
+    ],
+  },
+  {
+    title: 'BUY vs JOB — "business opportunity" opener must not become a role intake',
+    persona: {
+      opener: 'I wanted to talk to someone about a business opportunity.',
+      facts: `Your name: Neil Ashford. Number: 262-497-9039. Email: neil@ashforddental.com.
+You are VAGUE at first on purpose. When asked what it is about, you explain you run a
+small clinic front desk and you want to BUY an AI receptionist like the one answering.
+You take about forty calls a day, you want messages and questions handled, and today
+calls just go to voicemail. You do NOT want to hire anybody and you are NOT offering work.`,
+      behaviour:
+        'Vague opener, then clear once asked. If the agent treats you as a recruiter with ' +
+        'a role to fill, correct it plainly: "no — I want to buy your service."',
+    },
+    grade: (o) => [
+      // The job tree must never capture a lead here — wrong record, wrong email to the owner.
+      ...(o.fakes.capture_job_inquiry.calls.length === 0
+        ? []
+        : ['a BUYER was recorded as a job inquiry']),
+      ...has(o, 'business_type', ['answered']),
+      ...valueMatch(o, 'current_setup', /voicemail/),
+      // Voicemail has no monthly bill — the follow-up must be ruled out, never asked.
+      ...has(o, 'current_cost', ['not_applicable']),
+      ...mustClose(o),
+    ],
+  },
+  {
     title: 'QA-ONLY — questions answered from RAG, no identity shakedown',
     persona: {
       opener: "I'm curious what kind of experience Dale has — can you tell me about him?",
