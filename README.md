@@ -8,7 +8,7 @@ Below is a full list of its features:
 
 **Voice & Calls**
 
-- Answers inbound calls 24/7 with a low-latency, human-like voice (OpenAI TTS, default voice `shimmer`)
+- Answers inbound calls 24/7 with a low-latency, human-like voice (Deepgram Aura TTS, streaming)
 - Identifies callers on arrival and matches them to existing customer records
 - Greets callers by name when recognized, captures new callers into the address book automatically
 - Live call transfer to a human agent via SIP REFER when the caller needs escalation
@@ -85,15 +85,15 @@ Below is a full list of its features:
 
 [![CI](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml/badge.svg)](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml)
 
-|               |                                                                                                                                                                                                                                                                                                        |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Phase**     | 13 — Production Readiness                                                                                                                                                                                                                                                                              |
-| **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                                                                                                                                                                   |
-| **Dashboard** | Live at `https://www.secretaryhq.com` (Railway origin `dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                                                                           |
-| **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default `shimmer`). PSTN inbound reaches the agent (confirmed 2026-06-30); the booking + transfer legs still need a live different-carrier call — see `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7. |
-| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                                                                                                           |
-| **Tests**     | ~3,853 passing (~2,340 backend + ~1,017 dashboard + ~496 agent) + 0 skips, zero TypeScript errors                                                                                                                                                                                                      |
-| **E2E**       | 35 Playwright spec files                                                                                                                                                                                                                                                                               |
+|               |                                                                                                                                                                                                                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase**     | 13 — Production Readiness                                                                                                                                                                                                                                                                                                                         |
+| **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                                                                                                                                                                                                              |
+| **Dashboard** | Live at `https://www.secretaryhq.com` (Railway origin `dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                                                                                                                      |
+| **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4.1-mini (LLM) + Deepgram Aura (TTS). Call flow = question trees (`agent/src/checklist/`). PSTN inbound reaches the agent (confirmed 2026-06-30); the booking + transfer legs still need a live different-carrier call — see `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7. |
+| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                                                                                                                                                      |
+| **Tests**     | ~3,853 passing (~2,340 backend + ~1,017 dashboard + ~496 agent) + 0 skips, zero TypeScript errors                                                                                                                                                                                                                                                 |
+| **E2E**       | 35 Playwright spec files                                                                                                                                                                                                                                                                                                                          |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -132,8 +132,8 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                           |
                                 LiveKit Agent worker (Node)
                                 — Deepgram Nova-3 (STT)
-                                — OpenAI GPT-4o-mini (LLM)
-                                — OpenAI TTS (default voice `shimmer`)
+                                — OpenAI GPT-4.1-mini (LLM)
+                                — Deepgram Aura (TTS, streaming)
                                           |
                                 Fastify backend (29 route modules; agent calls /agent-tools/*)
                                           |
@@ -142,16 +142,16 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                 Next.js 14 Dashboard
 ```
 
-| Layer             | Tech                                                                                                                                                                                                                                               |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4o-mini (LLM), OpenAI TTS (default voice `shimmer`; per-tenant voice/speed via dashboard AI Persona page; fully OpenAI since 2026-06-25)             |
-| **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                        |
-| **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                |
-| **Database**      | PostgreSQL + pgvector, 154 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`) |
-| **Agent runtime** | LiveKit Agents (Node) deployed on Railway as `ai-sec-agent`; 23 voice tools (most backed by Fastify `/agent-tools/*`; `transfer_call` uses SIP REFER)                                                                                              |
-| **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                 |
-| **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                  |
-| **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                          |
+| Layer             | Tech                                                                                                                                                                                                                                                                               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4.1-mini (voice LLM; 4o-mini for summaries/classify), Deepgram Aura (TTS, streaming, per-tenant voice via dashboard AI Persona page; `tts_speed` is inert under Aura)                |
+| **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                                        |
+| **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                |
+| **Database**      | PostgreSQL + pgvector, 154 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                 |
+| **Agent runtime** | LiveKit Agents (Node) on Railway as `ai-sec-agent`. Call flow = **question trees** (`agent/src/checklist/`): host-owned checklist, purpose-selected trees, goodbye gate. 26 tools defined in `agent/src/tools.ts`; **12 are offered to the model** — see `docs/ARCHITECTURE.md` §7 |
+| **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                 |
+| **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                                                  |
+| **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                                                          |
 
 See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
@@ -220,7 +220,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   ├── routes/             29 route modules + shared helpers (routeHelpers.ts, versionHistoryHelpers.ts, crmRouteScaffold.ts)
 │   ├── services/           Square CRM sync, calendar sync, communications (Telnyx-only for SMS + delivery receipts), reminders, token management, telnyxNumbers + telnyxSms (Telnyx is now the sole provider)
 │   └── database/           DatabaseService interface + Postgres implementation
-├── agent/                  LiveKit Agents worker (Node) — Deepgram STT + OpenAI LLM + OpenAI TTS (fully since 2026-06-25)
+├── agent/                  LiveKit Agents worker (Node) — Deepgram STT + OpenAI LLM + Deepgram Aura TTS; call flow in agent/src/checklist/
 │   └── src/                Worker entry, session context, prompt, tool client
 ├── dashboard/              Next.js 14 frontend
 │   ├── components/         60+ components (scheduler, CRM, settings, wizard)

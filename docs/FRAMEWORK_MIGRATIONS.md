@@ -2,7 +2,7 @@
 
 Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `docs/TODO.md`.
 
-**Last updated:** 2026-06-26 (Grok/xAI TTS removal finalized; OpenAI is now the sole TTS provider as it is smoother and fully integrated)
+**Last updated:** 2026-07-28 (added §5 Deepgram Aura TTS — the current provider — and §6, the call-flow rebuilds: ladder → rungs → question trees)
 
 ---
 
@@ -12,7 +12,7 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 **Why:** Vapi charged a $0.05/min orchestration tax. LiveKit Cloud free tier covers 1,000 SIP minutes/month at $0.
 
-**Current stack:** Telnyx (carrier + SIP trunk) → LiveKit Cloud (SIP ingress) → LiveKit Agent worker (Node) → Deepgram Nova-3 (STT) + OpenAI GPT-4o-mini (LLM) + OpenAI TTS (default voice `shimmer`; per-tenant voice + speed via `tenants.tts_voice` / `tts_speed`; fully OpenAI since 2026-06-25 removal of xAI Grok) → Fastify `/agent-tools/*`.
+**Current stack:** Telnyx (carrier + SIP trunk) → LiveKit Cloud (SIP ingress) → LiveKit Agent worker (Node) → Deepgram Nova-3 (STT) + **OpenAI GPT-4.1-mini** (voice LLM; 4o-mini for summaries/classify/fallback) + **Deepgram Aura** (TTS, streaming; per-tenant voice via `tenants.tts_voice` — `tts_speed` is INERT, see §5) → Fastify `/agent-tools/*`. Call SEQUENCING is question trees (§6).
 
 **Open follow-up:** First live PSTN call still pending full different-carrier verification — see `docs/TODO.md` (P0 Voice) and `docs/RUNBOOK.md` section 7.
 
@@ -40,7 +40,7 @@ The fallback path inside `runFallback()` uses `openai.TTS` as a last-resort voic
 
 ---
 
-## 4. TTS provider: xAI Grok → OpenAI TTS (full removal, 2026-06-25)
+## 4. TTS provider: xAI Grok → OpenAI TTS (full removal, 2026-06-25) — SUPERSEDED by §5
 
 **Status:** Shipped (chore #94 and follow-ups). All Grok/xAI TTS code, env vars (`XAI_API_KEY`, `XAI_TTS_*`), `grokTTS.ts`, and references removed from the agent. Primary path and fallback are now both `openai.TTS`. Per-tenant control lives entirely in `tenants.tts_voice` (OpenAI ids: shimmer/nova/alloy/echo/onyx/fable) + `tts_speed` (and tone flags for the prompt, not prosody). No `XAI_API_KEY` required anywhere.
 
@@ -58,3 +58,47 @@ The fallback path inside `runFallback()` uses `openai.TTS` as a last-resort voic
 - `docs/ARCHITECTURE.md` — system architecture
 - `CLAUDE.md` — project overview, includes migration callout
 - `docs/VOICE_AGENT_PLAYBOOK.md` — rules for building/maintaining voice agents (pipeline vs Realtime, never-silent layers, etc.)
+
+---
+
+## 5. TTS provider: OpenAI TTS → **Deepgram Aura** (2026-07-14) — CURRENT
+
+**Status:** Shipped. `aura-asteria-en` default, per-tenant via `tenants.tts_voice`.
+
+**Why:** the OpenAI LiveKit TTS plugin is **non-streaming** — it buffers the ENTIRE reply
+before emitting any audio, so every turn was silence-then-a-burst. Feeding it
+sentence-by-sentence through `StreamAdapter` only traded one gap for a gap between every
+sentence. **You cannot make a non-streaming engine stream by chopping its input finer.**
+Aura streams over a WebSocket as the words are produced.
+
+**The outage this caused, and the guard that came out of it:** the swap passed typecheck
+and all 567 unit tests and took the phone line **completely silent**. The plugin appends
+`?speed=…` to the WebSocket upgrade URL; Aura answers **400**; the socket never opens;
+there is no TTS at all. Not one of those tests synthesises a word — they all mock the TTS.
+Hence `cd agent && npm run verify:tts`, which opens the REAL socket with the REAL config
+and demands real audio bytes back for every mappable voice. **Mandatory before any TTS
+change reaches prod.** "It compiles and the tests are green" is not "it makes noise."
+
+**Consequence:** `tenants.tts_speed` is inert — it is deliberately not passed, because
+passing it is what caused the outage. The dashboard control still writes the column.
+
+---
+
+## 6. Call flow: prompt ladder → TaskGroup rungs → **question trees** (2026-07-21) — CURRENT
+
+Not a provider swap — a rebuild of how a call is SEQUENCED. Three generations:
+
+| Gen | Where | Idea | Status |
+|---|---|---|---|
+| 1. Prompt ladder | `src/services/scripts/blocks.ts` → `tenants.system_prompt` | one long system prompt of RUNG 1-6 the model works down | Fallback (both flags off). The model skipped steps. |
+| 2. TaskGroup rungs | `agent/src/tasks/` | host-code rungs the model *cannot* skip; each completes on a real tool id | Fallback (`ENABLE_TASK_GROUP`). Live in prod 2026-07-18 → 2026-07-21. |
+| 3. **Question trees** | `agent/src/checklist/` | sequencing removed entirely: purpose-selected trees, host-owned checklist, a **goodbye gate** (`isResolved()`) that refuses to end the call while any goal is unresolved | **CURRENT.** `ENABLE_QUESTION_TREE`, on unless set to `"false"`. |
+
+**Why gen 3:** rungs enforced an ORDER, and real callers do not follow one — they answer
+three questions in one breath and change their mind. Trees let answers arrive in any
+order; what is enforced is COMPLETION, not sequence.
+
+**What this means in practice:** a tenant's composed `system_prompt` is never passed to the
+model on a live call. Editing `blocks.ts`, running `install-script.ts`, or regenerating
+`docs/CALL_LADDER.md` changes nothing about how calls go. Behaviour changes go in
+`agent/src/checklist/trees.ts`. See `docs/QUESTION_TREE_ARCHITECTURE.md`.

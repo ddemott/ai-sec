@@ -19,7 +19,9 @@ This folder contains the project's technical and operational documentation.
 | [README.md](../README.md)          | Main project overview (start here)                                       |
 | [CLAUDE.md](../CLAUDE.md)          | Current-state reference for agents & humans (points to docs/ for depth)  |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Technical architecture and stack                                         |
-| [DIAGRAMS.md](DIAGRAMS.md)         | Mermaid diagrams (deployment, voice flow, booking, OAuth, etc.)          |
+| [QUESTION_TREE_ARCHITECTURE.md](QUESTION_TREE_ARCHITECTURE.md) | **How a call actually works — the LIVE call flow** (`agent/src/checklist/`). Read before changing any call behaviour |
+| [DIAGRAMS.md](DIAGRAMS.md)         | Mermaid diagrams (deployment, voice flow, call sequencing, booking, OAuth, etc.) |
+| [VOICE_AGENT_PLAYBOOK.md](VOICE_AGENT_PLAYBOOK.md) | Voice pipeline rules — STT/LLM/TTS, latency, turn-taking |
 | [DEPLOYMENT.md](DEPLOYMENT.md)     | How to run, deploy, and configure the system                             |
 | [SECURITY.md](SECURITY.md)         | Security model, RLS, auth, and hardening                                 |
 | [RUNBOOK.md](RUNBOOK.md)           | Production incident + telephony recovery playbook                        |
@@ -91,6 +93,22 @@ This folder contains the project's technical and operational documentation.
 ## Archived / Historical
 
 Completed phases, the historical bug tracker (formerly `BUGS.md`), the product plan (formerly `PLAN.md`), per-session journals (formerly `sessions/`), and the long-form status archive (formerly `CURRENT_STATUS_ARCHIVED_2026-05-15.md`) have all been **consolidated into [RESOLVED.md](RESOLVED.md)**. Those standalone files no longer exist.
+
+### Superseded call architectures — kept, but NOT how calls work today
+
+The call flow has been rebuilt twice. These docs describe the earlier designs and each
+carries a banner saying so. They are retained because the **bugs** they catalogue are real
+and the current design's guards exist because of them — read them for evidence, not for
+behaviour.
+
+| File | Describes | Status |
+| ---- | --------- | ------ |
+| [BUILDING_SCRIPT_NOTES.md](BUILDING_SCRIPT_NOTES.md) | TaskGroup "rungs" (`agent/src/tasks/`) | Superseded 2026-07-21 · fallback behind `ENABLE_TASK_GROUP` |
+| [CALL_LADDER.md](CALL_LADDER.md) | The prompt ladder — generated from `src/services/scripts/blocks.ts` | Superseded · fallback when both flags are off. Editing a rung changes nothing about a live call |
+| [VOICE_DEADAIR_RESEARCH.md](VOICE_DEADAIR_RESEARCH.md) | Working around non-streaming OpenAI TTS | Core premise moot — TTS is Deepgram Aura (streaming) since 2026-07-14 |
+| [AIASSISTANT_PERSONA_DRAFT.md](AIASSISTANT_PERSONA_DRAFT.md) | 2026-06-10 persona + call-flow brief | Stale; persona is `Piper`, flow is question trees |
+
+**The live architecture is [QUESTION_TREE_ARCHITECTURE.md](QUESTION_TREE_ARCHITECTURE.md).**
 
 ---
 

@@ -76,9 +76,14 @@ export const BOOKING_TREE: QuestionTreeDef = {
       node_id: 'meeting_topic',
       type: 'text',
       ask:
-        'what the meeting is about, in the CALLER\'S OWN WORDS ("a meeting to talk about a ' +
+        'what the meeting is ABOUT, in the CALLER\'S OWN WORDS ("a meeting to talk about a ' +
         'job position") — the system matches their words to the right service, so record the ' +
-        'words and let it choose',
+        'words and let it choose. **WHO is not WHAT**: "I want to talk with [the owner]" names a ' +
+        'person and carries NO topic — never record it here (2026-07-27 live call: it was, ' +
+        'the topic question was skipped, and a recruiter\'s meeting was booked with the role ' +
+        'never mentioned again). If all you know is who they want, ask what it is about — ' +
+        'and when the answer names work for the owner, a purchase, or a repair, that answer ' +
+        'also picks the matching tree: call set_purpose again with it',
     },
     {
       node_id: 'book',
@@ -144,6 +149,132 @@ export const GENERIC_SUBJECT_TREE: QuestionTreeDef = {
   ],
 };
 
+/**
+ * BUYING THE AI SECRETARY ITSELF — the inbound sales call.
+ *
+ * The product answers its own sales line, so "I want this for MY business" is a
+ * distinct purpose from every other tree: it is not a job brought to the owner
+ * (that is `job` — a role FOR him), and not a service request (that is a repair).
+ * Without its own tree these callers fell to `generic_subject` + message, which
+ * asks one vague "what does this concern?" and leaves the owner ringing back
+ * cold, knowing nothing about the business he is selling to.
+ *
+ * NO ACTION NODE, ON PURPOSE. The outcome of a sales call is the DEMO — the
+ * tenant's own "Secretary HQ Demonstration" service — so this tree pairs with
+ * `booking`, and the appointment IS the write. If they will not book, it pairs
+ * with `message`. Giving it its own action node was considered and rejected:
+ * the only fitting tool is `attach_meeting_notes`, which errors when no meeting
+ * was booked, and an action node that cannot complete holds the goodbye gate
+ * open forever — the caller would be trapped on a call that refuses to end.
+ * `attach_meeting_notes` is offered as a PASSTHROUGH instead: reachable when a
+ * booking exists, harmless when it does not.
+ *
+ * The questions are the ones that let the owner price and prepare BEFORE the
+ * demo. Budget and decision-maker are deliberately absent — they read as pushy
+ * on an inbound call, and he can ask them live once someone is on the calendar.
+ */
+export const BUY_SERVICE_TREE: QuestionTreeDef = {
+  tree_id: 'buy_service',
+  description:
+    'The caller wants to BUY the AI receptionist service for THEIR OWN business — "I saw ' +
+    'your AI answers the phone", "how much is this", "I want one of these for my shop", ' +
+    'or any interest in the assistant itself as a product. **Distinguish carefully:** a ' +
+    'caller offering the OWNER a job or contract is the `job` tree (work FOR him); a caller ' +
+    'wanting something repaired is a service request; THIS is a caller who wants to become ' +
+    'a customer of the phone system they are talking to. A VAGUE opener — "a business ' +
+    'opportunity", "something for my company", "I saw what you do" — is NOT enough to pick ' +
+    'between this and `job`: ask what it is about before selecting either, because guessing ' +
+    'wrong sends a buyer into a role intake. If you did guess wrong, remove the tree with ' +
+    'set_purpose(wrong_trees) — a wrong tree cannot be talked away. Select it alongside ' +
+    '`booking` — ' +
+    'the demonstration is the goal — or alongside `message` if they will not commit to a ' +
+    'time. Once a demo IS booked, pass the answers on with attach_meeting_notes in ONE ' +
+    'line, so the owner reads the business, the volume, and what they want handled before ' +
+    'he dials.',
+  nodes: [
+    {
+      node_id: 'business_type',
+      type: 'text',
+      ask:
+        "what kind of business they run, in their own words — a salon and a tyre shop want " +
+        'very different things from a receptionist, and this is what the owner prepares against',
+    },
+    {
+      node_id: 'call_volume',
+      type: 'text',
+      ask:
+        'roughly how many calls a day they take — a rough number or a range is a complete ' +
+        'answer ("maybe twenty?"), never push for precision they do not have',
+    },
+    {
+      node_id: 'wants_handled',
+      type: 'choice',
+      ask:
+        'what they most want handled — booking appointments, taking messages, answering ' +
+        "questions about the business, or all of it. Ask it as a real question, not a menu " +
+        'read aloud; if they describe it in their own words, map it yourself',
+      options: {
+        // No follow-ups on any branch: this answer steers the DEMO, not more questions.
+        booking: [],
+        messages: [],
+        answering_questions: [],
+        everything: [],
+      },
+    },
+    {
+      node_id: 'current_setup',
+      type: 'choice',
+      ask:
+        'what happens to their calls today — voicemail, an answering service, a person, or ' +
+        'nothing at all. This is the comparison the owner has to beat, so it is worth asking',
+      options: {
+        voicemail: [],
+        answering_service: [
+          {
+            node_id: 'current_cost',
+            type: 'text',
+            ask:
+              'roughly what that answering service costs them a month — ask it lightly and ' +
+              'take a decline gracefully; a number here is what makes the price land, but ' +
+              'nobody owes it to you',
+          },
+        ],
+        a_person: [],
+        nothing: [],
+      },
+    },
+    {
+      node_id: 'best_email',
+      type: 'text',
+      ask:
+        'the best email to send the details to — read it back once to confirm the spelling, ' +
+        'the same way a phone number is confirmed. A wrong address is a lead that silently ' +
+        'goes nowhere',
+    },
+    {
+      // THE DEMO MUST BE OFFERED, NOT HOPED FOR (2026-07-28 sim, 0/3).
+      // This tree has no action node, so it RESOLVES the moment its questions are
+      // answered — the checklist read COMPLETE, the model asked "anything else?",
+      // and a qualified buyer was shown the door without ever being offered the
+      // demonstration. A goal nothing on the checklist asks for does not happen.
+      // Making the offer a NODE is what forces the ask; the caller's answer then
+      // decides whether `booking` joins the call.
+      node_id: 'demo_offer',
+      type: 'choice',
+      ask:
+        'whether they want to see it working — OFFER the demonstration plainly once you have ' +
+        'the basics ("Would you like to see it in action? I can put you in with the owner for ' +
+        'a walkthrough."). Record wants_demo if they say yes — then add the booking tree with ' +
+        'set_purpose and book a real time. Record not_now if they would rather think about it ' +
+        'or just have the details emailed; that is a fine answer and is never pushed twice',
+      options: {
+        wants_demo: [],
+        not_now: [],
+      },
+    },
+  ],
+};
+
 /** QUESTIONS — RAG-answered; the tree only marks "they got what they came for". */
 export const QA_TREE: QuestionTreeDef = {
   tree_id: 'qa',
@@ -175,6 +306,11 @@ export const JOB_TREE: QuestionTreeDef = {
     'owner — a recruiter, staffing agency, or someone pitching work for the owner to take. ' +
     'NOT a caller asking the business to do work for THEM ("can someone fix my computer" is ' +
     'a service request → booking/fix_computer, even if they call it "a job"). ' +
+    '**"Is [the owner] available for work?" / "is he available for a contract?" / "is he taking on ' +
+    'projects?" IS this tree** — an availability QUESTION about paid work is a job call in ' +
+    'question form, not qa: whether he is available is HIS decision, so the answer is never ' +
+    'read from the knowledge base — it is "that\'s his call — let me grab the details so he ' +
+    'can come back to you", and the role intake IS that. ' +
     '"I have a position / role / opening I want to run past him" IS this tree — pass-it-along ' +
     'phrasing does not make it a plain message; the role questions ARE the message. ' +
     '"TALK TO / speak with / meet [the owner] about a job" is TWO goals — select job AND ' +
@@ -360,6 +496,7 @@ export const PLATFORM_TREE_LIBRARY: QuestionTreeDef[] = [
   GENERIC_SUBJECT_TREE,
   QA_TREE,
   JOB_TREE,
+  BUY_SERVICE_TREE,
   SCHEDULE_CHANGE_TREE,
   FIX_COMPUTER_TREE,
 ];

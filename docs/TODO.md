@@ -41,7 +41,8 @@ _Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voi
 ### 2. Billing — be able to take money
 
 - [ ] **(Dale)** **Decide final tier pricing** before creating Stripe products — current placeholders ($129/$279) have not been validated. Research findings + cost model (2026-07-07):
-  - **Variable cost per call (5-min avg):** Telnyx ~$0.03 + LiveKit ~$0.02–0.05 + Deepgram $0.02 + OpenAI LLM ~$0.001 + OpenAI TTS ~$0.02–0.09 = **~$0.09–0.17/call**
+  - **Variable cost per call (5-min avg):** Telnyx ~$0.03 + LiveKit ~$0.02–0.05 + Deepgram STT $0.02 + OpenAI LLM ~$0.001 + TTS ~$0.02–0.09 = **~$0.09–0.17/call**
+    - ⚠️ **Stale input (flagged 2026-07-28):** the TTS figure is OpenAI's, and TTS moved to **Deepgram Aura** on 2026-07-14. The LLM also moved 4o-mini → **4.1-mini**. Both legs need re-pricing from current provider rates before this model is used to set a price — deliberately NOT guessed here.
   - **Loss point:** an uncapped Solo tier at 1,000 calls costs $90–170 in variable cost alone — near-zero or negative margin at $129/mo
   - **Recommended Solo cap: ~300–400 calls/month** → variable cost ~$27–51, gross margin ~$78–102 on $129/mo
   - **Competitor benchmarks (verified July 2026):** Rosie AI $49/$149/$299 (250/1,000/2,000 min); Goodcall $79/$129/$249/agent (100/250/500 unique customers/mo); Signpost $199/$399/$749 (AI-only → hybrid human+AI)
@@ -202,6 +203,20 @@ Both erase PII irreversibly (kill-switched off / inert until enabled). Branches 
   - **The one signal actually worth having** — "SMS failure ratio crossed 20%", which would have caught the dead `TELNYX_PHONE_NUMBER` on day one — needs no vendor. See the zero-vendor option below.
 - [ ] **(code)** _(Optional, unscheduled)_ **Zero-vendor alert** — a scheduled GitHub Actions workflow that curls `/metrics` with `METRICS_TOKEN`, evaluates the two `sms_sends_total` / `errors_total` thresholds from `ALERTS.md` §3.9, and opens an issue on breach. No account, no series cap, no ToS that bans commercial use. Costs Actions minutes (~720/mo at a 30-min cadence, against 2,000 free on a private repo). Gives alerts, not dashboards — which is the actual need until real call volume exists.
 - [ ] **(code)** **Website-scan re-scan scheduler** — periodic re-scan of stale KB. Deferred: needs a `last_scanned` column/migration + is a cost/product call.
+
+### Structural refactors (folded in from root `07_11_2026_IMPROVEMENTS.md`, 2026-07-28 — that file is deleted; it duplicated this backlog and sat in the root, which by CLAUDE.md holds only CLAUDE.md / README.md / workflow.config.json / DEMO_SECTION.md)
+
+Each status re-verified against the code on 2026-07-28, not carried over on trust. Item 1 of the original nine (**split `agentTools.ts` into a domain module**) is **DONE** — `src/routes/agentTools/` is a directory of 8 modules.
+
+- [ ] **(code)** **Move test files out of `src/` into a parallel `tests/` tree** — still mixed (e.g. `src/services/phoneLoopGuard.test.ts`). Backend convention is `tests/` mirroring `src/`.
+- [ ] **(code)** **Extract `src/routes/knowledge.ts` into services** — still **1,087 lines**. Route should orchestrate; scanning/embedding/normalization belong in `src/services/`.
+- [ ] **(code)** **Extract `src/routes/analytics.ts` into services** — still **880 lines**. Same shape as above.
+- [ ] **(code)** **Group agent tool definitions by capability** — `agent/src/tools.ts` defines **26** tools in one flat file; `agent/src/tools/` holds only `wrapTool.ts`. The capability union (`knowledge | messaging | identity | scheduling | verification | transfer`) exists in types but not in the file layout. **Do this together with the reachability audit below** — the two touch the same file.
+- [ ] **(code)** **Reconcile `tools.ts` against what the model can actually reach** (new, 2026-07-27). 26 tools are defined; `selectedTools()` offers **12** under question trees. Some absences are correct (`start_booking` / `manage_appointment` were ladder routers; `book_appointment` / `check_availability` / `get_scheduling_options` are superseded; SMS tools are gated off anyway). **These are not:** `transfer_call` — *there is no human handoff on a live call* — plus `page_owner_via_sms`, `attach_meeting_notes`, `save_customer_preference`, `identify_caller`, `get_customer_context`, `get_detailed_customer_history`, `find_caller_by_name`, `send_verification_code`, `verify_phone_code`. Decide per tool: wire it into a tree / passthrough, or delete it. A tool that cannot be called is either a missing feature or dead code, and right now the codebase does not say which.
+- [ ] **(code)** **Dedupe `src/services/phoneUtils.ts` / `nameUtils.ts` against `shared/`** — both still exist alongside `shared/phone.ts` + `shared/name.ts`.
+- [ ] **(code)** **Finish the dashboard component subdirectory migration** — 87 loose `.tsx` files still at `dashboard/components/`.
+- [ ] **(code)** **Dead CRM schema cleanup** — Jobber/HubSpot/ServiceTitan/GoHighLevel columns still referenced in `supabase/baseline.sql` after the 2026-06-12 adapter deletion.
+- [ ] **(code)** **Migration chain squash** — 173 files in `supabase/migrations/`. Do when convenient; `baseline.sql` already carries the collapsed schema.
 
 ---
 

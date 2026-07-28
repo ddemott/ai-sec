@@ -1,5 +1,25 @@
 # Client Onboarding Runbook
 
+> ## ⚠️ THE VOICE-SCRIPT STEPS NO LONGER AFFECT CALLS (verified 2026-07-27)
+>
+> `setup-voice-script.ts`, `install-script.ts`, and `ladder-builder --build` all write
+> `tenants.system_prompt` — the **prompt ladder**. Production runs the **question-tree**
+> architecture (`agent/src/checklist/`, `ENABLE_QUESTION_TREE`, on unless set to
+> `"false"`), and under it `ChecklistAgent` receives a ONE-LINE persona; the composed
+> `system_prompt` is never passed to the model. **Installing a script onto a new tenant
+> changes nothing about how their calls go.** The trees are platform-wide today
+> (`PLATFORM_TREE_LIBRARY`) — per-tenant trees are deliberately deferred until a real
+> tenant needs one.
+>
+> **What DOES shape a new tenant's calls:** their `tenants` row — `persona_name`,
+> `first_message`, `call_disclosure`, `greeting_menu`, `greeting_closer` (the spoken
+> greeting, composed by `agent/src/greeting.ts` on every flow), `timezone`, `tts_voice`
+> — plus their business shape (services, employees, `employee_schedule`) and knowledge
+> base. Those steps below are all still correct and still required.
+>
+> The script installers are kept for the `ENABLE_QUESTION_TREE=false` rollback path.
+> See `docs/QUESTION_TREE_ARCHITECTURE.md` and CLAUDE.md → `/agent`.
+
 The exact order of operations to take a new client from "signed up" to "their AI answers the phone" — and the cleanup tools around it. Safety model: the **data-destroying** scripts (`clear-call-data`, `remove-customer`, `purge-soft-deleted`) are dry-run by default and need `--execute --yes` to act; the **script installers** (`setup-voice-script`, `ladder-builder --build`, `install-script`) always diff against and print the script they replace (and `ladder-builder` backs it up to `scripts/script-backups/` first). Everything that writes refuses a non-local database without `--force`.
 
 ## The scripts at a glance
@@ -7,9 +27,9 @@ The exact order of operations to take a new client from "signed up" to "their AI
 | Script                  | What it does                                                                                                                      | Safety                                           |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | `onboard-tenant.ts`     | Tenant + secured owner login (+ optional voice preset) in one shot                                                                | Local-only guard; temp password printed once     |
-| `setup-voice-script.ts` | Install a business-type voice script preset (`--list` to see them)                                                                | Diffs + prints what it replaces; `--dry-run`     |
-| `install-script.ts`     | Fully bespoke voice script from a JSON composition                                                                                | Same diff behavior                               |
-| `ladder-builder.ts`     | Rung catalog (`--list`/`--show`), generated `docs/CALL_LADDER.md` (`--docs`), build+install (`--build`)                           | Diff + automatic pre-install backup; `--dry-run` |
+| `setup-voice-script.ts` | **LADDER-ONLY — no effect on live calls.** Installs a business-type voice-script preset into `tenants.system_prompt`               | Diffs + prints what it replaces; `--dry-run`     |
+| `install-script.ts`     | **LADDER-ONLY — no effect on live calls.** Bespoke voice script from a JSON composition                                            | Same diff behavior                               |
+| `ladder-builder.ts`     | **LADDER-ONLY — `--build` has no effect on live calls.** Rung catalog (`--list`/`--show`), regenerates `docs/CALL_LADDER.md` (`--docs`) | Diff + automatic pre-install backup; `--dry-run` |
 | `remove-customer.ts`    | Remove ONE customer + everything of theirs                                                                                        | Dry-run default; `--execute --yes` to act        |
 | `clear-call-data.ts`    | Wipe ALL transactional data (customers, appointments, calls, audit trails) leaving the business shape intact; `--tenant` to scope | Dry-run default; `--execute --yes` to act        |
 | `purge-soft-deleted.ts` | Hard-destroy soft-deleted tenants (maintenance window act)                                                                        | Dry-run default                                  |
@@ -37,14 +57,23 @@ This prints a **one-time temporary password**. Security rules baked into the flo
 
 Log in as the owner and walk the dashboard **Setup Wizard**. It seeds services/resources from the business-type template, collects staff and working days, and expands the weekly schedule. Don't script around it — the wizard is the product's onboarding UX and asking the vertical's questions with the client in the room is where you catch the "oh, we also do X" surprises.
 
-### 3. Voice script (if not done in step 1)
+### 3. Voice script — **SKIP THIS. It does nothing under question trees.**
 
-```bash
-npx tsx scripts/setup-voice-script.ts --list                       # see presets
-npx tsx scripts/setup-voice-script.ts --tenant <id> --type salon   # install
-```
+Formerly: `setup-voice-script.ts --tenant <id> --type salon`, or a JSON composition via
+`install-script.ts`. Both write `tenants.system_prompt`, which the live call flow never
+reads (see the banner at the top). Running them is harmless but pointless; the
+`--voice-preset` flag on `onboard-tenant.ts` in step 1 is equally inert.
 
-Presets: `staffing` (real intake block, capture_job_inquiry), `automotive`, `auto_bays`, `mobile_tire`, `salon` (vertical intake questions), `generic` (booking + messages only). A business that fits none of them gets a JSON composition via `install-script.ts` — the universal rungs are never rewritten, only persona + intake.
+**There is no per-tenant call script today.** Every tenant gets the same
+`PLATFORM_TREE_LIBRARY` — `identity`, `booking`, `message`, `generic_subject`, `qa`,
+`job`, `schedule_change`, `fix_computer` — and the tree the caller lands in is chosen at
+call time from their opener, not from the tenant's vertical. A business whose calls need
+a question the library does not have needs a **new tree in `agent/src/checklist/trees.ts`**
+(a code change + deploy), not a preset. Per-tenant tree delivery is deliberately deferred
+until a real tenant needs it.
+
+What actually differentiates this tenant's calls is step 4, plus their business shape from
+step 2. Go there.
 
 ### 4. Teach the AI + pick the voice
 

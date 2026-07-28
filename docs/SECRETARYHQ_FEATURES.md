@@ -13,7 +13,7 @@
 ## 1. AI Voice Receptionist (the core)
 
 - ✅ Answers business calls 24/7 (Telnyx → LiveKit Cloud → AI agent)
-- ✅ Natural conversation — Deepgram (speech-to-text), GPT-4o-mini (reasoning), OpenAI TTS (voice; fully OpenAI since 2026-06-25 removal of xAI Grok)
+- ✅ Natural conversation — Deepgram Nova-3 (speech-to-text), OpenAI GPT-4.1-mini (reasoning), Deepgram Aura (voice; streaming TTS since 2026-07-14)
 - ✅ Knows the business — answers hours / prices / services / policies from a per-tenant knowledge base (RAG / vector search)
 - ✅ Books appointments live during the call
 - ✅ Recognizes returning callers + recalls their history and preferences

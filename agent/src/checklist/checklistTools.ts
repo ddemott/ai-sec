@@ -47,6 +47,12 @@ const ACTION_ID_FIELDS: Record<string, string> = {
 const TREE_PASSTHROUGH_TOOLS: Record<string, string[]> = {
   booking: ['get_available_slots', 'get_service_catalog'],
   schedule_change: ['get_my_appointments', 'get_available_slots'],
+  // A sales call's write is the DEMO BOOKING, so buy_service has no action node of
+  // its own (an action that cannot complete would hold the goodbye gate open — see
+  // BUY_SERVICE_TREE). attach_meeting_notes rides along so the qualifying answers can
+  // reach the owner ON the meeting; unwrapped, so it never gates anything and is
+  // simply unavailable-by-error when no booking happened.
+  buy_service: ['attach_meeting_notes'],
 };
 
 /**
@@ -229,6 +235,16 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     parameters: {
       type: 'object',
       properties: {
+        work_direction: {
+          type: 'string',
+          enum: ['caller_pays_us', 'caller_offers_owner_work', 'neither_or_unclear'],
+          description:
+            'WHICH WAY THE WORK FLOWS — answer this BEFORE picking trees. caller_pays_us: ' +
+            'they want to BUY something from this business (the AI service, a repair, a ' +
+            'visit). caller_offers_owner_work: they bring a job, role, contract, or project ' +
+            'the OWNER would be paid for. neither_or_unclear: a message, a question, a ' +
+            'schedule change — or you genuinely cannot tell yet.',
+        },
         trees: {
           type: 'array',
           items: { type: 'string', enum: treeIds },
@@ -248,9 +264,10 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
           description: 'ONLY if the caller spoke a number for themselves — digits as said.',
         },
       },
-      required: ['trees'],
+      required: ['work_direction', 'trees'],
     },
     execute: (args: {
+      work_direction?: string;
       trees: string[];
       wrong_trees?: string[];
       caller_name?: string;
@@ -259,12 +276,60 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   });
 
   function runSetPurpose(args: {
+    work_direction?: string;
     trees: string[];
     wrong_trees?: string[];
     caller_name?: string;
     caller_phone?: string;
   }): string {
     {
+      // THE WORK-DIRECTION GATE (2026-07-28 sim: a buyer opening with "a business
+      // opportunity" got the JOB tree alongside buy_service, whose blocked capture
+      // held the goodbye gate open — the agent repeated one sentence nine times on
+      // a call that could not end). buy_service and job are the one confusable
+      // pair with EVIDENCE of confusion, and they sit on opposite ends of a single
+      // axis: who pays whom. Making the model DECLARE the axis, then checking the
+      // declaration against the selection IN HOST CODE, turns a prompt hope into a
+      // deterministic bounce. Every refusal names the satisfiable next step.
+      // Deliberately narrow — only the pair that actually failed; a full
+      // intent-tree compatibility matrix is speculation until a call pays for it.
+      const dir = args.work_direction;
+      const picksJob = args.trees.includes('job');
+      const picksBuy = args.trees.includes('buy_service');
+      if (picksJob && picksBuy) {
+        return (
+          'REFUSED: job and buy_service contradict each other — one caller cannot both ' +
+          'offer the owner work and buy the service in the same breath. Ask which it is ' +
+          '("Are you looking to hire him, or interested in the AI receptionist for your ' +
+          'own business?"), then select ONE of them.'
+        );
+      }
+      if (dir === 'caller_pays_us' && picksJob) {
+        return (
+          'REFUSED: you said the caller is PAYING US, but selected the job tree — that ' +
+          'tree is for work the OWNER gets paid for. If they want to buy the AI service, ' +
+          'select buy_service; if you are unsure which way the work flows, ask them first.'
+        );
+      }
+      if (dir === 'caller_offers_owner_work' && picksBuy) {
+        return (
+          'REFUSED: you said the caller is OFFERING THE OWNER WORK, but selected ' +
+          'buy_service — that tree is for callers buying the AI receptionist for their own ' +
+          'business. If they have a role or contract for the owner, select job; if you are ' +
+          'unsure, ask them first.'
+        );
+      }
+      if (dir === 'neither_or_unclear' && (picksJob || picksBuy)) {
+        return (
+          'REFUSED: you marked the work direction UNCLEAR but selected ' +
+          (picksJob ? 'job' : 'buy_service') +
+          ' — the two trees on that axis look alike from a vague opener, and a wrong pick ' +
+          'interrogates the caller down the wrong track. Ask ONE clarifying question ' +
+          '("Are you looking to hire him, or interested in the AI receptionist for your ' +
+          'own business?") and select once they answer. Other trees (message, qa, booking, ' +
+          'schedule_change) may be selected now.'
+        );
+      }
       purposeRounds += 1;
       if (purposeRounds > maxRounds) {
         return (
@@ -302,12 +367,30 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       }
       maybeIdentify();
       deps.onSelectionChanged();
+      // THE UNDER-SELECTION NUDGE (2026-07-27 live call, 17:57 UTC): the caller
+      // said "talk with Jane about the job opportunities, he shared the resume" —
+      // the model selected booking ONLY, booked 1:00, asked zero role questions,
+      // and closed. The meeting landed; the role details never did. The gate
+      // above blocks CONTRADICTIONS; this covers the OMISSION: direction says
+      // the owner is being offered paid work, but no job tree is selected. A
+      // NUDGE, not a refusal — a recruiter returning the owner's call about an
+      // existing arrangement legitimately selects message without job — carried
+      // in the tool result, the one channel the model reliably re-reads.
+      const jobNudge =
+        dir === 'caller_offers_owner_work' && !tracker.selectedTrees().includes('job')
+          ? '\n\nNOTE: you declared the caller is OFFERING THE OWNER WORK, but the job ' +
+            'tree is not selected — so nothing on this checklist will collect the role. ' +
+            'If there is a role, position, or contract to record, call set_purpose again ' +
+            'and ADD job: the role questions are what actually reaches the owner. Skip ' +
+            'this only if they are not describing a role (e.g. returning his call about ' +
+            'an existing arrangement).'
+          : '';
       // A number VOLUNTEERED through this door still needs its read-back — only
       // if it actually landed as this node's value (not blocked by caller ID).
       const volunteered = sanitizeVolunteered(args.caller_phone, 30);
       const dictated =
         volunteered && tracker.value(CALLER_PHONE) === volunteered ? volunteered : undefined;
-      return `Purpose set: ${tracker.selectedTrees().join(' + ')}.${callerIdNote}\n${stateBlock()}${readbackDirective(dictated)}`;
+      return `Purpose set: ${tracker.selectedTrees().join(' + ')}.${callerIdNote}\n${stateBlock()}${jobNudge}${readbackDirective(dictated)}`;
     }
   }
 

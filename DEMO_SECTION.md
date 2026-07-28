@@ -44,7 +44,7 @@ tenant (the existing `/demo/start` flow → `is_demo=true`, 30-min TTL). They ta
 to the receptionist, it books into _their_ demo schedule, they watch it land in
 the dashboard live.
 
-Why browser/WebRTC: same agent brain (Deepgram → GPT-4o-mini → OpenAI TTS), but
+Why browser/WebRTC: same agent brain (Deepgram → GPT-4.1-mini → Deepgram Aura TTS), but
 **avoids the PSTN path entirely** (inbound reaches the agent — confirmed
 2026-06-30 — but the booking + transfer legs are still unverified on a live
 call), **drops carrier + number cost**, and gives **clean per-prospect isolation**. (It does NOT make the AI inference

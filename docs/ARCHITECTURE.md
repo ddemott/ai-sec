@@ -4,7 +4,9 @@
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
-> **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. TTS provider history: OpenAI → xAI Grok (2026-05) → fully back to OpenAI (2026-06-25 removal of all Grok/xAI remnants; see `docs/FRAMEWORK_MIGRATIONS.md` for the index and reversal rationale — OpenAI TTS is now smoother).
+> **Migration shipped:** The voice-AI stack moved from Vapi + Supabase Edge Functions to LiveKit Agents + Fastify in commit `661d21d` (2026-04-27). Vapi account deleted; only Telnyx + LiveKit remain. TTS provider history: OpenAI → xAI Grok (2026-05) → OpenAI (2026-06-25) → **Deepgram Aura (2026-07-14, current)**; see §6.2 and `docs/FRAMEWORK_MIGRATIONS.md`.
+>
+> **Call flow:** production runs the **question-tree** architecture (`agent/src/checklist/`, `ENABLE_QUESTION_TREE`, on by default). The prompt ladder (`tenants.system_prompt`) and the TaskGroup rungs are flag-gated fallbacks and are NOT what a live call executes — see §6.3.
 
 ## Contents
 
@@ -41,8 +43,8 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 
 **Layering:**
 
-- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`, runs STT via Deepgram, LLM via OpenAI, TTS via OpenAI (fully since 2026-06-25 Grok removal; no XAI key; runFallback also OpenAI))
-- **Tools**: 23 voice tools that run against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`
+- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`: Deepgram Nova-3 STT, OpenAI GPT-4.1-mini LLM, **Deepgram Aura TTS**; no XAI key). Call sequencing = question trees (§6.3).
+- **Tools**: 26 voice tools defined in `agent/src/tools.ts` against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`. **12 of them are actually offered to the model** under question trees (§7).
 - **API**: Fastify (29 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
 - **DB**: Postgres + pgvector on Supabase, 154 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — deployed on Railway (production dashboard service)
@@ -87,7 +89,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 **Shipped in LiveKit migration (commit `661d21d`):**
 
 - `agent/` — separate Node.js package for the LiveKit agent worker (deployed as Railway service `ai-sec-agent`)
-- `src/routes/agentTools.ts` — voice-AI tools (originals + OTP helpers); replaced the deleted `supabase/functions/vapi-tools/`
+- `src/routes/agentTools/` — voice-AI tools (originals + OTP helpers); replaced the deleted `supabase/functions/vapi-tools/`
 
 ---
 
@@ -290,31 +292,66 @@ Super-admin operations (cross-tenant queries, tenant listing, user registration)
 
 1. **Inbound call** — Telnyx SIP trunk → LiveKit Cloud SIP inbound trunk.
 2. **Room creation** — LiveKit dispatch rule `SDR_if97ky4Zf7e6` creates a room with metadata `{ tenant_id }` (agent name `ai-secretary-agent`).
-3. **Agent worker** — Node.js worker (Railway service `ai-sec-agent`, worker `AW_vPmGExrgTeGn`) joins the room, runs `VoicePipelineAgent`.
-4. **Conversation** — Deepgram Nova-3 (STT) → OpenAI GPT-4o-mini (LLM) → OpenAI TTS (default voice `shimmer`; per-tenant `tts_voice`/`tts_speed` from `tenants` table; fully OpenAI since 2026-06-25 — no Grok/xAI remnants, no `XAI_API_KEY` required).
+3. **Agent worker** — Node.js worker (Railway service `ai-sec-agent`) joins the room. `agent/src/index.ts` speaks the tenant's pre-generated greeting (`buildGreeting()`, via `session.say()`) and then constructs ONE of three call architectures — see §6.3.
+4. **Conversation** — Deepgram Nova-3 (STT) → **OpenAI GPT-4.1-mini** (voice LLM since 2026-07-20; 4o-mini still runs summaries/classify/fallback) → **Deepgram Aura TTS** (`aura-asteria-en`; per-tenant `tenants.tts_voice`). **`tenants.tts_speed` is INERT under Aura** — the plugin appends `?speed=` to the WS upgrade URL, Aura answers 400, the socket never opens and the line goes completely silent. That outage (2026-07-14) is why `cd agent && npm run verify:tts` exists and is mandatory before any TTS change ships.
 5. **Tool execution** — LLM issues tool calls → HTTP POST to `https://ai-sec-production.up.railway.app/agent-tools/*` with `x-agent-secret` header.
 6. **Business logic** — Fastify route → `withTenantClient()` → Postgres RPCs and pgvector queries.
 7. **Response** — JSON `{ success: true, result: ... }` or `{ success: false, error: ... }` with HTTP 200 — the LLM relays both shapes naturally.
 8. **Call end** — LiveKit room close event → `src/routes/voice.ts` handles summary generation + embedding + `link_orphaned_transcripts()`.
 9. **Post-call async** — Appointment mutations trigger fire-and-forget sync (via `syncOrchestrator.ts`) to Google/Outlook calendars **and** Square from route handlers.
 
-### 6.2 TTS history — OpenAI TTS → xAI Grok (2026-05) → full OpenAI (2026-06-25)
+### 6.2 TTS history — OpenAI → xAI Grok (2026-05) → OpenAI (2026-06-25) → **Deepgram Aura (2026-07-14, current)**
 
-**Grok phase (historical):** Done in commit `f6cc1d4`. `agent/src/grokTTS.ts` implemented the LiveKit `tts.TTS` plugin against `https://api.x.ai/v1/tts`. Primary used GrokTTS; `runFallback()` retained `openai.TTS` as dead-air guard. Voice via `XAI_TTS_VOICE` env etc. (see `docs/FRAMEWORK_MIGRATIONS.md` §3 for details).
+**Current: Deepgram Aura.** Native WebSocket streaming — audio is emitted as the words are produced. Configured per tenant via `tenants.tts_voice`; `tts_speed` is not passed (see §6.1).
 
-**Final state (2026-06-25):** All Grok/xAI code, files (`grokTTS.ts`), and env vars removed (chore #94). Primary path + fallback both use OpenAI TTS via the official LiveKit plugin. Per-tenant configuration is now exclusively `tenants.tts_voice` (OpenAI ids: shimmer/nova/alloy/echo/onyx/fable) + `tts_speed`, set from the dashboard Phone Assistant → AI Persona page. Legacy Grok voice ids (e.g. `ara`) fall back to `shimmer`. OpenAI TTS is the current provider because it is smoother. See `docs/FRAMEWORK_MIGRATIONS.md` §4 and `agent/src/index.ts` (toOpenAIVoice + session construction) + `agent/src/tenantConfig.ts`. No `XAI_API_KEY` is referenced or required anywhere.
+**Why the switch off OpenAI TTS (2026-07-14):** the OpenAI LiveKit plugin is **non-streaming** — it buffers the entire reply before emitting any audio, so every turn was silence-then-a-burst. Chopping the input into sentences with `StreamAdapter` only traded one gap for a gap between every sentence. **You cannot make a non-streaming engine stream by chopping its input finer.**
+
+**Historical (no longer in the codebase):** the Grok/xAI phase (`agent/src/grokTTS.ts`, `XAI_TTS_VOICE`) was removed entirely on 2026-06-25 — no `XAI_API_KEY` is referenced anywhere. The OpenAI-TTS phase that followed it is likewise gone. Full index in `docs/FRAMEWORK_MIGRATIONS.md`.
+
+### 6.3 Call flow — THE QUESTION-TREE ARCHITECTURE (what production runs)
+
+`agent/src/index.ts` selects one of three, in this precedence order:
+
+| Flow | Flag | Status |
+|---|---|---|
+| **`ChecklistAgent`** — question trees (`agent/src/checklist/`) | `ENABLE_QUESTION_TREE`, `(v) => v !== 'false'` — **ON unless disabled** | **LIVE. This is production.** |
+| `CallRootAgent` — TaskGroup "rungs" (`agent/src/tasks/`) | `ENABLE_TASK_GROUP=true` AND question-tree off | Fallback. Superseded 2026-07-21. |
+| `SpeakingAgent` — the prompt ladder (`prompt.ts` + `tenants.system_prompt`) | both flags off | Fallback. The original design. |
+
+**How question trees work.** The model is NOT given a script to follow. Instead:
+
+- **Trees are data** (`checklist/trees.ts`). 8 in `PLATFORM_TREE_LIBRARY`: `identity`, `booking`, `message`, `generic_subject`, `qa`, `job`, `schedule_change`, `fix_computer`. Nodes are `text`, `choice` (if-branch: answering one option activates its children and marks siblings `not_applicable`), or `action` (completed ONLY by a real tool's success id).
+- **Host code owns all state** (`checklist/tracker.ts`). 10 node statuses; it renders the live checklist into the model's context each turn (`[ASK]` / `[listen]` / `[ACTION NOW]` / `[✓]`), discards answers stranded on a branch the caller abandoned, and exposes `isResolved()`.
+- **`isResolved()` is the goodbye gate.** `finish_call` refuses to close the call while any selected node is unresolved. **This gate replaced book-first sequencing**: a stated goal cannot be forgotten because the call cannot END on it. Callers may answer out of order, in any order.
+- **The model has three jobs:** `set_purpose` (choose trees off a menu), `record_answer` (fill anything it hears), and call the action tool when the checklist says `[ACTION NOW]`. Plus `answer_question` (RAG) at any moment.
+
+**Consequence for anyone changing call behaviour:** a tenant's `system_prompt` is **never passed to the model** on a live call — `ChecklistAgent` receives a one-line persona. Editing `src/services/scripts/blocks.ts` or reinstalling a tenant script changes nothing. Behaviour changes go in `agent/src/checklist/trees.ts`. Full design: `docs/QUESTION_TREE_ARCHITECTURE.md`.
 
 ---
 
 ## 7. Voice AI Tools Catalog
 
-The core booking/knowledge/identity/messaging/transfer tools (17+ as of 2026-06) are exposed to the LLM via capability composition in `agent/src/tools.ts` (buildTools) and implemented primarily as POST routes in `src/routes/agentTools.ts`. Later additions (transfer_call via SIP REFER, job inquiries, get_my_appointments, cancel/reschedule, etc.) are documented in `CLAUDE.md` and `docs/FRAMEWORK_MIGRATIONS.md`. See the full list and `wrapTool` contract in the agent sources and `docs/VOICE_AGENT_PLAYBOOK.md`.
+`agent/src/tools.ts` defines **26** real tools, implemented as POST routes under `src/routes/agentTools/` (a DIRECTORY since 2026-07-11 — split from a single 2,517-line file).
+
+**But defining a tool does not put it in front of the model.** Under question trees, `selectedTools()` (`agent/src/checklist/checklistTools.ts`) rebuilds the toolset from the currently selected trees, and presents **12**:
+
+| Group | Tools |
+|---|---|
+| Base (always) | `set_purpose`, `record_answer`, `finish_call`, `answer_question` (wraps `get_company_policy_answer` — RAG under another name) |
+| Action nodes (per selected tree) | `book_with_scheduling`, `take_message`, `capture_job_inquiry`, `cancel_appointment`, `reschedule_appointment` |
+| Passthrough (per selected tree) | `get_available_slots`, `get_service_catalog`, `get_my_appointments` |
+
+The other 14 are **never offered on a live call.** Some are dead by design: `start_booking` / `manage_appointment` were ladder-era ROUTERS, `book_appointment` / `check_availability` / `get_scheduling_options` are superseded, and `record_sms_consent` / `send_self_service_link` are gated off with SMS anyway. **The rest are capability the product believes it has and does not** (verified 2026-07-27 by diffing `tools.ts` against `selectedTools()`): `transfer_call` — *so there is no human handoff on a live call* — plus `page_owner_via_sms`, `attach_meeting_notes`, `save_customer_preference`, `identify_caller`, `get_customer_context`, `get_detailed_customer_history`, `find_caller_by_name`, `send_verification_code`, `verify_phone_code`.
+
+To make a tool reachable it must be an `action` node in a tree, a `TREE_PASSTHROUGH_TOOLS` entry, or a base tool.
+
+**Action tools are WRAPPED, not passed raw** (`wrapAction`): a completed action refuses to run twice (anti-double-book), a blocked one names its unmet prerequisites, omitted arguments are backfilled from the tracker's recorded answers, completion requires a real success id in the response, and two consecutive failures rewrite the tool's own result to "stop retrying, take a message."
 
 ### 7.1 Auth contract
 
-- **Header:** `x-agent-secret: <AGENT_SECRET>` (must match the backend's env var, ≥32 chars). The shared `preHandler` at `src/routes/agentTools.ts:187` rejects anything else with `401` for any URL starting with `/agent-tools/`.
+- **Header:** `x-agent-secret: <AGENT_SECRET>` (must match the backend's env var, ≥32 chars). The shared `preHandler` in `src/routes/agentTools/index.ts` rejects anything else with `401` for any URL starting with `/agent-tools/`.
 - **Tenant scoping:** every body carries `tenant_id` (UUID). These routes are exempt from `tenantMiddleware` because the agent worker isn't logged in as a tenant user; tenant enforcement is at the SQL/RPC layer via `withTenantClient(tenant_id)`.
-- **Validation:** every body parsed with Zod (schemas at `src/routes/agentTools.ts:43-122`). Failures return `success: false` with the field paths.
+- **Validation:** every body parsed with Zod (Zod schemas in `src/routes/agentTools/schemas.ts`). Failures return `success: false` with the field paths.
 
 ### 7.2 Response envelope
 

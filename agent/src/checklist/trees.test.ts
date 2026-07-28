@@ -14,6 +14,7 @@ import { ChecklistTracker } from './tracker.js';
 import { buildChecklistPrompt } from './checklistAgent.js';
 import {
   BOOKING_TREE,
+  BUY_SERVICE_TREE,
   FIX_COMPUTER_TREE,
   IDENTITY_TREE,
   JOB_TREE,
@@ -279,5 +280,94 @@ describe('booking + message trees carry their own gates', () => {
     // Same node id the identity/booking trees use — one fact, one node.
     expect(MESSAGE_TREE.nodes.some((n) => n.node_id === 'caller_name')).toBe(true);
     expect(BOOKING_TREE.nodes.some((n) => n.node_id === 'caller_name')).toBe(false);
+  });
+});
+
+describe('buy_service — the caller who wants to BUY the AI receptionist', () => {
+  it('is in the library and asks what the owner needs to price and prepare', () => {
+    // WHY: before this tree these callers fell to generic_subject + message —
+    //      one vague "what does this concern?" — and the owner rang back knowing
+    //      nothing about the business he was selling to.
+    expect(PLATFORM_TREE_LIBRARY).toContain(BUY_SERVICE_TREE);
+    const ids = BUY_SERVICE_TREE.nodes.map((n) => n.node_id);
+    expect(ids).toEqual([
+      'business_type',
+      'call_volume',
+      'wants_handled',
+      'current_setup',
+      'best_email',
+      'demo_offer',
+    ]);
+  });
+
+  it('SAD: has NO action node — an action it could not complete would trap the caller', () => {
+    // WHY: the only fitting tool is attach_meeting_notes, which ERRORS when no
+    //      meeting was booked. An action node that cannot complete never leaves
+    //      'ready', isResolved() stays false, and finish_call refuses forever —
+    //      the caller is stuck on a call that will not end. The write for a sales
+    //      call is the DEMO BOOKING (or a message); this tree only qualifies.
+    expect(BUY_SERVICE_TREE.nodes.every((n) => n.type !== 'action')).toBe(true);
+  });
+
+  it('resolves on its own once answered, so it never blocks the goodbye', () => {
+    // WHY: the direct consequence of having no action — a qualified caller who
+    //      declines both a demo and a message must still be able to hang up.
+    const t = make();
+    t.select(['buy_service']);
+    t.record('business_type', { value: 'a two-chair barber shop' });
+    t.record('call_volume', { value: 'maybe twenty a day' });
+    t.record('wants_handled', { value: 'booking' });
+    t.record('current_setup', { value: 'voicemail' });
+    t.record('best_email', { value: 'sam@example.com' });
+    expect(t.isResolved()).toBe(false); // the demo has not been offered yet
+    t.record('demo_offer', { value: 'not_now' });
+    expect(t.isResolved()).toBe(true);
+  });
+
+  it('only asks the cost follow-up when they already pay an answering service', () => {
+    // WHY: the comparison the owner has to beat. Asking a voicemail user what
+    //      their answering service costs is asking about a thing they do not have.
+    const t = make();
+    t.select(['buy_service']);
+    t.record('current_setup', { value: 'voicemail' });
+    expect(t.status('current_cost')).toBe('not_applicable');
+
+    const t2 = make();
+    t2.select(['buy_service']);
+    t2.record('current_setup', { value: 'answering_service' });
+    expect(t2.status('current_cost')).toBe('open');
+  });
+
+  it('HAPPY: a sales call composes buy_service + identity + booking for the demo', () => {
+    // WHY: this is the whole point — the qualifying answers exist so the DEMO is
+    //      prepared, and the appointment is what actually records the lead.
+    const t = make();
+    t.select(['identity', 'buy_service', 'booking']);
+    t.record('business_type', { value: 'mobile dog grooming' });
+    t.record('call_volume', { value: 'about 30' });
+    t.record('wants_handled', { value: 'everything' });
+    t.record('current_setup', { value: 'nothing' });
+    t.record('best_email', { value: 'kim@example.com' });
+    t.record('demo_offer', { value: 'wants_demo' });
+    t.record('meeting_topic', { value: 'see a demo of the AI receptionist' });
+    t.record('caller_name', { value: 'Kim' });
+    expect(t.status('book')).toBe('blocked'); // phone still open
+    t.record('caller_phone', { value: '6305550147' });
+    expect(t.status('book')).toBe('ready');
+    expect(t.isResolved()).toBe(false); // the booking must still land
+  });
+
+  it('SAD: buy_service and job are different callers and must not be confused', () => {
+    // WHY: both are "business" calls about work and money. One wants to HIRE the
+    //      owner (job — a role FOR him); the other wants to BUY his product. The
+    //      boundary lives in the selector-facing descriptions, so pin it there.
+    expect(BUY_SERVICE_TREE.description).toMatch(/their own business/i);
+    expect(BUY_SERVICE_TREE.description).toMatch(/job.*tree|`job`/i);
+    // No node id may collide with the job tree — a shared id would merge two
+    // unrelated facts into one node when both are somehow selected.
+    const jobIds = new Set(JOB_TREE.nodes.map((n) => n.node_id));
+    for (const n of BUY_SERVICE_TREE.nodes) {
+      expect(jobIds.has(n.node_id), `${n.node_id} collides with the job tree`).toBe(false);
+    }
   });
 });
