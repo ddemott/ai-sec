@@ -1,4 +1,19 @@
 # __PERSONA_NAME__ — Persona + Call-Flow Draft (tenant `d5e3c6a1`, Thinking Hammer LLC)
+
+> ## ⚠️ STALE — 2026-06-10 draft, kept for the brief only
+>
+> Checked against the code 2026-07-27. What has changed since:
+> - **Persona name is `Piper`**, not `Chris` (`tenants.persona_name`, set 2026-07-27).
+> - **The call flow below is not the architecture.** Live calls run question trees
+>   (`agent/src/checklist/`) — purpose-selected trees and a goodbye gate, not a
+>   scripted business-or-personal branch. See `docs/QUESTION_TREE_ARCHITECTURE.md`.
+> - **`transfer_call` IS built** (`agent/src/tools.ts`, `transferClient.ts`, SIP REFER)
+>   — the "❌ NOT BUILT" row below is out of date. BUT it is **not reachable on a live
+>   call**: the question-tree toolset never presents it, so personal calls still cannot
+>   be forwarded to `+1 608-217-5303`. The outcome in the status table is right for the
+>   wrong reason.
+>
+> Read this for Dale's original intent. Do not read it for current behaviour.
 # (file renamed to AIASSISTANT_ for generic, was BETH_PERSONA_DRAFT.md)
 # Persona name variable in seed (currently 'Chris')
 # Marker: __PERSONA_NAME__  (use in docs/comments for the name; change only in seed var)
@@ -91,5 +106,5 @@ This is its own branch + live verification. Until then the message-taking interi
 ---
 
 ## Tuning notes (after a live call)
-- Pace: `tts_speed` 0.8 (slower) ↔ 0.9–1.0 (faster) via dashboard (OpenAI TTS; old XAI_TTS_* envs removed 2026-06-25).
+- Pace: ~~`tts_speed` 0.8 ↔ 0.9–1.0 via dashboard~~ — **`tts_speed` is INERT since the 2026-07-14 move to Deepgram Aura.** It is deliberately not passed: sending it appends `?speed=` to the Aura WebSocket upgrade URL, which answers 400 and leaves the call with no TTS at all. The dashboard control still writes the column; nothing reads it.
 - All `ai-sec-agent` Railway env vars → change = redeploy → call to judge by ear. (Voice now configured primarily in DB per-tenant + dashboard AI Persona.)

@@ -1,8 +1,26 @@
 # QUESTION TREE ARCHITECTURE
 
-_Design + build plan, agreed with Dale 2026-07-21. Replaces BOTH call-flow systems:
-the prompt ladder (`src/services/scripts/blocks.ts` composition) and the rung/TaskGroup
-flow (`agent/src/tasks/`, `ENABLE_TASK_GROUP`, live in prod since 2026-07-18)._
+> ## ✅ BUILT AND LIVE — this is the production call architecture
+>
+> Not a plan any more. `ENABLE_QUESTION_TREE` is `(v) => v !== 'false'` in
+> `agent/src/configSchema.ts` — **ON unless explicitly disabled** — so
+> `agent/src/index.ts` builds a `ChecklistAgent` for every call. The code is in
+> `agent/src/checklist/`: `types.ts` (node shapes), `trees.ts` (the 8-tree platform
+> library), `tracker.ts` (state + the goodbye gate), `checklistAgent.ts` (the prompt
+> and the one agent), `checklistTools.ts` (`set_purpose` / `record_answer` /
+> `finish_call` / `answer_question` + the action wrappers).
+>
+> Both older flows survive as fallbacks behind flags and are NOT what a live call
+> runs: the rung/TaskGroup flow (`agent/src/tasks/`, `ENABLE_TASK_GROUP`) and the
+> prompt ladder (`src/services/scripts/blocks.ts` → `tenants.system_prompt`, both
+> flags off). Under question trees the composed `system_prompt` is never passed to
+> the model at all.
+>
+> Sections below are the ORIGINAL design as agreed; where the built code and this
+> document differ, **the code in `agent/src/checklist/` wins**.
+
+_Design agreed with Dale 2026-07-21; built and shipped the same week. Replaces BOTH
+earlier call-flow systems._
 
 _Rollback anchor: branch `rung-architecture` = main @ `909c8f2` (the last rung-era
 main). Dale deletes it himself once this architecture is proven on live calls._

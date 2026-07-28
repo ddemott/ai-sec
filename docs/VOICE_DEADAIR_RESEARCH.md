@@ -1,5 +1,21 @@
 # Voice dead-air / latency — research findings (2026-06-25)
 
+> ## ⚠️ CORE PREMISE SUPERSEDED (2026-07-14)
+>
+> This document's central problem — **"OpenAI TTS is non-streaming, so every reply
+> starts with a gap"** — was solved by REPLACING THE ENGINE, not by any technique
+> researched below. TTS is now **Deepgram Aura**, which streams over a WebSocket as
+> the words are produced. Every §-reference to `gpt-4o-mini-tts`, its per-synthesis
+> latency, and the workarounds for buffering it describes a provider we no longer use.
+>
+> What is still live and worth reading: the filler/thinking-sound machinery
+> (`agent/src/session/fillerCache.ts`, `thinkingSound.ts`, `watchdog.ts`) and the
+> **tool-boundary** rule — never call a filler inside a tool's own `execute()`.
+> Dead air today is covered by a TIMER speaking a pre-synthesized hold line
+> (`agent/src/session/holdLines.ts`), which may name a lookup only when a tool is
+> genuinely in flight — the model is not asked to narrate, because it satisfied that
+> instruction with a SENTENCE instead of a tool call.
+
 > **Reference doc, mostly shipped (status 2026-06-30).** This is a research record, not an open-work list. Of its recommendations, adaptive interruption, false-interruption resume, the non-interruptible greeting (#103/#104/#108/#109), and the TTS-model switch all **landed** in the pipeline path. **Cached/pre-rendered filler audio (§2) is also built** — `agent/src/session/fillerCache.ts` (`warmFillers` → synth-once → `say(text,{audio})`), consumed by the **output watchdog** (`watchdog.ts`); plus a thinking-sound bed (`thinkingSound.ts`). Both are **flag-gated OFF** (`ENABLE_OUTPUT_WATCHDOG` / `ENABLE_THINKING_SOUND`) pending real-call tuning (watchdog deadline must exceed reply latency — PLAYBOOK §8.1). The genuine remaining gaps are narrow: (a) re-enable the watchdog after tuning, and (b) the **tool-boundary** `speakFiller` is still a **no-op** (was disabled after the #97 in-`execute()` freeze; the cached-filler plumbing exists but isn't wired to the tool boundary). Operational voice rules now live in `docs/VOICE_AGENT_PLAYBOOK.md` (authoritative §8). "How this maps to our config" below predates `fillerCache.ts` — read it with this banner.
 
 Cited research into how voice-AI practitioners handle dead air during LLM + tool-call + TTS,

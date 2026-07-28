@@ -2,7 +2,7 @@
 
 Companion to `ARCHITECTURE.md`. Every diagram is a Mermaid block — renders natively on GitHub and on claude.ai (paste into chat, or upload this file and ask for an artifact).
 
-**Last synced to architecture doc:** 2026-04-30
+**Last synced to architecture doc:** 2026-07-27
 
 ## Contents
 
@@ -17,6 +17,7 @@ Companion to `ARCHITECTURE.md`. Every diagram is a Mermaid block — renders nat
 9. [Billing State Machine](#9-billing-state-machine)
 10. [Dashboard Component Hierarchy](#10-dashboard-component-hierarchy)
 11. [RLS Context Flow (withTenantClient)](#11-rls-context-flow-withtenantclient)
+12. [Call Sequencing — Question Trees (the LIVE call architecture)](#12-call-sequencing--question-trees-the-live-call-architecture)
 
 ---
 
@@ -37,8 +38,8 @@ flowchart TB
     direction TB
     Agent["Node + LiveKit Agents SDK<br/>worker AW_vPmGExrgTeGn"]
     DG["Deepgram Nova-3 STT"]
-    OAI["OpenAI GPT-4o-mini LLM"]
-    TTS["OpenAI TTS<br/>(default `shimmer`; per-tenant via tenants.tts_voice)"]
+    OAI["OpenAI GPT-4.1-mini LLM"]
+    TTS["Deepgram Aura TTS<br/>(streaming; per-tenant via tenants.tts_voice)"]
     Agent --> DG
     Agent --> OAI
     Agent --> TTS
@@ -229,7 +230,7 @@ sequenceDiagram
   participant Agent as Agent Worker<br/>(Node on Railway)
   participant DG as Deepgram STT
   participant OAI as OpenAI LLM
-  participant TTS as OpenAI TTS (per-tenant voice)
+  participant TTS as Deepgram Aura TTS (per-tenant voice)
   participant API as Fastify<br/>/agent-tools/*
   participant DB as Postgres
 
@@ -245,7 +246,7 @@ sequenceDiagram
     LK->>Agent: audio stream
     Agent->>DG: STT (Nova-3)
     DG-->>Agent: transcript
-    Agent->>OAI: LLM (GPT-4o-mini)
+    Agent->>OAI: LLM (GPT-4.1-mini)
     OAI-->>Agent: text + tool calls
     opt tool call
       Agent->>API: POST /agent-tools/{name}<br/>+ x-agent-secret<br/>body contains tenant_id
@@ -659,3 +660,51 @@ sequenceDiagram
 
   Note over Route: Admin routes (super-admin tenant<br/>00000000-0000-0000-0000-000000000000)<br/>skip set_tenant_context entirely.<br/>tenants, users, business_templates<br/>have admin-bypass policies:<br/>if context is NULL, allow all rows.
 ```
+
+---
+
+## 12. Call Sequencing — Question Trees (the LIVE call architecture)
+
+Diagram 3 shows the MEDIA pipeline (audio in, audio out). This shows how the
+conversation is SEQUENCED — which is a separate thing, chosen by flag in
+`agent/src/index.ts`, and the part most likely to be misread from older docs.
+
+Production runs `ChecklistAgent` (`ENABLE_QUESTION_TREE`, on unless set to `"false"`).
+The prompt ladder (`tenants.system_prompt`) and the TaskGroup rungs are fallbacks and
+are **not** what a live call executes.
+
+```mermaid
+flowchart TB
+  Start["index.ts — session start"] --> Greet["session.say(buildGreeting(tenantConfig))<br/>pre-generated; runs on EVERY flow"]
+  Greet --> Flag{"ENABLE_QUESTION_TREE<br/>!== 'false'"}
+  Flag -->|yes — PRODUCTION| CA["ChecklistAgent<br/>persona = ONE identity line"]
+  Flag -->|no| TG{"ENABLE_TASK_GROUP"}
+  TG -->|true| Rungs["CallRootAgent — TaskGroup rungs<br/>(agent/src/tasks/) — superseded"]
+  TG -->|false| Ladder["SpeakingAgent — prompt ladder<br/>(tenants.system_prompt) — original"]
+
+  CA --> Purpose["model: set_purpose(trees)"]
+  Purpose --> Tracker["ChecklistTracker merges the selected trees<br/>shared node ids dedupe to ONE node"]
+  Tracker --> Render["renderState() into the model's context<br/>[ASK] / [listen] / [ACTION NOW] / [✓]"]
+  Render --> Turn{"caller speaks"}
+  Turn --> Rec["model: record_answer<br/>(any order, several per breath)"]
+  Rec --> Tracker
+  Render --> Act["model: call the action tool"]
+  Act --> Wrap["wrapAction gate:<br/>done → refuse (anti-double-book)<br/>blocked → name unmet nodes<br/>backfill omitted args from tracker<br/>2 failures → 'stop, take a message'"]
+  Wrap --> Success{"real success id<br/>in the response?"}
+  Success -->|yes| Done["tracker.completeAction() → [✓]"]
+  Success -->|no| Render
+  Done --> Gate{"isResolved()?<br/>every selected node resolved"}
+  Render --> Gate
+  Gate -->|no| Render
+  Gate -->|yes| Finish["finish_call speaks the goodbye,<br/>then closes on a macrotask"]
+```
+
+**The load-bearing ideas**
+
+| Idea | Where | Why |
+|---|---|---|
+| Questions are DATA, not prose | `checklist/trees.ts` | 8 trees; a call's checklist is the MERGE of the trees its purpose selects |
+| Host code owns state | `checklist/tracker.ts` | the model is never trusted to remember what is done |
+| Actions complete on a real id | `wrapAction` | "booked" cannot be said into existence |
+| The goodbye gate | `tracker.isResolved()` | replaced book-first sequencing — a stated goal can't be forgotten because the call can't END on it |
+| Tools follow the selection | `selectedTools()` | 26 defined, 12 offered; `updateTools` deferred to a macrotask, never inside a tool's own `execute` |

@@ -4,6 +4,23 @@ A running record of how the voice-agent call flow is built, why, and every bug w
 getting it to work. Written so a second business — or a second developer — can rebuild
 the same thing without re-paying for the lessons.
 
+> ## ⚠️ HISTORICAL — this documents the RUNG (TaskGroup) era, not the live flow
+>
+> Everything below describes `agent/src/tasks/` (`CallRootAgent`, `makeRung`,
+> `planCallTasks`), which ran in prod from 2026-07-18 and was **superseded on
+> 2026-07-21 by the question-tree architecture**. It is reachable today only with
+> `ENABLE_QUESTION_TREE=false` **and** `ENABLE_TASK_GROUP=true`.
+>
+> Live calls run `agent/src/checklist/` — see `docs/QUESTION_TREE_ARCHITECTURE.md`
+> and CLAUDE.md → `/agent`. **Read this file for the BUGS, not for the design.**
+> The failure modes it catalogues (a model that says "booked" with an empty diary,
+> a router that swaps its own tool mid-call, an action that fires before its inputs
+> are collected) are all still real — the question-tree code guards against each of
+> them, and this is where the evidence for those guards lives.
+>
+> The "VERIFIED SUCCESS POINT" below is a rung-era anchor. It is a valid rollback
+> target for that architecture; it is not the current state of the product.
+
 ---
 
 ## ✅ VERIFIED SUCCESS POINT — 2026-07-15 (rollback anchor: COMMIT HASHES, no branch)

@@ -2,25 +2,41 @@
 
 **Purpose:** a living rulebook so a new customer voice agent can be built **without days of troubleshooting.** Every rule here is something we verified the hard way (mostly the 2026-06-24→26 go-live + Realtime work). Append new rules as we learn — date them.
 
-**Stack this covers:** LiveKit Agents (Node/TS, `@livekit/agents` 1.4.x) + Deepgram STT + OpenAI (GPT-4o-mini LLM + TTS *or* Realtime speech-to-speech) + Telnyx/SIP. Agent code in `/agent`; per-tenant config in `tenants` (DB). Deploys from `main` to Railway service `ai-sec-agent`.
+**Stack this covers (CURRENT as of 2026-07-27):** LiveKit Agents (Node/TS, `@livekit/agents` 1.4.x) + Deepgram Nova-3 STT + **OpenAI GPT-4.1-mini** (voice LLM; 4o-mini still runs summaries/classify/fallback) + **Deepgram Aura TTS** (`aura-asteria-en`, native WebSocket streaming) + Telnyx/SIP. Agent code in `/agent`; per-tenant config in `tenants` (DB). Deploys from `main` to Railway service `ai-sec-agent`.
+
+> **CALL FLOW — read this before any rule below.** The rules here are about the
+> voice PIPELINE (STT/LLM/TTS, turn-taking, latency), which is shared by every call.
+> They are NOT about how a call is SEQUENCED. Live calls run the **question-tree**
+> architecture (`agent/src/checklist/`, `ENABLE_QUESTION_TREE`, on by default) — one
+> agent, a host-owned checklist, and a goodbye gate. Any rule below that talks about
+> a "script", a "ladder", rungs, or `tenants.system_prompt` driving the conversation
+> is describing a fallback path. See `docs/QUESTION_TREE_ARCHITECTURE.md`.
 
 ---
 
 ## 0. The two modes — pick first, everything else follows
 
+> **The TTS half of this table is HISTORY.** It compares Realtime against the OLD
+> OpenAI-TTS pipeline. OpenAI TTS was replaced by **Deepgram Aura on 2026-07-14**
+> precisely because the OpenAI plugin is non-streaming; Aura streams over a
+> WebSocket as words are produced, so the "2–3s gap per reply" line below no longer
+> describes the pipeline we ship. `tenants.tts_speed` is INERT under Aura (passing
+> it appends `?speed=` to the WS upgrade URL, Aura answers 400, and the line goes
+> completely silent — that outage is why `npm run verify:tts` exists).
+
 | | **Pipeline** (STT→LLM→TTS) | **Realtime** (speech-to-speech) |
 |---|---|---|
-| How | Deepgram → GPT-4o-mini → OpenAI TTS | `openai.realtime.RealtimeModel` as the `llm`; no STT/TTS |
-| Smoothness | choppy — non-streaming TTS, **2–3s gap per reply**, seams between chunks | **smooth, near-instant, no inter-word gaps** (native audio) |
-| Voice | OpenAI TTS voices (shimmer/nova/…); per-tenant `tenants.tts_voice` | Realtime voice set (alloy/ballad/coral/sage/…) via `REALTIME_VOICE` |
+| How | Deepgram Nova-3 → GPT-4.1-mini → Deepgram Aura | `openai.realtime.RealtimeModel` as the `llm`; no STT/TTS |
+| Smoothness | ~~choppy — non-streaming TTS, **2–3s gap per reply**~~ → **smooth since Aura (2026-07-14)**; audio streams as it is produced | **smooth, near-instant, no inter-word gaps** (native audio) |
+| Voice | Aura voices; per-tenant `tenants.tts_voice` (`tts_speed` inert under Aura) | Realtime voice set (alloy/ballad/coral/sage/…) via `REALTIME_VOICE` |
 | Transcript | reliable (Calls tab populates) | **thin — caller turns often missing** (known gap) |
 | Tokens / cost | cheap, no per-minute wall | **expensive; audio burns tokens fast; TPM rate-limit wall** |
 | Turn-taking | LiveKit `turnHandling` (you tune it) | **server-side VAD** (don't fight it) |
 | Flag | default | `ENABLE_REALTIME=true` |
 
-**RULE 0.1** — Realtime wins on *feel*; pipeline wins on *reliability/cost*. For a polished demo or premium tenant → Realtime (if the OpenAI tier can pay the token bill). For high call volume / tight budget / transcript-critical → pipeline + a streaming TTS (ElevenLabs) to fix the gap.
+**RULE 0.1** — Realtime wins on *feel*; pipeline wins on *reliability/cost*. For a polished demo or premium tenant → Realtime (if the OpenAI tier can pay the token bill). For high call volume / tight budget / transcript-critical → pipeline. _(Superseded 2026-07-14: "add a streaming TTS such as ElevenLabs to fix the gap" was the standing advice; the gap was fixed with **Deepgram Aura** instead, and the pipeline is what ships. ElevenLabs was never wired.)_
 
-**RULE 0.2** — Both modes are flag-gated and live side-by-side in `agent/src/index.ts`. The session-construction `if (config.ENABLE_REALTIME)` branch is the ONLY place they diverge; everything after (tools, prompt, transcript, finalize, greeting) is shared.
+**RULE 0.2** — Both modes are flag-gated and live side-by-side in `agent/src/index.ts`. The session-construction `if (config.ENABLE_REALTIME)` branch is the ONLY place they diverge; everything after (tools, transcript, finalize, greeting) is shared. **Note the word "prompt" was removed from that list 2026-07-27:** the call architecture is chosen separately and later (`ENABLE_QUESTION_TREE` → `ENABLE_TASK_GROUP` → ladder), and each builds its own instructions — the question-tree path composes its prompt in `buildChecklistPrompt()` and never reads `tenants.system_prompt`.
 
 ---
 
@@ -188,7 +204,8 @@ The `agent_session_error` log's `error_body` carries the provider's exact error 
 
 - 2026-07-01 — booking tool-selection dead-end: `get_available_slots` returns SPOKEN times with NO resource_id, but `book_appointment`/`check_availability` REQUIRE a `resource_id` (`z.string().uuid()`). The LLM paired available_slots → book_appointment → Zod 400 (`validation_error`), so every booking silently failed ("having trouble pulling that up") even after the SQL-crash + tz fixes. Fix (prompt): steer to **book_with_scheduling** (self-contained window-based booking that finds the resource AND assigns staff — no resource_id) as the default after get_available_slots; only use book_appointment/check_availability with a real resource_id from get_scheduling_options. book_with_scheduling also fixes the "Unassigned" symptom (it assigns an employee; book_appointment to a bare resource leaves it staffless).
 
-- 2026-06-25 — OpenAI TTS non-streaming = 2–3s dead air/reply; switched gpt-4o-mini-tts→Realtime to kill it.
+- **2026-07-14 — TTS moved to Deepgram Aura (CURRENT).** Aura streams over a WebSocket as words are produced, which is what actually killed the pipeline gap. The swap passed typecheck + 567 unit tests and took the line COMPLETELY SILENT: the plugin appends `?speed=` to the WS upgrade URL, Aura answers 400, the socket never opens. Hence `npm run verify:tts` (opens the real socket, demands real bytes) — mandatory before any TTS change ships. `tenants.tts_speed` is inert under Aura.
+- 2026-06-25 — OpenAI TTS non-streaming = 2–3s dead air/reply; switched gpt-4o-mini-tts→Realtime to kill it. _(Superseded by the 2026-07-14 entry above — the pipeline was fixed by changing engine, not by moving to Realtime.)_
 - 2026-06-26 — `gpt-4o-mini-realtime-preview` invalid id → dead call; real id `gpt-realtime-mini`.
 - 2026-06-26 — Realtime greeting: `say(text)` throws (no TTS) → use `generateReply`; `allowInterruptions:false` on generateReply leaves it not-listening → silence after greeting.
 - 2026-06-26 — Realtime TPM 40k (Tier 1) → mid-call dead space + failed appointment read-back (`rate_limit_exceeded`). Lean flow + mini model under Tier 1; Tier 2 ($50+7d) to widen.

@@ -434,9 +434,25 @@ agent/src/
 ├── sentry.ts             ✓
 ├── redactToolArgs.ts     ✓
 │
+├── checklist/            ✓ existing — THE LIVE CALL ARCHITECTURE (question trees)
+│   ├── types.ts          node shapes (text / choice / action) + the 10 NodeStatus values
+│   ├── trees.ts          PLATFORM_TREE_LIBRARY — the 8 trees a purpose can select
+│   ├── tracker.ts        ChecklistTracker: all call state + isResolved() (the goodbye gate)
+│   ├── checklistAgent.ts ONE agent for the whole call + buildChecklistPrompt()
+│   └── checklistTools.ts set_purpose / record_answer / finish_call / answer_question + wrapAction
+│
+├── tasks/                ✓ existing — TaskGroup "rungs", FALLBACK only (ENABLE_TASK_GROUP)
+│   ├── rung.ts           makeRung() generic core        superseded 2026-07-21
+│   ├── callRootAgent.ts  intent hand-off via begin_call
+│   ├── callPlan.ts       planCallTasks() + runtimePreamble() ← still shared with checklist/
+│   └── *Task.ts          identity / bookMeeting / meetingContext / takeMessage / scheduling
+│
 ├── session/              ✓ existing — well organized
 │   ├── fillerCache.ts
 │   ├── thinkingSound.ts
+│   ├── holdLines.ts      pre-synthesized dead-air lines, spoken from a TIMER
+│   ├── toolActivity.ts   isToolRunning() — so a hold line never names a lookup that isn't happening
+│   ├── turnDetector.ts   checklist-aware end-of-turn (reads the pending [ASK] node)
 │   └── watchdog.ts
 │
 ├── tools/                🔄 item 5 — group by capability

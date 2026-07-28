@@ -10,7 +10,7 @@ This guide walks through migrating from the local Docker development environment
 - **Telnyx Account**: [telnyx.com](https://telnyx.com) — carrier, SIP trunk, SMS OTP
 - **LiveKit Cloud Account**: [livekit.io](https://livekit.io) — voice agent orchestrator + SIP ingress
 - **Deepgram Account**: [deepgram.com](https://deepgram.com) — STT (Nova-3) used by the LiveKit agent
-- **OpenAI API Key**: LLM (GPT-4o-mini) + TTS in the agent, RAG embeddings, post-call summaries
+- **OpenAI API Key**: LLM (GPT-4.1-mini voice; 4o-mini summaries/classify), RAG embeddings, post-call summaries. **TTS is Deepgram, not OpenAI** — see `DEEPGRAM_API_KEY`
 - **Railway Account**: For hosting the full stack (backend + ai-sec-agent worker + this Next.js dashboard) in production. Self-hosting or other platforms (e.g. Vercel for dashboard only) remain options for the Next.js part.
 - **Supabase CLI**: already in devDependencies — invoke via `npx supabase` (no global install needed). Migrations are applied via `npm run db:migrate` / `scripts/setup-db.sh`, not a direct CLI link.
 
@@ -258,8 +258,8 @@ The agent boots with `dotenv` loading the repo-root `.env` and `agent/.env` in t
 | `LIVEKIT_API_KEY`    | Yes      | LiveKit Cloud API key                                                                                                                                                                                                                                                                                        |
 | `LIVEKIT_API_SECRET` | Yes      | LiveKit Cloud API secret                                                                                                                                                                                                                                                                                     |
 | `AGENT_SECRET`       | Yes      | Min 32 chars. Must match backend's `AGENT_SECRET`.                                                                                                                                                                                                                                                           |
-| `OPENAI_API_KEY`     | Yes      | LLM (GPT-4o-mini) + TTS (primary, voice `shimmer` default) + fallback TTS                                                                                                                                                                                                                                    |
-| `DEEPGRAM_API_KEY`   | Yes      | STT (Nova-3)                                                                                                                                                                                                                                                                                                 |
+| `OPENAI_API_KEY`     | Yes      | LLM (GPT-4.1-mini voice, 4o-mini auxiliary) + embeddings + summaries. NOT TTS since 2026-07-14                                                                                                                                                                                                                                    |
+| `DEEPGRAM_API_KEY`   | Yes      | STT (Nova-3) **and TTS (Aura, `aura-asteria-en`)** — a bad key or param takes the line SILENT; run `cd agent && npm run verify:tts`                                                                                                                                                                                                                                                                                                 |
 | `BACKEND_URL`        | No       | Where the agent posts `/agent-tools/*` calls. Default `http://localhost:4001`.                                                                                                                                                                                                                               |
 | `BETTER_STACK_TOKEN` | No       | Same value as the backend's `BETTER_STACK_TOKEN`. When set, agent forwards Pino logs to Better Stack alongside stdout; unset = stdout only. Per-call child logger adds `tenant_id` + `call_id` to every line so support can pull a specific call's full timeline with one filter. See "Observability" below. |
 | `LOG_LEVEL`          | No       | `trace` \| `debug` \| `info` (default) \| `warn` \| `error`                                                                                                                                                                                                                                                  |
@@ -336,7 +336,7 @@ The agent worker lives in `agent/` and runs as a separate Railway service (`ai-s
 
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 5.1
 - `OPENAI_API_KEY` — LLM + TTS used by the agent
-- `DEEPGRAM_API_KEY` — STT (Nova-3)
+- `DEEPGRAM_API_KEY` — STT (Nova-3) + TTS (Aura)
 - `BACKEND_URL` — base URL for the Fastify backend (e.g., `https://ai-sec-production.up.railway.app`)
 - `AGENT_SECRET` — shared secret the agent presents on every `/agent-tools/*` call (must match the same env var on the backend service)
 
