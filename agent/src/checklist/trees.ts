@@ -78,7 +78,7 @@ export const BOOKING_TREE: QuestionTreeDef = {
       ask:
         'what the meeting is ABOUT, in the CALLER\'S OWN WORDS ("a meeting to talk about a ' +
         'job position") — the system matches their words to the right service, so record the ' +
-        'words and let it choose. **WHO is not WHAT**: "I want to talk with Dale" names a ' +
+        'words and let it choose. **WHO is not WHAT**: "I want to talk with [the owner]" names a ' +
         'person and carries NO topic — never record it here (2026-07-27 live call: it was, ' +
         'the topic question was skipped, and a recruiter\'s meeting was booked with the role ' +
         'never mentioned again). If all you know is who they want, ask what it is about — ' +
@@ -306,7 +306,7 @@ export const JOB_TREE: QuestionTreeDef = {
     'owner — a recruiter, staffing agency, or someone pitching work for the owner to take. ' +
     'NOT a caller asking the business to do work for THEM ("can someone fix my computer" is ' +
     'a service request → booking/fix_computer, even if they call it "a job"). ' +
-    '**"Is Dale available for work?" / "is he available for a contract?" / "is he taking on ' +
+    '**"Is [the owner] available for work?" / "is he available for a contract?" / "is he taking on ' +
     'projects?" IS this tree** — an availability QUESTION about paid work is a job call in ' +
     'question form, not qa: whether he is available is HIS decision, so the answer is never ' +
     'read from the knowledge base — it is "that\'s his call — let me grab the details so he ' +
