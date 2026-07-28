@@ -47,6 +47,12 @@ const ACTION_ID_FIELDS: Record<string, string> = {
 const TREE_PASSTHROUGH_TOOLS: Record<string, string[]> = {
   booking: ['get_available_slots', 'get_service_catalog'],
   schedule_change: ['get_my_appointments', 'get_available_slots'],
+  // A sales call's write is the DEMO BOOKING, so buy_service has no action node of
+  // its own (an action that cannot complete would hold the goodbye gate open — see
+  // BUY_SERVICE_TREE). attach_meeting_notes rides along so the qualifying answers can
+  // reach the owner ON the meeting; unwrapped, so it never gates anything and is
+  // simply unavailable-by-error when no booking happened.
+  buy_service: ['attach_meeting_notes'],
 };
 
 /**

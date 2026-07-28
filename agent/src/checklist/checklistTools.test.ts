@@ -47,6 +47,7 @@ function makeKit(overrides: Partial<ChecklistToolDeps> = {}) {
     get_service_catalog: fakeTool(ok({ services: [] })),
     cancel_appointment: fakeTool(ok({ appointment_id: 'appt_9' })),
     reschedule_appointment: fakeTool(ok({ appointment_id: 'appt_9' })),
+    attach_meeting_notes: fakeTool(ok({ appointment_id: 'appt_1' })),
   };
   const tracker = new ChecklistTracker(PLATFORM_TREE_LIBRARY);
   const onSelectionChanged = vi.fn();
@@ -91,6 +92,33 @@ describe('the toolset composition', () => {
     expect(names).toContain('book_with_scheduling');
     expect(names).toContain('get_available_slots'); // the calendar rides with booking
     expect(names).not.toContain('cancel_appointment'); // schedule_change not selected
+  });
+
+  it('buy_service brings attach_meeting_notes as an UNWRAPPED passthrough', async () => {
+    // WHY: a sales call's write is the demo BOOKING, so buy_service has no action
+    //      node. attach_meeting_notes rides along so the qualifying answers can be
+    //      put ON that meeting — but unwrapped, because it errors when no booking
+    //      happened, and a wrapped action that can never complete would hold the
+    //      goodbye gate open and trap the caller on a call that refuses to end.
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['identity', 'buy_service', 'booking'],
+    });
+    const names = Object.keys(toolkit.selectedTools());
+    expect(names).toContain('attach_meeting_notes');
+    // No node in the checklist is completed by it — nothing gates on it.
+    expect(tracker.frontier().every((f) => f.node_id !== 'attach_meeting_notes')).toBe(true);
+  });
+
+  it('buy_service alone offers no write of its own', async () => {
+    // WHY: pins the "questions only" contract. If someone later gives this tree an
+    //      action node, this fails and they have to read why it does not have one.
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['buy_service'] });
+    const names = Object.keys(toolkit.selectedTools());
+    expect(names).not.toContain('book_with_scheduling');
+    expect(names).not.toContain('take_message');
+    expect(names).not.toContain('capture_job_inquiry');
   });
 });
 

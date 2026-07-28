@@ -144,6 +144,106 @@ export const GENERIC_SUBJECT_TREE: QuestionTreeDef = {
   ],
 };
 
+/**
+ * BUYING THE AI SECRETARY ITSELF — the inbound sales call.
+ *
+ * The product answers its own sales line, so "I want this for MY business" is a
+ * distinct purpose from every other tree: it is not a job brought to the owner
+ * (that is `job` — a role FOR him), and not a service request (that is a repair).
+ * Without its own tree these callers fell to `generic_subject` + message, which
+ * asks one vague "what does this concern?" and leaves the owner ringing back
+ * cold, knowing nothing about the business he is selling to.
+ *
+ * NO ACTION NODE, ON PURPOSE. The outcome of a sales call is the DEMO — the
+ * tenant's own "Secretary HQ Demonstration" service — so this tree pairs with
+ * `booking`, and the appointment IS the write. If they will not book, it pairs
+ * with `message`. Giving it its own action node was considered and rejected:
+ * the only fitting tool is `attach_meeting_notes`, which errors when no meeting
+ * was booked, and an action node that cannot complete holds the goodbye gate
+ * open forever — the caller would be trapped on a call that refuses to end.
+ * `attach_meeting_notes` is offered as a PASSTHROUGH instead: reachable when a
+ * booking exists, harmless when it does not.
+ *
+ * The questions are the ones that let the owner price and prepare BEFORE the
+ * demo. Budget and decision-maker are deliberately absent — they read as pushy
+ * on an inbound call, and he can ask them live once someone is on the calendar.
+ */
+export const BUY_SERVICE_TREE: QuestionTreeDef = {
+  tree_id: 'buy_service',
+  description:
+    'The caller wants to BUY the AI receptionist service for THEIR OWN business — "I saw ' +
+    'your AI answers the phone", "how much is this", "I want one of these for my shop", ' +
+    'or any interest in the assistant itself as a product. **Distinguish carefully:** a ' +
+    'caller offering the OWNER a job or contract is the `job` tree (work FOR him); a caller ' +
+    'wanting something repaired is a service request; THIS is a caller who wants to become ' +
+    'a customer of the phone system they are talking to. Select it alongside `booking` — ' +
+    'the demonstration is the goal — or alongside `message` if they will not commit to a ' +
+    'time. Once a demo IS booked, pass the answers on with attach_meeting_notes in ONE ' +
+    'line, so the owner reads the business, the volume, and what they want handled before ' +
+    'he dials.',
+  nodes: [
+    {
+      node_id: 'business_type',
+      type: 'text',
+      ask:
+        "what kind of business they run, in their own words — a salon and a tyre shop want " +
+        'very different things from a receptionist, and this is what the owner prepares against',
+    },
+    {
+      node_id: 'call_volume',
+      type: 'text',
+      ask:
+        'roughly how many calls a day they take — a rough number or a range is a complete ' +
+        'answer ("maybe twenty?"), never push for precision they do not have',
+    },
+    {
+      node_id: 'wants_handled',
+      type: 'choice',
+      ask:
+        'what they most want handled — booking appointments, taking messages, answering ' +
+        "questions about the business, or all of it. Ask it as a real question, not a menu " +
+        'read aloud; if they describe it in their own words, map it yourself',
+      options: {
+        // No follow-ups on any branch: this answer steers the DEMO, not more questions.
+        booking: [],
+        messages: [],
+        answering_questions: [],
+        everything: [],
+      },
+    },
+    {
+      node_id: 'current_setup',
+      type: 'choice',
+      ask:
+        'what happens to their calls today — voicemail, an answering service, a person, or ' +
+        'nothing at all. This is the comparison the owner has to beat, so it is worth asking',
+      options: {
+        voicemail: [],
+        answering_service: [
+          {
+            node_id: 'current_cost',
+            type: 'text',
+            ask:
+              'roughly what that answering service costs them a month — ask it lightly and ' +
+              'take a decline gracefully; a number here is what makes the price land, but ' +
+              'nobody owes it to you',
+          },
+        ],
+        a_person: [],
+        nothing: [],
+      },
+    },
+    {
+      node_id: 'best_email',
+      type: 'text',
+      ask:
+        'the best email to send the details to — read it back once to confirm the spelling, ' +
+        'the same way a phone number is confirmed. A wrong address is a lead that silently ' +
+        'goes nowhere',
+    },
+  ],
+};
+
 /** QUESTIONS — RAG-answered; the tree only marks "they got what they came for". */
 export const QA_TREE: QuestionTreeDef = {
   tree_id: 'qa',
@@ -360,6 +460,7 @@ export const PLATFORM_TREE_LIBRARY: QuestionTreeDef[] = [
   GENERIC_SUBJECT_TREE,
   QA_TREE,
   JOB_TREE,
+  BUY_SERVICE_TREE,
   SCHEDULE_CHANGE_TREE,
   FIX_COMPUTER_TREE,
 ];
