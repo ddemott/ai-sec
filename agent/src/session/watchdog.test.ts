@@ -388,3 +388,74 @@ describe('attachSilentTurnRecovery', () => {
     expect(NUDGE_INSTRUCTIONS).not.toMatch(/what you already know/i);
   });
 });
+
+describe('onSpoken — watchdog speech reaches the transcript (batch H, 2026-07-30)', () => {
+  beforeEach(() => {
+    _resetFillerCacheForTest();
+    _resetToolActivityForTest();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('hold line played → onSpoken gets the exact text (addToChatCtx stays false)', async () => {
+    // WHO: the 07-27 silent calls (#5/#6) — 40s of "nothing" between greeting
+    //      and hangup, with no way to tell whether dead-air handling ever fired,
+    //      because every watchdog say() skips the chat context AND therefore the
+    //      ConversationItemAdded-driven transcript.
+    // WHAT: the say still skips chat context; onSpoken hands the same text to
+    //      the TranscriptRecorder so the transcript reports what was SPOKEN.
+    const spoken: string[] = [];
+    const f = makeFakeSession();
+    attachOutputWatchdog(f.session, {
+      voice: 'eve',
+      thinkingText: 'Just a moment.',
+      fillerText: FILLER,
+      recoveryText: RECOVERY,
+      log: noopLog,
+      onSpoken: (t) => spoken.push(t),
+    });
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(f.sayCalls).toHaveLength(1);
+    expect(spoken).toEqual(['Just a moment.']); // no tool running → thinking line
+    // The chat-context contract is unchanged — hold lines never brief the model.
+    expect((f.sayCalls[0].opts as { addToChatCtx?: boolean }).addToChatCtx).toBe(false);
+  });
+
+  it('recovery escalation line → onSpoken fires; the generateReply nudge does NOT (it transcripts itself)', () => {
+    const spoken: string[] = [];
+    const f = makeFakeSession();
+    attachSilentTurnRecovery(f.session, {
+      voice: 'eve',
+      recoveryText: RECOVERY,
+      log: noopLog,
+      onSpoken: (t) => spoken.push(t),
+    });
+    // First silent death → generateReply nudge (a normal turn: transcripted via
+    // ConversationItemAdded, so onSpoken must NOT double-record it).
+    f.emit('thinking');
+    f.emit('listening');
+    expect(f.generateReplyCalls).toHaveLength(1);
+    expect(spoken).toEqual([]);
+    // The nudge ALSO dies silent → canned escalation line via say() — the one
+    // utterance nothing else records.
+    f.emit('thinking');
+    f.emit('listening');
+    expect(f.sayCalls.map((s) => s.text)).toEqual([RECOVERY]);
+    expect(spoken).toEqual([RECOVERY]);
+  });
+
+  it('onSpoken omitted → everything still works (the callback is strictly optional)', async () => {
+    const f = makeFakeSession();
+    attachOutputWatchdog(f.session, {
+      voice: 'eve',
+      thinkingText: 'Just a moment.',
+      fillerText: FILLER,
+      recoveryText: RECOVERY,
+      log: noopLog,
+    });
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(f.sayCalls).toHaveLength(1); // no throw, hold line still plays
+  });
+});
