@@ -384,6 +384,32 @@ export const VoiceSessionEndSchema = z.object({
   // The appointment booked during the call, if any. UUID-validated so a malformed
   // id can't reach (and 500) the RPC's ::uuid cast — it just stays null.
   appointment_id: z.string().uuid().nullable().optional(),
+  // Persisted per-call tool trace → voice_sessions.metadata.tool_calls (2026-07-30,
+  // CALL_IMPROVEMENTS.md: the Railway log copy rotated away before the 07-27 calls
+  // could be analyzed; call #8's postmortem died at three candidate causes). Args
+  // arrive PII-redacted from the agent (redactToolArgs). Bounds mirror the agent's
+  // MAX_TOOL_LOG_ENTRIES cap; the total-size refine keeps a hostile/buggy payload
+  // from writing a multi-MB jsonb.
+  tool_calls: z
+    .object({
+      entries: z
+        .array(
+          z.object({
+            t: z.number().int().nonnegative(),
+            tool: z.string().max(100),
+            args: z.unknown().optional(),
+            ok: z.boolean().nullable(),
+            ms: z.number().int().nonnegative().nullable(),
+          })
+        )
+        .max(200),
+      dropped: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .optional()
+    .refine((v) => v == null || JSON.stringify(v).length <= 120_000, {
+      message: 'tool_calls payload too large',
+    }),
 });
 
 // Incremental transcript save — the agent posts the transcript-so-far after each
