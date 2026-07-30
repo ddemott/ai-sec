@@ -66,7 +66,11 @@ const TREE_PASSTHROUGH_TOOLS: Record<string, string[]> = {
  * (it may legitimately normalize phrasing). Declined/empty answers never fill.
  */
 type ArgFill = { arg: string; from: readonly string[]; map?: (v: string) => unknown };
-const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
+// Exported for the capture-completeness test: every collected tree node must map
+// to a tool param here (or be an explicitly-declared control node) — the guard
+// that turns a silently-dropped field (role_description, found 2026-07-30) into
+// a CI failure instead of a prod discovery.
+export const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
   capture_job_inquiry: [
     { arg: 'caller_name', from: ['caller_name'] },
     { arg: 'callback_phone', from: ['caller_phone'] },
@@ -82,6 +86,10 @@ const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
       // the whole capture mid-call. Known values pass through untouched.
       map: (v) => (['contract', 'full_time', 'contract_to_hire'].includes(v) ? v : 'contract'),
     },
+    // The field the pipeline used to LOSE (verified on prod call SCL_nRKo3KEVw8Yh,
+    // 2026-07-30): the tree collected the role, the checklist showed ✓, and the
+    // write had no param — the paragraph survived only in the transcript.
+    { arg: 'role_description', from: ['role_description'] },
     { arg: 'rate_range', from: ['rate_range', 'salary_range'] },
     { arg: 'duration', from: ['contract_length', 'conversion_terms'] },
     {
@@ -179,6 +187,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
 
   let purposeRounds = 0;
   let identifySent = false;
+  let closing = false;
   const failCounts = new Map<string, number>();
 
   // Every state block ends with an explicit NEXT pointer — the first frontier
@@ -466,6 +475,26 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     // remembered style rule away. (Caller-ID-prefilled numbers never pass through
     // record_answer, so this fires only on genuinely dictated numbers.)
     let directive = readbackDirective(args.value);
+    if (!directive && args.node_id === 'meeting_offer' && args.value === 'wants_meeting') {
+      // The offer's YES is a booking ask — and the HOST does the selecting, not
+      // the model. First shipped as a directive ("call set_purpose NOW adding
+      // booking"); on the very next sim run the model recorded the yes and never
+      // made the call — the same shape as the ladder's 2026-07-27 eval failure
+      // (offered, took a time, said "you're booked", never called the tool). A
+      // tool-result instruction the model can skip is a hope; a selection the
+      // host has already made is a fact. Same promotion as the read-back above.
+      tracker.select(['identity', 'booking']);
+      // A meeting accepted off the job intake already has its topic — the same
+      // auto-fill set_purpose does when booking rides along with job.
+      if (tracker.selectedTrees().includes('job')) {
+        recordIfOpen('meeting_topic', TREE_TOPIC['job']);
+      }
+      deps.onSelectionChanged();
+      directive =
+        '\n\nThey want the meeting — booking is now ON YOUR CHECKLIST. Offer real times ' +
+        'next (get_available_slots). Nothing is booked until book_with_scheduling ' +
+        'returns success — never say "booked" before it.';
+    }
     if (!directive && args.node_id === CALLER_NAME && args.value && !args.declined) {
       // 2026-07-21 live call: the caller gave his name and never heard it again
       // until the goodbye. A receptionist who learns a name USES it — nudge at
@@ -496,6 +525,13 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       if (tracker.hasSelection() && !tracker.isResolved()) {
         return `Not yet — the checklist is not complete. Finish these first. ${stateBlock()}`;
       }
+      // ONE goodbye. closeCall defers session.close() to a macrotask, so a second
+      // finish_call can land in the gap and speak a SECOND farewell over the first
+      // (2026-07-27 live call SCL_nRKo3KEVw8Yh ended "Nothing else needed… Thanks
+      // for calling." / "You're all set… have a great day!" back to back). The
+      // first call through this gate owns the goodbye; any repeat is a no-op.
+      if (closing) return 'The call is already ending — say nothing further.';
+      closing = true;
       // First name only — "You're all set, Dale", never "…, Dale DeMott".
       const name = tracker.value(CALLER_NAME)?.trim().split(/\s+/)[0];
       const goodbye = name

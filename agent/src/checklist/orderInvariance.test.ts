@@ -30,6 +30,7 @@ const JOB_CALL_ANSWERS: Array<[string, string]> = [
   ['contract_length', 'six months'],
   ['work_mode', 'remote'],
   ['team_timezone', 'Central'],
+  ['meeting_offer', 'details_only'],
 ];
 
 function mulberry32(seed: number): () => number {
@@ -116,6 +117,7 @@ describe('order invariance (the property, not the cases)', () => {
     t.record('rate_range', { value: '65 to 82 an hour' });
     t.record('contract_length', { value: 'six months' });
     t.record('team_timezone', { value: 'Central' });
+    t.record('meeting_offer', { value: 'details_only' });
     t.completeAction('capture', 'ji_1');
     expect(t.isResolved()).toBe(true);
     expect(JSON.stringify(t.snapshot())).toBe(CANONICAL);

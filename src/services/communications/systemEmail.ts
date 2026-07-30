@@ -160,6 +160,8 @@ export interface JobInquiryFields {
   callerCompany?: string | null;
   representsCompany?: boolean | null;
   employmentType?: string | null;
+  /** The role in the caller's own words — title, tech, responsibilities. */
+  roleDescription?: string | null;
   rateRange?: string | null;
   duration?: string | null;
   locationType?: string | null;
@@ -198,6 +200,9 @@ export async function sendJobInquiryEmail(to: string, fields: JobInquiryFields):
     ['Client (where the work is)', orDash(fields.clientCompany)],
     ['Caller works for', orDash(fields.callerCompany)],
     ['In-house at the client', yesNo(fields.representsCompany)],
+    // The role itself — WHAT job this is. The one field the owner reads first,
+    // and the one the pipeline used to lose (dropped end-to-end until 2026-07-30).
+    ['Role', orDash(fields.roleDescription)],
     ['Employment type', employment],
     [rateLabel, orDash(fields.rateRange)],
   ];

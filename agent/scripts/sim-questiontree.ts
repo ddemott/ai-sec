@@ -721,6 +721,80 @@ it — leave whatever message gets him to call. The date is October 3rd.`,
       ...mustClose(o),
     ],
   },
+  {
+    // SCL_nRKo3KEVw8Yh replay (2026-07-27): an AI recruiter bot that mirrors
+    // "would you like me to leave a message?" back at every turn. The live call
+    // spent 5 minutes on it, the agent promised a message twice (none exists —
+    // the write was capture_job_inquiry), and the call ended on a double
+    // goodbye. The graders pin the fixes: the capture lands WITH the role
+    // description, and the agent never promises a message artifact.
+    title: 'SAGE BOT-MIRROR — an AI caller that deflects; capture lands, no message promised',
+    persona: {
+      opener:
+        "I'm Sage from eTeam, reaching out to Dale regarding the Azure and M365 developer " +
+        'position. Is this a good time to chat? Would you prefer I leave a message?',
+      facts: `You are an AI recruiting assistant — polite, verbose, and deflecting. Your
+name: Sage. Your company: eTeam, a staffing agency placing the role with a CLIENT:
+Capgemini. The role: Azure/M365 developer — designing and supporting cloud-native
+solutions on Azure and Power Platform. Contract to hire, conversion depends on project
+needs. Hybrid, at Hanover, New Hampshire. Rate: "competitive" — you have no numbers and
+say so if pressed. Your number: 262-497-9039. You do NOT want a meeting — decline any
+offer of one. END EVERY TURN by asking "Would you like me to leave a message for Dale?"
+— mirror the question back even when you were just asked something.`,
+      behaviour:
+        'Courteous corporate bot. You answer what is asked, then ALWAYS tack on your ' +
+        'message question. Never volunteer everything at once.',
+    },
+    grade: (o) => [
+      ...has(o, 'capture', ['done']),
+      // The 2026-07-30 prod loss: the role must reach the write, not just the transcript.
+      ...has(o, 'role_description', ['answered']),
+      ...valueMatch(o, 'callers_company', /eteam/i),
+      ...valueMatch(o, 'client_company', /capgemini/i),
+      ...valueMatch(o, 'employment_type', /contract_to_hire/),
+      // The false-promise guard: the agent never claims it will leave a message —
+      // the job-call write is a recorded inquiry, and it must say so.
+      ...(agentSaid(o, /\bI(?:'| wi)ll (?:leave|take) (?:a|the|your) message\b|voicemail/i)
+        ? ['promised a message artifact that take_message never writes on a job call']
+        : []),
+      ...(o.fakes.take_message.calls.length === 0
+        ? []
+        : ['take_message fired on a pure job call — the inquiry IS the record']),
+      ...mustResolve(o),
+      ...mustClose(o),
+    ],
+  },
+  {
+    // The live-path OFFER_MEETING port (the ladder's 2026-07-27 eval failure:
+    // offered, took a time, said "you're booked", never called the tool). A
+    // recruiter who did NOT ask for a meeting accepts the one offer — the yes
+    // must route through set_purpose → booking → a real book_with_scheduling
+    // success, and the intake must still complete.
+    title: 'OFFER ACCEPTED — recruiter says yes to the one offer; booking goes through the tool',
+    persona: {
+      opener: "Hi, I have a contract role I'd like to run past Dale.",
+      facts: `Your name: Elena Voss. Number: 262-497-9039. Your company: Voss Talent,
+placing the role with a CLIENT: Lakeshore Logistics. The role: backend engineer,
+contract, six months, 70 to 80 an hour, fully remote, team on Eastern time. You do NOT
+ask for a meeting yourself — but if they OFFER you time with Dale, accept it and take
+the first time they suggest.`,
+      behaviour:
+        'Professional and concise. Answer one thing at a time. Accept the meeting only ' +
+        'if offered — never request it unprompted.',
+    },
+    grade: (o) => [
+      ...valueMatch(o, 'meeting_offer', /wants_meeting/),
+      // "Booked" must be earned by the tool, and the intake still completes.
+      ...has(o, 'book', ['done']),
+      ...has(o, 'capture', ['done']),
+      ...valueMatch(o, 'client_company', /lakeshore/i),
+      ...(o.toolOrder.includes('book_with_scheduling')
+        ? []
+        : ['the accepted offer never reached book_with_scheduling']),
+      ...mustResolve(o),
+      ...mustClose(o),
+    ],
+  },
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────

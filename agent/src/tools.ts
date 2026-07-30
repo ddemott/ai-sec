@@ -1146,6 +1146,11 @@ export function buildTools(
             enum: ['contract', 'full_time', 'contract_to_hire'],
             description: 'Whether the position is contract, full time, or contract-to-hire.',
           },
+          role_description: {
+            type: 'string',
+            description:
+              "The role itself, in the caller's own words — title, tech, responsibilities, whatever they led with. This is the field that tells the owner WHAT JOB it is; capture what they actually said.",
+          },
           rate_range: {
             type: 'string',
             description: 'The rate range (contract) or salary range (full time) offered.',
@@ -1179,6 +1184,7 @@ export function buildTools(
         client_company?: string;
         represents_company?: boolean;
         employment_type?: 'contract' | 'full_time' | 'contract_to_hire';
+        role_description?: string;
         rate_range?: string;
         duration?: string;
         location_type?: 'onsite' | 'remote' | 'hybrid';
@@ -1208,6 +1214,7 @@ export function buildTools(
           client_company: args.client_company,
           represents_company: args.represents_company,
           employment_type: args.employment_type,
+          role_description: args.role_description,
           rate_range: args.rate_range,
           duration: args.duration,
           location_type: args.location_type,
@@ -1223,6 +1230,13 @@ export function buildTools(
           // sees or handles the UUID (same trust model as spokenPhone).
           appointment_id: outcome?.result().appointmentId ?? undefined,
         });
+        // Label the call from the tool that DID the thing, never the classifier's
+        // guess. Call SCL_nRKo3KEVw8Yh (2026-07-27): this tool captured the lead,
+        // no outcome was recorded, the null fell to the post-call classifier —
+        // which read the transcript's "I'll leave a message for Dale" and labelled
+        // the call 'message'. Messages inbox: empty. The row, the summary, and the
+        // dashboard all repeated a promise no tool had executed.
+        if (res.ok) outcome?.recordJobInquiry();
         return formatResponse(res);
       },
     }),

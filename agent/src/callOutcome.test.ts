@@ -82,3 +82,44 @@ describe('CallOutcomeTracker', () => {
     expect(t.result().appointmentId).toBe('eeeeeeee-5555-4555-8555-555555555555');
   });
 });
+
+describe('recordJobInquiry (the honest label for SCL_nRKo3KEVw8Yh)', () => {
+  // WHY: capture_job_inquiry used to record NOTHING — the null fell to the
+  // post-call classifier, which read the transcript's false "I'll leave a
+  // message" and labelled the call 'message'. The Messages inbox was empty;
+  // the lead sat unseen in job_inquiries.
+  it('labels an unclassified call job_inquiry', () => {
+    const t = new CallOutcomeTracker();
+    t.recordJobInquiry();
+    expect(t.result().outcome).toBe('job_inquiry');
+  });
+
+  it('outranks message — on a job call the inquiry row IS the message', () => {
+    const t = new CallOutcomeTracker();
+    t.recordMessage();
+    t.recordJobInquiry();
+    expect(t.result().outcome).toBe('job_inquiry');
+  });
+
+  it('a later message never downgrades it', () => {
+    const t = new CallOutcomeTracker();
+    t.recordJobInquiry();
+    t.recordMessage();
+    expect(t.result().outcome).toBe('job_inquiry');
+  });
+
+  it('never overwrites booked — the appointment is what the owner acts on', () => {
+    const t = new CallOutcomeTracker();
+    t.recordBooking('appt_1');
+    t.recordJobInquiry();
+    expect(t.result().outcome).toBe('booked');
+    expect(t.result().appointmentId).toBe('appt_1');
+  });
+
+  it('never overwrites transferred', () => {
+    const t = new CallOutcomeTracker();
+    t.recordTransfer();
+    t.recordJobInquiry();
+    expect(t.result().outcome).toBe('transferred');
+  });
+});

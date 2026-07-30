@@ -115,6 +115,7 @@ export function jobSummaryLine(
   },
   args: {
     employment_type?: string;
+    role_description?: string;
     rate_range?: string;
     duration?: string;
     location_type?: string;
@@ -123,6 +124,8 @@ export function jobSummaryLine(
   }
 ): string {
   const bits: string[] = [];
+  // The role leads — it is WHAT the meeting is about; everything else qualifies it.
+  if (args.role_description) bits.push(args.role_description);
   if (args.employment_type)
     bits.push(
       args.employment_type === 'contract'
@@ -542,9 +545,9 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         const res = await client.query<{ job_inquiry_id: string }>(
           `INSERT INTO job_inquiries
              (tenant_id, customer_id, client_company, caller_company, represents_company,
-              employment_type, rate_range, duration, location_type, address, timezone,
-              caller_name, callback_phone, call_id, appointment_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+              employment_type, role_description, rate_range, duration, location_type,
+              address, timezone, caller_name, callback_phone, call_id, appointment_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
            ON CONFLICT (tenant_id, call_id) WHERE call_id IS NOT NULL DO NOTHING
            RETURNING job_inquiry_id`,
           [
@@ -554,6 +557,7 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             companies.callerCompany,
             companies.representsCompany,
             args.employment_type ?? null,
+            args.role_description ?? null,
             args.rate_range ?? null,
             args.duration ?? null,
             args.location_type ?? null,
@@ -662,6 +666,7 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
           callerCompany: companies.callerCompany ?? undefined,
           representsCompany: companies.representsCompany ?? undefined,
           employmentType: args.employment_type,
+          roleDescription: args.role_description,
           rateRange: args.rate_range,
           duration: args.duration,
           locationType: args.location_type,

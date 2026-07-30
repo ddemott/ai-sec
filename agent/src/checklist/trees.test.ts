@@ -117,6 +117,9 @@ describe('the job call (identity + job on the real trees)', () => {
     t.record('contract_length', { value: 'six months' });
     t.record('team_timezone', { value: 'Central' });
     t.record('caller_phone', { value: '2624979039' });
+    // The offer is part of the intake now — capture's await_tree holds until it
+    // is answered (offered once, either door).
+    t.record('meeting_offer', { value: 'details_only' });
     expect(t.status('capture')).toBe('ready');
     expect(t.isResolved()).toBe(false); // talking cannot finish the intake
     t.completeAction('capture', 'ji_1');
@@ -157,6 +160,8 @@ describe('the job call (identity + job on the real trees)', () => {
     t.record('rate_range', { declined: true });
     t.record('contract_length', { declined: true });
     t.record('work_mode', { declined: true });
+    // A declined offer resolves it too — no answer is ever forced.
+    t.record('meeting_offer', { declined: true });
     expect(t.status('capture')).toBe('ready');
     t.completeAction('capture', 'ji_2');
     expect(t.isResolved()).toBe(true);
