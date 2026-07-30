@@ -18,6 +18,7 @@ import {
   CANONICAL_ORDER,
   composeScript,
   INTAKE_JOB_INQUIRY,
+  OFFER_MEETING,
   type ScriptComposition,
 } from '../../src/services/scripts/blocks';
 
@@ -133,6 +134,52 @@ describe('script composition — the invariants a copy-pasted script would lose'
       expect(BLOCKS[id], `CANONICAL_ORDER names a block that does not exist: ${id}`).toBeDefined();
     }
   });
+
+  it('SAD: the meeting offer is OFF unless a tenant asks for it', () => {
+    // WHY: RUNG 2b tells the model to offer a meeting unprompted, which is right for a
+    //      business selling the owner's time and WRONG for a salon — there, a caller who
+    //      did not ask for an appointment does not want one, and an offered-then-booked
+    //      slot is the unasked-for diary entry RUNG 2 was hardened against (2026-07-22).
+    //      Opt-in means a new ordinary tenant cannot inherit it by accident.
+    const script = composeScript({ persona: PERSONA, intake: ['intake_job_inquiry'] });
+    expect(script).not.toContain('RUNG 2b');
+    expect(script).not.toContain(OFFER_MEETING.text);
+  });
+
+  it('HAPPY: offerMeeting puts RUNG 2b directly behind RUNG 2, before any intake', () => {
+    // WHY: position is the whole point. The two rungs disagree on the surface — RUNG 2
+    //      says mention the diary only if they push, RUNG 2b says offer it unprompted —
+    //      and a model that reads them ADJACENT resolves that correctly, because 2b opens
+    //      by naming what it overrides. Put an intake block between them and the override
+    //      is separated from the rule it overrides by a page of role questions.
+    const script = composeScript({
+      persona: PERSONA,
+      intake: ['intake_job_inquiry'],
+      offerMeeting: true,
+    });
+
+    const rung2 = script.indexOf('RUNG 2 —');
+    const rung2b = script.indexOf('RUNG 2b —');
+    const intake = script.indexOf('What company are you calling from?');
+    expect(rung2).toBeGreaterThan(-1);
+    expect(rung2b).toBeGreaterThan(rung2);
+    expect(rung2b, 'RUNG 2b must precede intake, not trail it').toBeLessThan(intake);
+  });
+
+  it('SAD: the offer block never weakens a booking guard', () => {
+    // WHY: this is the block most likely to be "simplified" later by someone who reads it
+    //      as permission to book more freely. It is not. Offering is not booking, and the
+    //      three rules below are the ones a refused-booking call actually turns on — they
+    //      must survive inside the block that sits next to them, or the override reads as
+    //      a blanket one. (2026-07-22: caller said "No. No. No." and the meeting stayed.)
+    const script = composeScript({ persona: PERSONA, offerMeeting: true });
+    expect(script, 'consent before the diary').toMatch(/ONLY after they have said yes/i);
+    expect(script, 'no success claim without the tool').toMatch(
+      /Nothing is booked until book_with_scheduling returns success/i
+    );
+    expect(script, 'a refused booking must be undone').toMatch(/cancel_appointment/);
+    expect(script, 'an offer is made once, not sold').toMatch(/OFFER ONCE/);
+  });
 });
 
 /**
@@ -173,5 +220,49 @@ describe('regular-tenant.template.json — the default script for an ordinary bu
     //      tenants via --tenant. A pinned tenant here would silently target the
     //      wrong business.
     expect(template.tenant).toBeUndefined();
+  });
+});
+
+/**
+ * Thinking Hammer's own composition — the one live tenant, and the ONLY one that
+ * offers the meeting unprompted. Its greeting says "Dale is available for hire" out
+ * loud, so its script has to be able to act on that; these guard the pairing.
+ */
+describe("thinking-hammer.tenant.json — the script behind a line that sells the owner's time", () => {
+  const composition = JSON.parse(
+    readFileSync(join(__dirname, '../../scripts/scripts/thinking-hammer.tenant.json'), 'utf8')
+  ) as ScriptComposition & { tenant?: string };
+  const script = composeScript(composition);
+
+  it('offers the meeting, and its persona agrees with the rung that does it', () => {
+    // WHY: this file spent 2026-07-23 to 2026-07-27 contradicting itself. The persona
+    //      said "book a meeting only when the caller asks for one; otherwise a message
+    //      is the right outcome" while the greeting told callers "I can schedule some
+    //      time with him" — so the line ADVERTISED a meeting the script then steered
+    //      away from. A recruiter who described a role without using the word "meeting"
+    //      got a voicemail slot. Guard both halves, the way the regular template does.
+    expect(composition.offerMeeting).toBe(true);
+    expect(script).toContain('RUNG 2b');
+    expect(composition.persona).not.toMatch(/only when the caller asks/i);
+    expect(composition.persona, 'the persona must not re-impose message-by-default').not.toMatch(
+      /a message requesting a return call is the right outcome/i
+    );
+  });
+
+  it('still runs the staffing intake, and still after the booking', () => {
+    // WHY: offering the meeting changed the ORDER nothing. The role questions are
+    //      preparation for a meeting that is already in the diary — the failure this
+    //      whole module exists to prevent is nine perfect answers and an empty diary.
+    expect(composition.intake).toEqual(['intake_job_inquiry']);
+    expect(script.indexOf('RUNG 2 —')).toBeLessThan(
+      script.indexOf('What company are you calling from?')
+    );
+  });
+
+  it('stays pinned to its own tenant', () => {
+    // WHY: the .tenant.json suffix promises this file targets ONE business. It carries a
+    //      recruiting persona and a staffing intake; installed onto a salon by a stray
+    //      --file, it would interview that salon's customers about contract rates.
+    expect(composition.tenant).toBe('d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0');
   });
 });

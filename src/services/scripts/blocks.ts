@@ -131,6 +131,56 @@ ELSE (they have NOT asked for a meeting — the common case)
 };
 
 /**
+ * RUNG 2b — OFFER THE MEETING. OPT-IN, per tenant (`offerMeeting: true`).
+ *
+ * RUNG 2 is message-by-default, and for a salon or a tyre shop that is right: those
+ * callers ring with an errand, and an unasked-for booking is a wrong diary entry.
+ *
+ * But a business that is SELLING ITS OWNER'S TIME has the opposite problem. Thinking
+ * Hammer's line exists so recruiters can reach Dale about programming work; a recruiter
+ * who rings, describes a role, and is handed a voicemail slot has been served worse than
+ * one who is asked "would you like to talk to him about it?". The greeting now says
+ * "Dale is available for hire" out loud, and a greeting that offers a meeting the script
+ * then refuses to mention is the same broken promise this codebase keeps fixing.
+ *
+ * WHAT THIS BLOCK DOES NOT DO: it does not weaken a single guard. The 2026-07-22 call
+ * that produced RUNG 2's hardening was a booking made WITHOUT CONSENT — the agent booked,
+ * the caller said "No. No. No. I just want to speak with him", and the meeting stayed in
+ * the diary. Offering is not booking. Every rule about what may be SAID ("booked" is
+ * earned only by book_with_scheduling returning success) and what must be UNDONE (a
+ * refused booking gets cancel_appointment) is untouched and restated below, because a
+ * model reading two adjacent rungs must not be left to guess which one won.
+ *
+ * The offer is made ONCE. That is the line between offering and selling.
+ */
+export const OFFER_MEETING: ScriptBlock = {
+  id: 'offer_meeting',
+  purpose:
+    "Offer the meeting once, unprompted, and book it on a yes. Opt-in: for businesses selling the owner's time.",
+  text: `### RUNG 2b — OFFER THE MEETING
+
+**This business is available for hire, and the greeting says so out loud.** So where RUNG 2 tells you to mention the diary only if the caller pushes for it, on THIS line you do the opposite: you offer it once, plainly, without being asked.
+
+**What does NOT change:** a meeting still goes in the diary ONLY after they have said yes. Offering is not booking. Everything RUNG 2 forbids still stands, in full.
+
+WHEN the caller's business is anything the owner could be hired for — a job, a role, a position, a contract, a project, work of any kind — AND you have not already booked or offered a meeting
+  → offer it once, in ONE line, and give them both doors: "I can put some time in the diary with him so you can talk it through, or I can just take a message — which would you prefer?"
+  → then STOP TALKING and let them answer.
+  IF they choose the meeting, or say yes
+    → **that IS asking for one.** Go back to RUNG 2 and work it IN FULL. This rung is not a shortcut through it.
+    → **A TIME THEY HAVE PICKED IS NOT A BOOKING.** The moment they name a time, your very next action is the book_with_scheduling CALL. Not the role questions. Not "booking that now". Not "you're all set". The TOOL — and only once it comes back successful may you say the meeting exists.
+    → **RUNG 3 DOES NOT BEGIN until book_with_scheduling has returned success.** Role details are preparation for a meeting that is already in the diary; collected in front of one that never got booked, they are notes about an appointment nobody is coming to (2026-07-27 eval: the model offered, took a time, said "you're booked for tomorrow at 3:30", went straight into the role questions, and never called the booking tool at all).
+  IF they choose the message, say no, or are unsure
+    → that is their answer, and it is a good outcome. Go to the next rung and take the message.
+  → **OFFER ONCE.** A no is an answer. Asking a second time turns an offer into a sales pitch, and they rang for help, not to be sold to.
+
+**Still true, without exception:**
+  → "Can I speak to him?" is a caller reaching for a PERSON. Answer THAT first — plainly, that he is not available — before you offer anything.
+  → Nothing is booked until book_with_scheduling returns success. Do not say "booked" before it.
+  → A meeting they turn down after it is booked gets cancel_appointment, and you tell them it is cancelled.`,
+};
+
+/**
  * RUNG 3 — INTAKE. THE ONLY BLOCK THAT VARIES BY BUSINESS.
  *
  * This is the seam. A staffing agency asks about rate and contract length; an estate
@@ -273,6 +323,7 @@ export const BLOCKS: Record<string, ScriptBlock> = Object.fromEntries(
     LADDER_HEADER,
     IDENTITY,
     BOOK_MEETING,
+    OFFER_MEETING,
     INTAKE_JOB_INQUIRY,
     TAKE_MESSAGE,
     COMPLETE_ALL_GOALS,
@@ -310,6 +361,15 @@ export interface ScriptComposition {
   intake?: string[];
   /** A one-off intake, inline, for a business that doesn't fit an existing block. */
   customIntake?: string;
+  /**
+   * Offer the meeting unprompted (RUNG 2b), instead of waiting to be asked.
+   *
+   * OFF by default, and that default is deliberate: for a salon or a shop, a caller who
+   * did not ask for an appointment does not want one, and RUNG 2's message-default is
+   * what keeps the diary honest. Turn it ON for a business whose product IS the owner's
+   * time — where the caller ringing about work is exactly who the line is for.
+   */
+  offerMeeting?: boolean;
 }
 
 /**
@@ -331,7 +391,14 @@ export function composeScript(c: ScriptComposition): string {
       }
       if (c.customIntake?.trim()) parts.push(c.customIntake.trim());
     }
-    parts.push(BLOCKS[CANONICAL_ORDER[i]].text);
+    const id = CANONICAL_ORDER[i];
+    parts.push(BLOCKS[id].text);
+    // RUNG 2b rides directly behind RUNG 2 when the tenant opts in. It is placed HERE
+    // rather than in CANONICAL_ORDER because it is conditional, and it must sit against
+    // the block it qualifies — a model that reads "mention the diary only if they push"
+    // three rungs before "offer it unprompted" has been handed a contradiction to resolve
+    // on its own, which is how prompts start producing coin-flips.
+    if (id === 'book_meeting' && c.offerMeeting) parts.push(OFFER_MEETING.text);
   }
 
   return parts.join('\n\n');
