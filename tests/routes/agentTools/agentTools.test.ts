@@ -3569,6 +3569,96 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     expect(errorCount('no_caller_audio')).toBe(before);
   });
 
+  it('HAPPY: a TIMESTAMPED caller line ("Caller [0:12]: …") is a caller turn — no alarm', async () => {
+    // WHO: an agent built after 2026-07-30, whose transcript lines carry m:ss
+    //      offsets (CALL_IMPROVEMENTS.md batch H).
+    // WHY: this regex once matched only the bare "Caller: " — left unchanged it
+    //      would have flagged EVERY healthy call as no_caller_audio the moment
+    //      the timestamped agent deployed, drowning the real codec alarm.
+    const before = errorCount('no_caller_audio');
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-healthy-stamped',
+      duration_seconds: 120,
+      transcript: 'Assistant [0:00]: How can I help?\nCaller [0:12]: I need an oil change.',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(errorCount('no_caller_audio')).toBe(before);
+  });
+
+  it('HAPPY: tool_calls payload is MERGED into voice_sessions.metadata', async () => {
+    // WHO: the agent's finalize pass shipping the per-call tool trace.
+    // WHAT: after end_voice_session, the route runs a metadata || merge keyed
+    //        (tenant_id, call_id) with the payload under 'tool_calls'.
+    // WHY: the Pino copy of this data rotates with the container — the 07-27
+    //        calls lost every tool trace to a restart and call #8's postmortem
+    //        ended at three undecidable causes. This makes it one SQL query.
+    const toolCalls = {
+      entries: [
+        { t: 4200, tool: 'get_available_slots', args: { date: '2026-07-30' }, ok: true, ms: 180 },
+        { t: 9100, tool: 'book_with_scheduling', args: {}, ok: false, ms: 240 },
+      ],
+      dropped: 0,
+    };
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ ended: true }] }, { rows: [] }],
+    });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-traced',
+      duration_seconds: 90,
+      transcript: 'Assistant [0:00]: Hello.\nCaller [0:05]: Book me in.',
+      tool_calls: toolCalls,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, result: { ended: true } });
+    const merge = queries.find((q) => q.text.includes("jsonb_build_object('tool_calls'"))!;
+    expect(merge).toBeDefined();
+    expect(merge.text).toContain('metadata'); // a merge (||), never a SET-overwrite
+    expect(merge.text).toContain('||');
+    expect(merge.params).toEqual([TENANT_ID, 'call-traced', JSON.stringify(toolCalls)]);
+  });
+
+  it('HAPPY: an end WITHOUT tool_calls runs no metadata write — omission never erases', async () => {
+    // WHY: the enrich pass re-calls this route without tool_calls; a merge on
+    //      that second call with an empty value would wipe the finalize's trace.
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-no-trace',
+      duration_seconds: 60,
+      transcript: 'Assistant [0:00]: Hello.\nCaller [0:04]: Hi.',
+      summary: 'Caller said hi.',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(queries.some((q) => q.text.includes('jsonb_build_object'))).toBe(false);
+  });
+
+  it('SAD: an oversized tool_calls payload is rejected by the schema, not written', async () => {
+    // WHY: metadata is unbounded jsonb; the size refine is the only thing
+    //      between a buggy agent loop and a multi-MB row.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'call-huge-trace',
+      duration_seconds: 60,
+      tool_calls: {
+        entries: Array.from({ length: 200 }, (_, i) => ({
+          t: i,
+          tool: 'x'.repeat(100),
+          args: { blob: 'y'.repeat(700) },
+          ok: true,
+          ms: 1,
+        })),
+        dropped: 0,
+      },
+    });
+    expect(res.statusCode).toBe(200); // agent-tools speak failure at 200
+    expect(res.json().success).toBe(false);
+    expect(queries).toHaveLength(0); // nothing reached the DB
+  });
+
   it('HAPPY: a short hang-up does NOT bump errors_total{no_caller_audio}', async () => {
     // WHO: a caller who hung up during the greeting.
     // WHAT: 12 seconds, greeting-only transcript — under SILENT_CALL_MIN_SECONDS,

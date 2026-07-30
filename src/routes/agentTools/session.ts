@@ -350,6 +350,22 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
               args.appointment_id ?? null,
             ]
           );
+          // Persist the per-call tool trace into metadata (2026-07-30). A MERGE
+          // (`||`), not a SET — metadata may carry other keys, and the RPC above
+          // is deliberately untouched (changing its signature creates a second
+          // overload; see the booking-RPC "function is not unique" lesson).
+          // Only when the agent sent one: the finalize pass carries it, the
+          // enrich pass omits it, and omission must never erase it.
+          if (args.tool_calls != null) {
+            await client.query(
+              `UPDATE voice_sessions
+                  SET metadata = COALESCE(metadata, '{}'::jsonb)
+                        || jsonb_build_object('tool_calls', $3::jsonb),
+                      updated_at = now()
+                WHERE tenant_id = $1 AND call_id = $2`,
+              [args.tenant_id, args.call_id, JSON.stringify(args.tool_calls)]
+            );
+          }
           if (!['price', 'no_availability'].includes(args.outcome ?? '')) {
             return { ended: res.rows[0]?.ended ?? false, forwardPhone: null, inboundPhone: null };
           }
@@ -409,8 +425,11 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         // Anchored to line start — "Caller:" inside the assistant's own words
         // must not count as a caller turn. Mirrors renderedHasCallerTurn() in
         // agent/src/transcript.ts, which owns the rendering side of this
-        // contract; the two regexes must stay in step.
-        if (!/^Caller: /m.test(transcript)) {
+        // contract; the two regexes must stay in step. Accepts both the
+        // timestamped "Caller [1:23]: " (2026-07-30 onward) and the bare
+        // "Caller: " of older agents — during a deploy the two coexist, and a
+        // mismatch here would flag EVERY real call as no_caller_audio.
+        if (!/^Caller(?: \[\d+:\d{2}\])?: /m.test(transcript)) {
           errorsTotal.inc({ event: 'no_caller_audio' });
           app.log.warn(
             {

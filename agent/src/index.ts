@@ -46,6 +46,7 @@ import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/h
 import { attachOutputWatchdog, attachSilentTurnRecovery } from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
 import { TranscriptRecorder } from './transcript.js';
+import { ToolCallLog } from './toolCallLog.js';
 import { CallOutcomeTracker } from './callOutcome.js';
 import { summarizeCall } from './callSummary.js';
 import { classifyCallOutcome } from './callClassify.js';
@@ -380,6 +381,12 @@ export default defineAgent({
     // — above both the shutdown registration and the session listener — so both
     // close over the same recorder.
     const transcript = new TranscriptRecorder();
+    // Same lifecycle as the transcript: fed by the FunctionToolsExecuted
+    // listener, shipped once at finalize into voice_sessions.metadata. The Pino
+    // copy of the same data rotates with the container (2026-07-28 restart ate
+    // every tool trace for the 07-27 calls — CALL_IMPROVEMENTS.md); this one
+    // lands in the row next to the transcript it explains.
+    const toolCallLog = new ToolCallLog();
     // INBOUND-AUDIO EVIDENCE. Two independent counters that, read together at
     // finalize, say WHERE a caller's speech was lost — the one distinction that
     // matters when a call comes back empty, and the one that is impossible to
@@ -525,6 +532,11 @@ export default defineAgent({
               transcript: rendered,
               outcome: trackedOutcome,
               appointment_id: appointmentId,
+              // Persisted tool trace (voice_sessions.metadata.tool_calls) —
+              // omitted entirely when no tool fired. Only this first call
+              // carries it; the enrich pass merges nothing, so a re-SET of the
+              // other columns can't erase it.
+              tool_calls: toolCallLog.toPayload() ?? undefined,
             });
             // ToolsClient.call() resolves { ok:false } on a backend 5xx (does NOT
             // throw), so the catch below won't fire on a 500 — inspect the result
@@ -1473,6 +1485,9 @@ export default defineAgent({
             { event: 'function_tools_executed', tools, tool_calls: toolCalls },
             `tools executed: ${tools.join(', ')}`
           );
+          // Same entries, PERSISTED — the log line above rotates with the
+          // container; this accumulates for voice_sessions.metadata at finalize.
+          toolCallLog.recordBatch(ev.functionCalls ?? [], ev.functionCallOutputs ?? []);
         });
         session.on(voice.AgentSessionEventTypes.Error, (ev) => {
           const e: unknown = ev.error;
@@ -1565,6 +1580,11 @@ export default defineAgent({
             fillerText,
             recoveryText,
             log: callLog,
+            // Hold lines are addToChatCtx:false (never pollute the model's
+            // context) — this puts them in the TRANSCRIPT anyway, so a silent
+            // call shows whether dead-air handling actually fired (the 07-27
+            // 40s-of-nothing calls could not).
+            onSpoken: (text) => transcript.add('assistant', text),
           });
           session.on(voice.AgentSessionEventTypes.Close, detachWatchdog);
         }
@@ -1579,6 +1599,7 @@ export default defineAgent({
           voice: ttsVoiceKey,
           recoveryText: RECOVERY_LINE,
           log: callLog,
+          onSpoken: (text) => transcript.add('assistant', text),
         });
         session.on(voice.AgentSessionEventTypes.Close, detachTurnRecovery);
 

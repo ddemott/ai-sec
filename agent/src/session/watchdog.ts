@@ -52,6 +52,16 @@ export interface WatchdogOptions {
   deadline2Ms?: number;
   /** Structured logger (callLog). */
   log: { info: LogFn; warn: LogFn };
+  /**
+   * Called with each line the watchdog actually plays. Every say() here is
+   * addToChatCtx:false ON PURPOSE (hold lines must not pollute the model's
+   * context) — but that also kept them out of ConversationItemAdded and thus
+   * the TranscriptRecorder, so a call's transcript under-reported what the
+   * agent spoke. The 2026-07-27 silent calls (#5/#6, 40s of "nothing" between
+   * greeting and hangup) could not show whether dead-air handling ever fired.
+   * index.ts wires this straight into the transcript; chat context stays clean.
+   */
+  onSpoken?: (text: string) => void;
 }
 
 type LogFn = (obj: Record<string, unknown>, msg: string) => void;
@@ -113,6 +123,7 @@ export function attachOutputWatchdog(
         { event: 'watchdog_hold_played', label, cached: frame != null },
         `watchdog played a ${label} line (caller not left in silence)`
       );
+      opts.onSpoken?.(text);
       return handle;
     } catch (e) {
       // SchedulingPausedError (draining) or similar — nothing to play into.
@@ -329,6 +340,11 @@ export function attachSilentTurnRecovery(
     /** Escalation line if the forced reply itself produces no audio. */
     recoveryText: string;
     log: { info: LogFn; warn: LogFn };
+    /** Same contract as WatchdogOptions.onSpoken — the escalation line is
+     *  addToChatCtx:false, so only this callback gets it into the transcript.
+     *  (The generateReply nudge produces a normal ConversationItemAdded and
+     *  needs no help.) */
+    onSpoken?: (text: string) => void;
   }
 ): () => void {
   // True from the moment we fire a nudge until any agent audio plays. If a
@@ -380,6 +396,7 @@ export function attachSilentTurnRecovery(
           allowInterruptions: true,
           addToChatCtx: false,
         });
+        opts.onSpoken?.(opts.recoveryText);
       } catch {
         // Session draining/closed — nothing to play into, nothing to do.
       }

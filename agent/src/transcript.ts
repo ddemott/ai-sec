@@ -19,6 +19,9 @@ export type TranscriptRole = 'user' | 'assistant';
 export interface TranscriptTurn {
   role: TranscriptRole;
   text: string;
+  /** ms offset from call start — when this turn was COMMITTED (finalized by
+   *  STT / finished being spoken), not when it began. */
+  tMs: number;
 }
 
 const SPEAKER_LABEL: Record<TranscriptRole, string> = {
@@ -43,14 +46,35 @@ const TRUNCATION_MARKER = '\n…[transcript truncated]';
  * hasCallerTurn's note). Anchored to the start of a line so "Caller:" appearing
  * inside the assistant's own words can't trip it.
  */
-const CALLER_LINE = new RegExp(`^${SPEAKER_LABEL.user}: `, 'm');
+// Both shapes: timestamped "Caller [1:23]: …" (2026-07-30 onward) and the bare
+// "Caller: …" of rows stored before then — these functions also run over
+// historical transcripts pulled from the DB.
+const CALLER_LINE = new RegExp(`^${SPEAKER_LABEL.user}(?: \\[\\d+:\\d{2}\\])?: `, 'm');
 export function renderedHasCallerTurn(rendered: string | null | undefined): boolean {
   return !!rendered && CALLER_LINE.test(rendered);
+}
+
+/** Render an ms offset as the transcript's `m:ss` stamp. */
+function formatOffset(tMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(tMs / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 /** Accumulates spoken turns and renders a human-readable transcript. */
 export class TranscriptRecorder {
   private readonly turns: TranscriptTurn[] = [];
+  private readonly startedAtMs: number;
+
+  // Timestamps were added 2026-07-30 (CALL_IMPROVEMENTS.md): the silent calls
+  // (#4/#5/#6 — 13-42s, greeting only) and the bot-mirror loop (#1, 5 minutes)
+  // were undiagnosable from an unstamped transcript — "how long did the caller
+  // wait", "where did the dead air sit" had no answer. Each line now carries
+  // its m:ss offset from call start, so pauses read straight off the text.
+  constructor(startedAtMs: number = Date.now()) {
+    this.startedAtMs = startedAtMs;
+  }
 
   /**
    * Record one conversation item. No-ops for any role other than
@@ -61,7 +85,7 @@ export class TranscriptRecorder {
     if (role !== 'user' && role !== 'assistant') return;
     const trimmed = (text ?? '').trim();
     if (!trimmed) return;
-    this.turns.push({ role, text: trimmed });
+    this.turns.push({ role, text: trimmed, tMs: Math.max(0, Date.now() - this.startedAtMs) });
   }
 
   /** Number of spoken turns recorded so far. */
@@ -94,7 +118,9 @@ export class TranscriptRecorder {
    */
   render(): string | null {
     if (this.turns.length === 0) return null;
-    const full = this.turns.map((t) => `${SPEAKER_LABEL[t.role]}: ${t.text}`).join('\n');
+    const full = this.turns
+      .map((t) => `${SPEAKER_LABEL[t.role]} [${formatOffset(t.tMs)}]: ${t.text}`)
+      .join('\n');
     if (full.length <= MAX_TRANSCRIPT_CHARS) return full;
     return full.slice(0, MAX_TRANSCRIPT_CHARS - TRUNCATION_MARKER.length) + TRUNCATION_MARKER;
   }

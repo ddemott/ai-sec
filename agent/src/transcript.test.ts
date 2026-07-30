@@ -1,27 +1,40 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MAX_TRANSCRIPT_CHARS, TranscriptRecorder, renderedHasCallerTurn } from './transcript.js';
 
 // WHO: the agent's conversation_item_added listener (index.ts) feeding spoken
 //      turns to the recorder, drained by the shutdown callback.
 // WHAT: TranscriptRecorder accumulates user/assistant turns and renders a
-//      plain-text Caller:/Assistant: transcript for end_voice_session.
+//      plain-text `Caller [m:ss]:`/`Assistant [m:ss]:` transcript for
+//      end_voice_session. Offsets added 2026-07-30 (CALL_IMPROVEMENTS.md): the
+//      silent calls and the 5-minute bot-mirror loop were undiagnosable from
+//      an unstamped transcript — "where did the dead air sit" had no answer.
 // WHERE: agent/src/transcript.ts.
 // WHY: the Calls tab transcript section reads exactly this text; bad rendering
 //      (blank lines, leaked system prompt, empty-string instead of NULL) would
 //      surface to owners.
 describe('TranscriptRecorder', () => {
-  it('HAPPY: renders caller + assistant turns as labeled lines in order', () => {
-    // WHEN: a normal two-way conversation.
+  beforeEach(() => {
+    // Fixed clock → deterministic [m:ss] stamps.
+    vi.useFakeTimers({ now: 1_000_000 });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('HAPPY: renders caller + assistant turns as labeled, TIMESTAMPED lines in order', () => {
+    // WHEN: a normal two-way conversation with real gaps between turns.
     const rec = new TranscriptRecorder();
     rec.add('assistant', 'Thanks for calling Bella’s. How can I help?');
+    vi.advanceTimersByTime(12_000);
     rec.add('user', 'I want to book a haircut.');
+    vi.advanceTimersByTime(63_000); // a 1m03s think — the kind of gap the stamps exist to expose
     rec.add('assistant', 'Sure — what day works?');
     expect(rec.size).toBe(3);
     expect(rec.render()).toBe(
-      'Assistant: Thanks for calling Bella’s. How can I help?\n' +
-        'Caller: I want to book a haircut.\n' +
-        'Assistant: Sure — what day works?'
+      'Assistant [0:00]: Thanks for calling Bella’s. How can I help?\n' +
+        'Caller [0:12]: I want to book a haircut.\n' +
+        'Assistant [1:15]: Sure — what day works?'
     );
   });
 
@@ -44,7 +57,7 @@ describe('TranscriptRecorder', () => {
     rec.add('function', 'noise');
     rec.add('user', 'Hello?');
     expect(rec.size).toBe(1);
-    expect(rec.render()).toBe('Caller: Hello?');
+    expect(rec.render()).toBe('Caller [0:00]: Hello?');
   });
 
   it('SAD: skips empty / whitespace-only text (no blank transcript lines)', () => {
@@ -57,7 +70,7 @@ describe('TranscriptRecorder', () => {
     rec.add('user', '  trimmed me  ');
     expect(rec.size).toBe(1);
     // leading/trailing whitespace is trimmed on store.
-    expect(rec.render()).toBe('Caller: trimmed me');
+    expect(rec.render()).toBe('Caller [0:00]: trimmed me');
   });
 
   it('SAD: truncates an over-cap transcript and marks it, keeping the start', () => {
@@ -71,8 +84,16 @@ describe('TranscriptRecorder', () => {
     const out = rec.render();
     expect(out).not.toBeNull();
     expect(out!.length).toBeLessThanOrEqual(MAX_TRANSCRIPT_CHARS);
-    expect(out!.startsWith('Assistant: aaaa')).toBe(true);
+    expect(out!.startsWith('Assistant [0:00]: aaaa')).toBe(true);
     expect(out!.endsWith('[transcript truncated]')).toBe(true);
+  });
+
+  it('SAD: a clock that jumps backwards never renders a negative offset', () => {
+    // Date.now() is not monotonic (NTP correction mid-call). Clamped at 0.
+    const rec = new TranscriptRecorder();
+    vi.setSystemTime(999_000); // 1s BEFORE the recorder's start
+    rec.add('user', 'Hello?');
+    expect(rec.render()).toBe('Caller [0:00]: Hello?');
   });
 });
 
@@ -92,7 +113,7 @@ describe('TranscriptRecorder.hasCallerTurn — how real calls end', () => {
     const rec = new TranscriptRecorder();
     rec.add('assistant', GREETING);
     expect(rec.hasCallerTurn()).toBe(false);
-    expect(rec.render()).not.toContain('Caller:');
+    expect(rec.render()).not.toContain('Caller');
   });
 
   it('SAD: long silent pause then hang-up — duration does NOT imply speech', () => {
@@ -149,9 +170,20 @@ describe('TranscriptRecorder.hasCallerTurn — how real calls end', () => {
 describe('renderedHasCallerTurn — the string-level twin used by the enrichers', () => {
   it('matches only a caller line at the START of a line', () => {
     // "Caller:" buried inside the assistant's own words must not count.
-    expect(renderedHasCallerTurn('Assistant: I can note "Caller:" style labels.')).toBe(false);
-    expect(renderedHasCallerTurn(`Assistant: ${GREETING}`)).toBe(false);
-    expect(renderedHasCallerTurn(`Assistant: ${GREETING}\nCaller: Hi there.`)).toBe(true);
+    expect(renderedHasCallerTurn('Assistant [0:00]: I can note "Caller:" style labels.')).toBe(
+      false
+    );
+    expect(renderedHasCallerTurn(`Assistant [0:00]: ${GREETING}`)).toBe(false);
+    expect(
+      renderedHasCallerTurn(`Assistant [0:00]: ${GREETING}\nCaller [0:09]: Hi there.`)
+    ).toBe(true);
+  });
+
+  it('still matches the PRE-timestamp format — historical rows run through this too', () => {
+    // Transcripts stored before 2026-07-30 have bare "Caller: " lines, and the
+    // enrichers can be pointed at a stored transcript (re-summarize tooling).
+    expect(renderedHasCallerTurn('Assistant: hello\nCaller: Hi there.')).toBe(true);
+    expect(renderedHasCallerTurn('Assistant: mentions Caller: inline')).toBe(false);
   });
 
   it('null / empty is not a caller turn', () => {
