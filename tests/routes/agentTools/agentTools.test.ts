@@ -864,6 +864,7 @@ describe('agentTools /capture-job-inquiry', () => {
       client_company: 'Globex Health',
       represents_company: false,
       employment_type: 'contract',
+      role_description: 'senior Azure/M365 developer — cloud-native and integration work',
       rate_range: '$120-140/hr',
       duration: '6 months',
       location_type: 'remote',
@@ -872,12 +873,19 @@ describe('agentTools /capture-job-inquiry', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { email_queued: true } });
     expect(queries[2].text).toContain('INSERT INTO job_inquiries');
+    // The 2026-07-30 prod loss: the role itself must land in the ROW, not just
+    // the transcript — column + placeholder in the INSERT, verbatim in values.
+    expect(queries[2].text).toContain('role_description');
+    expect(queries[2].params).toContain(
+      'senior Azure/M365 developer — cloud-native and integration work'
+    );
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
       'DaleDeMott@thinkinghammer.com',
       expect.objectContaining({
         callerCompany: 'Acme Corp',
         clientCompany: 'Globex Health',
         employmentType: 'contract',
+        roleDescription: 'senior Azure/M365 developer — cloud-native and integration work',
         duration: '6 months',
         locationType: 'remote',
         timezone: 'America/Chicago',
@@ -1163,7 +1171,8 @@ describe('agentTools /capture-job-inquiry', () => {
     expect(res.json()).toMatchObject({ success: true, result: { saved: true } });
     const insert = queries.find((q) => q.text.includes('INSERT INTO job_inquiries'))!;
     expect(insert.text).toContain('appointment_id');
-    expect(insert.params[14], 'the link rides the INSERT as $15').toBe(APPT);
+    // $16 since role_description joined the column list (2026-07-30).
+    expect(insert.params[15], 'the link rides the INSERT as $16').toBe(APPT);
     const stamp = queries.find((q) => q.text.includes('UPDATE appointments'))!;
     expect(stamp.params[1]).toBe(APPT);
     expect(stamp.params[2]).toBe(

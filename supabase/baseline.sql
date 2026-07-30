@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict uHM8rN4dwE8eMktabRfsF1gFOGmXi5nAxbSMonQQ9rmMif4K4IYB17VEC7YafxY
+\restrict 7aKqnQ4aWqc4oyqPf3cGosOqvS1aFmji38TUQ6GOulAmXaIceArIx3AQZ1RVt5j
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2988,7 +2988,8 @@ CREATE TABLE public.job_inquiries (
     call_id text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     caller_company text,
-    appointment_id uuid
+    appointment_id uuid,
+    role_description text
 );
 
 ALTER TABLE ONLY public.job_inquiries FORCE ROW LEVEL SECURITY;
@@ -3020,6 +3021,13 @@ COMMENT ON COLUMN public.job_inquiries.caller_company IS 'The company the CALLER
 --
 
 COMMENT ON COLUMN public.job_inquiries.appointment_id IS 'The meeting this inquiry was booked around, when the call produced one. NULL for brief-the-owner-only inquiries. SET NULL on appointment delete: the lead outlives the meeting.';
+
+
+--
+-- Name: COLUMN job_inquiries.role_description; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.job_inquiries.role_description IS 'The role in the caller''s own words (title, tech, responsibilities) — collected by the job tree''s role_description node.';
 
 
 --
@@ -5949,5 +5957,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict uHM8rN4dwE8eMktabRfsF1gFOGmXi5nAxbSMonQQ9rmMif4K4IYB17VEC7YafxY
+\unrestrict 7aKqnQ4aWqc4oyqPf3cGosOqvS1aFmji38TUQ6GOulAmXaIceArIx3AQZ1RVt5j
 

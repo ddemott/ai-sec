@@ -325,6 +325,9 @@ export const CaptureJobInquirySchema = z.object({
   // the tree accepted it, and THIS enum bounced the whole capture — the agent had
   // to ask the caller to re-answer and then mislabeled the role "contract".
   employment_type: z.enum(['contract', 'full_time', 'contract_to_hire']).optional(),
+  // The role itself, in the caller's own words — title, tech, responsibilities.
+  // Generous cap: callers dictate whole paragraphs, and the paragraph is the lead.
+  role_description: z.string().max(2000).optional(),
   rate_range: z.string().max(200).optional(),
   duration: z.string().max(200).optional(),
   location_type: z.enum(['onsite', 'remote', 'hybrid']).optional(),
