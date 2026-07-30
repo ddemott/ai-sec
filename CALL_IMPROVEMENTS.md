@@ -25,6 +25,8 @@ Analyzed 2026-07-30 (12 calls: all real inbound `SCL_*` calls from 2026-07-26/27
 
 ## 1. SCL_nRKo3KEVw8Yh — 2026-07-27 16:42 CT, 298s, outcome=message (Sage / eTeam, +17324018834)
 
+> **FIX SHIPPED — PR #307** (2026-07-30): wording rule (no "message" promise on job calls), outcome `job_inquiry`, stall detector, `finish_call` once-guard, offer-meeting on the live path — plus the deep-dive finding the original analysis missed: `role_description` was dropped end-to-end (tree collected it, write had no param/field/column; now migration `20260730120000` + full plumbing + a completeness CI guard).
+
 **PROBLEM.** 5-minute call with an AI recruiter bot. Agent promised twice to "leave a message for Dale with all the details" — **no `customer_messages` row exists for this call.** The data landed only in `job_inquiries` (correctly captured: eTeam → Capgemini, contract-to-hire, hybrid, Hanover NH, "competitive"). Call also looped: agent asked "which company / would you like to leave a message" variants ~5 times against a bot that mirrored the question back. Two consecutive goodbye utterances at the end.
 
 **ANALYSIS.** (a) The job tree's action tool (`capture_job_inquiry`) fired and satisfied the checklist, so `take_message` never ran — but the agent's _language_ promised a message. Outcome column says `message`, the Messages inbox shows nothing; if Dale checks Messages he misses this lead unless he also checks job inquiries. Verbal promise and executed tool diverged. (b) Bot-loop: both sides were AIs politely deferring; the agent has no "caller is repeating themselves / not answering" detection, so it spent 5 minutes extracting what the bot said in its first sentence. (c) Double farewell = two `session.say`/reply turns racing at close.

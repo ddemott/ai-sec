@@ -15,7 +15,7 @@ failures behind the 07-27 Jaya cascade, then the rest.
 
 ---
 
-## G — job-call capture completeness (calls #1) — IN PROGRESS
+## G — job-call capture completeness (calls #1) — **PR #307**
 
 1. `job_inquiries.role_description` column + Zod field + tool param + tree mapping +
    `baseline.sql` regen. The job tree COLLECTS the role description (node exists, the
