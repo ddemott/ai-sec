@@ -19,6 +19,11 @@ export const OUTCOME_LABELS: Record<string, string> = {
   booked: 'Booked',
   transferred: 'Transferred',
   message: 'Left a message',
+  // capture_job_inquiry succeeded (callOutcome.ts recordJobInquiry, 2026-07-30).
+  // Previously these calls fell to the classifier, which read the agent's spoken
+  // "I'll leave a message" and labelled them 'message' — sending the owner to an
+  // empty Messages inbox while the lead sat in job inquiries.
+  job_inquiry: 'Job inquiry',
   no_availability: 'No availability',
   wrong_service: 'Wrong service',
   price: 'Price concern',
@@ -76,6 +81,7 @@ export function getOutcomeStyle(outcome: string | null): OutcomeStyle {
     // Procedural, needs follow-up + legacy `voicemail`.
     case 'transferred':
     case 'message':
+    case 'job_inquiry':
     case 'voicemail':
       return { backgroundColor: 'var(--warning-bg)', color: 'var(--warning)' };
     default:

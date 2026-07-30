@@ -51,6 +51,19 @@ export class CallOutcomeTracker {
     if (this.outcome === null) this.outcome = 'message';
   }
 
+  /**
+   * capture_job_inquiry persisted a job lead. Sits between 'message' and the
+   * strong outcomes: a job call that also booked a meeting is a BOOKED call
+   * (the appointment link is what the owner acts on), but the inquiry outranks
+   * a plain message — the lead row IS the message on a job call, and labelling
+   * it 'message' sent the owner to an empty Messages inbox (SCL_nRKo3KEVw8Yh,
+   * 2026-07-27: outcome said message, customer_messages had zero rows, and the
+   * lead sat unseen in job_inquiries).
+   */
+  recordJobInquiry(): void {
+    if (this.outcome === null || this.outcome === 'message') this.outcome = 'job_inquiry';
+  }
+
   /** Snapshot for the session-end payload. */
   result(): { outcome: string | null; appointmentId: string | null } {
     return { outcome: this.outcome, appointmentId: this.appointmentId };

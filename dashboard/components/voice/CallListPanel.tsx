@@ -115,6 +115,7 @@ export function CallListPanel({
             <option value="booked">Booked</option>
             <option value="transferred">Transferred</option>
             <option value="message">Left a message</option>
+            <option value="job_inquiry">Job inquiry</option>
             <option value="no_availability">No availability</option>
             <option value="wrong_service">Wrong service</option>
             <option value="price">Price concern</option>
