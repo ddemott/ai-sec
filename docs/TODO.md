@@ -16,6 +16,20 @@ Voice/Telnyx go-live ops detail + incident recovery: `docs/RUNBOOK.md` §7.
 
 ---
 
+## 📞 Live-call fix series (2026-07-30) — see `docs/CALL_FIX_PLAN.md`
+
+The 12 real calls from 2026-07-26/27 (`CALL_IMPROVEMENTS.md`, root) produced an
+8-batch PR plan: **G** (job-call capture completeness — role_description dropped
+end-to-end, outcome mislabel, false "message" promise, stall detector, offer-meeting
+on the live path) → **H** (per-call tool-call log + transcript fidelity) → **A**
+(caller context/appointments reach the model) + **B** (booking mechanics, timezone,
+cross-call duplicates, roster) → **C** (availability reason codes) → **D**
+(corrections propagate) → **E** (junk "Caller" rows, urgency) → **F** (silence
+handling, greeting metric, inbox unification). Full detail, cut lines, and the four
+recurring failure classes: `docs/CALL_FIX_PLAN.md`.
+
+---
+
 ## 🔴 P0 — Launch blockers (clear before the first paying customer)
 
 Ordered: the product must answer + transfer + book on a real call, then take money,
@@ -212,7 +226,7 @@ Each status re-verified against the code on 2026-07-28, not carried over on trus
 - [ ] **(code)** **Extract `src/routes/knowledge.ts` into services** — still **1,087 lines**. Route should orchestrate; scanning/embedding/normalization belong in `src/services/`.
 - [ ] **(code)** **Extract `src/routes/analytics.ts` into services** — still **880 lines**. Same shape as above.
 - [ ] **(code)** **Group agent tool definitions by capability** — `agent/src/tools.ts` defines **26** tools in one flat file; `agent/src/tools/` holds only `wrapTool.ts`. The capability union (`knowledge | messaging | identity | scheduling | verification | transfer`) exists in types but not in the file layout. **Do this together with the reachability audit below** — the two touch the same file.
-- [ ] **(code)** **Reconcile `tools.ts` against what the model can actually reach** (new, 2026-07-27). 26 tools are defined; `selectedTools()` offers **12** under question trees. Some absences are correct (`start_booking` / `manage_appointment` were ladder routers; `book_appointment` / `check_availability` / `get_scheduling_options` are superseded; SMS tools are gated off anyway). **These are not:** `transfer_call` — *there is no human handoff on a live call* — plus `page_owner_via_sms`, `attach_meeting_notes`, `save_customer_preference`, `identify_caller`, `get_customer_context`, `get_detailed_customer_history`, `find_caller_by_name`, `send_verification_code`, `verify_phone_code`. Decide per tool: wire it into a tree / passthrough, or delete it. A tool that cannot be called is either a missing feature or dead code, and right now the codebase does not say which.
+- [ ] **(code)** **Reconcile `tools.ts` against what the model can actually reach** (new, 2026-07-27). 26 tools are defined; `selectedTools()` offers **12** under question trees. Some absences are correct (`start_booking` / `manage_appointment` were ladder routers; `book_appointment` / `check_availability` / `get_scheduling_options` are superseded; SMS tools are gated off anyway). **These are not:** `transfer_call` — _there is no human handoff on a live call_ — plus `page_owner_via_sms`, `attach_meeting_notes`, `save_customer_preference`, `identify_caller`, `get_customer_context`, `get_detailed_customer_history`, `find_caller_by_name`, `send_verification_code`, `verify_phone_code`. Decide per tool: wire it into a tree / passthrough, or delete it. A tool that cannot be called is either a missing feature or dead code, and right now the codebase does not say which.
 - [ ] **(code)** **Dedupe `src/services/phoneUtils.ts` / `nameUtils.ts` against `shared/`** — both still exist alongside `shared/phone.ts` + `shared/name.ts`.
 - [ ] **(code)** **Finish the dashboard component subdirectory migration** — 87 loose `.tsx` files still at `dashboard/components/`.
 - [ ] **(code)** **Dead CRM schema cleanup** — Jobber/HubSpot/ServiceTitan/GoHighLevel columns still referenced in `supabase/baseline.sql` after the 2026-06-12 adapter deletion.
