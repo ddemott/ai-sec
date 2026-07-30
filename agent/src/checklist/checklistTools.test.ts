@@ -514,7 +514,13 @@ describe('wrapped actions', () => {
     // mock call fired capture with half the role uncollected.
     const early = await call(toolkit.selectedTools(), 'capture_job_inquiry', {});
     expect(early).toContain('first resolve:');
-    for (const node_id of ['caller_name', 'caller_phone', 'role_description', 'work_mode']) {
+    for (const node_id of [
+      'caller_name',
+      'caller_phone',
+      'role_description',
+      'work_mode',
+      'meeting_offer',
+    ]) {
       await call(toolkit.selectedTools(), 'record_answer', { node_id, declined: true });
     }
     const res = await call(toolkit.selectedTools(), 'capture_job_inquiry', {});
@@ -544,6 +550,7 @@ describe('wrapped actions', () => {
       ['salary_range', '130 to 200 thousand'],
       ['work_mode', 'onsite'],
       ['position_address', '123 Main Street'],
+      ['meeting_offer', 'details_only'],
     ] as const) {
       await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
     }
@@ -554,6 +561,7 @@ describe('wrapped actions', () => {
     });
     const sent = fakes.capture_job_inquiry.execute.mock.calls[0][0] as Record<string, unknown>;
     expect(sent.location_type).toBe('onsite'); // the live NULL, backfilled
+    expect(sent.role_description).toBe('senior software engineer'); // the 2026-07-30 prod loss
     expect(sent.rate_range).toBe('130 to 200 thousand'); // salary_range → rate_range
     expect(sent.employment_type).toBe('full_time');
     expect(sent.represents_company).toBe(true); // own_company → boolean
@@ -579,6 +587,7 @@ describe('wrapped actions', () => {
       ['conversion_terms', 'converts after six months'],
       ['work_mode', 'remote'],
       ['team_timezone', 'Central'],
+      ['meeting_offer', 'details_only'],
     ] as const) {
       await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
     }
@@ -600,6 +609,7 @@ describe('wrapped actions', () => {
       ['employment_type', 'contract'],
       ['work_mode', 'remote'],
       ['team_timezone', 'Central'],
+      ['meeting_offer', 'details_only'],
     ] as const) {
       await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
     }
@@ -727,5 +737,81 @@ describe('answer_question (always-on RAG)', () => {
     expect(fakes.get_company_policy_answer.execute).toHaveBeenCalledOnce();
     expect(res).toContain('Open 1 to 5');
     expect(res).toContain('return to the checklist — next open: caller_name');
+  });
+});
+
+describe('finish_call — one goodbye only (SCL_nRKo3KEVw8Yh double farewell)', () => {
+  it('a second finish_call is a no-op — closeCall fires exactly once', async () => {
+    // WHO: the 2026-07-27 Sage call — two consecutive goodbye utterances.
+    // WHAT: closeCall defers session.close() to a macrotask, so a repeat
+    //       finish_call can land in the gap and speak a second farewell.
+    // WHY: the first call through the gate owns the goodbye; repeats no-op.
+    const { toolkit, closeCall } = makeKit();
+    await call(toolkit.selectedTools(), 'finish_call', {});
+    const second = await call(toolkit.selectedTools(), 'finish_call', {});
+    expect(closeCall).toHaveBeenCalledOnce();
+    expect(second).toContain('already ending');
+  });
+});
+
+describe('meeting_offer (the live-path OFFER_MEETING port)', () => {
+  it('a YES makes the HOST select booking — no model discretion involved', async () => {
+    // WHO: the 2026-07-27 ladder eval failure — offered, took a time, said
+    //      "you're booked", never called the booking tool — repeated by the
+    //      tree version on its second sim run when the "call set_purpose NOW"
+    //      directive was simply ignored.
+    // WHY: a directive the model can skip is a hope; a selection the host has
+    //      already made is a fact. The yes routes STRUCTURALLY into booking →
+    //      book_with_scheduling, where "booked" is earned by a success result.
+    const { toolkit, tracker, onSelectionChanged } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_offer',
+      value: 'wants_meeting',
+    });
+    expect(tracker.selectedTrees()).toContain('booking'); // host selected, already done
+    expect(tracker.value('meeting_topic')).toBe('a job opportunity'); // topic auto-filled
+    expect(onSelectionChanged).toHaveBeenCalled(); // toolset rebuild scheduled
+    expect(res).toContain('booking is now ON YOUR CHECKLIST');
+    expect(res).toContain('book_with_scheduling returns success');
+  });
+
+  it('a details-only answer adds no booking directive — the message path is a complete outcome', async () => {
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_offer',
+      value: 'details_only',
+    });
+    expect(res).not.toContain('book_with_scheduling');
+    expect(res).toContain('CHECKLIST STATE');
+  });
+
+  it('the offer gates the capture — await_tree holds the write until the offer is resolved', async () => {
+    // The goodbye gate makes the offer STRUCTURAL: the intake cannot complete
+    // (and the call cannot close) with the offer silently skipped.
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    for (const node_id of [
+      'caller_name',
+      'caller_phone',
+      'callers_company',
+      'hiring_for',
+      'role_description',
+      'employment_type',
+      'work_mode',
+    ]) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, declined: true });
+    }
+    const early = await call(toolkit.selectedTools(), 'capture_job_inquiry', {});
+    expect(early).toContain('first resolve:');
+    expect(tracker.status('capture')).not.toBe('done');
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_offer',
+      declined: true,
+    });
+    const res = await call(toolkit.selectedTools(), 'capture_job_inquiry', {});
+    expect(res).toContain('ji_1');
+    expect(tracker.status('capture')).toBe('done');
   });
 });

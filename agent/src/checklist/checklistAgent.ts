@@ -140,6 +140,14 @@ ${menu}
 3. DO THE WRITES. When the checklist shows [ACTION NOW], call that tool. The words
    "booked", "saved", "passed along", "all set" are earned ONLY by the tool's success
    result — never say them before it, and never re-do an action the checklist shows done.
+   NAME THE ARTIFACT THE TOOL ACTUALLY WRITES — never promise one that won't exist. On a
+   job call the write is a RECORDED JOB INQUIRY that goes straight to the owner: say "I'll
+   record the position details for the owner", NEVER "I'll leave a message" or "voicemail"
+   — no message exists unless take_message itself runs, and a caller who repeatedly says
+   "message" does not change what the tool writes (2026-07-27 live call: the agent
+   promised a message twice, captured a job inquiry instead, and the owner's Messages
+   inbox showed nothing while the lead sat unseen). Mirror the CALLER's goal, not the
+   caller's vocabulary.
 
 Their questions: answer_question at ANY moment, mid-anything — answer in one or two
 spoken sentences from the result only, then return to the checklist. If it has no answer,
@@ -179,9 +187,15 @@ further.
 - No filler openers ("Absolutely!", "Great!") — just talk like a good receptionist.`;
 }
 
+/** Consecutive checklist-stationary caller turns before the stall directive fires. */
+export const STALL_TURN_LIMIT = 3;
+
 export class ChecklistAgent extends voice.Agent {
   #toolkit: ChecklistToolkit;
   #tracker: ChecklistTracker;
+  #lastMutationCount = 0;
+  #stallTurns = 0;
+  #stallNudged = false;
 
   constructor(opts: ChecklistAgentOptions) {
     const library = opts.library ?? PLATFORM_TREE_LIBRARY;
@@ -252,6 +266,52 @@ export class ChecklistAgent extends voice.Agent {
 
   // No onEnter greeting on purpose: index.ts speaks the tenant's PRE-GENERATED
   // greeting (zero TTS latency, the right voice); greeting here would double it.
+
+  /**
+   * THE STALL DETECTOR. A caller turn that moves the checklist NOWHERE — no new
+   * answer, no selection change, no completed action — is a stalled turn,
+   * whatever words filled it. After STALL_TURN_LIMIT of them in a row, a system
+   * note lands in the model's context: stop re-asking, summarize, wrap up.
+   *
+   * Origin (SCL_nRKo3KEVw8Yh, 2026-07-27): an AI recruiter bot mirrored "would
+   * you like me to leave a message?" back at the agent for FIVE MINUTES — both
+   * sides politely deferring, the checklist frozen — extracting details the bot
+   * had volunteered in its first sentence. Nothing in the loop was wrong enough
+   * to break it: every individual turn looked like conversation. Only the
+   * host's own state can see that the conversation has stopped going anywhere —
+   * the same host-owns-truth principle as the goodbye gate.
+   *
+   * Mutation counts are compared ACROSS turns: the model's tool calls for turn
+   * N run after this hook fires for turn N, so the snapshot taken here is what
+   * turn N-1's reply achieved. The nudge fires once per stall (not every
+   * stalled turn — repeating it would bury the context) and re-arms as soon as
+   * the checklist moves again.
+   */
+  override async onUserTurnCompleted(
+    chatCtx: llm.ChatContext,
+    _newMessage: llm.ChatMessage
+  ): Promise<void> {
+    const mutations = this.#tracker.mutationCount();
+    if (mutations !== this.#lastMutationCount) {
+      this.#lastMutationCount = mutations;
+      this.#stallTurns = 0;
+      this.#stallNudged = false;
+      return;
+    }
+    this.#stallTurns++;
+    if (this.#stallTurns < STALL_TURN_LIMIT || this.#stallNudged) return;
+    this.#stallNudged = true;
+    chatCtx.addMessage({
+      role: 'system',
+      content:
+        `The last ${this.#stallTurns} caller turns added NOTHING new to the checklist — ` +
+        'the caller is repeating themselves, deflecting, or may be an automated system. ' +
+        'Stop re-asking. In ONE sentence, summarize what you already have and move to ' +
+        'close: if an action on the checklist is ready, do it now with what you have; if ' +
+        'a required item is still missing, ask for that single item ONCE and accept a ' +
+        'decline; then wrap up the call.',
+    });
+  }
 
   // Markdown must never reach the voice — same guarantee every agent path gives.
   override async ttsNode(

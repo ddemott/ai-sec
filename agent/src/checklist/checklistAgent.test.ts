@@ -9,7 +9,8 @@
  * this guidance silently reopens the deadlock. These tests fail if it does.
  */
 import { describe, it, expect } from 'vitest';
-import { buildChecklistPrompt } from './checklistAgent.js';
+import { llm } from '@livekit/agents';
+import { buildChecklistPrompt, ChecklistAgent, STALL_TURN_LIMIT } from './checklistAgent.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
 
 const prompt = buildChecklistPrompt({
@@ -46,5 +47,60 @@ describe('buildChecklistPrompt — wrong-business handling', () => {
     // WHO: THE ELSE catch-all | WHY: it used to fire message+generic_subject for
     // ANY unclassifiable input, including a wrong-number question — the trap.
     expect(prompt).toMatch(/wants something FROM THIS business/i);
+  });
+});
+
+describe('the stall detector (SCL_nRKo3KEVw8Yh — five minutes of bot-mirror)', () => {
+  // WHO: an AI recruiter bot mirroring "would you like me to leave a message?"
+  //      at the agent for 5 minutes, the checklist frozen the whole time.
+  // WHAT: onUserTurnCompleted compares the tracker's mutation count across
+  //       caller turns; STALL_TURN_LIMIT stationary turns → one system note:
+  //       stop re-asking, summarize, wrap up. Re-arms when the checklist moves.
+  // WHY: every individual turn looked like conversation — only host state can
+  //      see that the conversation is going nowhere.
+  function makeAgent() {
+    return new ChecklistAgent({
+      tools: {} as llm.ToolContext,
+      persona: 'You are Piper, the receptionist for Thinking Hammer.',
+      runtime: {
+        currentDate: 'Thursday, July 30, 2026',
+        timezone: 'America/Chicago',
+        businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+        bookableThrough: 'Friday, August 28, 2026',
+      },
+    });
+  }
+
+  it('injects the wrap-up note after STALL_TURN_LIMIT stationary turns — and only once', async () => {
+    const agent = makeAgent();
+    const ctx = llm.ChatContext.empty();
+    const fakeMsg = {} as llm.ChatMessage;
+    for (let i = 0; i < STALL_TURN_LIMIT + 2; i++) {
+      await agent.onUserTurnCompleted(ctx, fakeMsg);
+    }
+    const notes = ctx.items.filter(
+      (it) => it.type === 'message' && it.role === 'system'
+    );
+    expect(notes).toHaveLength(1); // fires once per stall, never spams
+    expect(JSON.stringify(notes[0])).toContain('summarize');
+  });
+
+  it('checklist movement resets the counter — a working call never sees the note', async () => {
+    const agent = makeAgent();
+    const ctx = llm.ChatContext.empty();
+    const fakeMsg = {} as llm.ChatMessage;
+    const tools = agent.currentTools();
+    const exec = (name: string, args: unknown) =>
+      (tools[name] as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }).execute(
+        args,
+        undefined
+      );
+    for (let i = 0; i < 6; i++) {
+      // Every turn moves the checklist (a new selection or answer) — no stall.
+      if (i === 0) await exec('set_purpose', { trees: ['identity'] });
+      else await exec('record_answer', { node_id: 'caller_name', value: `Name${i}` });
+      await agent.onUserTurnCompleted(ctx, fakeMsg);
+    }
+    expect(ctx.items.filter((it) => it.type === 'message' && it.role === 'system')).toHaveLength(0);
   });
 });

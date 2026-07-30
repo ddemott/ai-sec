@@ -339,7 +339,13 @@ export const JOB_TREE: QuestionTreeDef = {
           {
             node_id: 'client_company',
             type: 'text',
-            ask: "which company the work would ACTUALLY be for — different from the caller's",
+            ask:
+              "which company the work would ACTUALLY be for — different from the caller's. " +
+              "NEVER fill this with the caller's own company: if they have not NAMED the " +
+              'client, ask ("And which company would the work be for?"); if they don\'t ' +
+              'know or won\'t say, record declined — an honest blank beats the agency\'s ' +
+              'name in the client slot (2026-07-30 sim: eTeam landed here and the record ' +
+              'claimed an in-house role that was actually a placement)',
           },
         ],
       },
@@ -385,6 +391,31 @@ export const JOB_TREE: QuestionTreeDef = {
             ask: 'the timezone, so the owner knows the office hours',
           },
         ],
+      },
+    },
+    {
+      // THE OFFER — live-path port of the ladder's OFFER_MEETING block (PR #306,
+      // inert there: prod runs trees). A business taking job calls is selling the
+      // owner's TIME, and a recruiter who describes a role and is handed only a
+      // recorded inquiry has been served worse than one asked "would you like to
+      // talk it through with him?". Offering is not booking: a yes routes through
+      // set_purpose → booking tree → the real book_with_scheduling call, and every
+      // consent guard on that path stands untouched. Sits at the END of the intake
+      // (the walk order is the ask order) so the offer lands when the role is
+      // understood — and being a checklist node, the goodbye gate makes the offer
+      // STRUCTURAL: the call cannot close with it silently skipped.
+      node_id: 'meeting_offer',
+      type: 'choice',
+      ask:
+        'offer ONCE, in one line with both doors open: "Would you like me to put some ' +
+        'time in the diary with the owner so you can talk it through, or shall I just ' +
+        'pass the details along?" A no is an answer — NEVER offer twice; a repeated ' +
+        'offer is a sales pitch. If they already asked for a meeting themselves, record ' +
+        'wants_meeting without asking; if they already said "just pass it along" or ' +
+        'equivalent, record details_only without asking',
+      options: {
+        wants_meeting: [],
+        details_only: [],
       },
     },
     {

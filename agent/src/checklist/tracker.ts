@@ -69,6 +69,11 @@ export class ChecklistTracker {
   #values = new Map<NodeId, string>();
   #declined = new Set<NodeId>();
   #actionDone = new Map<NodeId, string>();
+  /** Bumped on every state change (select/deselect/record/completeAction). The
+   *  stall detector compares this across caller turns: a turn that moves the
+   *  checklist nowhere is a stalled turn, whatever was said (bot-mirror calls,
+   *  callers repeating themselves). */
+  #mutations = 0;
 
   constructor(library: QuestionTreeDef[]) {
     for (const tree of library) {
@@ -167,6 +172,7 @@ export class ChecklistTracker {
         added.push(id);
       }
     }
+    if (added.length > 0) this.#mutations++;
     return { added };
   }
 
@@ -179,7 +185,17 @@ export class ChecklistTracker {
    * removed tree simply drop out of the walk and the gate.
    */
   deselect(treeId: string): void {
+    if (this.#selected.includes(treeId)) this.#mutations++;
     this.#selected = this.#selected.filter((t) => t !== treeId);
+  }
+
+  /**
+   * Monotonic count of state changes (selections, answers, completed actions).
+   * The stall detector snapshots it per caller turn: unchanged across a turn
+   * means the conversation moved the checklist nowhere.
+   */
+  mutationCount(): number {
+    return this.#mutations;
   }
 
   hasSelection(): boolean {
@@ -310,6 +326,7 @@ export class ChecklistTracker {
           );
         }
         this.#declined.add(nodeId);
+        this.#mutations++;
         return this.status(nodeId);
       }
       throw new RecordError(
@@ -330,6 +347,7 @@ export class ChecklistTracker {
     if (input.declined) {
       this.#values.delete(nodeId);
       this.#declined.add(nodeId);
+      this.#mutations++;
       if (def.type === 'choice') this.#discardDeadAnswers();
       return this.status(nodeId);
     }
@@ -349,6 +367,7 @@ export class ChecklistTracker {
 
     this.#values.set(nodeId, value);
     this.#declined.delete(nodeId);
+    this.#mutations++;
     // Answering (or re-answering — the mind-change) a choice redraws the map:
     // branches just ruled out take their recorded answers with them. Kept data
     // under a dead branch is a ghost that would brief the owner on a hypothesis
@@ -391,6 +410,7 @@ export class ChecklistTracker {
     }
     this.#actionDone.set(nodeId, successId);
     this.#declined.delete(nodeId);
+    this.#mutations++;
   }
 
   // ── what the model sees, and the gate ──────────────────────────────────────

@@ -476,15 +476,24 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     // record_answer, so this fires only on genuinely dictated numbers.)
     let directive = readbackDirective(args.value);
     if (!directive && args.node_id === 'meeting_offer' && args.value === 'wants_meeting') {
-      // The offer's YES is a booking ask — make the next move a TOOL CALL, not a
-      // sentence. (The ladder's 2026-07-27 eval failure: the model offered, took a
-      // time, said "you're booked", and never called the booking tool. The tree
-      // version closes that gap here: accepting the offer routes through
-      // set_purpose → booking → book_with_scheduling, where "booked" is earned.)
+      // The offer's YES is a booking ask — and the HOST does the selecting, not
+      // the model. First shipped as a directive ("call set_purpose NOW adding
+      // booking"); on the very next sim run the model recorded the yes and never
+      // made the call — the same shape as the ladder's 2026-07-27 eval failure
+      // (offered, took a time, said "you're booked", never called the tool). A
+      // tool-result instruction the model can skip is a hope; a selection the
+      // host has already made is a fact. Same promotion as the read-back above.
+      tracker.select(['identity', 'booking']);
+      // A meeting accepted off the job intake already has its topic — the same
+      // auto-fill set_purpose does when booking rides along with job.
+      if (tracker.selectedTrees().includes('job')) {
+        recordIfOpen('meeting_topic', TREE_TOPIC['job']);
+      }
+      deps.onSelectionChanged();
       directive =
-        '\n\nThey want the meeting: call set_purpose NOW adding booking (and identity if ' +
-        'not already selected), then offer real times. Nothing is booked until ' +
-        'book_with_scheduling returns success — never say "booked" before it.';
+        '\n\nThey want the meeting — booking is now ON YOUR CHECKLIST. Offer real times ' +
+        'next (get_available_slots). Nothing is booked until book_with_scheduling ' +
+        'returns success — never say "booked" before it.';
     }
     if (!directive && args.node_id === CALLER_NAME && args.value && !args.declined) {
       // 2026-07-21 live call: the caller gave his name and never heard it again
