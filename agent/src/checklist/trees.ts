@@ -86,6 +86,23 @@ export const BOOKING_TREE: QuestionTreeDef = {
         'also picks the matching tree: call set_purpose again with it',
     },
     {
+      // LISTEN-ONLY (never asked — a caller who says nothing about zones means
+      // ours, and asking "what timezone are you in?" on a local call is noise).
+      // Recorded ONLY when the caller volunteers one, because on 2026-07-27 a
+      // caller said "2:30 EST" plainly, the words went nowhere, and she was
+      // booked at 2:30 LOCAL — an hour off what she had agreed to
+      // (CALL_IMPROVEMENTS.md #9). Holding the utterance is what lets the
+      // conversion rule in the prompt fire, and lets the owner see WHY the
+      // booked time differs from the one the caller first said.
+      node_id: 'caller_timezone',
+      type: 'text',
+      listen: true,
+      ask:
+        'the timezone the caller named for themselves ("2:30 Eastern", "I am on the west ' +
+        "coast\"), in their words. Convert it to THIS business's zone, say both times out " +
+        'loud, and book only the converted time they agree to',
+    },
+    {
       node_id: 'book',
       type: 'action',
       tool: 'book_with_scheduling',

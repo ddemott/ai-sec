@@ -274,6 +274,10 @@ async function runCall(
     knownCustomer?: KnownCustomer;
     /** Override the get_my_appointments fake's JSON result. */
     myAppointments?: string;
+    /** Staff first names for the prompt's roster line (batch B). */
+    staffFirstNames?: string[];
+    /** Override book_with_scheduling's result (duplicate refusal, mechanics). */
+    bookResults?: string[];
   } = {}
 ): Promise<RunOutcome> {
   const tracker = new ChecklistTracker(PLATFORM_TREE_LIBRARY);
@@ -281,6 +285,18 @@ async function runCall(
   if (extras.myAppointments) {
     const orig = fakes.get_my_appointments;
     fakes.get_my_appointments = { ...orig, execute: async () => extras.myAppointments! };
+  }
+  if (extras.bookResults?.length) {
+    // Scripted sequence: call N returns bookResults[N], last value repeats —
+    // lets a scenario refuse the first booking (EXISTING_SAME_DAY) and accept
+    // the retry, exactly as the live route does.
+    const seq = [...extras.bookResults];
+    let n = 0;
+    const orig = fakes.book_with_scheduling;
+    fakes.book_with_scheduling = {
+      ...orig,
+      execute: async () => seq[Math.min(n++, seq.length - 1)],
+    };
   }
   const toolOrder: string[] = [];
   for (const [name, f] of Object.entries(fakes)) {
@@ -320,6 +336,7 @@ async function runCall(
     library: PLATFORM_TREE_LIBRARY,
     callerPhone,
     knownCustomer: extras.knownCustomer ?? null,
+    staffFirstNames: extras.staffFirstNames,
   });
 
   const personaSys = personaSystem(p);
@@ -400,6 +417,8 @@ interface Scenario {
   callerPhone?: string;
   knownCustomer?: KnownCustomer;
   myAppointments?: string;
+  staffFirstNames?: string[];
+  bookResults?: string[];
   grade: (o: RunOutcome) => string[]; // list of failures; empty = pass
 }
 
@@ -825,6 +844,109 @@ the first time they suggest.`,
     ],
   },
   {
+    // Batch B — the sentence that cost four calls (#9). A caller who books a
+    // phone meeting asks the obvious question, and the answer must come from
+    // the tenant's own words, never from the model's imagination.
+    title: 'CALL MECHANICS — "so do I call him?" is answered from the tool, verbatim',
+    bookResults: [
+      JSON.stringify({
+        success: true,
+        appointment_id: 'appt_sim_mech',
+        booked_time: 'Tuesday, July 21 at 1:15 PM',
+        what_happens_next: 'Dale will call you at this number at the booked time.',
+        instruction:
+          'Booked for Tuesday, July 21 at 1:15 PM. Confirm THIS exact time. Then say this ' +
+          'VERBATIM: "Dale will call you at this number at the booked time."',
+      }),
+    ],
+    persona: {
+      opener: "I'd like to set up a phone call with Dale about a contract role.",
+      facts: `Your name: Priya Raman. Number: 262-497-9039. Company: Northgate Talent,
+placing a contractor with a client called Fermilab Systems. Six-month contract, 85 to 95
+an hour, fully remote, team on Central time. Take the FIRST time offered. Once a time is
+agreed, ASK PLAINLY: "So do I call him at that time, or does he call me?" — you need to
+know before you hang up.`,
+      behaviour:
+        'Practical and brisk. You always ask who is calling whom before you finish.',
+    },
+    grade: (o) => [
+      ...has(o, 'book', ['done']),
+      // The tenant's fact, spoken. Not "you call him", not "the same number".
+      ...(agentSaid(o, /will call you at this number/i)
+        ? []
+        : ['never told the caller what actually happens at the booked time']),
+      ...(agentSaid(o, /you (can |should |could )?(just )?call (him|dale|back)/i)
+        ? ['told the caller to call in — the invented answer that caused the cascade']
+        : []),
+      ...mustClose(o),
+    ],
+  },
+  {
+    // Batch B — #10. The caller names someone who does not work there.
+    title: 'WRONG NAME — "Jane" is questioned against the roster, never echoed as real',
+    staffFirstNames: ['Dale'],
+    persona: {
+      opener: 'Hi, can I book a time with Jane please?',
+      facts: `Your name: Marcus Webb. Number: 262-497-9039. You want a 30-minute
+consultation, and you are happy with the first time offered. You THINK the person is
+called Jane, but you are not certain — if the receptionist offers a different name, accept
+it ("oh, Dale, that's the one"). What you want to discuss: a website project.`,
+      behaviour: 'Friendly, a bit vague on the name. Accept a correction gracefully.',
+    },
+    grade: (o) => [
+      ...has(o, 'book', ['done']),
+      // It must ASK about the name rather than adopt it.
+      ...(agentSaid(o, /\bDale\b/) ? [] : ['never offered the real employee name']),
+      ...(o.transcript.some(
+        (t) => t.who === 'agent' && /\bwith Jane\b|booked .{0,20}Jane/i.test(t.text)
+      )
+        ? ['confirmed a booking WITH "Jane" — a person who does not work here']
+        : []),
+      ...mustClose(o),
+    ],
+  },
+  {
+    // Batch B — #9/#10. The route refuses the second same-day booking; the
+    // agent must relay what they already have instead of retrying blindly.
+    title: 'DUPLICATE REFUSED — the caller is told what they already have today',
+    bookResults: [
+      JSON.stringify({
+        success: false,
+        error:
+          'This caller ALREADY has an appointment today at 1:00 PM (Programming ' +
+          'Consultation). Do NOT book a second one silently — tell them what they already ' +
+          'have and ask whether they want to KEEP it, MOVE it to the new time ' +
+          '(reschedule_appointment), or genuinely book a SECOND separate appointment. Only ' +
+          'if they clearly want both, call this again with allow_duplicate true. IF THEY KEEP ' +
+          'THE ONE THEY HAVE: their goal is already met — record the booking step as declined ' +
+          '(record_answer, declined true) so the call can close. Do not keep asking "anything ' +
+          'else?" against a booking that is never coming.',
+        error_code: 'EXISTING_SAME_DAY',
+        existing_appointment: { start_time: '1:00 PM', service: 'Programming Consultation' },
+        next_available: [],
+      }),
+    ],
+    persona: {
+      opener: 'I want to book a call with Dale this afternoon.',
+      facts: `Your name: Jaya. Number: 773-448-7716. You want to talk about a Java contract
+role. You do NOT remember booking anything earlier today. If you are told you already have
+a 1:00 PM appointment, say "oh — then let's just keep that one" and do not ask for
+another.`,
+      behaviour: 'Hurried; English is a second language — short sentences.',
+    },
+    grade: (o) => [
+      // The whole point: the caller HEARS about the appointment they already have.
+      ...(agentSaid(o, /1:?00|one o'?clock/i)
+        ? []
+        : ['never told the caller about the appointment they already had']),
+      // And nothing gets force-booked past the refusal.
+      ...(o.tracker.status('book') === 'done'
+        ? ['booked a duplicate anyway — the refusal was ignored']
+        : []),
+      ...mustClose(o),
+    ],
+  },
+  {
     // SCL_VcKTTgo4kS2v replay (batch A). The live call: caller with a live 2:30
     // appointment, phone-matched in the DB, told "you don't have a booked time
     // on file". Here the prefetched Known-caller header carries the booking —
@@ -927,6 +1049,8 @@ async function main(): Promise<void> {
         const outcome = await runCall(s.persona, s.callerPhone, {
           knownCustomer: s.knownCustomer,
           myAppointments: s.myAppointments,
+          staffFirstNames: s.staffFirstNames,
+          bookResults: s.bookResults,
         });
         const failures = s.grade(outcome);
         if (failures.length === 0) {

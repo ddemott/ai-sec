@@ -163,3 +163,58 @@ describe('the Known caller section (batch A — the CRM snapshot reaches the LIV
     expect(p).toContain('EXISTING BOOKINGS ARE TOOL-GATED FACTS');
   });
 });
+
+describe('batch B — the Jaya-cascade prompt guarantees', () => {
+  const runtime = {
+    currentDate: 'Tuesday, July 21, 2026',
+    timezone: 'America/Chicago',
+    businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+    bookableThrough: 'Friday, August 28, 2026',
+  };
+  const build = (over: Partial<Parameters<typeof buildChecklistPrompt>[0]> = {}) =>
+    buildChecklistPrompt({
+      persona: 'You are Piper.',
+      runtime,
+      library: PLATFORM_TREE_LIBRARY,
+      ...over,
+    });
+
+  it('the roster is named, and an unknown name must be QUESTIONED, never repeated as fact', () => {
+    // WHO: the caller who asked for "Jane" — STT for "Dale", the only employee
+    //      — and was confirmed into a meeting "with Jane" (2026-07-27, #10).
+    const p = build({ staffFirstNames: ['Dale', 'Maria'] });
+    expect(p).toContain('WHO WORKS HERE: Dale, Maria');
+    expect(p).toContain('Do you mean Dale?');
+    expect(p).toMatch(/never book, or say you booked, with a person who is not on this list/i);
+  });
+
+  it('no roster configured → no roster line at all (never an empty list read aloud)', () => {
+    const p = build({ staffFirstNames: [] });
+    expect(p).not.toContain('WHO WORKS HERE');
+  });
+
+  it('names the tenant zone and demands conversion when the caller states their own', () => {
+    // WHO: the caller who said "2:30 EST" and was booked at 2:30 CENTRAL —
+    //      an hour off what she agreed to (2026-07-27, #9).
+    const p = build();
+    expect(p).toContain('TIMES ARE IN America/Chicago');
+    expect(p).toMatch(/2:30 Eastern is 1:30 our time/);
+    expect(p).toMatch(/never\s+guess a zone from an area code/i);
+  });
+
+  it('forbids improvising what happens at the appointment, and points at what_happens_next', () => {
+    // The single sentence that cost four follow-up calls: "call Dale directly…
+    // you can use the same number" — the AI receptionist's own line.
+    const p = build();
+    expect(p).toContain('what_happens_next');
+    expect(p).toMatch(/do NOT invent an answer/i);
+  });
+
+  it('records only what the caller SAID — a hedged mention is not an answer', () => {
+    // "we place people at companies like Capgemini" must not become a
+    // Capgemini role (the provenance gap found while auditing call #1).
+    const p = build();
+    expect(p).toMatch(/companies like Capgemini/);
+    expect(p).toMatch(/ask one plain question to confirm it/i);
+  });
+});

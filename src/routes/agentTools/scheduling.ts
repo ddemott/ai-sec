@@ -543,7 +543,7 @@ export function registerSchedulingRoutes({
         args.name || 'Caller'
       );
 
-      const result = await withTenantClient(args.tenant_id, async (client) => {
+      const outcomeOfBooking = await withTenantClient(args.tenant_id, async (client) => {
         // Resolve the service (falls through to the tenant default when the
         // spoken type doesn't match — so the booking uses a REAL service that
         // carries required_skills, and the RPC can assign a qualified employee
@@ -563,11 +563,68 @@ export function registerSchedulingRoutes({
         // (Railway = UTC) and search the wrong absolute window. Convert via
         // applyTimezone (DST-correct; no-op if already offset-carrying) — same
         // as check-availability + book-appointment.
-        const tzRes = await client.query<{ timezone: string }>(
-          `SELECT COALESCE(timezone, 'America/Chicago') AS timezone FROM tenants WHERE tenant_id = $1`,
+        // One SELECT, two facts: the zone the window is expressed in, and the
+        // owner's words for what happens at the appointment. booking_mechanics
+        // rides along here rather than in its own round-trip because this is a
+        // LIVE CALL — the caller is holding while these run.
+        const tzRes = await client.query<{ timezone: string; booking_mechanics: string | null }>(
+          `SELECT COALESCE(timezone, 'America/Chicago') AS timezone, booking_mechanics
+             FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         const ianaTimezone = tzRes.rows[0]?.timezone || 'America/Chicago';
+        const mechanicsRaw = tzRes.rows[0]?.booking_mechanics;
+        const mechanics =
+          typeof mechanicsRaw === 'string' && mechanicsRaw.trim() ? mechanicsRaw.trim() : null;
+
+        // CROSS-CALL DUPLICATE GUARD (2026-07-31).
+        //
+        // wrapAction's anti-double-book gate lives in the agent's in-memory
+        // tracker: it stops a repeat WITHIN one call and knows nothing about
+        // the call before it. On 2026-07-27 Jaya booked 1:00 PM on one call
+        // (SCL_yyZ7Qd7WTcQx) and 2:30 PM for the same thing six minutes later
+        // on the next (SCL_6QQqjBf7kNQj) — two live appointments ninety
+        // minutes apart, the first never cancelled and never honored
+        // (CALL_IMPROVEMENTS.md #9/#10).
+        //
+        // Same customer + same LOCAL DAY + still scheduled + a DIFFERENT call
+        // → refuse, and hand the model the booking they already have so it can
+        // offer keep / move / both. "Both" comes back as allow_duplicate — a
+        // deliberate second appointment is legitimate (two cars, two people);
+        // an accidental one is the bug. Same call_id is exempt: a retry of THIS
+        // booking is the idempotency path, not a duplicate. Scoped to the same
+        // DAY on purpose — next week's booking must not block today's.
+        if (!args.allow_duplicate) {
+          const dup = await client.query<{ start_time: string; service: string | null }>(
+            `SELECT a.start_time, s.name AS service
+               FROM appointments a
+               JOIN customers c ON c.customer_id = a.customer_id AND c.tenant_id = a.tenant_id
+               LEFT JOIN services s ON s.service_id = a.service_id AND s.tenant_id = a.tenant_id
+              WHERE a.tenant_id = $1 AND c.phone = $2
+                AND a.status = 'scheduled'
+                AND (a.is_deleted IS NULL OR a.is_deleted = false)
+                AND (a.call_id IS DISTINCT FROM $3)
+                AND (a.start_time AT TIME ZONE $4)::date
+                    = ($5::timestamptz AT TIME ZONE $4)::date
+              ORDER BY a.start_time ASC
+              LIMIT 1`,
+            [
+              args.tenant_id,
+              normalized,
+              args.call_id || null,
+              ianaTimezone,
+              applyTimezone(args.window.from, ianaTimezone),
+            ]
+          );
+          if (dup.rows[0]) {
+            return {
+              kind: 'duplicate' as const,
+              spokenTime: toLocalWallClock(dup.rows[0].start_time, ianaTimezone),
+              service: dup.rows[0].service,
+            };
+          }
+        }
+
         const rpc = await client.query<{
           success: boolean;
           appointment_id: string | null;
@@ -626,8 +683,39 @@ export function registerSchedulingRoutes({
           if (row.booked_start) row.booked_start = toLocalWallClock(row.booked_start, ianaTimezone);
           if (row.booked_end) row.booked_end = toLocalWallClock(row.booked_end, ianaTimezone);
         }
-        return row;
+        return { kind: 'booked' as const, row, mechanics };
       });
+
+      // The caller already has something today — refuse before anything is
+      // written, and tell the model exactly what they have.
+      if (outcomeOfBooking.kind === 'duplicate') {
+        const { spokenTime, service } = outcomeOfBooking;
+        bookingAttemptsTotal.inc({ outcome: 'duplicate_same_day', source: 'agent' });
+        (reply as unknown as { _toolOutcome?: string })._toolOutcome = 'error';
+        return reply.status(200).send({
+          success: false,
+          error:
+            `This caller ALREADY has an appointment today at ${spokenTime}` +
+            `${service ? ` (${service})` : ''}. Do NOT book a second one silently — tell them ` +
+            `what they already have and ask whether they want to KEEP it, MOVE it to the new ` +
+            `time (reschedule_appointment), or genuinely book a SECOND separate appointment. ` +
+            `Only if they clearly want both, call this again with allow_duplicate true. ` +
+            // WITHOUT THIS LINE THE CALL CANNOT END. The booking action stays
+            // unresolved after a refusal, and the goodbye gate holds the call
+            // open — on the first sim run of this guard the agent correctly
+            // relayed the existing 1:00 PM, the caller said "let's keep that
+            // one", and then both sides looped "anything else?" until the
+            // transcript ran out. A refusal has to come with its own exit.
+            `IF THEY KEEP THE ONE THEY HAVE: their goal is already met — record the booking ` +
+            `step as declined (record_answer, declined true) so the call can close. Do not ` +
+            `keep asking "anything else?" against a booking that is never coming.`,
+          error_code: 'EXISTING_SAME_DAY',
+          existing_appointment: { start_time: spokenTime, service },
+          next_available: [],
+        });
+      }
+      const result = outcomeOfBooking.row;
+      const mechanics = outcomeOfBooking.mechanics;
 
       // Best-effort: record the service the caller was trying to book — runs
       // whether the booking SUCCEEDED or FAILED, so an abandoned booking
@@ -723,6 +811,17 @@ export function registerSchedulingRoutes({
           );
         }
       }
+      // WHAT HAPPENS AT THE BOOKED TIME — the owner's own words, spoken
+      // verbatim (fetched with the timezone above; no extra round-trip).
+      //
+      // Booking a "call" never defined who dials whom, so when the 2026-07-27
+      // caller asked, the model invented the agreeable answer: "call Dale
+      // directly at two thirty… you can use the same number" — the AI's own
+      // line. Four more failed calls followed from that one sentence
+      // (CALL_IMPROVEMENTS.md #9, #5-#8). The model could not have known; nobody
+      // had ever written the fact down. Now the tenant writes it once.
+      // NULL/blank tenant → the field is absent and the confirmation is
+      // unchanged, because saying nothing is honest and guessing is not.
       return ok(reply, {
         success: true,
         appointment_id: result.appointment_id,
@@ -731,6 +830,12 @@ export function registerSchedulingRoutes({
         booked_start: result.booked_start,
         booked_end: result.booked_end,
         error_message: null,
+        ...(mechanics
+          ? {
+              what_happens_next: mechanics,
+              instruction: `Confirm the booked time, then say this VERBATIM: "${mechanics}" — it is what actually happens at the appointment, and you must never improvise your own version of it.`,
+            }
+          : {}),
       });
     },
     'Failed to book with scheduling'

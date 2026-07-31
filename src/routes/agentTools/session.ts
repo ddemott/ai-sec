@@ -68,8 +68,9 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           call_disclosure: string | null;
           greeting_menu: string | null;
           greeting_closer: string | null;
+          booking_mechanics: string | null;
         }>(
-          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, inbound_phone, call_disclosure, greeting_menu, greeting_closer FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, inbound_phone, call_disclosure, greeting_menu, greeting_closer, booking_mechanics FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         if (!res.rows[0]) return null;
@@ -80,7 +81,27 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         // caller cannot see — the open-ended question that made the 2026-07-12
         // caller name two impossible dates in a row. 2026-07-12.
         const hours = await getBusinessHours(client, args.tenant_id);
-        return { ...res.rows[0], hours };
+        // WHO THE CALLER CAN ACTUALLY ASK FOR. On 2026-07-27 a caller asked for
+        // "Jane" — an STT mangle of "Dale", the tenant's only employee — and the
+        // agent adopted the name unchallenged, confirming "You're booked for
+        // 1:00 PM with Jane" (CALL_IMPROVEMENTS.md #10). Nothing in the agent
+        // knew who worked there, so there was nothing to check the name against.
+        // First names only: the roster goes into a PROMPT the model speaks from,
+        // and a receptionist says "Dale", not "Dale DeMott".
+        const staff = await client.query<{ first: string }>(
+          `SELECT DISTINCT COALESCE(NULLIF(TRIM(first_name), ''), split_part(TRIM(name), ' ', 1)) AS first
+             FROM employees
+            WHERE tenant_id = $1 AND is_active = true
+              AND (is_deleted IS NULL OR is_deleted = false)
+            ORDER BY 1
+            LIMIT 25`,
+          [args.tenant_id]
+        );
+        return {
+          ...res.rows[0],
+          hours,
+          staff: staff.rows.map((r) => r.first).filter((n) => n && n.length > 0),
+        };
       });
       if (!row) {
         return fail(reply, 'Tenant not found');
@@ -162,6 +183,14 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         // disclosure and "How can I help you today?". NULL/blank = no menu line.
         greeting_menu: row.greeting_menu ?? null,
         greeting_closer: row.greeting_closer ?? null,
+        // 2026-07-31: what happens AT the booked time, spoken verbatim after a
+        // successful booking. NULL = say nothing extra. See migration
+        // 20260731000000 — the "call Dale on this same number" cascade.
+        booking_mechanics: row.booking_mechanics ?? null,
+        // Active staff first names — the roster the agent checks a caller-named
+        // person against before repeating it back as fact ("Jane" → "You mean
+        // Dale?"). Empty array when a tenant has no employees configured.
+        staff_first_names: row.staff,
       });
     },
     'Failed to fetch tenant config'

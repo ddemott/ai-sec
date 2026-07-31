@@ -1326,6 +1326,9 @@ export default defineAgent({
               // returning customer as a stranger and once denied a live booking
               // outright (CALL_IMPROVEMENTS.md #8).
               knownCustomer,
+              // The roster a caller-named person is checked against before the
+              // agent repeats it back ("Jane" → "Do you mean Dale?").
+              staffFirstNames: tenantConfig.staffFirstNames,
             })
           : config.ENABLE_TASK_GROUP
             ? new CallRootAgent({

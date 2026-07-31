@@ -148,6 +148,12 @@ export const BookWithSchedulingSchema = z.object({
   // "remind me in 22.5 minutes" is not a thing a person says.
   // 2026-07-12.
   reminder_lead_minutes: z.number().int().positive().max(129600).optional().nullable(),
+  // Set only after the caller has been TOLD about their existing same-day
+  // appointment and said they want a second one anyway. The cross-call
+  // duplicate guard (2026-07-31) refuses otherwise — see the route. Default
+  // false is what makes the guard the default; a model that never learns this
+  // flag simply cannot double-book across calls.
+  allow_duplicate: z.boolean().optional().default(false),
 });
 
 export const GetServiceCatalogSchema = z.object({

@@ -80,7 +80,14 @@ question lengthens calls; callback phone already on every lead).
 5. toolselect eval: caller claims an existing booking → must not deny without
    checking.
 
-## B — booking mechanics + timezone + duplicates (calls #9, #10 — root of the cascade)
+## B — booking mechanics + timezone + duplicates (calls #9, #10 — root of the cascade) — **PR #310**
+
+> Found while building: a refusal needs its own EXIT. The first sim run of the
+> duplicate guard behaved perfectly — relayed the existing 1:00 PM, refused to
+> double-book — and then the call could not END: the booking node stayed
+> unresolved and the goodbye gate held it open while both sides looped "anything
+> else?". Every refusal a checklist action can receive must tell the model how to
+> resolve the node (here: record it declined when the caller keeps what they have).
 
 1. Booking confirmation states call mechanics — per-tenant/per-service copy, default
    "[owner] will call you at this number at [time]". Call #9's "call Dale directly at

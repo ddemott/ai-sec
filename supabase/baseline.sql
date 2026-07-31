@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 7aKqnQ4aWqc4oyqPf3cGosOqvS1aFmji38TUQ6GOulAmXaIceArIx3AQZ1RVt5j
+\restrict 0T0xVcK7cD87eTbmHeWFchf0s95iMSZ6gXeJTxjTLCrB8KVZGYbrgZnAnHrx0OW
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3560,7 +3560,8 @@ CREATE TABLE public.tenants (
     deleted_at timestamp with time zone,
     deleted_by uuid,
     greeting_menu text,
-    greeting_closer text
+    greeting_closer text,
+    booking_mechanics text
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3697,6 +3698,13 @@ COMMENT ON COLUMN public.tenants.greeting_menu IS 'Optional spoken services-menu
 --
 
 COMMENT ON COLUMN public.tenants.greeting_closer IS 'Optional spoken closing question for the call greeting, replacing the default "How can I help you today?". NULL/blank = default.';
+
+
+--
+-- Name: COLUMN tenants.booking_mechanics; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.booking_mechanics IS 'Spoken verbatim after a successful booking: what happens at the appointment time (who calls whom / where to go). NULL = say nothing extra.';
 
 
 --
@@ -5957,5 +5965,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 7aKqnQ4aWqc4oyqPf3cGosOqvS1aFmji38TUQ6GOulAmXaIceArIx3AQZ1RVt5j
+\unrestrict 0T0xVcK7cD87eTbmHeWFchf0s95iMSZ6gXeJTxjTLCrB8KVZGYbrgZnAnHrx0OW
 

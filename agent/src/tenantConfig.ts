@@ -122,6 +122,14 @@ export interface TenantDisplayConfig {
   businessHours: string | null;
   /** Last date anyone is scheduled — how far ahead we can actually book. */
   bookableThrough: string | null;
+  /**
+   * Active staff FIRST names. The roster a caller-named person is checked
+   * against before the agent repeats the name back as fact — 2026-07-27, a
+   * caller asked for "Jane" (STT for "Dale", the only employee) and was
+   * confirmed into a meeting "with Jane" that the row says is with Dale.
+   * Empty when the tenant has no employees configured.
+   */
+  staffFirstNames: string[];
 }
 
 export const TENANT_FALLBACK: TenantDisplayConfig = {
@@ -147,6 +155,7 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   greetingCloser: null,
   businessHours: null,
   bookableThrough: null,
+  staffFirstNames: [],
 };
 
 export async function fetchTenantConfig(
@@ -178,6 +187,7 @@ export async function fetchTenantConfig(
     greeting_closer?: string | null;
     business_hours?: string | null;
     bookable_through?: string | null;
+    staff_first_names?: string[] | null;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {
@@ -206,6 +216,14 @@ export async function fetchTenantConfig(
       greetingCloser: res.result.greeting_closer ?? null,
       businessHours: res.result.business_hours ?? null,
       bookableThrough: res.result.bookable_through ?? null,
+      // Defensive filter: this list is rendered into a prompt the model speaks
+      // from, so a stray null/blank from an older backend must not become
+      // "you can ask for , or Dale".
+      staffFirstNames: Array.isArray(res.result.staff_first_names)
+        ? res.result.staff_first_names.filter(
+            (n): n is string => typeof n === 'string' && n.trim().length > 0
+          )
+        : [],
     };
   }
   return TENANT_FALLBACK;

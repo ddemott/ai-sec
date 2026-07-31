@@ -213,25 +213,36 @@ function formatBookingResponse(res: ToolResponse, requestedStart?: string): stri
     appointment_id?: string;
     employee_name?: string | null;
     booked_start?: string | null;
+    what_happens_next?: string | null;
   };
   const bookedStart = typeof r.booked_start === 'string' ? r.booked_start : null;
   if (!bookedStart) return formatResponse(res);
 
   const spoken = spokenClock(bookedStart);
   const withWhom = r.employee_name ? ` with ${r.employee_name}` : '';
+  // The owner's own words for what happens AT the appointment. This function
+  // REBUILDS the payload the model sees, so anything not copied here is
+  // invisible to it — the exact way a backend field can ship and change
+  // nothing (2026-07-31: added with the field, not after it went missing).
+  const mechanics =
+    typeof r.what_happens_next === 'string' && r.what_happens_next.trim()
+      ? r.what_happens_next.trim()
+      : null;
+  const sayNext = mechanics ? ` Then say this VERBATIM: "${mechanics}"` : '';
   const payload: Record<string, unknown> = {
     success: true,
     appointment_id: r.appointment_id ?? null,
     booked_time: spoken,
     employee: r.employee_name ?? null,
-    instruction: `Booked${withWhom} for ${spoken}. Confirm THIS exact time (${spoken}) to the caller — it is the actual booked slot.`,
+    ...(mechanics ? { what_happens_next: mechanics } : {}),
+    instruction: `Booked${withWhom} for ${spoken}. Confirm THIS exact time (${spoken}) to the caller — it is the actual booked slot.${sayNext}`,
   };
   if (requestedStart && bookedTimeDiffers(requestedStart, bookedStart)) {
     payload.time_changed = true;
     payload.requested_time = spokenClock(requestedStart);
     payload.instruction =
       `Booked${withWhom} for ${spoken}, but the caller asked for ${spokenClock(requestedStart)}, which was NOT open. ` +
-      `Tell the caller you booked the closest opening — ${spoken}${withWhom} — and ask if that works or if they'd like a different time.`;
+      `Tell the caller you booked the closest opening — ${spoken}${withWhom} — and ask if that works or if they'd like a different time.${sayNext}`;
   }
   return JSON.stringify(payload);
 }
@@ -698,6 +709,11 @@ export function buildTools(
             description:
               'How many minutes BEFORE the appointment to text a reminder. Set ONLY when the caller agreed to a text reminder (after the SMS-consent disclosures — see "Text reminders"). Use 30 when they say yes without naming a time; use their number when they name one ("an hour before" → 60, "the day before" → 1440). OMIT entirely if they declined or were not asked.',
           },
+          allow_duplicate: {
+            type: 'boolean',
+            description:
+              'Set true ONLY after this tool refused with EXISTING_SAME_DAY, you told the caller about the appointment they already have that day, and they said they want a SECOND separate one anyway. Never set it pre-emptively: it exists to stop a caller ending up with two live bookings for the same thing, which happened on a real call.',
+          },
         },
         required: ['service_type', 'window_from', 'window_to', 'phone'],
         additionalProperties: false,
@@ -714,6 +730,7 @@ export function buildTools(
         name?: string;
         description?: string;
         reminder_lead_minutes?: number;
+        allow_duplicate?: boolean;
       }) => {
         speakFiller?.('One moment while I find and book a slot...');
         const res = await client.call('/agent-tools/book-with-scheduling', {
@@ -732,6 +749,9 @@ export function buildTools(
           // Absent → backend falls back to the caller's stored lead preference,
           // then to the standard bundle. Never invent a value here.
           reminder_lead_minutes: args.reminder_lead_minutes ?? null,
+          // Only ever true after the caller was told about their existing
+          // same-day booking and asked for a second one anyway.
+          allow_duplicate: args.allow_duplicate === true,
         });
         const bookedId = extractAppointmentId(res);
         if (bookedId) outcome?.recordBooking(bookedId);
