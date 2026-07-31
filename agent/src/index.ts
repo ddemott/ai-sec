@@ -879,7 +879,11 @@ export default defineAgent({
       const knownCustomer = await fetchCustomerContext(
         client,
         sessionCtx.tenantId,
-        sessionCtx.callerPhone
+        sessionCtx.callerPhone,
+        // call_id rides along for the disclosure gate's audit log. (The gate
+        // itself passes on carrier attestation — see the phone_source note in
+        // fetchCustomerContext, which is what un-broke this whole prefetch.)
+        { callId: sessionCtx.callId }
       );
       callLog.info(
         {
@@ -1316,6 +1320,12 @@ export default defineAgent({
               // Carrier-attested number (nulled upstream on forwarded lines) —
               // seeds the caller_phone node so the question never exists.
               callerPhone: sessionCtx.callerPhone,
+              // The CRM snapshot, finally on the LIVE path (2026-07-30). It was
+              // prefetched on every call and passed only to buildSystemPrompt —
+              // the ladder, which prod never runs — so the model greeted every
+              // returning customer as a stranger and once denied a live booking
+              // outright (CALL_IMPROVEMENTS.md #8).
+              knownCustomer,
             })
           : config.ENABLE_TASK_GROUP
             ? new CallRootAgent({

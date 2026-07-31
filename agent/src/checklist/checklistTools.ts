@@ -544,6 +544,16 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
 
   const baseTools: llm.ToolContext = { set_purpose, record_answer, finish_call };
 
+  // get_my_appointments — in the toolset EVERY turn, not just when
+  // schedule_change is selected (2026-07-30, CALL_IMPROVEMENTS.md #8): a caller
+  // claimed her live 2:30 booking and the model — which had NO tool that could
+  // check — asserted "you don't have a booked time on file" from silence. The
+  // prompt's tool-gated-facts rule needs the tool to actually be there. Plain
+  // read-only passthrough: server-side phone-gated (caller-ID / verified spoken
+  // number), completes no checklist node, holds no gate.
+  const realMyAppointments = realTools['get_my_appointments'];
+  if (realMyAppointments) baseTools['get_my_appointments'] = realMyAppointments;
+
   // RAG — in the toolset EVERY turn (questions arrive anywhere); the result
   // points the model back at the frontier so a digression cannot lose the call.
   const realAnswer = realTools['get_company_policy_answer'];

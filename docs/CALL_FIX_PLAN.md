@@ -47,7 +47,7 @@ failures behind the 07-27 Jaya cascade, then the rest.
 Deliberately cut: caller-email ask at job wrap-up (owner declined — every added
 question lengthens calls; callback phone already on every lead).
 
-## H — call observability (unblocks every later postmortem)
+## H — call observability (unblocks every later postmortem) — **PR #308**
 
 1. Per-call tool-call log — tool name, args digest, outcome, timestamp — persisted
    (e.g. `voice_sessions.metadata`, currently an empty `{}` on every row). Railway
@@ -58,7 +58,14 @@ question lengthens calls; callback phone already on every lead).
    spoke, which is why the silent calls (#5/#6) are undiagnosable.
 3. Per-turn timestamps in transcript entries — pause/latency forensics.
 
-## A — caller context reaches the model (calls #7, #8)
+## A — caller context reaches the model (calls #7, #8) — **PR #309**
+
+> Bonus find during the build (2026-07-30): the context prefetch had been
+> SILENTLY DEAD since the disclosure gate shipped 2026-07-13 — it never sent
+> `phone_source`, the schema defaults to 'spoken', and the gate blocked every
+> known-caller lookup. Even the LADDER's known-customer section stopped
+> rendering that day, and nothing noticed. Fixed by declaring the attested
+> source; the ladder path gets its context back as a side effect.
 
 1. Extend `fetchCustomerContext` payload with upcoming appointments; PASS
    `knownCustomer` into ChecklistAgent (today it goes only into the ladder prompt —

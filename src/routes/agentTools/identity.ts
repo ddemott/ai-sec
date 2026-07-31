@@ -563,8 +563,26 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
           LIMIT 3`,
           [customer.customer_id]
         );
+        // Upcoming appointments — INSIDE the gate, same as name/preferences
+        // (an appointment reveals a person's schedule; it is the most sensitive
+        // fact on this route). 2026-07-27 (CALL_IMPROVEMENTS.md #8): a caller
+        // WITH a live 2:30 appointment was told "you don't have a booked time
+        // on file" — the row existed, phone-linked, and the model was never
+        // told. This is how the model gets told, on every call, before the
+        // first word.
+        const upcoming = await client.query<{ start_time: Date | string; service: string | null }>(
+          `SELECT a.start_time, s.name AS service
+             FROM appointments a
+             LEFT JOIN services s ON s.service_id = a.service_id AND s.tenant_id = a.tenant_id
+            WHERE a.tenant_id = $1 AND a.customer_id = $2
+              AND a.status = 'scheduled' AND a.start_time > NOW()
+              AND (a.is_deleted IS NULL OR a.is_deleted = false)
+            ORDER BY a.start_time ASC
+            LIMIT 3`,
+          [args.tenant_id, customer.customer_id]
+        );
         const smsConsent = await hasSmsConsent(client, args.tenant_id, normalized);
-        return { customer, summaries: sums.rows, smsConsent };
+        return { customer, summaries: sums.rows, smsConsent, upcoming: upcoming.rows };
       });
 
       // Blocked, not absent. Say so plainly, and tell the LLM the way forward —
@@ -590,6 +608,13 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
         // this route, so preferences must ride along here, not only in the
         // dashboard's get_customer_context_for_call path. Default {} when none.
         preferences: data.customer.preferences ?? {},
+        // Next 3 scheduled appointments (ISO start_time + service name) — the
+        // agent bakes them into the prompt header so the model can never deny
+        // a booking the DB holds (#8).
+        upcoming_appointments: data.upcoming.map((a) => ({
+          start_time: a.start_time instanceof Date ? a.start_time.toISOString() : a.start_time,
+          service: a.service,
+        })),
       });
     },
     'Failed to fetch customer context'

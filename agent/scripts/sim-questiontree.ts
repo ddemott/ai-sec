@@ -31,6 +31,7 @@ import type { llm } from '@livekit/agents';
 import { ChecklistTracker } from '../src/checklist/tracker.js';
 import { createChecklistTools } from '../src/checklist/checklistTools.js';
 import { buildChecklistPrompt } from '../src/checklist/checklistAgent.js';
+import type { KnownCustomer } from '../src/customerContext.js';
 import { PLATFORM_TREE_LIBRARY } from '../src/checklist/trees.js';
 import type { NodeStatus } from '../src/checklist/types.js';
 
@@ -190,6 +191,13 @@ function makeFakeBackend(): Record<string, Fake> {
           'recently AI platforms. Consultations run Monday to Friday, 1 to 5 PM.',
       })
     ),
+    // Empty by default; scenarios exercising the claimed-booking path override
+    // via the runCall myAppointments option (batch A, CALL_IMPROVEMENTS.md #8).
+    get_my_appointments: fake(
+      "Look up the caller's own upcoming appointments (phone-matched server-side).",
+      {},
+      JSON.stringify({ success: true, appointments: [] })
+    ),
     cancel_appointment: fake(
       'Cancel an existing appointment.',
       {},
@@ -258,9 +266,22 @@ interface RunOutcome {
   goodbye: string;
 }
 
-async function runCall(p: Persona, callerPhone?: string): Promise<RunOutcome> {
+async function runCall(
+  p: Persona,
+  callerPhone?: string,
+  extras: {
+    /** Rendered into the prompt's `# Known caller` header (batch A). */
+    knownCustomer?: KnownCustomer;
+    /** Override the get_my_appointments fake's JSON result. */
+    myAppointments?: string;
+  } = {}
+): Promise<RunOutcome> {
   const tracker = new ChecklistTracker(PLATFORM_TREE_LIBRARY);
   const fakes = makeFakeBackend();
+  if (extras.myAppointments) {
+    const orig = fakes.get_my_appointments;
+    fakes.get_my_appointments = { ...orig, execute: async () => extras.myAppointments! };
+  }
   const toolOrder: string[] = [];
   for (const [name, f] of Object.entries(fakes)) {
     const orig = f.execute;
@@ -286,13 +307,19 @@ async function runCall(p: Persona, callerPhone?: string): Promise<RunOutcome> {
   const system = buildChecklistPrompt({
     persona: 'You are Chris, the AI receptionist for Thinking Hammer.',
     runtime: {
-      currentDate: 'Monday, July 21, 2026',
+      // 2026-07-21 IS a Tuesday. This said "Monday" for weeks and nothing
+      // cared — until the Known-caller header rendered a REAL date through
+      // Intl ("Tuesday, July 21 at 2:30 PM") and handed the model a prompt
+      // that contradicted itself about what day it was; it resolved the
+      // contradiction by inventing a third answer ("Thursday at 2 PM").
+      currentDate: 'Tuesday, July 21, 2026',
       timezone: 'America/Chicago',
       businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
       bookableThrough: 'Friday, August 15, 2026',
     },
     library: PLATFORM_TREE_LIBRARY,
     callerPhone,
+    knownCustomer: extras.knownCustomer ?? null,
   });
 
   const personaSys = personaSystem(p);
@@ -371,6 +398,8 @@ interface Scenario {
   title: string;
   persona: Persona;
   callerPhone?: string;
+  knownCustomer?: KnownCustomer;
+  myAppointments?: string;
   grade: (o: RunOutcome) => string[]; // list of failures; empty = pass
 }
 
@@ -795,6 +824,88 @@ the first time they suggest.`,
       ...mustClose(o),
     ],
   },
+  {
+    // SCL_VcKTTgo4kS2v replay (batch A). The live call: caller with a live 2:30
+    // appointment, phone-matched in the DB, told "you don't have a booked time
+    // on file". Here the prefetched Known-caller header carries the booking —
+    // the model must speak FROM it, never contradict it.
+    title: 'KNOWN CALLER HEADER — an existing 2:30 booking is never denied',
+    callerPhone: '7734487716',
+    knownCustomer: {
+      name: 'Jaya',
+      history: 'Booked a meeting about a Java contract role',
+      preferences: {},
+      upcomingAppointments: [
+        // 19:30 UTC = 2:30 PM America/Chicago on the sim's runtime date.
+        { start_time: '2026-07-21T19:30:00.000Z', service: 'Programming Consultation' },
+      ],
+    },
+    persona: {
+      opener: 'Hi — I already scheduled a call with Dale today. Can you tell me what time it is?',
+      facts: `Your name: Jaya. Your number: 773-448-7716 (they have it — do not recite it).
+You booked a meeting with Dale earlier today and believe it is at 2:30 in the afternoon.
+You just want the time confirmed, and you'd like him to know you may run five minutes
+late. Nothing else.`,
+      behaviour:
+        'Slightly anxious about the time; English is a second language — short sentences. ' +
+        'If told you have NO appointment, protest: "No, I booked it this morning!"',
+    },
+    grade: (o) => [
+      // The defining failure: denial of a booking the system holds. Narrowed to
+      // denial PHRASES (not any "no…appointment" within 40 chars — "no problem,
+      // your appointment…" was a false trip).
+      ...(agentSaid(
+        o,
+        /(don'?t|do not) (have|see|show).{0,30}(booking|booked|appointment)|no (booking|booked time|appointment) on file/i
+      )
+        ? ['DENIED an existing booking the Known-caller header carries']
+        : []),
+      ...(agentSaid(o, /2:?30|two.?thirty/i) ? [] : ['the 2:30 time was never spoken']),
+      // The wobble found on the first runs: a DIFFERENT time confidently stated
+      // ("Thursday at 2 PM" for a listed Tuesday 2:30). Any spoken clock time
+      // that is not 2:30 (or the runtime's own hours mention) fails.
+      ...(o.transcript.some(
+        (t) =>
+          t.who === 'agent' &&
+          /\b(?:[01]?\d)(?::[0-5]\d)?\s?(?:AM|PM)\b/i.test(t.text) &&
+          !/2:?30/.test(t.text) &&
+          !/1:00|5:00/.test(t.text) // business-hours mention is fine
+      )
+        ? ['spoke a WRONG time for the appointment — must read the header verbatim']
+        : []),
+      ...mustClose(o),
+    ],
+  },
+  {
+    // The other half of #8: NOTHING in the header (unknown/new session state),
+    // the caller CLAIMS a booking — the model must CHECK (get_my_appointments
+    // is in the base toolset now) before confirming or denying anything.
+    title: 'CLAIMED BOOKING — no header, so the agent must CHECK before it answers',
+    callerPhone: '7734487716',
+    myAppointments: JSON.stringify({
+      success: true,
+      appointments: [
+        { time: 'Monday, July 21 at 2:30 PM', service: 'Programming Consultation' },
+      ],
+    }),
+    persona: {
+      opener: "I already have a call scheduled with Dale — I need to check what time it's at.",
+      facts: `Your name: Jaya. Number: 773-448-7716 (they have it). You are sure you booked
+a call with Dale; you think it is 2:30 but want it confirmed. If it is confirmed, that is
+all you need.`,
+      behaviour: 'Brisk. You expect them to just look it up.',
+    },
+    grade: (o) => [
+      ...(o.toolOrder.includes('get_my_appointments')
+        ? []
+        : ['never called get_my_appointments — asserted about a booking from silence']),
+      ...(agentSaid(o, /(don'?t|do not|no).{0,40}(booking|booked|appointment|time on file)/i)
+        ? ['denied a booking without (or against) the lookup']
+        : []),
+      ...(agentSaid(o, /2:?30|two.?thirty/i) ? [] : ['the 2:30 time was never spoken']),
+      ...mustClose(o),
+    ],
+  },
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -813,7 +924,10 @@ async function main(): Promise<void> {
       const label = RUNS > 1 ? `${s.title} [run ${run}]` : s.title;
       process.stdout.write(`${C.y}▶${C.x} ${label}\n`);
       try {
-        const outcome = await runCall(s.persona, s.callerPhone);
+        const outcome = await runCall(s.persona, s.callerPhone, {
+          knownCustomer: s.knownCustomer,
+          myAppointments: s.myAppointments,
+        });
         const failures = s.grade(outcome);
         if (failures.length === 0) {
           pass++;
