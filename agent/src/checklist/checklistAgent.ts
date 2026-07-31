@@ -16,6 +16,7 @@
  */
 import { type llm, voice } from '@livekit/agents';
 import { sanitizeStream } from '../speechSanitizer.js';
+import type { KnownCustomer } from '../customerContext.js';
 import { runtimePreamble, type CallRuntime } from '../tasks/callPlan.js';
 import { ChecklistTracker } from './tracker.js';
 import { createChecklistTools, type ChecklistToolkit } from './checklistTools.js';
@@ -31,8 +32,71 @@ export interface ChecklistAgentOptions {
   runtime: CallRuntime;
   /** Carrier-attested caller number; null/undefined on forwarded lines. */
   callerPhone?: string | null;
+  /** Prefetched CRM context (attested caller-ID only — the prefetch never runs
+   *  on a spoken/blocked number). Until 2026-07-30 this reached ONLY the ladder
+   *  prompt: the live path never saw the CRM snapshot, which is how a caller
+   *  with a live appointment was told "you don't have a booked time on file"
+   *  (CALL_IMPROVEMENTS.md #8). */
+  knownCustomer?: KnownCustomer | null;
   /** Override for tests/tenants; defaults to the platform library. */
   library?: QuestionTreeDef[];
+}
+
+/** Speak-ready local time for a stored ISO timestamp ("Wednesday, July 30 at 2:30 PM"). */
+function formatAppointmentTime(iso: string, timezone: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(d);
+}
+
+/** The `# Known caller` prompt section — CRM facts the model must not
+ *  contradict, or '' for an unknown caller. Appointments lead: they are the
+ *  fact that was denied on the 2026-07-27 live call (#8). */
+function renderKnownCaller(known: KnownCustomer | null, timezone: string): string {
+  if (!known) return '';
+  const lines: string[] = [];
+  const name = known.name && known.name !== 'Unknown' ? known.name : null;
+  lines.push(
+    `This is a RETURNING caller${name ? ` — ${name}` : ''} (matched by carrier caller ID; already in the phone book — never re-ask their name if it is shown here, and greet them like someone you know).`
+  );
+  if (known.upcomingAppointments.length > 0) {
+    lines.push(
+      'They ALREADY HAVE these upcoming appointments — this list is DB truth, fetched at call start:'
+    );
+    for (const a of known.upcomingAppointments) {
+      lines.push(
+        `- ${formatAppointmentTime(a.start_time, timezone)}${a.service ? ` — ${a.service}` : ''}`
+      );
+    }
+    lines.push(
+      'NEVER tell this caller they have no booking, and never book a DUPLICATE of one of ' +
+        'these — if they ask about "their appointment", THIS is what they mean; offer to ' +
+        'keep, move, or cancel it (add schedule_change with set_purpose). If a time they ' +
+        'request is occupied by their own appointment above, SAY THAT plainly. When you ' +
+        'speak an appointment time, read it EXACTLY as written in the list — day and time ' +
+        'verbatim, never paraphrased to a different day or hour (a sim caller was told ' +
+        '"Thursday at 2 PM" for a listed Tuesday 2:30 — a wrong time confidently stated ' +
+        'is worse than no answer).'
+    );
+  } else {
+    lines.push(
+      'No upcoming appointments on file AT CALL START. If they claim one, or anything may ' +
+        'have changed, call get_my_appointments before you confirm or deny — never assert ' +
+        'from silence.'
+    );
+  }
+  if (Object.keys(known.preferences).length > 0) {
+    lines.push(`Saved preferences: ${JSON.stringify(known.preferences)}`);
+  }
+  if (known.history) lines.push(`Recent calls: ${known.history}`);
+  return `\n# Known caller\n${lines.join('\n')}\n`;
 }
 
 /** The system prompt — persona, runtime facts, the tree menu, and the ported
@@ -42,8 +106,10 @@ export function buildChecklistPrompt(opts: {
   runtime: CallRuntime;
   library: QuestionTreeDef[];
   callerPhone?: string | null;
+  knownCustomer?: KnownCustomer | null;
 }): string {
   const menu = opts.library.map((tree) => `- ${tree.tree_id}: ${tree.description}`).join('\n');
+  const knownSection = renderKnownCaller(opts.knownCustomer ?? null, opts.runtime.timezone);
   const callerIdLine = opts.callerPhone
     ? `The caller's number is ${opts.callerPhone} — verified by caller ID and already on ` +
       'file. NEVER ask for it and NEVER recite it back at them ("I see you\'re calling ' +
@@ -54,7 +120,7 @@ export function buildChecklistPrompt(opts: {
   return `${opts.persona}
 
 ${runtimePreamble(opts.runtime)}
-
+${knownSection}
 # How this call works
 There is ONE conversation and a CHECKLIST the system keeps for you — you never track
 progress yourself. Your three jobs:
@@ -153,6 +219,13 @@ Their questions: answer_question at ANY moment, mid-anything — answer in one o
 spoken sentences from the result only, then return to the checklist. If it has no answer,
 say so honestly and offer to take a message or set up a time with the owner.
 
+EXISTING BOOKINGS ARE TOOL-GATED FACTS. Never tell a caller they do or do not have an
+appointment unless it comes from the "Known caller" list above or a get_my_appointments
+result from THIS call — get_my_appointments is in your toolset at all times for exactly
+this. Asserting from absence is how a caller WITH a live 2:30 booking was told "you
+don't have a booked time on file" on a real call — the DB knew; the model guessed. If
+the caller claims a booking you can't see, CHECK before you answer.
+
 Ending: BEFORE you wrap up, re-read the caller's opening sentence. If they asked to
 TALK TO / speak with / meet someone and no meeting is booked, the call is NOT complete —
 add the booking tree with set_purpose now and offer real times (2026-07-21 live call:
@@ -243,6 +316,7 @@ export class ChecklistAgent extends voice.Agent {
         runtime: opts.runtime,
         library,
         callerPhone: opts.callerPhone,
+        knownCustomer: opts.knownCustomer,
       }),
       tools: toolkit.selectedTools(),
     });

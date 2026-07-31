@@ -935,6 +935,7 @@ describe('buildSystemPrompt — prefetched caller context', () => {
     name: 'Dale',
     history: 'Booked a cut on May 2',
     preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
+    upcomingAppointments: [],
   };
 
   it('HAPPY: bakes the returning caller name, preferences, and history into the prompt', () => {

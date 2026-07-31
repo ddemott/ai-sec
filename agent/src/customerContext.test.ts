@@ -40,17 +40,66 @@ describe('fetchCustomerContext', () => {
       },
     });
 
-    const result = await fetchCustomerContext(client, TENANT_ID, CALLER_PHONE);
+    const result = await fetchCustomerContext(client, TENANT_ID, CALLER_PHONE, {
+      callId: 'SCL_test1',
+    });
 
     expect(result).toEqual({
       name: 'Dale',
       history: 'Booked a cut on May 2; asked about color pricing',
       preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
+      upcomingAppointments: [],
     });
     // WHERE: the same route the get_customer_context tool uses, so the prefetch
     // and the tool can never return differently-shaped context.
     expect(calls[0].path).toBe('/agent-tools/customer-context');
-    expect(calls[0].body).toEqual({ tenant_id: TENANT_ID, phone: CALLER_PHONE });
+    // phone_source 'caller_id' is THE fix that revived this prefetch: the
+    // disclosure gate (2026-07-13) defaults an omitted source to 'spoken' and
+    // was silently blocking every known-caller lookup this function made.
+    expect(calls[0].body).toEqual({
+      tenant_id: TENANT_ID,
+      phone: CALLER_PHONE,
+      phone_source: 'caller_id',
+      call_id: 'SCL_test1',
+    });
+  });
+
+  it('parses upcoming appointments — the fact the model must never contradict (#8)', async () => {
+    const { client } = makeClient({
+      ok: true,
+      result: {
+        name: 'Jaya',
+        history: 'No history',
+        preferences: {},
+        upcoming_appointments: [
+          { start_time: '2026-07-27T19:30:00.000Z', service: 'Programming Consultation' },
+          { start_time: 'not-a-date-but-still-passed-through', service: null },
+          { service: 'missing start_time — dropped' },
+        ],
+      },
+    });
+    const result = await fetchCustomerContext(client, TENANT_ID, CALLER_PHONE);
+    expect(result?.upcomingAppointments).toEqual([
+      { start_time: '2026-07-27T19:30:00.000Z', service: 'Programming Consultation' },
+      { start_time: 'not-a-date-but-still-passed-through', service: null },
+    ]);
+  });
+
+  it('an upcoming appointment ALONE makes the caller known — even with no name/prefs', async () => {
+    // A placeholder-named customer ("Caller") with a live booking must still get
+    // the Known-caller section: the appointment is the fact that was denied live.
+    const { client } = makeClient({
+      ok: true,
+      result: {
+        name: 'Unknown',
+        history: 'No history',
+        preferences: {},
+        upcoming_appointments: [{ start_time: '2026-07-27T19:30:00.000Z', service: null }],
+      },
+    });
+    const result = await fetchCustomerContext(client, TENANT_ID, CALLER_PHONE);
+    expect(result).not.toBeNull();
+    expect(result?.upcomingAppointments).toHaveLength(1);
   });
 
   // WHAT: blocked / withheld caller ID (or a forwarded line the guards nulled).

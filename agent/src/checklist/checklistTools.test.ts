@@ -45,6 +45,7 @@ function makeKit(overrides: Partial<ChecklistToolDeps> = {}) {
     get_company_policy_answer: fakeTool(ok({ answer: 'Open 1 to 5, Monday to Friday.' })),
     get_available_slots: fakeTool(ok({ open_times: ['3:00 PM'] })),
     get_service_catalog: fakeTool(ok({ services: [] })),
+    get_my_appointments: fakeTool(ok({ appointments: [] })),
     cancel_appointment: fakeTool(ok({ appointment_id: 'appt_9' })),
     reschedule_appointment: fakeTool(ok({ appointment_id: 'appt_9' })),
     attach_meeting_notes: fakeTool(ok({ appointment_id: 'appt_1' })),
@@ -76,9 +77,13 @@ describe('the toolset composition', () => {
   it('before any purpose: base tools only — no action tool exists to misfire', () => {
     const { toolkit } = makeKit();
     const tools = toolkit.selectedTools();
+    // get_my_appointments joined the base set 2026-07-30 (#8): the prompt's
+    // "existing bookings are tool-gated facts" rule needs the tool to exist on
+    // EVERY turn — a caller can claim a booking before any tree is selected.
     expect(Object.keys(tools).sort()).toEqual([
       'answer_question',
       'finish_call',
+      'get_my_appointments',
       'record_answer',
       'set_purpose',
     ]);

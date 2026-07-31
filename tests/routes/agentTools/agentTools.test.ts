@@ -497,6 +497,7 @@ describe('agentTools /customer-context', () => {
       queryResponses: [
         { rows: [{ customer_id: 'cust1', name: 'Alice' }] },
         { rows: [{ summary: 'Booked oil change' }, { summary: 'Asked about winter tires' }] },
+        { rows: [] }, // no upcoming appointments
       ],
     });
     const res = await post(app, '/agent-tools/customer-context', {
@@ -516,6 +517,7 @@ describe('agentTools /customer-context', () => {
       // send the agent down the full permission script. Texting without consent
       // is illegal; asking someone who already agreed is merely annoying.
       sms_consent: false,
+      upcoming_appointments: [],
     });
     // WHY: Phone must be normalized to +1 form before the lookup
     expect(queries[0].params).toEqual([TENANT_ID, '+15551234567']);
@@ -542,6 +544,7 @@ describe('agentTools /customer-context', () => {
           ],
         },
         { rows: [] }, // no call summaries
+        { rows: [] }, // no upcoming appointments
         // Sarah agreed to appointment texts on a previous call. Consent is
         // durable (TCPA: prior express consent persists until revoked), so the
         // agent must NOT run the permission script at her again.
@@ -562,7 +565,42 @@ describe('agentTools /customer-context', () => {
       preferences: { preferred_stylist: 'Maria', last_service: 'balayage' },
       // She already said yes — do not ask again.
       sms_consent: true,
+      upcoming_appointments: [],
     });
+  });
+
+  it('HAPPY: upcoming appointments ride along — the fact the model must never contradict (#8)', async () => {
+    // WHO: Jaya (SCL_VcKTTgo4kS2v, 2026-07-27) — live 2:30 appointment,
+    //      phone-matched, told "you don't have a booked time on file". THIS
+    //      payload is how the model gets told before the first word.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-jaya', name: 'Jaya' }] },
+        { rows: [] }, // no summaries
+        {
+          rows: [
+            {
+              start_time: new Date('2026-07-27T19:30:00.000Z'),
+              service: 'Programming Consultation',
+            },
+          ],
+        },
+      ],
+    });
+    const res = await post(app, '/agent-tools/customer-context', {
+      tenant_id: TENANT_ID,
+      phone: '7734487716',
+      phone_source: 'caller_id',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.upcoming_appointments).toEqual([
+      { start_time: '2026-07-27T19:30:00.000Z', service: 'Programming Consultation' },
+    ]);
+    // Scheduled + future + not-deleted only — a cancelled appointment in this
+    // list would make the agent confirm a booking that no longer exists.
+    const upcomingQ = queries.find((q) => q.text.includes('FROM appointments'))!;
+    expect(upcomingQ.text).toContain("status = 'scheduled'");
+    expect(upcomingQ.text).toContain('start_time > NOW()');
   });
 
   it('HAPPY: unknown customer returns "new caller" message', async () => {

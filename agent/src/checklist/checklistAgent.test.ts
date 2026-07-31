@@ -104,3 +104,62 @@ describe('the stall detector (SCL_nRKo3KEVw8Yh — five minutes of bot-mirror)',
     expect(ctx.items.filter((it) => it.type === 'message' && it.role === 'system')).toHaveLength(0);
   });
 });
+
+describe('the Known caller section (batch A — the CRM snapshot reaches the LIVE path)', () => {
+  // WHO: SCL_VcKTTgo4kS2v (2026-07-27, CALL_IMPROVEMENTS.md #8) — a caller with
+  //      a live 2:30 appointment, phone-matched in the DB, told "you don't have
+  //      a booked time on file". The snapshot was prefetched on every call and
+  //      handed only to the ladder prompt, which prod never runs.
+  const runtime = {
+    currentDate: 'Thursday, July 30, 2026',
+    timezone: 'America/Chicago',
+    businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+    bookableThrough: 'Friday, August 28, 2026',
+  };
+
+  it('renders the returning caller: appointments lead, in tenant-local words, with the never-deny rule', () => {
+    const p = buildChecklistPrompt({
+      persona: 'You are Piper.',
+      runtime,
+      library: PLATFORM_TREE_LIBRARY,
+      knownCustomer: {
+        name: 'Jaya',
+        history: 'Booked a meeting about a Java contract',
+        preferences: { preferred_contact: 'phone' },
+        // 19:30 UTC = 2:30 PM America/Chicago — the live call's exact booking.
+        upcomingAppointments: [
+          { start_time: '2026-07-27T19:30:00.000Z', service: 'Programming Consultation' },
+        ],
+      },
+    });
+    expect(p).toContain('# Known caller');
+    expect(p).toContain('Jaya');
+    expect(p).toContain('2:30 PM'); // tenant-local, speakable — never raw ISO
+    expect(p).toContain('Programming Consultation');
+    expect(p).toContain('NEVER tell this caller they have no booking');
+    expect(p).toContain('Booked a meeting about a Java contract');
+  });
+
+  it('known caller with NO appointments: directed to CHECK before denying, never assert from silence', () => {
+    const p = buildChecklistPrompt({
+      persona: 'You are Piper.',
+      runtime,
+      library: PLATFORM_TREE_LIBRARY,
+      knownCustomer: { name: 'Dale', history: '', preferences: {}, upcomingAppointments: [] },
+    });
+    expect(p).toContain('# Known caller');
+    expect(p).toContain('never assert');
+    expect(p).toContain('get_my_appointments');
+  });
+
+  it('unknown caller: no Known-caller section, but the tool-gated-bookings rule still stands', () => {
+    const p = buildChecklistPrompt({
+      persona: 'You are Piper.',
+      runtime,
+      library: PLATFORM_TREE_LIBRARY,
+      knownCustomer: null,
+    });
+    expect(p).not.toContain('# Known caller');
+    expect(p).toContain('EXISTING BOOKINGS ARE TOOL-GATED FACTS');
+  });
+});
