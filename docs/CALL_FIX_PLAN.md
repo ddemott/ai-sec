@@ -114,7 +114,7 @@ question lengthens calls; callback phone already on every lead).
    have 2:30 booked") instead of inventing one ("we can only book on the quarter
    hour" — call #8's hallucinated explanation for a slot list it didn't understand).
 
-## D — corrections propagate (call #2)
+## D — corrections propagate (call #2) — **PR pending**
 
 1. Partial UNIQUE on `customer_messages (tenant_id, call_id) WHERE call_id IS NOT
 NULL`; route becomes `ON CONFLICT DO UPDATE` — retry-safe AND correction-capable

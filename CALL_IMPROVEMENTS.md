@@ -35,6 +35,8 @@ Analyzed 2026-07-30 (12 calls: all real inbound `SCL_*` calls from 2026-07-26/27
 
 ## 2. SCL_ReG7kLRiY94c — 2026-07-27 16:37 CT, 71s, outcome=message (Camille, +12624979039)
 
+> **FIX SHIPPED — batch D** (2026-08-01): `customer_messages` is now one row per call (migration 20260801000000), so a correction REWRITES the row instead of having nowhere to land; `record_answer` re-fires any completed write whose answers changed; `identify_caller` is no longer a one-shot latch and carries a scoped `is_correction` that may overwrite a real name **only when this same call wrote it** (never a cross-call rename — that is the claim-based trust the OTP binding exists to destroy); spelled corrections ("C-A-M-I-L-L-E") are collapsed and "Jaya from Connolly Systems" splits into person + company before storage. NB the historical Jamil row is not retro-fixed by this — the code change only governs future calls.
+
 **PROBLEM.** Caller name heard as "Jamil"; message saved immediately ("returning Dale's call"); caller then corrected — "You got my name wrong… Camille, C-A-M-I-L-L-E." Message row in `customer_messages` still says **Jamil**. Customer row separately shows "Camille DeMott".
 
 **ANALYSIS.** `take_message` wrote the row mid-call with the then-current name. `record_answer` accepted the correction and the agent acknowledged it, but nothing re-touches rows already written this call. Host-owned state was corrected; the persisted artifact wasn't — same "state theater" class as the dropped `location_type` lesson in `checklistTools.ts`.

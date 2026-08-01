@@ -820,3 +820,121 @@ describe('meeting_offer (the live-path OFFER_MEETING port)', () => {
     expect(tracker.status('capture')).toBe('done');
   });
 });
+
+describe('corrections reach what was already written (batch D — the "Jamil" row)', () => {
+  // WHO: SCL_ReG7kLRiY94c, 2026-07-27. Name heard as "Jamil"; message saved;
+  //      caller corrected to "Camille" thirty seconds later; the row never
+  //      changed and still says Jamil in prod (CALL_IMPROVEMENTS.md #2).
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it('a corrected name RE-FIRES the message write, with the corrected value', async () => {
+    const { toolkit, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    for (const [node_id, value] of [
+      ['caller_name', 'Jamil'],
+      ['caller_phone', '2624979039'],
+      ['message_body', 'returning your call'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    await call(toolkit.selectedTools(), 'take_message', {});
+    expect(fakes.take_message.execute).toHaveBeenCalledOnce();
+
+    // The correction.
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Camille',
+    });
+    await flush(); // the re-fire is deferred to a macrotask, never inline
+
+    expect(fakes.take_message.execute).toHaveBeenCalledTimes(2);
+    const second = fakes.take_message.execute.mock.calls[1][0] as Record<string, unknown>;
+    expect(second.caller_name).toBe('Camille');
+    // Same call → the backend upserts on (tenant_id, call_id), so this rewrites
+    // the row rather than appending a contradictory second one.
+  });
+
+  it('a correction re-syncs the PHONE BOOK too — identify is no longer a one-shot latch', async () => {
+    const { toolkit, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Jamil',
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '2624979039',
+    });
+    expect(fakes.identify_caller.execute).toHaveBeenCalledOnce();
+    const first = fakes.identify_caller.execute.mock.calls[0][0] as Record<string, unknown>;
+    expect(first.name).toBe('Jamil');
+    expect(first.is_correction).toBeUndefined(); // the first save is not a correction
+
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Camille',
+    });
+    expect(fakes.identify_caller.execute).toHaveBeenCalledTimes(2);
+    const second = fakes.identify_caller.execute.mock.calls[1][0] as Record<string, unknown>;
+    expect(second.name).toBe('Camille');
+    // The flag that lets the backend overwrite a REAL name — scoped to a name
+    // this call itself wrote, never a cross-call rename.
+    expect(second.is_correction).toBe(true);
+  });
+
+  it('re-recording the SAME name changes nothing — no pointless writes', async () => {
+    const { toolkit, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Sue' });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '2624979039',
+    });
+    await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Sue' });
+    expect(fakes.identify_caller.execute).toHaveBeenCalledOnce();
+  });
+
+  it('a spelled-out correction is collapsed before it is stored', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'C-A-M-I-L-L-E',
+    });
+    expect(tracker.value('caller_name')).toBe('Camille');
+  });
+
+  it('"Jaya from Connolly Systems" splits: the person to the name, the company to the company', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Jaya from Connolly Systems',
+    });
+    expect(tracker.value('caller_name')).toBe('Jaya');
+    // The company half is KEPT, on the node that exists for it — not discarded,
+    // and not filed as a surname.
+    expect(tracker.value('callers_company')).toBe('Connolly Systems');
+  });
+
+  it('a BOOKING is never silently re-fired by a name correction', async () => {
+    // A corrected name must not move an appointment: only writes that are
+    // idempotent per call and safe to redo are in REWRITABLE_ON_CORRECTION.
+    const { toolkit, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'booking'] });
+    for (const [node_id, value] of [
+      ['caller_name', 'Jamil'],
+      ['caller_phone', '2624979039'],
+      ['meeting_topic', 'a consult'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    await call(toolkit.selectedTools(), 'book_with_scheduling', {});
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Camille',
+    });
+    await flush();
+    expect(fakes.book_with_scheduling.execute).toHaveBeenCalledOnce();
+  });
+});
