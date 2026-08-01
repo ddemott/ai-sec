@@ -204,8 +204,10 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         // which row belonged to this call. It still says Jamil.
         //
         // Now a second take_message on the same call REWRITES its own row, so a
-        // correction lands and a retry cannot duplicate. The updated_at bump is
-        // what tells the owner (and a postmortem) that the row was revised.
+        // correction lands and a retry cannot duplicate. updated_at is bumped by
+        // trg_customer_messages_updated_at (the house fn_set_updated_at pattern),
+        // not by hand here — a column maintained in one call site is a column
+        // that lies everywhere else, which is what the review caught on #312.
         // Dashboard-created messages carry no call_id and are untouched by this.
         const res = await client.query<{ message_id: string }>(
           `INSERT INTO customer_messages
@@ -217,8 +219,7 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
              callback_phone = EXCLUDED.callback_phone,
              message        = EXCLUDED.message,
              caller_phone   = COALESCE(EXCLUDED.caller_phone, customer_messages.caller_phone),
-             customer_id    = COALESCE(EXCLUDED.customer_id, customer_messages.customer_id),
-             updated_at     = now()
+             customer_id    = COALESCE(EXCLUDED.customer_id, customer_messages.customer_id)
            RETURNING message_id`,
           [
             args.tenant_id,

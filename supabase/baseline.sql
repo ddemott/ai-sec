@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict yHehWn7tckzhGt1ESkKbHuqeiQdRGM4GiOdrN7bHCqyrmF1QaBmiWl60fhyaVsG
+\restrict c1LMhAURye3GlA0PW4ccEjdDFXC0gMjkOLcP1gK4cqVscDFGZg79fINXVpT9a7M
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -4850,6 +4850,13 @@ CREATE TRIGGER trg_audit_services AFTER INSERT OR DELETE OR UPDATE ON public.ser
 
 
 --
+-- Name: customer_messages trg_customer_messages_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_customer_messages_updated_at BEFORE UPDATE ON public.customer_messages FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
 -- Name: customers trg_customers_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -5980,5 +5987,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict yHehWn7tckzhGt1ESkKbHuqeiQdRGM4GiOdrN7bHCqyrmF1QaBmiWl60fhyaVsG
+\unrestrict c1LMhAURye3GlA0PW4ccEjdDFXC0gMjkOLcP1gK4cqVscDFGZg79fINXVpT9a7M
 

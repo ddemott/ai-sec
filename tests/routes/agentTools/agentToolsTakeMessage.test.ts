@@ -115,8 +115,9 @@ describe('/agent-tools/take-message', () => {
     expect(insert.text).toContain('ON CONFLICT (tenant_id, call_id)');
     expect(insert.text).toContain('DO UPDATE');
     expect(insert.text).toContain('caller_name    = EXCLUDED.caller_name');
-    // A revised row SAYS it was revised.
-    expect(insert.text).toContain('updated_at     = now()');
+    // updated_at is the TRIGGER's job (trg_customer_messages_updated_at) — a
+    // column maintained in one call site lies everywhere else (#312 review).
+    expect(insert.text).not.toContain('updated_at');
     // Partial: dashboard-created messages carry no call_id and are untouched.
     expect(insert.text).toContain('WHERE call_id IS NOT NULL');
   });
