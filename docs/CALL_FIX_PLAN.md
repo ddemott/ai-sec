@@ -150,7 +150,7 @@ NULL`; route becomes `ON CONFLICT DO UPDATE` — retry-safe AND correction-capab
    passthrough (gated on tenant forward-phone) is a separate later PR needing
    live-call verification.
 
-## F — call hygiene (calls #1, #4, #5, #6, #11, #12)
+## F — call hygiene (calls #1, #4, #5, #6, #11, #12) — **PR pending**
 
 1. Caller-silence timer: >10s post-greeting → one "Are you still there? I can take a
    message or book a time." → graceful close, `outcome='silent_hangup'`. (No

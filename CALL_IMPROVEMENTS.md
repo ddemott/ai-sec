@@ -59,9 +59,13 @@ Analyzed 2026-07-30 (12 calls: all real inbound `SCL_*` calls from 2026-07-26/27
 
 **ANALYSIS.** 13s barely covers the greeting: caller hung up during or right after it. Likely bad-moment call or greeting-length impatience — this greeting is ~9s of speech before the caller may talk. Not a defect on its own, but it's one of four greeting-only calls in a single afternoon; the pattern says the greeting is long enough that early hangups look like this.
 
+> **FIXED — batch F**: `greeting_only_hangups_total`, bucketed under/over the 20s silent-call line and deliberately separate from the broken-audio alarm. Measure first, exactly as the solution below says.
+
 **SOLUTION.** Track a `greeting_only_hangup` metric (transcript length == greeting length). If the rate is material, shorten the greeting's first sentence and move the menu after a beat of silence. No code change on this call alone.
 
 ## 5 & 6. SCL_8onBgV2RSjiW (13:55 CT, 40s) and SCL_BRQq7dNa9xrg (14:54 CT, 42s) — outcome=none (Jaya, +17734487716)
+
+> **FIXED — batch F** (2026-08-01): `attachCallerSilenceWatch` — the gap neither existing watchdog covered, because both arm on the AGENT's state and stand down exactly when a caller's silence begins. Ten seconds of quiet with the agent idle → one spoken check-in ("Are you still there? I can take a message or set up a time"); twelve more → a goodbye and a clean close, so the call ends with a record instead of hanging open. Speech resets both beats. The root cause of these two calls (#9's who-calls-whom) was fixed in batch B.
 
 **PROBLEM.** Two calls, 40+ seconds each, transcript contains ONLY the greeting. Caller (who had a 14:30 CT appointment and had been told at 13:03 to "call Dale on this same number") stayed on the line ~40 seconds and either said nothing the STT kept, or waited for a human, and hung up.
 

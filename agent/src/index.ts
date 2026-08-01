@@ -42,8 +42,19 @@ import { CallRootAgent } from './tasks/callRootAgent.js';
 import { ChecklistAgent } from './checklist/checklistAgent.js';
 import { createChecklistTurnDetector } from './session/turnDetector.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
-import { HOLD_LINE, THINKING_LINE, RECOVERY_LINE, HOLD_LINES } from './session/holdLines.js';
-import { attachOutputWatchdog, attachSilentTurnRecovery } from './session/watchdog.js';
+import {
+  HOLD_LINE,
+  THINKING_LINE,
+  RECOVERY_LINE,
+  CALLER_CHECK_IN_LINE,
+  CALLER_SILENCE_GOODBYE,
+  HOLD_LINES,
+} from './session/holdLines.js';
+import {
+  attachOutputWatchdog,
+  attachSilentTurnRecovery,
+  attachCallerSilenceWatch,
+} from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
 import { TranscriptRecorder } from './transcript.js';
 import { ToolCallLog } from './toolCallLog.js';
@@ -65,6 +76,20 @@ const MAX_TOOL_STEPS = (() => {
   const parsed = Number.parseInt(process.env.MAX_TOOL_STEPS ?? '', 10);
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 5;
 })();
+
+/**
+ * A duration from the environment, or the default — never NaN, never 0.
+ *
+ * `Number('')` is 0 and `Number('abc')` is NaN, and setTimeout treats BOTH as
+ * "fire immediately". For the caller-silence timers that means a typo in an env
+ * var checks in on the caller the instant the agent stops talking, then hangs up
+ * on them — a misconfiguration that ends calls (review catch on #314). Same
+ * shape as MAX_TOOL_STEPS above, for the same reason.
+ */
+function envMs(name: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 /**
  * The tenant's saved voice, mapped to its nearest Deepgram Aura equivalent.
@@ -1615,6 +1640,48 @@ export default defineAgent({
           onSpoken: (text) => transcript.add('assistant', text),
         });
         session.on(voice.AgentSessionEventTypes.Close, detachTurnRecovery);
+
+        // CALLER-side silence — the gap the two watchdogs above never covered,
+        // because both arm on the AGENT's state and stand down exactly when the
+        // caller's silence begins. Four calls on 2026-07-27 held 13-42 seconds
+        // of dead air after the greeting and said nothing into it; one caller
+        // had been told to ring back at that time and was waiting for a human
+        // (CALL_IMPROVEMENTS.md #5, #6, #4, #11).
+        //
+        // Unconditional, like attachSilentTurnRecovery and for the same reason:
+        // an empty line held open until the caller gives up is a dropped call,
+        // not a polish item. Tunable without a deploy.
+        const detachCallerSilence = attachCallerSilenceWatch(session, {
+          checkInText: CALLER_CHECK_IN_LINE,
+          silenceMs: envMs('CALLER_SILENCE_MS', 10_000),
+          giveUpMs: envMs('CALLER_SILENCE_GIVEUP_MS', 12_000),
+          log: callLog,
+          onSpoken: (text) => transcript.add('assistant', text),
+          onGiveUp: () => {
+            // Say goodbye, then close — a call that ends because nobody was
+            // there should still END, rather than sit open until the carrier
+            // times it out and leaves a session with no outcome.
+            void (async () => {
+              try {
+                await session
+                  .say(CALLER_SILENCE_GOODBYE, { allowInterruptions: false, addToChatCtx: false })
+                  .waitForPlayout();
+                transcript.add('assistant', CALLER_SILENCE_GOODBYE);
+              } catch {
+                /* draining/closed — close anyway; a silent hangup beats a stuck line */
+              }
+              // Macrotask, same as finish_call's close: tearing the session down
+              // inside an event handler is what made the goodbye register as an
+              // internal error on 2026-07-21.
+              setTimeout(() => {
+                session.close().catch(() => {
+                  /* already closing */
+                });
+              }, 0);
+            })();
+          },
+        });
+        session.on(voice.AgentSessionEventTypes.Close, detachCallerSilence);
 
         // Thinking-sound bed (never-silent polish) — OFF unless ENABLE_THINKING_SOUND.
         // A looping keyboard-typing ambiance plays while the agent is 'thinking'

@@ -7,7 +7,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toolStarted, toolFinished, _resetToolActivityForTest } from './toolActivity.js';
 import { voice } from '@livekit/agents';
-import { attachOutputWatchdog, attachSilentTurnRecovery, NUDGE_INSTRUCTIONS } from './watchdog.js';
+import {
+  attachOutputWatchdog,
+  attachSilentTurnRecovery,
+  attachCallerSilenceWatch,
+  NUDGE_INSTRUCTIONS,
+} from './watchdog.js';
 import { _resetFillerCacheForTest } from './fillerCache.js';
 
 const STATE_EV = voice.AgentSessionEventTypes.AgentStateChanged;
@@ -69,6 +74,14 @@ function makeFakeSession() {
     activity: undefined as unknown,
   };
 
+  const emitUserState = (newState: string) => {
+    const oldState = userState;
+    userState = newState;
+    (handlers[voice.AgentSessionEventTypes.UserStateChanged] ?? []).forEach((cb) =>
+      cb({ type: voice.AgentSessionEventTypes.UserStateChanged, oldState, newState, createdAt: 0 })
+    );
+  };
+
   const emit = (newState: string) => {
     const oldState = agentState;
     agentState = newState;
@@ -83,6 +96,7 @@ function makeFakeSession() {
     generateReplyCalls,
     handles,
     emit,
+    emitUserState,
     setUserState: (s: string) => {
       userState = s;
     },
@@ -457,5 +471,88 @@ describe('onSpoken — watchdog speech reaches the transcript (batch H, 2026-07-
     f.emit('thinking');
     await vi.advanceTimersByTimeAsync(2500);
     expect(f.sayCalls).toHaveLength(1); // no throw, hold line still plays
+  });
+});
+
+describe('attachCallerSilenceWatch — the gap nobody was watching (batch F)', () => {
+  beforeEach(() => {
+    _resetFillerCacheForTest();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const CHECK_IN = 'Are you still there?';
+
+  const attachSilence = (f: ReturnType<typeof makeFakeSession>, onGiveUp = () => {}) =>
+    attachCallerSilenceWatch(f.session, {
+      checkInText: CHECK_IN,
+      onGiveUp,
+      silenceMs: 10_000,
+      giveUpMs: 12_000,
+      log: noopLog,
+    });
+
+  it('SAD: caller goes quiet after the greeting → ONE check-in, then the call is closed out', async () => {
+    // WHO: the 2026-07-27 calls that held 13-42s of dead air after the greeting
+    //      and said nothing into it — one from a caller waiting for a human at
+    //      the exact time she had been told to ring back (#5, #6).
+    const giveUp = vi.fn();
+    const f = makeFakeSession();
+    attachSilence(f, giveUp);
+    f.emit('listening'); // agent finished the greeting; the caller's clock starts
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(f.sayCalls.map((s) => s.text)).toEqual([CHECK_IN]);
+    expect(giveUp).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(giveUp).toHaveBeenCalledOnce();
+    // Exactly one check-in, ever — a line repeated at a silent caller is noise.
+    expect(f.sayCalls).toHaveLength(1);
+  });
+
+  it('HAPPY: a caller who speaks resets everything — and gets the full two beats again later', async () => {
+    const giveUp = vi.fn();
+    const f = makeFakeSession();
+    attachSilence(f, giveUp);
+    f.emit('listening');
+    await vi.advanceTimersByTimeAsync(9_000);
+
+    // Caller speaks: cancels the pending check-in outright.
+    f.setUserState('speaking');
+    f.emitUserState('speaking');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(f.sayCalls).toHaveLength(0);
+    expect(giveUp).not.toHaveBeenCalled();
+
+    // They fall quiet again → the SAME two beats, not an instant hang-up.
+    f.setUserState('listening');
+    f.emitUserState('listening');
+    f.emit('listening');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(f.sayCalls.map((s) => s.text)).toEqual([CHECK_IN]);
+  });
+
+  it('the agent speaking is never counted as the CALLER being silent', async () => {
+    const giveUp = vi.fn();
+    const f = makeFakeSession();
+    attachSilence(f, giveUp);
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(60_000);
+    f.emit('speaking');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(f.sayCalls).toHaveLength(0);
+    expect(giveUp).not.toHaveBeenCalled();
+  });
+
+  it('detaching stops the clock — a torn-down session never speaks into a dead line', async () => {
+    const giveUp = vi.fn();
+    const f = makeFakeSession();
+    const detach = attachSilence(f, giveUp);
+    f.emit('listening');
+    detach();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(f.sayCalls).toHaveLength(0);
+    expect(giveUp).not.toHaveBeenCalled();
   });
 });

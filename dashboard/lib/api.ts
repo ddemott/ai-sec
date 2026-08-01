@@ -39,6 +39,7 @@ import type {
   VersionComparison,
   TeamUser,
   CustomerMessage,
+  JobInquiry,
   AuditLogResponse,
   KnowledgeExplainResponse,
   TenantDataExportResponse,
@@ -1195,6 +1196,20 @@ export const Api = {
       apiFetch<CustomerContext>(
         `/voice/context/${encodeURIComponent(phone)}`,
         tenantParam(tenantId)
+      ),
+
+    /** Job inquiries — recruiter leads captured on a call. Rendered in the same
+     *  inbox as messages: a lead nobody can find is a lead nobody called back. */
+    listJobInquiries: (tenantId: string | null, opts?: { limit?: number; offset?: number }) =>
+      apiFetch<JobInquiry[]>(
+        `/voice/job-inquiries`,
+        tenantId
+          ? {
+              tenant_id: tenantId,
+              ...(opts?.limit !== undefined ? { limit: String(opts.limit) } : {}),
+              ...(opts?.offset !== undefined ? { offset: String(opts.offset) } : {}),
+            }
+          : undefined
       ),
 
     listMessages: (

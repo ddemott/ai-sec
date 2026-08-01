@@ -28,7 +28,7 @@ import {
 // rather than the two raw numbers.
 import { canTransfer } from '../../../shared/phone';
 import { sendSms } from '../../services/telnyxSms';
-import { errorsTotal } from '../../services/metrics';
+import { errorsTotal, silentHangupsTotal } from '../../services/metrics';
 
 /**
  * How long a call must last before "the caller never spoke" is evidence of a
@@ -38,6 +38,18 @@ import { errorsTotal } from '../../services/metrics';
  * is worse than a missed short call, and a genuinely broken audio path repeats.
  */
 const SILENT_CALL_MIN_SECONDS = 20;
+
+/**
+ * Does a rendered transcript contain at least one CALLER line?
+ *
+ * Accepts both shapes: the timestamped "Caller [1:23]: " (2026-07-30 onward) and
+ * the bare "Caller: " of older agents — during a deploy the two coexist, and a
+ * mismatch here would mark every healthy call as silent. Defined once because
+ * three call sites now depend on it (the alarm, the greeting-only counter, and
+ * the phonebook prune) and three drifting copies of one predicate is how the
+ * copies stop agreeing.
+ */
+const CALLER_LINE_RE = /^Caller(?: \[\d+:\d{2}\])?: /m;
 
 export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps): void {
   // tenant-config — minimal display info the agent worker needs at the
@@ -452,6 +464,25 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
       // A call that produces zero caller speech is never a success. Count it
       // and say so, so the next one surfaces in `errors_total` within minutes
       // instead of being discovered socially.
+      // CALLS WHERE THE CALLER NEVER SPOKE, counted separately from the
+      // broken-audio alarm.
+      //
+      // Four calls on 2026-07-27 (13-42s) held the greeting and nothing else.
+      // Whether that is a long greeting, a surprised caller, or a bad moment is
+      // NOT knowable from one afternoon — and CALL_IMPROVEMENTS.md #4 says so
+      // plainly: measure before shortening anything. This is the measurement.
+      //
+      // Deliberately NOT folded into no_caller_audio: that alarm means "the
+      // inbound audio path is broken" and ignores short calls for exactly that
+      // reason. A 13-second hang-up is not a codec failure; it is a person
+      // deciding not to talk to a robot, and conflating the two would make both
+      // numbers useless.
+      if (ended && args.transcript && !CALLER_LINE_RE.test(args.transcript)) {
+        silentHangupsTotal.inc({
+          bucket: (args.duration_seconds ?? 0) < SILENT_CALL_MIN_SECONDS ? 'under_20s' : 'over_20s',
+        });
+      }
+
       if (ended && (args.duration_seconds ?? 0) >= SILENT_CALL_MIN_SECONDS) {
         const transcript = args.transcript ?? '';
         // Anchored to line start — "Caller:" inside the assistant's own words
@@ -461,7 +492,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         // timestamped "Caller [1:23]: " (2026-07-30 onward) and the bare
         // "Caller: " of older agents — during a deploy the two coexist, and a
         // mismatch here would flag EVERY real call as no_caller_audio.
-        if (!/^Caller(?: \[\d+:\d{2}\])?: /m.test(transcript)) {
+        if (!CALLER_LINE_RE.test(transcript)) {
           errorsTotal.inc({ event: 'no_caller_audio' });
           app.log.warn(
             {
@@ -517,7 +548,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         ended &&
         typeof args.transcript === 'string' &&
         args.transcript.length > 0 &&
-        !/^Caller(?: \[\d+:\d{2}\])?: /m.test(args.transcript)
+        !CALLER_LINE_RE.test(args.transcript)
       ) {
         try {
           const pruned = await withTenantClient(args.tenant_id, async (client) =>

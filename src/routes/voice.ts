@@ -538,13 +538,16 @@ export function registerVoiceRoutes(
       if (!tenantId) return;
       const query = req.query as Record<string, string | undefined>;
       const status = query['status'] ?? null;
-      const limit = Math.min(parseInt(query['limit'] ?? '') || 50, 200);
-      const offset = parseInt(query['offset'] ?? '') || 0;
+      // Same clamp as /voice/job-inquiries: a negative OFFSET 500s, a negative
+      // LIMIT is unbounded. Predates this PR; fixed here because it is the same
+      // line of code and leaving one of two copies wrong is how they diverge.
+      const limit = Math.min(Math.max(parseInt(query['limit'] ?? '') || 50, 1), 200);
+      const offset = Math.max(parseInt(query['offset'] ?? '') || 0, 0);
 
       const rows = await withTenantClient(tenantId, (client) =>
         client.query(
           `SELECT message_id, caller_name, caller_phone, callback_phone, message,
-                  status, call_id, created_at
+                  status, call_id, created_at, is_urgent
            FROM customer_messages
           WHERE tenant_id = $1
             ${status ? 'AND status = $4' : ''}
@@ -555,6 +558,48 @@ export function registerVoiceRoutes(
       );
       return reply.send(rows.rows);
     }, 'Failed to fetch messages')
+  );
+
+  /**
+   * GET /voice/job-inquiries
+   *
+   * THE LEAD THE OWNER COULD NOT SEE. On 2026-07-27 a recruiter call captured a
+   * complete job inquiry — agency, client, role, rate, location — and the call
+   * was filed under an outcome that said "message". The Messages inbox was
+   * empty, because a job inquiry is not a message; it lived in its own table
+   * with NO route, NO API client method and NO screen (CALL_IMPROVEMENTS.md #1).
+   * A lead nobody can find is a lead nobody called back.
+   *
+   * Same shape as /voice/messages so the inbox can render both in one list.
+   */
+  app.get(
+    '/voice/job-inquiries',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const query = req.query as Record<string, string | undefined>;
+      // Clamped, not merely capped: these come straight off a querystring, and
+      // a negative OFFSET makes Postgres throw (a 500 from a URL anyone can
+      // type) while a negative LIMIT reads as "no limit" — an unbounded scan.
+      // Review catch on #314; the same shape was copied from /voice/messages,
+      // which is fixed alongside it.
+      const limit = Math.min(Math.max(parseInt(query['limit'] ?? '') || 50, 1), 200);
+      const offset = Math.max(parseInt(query['offset'] ?? '') || 0, 0);
+
+      const rows = await withTenantClient(tenantId, (client) =>
+        client.query(
+          `SELECT job_inquiry_id, caller_name, callback_phone, caller_company, client_company,
+                  represents_company, employment_type, role_description, rate_range, duration,
+                  location_type, address, timezone, call_id, appointment_id, created_at
+             FROM job_inquiries
+            WHERE tenant_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2 OFFSET $3`,
+          [tenantId, limit, offset]
+        )
+      );
+      return reply.send(rows.rows);
+    }, 'Failed to fetch job inquiries')
   );
 
   /**

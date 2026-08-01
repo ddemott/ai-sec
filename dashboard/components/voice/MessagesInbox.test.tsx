@@ -17,6 +17,7 @@ const { mockApi } = vi.hoisted(() => ({
   mockApi: {
     voice: {
       listMessages: vi.fn(),
+      listJobInquiries: vi.fn(),
       updateMessageStatus: vi.fn(),
     },
   },
@@ -53,6 +54,7 @@ const SAMPLE_MESSAGES = [
 beforeEach(() => {
   vi.clearAllMocks();
   mockApi.voice.listMessages.mockResolvedValue(SAMPLE_MESSAGES);
+  mockApi.voice.listJobInquiries.mockResolvedValue([]);
   mockApi.voice.updateMessageStatus.mockResolvedValue({ success: true });
 });
 
@@ -63,12 +65,49 @@ describe('MessagesInbox — loading / empty states', () => {
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
-  test('HAPPY: shows empty state when no messages', async () => {
+  test('HAPPY: shows empty state when there is nothing at all', async () => {
+    // Wording widened with the inbox itself: it holds job leads as well as
+    // messages now, so "no messages yet" would understate what is empty.
     mockApi.voice.listMessages.mockResolvedValue([]);
+    mockApi.voice.listJobInquiries.mockResolvedValue([]);
     render(<MessagesInbox tenantId="tenant-test" />);
-    await waitFor(() =>
-      expect(screen.getByText(/no messages yet/i)).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText(/nothing here yet/i)).toBeInTheDocument());
+  });
+
+  test('THE INVISIBLE LEAD: a job inquiry appears in the inbox, marked as a lead', async () => {
+    // WHO: the recruiter call of 2026-07-27 (CALL_IMPROVEMENTS.md #1). The
+    //       inquiry was captured in full — agency, client, role, rate — the
+    //       call's outcome said "message", and this inbox was EMPTY. The lead
+    //       lived in a table with no route, no client method and no screen.
+    // WHY: a lead nobody can find is a lead nobody called back.
+    mockApi.voice.listMessages.mockResolvedValue([]);
+    mockApi.voice.listJobInquiries.mockResolvedValue([
+      {
+        job_inquiry_id: 'ji-1',
+        caller_name: 'Sage',
+        callback_phone: '+17324018834',
+        caller_company: 'eTeam',
+        client_company: 'Capgemini',
+        represents_company: false,
+        employment_type: 'contract_to_hire',
+        role_description: 'Azure/M365 developer',
+        rate_range: 'competitive',
+        duration: null,
+        location_type: 'hybrid',
+        address: 'Hanover, New Hampshire',
+        timezone: null,
+        call_id: 'SCL_nRKo3KEVw8Yh',
+        appointment_id: null,
+        created_at: '2026-07-27T21:46:31.000Z',
+      },
+    ]);
+    render(<MessagesInbox tenantId="tenant-test" />);
+    await waitFor(() => expect(screen.getByText('Sage')).toBeInTheDocument());
+    // The list badge AND the detail-pane badge both say it — assert at least one
+    // rather than exactly one, so the copy can appear in both places.
+    expect(screen.getAllByText(/job lead/i).length).toBeGreaterThan(0);
+    // The role leads the preview — it is what decides whether to call back.
+    expect(screen.getByText(/Azure\/M365 developer/)).toBeInTheDocument();
   });
 
   test('SAD: API error shows toast and renders empty list', async () => {
@@ -93,10 +132,10 @@ describe('MessagesInbox — message list', () => {
     await waitFor(() => expect(screen.getByText('1')).toBeInTheDocument());
   });
 
-  test('HAPPY: shows "Select a message" placeholder when nothing selected', async () => {
+  test('HAPPY: shows the "select something to read" placeholder when nothing is selected', async () => {
     render(<MessagesInbox tenantId="tenant-test" />);
     await waitFor(() =>
-      expect(screen.getByText(/select a message to read it/i)).toBeInTheDocument()
+      expect(screen.getByText(/select a message or job lead to read it/i)).toBeInTheDocument()
     );
   });
 });
@@ -169,8 +208,8 @@ describe('MessagesInbox — select and mark read', () => {
     await waitFor(() =>
       expect(screen.getAllByText('Alice Smith').length).toBeGreaterThan(0)
     );
-    // Before click: "Select a message to read it" placeholder is visible
-    expect(screen.getByText(/select a message to read it/i)).toBeInTheDocument();
+    // Before click: the "select a message or job lead" placeholder is visible
+    expect(screen.getByText(/select a message or job lead to read it/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /alice smith/i }));
     // After click: detail panel replaces the placeholder
     await waitFor(() =>
