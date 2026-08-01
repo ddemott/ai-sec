@@ -154,8 +154,8 @@ function makeFakeBackend(): Record<string, Fake> {
       })
     ),
     get_available_slots: fake(
-      'Get real bookable open times for a requested day.',
-      { day: str },
+      'Get real bookable open times for a requested day. Pass requested_time when the caller named one.',
+      { day: str, requested_time: str },
       JSON.stringify({
         success: true,
         open_times: ['Tuesday, July 22 at 1:15 PM', '2:45 PM', '4:30 PM'],
@@ -278,6 +278,8 @@ async function runCall(
     staffFirstNames?: string[];
     /** Override book_with_scheduling's result (duplicate refusal, mechanics). */
     bookResults?: string[];
+    /** Override get_available_slots' result (batch C reason codes). */
+    slotsResult?: string;
   } = {}
 ): Promise<RunOutcome> {
   const tracker = new ChecklistTracker(PLATFORM_TREE_LIBRARY);
@@ -285,6 +287,10 @@ async function runCall(
   if (extras.myAppointments) {
     const orig = fakes.get_my_appointments;
     fakes.get_my_appointments = { ...orig, execute: async () => extras.myAppointments! };
+  }
+  if (extras.slotsResult) {
+    const orig = fakes.get_available_slots;
+    fakes.get_available_slots = { ...orig, execute: async () => extras.slotsResult! };
   }
   if (extras.bookResults?.length) {
     // Scripted sequence: call N returns bookResults[N], last value repeats —
@@ -419,6 +425,7 @@ interface Scenario {
   myAppointments?: string;
   staffFirstNames?: string[];
   bookResults?: string[];
+  slotsResult?: string;
   grade: (o: RunOutcome) => string[]; // list of failures; empty = pass
 }
 
@@ -947,6 +954,51 @@ another.`,
     ],
   },
   {
+    // Batch C — SCL_VcKTTgo4kS2v (#8). The caller asks for 2:30; her OWN
+    // appointment is on it. The tool now says so; the agent must RELAY that,
+    // not invent "we only book on the quarter hour" (2:30 IS a quarter hour).
+    title: 'OCCUPIED BY CALLER — the true reason is relayed, never manufactured',
+    callerPhone: '7734487716',
+    slotsResult: JSON.stringify({
+      success: true,
+      requested: {
+        time: '2:30 PM',
+        available: false,
+        reason: 'occupied_by_caller',
+        conflict_start: '2:30 PM',
+        spoken_reason: 'You already have an appointment at 2:30 PM.',
+        note:
+          "The caller's OWN appointment occupies that time. Say so plainly, and ask whether " +
+          'they want to keep it, move it, or book something else — never book a second one ' +
+          'silently, and never imply the time is unavailable for some other reason.',
+      },
+      open_times: ['1:15 PM', '3:00 PM', '3:30 PM'],
+      offer_times: ['1:15 PM', '3:00 PM'],
+      date: '2026-07-21',
+      spoken:
+        'You already have an appointment at 2:30 PM. On Tuesday, July 21 I have 1:15 PM or ' +
+        '3:00 PM. Would any of those work?',
+    }),
+    persona: {
+      opener: 'Hi, I want to book a call with Dale at 2:30 today.',
+      facts: `Your name: Jaya. Number: 773-448-7716 (they have it). You want 2:30 PM today
+to talk about a Java contract role. If you are told you ALREADY have something at 2:30,
+say "oh, that's the one I made this morning — I'll keep it" and do not book anything else.`,
+      behaviour: 'Hurried, direct. Short sentences.',
+    },
+    grade: (o) => [
+      // The true reason, spoken.
+      ...(agentSaid(o, /already have an appointment at 2:?30|already have.{0,20}2:?30/i)
+        ? []
+        : ["never told the caller the 2:30 was their OWN existing appointment"]),
+      // The invented reason must never appear.
+      ...(agentSaid(o, /quarter hour|only book on the/i)
+        ? ['manufactured a reason (the "quarter hour" lie) instead of relaying the tool\'s']
+        : []),
+      ...mustClose(o),
+    ],
+  },
+  {
     // SCL_VcKTTgo4kS2v replay (batch A). The live call: caller with a live 2:30
     // appointment, phone-matched in the DB, told "you don't have a booked time
     // on file". Here the prefetched Known-caller header carries the booking —
@@ -1051,6 +1103,7 @@ async function main(): Promise<void> {
           myAppointments: s.myAppointments,
           staffFirstNames: s.staffFirstNames,
           bookResults: s.bookResults,
+          slotsResult: s.slotsResult,
         });
         const failures = s.grade(outcome);
         if (failures.length === 0) {

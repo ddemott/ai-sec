@@ -2681,6 +2681,206 @@ describe('agentTools pure-inquiry abandonment attribution', () => {
 });
 
 describe('agentTools /available-slots', () => {
+  it('THE LIVE BUG: the caller\'s OWN 2:30 is named as the reason, not invented as one', async () => {
+    // WHO: Jaya, SCL_VcKTTgo4kS2v (2026-07-27, CALL_IMPROVEMENTS.md #8).
+    // WHAT: she asked for 2:30; her own appointment occupied it; the model was
+    //        handed a list with a hole and said "we can only book on the quarter
+    //        hour, so 2:30 won't work" — 2:30 IS a quarter hour.
+    // WHY: the truth was in the DB the whole time. Now it rides the response.
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Programming Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        }, // resolver
+        {
+          rows: [
+            { source: 'shift', start_time: '13:00:00', end_time: '17:00:00', is_caller: false },
+            {
+              source: 'appointment',
+              start_time: '14:30:00',
+              end_time: '15:00:00',
+              is_caller: true,
+            },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] }, // buffer
+        { rows: [{ timezone: 'America/Chicago' }] }, // tz for the past-time filter
+      ],
+    });
+    const res = await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'consultation',
+      date: '2099-07-27',
+      requested_time: '2:30 PM',
+      caller_phone: '7734487716',
+    });
+    expect(res.statusCode).toBe(200);
+    const r = res.json().result;
+    expect(r.requested.available).toBe(false);
+    expect(r.requested.reason).toBe('occupied_by_caller');
+    expect(r.requested.spoken_reason).toBe('You already have an appointment at 2:30 PM.');
+    // The spoken line LEADS with their time, then the alternatives.
+    expect(r.spoken).toContain('You already have an appointment at 2:30 PM.');
+    // And 2:30 really is absent from the list — reason and list agree.
+    expect(r.open_times).not.toContain('2:30 PM');
+  });
+
+  it("someone ELSE's booking is 'already spoken for' — the other customer is never described", async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        },
+        {
+          rows: [
+            { source: 'shift', start_time: '13:00:00', end_time: '17:00:00', is_caller: false },
+            {
+              source: 'appointment',
+              start_time: '14:30:00',
+              end_time: '15:00:00',
+              is_caller: false,
+            },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'consultation',
+      date: '2099-07-27',
+      requested_time: '2:30 PM',
+      caller_phone: '5550001111',
+    });
+    const r = res.json().result;
+    expect(r.requested.reason).toBe('occupied');
+    expect(r.requested.spoken_reason).toBe('2:30 PM is already spoken for.');
+    // The other customer's identity never appears — their schedule is their
+    // business. The explanation carries a time and a verdict, nothing about who.
+    expect(r.requested.customer_name).toBeUndefined();
+    expect(r.requested.customer_id).toBeUndefined();
+    expect(r.requested.spoken_reason).not.toMatch(/with |for [A-Z]/);
+  });
+
+  it('a time OUTSIDE the shift says so, instead of implying it is booked', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        },
+        {
+          rows: [
+            { source: 'shift', start_time: '13:00:00', end_time: '17:00:00', is_caller: false },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'consultation',
+      date: '2099-07-27',
+      requested_time: '9:00 AM',
+    });
+    const r = res.json().result;
+    expect(r.requested.reason).toBe('outside_shift');
+    expect(r.requested.spoken_reason).toMatch(/not open/i);
+  });
+
+  it('an AVAILABLE requested time is confirmed, with no reason and no alternatives pushed', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        },
+        {
+          rows: [
+            { source: 'shift', start_time: '13:00:00', end_time: '17:00:00', is_caller: false },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'consultation',
+      date: '2099-07-27',
+      requested_time: '2:30 PM',
+    });
+    const r = res.json().result;
+    expect(r.requested.available).toBe(true);
+    expect(r.requested.reason).toBe('available');
+    expect(r.requested.spoken_reason).toBeUndefined();
+    expect(r.requested.note).toMatch(/book it/i);
+    expect(r.open_times).toContain('2:30 PM');
+  });
+
+  it('NO requested_time → no requested block at all (an unasked explanation is noise)', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        },
+        {
+          rows: [
+            { source: 'shift', start_time: '13:00:00', end_time: '17:00:00', is_caller: false },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'consultation',
+      date: '2099-07-27',
+    });
+    expect(res.json().result.requested).toBeUndefined();
+  });
+
   it('SAD: open_times ENUMERATES every bookable time — the model must never do interval arithmetic', async () => {
     // WHO: a caller asking for 3 PM on a wide-open afternoon.
     // WHEN: 2026-07-14. This route returned ONE PROSE SENTENCE — "We have openings all
@@ -2820,7 +3020,9 @@ describe('agentTools /available-slots', () => {
     expect(queries[0].params).toEqual([TENANT_ID, 'Oil Change']);
     expect(queries[0].text).toMatch(/FROM services[\s\S]*is_deleted/);
     // The shifts + appointments query is second, keyed by tenant + date.
-    expect(queries[1].params).toEqual([TENANT_ID, '2030-01-01']);
+    // $3 is the caller's normalized phone for attributing a blocking
+    // appointment back to them (2026-07-31); null when the agent sent none.
+    expect(queries[1].params).toEqual([TENANT_ID, '2030-01-01', null]);
   });
 
   it('HAPPY: unmatched service_type falls through to the tenant default', async () => {

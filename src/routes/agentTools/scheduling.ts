@@ -46,6 +46,14 @@ import { findNextAvailableSlots, type AvailableSlot } from '../../services/avail
 import { resolveServiceForBooking } from '../../services/serviceResolver';
 import { getTenantBufferMinutes } from '../../services/tenantBuffer';
 import {
+  explainRequestedTime,
+  formatMinutesOfDay,
+  parseRequestedTime,
+  reasonNote,
+  spokenReason,
+  type BookedInterval,
+} from '../../services/availabilityReason';
+import {
   findOverlappingAppointment,
   isOverlapError,
   type AppointmentConflict,
@@ -987,6 +995,17 @@ export function registerSchedulingRoutes({
         });
       }
 
+      // The caller's own number, normalized once, for attributing a blocking
+      // appointment back to them. Server-injected by the agent runtime.
+      const callerPhoneNormalized = args.caller_phone ? normalizePhone(args.caller_phone) : null;
+      // The specific time they asked for, if any. Unparseable → null → the
+      // response simply carries no explanation, never a guessed one.
+      const requestedMinutes = parseRequestedTime(args.requested_time);
+      const requestedLabel =
+        requestedMinutes !== null
+          ? formatMinutesOfDay(requestedMinutes)
+          : (args.requested_time ?? '');
+
       // Format date for speech ("Wednesday, April 2")
       const dateObj = new Date(args.date + 'T12:00:00');
       const dayName = dateObj.toLocaleDateString('en-US', {
@@ -1000,6 +1019,7 @@ export function registerSchedulingRoutes({
           source: 'shift' | 'appointment';
           start_time: string | null;
           end_time: string | null;
+          is_caller: boolean | null;
         }>(
           `WITH active_employees AS (
              SELECT employee_id FROM employees
@@ -1028,27 +1048,39 @@ export function registerSchedulingRoutes({
              -- knew). The suggest layer and the enforce layer must read the
              -- same clock: the tenant's. (The date filter needs it too, or a
              -- late-evening local booking files under the wrong UTC day.)
+             -- is_caller: does this appointment belong to the person on the
+             -- phone? "You already have 2:30 booked" and "2:30 is taken" are
+             -- different answers, and only one of them stops a double-booking.
+             -- $3 is server-injected (agent runtime), never model-supplied.
              SELECT ((a.start_time AT TIME ZONE t.timezone)::time)::text AS start_time,
-                    ((a.end_time   AT TIME ZONE t.timezone)::time)::text AS end_time
+                    ((a.end_time   AT TIME ZONE t.timezone)::time)::text AS end_time,
+                    ($3::text IS NOT NULL AND c.phone = $3::text) AS is_caller
                FROM appointments a
                JOIN tenants t ON t.tenant_id = a.tenant_id
+               LEFT JOIN customers c ON c.customer_id = a.customer_id
               WHERE a.tenant_id = $1 AND a.status = 'scheduled'
                 AND (a.is_deleted IS NULL OR a.is_deleted = false)
                 AND (a.start_time AT TIME ZONE t.timezone)::date = $2::date
            )
-           SELECT 'shift'::text AS source, start_time, end_time FROM effective_shifts
+           SELECT 'shift'::text AS source, start_time, end_time, false AS is_caller
+             FROM effective_shifts
            UNION ALL
-           SELECT 'appointment'::text, start_time, end_time FROM day_appointments
+           SELECT 'appointment'::text, start_time, end_time, is_caller FROM day_appointments
            ORDER BY source, start_time`,
-          [args.tenant_id, args.date]
+          [args.tenant_id, args.date, callerPhoneNormalized]
         );
         const shifts: Array<{ start_time: string; end_time: string }> = [];
-        const appointments: Array<{ start_time: string; end_time: string }> = [];
+        const appointments: Array<{ start_time: string; end_time: string; is_caller: boolean }> =
+          [];
         for (const row of res.rows) {
           if (row.source === 'shift' && row.start_time && row.end_time) {
             shifts.push({ start_time: row.start_time, end_time: row.end_time });
           } else if (row.source === 'appointment' && row.start_time && row.end_time) {
-            appointments.push({ start_time: row.start_time, end_time: row.end_time });
+            appointments.push({
+              start_time: row.start_time,
+              end_time: row.end_time,
+              is_caller: row.is_caller === true,
+            });
           }
         }
         // Buffer so the openings we read aloud match what booking will accept.
@@ -1140,6 +1172,16 @@ export function registerSchedulingRoutes({
         start: timeToMinutes(a.start_time) - data.bufferMinutes,
         end: timeToMinutes(a.end_time) + data.bufferMinutes,
       }));
+      // UNBUFFERED, with attribution — the reason engine answers "is the
+      // caller's own meeting sitting on this time", and the tenant's buffer is
+      // not part of that fact. (The buffered copy above is what shapes the
+      // offer list; conflating the two would report a neighbouring booking as
+      // occupying a time it merely sits near.)
+      const bookedForReason: BookedInterval[] = data.appointments.map((a) => ({
+        start: timeToMinutes(a.start_time),
+        end: timeToMinutes(a.end_time),
+        isCaller: a.is_caller,
+      }));
       const open = subtractIntervals(coverage, booked);
       const usable = open.filter((slot) => slot.end - slot.start >= duration_minutes);
 
@@ -1171,12 +1213,43 @@ export function registerSchedulingRoutes({
             .filter((s) => s.end - s.start >= duration_minutes)
         : usable;
 
+      // THE EXPLANATION (2026-07-31). Computed from the same intervals that
+      // built the list, so the reason can never disagree with the offer. Only
+      // when the caller actually named a time — an unrequested explanation is
+      // noise, and an unparseable one is a guess.
+      const explainRequested = (openMins: number[]): Record<string, unknown> => {
+        if (requestedMinutes === null) return {};
+        const explanation = explainRequestedTime({
+          requestedMinutes,
+          durationMinutes: duration_minutes,
+          coverage,
+          booked: bookedForReason,
+          openMinutes: openMins,
+          isToday,
+          currentMinutes,
+        });
+        const spoken = spokenReason(explanation, requestedLabel);
+        return {
+          requested: {
+            time: requestedLabel,
+            available: explanation.verdict === 'available',
+            reason: explanation.verdict,
+            ...(explanation.conflictStart !== undefined
+              ? { conflict_start: formatMinutesOfDay(explanation.conflictStart) }
+              : {}),
+            ...(spoken ? { spoken_reason: spoken } : {}),
+            note: reasonNote(explanation),
+          },
+        };
+      };
+
       if (futureSlots.length === 0) {
         return ok(reply, {
           spoken: `${serviceInfo} Unfortunately, we're fully booked on ${dayName}. Would you like to try a different day?`,
           date: args.date,
           open_times: [],
           note: 'Fully booked. open_times is empty — do NOT offer any time on this day.',
+          ...explainRequested([]),
         });
       }
 
@@ -1249,6 +1322,7 @@ export function registerSchedulingRoutes({
           open_times: [],
           offer_times: [],
           note: 'Fully booked. open_times is empty — do NOT offer any time on this day.',
+          ...explainRequested([]),
         });
       }
 
@@ -1282,14 +1356,27 @@ export function registerSchedulingRoutes({
           ? offerTimes[0]
           : `${offerTimes.slice(0, -1).join(', ')} or ${offerTimes[offerTimes.length - 1]}`;
 
+      // When the caller named a time, LEAD with the verdict on THAT time —
+      // the model reads top-down, and a caller who asked for 2:30 wants to
+      // hear about 2:30 before they hear a menu (2026-07-27: they got the
+      // menu, with an invented reason attached).
+      const requestedBlock = explainRequested(openMinutes);
+      const requestedSpoken =
+        requestedMinutes !== null &&
+        (requestedBlock.requested as { spoken_reason?: string } | undefined)?.spoken_reason;
+
       return ok(reply, {
+        ...requestedBlock,
         // The LIST first, and the prose derived FROM it. Order matters: it is what the
         // model reads first, and there is no longer a range for it to reason about.
         open_times: openTimes,
         offer_times: offerTimes,
         date: args.date,
         note: 'open_times is the COMPLETE and ONLY list of bookable start times. A time in this list IS available — book it, do not second-guess it. A time NOT in this list is not available. Never state a time that is not in this list, and never refuse one that is. Do NOT reason about opening hours or ranges — they do not tell you what is free. When OFFERING times, offer exactly offer_times, speaking them as ONE natural sentence with commas ("I have 1:00, 1:30, or 2:00 — which works for you?") — never a bulleted or numbered list, and never more than these; a caller who names a different time from open_times gets a yes.',
-        spoken: `${serviceInfo} On ${dayName} I have ${spokenTimes}. Would any of those work, or did you have another time in mind?`,
+        spoken: requestedSpoken
+          ? // Their time first, with the true reason, THEN the alternatives.
+            `${requestedSpoken} On ${dayName} I have ${spokenTimes}. Would any of those work?`
+          : `${serviceInfo} On ${dayName} I have ${spokenTimes}. Would any of those work, or did you have another time in mind?`,
       });
     },
     'Failed to compute available slots'

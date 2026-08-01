@@ -225,6 +225,17 @@ export const GetAvailableSlotsSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
     .optional(),
+  // The specific time the caller ASKED FOR ("2:30 PM", "14:30"). When it isn't
+  // bookable the response says WHY (occupied_by_caller / occupied /
+  // outside_shift / past / no_room / closed) instead of leaving the model to
+  // invent a reason — it invented "we can only book on the quarter hour" for a
+  // 2:30 that the caller's OWN appointment was sitting on (2026-07-27, #8).
+  // Only meaningful alongside `date`.
+  requested_time: z.string().max(20).optional(),
+  // Server-injected by the agent runtime (never the model) so a blocking
+  // appointment can be attributed to the person on the phone — "you already
+  // have 2:30 booked" is a different answer from "2:30 is taken".
+  caller_phone: z.string().max(50).optional(),
   // Optional — see GetSchedulingOptionsSchema.call_id (pure-inquiry attribution).
   call_id: z.string().min(1).optional(),
 });

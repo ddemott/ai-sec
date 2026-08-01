@@ -104,7 +104,7 @@ question lengthens calls; callback phone already on every lead).
 5. Provenance rule + sim case: hedged company mentions ("companies like X") get a
    confirm question, never direct capture.
 
-## C — availability says WHY (calls #7, #8)
+## C — availability says WHY (calls #7, #8) — **PR pending**
 
 1. `available-slots` accepts optional `requested_time`; when that time is missing from
    results the response carries the reason: `occupied_by_caller` / `occupied` /
