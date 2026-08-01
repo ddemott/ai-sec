@@ -17,6 +17,8 @@ import {
   explainRequestedTime,
   formatMinutesOfDay,
   parseRequestedTime,
+  parseRequestedTimeCandidates,
+  resolveRequestedTime,
   reasonNote,
   spokenReason,
   type BookedInterval,
@@ -173,7 +175,16 @@ describe('parseRequestedTime', () => {
     expect(parseRequestedTime('13')).toBe(at(13));
   });
 
-  it('AMBIGUITY IS UNPARSEABLE — a bare hour must not be guessed into the wrong half of the day', () => {
+  it('a bare hour yields BOTH readings — the caller said something real, so do not discard it', () => {
+    expect(parseRequestedTimeCandidates('2')).toEqual([at(2), at(14)]);
+    expect(parseRequestedTimeCandidates('9:30')).toEqual([at(9, 30), at(21, 30)]);
+    expect(parseRequestedTimeCandidates('12')).toEqual([0, at(12)]);
+    // Unambiguous inputs still yield exactly one.
+    expect(parseRequestedTimeCandidates('2 PM')).toEqual([at(14)]);
+    expect(parseRequestedTimeCandidates('16:45')).toEqual([at(16, 45)]);
+  });
+
+  it('AMBIGUITY IS UNPARSEABLE for the single-value parser (no hours to lean on)', () => {
     // Review catch on #311: "2" parsed as 2:00 AM, so a caller who meant 2 PM
     // would have been told "we're not open at 2:00 AM" — a confident wrong
     // reason, which is the exact failure this whole batch exists to remove.
@@ -186,6 +197,32 @@ describe('parseRequestedTime', () => {
     for (const bad of ['', 'sometime', 'half two', '25:00', '2:70 PM', '13 PM', null, undefined]) {
       expect(parseRequestedTime(bad as string)).toBeNull();
     }
+  });
+});
+
+describe('resolveRequestedTime — the OPEN HOURS settle what a bare hour meant', () => {
+  it('"2" at a shop open 1-5 PM is 2 PM — nobody means 2 AM, and nothing was guessed', () => {
+    // Dale's point (2026-07-31): refusing a bare "2" is over-correction. The
+    // caller named a time; the day's shift coverage says which one it can be.
+    expect(resolveRequestedTime(parseRequestedTimeCandidates('2'), SHIFT)).toBe(at(14));
+    expect(resolveRequestedTime(parseRequestedTimeCandidates('4:30'), SHIFT)).toBe(at(16, 30));
+  });
+
+  it('an explicit time is never second-guessed by the hours', () => {
+    // "2 AM" against a 1-5 PM shop stays 2 AM — and gets an honest
+    // outside_shift answer. Reinterpreting what a caller plainly said would be
+    // a new kind of lie.
+    expect(resolveRequestedTime(parseRequestedTimeCandidates('2 AM'), SHIFT)).toBe(at(2));
+  });
+
+  it('when the hours cannot settle it, the answer is null — not a coin-flip', () => {
+    // Open around the clock: both readings are live, so nothing is known.
+    const allDay = [{ start: 0, end: 24 * 60 }];
+    expect(resolveRequestedTime(parseRequestedTimeCandidates('2'), allDay)).toBeNull();
+    // Closed all day: neither reading is in hours.
+    expect(resolveRequestedTime(parseRequestedTimeCandidates('2'), [])).toBeNull();
+    // Nothing parseable at all.
+    expect(resolveRequestedTime(parseRequestedTimeCandidates('sometime'), SHIFT)).toBeNull();
   });
 });
 

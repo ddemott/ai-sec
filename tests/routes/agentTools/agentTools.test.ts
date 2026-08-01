@@ -2850,6 +2850,54 @@ describe('agentTools /available-slots', () => {
     expect(r.open_times).toContain('2:30 PM');
   });
 
+  it('a bare "2" is read as 2 PM by the OPEN HOURS, then answered on its merits', async () => {
+    // WHO: any caller who says "can I come in at 2?" — which is most of them.
+    // WHAT: the day's 1-5 PM coverage settles which "2" they meant, and the
+    //        verdict is about 2:00 PM. Nothing guessed, nothing refused.
+    // WHY: 2026-07-31 — refusing the bare hour outright was over-correction;
+    //        the shop's own hours are the fact that disambiguates it.
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              service_id: 'svc-1',
+              name: 'Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        },
+        {
+          rows: [
+            { source: 'shift', start_time: '13:00:00', end_time: '17:00:00', is_caller: false },
+            {
+              source: 'appointment',
+              start_time: '14:00:00',
+              end_time: '14:30:00',
+              is_caller: true,
+            },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/available-slots', {
+      tenant_id: TENANT_ID,
+      service_type: 'consultation',
+      date: '2099-07-27',
+      requested_time: '2',
+      caller_phone: '7734487716',
+    });
+    const r = res.json().result;
+    // Resolved to the PM reading, and answered about THAT.
+    expect(r.requested.time).toBe('2:00 PM');
+    expect(r.requested.reason).toBe('occupied_by_caller');
+    expect(r.requested.spoken_reason).toBe('You already have an appointment at 2:00 PM.');
+  });
+
   it('NO requested_time → no requested block at all (an unasked explanation is noise)', async () => {
     const { app } = buildApp({
       queryResponses: [

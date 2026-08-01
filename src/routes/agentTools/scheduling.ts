@@ -48,7 +48,8 @@ import { getTenantBufferMinutes } from '../../services/tenantBuffer';
 import {
   explainRequestedTime,
   formatMinutesOfDay,
-  parseRequestedTime,
+  parseRequestedTimeCandidates,
+  resolveRequestedTime,
   reasonNote,
   spokenReason,
   type BookedInterval,
@@ -998,13 +999,11 @@ export function registerSchedulingRoutes({
       // The caller's own number, normalized once, for attributing a blocking
       // appointment back to them. Server-injected by the agent runtime.
       const callerPhoneNormalized = args.caller_phone ? normalizePhone(args.caller_phone) : null;
-      // The specific time they asked for, if any. Unparseable → null → the
-      // response simply carries no explanation, never a guessed one.
-      const requestedMinutes = parseRequestedTime(args.requested_time);
-      const requestedLabel =
-        requestedMinutes !== null
-          ? formatMinutesOfDay(requestedMinutes)
-          : (args.requested_time ?? '');
+      // The specific time they asked for, if any. A bare "2" carries two
+      // readings; the day's OPEN HOURS decide which (a shop open 1-5 PM makes
+      // it 2 PM, with nothing guessed) — resolved once `coverage` exists below.
+      // Still unresolvable → no explanation at all, never an invented one.
+      const requestedCandidates = parseRequestedTimeCandidates(args.requested_time);
 
       // Format date for speech ("Wednesday, April 2")
       const dateObj = new Date(args.date + 'T12:00:00');
@@ -1159,6 +1158,15 @@ export function registerSchedulingRoutes({
           end: timeToMinutes(s.end_time),
         }))
       );
+      // NOW the ambiguity can be settled with a fact instead of a coin-flip:
+      // "2" against a 1-5 PM shop is 2 PM, because 2 AM is not a time this
+      // business exists at. Unresolvable (open at both, or at neither) → null,
+      // and the response simply carries no explanation.
+      const requestedMinutes = resolveRequestedTime(requestedCandidates, coverage);
+      const requestedLabel =
+        requestedMinutes !== null
+          ? formatMinutesOfDay(requestedMinutes)
+          : (args.requested_time ?? '');
       // Expand each booking by the tenant's buffer on both sides before
       // subtracting it from shift coverage, so the open windows we offer keep
       // the required gap around existing appointments (matches the booking RPC).

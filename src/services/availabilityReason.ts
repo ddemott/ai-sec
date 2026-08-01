@@ -211,32 +211,58 @@ export function reasonNote(explanation: RequestedTimeExplanation): string | null
  * sends: "2:30 PM", "2 PM", "14:30", "2:30pm". Returns null on anything else —
  * an unparseable request must be IGNORED, never guessed into a wrong answer.
  *
- * AMBIGUITY IS UNPARSEABLE (review catch on #311). A bare "2" or "9:30" could be
- * either half of the day, and guessing turns this engine into the thing it was
- * built to replace: a confident, wrong explanation ("we're not open at 2:00 AM"
- * to someone who meant 2 PM). Only an explicit am/pm, or a 24-hour value that
- * cannot be anything else (13-23), is accepted.
+ * A bare "2" or "9:30" is ambiguous ON ITS OWN — but it is not ambiguous against
+ * a shop that opens at 1 PM and closes at 5. Nobody means 2 AM. So this returns
+ * every reading the string could have, and `resolveRequestedTime` picks the one
+ * the OPEN HOURS allow: data disambiguates, rather than a guess (which was
+ * wrong) or a refusal (which was unhelpful — the caller said a time and
+ * deserves an answer about it).
  */
-export function parseRequestedTime(raw: string | null | undefined): number | null {
-  if (!raw) return null;
+export function parseRequestedTimeCandidates(raw: string | null | undefined): number[] {
+  if (!raw) return [];
   const s = raw.trim().toLowerCase();
   const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/.exec(s);
-  if (!m) return null;
-  let hour = Number(m[1]);
+  if (!m) return [];
+  const hour = Number(m[1]);
   const minute = m[2] ? Number(m[2]) : 0;
   const ampm = m[3];
-  if (minute > 59) return null;
+  if (minute > 59) return [];
   if (ampm) {
-    if (hour < 1 || hour > 12) return null;
-    if (ampm === 'pm' && hour !== 12) hour += 12;
-    if (ampm === 'am' && hour === 12) hour = 0;
-  } else {
-    // No marker: only an unambiguous 24-hour reading survives. 0 is midnight
-    // (nobody says "0" for noon); 1-12 could be either half of the day.
-    if (hour > 23) return null;
-    if (hour >= 1 && hour <= 12) return null;
+    if (hour < 1 || hour > 12) return [];
+    let h = hour;
+    if (ampm === 'pm' && h !== 12) h += 12;
+    if (ampm === 'am' && h === 12) h = 0;
+    return [h * 60 + minute];
   }
-  return hour * 60 + minute;
+  if (hour > 23) return [];
+  // 13-23 can only be one thing. 0 is midnight. 1-12 could be either half of
+  // the day — hand back BOTH and let the open hours decide.
+  if (hour === 0 || hour >= 13) return [hour * 60 + minute];
+  const am = hour === 12 ? minute : hour * 60 + minute;
+  const pm = hour === 12 ? 12 * 60 + minute : (hour + 12) * 60 + minute;
+  return [am, pm];
+}
+
+/**
+ * Pick the reading the business could actually mean.
+ *
+ * One candidate → that one. Several → keep the ones that land inside the day's
+ * shift coverage: a shop open 1-5 PM makes "2" mean 2 PM, with no guessing
+ * involved. If that still leaves more than one (a business genuinely open at
+ * both 2 AM and 2 PM), or none at all, we cannot know — and the caller is
+ * better served by no explanation than a confident wrong one.
+ */
+export function resolveRequestedTime(candidates: number[], coverage: Interval[]): number | null {
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  const inHours = candidates.filter((c) => coverage.some((w) => w.start <= c && w.end > c));
+  return inHours.length === 1 ? inHours[0] : null;
+}
+
+/** Unambiguous parse, for callers with no coverage to disambiguate against. */
+export function parseRequestedTime(raw: string | null | undefined): number | null {
+  const c = parseRequestedTimeCandidates(raw);
+  return c.length === 1 ? c[0] : null;
 }
 
 export { clock as formatMinutesOfDay };
