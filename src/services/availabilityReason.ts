@@ -32,8 +32,13 @@ export type AvailabilityVerdict =
   | 'past'
   /** On shift and unbooked, but the service does not fit before the window ends. */
   | 'no_room'
+  /** Not on the quarter-hour grid the booking RPC accepts. */
+  | 'off_grid'
   /** Nobody works at all that day. */
   | 'closed';
+
+/** The booking grid. Mirrors isFifteenMinuteIncrement in appointmentValidation. */
+const GRID_MINUTES = 15;
 
 export interface Interval {
   start: number;
@@ -55,7 +60,8 @@ export interface RequestedTimeExplanation {
  * Classify a requested start time against the day the route just computed.
  *
  * Order matters and encodes what a caller most needs to hear first:
- *   closed → past → occupied (theirs, then anyone's) → outside_shift → no_room.
+ *   closed → past → occupied (theirs, then anyone's) → off_grid → outside_shift
+ *   → no_room.
  * "Occupied" outranks "outside_shift" because a booking that runs past the end
  * of a shift still blocks the time, and telling someone the shop is closed when
  * their own meeting is sitting there is the same wrong answer in a new costume.
@@ -98,6 +104,14 @@ export function explainRequestedTime(params: {
     };
   }
 
+  // Appointments live on a 15-minute grid (the RPC rejects anything else), so
+  // an off-grid request is genuinely unbookable AS ASKED. Ranked below
+  // occupancy on purpose: if their own meeting is sitting there, that is the
+  // fact they need. Note the symmetry with the bug that started this batch —
+  // "we book on the quarter hour" was a LIE about 2:30 and is the TRUTH about
+  // 2:10, and the difference is exactly what this engine now knows.
+  if (requestedMinutes % GRID_MINUTES !== 0) return { verdict: 'off_grid' };
+
   const covering = coverage.find((c) => c.start <= requestedMinutes && c.end > requestedMinutes);
   if (!covering) return { verdict: 'outside_shift' };
 
@@ -125,15 +139,23 @@ function clock(mins: number): string {
  */
 export function spokenReason(
   explanation: RequestedTimeExplanation,
-  requestedLabel: string
+  requestedLabel: string,
+  /** Spoken label of the blocking appointment's START, when there is one. */
+  conflictLabel?: string
 ): string | null {
+  // For an occupied verdict, name the BLOCKING appointment's own time: a caller
+  // who asks for 2:10 has a meeting at 2:00, and "you already have one at 2:10"
+  // is a small lie in the middle of a sentence whose whole job is being true.
+  const blockedAt = conflictLabel ?? requestedLabel;
   switch (explanation.verdict) {
     case 'available':
       return null; // nothing to explain — it is bookable
     case 'occupied_by_caller':
-      return `You already have an appointment at ${requestedLabel}.`;
+      return `You already have an appointment at ${blockedAt}.`;
     case 'occupied':
-      return `${requestedLabel} is already spoken for.`;
+      return `${blockedAt} is already spoken for.`;
+    case 'off_grid':
+      return `We book on the quarter hour, so ${requestedLabel} isn't a time I can book.`;
     case 'outside_shift':
       return `We're not open at ${requestedLabel} that day.`;
     case 'past':
@@ -173,6 +195,12 @@ export function reasonNote(explanation: RequestedTimeExplanation): string | null
         `The appointment does not fit in the remaining gap. Say there isn't enough time ` +
         `there, then offer the nearest times from open_times.`
       );
+    case 'off_grid':
+      return (
+        `That time is not on the quarter-hour grid, so it cannot be booked as asked. Say ` +
+        `so and offer the nearest times from open_times. (Only say this when the reason IS ` +
+        `off_grid — it was once said about a time that was perfectly on the grid.)`
+      );
     case 'closed':
       return `Nobody works that day at all. Say so, then offer the soonest day that is open.`;
   }
@@ -182,6 +210,12 @@ export function reasonNote(explanation: RequestedTimeExplanation): string | null
  * Parse a spoken/typed time into minutes-of-day. Accepts what a model actually
  * sends: "2:30 PM", "2 PM", "14:30", "2:30pm". Returns null on anything else —
  * an unparseable request must be IGNORED, never guessed into a wrong answer.
+ *
+ * AMBIGUITY IS UNPARSEABLE (review catch on #311). A bare "2" or "9:30" could be
+ * either half of the day, and guessing turns this engine into the thing it was
+ * built to replace: a confident, wrong explanation ("we're not open at 2:00 AM"
+ * to someone who meant 2 PM). Only an explicit am/pm, or a 24-hour value that
+ * cannot be anything else (13-23), is accepted.
  */
 export function parseRequestedTime(raw: string | null | undefined): number | null {
   if (!raw) return null;
@@ -196,8 +230,11 @@ export function parseRequestedTime(raw: string | null | undefined): number | nul
     if (hour < 1 || hour > 12) return null;
     if (ampm === 'pm' && hour !== 12) hour += 12;
     if (ampm === 'am' && hour === 12) hour = 0;
-  } else if (hour > 23) {
-    return null;
+  } else {
+    // No marker: only an unambiguous 24-hour reading survives. 0 is midnight
+    // (nobody says "0" for noon); 1-12 could be either half of the day.
+    if (hour > 23) return null;
+    if (hour >= 1 && hour <= 12) return null;
   }
   return hour * 60 + minute;
 }

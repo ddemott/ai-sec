@@ -1228,15 +1228,17 @@ export function registerSchedulingRoutes({
           isToday,
           currentMinutes,
         });
-        const spoken = spokenReason(explanation, requestedLabel);
+        const conflictLabel =
+          explanation.conflictStart !== undefined
+            ? formatMinutesOfDay(explanation.conflictStart)
+            : undefined;
+        const spoken = spokenReason(explanation, requestedLabel, conflictLabel);
         return {
           requested: {
             time: requestedLabel,
             available: explanation.verdict === 'available',
             reason: explanation.verdict,
-            ...(explanation.conflictStart !== undefined
-              ? { conflict_start: formatMinutesOfDay(explanation.conflictStart) }
-              : {}),
+            ...(conflictLabel ? { conflict_start: conflictLabel } : {}),
             ...(spoken ? { spoken_reason: spoken } : {}),
             note: reasonNote(explanation),
           },

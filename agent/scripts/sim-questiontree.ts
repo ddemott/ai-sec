@@ -127,10 +127,27 @@ interface Fake {
   execute: (a: unknown, o: unknown) => Promise<string>;
   calls: unknown[];
 }
-const fake = (description: string, params: Record<string, unknown>, result: string): Fake => {
+/**
+ * `optional` names params the model may omit. Everything else stays required —
+ * the default that makes scenarios deterministic. Added 2026-07-31 (review
+ * catch on #311): marking get_available_slots' requested_time required would
+ * FORCE the model to supply a time on every call, including scenarios where
+ * the caller never named one — inventing input the grader then measures, which
+ * is how a harness quietly stops catching regressions.
+ */
+const fake = (
+  description: string,
+  params: Record<string, unknown>,
+  result: string,
+  optional: string[] = []
+): Fake => {
   const f: Fake = {
     description,
-    parameters: { type: 'object', properties: params, required: Object.keys(params) },
+    parameters: {
+      type: 'object',
+      properties: params,
+      required: Object.keys(params).filter((k) => !optional.includes(k)),
+    },
     calls: [],
     execute: async (a: unknown) => {
       f.calls.push(a);
@@ -154,12 +171,13 @@ function makeFakeBackend(): Record<string, Fake> {
       })
     ),
     get_available_slots: fake(
-      'Get real bookable open times for a requested day. Pass requested_time when the caller named one.',
+      'Get real bookable open times for a requested day. Pass requested_time ONLY when the caller named a specific time.',
       { day: str, requested_time: str },
       JSON.stringify({
         success: true,
         open_times: ['Tuesday, July 22 at 1:15 PM', '2:45 PM', '4:30 PM'],
-      })
+      }),
+      ['requested_time']
     ),
     get_service_catalog: fake(
       'List the services offered.',

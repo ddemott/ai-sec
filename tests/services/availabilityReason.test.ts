@@ -132,6 +132,33 @@ describe('explainRequestedTime', () => {
   });
 });
 
+describe('off_grid — the quarter-hour sentence, said only when it is TRUE', () => {
+  it('an off-grid request is named as such', () => {
+    // The mirror image of the bug: "we book on the quarter hour" was a LIE
+    // about 2:30 and is the TRUTH about 2:10.
+    const r = explain({ requestedMinutes: at(14, 10), openMinutes: [at(13), at(15)] });
+    expect(r.verdict).toBe('off_grid');
+    expect(spokenReason(r, '2:10 PM')).toMatch(/quarter hour/i);
+    expect(reasonNote(r)).toMatch(/only say this when the reason IS off_grid/i);
+  });
+
+  it("but an off-grid time sitting on the caller's own booking still reports the booking", () => {
+    // Occupancy outranks the grid: what they need to hear is the meeting they
+    // already have, not a lecture about scheduling granularity.
+    const r = explain({
+      requestedMinutes: at(14, 10),
+      booked: [{ start: at(14), end: at(14, 30), isCaller: true }],
+      openMinutes: [at(15)],
+    });
+    expect(r.verdict).toBe('occupied_by_caller');
+    expect(r.conflictStart).toBe(at(14));
+    // And it speaks the BOOKING's time, not the odd time they asked for.
+    expect(spokenReason(r, '2:10 PM', formatMinutesOfDay(r.conflictStart!))).toBe(
+      'You already have an appointment at 2:00 PM.'
+    );
+  });
+});
+
 describe('parseRequestedTime', () => {
   it('accepts the shapes a model actually sends', () => {
     expect(parseRequestedTime('2:30 PM')).toBe(at(14, 30));
@@ -141,6 +168,18 @@ describe('parseRequestedTime', () => {
     expect(parseRequestedTime('9am')).toBe(at(9));
     expect(parseRequestedTime('12:00 AM')).toBe(0);
     expect(parseRequestedTime('12 PM')).toBe(at(12));
+    // Unambiguous 24-hour values need no marker.
+    expect(parseRequestedTime('16:45')).toBe(at(16, 45));
+    expect(parseRequestedTime('13')).toBe(at(13));
+  });
+
+  it('AMBIGUITY IS UNPARSEABLE — a bare hour must not be guessed into the wrong half of the day', () => {
+    // Review catch on #311: "2" parsed as 2:00 AM, so a caller who meant 2 PM
+    // would have been told "we're not open at 2:00 AM" — a confident wrong
+    // reason, which is the exact failure this whole batch exists to remove.
+    for (const ambiguous of ['2', '9:30', '11', '12', '12:15']) {
+      expect(parseRequestedTime(ambiguous), ambiguous).toBeNull();
+    }
   });
 
   it('refuses anything it cannot read — a guess here becomes a wrong answer aloud', () => {
