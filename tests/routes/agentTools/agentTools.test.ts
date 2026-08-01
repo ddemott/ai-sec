@@ -3968,6 +3968,23 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     expect(prune.text).toContain('other.call_id <> $2');
   });
 
+  it('a MISSING transcript never prunes — a capture failure is not evidence of silence', async () => {
+    // Review catch on #313, and the sharpest kind: the original condition read
+    // `args.transcript ?? ''`, so a finalize that carried NO transcript (agent
+    // crash, recorder never drained) looked identical to "nobody spoke" — on a
+    // DELETE path. That would erase a real customer on the strength of our own
+    // bug. Absence of evidence is not evidence of absence, least of all here.
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    const res = await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'SCL_no_transcript',
+      duration_seconds: 45,
+      // transcript omitted entirely
+    });
+    expect(res.statusCode).toBe(200);
+    expect(queries.some((q) => q.text.includes("deleted_by = 'silent_call_prune'"))).toBe(false);
+  });
+
   it('a call where the caller SPOKE never prunes — speech means a lead, not litter', async () => {
     const { app, queries } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
     await post(app, '/agent-tools/voice-session-end', {

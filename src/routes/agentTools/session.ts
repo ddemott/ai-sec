@@ -490,17 +490,35 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
       // So prune at the END instead of refusing to create at the START — by then
       // the call has told us which it was. A row is removed ONLY when all of
       // these hold:
-      //   - the caller never spoke (same predicate as no_caller_audio above),
+      //   - WE ACTUALLY CAPTURED A TRANSCRIPT, and it contains no caller line.
+      //     A NULL transcript is not evidence of silence — it is evidence that
+      //     transcript capture failed (agent crash, finalize before the recorder
+      //     drained), and treating a capture failure as "nobody spoke" would
+      //     delete a REAL customer on the strength of our own bug. Review catch
+      //     on #313; the original condition read `args.transcript ?? ''`, which
+      //     made absence and silence the same thing on a DELETE path.
       //   - the name is still a placeholder — nobody ever learned who they are,
       //   - the row has NO artifacts: no appointment, message, or job inquiry,
       //   - and no OTHER call is linked to it, so we cannot erase a returning
       //     customer whose earlier calls were real.
       //
+      // Deliberately NOT gated on SILENT_CALL_MIN_SECONDS, unlike the
+      // no_caller_audio alarm above. That alarm is about a BROKEN AUDIO PATH, so
+      // it ignores short calls where a hang-up is the ordinary explanation. This
+      // is about an EMPTY PHONEBOOK ROW, and a 13-second greeting-only hang-up
+      // creates exactly the row worth pruning (CALL_IMPROVEMENTS.md #4, #11).
+      // Same evidence, different questions, so: different thresholds.
+      //
       // SOFT delete, the house pattern (tenants, customers): the row stops
       // polluting the phonebook and the CSV export, and the audit trail survives
       // — including for the caller who rings back tomorrow and turns out to be
       // real. Best-effort: never fail a finalized call over housekeeping.
-      if (ended && !/^Caller(?: \[\d+:\d{2}\])?: /m.test(args.transcript ?? '')) {
+      if (
+        ended &&
+        typeof args.transcript === 'string' &&
+        args.transcript.length > 0 &&
+        !/^Caller(?: \[\d+:\d{2}\])?: /m.test(args.transcript)
+      ) {
         try {
           const pruned = await withTenantClient(args.tenant_id, async (client) =>
             client.query<{ customer_id: string }>(
@@ -521,7 +539,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
                           AND other.call_id <> $2
                      )
                RETURNING c.customer_id`,
-              [args.tenant_id, args.call_id, PLACEHOLDER_NAMES as unknown as string[]]
+              [args.tenant_id, args.call_id, Array.from(PLACEHOLDER_NAMES)]
             )
           );
           if ((pruned.rowCount ?? 0) > 0) {

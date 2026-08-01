@@ -111,7 +111,10 @@ describe('/agent-tools/take-message', () => {
     });
     expect(res.statusCode).toBe(200);
     const insert = queries.find((q) => q.text.includes('INSERT INTO customer_messages'))!;
-    expect(insert.params).toContain(true);
+    // The urgency flag is the LAST bound param ($8) — asserting its position,
+    // not merely "some param is true", so a future boolean cannot make this
+    // pass for the wrong reason (review catch on #313).
+    expect(insert.params[insert.params.length - 1]).toBe(true);
     // Monotonic on conflict: OR, never overwrite.
     expect(insert.text).toContain(
       'is_urgent      = customer_messages.is_urgent OR EXCLUDED.is_urgent'
