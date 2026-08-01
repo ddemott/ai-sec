@@ -129,7 +129,15 @@ NULL`; route becomes `ON CONFLICT DO UPDATE` — retry-safe AND correction-capab
 4. Normalize spelled corrections ("C-A-M-I-L-L-E" → "Camille") before save; prompt:
    name node gets the name ONLY, "from <company>" goes to the company node.
 
-## E — junk rows + urgency (calls #3, #7)
+## E — junk rows + urgency (calls #3, #7) — **PR pending**
+
+> COURSE CORRECTION during the build: the plan said "stop creating customer rows
+> at voice-session-start". That would have REVERTED a deliberate 2026-07-27 fix
+> — prod had 10 calls, 10 with caller ID, and ZERO linked customers; the owner's
+> phonebook contained nobody who had actually phoned him, and the comment there
+> explicitly accepts junk rows as the cost. So: keep creating, PRUNE AT HANG-UP
+> instead, when the call has told us which kind it was. Deciding at the start
+> whose call is worth recording is the mistake that caused the original gap.
 
 1. Stop customer creation at voice-session-start (`session.ts` creates a customer
    named literally "Caller" on EVERY caller-ID call before a word is spoken —

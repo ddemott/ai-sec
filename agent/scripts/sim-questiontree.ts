@@ -185,9 +185,10 @@ function makeFakeBackend(): Record<string, Fake> {
       JSON.stringify({ success: true, services: [{ name: 'Programming Consultation' }] })
     ),
     take_message: fake(
-      'Save a message for the owner. Pass the message text.',
-      { message: str },
-      JSON.stringify({ success: true, message_id: 'msg_sim_1' })
+      'Save a message for the owner. Pass the message text, and is_urgent when the caller said it cannot wait.',
+      { message: str, is_urgent: { type: 'boolean' } },
+      JSON.stringify({ success: true, message_id: 'msg_sim_1' }),
+      ['is_urgent']
     ),
     capture_job_inquiry: fake(
       'Record a job/role inquiry for the owner. Pass whatever role details were collected.',
@@ -968,6 +969,38 @@ another.`,
       ...(o.tracker.status('book') === 'done'
         ? ['booked a duplicate anyway — the refusal was ignored']
         : []),
+      ...mustClose(o),
+    ],
+  },
+  {
+    // Batch E — SCL_dpp8qN8ogCtF (#7). "I want to talk with him URGENTLY" was
+    // answered with a list of appointment slots; the caller hung up
+    // mid-sentence. There is no live transfer on this flow, so the honest move
+    // is an urgent-flagged message — offered as such, not disguised as a
+    // handoff that cannot happen.
+    title: 'URGENT CALLER — gets an urgent message taken, not a slot menu',
+    callerPhone: '7734487716',
+    persona: {
+      opener: 'I need to speak with Dale urgently — it is about the call we have set up.',
+      facts: `Your name: Jaya. Number: 773-448-7716 (they have it). It is genuinely urgent:
+you need him to know you may have to move today's call. You do NOT want to book another
+appointment — if you are offered a list of times, say "no, I need to reach him now".
+Accept a message being passed along urgently.`,
+      behaviour: 'Insistent and hurried. Short sentences. You repeat that it is urgent.',
+    },
+    grade: (o) => [
+      ...has(o, 'take_message_action', ['done']),
+      // The flag the owner's inbox sorts on — the caller said it, so it must ride.
+      ...(o.fakes.take_message.calls.some(
+        (c) => (c as { is_urgent?: boolean }).is_urgent === true
+      )
+        ? []
+        : ['took the message but never marked it urgent — the caller said it plainly']),
+      // And it must NOT promise a handoff that cannot happen on this flow.
+      ...(agentSaid(o, /put you through|transfer(ring)? you|connect(ing)? you (to|with)/i)
+        ? ['promised to put the caller through — no live transfer exists on this flow']
+        : []),
+      ...mustResolve(o),
       ...mustClose(o),
     ],
   },

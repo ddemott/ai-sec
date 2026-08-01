@@ -18,7 +18,10 @@ import {
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
 import { getBusinessHours } from '../../services/businessHours';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
-import { getOrCreateCustomerByPhoneOnClient } from '../../services/customerLookup';
+import {
+  getOrCreateCustomerByPhoneOnClient,
+  PLACEHOLDER_NAMES,
+} from '../../services/customerLookup';
 // Direct from shared/ per phoneUtils' own note ("all new code should import
 // directly from shared/phone"). canTransfer is THE resolved transfer capability
 // — see the transfer_available field below for why the agent gets a boolean
@@ -470,6 +473,71 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
               transcript_chars: transcript.length,
             },
             'call completed with ZERO caller speech after the greeting — inbound audio path is likely broken (codec negotiation / RTP), not a caller who hung up'
+          );
+        }
+      }
+
+      // PRUNE THE PHONEBOOK ENTRY A SILENT CALL LEFT BEHIND (2026-08-01).
+      //
+      // Every caller-ID call creates a customer up front (see voice-session-start
+      // above) — a DELIBERATE 2026-07-27 fix, after prod showed 10 calls, 10 with
+      // caller ID, and ZERO linked customers: the owner's phonebook contained
+      // nobody who had actually phoned him. That fix stays. Its accepted cost was
+      // a row for every robocall and wrong number, and the cost came due: prod
+      // holds a customer named literally "Caller" created by a robocall that said
+      // "Repeat this message." (CALL_IMPROVEMENTS.md #3).
+      //
+      // So prune at the END instead of refusing to create at the START — by then
+      // the call has told us which it was. A row is removed ONLY when all of
+      // these hold:
+      //   - the caller never spoke (same predicate as no_caller_audio above),
+      //   - the name is still a placeholder — nobody ever learned who they are,
+      //   - the row has NO artifacts: no appointment, message, or job inquiry,
+      //   - and no OTHER call is linked to it, so we cannot erase a returning
+      //     customer whose earlier calls were real.
+      //
+      // SOFT delete, the house pattern (tenants, customers): the row stops
+      // polluting the phonebook and the CSV export, and the audit trail survives
+      // — including for the caller who rings back tomorrow and turns out to be
+      // real. Best-effort: never fail a finalized call over housekeeping.
+      if (ended && !/^Caller(?: \[\d+:\d{2}\])?: /m.test(args.transcript ?? '')) {
+        try {
+          const pruned = await withTenantClient(args.tenant_id, async (client) =>
+            client.query<{ customer_id: string }>(
+              `UPDATE customers c
+                  SET is_deleted = true, deleted_at = now(), deleted_by = 'silent_call_prune'
+                FROM voice_sessions vs
+               WHERE vs.tenant_id = $1 AND vs.call_id = $2
+                 AND c.customer_id = vs.customer_id
+                 AND c.tenant_id = $1
+                 AND (c.is_deleted IS NULL OR c.is_deleted = false)
+                 AND (c.name IS NULL OR c.name = '' OR c.name = ANY($3::text[]))
+                 AND NOT EXISTS (SELECT 1 FROM appointments a WHERE a.customer_id = c.customer_id)
+                 AND NOT EXISTS (SELECT 1 FROM customer_messages m WHERE m.customer_id = c.customer_id)
+                 AND NOT EXISTS (SELECT 1 FROM job_inquiries j WHERE j.customer_id = c.customer_id)
+                 AND NOT EXISTS (
+                       SELECT 1 FROM voice_sessions other
+                        WHERE other.customer_id = c.customer_id
+                          AND other.call_id <> $2
+                     )
+               RETURNING c.customer_id`,
+              [args.tenant_id, args.call_id, PLACEHOLDER_NAMES as unknown as string[]]
+            )
+          );
+          if ((pruned.rowCount ?? 0) > 0) {
+            app.log.info(
+              {
+                event: 'silent_call_customer_pruned',
+                tenant_id: args.tenant_id,
+                call_id: args.call_id,
+              },
+              'silent call left an anonymous phonebook entry with nothing on it — soft-deleted'
+            );
+          }
+        } catch (err) {
+          app.log.warn(
+            { event: 'silent_call_prune_failed', call_id: args.call_id, ...pgErrorFields(err) },
+            'could not prune the placeholder customer a silent call created — harmless, but the phonebook keeps a junk row'
           );
         }
       }

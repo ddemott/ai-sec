@@ -1109,6 +1109,11 @@ export function buildTools(
             description:
               'ONLY set this if the caller gives a NEW number specifically for the callback. Otherwise OMIT it — the number they already gave (or their caller-ID) is filled in automatically. Never ask them to repeat a number they have already given you.',
           },
+          is_urgent: {
+            type: 'boolean',
+            description:
+              "Set true ONLY when the caller says it cannot wait — \"urgent\", \"emergency\", \"as soon as possible\", \"right away\". Their words, not your judgement: a message about money or a deadline is not urgent because of its topic. It flags the message at the top of the owner's inbox; it does NOT reach anyone mid-call, so never tell the caller you are putting them through or that someone will pick up.",
+          },
           message: {
             type: 'string',
             description:
@@ -1118,7 +1123,12 @@ export function buildTools(
         required: ['caller_name', 'message'],
         additionalProperties: false,
       },
-      execute: async (args: { caller_name: string; callback_phone?: string; message: string }) => {
+      execute: async (args: {
+        caller_name: string;
+        callback_phone?: string;
+        message: string;
+        is_urgent?: boolean;
+      }) => {
         speakFiller?.('One moment while I pass that along...');
         const res = await client.call('/agent-tools/take-message', {
           tenant_id: ctx.tenantId,
@@ -1138,6 +1148,9 @@ export function buildTools(
           caller_phone: firstPhone(ctx.callerPhone, ctx.spokenPhone),
           message: args.message,
           call_id: ctx.callId ?? undefined,
+          // The caller's own escalation, flagged for the owner's inbox. No
+          // transfer exists on this call flow — see the param description.
+          is_urgent: args.is_urgent === true,
         });
         // The message row is written → the outcome of this call IS 'message'.
         // Camille (2026-07-25) left one and the call was filed `wrong_service`,

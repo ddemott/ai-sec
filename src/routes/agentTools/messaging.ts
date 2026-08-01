@@ -211,10 +211,15 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         // Dashboard-created messages carry no call_id and are untouched by this.
         const res = await client.query<{ message_id: string }>(
           `INSERT INTO customer_messages
-             (tenant_id, customer_id, caller_phone, caller_name, callback_phone, message, call_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+             (tenant_id, customer_id, caller_phone, caller_name, callback_phone, message,
+              call_id, is_urgent)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (tenant_id, call_id) WHERE call_id IS NOT NULL
            DO UPDATE SET
+             -- Urgency can only ever be RAISED by a later correction: a caller
+             -- who escalates mid-call ("actually, this is urgent") must not be
+             -- un-escalated by a re-fire that omits the flag.
+             is_urgent      = customer_messages.is_urgent OR EXCLUDED.is_urgent,
              caller_name    = EXCLUDED.caller_name,
              callback_phone = EXCLUDED.callback_phone,
              message        = EXCLUDED.message,
@@ -229,6 +234,7 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             callbackPhone,
             args.message,
             args.call_id ?? null,
+            args.is_urgent === true,
           ]
         );
 
