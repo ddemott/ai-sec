@@ -538,8 +538,11 @@ export function registerVoiceRoutes(
       if (!tenantId) return;
       const query = req.query as Record<string, string | undefined>;
       const status = query['status'] ?? null;
-      const limit = Math.min(parseInt(query['limit'] ?? '') || 50, 200);
-      const offset = parseInt(query['offset'] ?? '') || 0;
+      // Same clamp as /voice/job-inquiries: a negative OFFSET 500s, a negative
+      // LIMIT is unbounded. Predates this PR; fixed here because it is the same
+      // line of code and leaving one of two copies wrong is how they diverge.
+      const limit = Math.min(Math.max(parseInt(query['limit'] ?? '') || 50, 1), 200);
+      const offset = Math.max(parseInt(query['offset'] ?? '') || 0, 0);
 
       const rows = await withTenantClient(tenantId, (client) =>
         client.query(
@@ -575,8 +578,13 @@ export function registerVoiceRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
       const query = req.query as Record<string, string | undefined>;
-      const limit = Math.min(parseInt(query['limit'] ?? '') || 50, 200);
-      const offset = parseInt(query['offset'] ?? '') || 0;
+      // Clamped, not merely capped: these come straight off a querystring, and
+      // a negative OFFSET makes Postgres throw (a 500 from a URL anyone can
+      // type) while a negative LIMIT reads as "no limit" — an unbounded scan.
+      // Review catch on #314; the same shape was copied from /voice/messages,
+      // which is fixed alongside it.
+      const limit = Math.min(Math.max(parseInt(query['limit'] ?? '') || 50, 1), 200);
+      const offset = Math.max(parseInt(query['offset'] ?? '') || 0, 0);
 
       const rows = await withTenantClient(tenantId, (client) =>
         client.query(

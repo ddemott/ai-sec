@@ -251,7 +251,7 @@ export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
             className="flex-1 flex items-center justify-center text-sm"
             style={{ color: 'var(--text-secondary)' }}
           >
-            Select a message to read it
+            Select a message or job lead to read it
           </div>
         ) : selected.kind === 'job' ? (
           /* A JOB LEAD. Every field the call captured, laid out so the owner can

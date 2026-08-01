@@ -28,7 +28,7 @@ import {
 // rather than the two raw numbers.
 import { canTransfer } from '../../../shared/phone';
 import { sendSms } from '../../services/telnyxSms';
-import { errorsTotal, greetingOnlyHangupsTotal } from '../../services/metrics';
+import { errorsTotal, silentHangupsTotal } from '../../services/metrics';
 
 /**
  * How long a call must last before "the caller never spoke" is evidence of a
@@ -464,7 +464,8 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
       // A call that produces zero caller speech is never a success. Count it
       // and say so, so the next one surfaces in `errors_total` within minutes
       // instead of being discovered socially.
-      // GREETING-ONLY HANGUPS, counted separately from the broken-audio alarm.
+      // CALLS WHERE THE CALLER NEVER SPOKE, counted separately from the
+      // broken-audio alarm.
       //
       // Four calls on 2026-07-27 (13-42s) held the greeting and nothing else.
       // Whether that is a long greeting, a surprised caller, or a bad moment is
@@ -477,7 +478,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
       // deciding not to talk to a robot, and conflating the two would make both
       // numbers useless.
       if (ended && args.transcript && !CALLER_LINE_RE.test(args.transcript)) {
-        greetingOnlyHangupsTotal.inc({
+        silentHangupsTotal.inc({
           bucket: (args.duration_seconds ?? 0) < SILENT_CALL_MIN_SECONDS ? 'under_20s' : 'over_20s',
         });
       }

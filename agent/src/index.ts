@@ -78,6 +78,20 @@ const MAX_TOOL_STEPS = (() => {
 })();
 
 /**
+ * A duration from the environment, or the default — never NaN, never 0.
+ *
+ * `Number('')` is 0 and `Number('abc')` is NaN, and setTimeout treats BOTH as
+ * "fire immediately". For the caller-silence timers that means a typo in an env
+ * var checks in on the caller the instant the agent stops talking, then hangs up
+ * on them — a misconfiguration that ends calls (review catch on #314). Same
+ * shape as MAX_TOOL_STEPS above, for the same reason.
+ */
+function envMs(name: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
  * The tenant's saved voice, mapped to its nearest Deepgram Aura equivalent.
  *
  * The dashboard picker stores OpenAI voice ids (shimmer/nova/…), and owners have
@@ -1639,8 +1653,8 @@ export default defineAgent({
         // not a polish item. Tunable without a deploy.
         const detachCallerSilence = attachCallerSilenceWatch(session, {
           checkInText: CALLER_CHECK_IN_LINE,
-          silenceMs: Number(process.env.CALLER_SILENCE_MS ?? 10_000),
-          giveUpMs: Number(process.env.CALLER_SILENCE_GIVEUP_MS ?? 12_000),
+          silenceMs: envMs('CALLER_SILENCE_MS', 10_000),
+          giveUpMs: envMs('CALLER_SILENCE_GIVEUP_MS', 12_000),
           log: callLog,
           onSpoken: (text) => transcript.add('assistant', text),
           onGiveUp: () => {

@@ -3983,14 +3983,17 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     expect(prune.text).toContain('other.call_id <> $2');
   });
 
-  it('a greeting-only hangup is COUNTED, bucketed either side of the silent-call line', async () => {
+  it('a hangup with NO caller speech is COUNTED, bucketed either side of the silent-call line', async () => {
     // WHO: four calls on 2026-07-27, 13-42s, greeting and nothing else
     //      (CALL_IMPROVEMENTS.md #4, #5, #6, #11).
-    // WHAT: greeting_only_hangups_total, separate from the no_caller_audio alarm.
+    // WHAT: silent_hangups_total, separate from the no_caller_audio alarm. Named
+    //       for what it tests — batch F put the runtime's check-in and goodbye
+    //       INTO the transcript, so "greeting only" stopped being true of these
+    //       calls the same day it shipped (review catch on #314).
     // WHY: nobody could say whether that afternoon meant a long greeting, a
     //       surprised caller, or a bad day — because nothing counted them. #4
     //       says measure before shortening the greeting; this is the measurement.
-    const before = counterValue('greeting_only_hangups_total', { bucket: 'under_20s' });
+    const before = counterValue('silent_hangups_total', { bucket: 'under_20s' });
     const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
     await post(app, '/agent-tools/voice-session-end', {
       tenant_id: TENANT_ID,
@@ -3998,11 +4001,29 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
       duration_seconds: 13,
       transcript: "Assistant [0:00]: Thanks for calling! I'm Piper.",
     });
-    expect(counterValue('greeting_only_hangups_total', { bucket: 'under_20s' })).toBe(before + 1);
+    expect(counterValue('silent_hangups_total', { bucket: 'under_20s' })).toBe(before + 1);
   });
 
-  it('a call where the caller spoke is NOT a greeting-only hangup', async () => {
-    const before = counterValue('greeting_only_hangups_total', { bucket: 'over_20s' });
+  it('the runtime\'s OWN check-in and goodbye do not stop it counting', async () => {
+    // Batch F made the silence watchdog speak into the transcript, so a call
+    // where nobody spoke now holds three assistant lines. The metric asks "did
+    // the CALLER ever speak", and must not be fooled by our own voice.
+    const before = counterValue('silent_hangups_total', { bucket: 'under_20s' });
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'SCL_silence_watch',
+      duration_seconds: 18,
+      transcript:
+        "Assistant [0:00]: Thanks for calling! I'm Piper.\n" +
+        'Assistant [0:11]: Are you still there? I can take a message or set up a time.\n' +
+        "Assistant [0:23]: I'll let you go for now — do call back any time.",
+    });
+    expect(counterValue('silent_hangups_total', { bucket: 'under_20s' })).toBe(before + 1);
+  });
+
+  it('a call where the caller spoke is NOT a silent hangup', async () => {
+    const before = counterValue('silent_hangups_total', { bucket: 'over_20s' });
     const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
     await post(app, '/agent-tools/voice-session-end', {
       tenant_id: TENANT_ID,
@@ -4010,7 +4031,7 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
       duration_seconds: 45,
       transcript: 'Assistant [0:00]: Hello.\nCaller [0:05]: Hi there.',
     });
-    expect(counterValue('greeting_only_hangups_total', { bucket: 'over_20s' })).toBe(before);
+    expect(counterValue('silent_hangups_total', { bucket: 'over_20s' })).toBe(before);
   });
 
   it('a MISSING transcript never prunes — a capture failure is not evidence of silence', async () => {

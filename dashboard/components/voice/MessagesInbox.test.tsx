@@ -103,7 +103,9 @@ describe('MessagesInbox — loading / empty states', () => {
     ]);
     render(<MessagesInbox tenantId="tenant-test" />);
     await waitFor(() => expect(screen.getByText('Sage')).toBeInTheDocument());
-    expect(screen.getByText(/job lead/i)).toBeInTheDocument();
+    // The list badge AND the detail-pane badge both say it — assert at least one
+    // rather than exactly one, so the copy can appear in both places.
+    expect(screen.getAllByText(/job lead/i).length).toBeGreaterThan(0);
     // The role leads the preview — it is what decides whether to call back.
     expect(screen.getByText(/Azure\/M365 developer/)).toBeInTheDocument();
   });
@@ -130,10 +132,10 @@ describe('MessagesInbox — message list', () => {
     await waitFor(() => expect(screen.getByText('1')).toBeInTheDocument());
   });
 
-  test('HAPPY: shows "Select a message" placeholder when nothing selected', async () => {
+  test('HAPPY: shows the "select something to read" placeholder when nothing is selected', async () => {
     render(<MessagesInbox tenantId="tenant-test" />);
     await waitFor(() =>
-      expect(screen.getByText(/select a message to read it/i)).toBeInTheDocument()
+      expect(screen.getByText(/select a message or job lead to read it/i)).toBeInTheDocument()
     );
   });
 });
@@ -206,8 +208,8 @@ describe('MessagesInbox — select and mark read', () => {
     await waitFor(() =>
       expect(screen.getAllByText('Alice Smith').length).toBeGreaterThan(0)
     );
-    // Before click: "Select a message to read it" placeholder is visible
-    expect(screen.getByText(/select a message to read it/i)).toBeInTheDocument();
+    // Before click: the "select a message or job lead" placeholder is visible
+    expect(screen.getByText(/select a message or job lead to read it/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /alice smith/i }));
     // After click: detail panel replaces the placeholder
     await waitFor(() =>

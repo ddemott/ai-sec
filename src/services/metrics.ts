@@ -309,7 +309,14 @@ export const errorsTotal = registry.counter(
   'Errors logged via logError(), partitioned by event name'
 );
 
-// Calls that ended with the greeting and nothing else — the caller never spoke.
+// Calls that ended with NO CALLER SPEECH at all.
+//
+// Named for the condition it actually tests, not the story it was written for.
+// The first draft called it greeting_only_hangups_total — and batch F then put
+// the runtime's own check-in and goodbye into the transcript, so a "greeting
+// only" call reliably holds THREE assistant lines and the name became false the
+// same day it shipped (review catch on #314). What the number is for is
+// unchanged: how often does a caller hang up without ever speaking.
 //
 // SEPARATE from errors_total{no_caller_audio} on purpose. That one means the
 // inbound audio path is broken (codec/RTP) and deliberately ignores calls under
@@ -320,9 +327,9 @@ export const errorsTotal = registry.counter(
 // bad day — because nothing counted them. Measure first, then decide whether the
 // greeting needs shortening; a rate that climbs after a greeting change is the
 // only honest way to know it made things worse.
-export const greetingOnlyHangupsTotal = registry.counter(
-  'greeting_only_hangups_total',
-  'Calls whose transcript held the greeting and no caller speech, bucketed under/over the silent-call threshold'
+export const silentHangupsTotal = registry.counter(
+  'silent_hangups_total',
+  'Calls that ended with no caller speech at all, bucketed under/over the silent-call threshold'
 );
 
 // Reminder delivery outcomes per channel. Closes TODO.md Phase 5
