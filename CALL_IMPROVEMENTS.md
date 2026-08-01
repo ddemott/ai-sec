@@ -45,6 +45,8 @@ Analyzed 2026-07-30 (12 calls: all real inbound `SCL_*` calls from 2026-07-26/27
 
 ## 3. SCL_JqvihjHH9nqp — 2026-07-27 16:06 CT, 31s, outcome=none (+14158438896)
 
+> **FIXED — batch E** (2026-08-01), but NOT by the means the plan proposed. Creating the customer up front is a deliberate 2026-07-27 fix (10 calls, 10 with caller ID, ZERO linked customers) and stays. Instead the row is PRUNED AT HANG-UP when the caller never spoke, the name is still a placeholder, there are no artifacts, and no other call is linked. `scripts/prune-anonymous-customers.ts` cleans up history (dry-run by default). NB this robocall SPOKE, so the script spares it by default — deciding which speech was worth having is a judgement a script will eventually get wrong; `--include-spoken` exists for an operator who has read the list.
+
 **PROBLEM.** Robocall/bot ("Repeat this message."). Agent asked a clarifying question, call died. A **customer row named "Caller"** was created for this phone number.
 
 **ANALYSIS.** Handling of the bot itself was fine (31s wasted, acceptable). The junk row is the failure: identity capture created a customer with the placeholder name for a caller who never identified. Junk customers pollute the dashboard, CRM export, and future context snapshots ("returning customer: Caller").
@@ -68,6 +70,8 @@ Analyzed 2026-07-30 (12 calls: all real inbound `SCL_*` calls from 2026-07-26/27
 **SOLUTION.** (a) Fix the root cause (#9's who-calls-whom). (b) Silence for >10s after greeting → one "Are you still there? I can take a message or book a time." → then a graceful close that leaves a breadcrumb row (`outcome='silent_hangup'`) instead of blank outcome. (c) Verify TranscriptRecorder captures watchdog/hold-line utterances so silent calls are diagnosable.
 
 ## 7. SCL_dpp8qN8ogCtF — 2026-07-27 13:33 CT, 95s, outcome=no_availability (Jaya, +17734487716)
+
+> **PARTIALLY FIXED — batch E** (2026-08-01): "urgent" is now a route, not a mood — the prompt forbids answering it with a slot menu, and `take_message` carries `is_urgent` (caller's own words only; a later correction can raise it but never lower it) so the owner's inbox can sort on it. (a) was already fixed in batch A — the caller's live appointment now rides the prompt header. STILL OPEN: a real live transfer, which needs verification on an actual call rather than a column.
 
 **PROBLEM.** Caller: "I want to talk with him **urgently**" about the 2:30 call with "Dell". Agent offered 1:45 / 2:00 / 2:15 slots. Transcript ends mid-sentence ("Do any of these work for you,") — caller hung up. Nothing booked, no message taken, no escalation.
 

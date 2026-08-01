@@ -294,6 +294,13 @@ export const TakeMessageSchema = z.object({
   caller_phone: z.string().optional(),
   message: z.string().min(1).max(2000),
   call_id: z.string().optional(),
+  // THE CALLER SAID IT CANNOT WAIT. Set from their own words ("urgent", "as
+  // soon as possible", "emergency"), never inferred from the topic — a message
+  // about money is not urgent because it is about money. On 2026-07-27 a caller
+  // said "I want to talk with him urgently" and received a list of appointment
+  // slots (CALL_IMPROVEMENTS.md #7); there is no live-transfer path on this
+  // call flow, so the honest move is to take the message and MARK it.
+  is_urgent: z.boolean().optional().default(false),
 });
 
 // page-owner — urgent mid-call SMS page to the business owner. Distinct from

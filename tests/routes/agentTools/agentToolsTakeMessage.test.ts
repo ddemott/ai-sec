@@ -85,6 +85,62 @@ afterEach(() => {
 });
 
 describe('/agent-tools/take-message', () => {
+  it('URGENT: the caller\'s own escalation is stored, and can only ever be RAISED', async () => {
+    // WHO: SCL_dpp8qN8ogCtF, 2026-07-27 (CALL_IMPROVEMENTS.md #7). "I want to
+    //       talk with him urgently" was answered with 1:45, 2:00 and 2:15, and
+    //       the caller hung up mid-sentence.
+    // WHAT: is_urgent rides the message so the owner's inbox can sort on it.
+    // WHY: there is no live-transfer path on this call flow, so flagging the
+    //       message is the honest escalation — and a re-fire that omits the flag
+    //       (a later correction) must never UN-escalate what the caller said.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-1' }] },
+        { rows: [] },
+        { rows: [{ message_id: 'msg-1' }] },
+        { rows: [{ owner_phone: null, forward_phone: null, inbound_phone: null }] },
+      ],
+    });
+    const res = await post(app, {
+      tenant_id: TENANT_ID,
+      caller_name: 'Jaya',
+      caller_phone: '7734487716',
+      message: 'needs to speak with him today about the 2:30',
+      call_id: 'SCL_dpp8qN8ogCtF',
+      is_urgent: true,
+    });
+    expect(res.statusCode).toBe(200);
+    const insert = queries.find((q) => q.text.includes('INSERT INTO customer_messages'))!;
+    // The urgency flag is the LAST bound param ($8) — asserting its position,
+    // not merely "some param is true", so a future boolean cannot make this
+    // pass for the wrong reason (review catch on #313).
+    expect(insert.params[insert.params.length - 1]).toBe(true);
+    // Monotonic on conflict: OR, never overwrite.
+    expect(insert.text).toContain(
+      'is_urgent      = customer_messages.is_urgent OR EXCLUDED.is_urgent'
+    );
+  });
+
+  it('a message with no urgency flag stores false — urgency is never inferred', async () => {
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-1' }] },
+        { rows: [] },
+        { rows: [{ message_id: 'msg-2' }] },
+        { rows: [{ owner_phone: null, forward_phone: null, inbound_phone: null }] },
+      ],
+    });
+    await post(app, {
+      tenant_id: TENANT_ID,
+      caller_name: 'Sam',
+      caller_phone: '2624979039',
+      message: 'call me back about the invoice',
+      call_id: 'SCL_plain',
+    });
+    const insert = queries.find((q) => q.text.includes('INSERT INTO customer_messages'))!;
+    expect(insert.params[insert.params.length - 1]).toBe(false);
+  });
+
   it('THE "JAMIL" ROW: the write is an UPSERT keyed on this call, so a correction lands', async () => {
     // WHO: SCL_ReG7kLRiY94c, 2026-07-27 (CALL_IMPROVEMENTS.md #2). The name was
     //       heard as "Jamil", the message was saved, and thirty seconds later

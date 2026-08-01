@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict c1LMhAURye3GlA0PW4ccEjdDFXC0gMjkOLcP1gK4cqVscDFGZg79fINXVpT9a7M
+\restrict 8srgCmBsYS8aQgmoNb3IbIbKWYTTk3xHWytFHHAs60S0zfEAKEQHU6Whh8ylsGb
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2774,10 +2774,18 @@ CREATE TABLE public.customer_messages (
     call_id text,
     status text DEFAULT 'new'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    is_urgent boolean DEFAULT false NOT NULL
 );
 
 ALTER TABLE ONLY public.customer_messages FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: COLUMN customer_messages.is_urgent; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_messages.is_urgent IS 'The caller said it could not wait. Set only from the caller''s own words — never inferred from topic.';
 
 
 --
@@ -4388,6 +4396,13 @@ CREATE INDEX idx_customer_messages_tenant ON public.customer_messages USING btre
 
 
 --
+-- Name: idx_customer_messages_urgent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_customer_messages_urgent ON public.customer_messages USING btree (tenant_id, created_at DESC) WHERE ((is_urgent = true) AND (status = 'new'::text));
+
+
+--
 -- Name: idx_customers_active; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5987,5 +6002,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict c1LMhAURye3GlA0PW4ccEjdDFXC0gMjkOLcP1gK4cqVscDFGZg79fINXVpT9a7M
+\unrestrict 8srgCmBsYS8aQgmoNb3IbIbKWYTTk3xHWytFHHAs60S0zfEAKEQHU6Whh8ylsGb
 
