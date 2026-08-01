@@ -32,6 +32,9 @@ export interface ChecklistAgentOptions {
   runtime: CallRuntime;
   /** Carrier-attested caller number; null/undefined on forwarded lines. */
   callerPhone?: string | null;
+  /** Active staff first names — the roster a caller-named person is checked
+   *  against ("Jane" → "You mean Dale?"). Empty/absent = no roster line. */
+  staffFirstNames?: string[];
   /** Prefetched CRM context (attested caller-ID only — the prefetch never runs
    *  on a spoken/blocked number). Until 2026-07-30 this reached ONLY the ladder
    *  prompt: the live path never saw the CRM snapshot, which is how a caller
@@ -107,9 +110,24 @@ export function buildChecklistPrompt(opts: {
   library: QuestionTreeDef[];
   callerPhone?: string | null;
   knownCustomer?: KnownCustomer | null;
+  staffFirstNames?: string[];
 }): string {
   const menu = opts.library.map((tree) => `- ${tree.tree_id}: ${tree.description}`).join('\n');
   const knownSection = renderKnownCaller(opts.knownCustomer ?? null, opts.runtime.timezone);
+  const staff = (opts.staffFirstNames ?? []).filter((n) => n && n.trim());
+  // THE ROSTER. 2026-07-27: a caller asked for "Jane" — STT for "Dale", the
+  // only person who works there — and the agent adopted the name unchallenged,
+  // then confirmed a meeting "with Jane" against a row that says Dale. It had
+  // the employee list nowhere, so there was nothing to reconcile against. A
+  // caller walking into a meeting believing they will meet Jane is a trust
+  // failure even when the booking itself is correct.
+  const rosterLine = staff.length
+    ? `- WHO WORKS HERE: ${staff.join(', ')}. That is the WHOLE list. If a caller asks for ` +
+      `someone NOT on it, do NOT repeat that name back as if they exist — phone audio ` +
+      `mangles names badly, and a mangled name usually IS one of the names above. Offer the ` +
+      `closest one as a question ("Do you mean ${staff[0]}?") and use the confirmed name from ` +
+      `then on. Never book, or say you booked, with a person who is not on this list.`
+    : '';
   const callerIdLine = opts.callerPhone
     ? `The caller's number is ${opts.callerPhone} — verified by caller ID and already on ` +
       'file. NEVER ask for it and NEVER recite it back at them ("I see you\'re calling ' +
@@ -226,6 +244,21 @@ this. Asserting from absence is how a caller WITH a live 2:30 booking was told "
 don't have a booked time on file" on a real call — the DB knew; the model guessed. If
 the caller claims a booking you can't see, CHECK before you answer.
 
+TIMES ARE IN ${opts.runtime.timezone} — AND THE CALLER MAY NOT BE. Every time you offer,
+book, or confirm is this business's LOCAL time. If the caller names a zone ("2:30
+Eastern", "I'm on the west coast"), do NOT book the number they said: convert it, say
+BOTH out loud, and get a yes before booking — "2:30 Eastern is 1:30 our time; shall I
+book 1:30?" On 2026-07-27 a caller said "2:30 EST" plainly, was booked at 2:30 LOCAL —
+an hour off what she agreed to — and rang back twice looking for a meeting that was not
+where she thought (CALL_IMPROVEMENTS.md #9). If they name no zone, they mean ours; never
+guess a zone from an area code.
+
+WHAT THE CALLER SAID, NOT WHAT YOU INFERRED. Record and repeat only facts the caller
+stated ABOUT THEIR OWN case. A hedged or illustrative mention is NOT an answer: "we place
+people at companies like Capgemini" does not make the role a Capgemini role, and "he
+usually does Tuesdays" is not a booked Tuesday. If a fact matters and you only have a
+hedge, ask one plain question to confirm it before you record it or say it back.
+
 Ending: BEFORE you wrap up, re-read the caller's opening sentence. If they asked to
 TALK TO / speak with / meet someone and no meeting is booked, the call is NOT complete —
 add the booking tree with set_purpose now and offer real times (2026-07-21 live call:
@@ -240,6 +273,12 @@ further.
 - This is a PHONE CALL. Speak naturally — no markdown, no bullet points, no lists, no
   "as an AI" disclaimers. Keep replies SHORT — one or two sentences.
 - ${callerIdLine}
+${rosterLine ? `${rosterLine}\n` : ''}- A booking tool that returns \`what_happens_next\` has told you what ACTUALLY happens at
+  the appointment (who calls whom, or where to come). Say it, in those words, right after
+  you confirm the time. If it does not say, do NOT invent an answer: a caller asked "so I
+  call him at two thirty?" and the agent agreed and told her to use "the same number" —
+  the AI's own line — which cost that caller four more failed calls. If you genuinely do
+  not know, say you will note it for the owner and take it from there.
 - Write numbers the way they must be HEARD. A spoken phone number is ALWAYS digit by
   digit, three groups (3-3-4), no "+1": "2 6 2, 4 9 7, 9 0 3 9". A number the caller
   DICTATES gets read back exactly once — never skipped (2026-07-21 live call: a dictated
@@ -317,6 +356,7 @@ export class ChecklistAgent extends voice.Agent {
         library,
         callerPhone: opts.callerPhone,
         knownCustomer: opts.knownCustomer,
+        staffFirstNames: opts.staffFirstNames,
       }),
       tools: toolkit.selectedTools(),
     });

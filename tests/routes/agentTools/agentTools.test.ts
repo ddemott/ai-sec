@@ -373,6 +373,15 @@ describe('agentTools /tenant-config', () => {
       // nobody scheduled has no hours to state, and the agent must NOT invent any.
       business_hours: null,
       bookable_through: null,
+      // 2026-07-31: what actually happens at the booked time, in the owner's
+      // words. Null → the confirmation says nothing extra, which is the honest
+      // default; the alternative is the model inventing an answer, and it
+      // invented "call Dale on this same number" on a real call.
+      booking_mechanics: null,
+      // The roster the agent checks a caller-named person against. The mock
+      // pool returns no employee rows, so the list is empty — and an empty
+      // roster must render NO roster line rather than an empty one.
+      staff_first_names: [],
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -444,6 +453,8 @@ describe('agentTools /tenant-config', () => {
       // nobody scheduled has no hours to state, and the agent must NOT invent any.
       business_hours: null,
       bookable_through: null,
+      booking_mechanics: null,
+      staff_first_names: [],
     });
   });
 
@@ -2123,6 +2134,220 @@ describe('agentTools /scheduling-options', () => {
 });
 
 describe('agentTools /book-with-scheduling', () => {
+  it('SAD: a second booking for the SAME DAY on a LATER CALL is refused, with the one they have', async () => {
+    // WHO: Jaya, 2026-07-27 (CALL_IMPROVEMENTS.md #9/#10). She booked 1:00 PM
+    //       on one call and 2:30 PM for the same thing six minutes later on the
+    //       next. Two live appointments ninety minutes apart; the first was
+    //       never cancelled and never honored.
+    // WHAT: the route refuses before ANY write and hands back the existing
+    //       booking so the agent can offer keep / move / both.
+    // WHY: wrapAction's anti-double-book gate is per-CALL and in-memory — it
+    //       cannot see the call before it. This is the layer that can.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-jaya' }] }, // customer SELECT
+        { rows: [] }, // name UPDATE
+        {
+          rows: [
+            {
+              service_id: 'svc-consult-01',
+              name: 'Programming Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        }, // resolver: matched on the first query (no embedding path)
+        { rows: [{ default_buffer_minutes: 0 }] }, // buffer
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] }, // tz + mechanics
+        { rows: [{ start_time: '2026-07-27T18:00:00.000Z', service: 'Programming Consultation' }] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '7734487716',
+      name: 'Jaya',
+      call_id: 'SCL_second_call',
+      requirements: { serviceType: 'meeting' },
+      window: { from: '2026-07-27T19:30:00Z', to: '2026-07-27T20:00:00Z' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.error_code).toBe('EXISTING_SAME_DAY');
+    expect(body.existing_appointment.service).toBe('Programming Consultation');
+    // The refusal must tell the model the alternatives, or it will just retry.
+    expect(body.error).toMatch(/KEEP/);
+    expect(body.error).toMatch(/allow_duplicate/);
+    // NOTHING was written — the RPC never ran.
+    expect(queries.some((q) => q.text.includes('book_with_scheduling_atomic'))).toBe(false);
+    // Only OTHER calls count: a retry of THIS booking is idempotency, not a dup.
+    const dupQ = queries.find((q) => q.text.includes('FROM appointments a'))!;
+    expect(dupQ.text).toContain('call_id IS DISTINCT FROM');
+    expect(dupQ.text).toContain("status = 'scheduled'");
+  });
+
+  it('HAPPY: allow_duplicate books anyway — a deliberate second appointment is legitimate', async () => {
+    // WHY: two cars, two people, two errands. The guard exists to stop the
+    //       ACCIDENT, never to make a real second booking impossible.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-jaya' }] },
+        { rows: [] },
+        {
+          rows: [
+            {
+              service_id: 'svc-consult-01',
+              name: 'Programming Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        }, // resolver: matched on the first query (no embedding path)
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] },
+        // NO duplicate query is issued at all when allow_duplicate is set.
+        {
+          rows: [
+            {
+              success: true,
+              appointment_id: 'appt-second',
+              resource_id: null,
+              resource_name: null,
+              employee_id: null,
+              employee_name: 'Dale',
+              booked_start: '2026-07-27T19:30:00.000Z',
+              booked_end: '2026-07-27T20:00:00.000Z',
+              customer_id: 'cust-jaya',
+              error_message: null,
+              error_code: null,
+            },
+          ],
+        },
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '7734487716',
+      name: 'Jaya',
+      call_id: 'SCL_second_call',
+      allow_duplicate: true,
+      requirements: { serviceType: 'meeting' },
+      window: { from: '2026-07-27T19:30:00Z', to: '2026-07-27T20:00:00Z' },
+    });
+    expect(res.json().success).toBe(true);
+    // The GUARD query specifically (identified by its cross-call predicate) is
+    // skipped entirely — not merely ignored.
+    expect(queries.some((q) => q.text.includes('call_id IS DISTINCT FROM'))).toBe(false);
+    expect(queries.some((q) => q.text.includes('book_with_scheduling_atomic'))).toBe(true);
+  });
+
+  it('HAPPY: booking_mechanics rides the confirmation, verbatim, with a say-it instruction', async () => {
+    // WHO: the caller who asked "so I call him at two thirty?" and was told to
+    //       use "the same number" — the AI's own line (2026-07-27, #9). Four
+    //       more failed calls came from that one invented sentence.
+    // WHY: the model had no ground truth to state. Now the owner states it once.
+    const MECHANICS = 'Dale will call you at this number at the booked time.';
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-1' }] },
+        { rows: [] },
+        {
+          rows: [
+            {
+              service_id: 'svc-consult-01',
+              name: 'Programming Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        }, // resolver: matched on the first query (no embedding path)
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: MECHANICS }] },
+        { rows: [] }, // duplicate guard: clear
+        {
+          rows: [
+            {
+              success: true,
+              appointment_id: 'appt-mech',
+              resource_id: null,
+              resource_name: null,
+              employee_id: null,
+              employee_name: 'Dale',
+              booked_start: '2026-07-31T19:30:00.000Z',
+              booked_end: '2026-07-31T20:00:00.000Z',
+              customer_id: 'cust-1',
+              error_message: null,
+              error_code: null,
+            },
+          ],
+        },
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      name: 'Alex',
+      requirements: { serviceType: 'consultation' },
+      window: { from: '2026-07-31T14:30:00Z', to: '2026-07-31T15:00:00Z' },
+    });
+    const r = res.json().result;
+    expect(r.what_happens_next).toBe(MECHANICS);
+    // VERBATIM, because an improvised version is exactly what caused the cascade.
+    expect(r.instruction).toContain('VERBATIM');
+    expect(r.instruction).toContain(MECHANICS);
+  });
+
+  it('HAPPY: a tenant with NO booking_mechanics gets no extra field — silence beats a guess', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-1' }] },
+        { rows: [] },
+        {
+          rows: [
+            {
+              service_id: 'svc-consult-01',
+              name: 'Programming Consultation',
+              duration_minutes: 30,
+              price: 0,
+              required_skills: [],
+            },
+          ],
+        }, // resolver: matched on the first query (no embedding path)
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] },
+        { rows: [] },
+        {
+          rows: [
+            {
+              success: true,
+              appointment_id: 'appt-plain',
+              resource_id: null,
+              resource_name: null,
+              employee_id: null,
+              employee_name: null,
+              booked_start: '2026-07-31T19:30:00.000Z',
+              booked_end: '2026-07-31T20:00:00.000Z',
+              customer_id: 'cust-1',
+              error_message: null,
+              error_code: null,
+            },
+          ],
+        },
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      name: 'Alex',
+      requirements: { serviceType: 'consultation' },
+      window: { from: '2026-07-31T14:30:00Z', to: '2026-07-31T15:00:00Z' },
+    });
+    expect(res.json().result.what_happens_next).toBeUndefined();
+  });
+
   it('SAD: an off-grid window fails SPOKEN before any DB work — never a 500', async () => {
     // WHO: the model booking "1:19 PM" — a time the old suggester offered on a
     //       2026-07-17 live call (its slot series inherited now's minutes).
@@ -2169,7 +2394,8 @@ describe('agentTools /book-with-scheduling', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes (after resolver, before RPC)
-        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] }, // tenant tz + booking_mechanics
+        { rows: [] }, // cross-call duplicate guard: no other appointment today (2026-07-31)
         {
           rows: [
             {
@@ -2233,7 +2459,8 @@ describe('agentTools /book-with-scheduling', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes (pre-RPC)
-        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] }, // tenant tz + booking_mechanics
+        { rows: [] }, // cross-call duplicate guard: no other appointment today (2026-07-31)
         {
           rows: [
             {
@@ -2295,6 +2522,8 @@ describe('agentTools /book-with-scheduling', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes (pre-RPC)
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] }, // tenant tz + booking_mechanics
+        { rows: [] }, // cross-call duplicate guard: nothing else booked today
         { rows: [] }, // RPC returns no row
         // failure branch: buffer lookup + findNextAvailableSlots (tz + slots)
         { rows: [{ default_buffer_minutes: 0 }] },
@@ -3293,7 +3522,8 @@ describe('agentTools customer persistence on booking failure', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes (pre-RPC)
-        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] }, // tenant tz + booking_mechanics
+        { rows: [] }, // cross-call duplicate guard: no other appointment today (2026-07-31)
         {
           rows: [
             {
@@ -3341,7 +3571,9 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(queries[1].text).toContain('INSERT INTO customers');
     expect(queries[1].params).toEqual([TENANT_ID, '+15551234567', 'Diane']);
     expect(queries[2].text).toMatch(/FROM services/); // resolver service match
-    expect(queries[5].text).toContain('book_with_scheduling_atomic');
+    // Positional index would move with every new pre-RPC lookup (the 2026-07-31
+    // duplicate guard added one); assert the RPC RAN, which is what this test means.
+    expect(queries.some((q) => q.text.includes('book_with_scheduling_atomic'))).toBe(true);
   });
 
   it('book-with-scheduling: existing customer is reused — SELECT + resolver + RPC fire', async () => {
@@ -3365,7 +3597,8 @@ describe('agentTools customer persistence on booking failure', () => {
           ],
         },
         { rows: [{ default_buffer_minutes: 0 }] }, // getTenantBufferMinutes
-        { rows: [{ timezone: 'America/Chicago' }] }, // getTenantTimezone (local → UTC conversion)
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] }, // tenant tz + booking_mechanics
+        { rows: [] }, // cross-call duplicate guard: no other appointment today (2026-07-31)
         {
           rows: [
             {
@@ -3403,7 +3636,8 @@ describe('agentTools customer persistence on booking failure', () => {
     expect(queries.length).toBeGreaterThanOrEqual(5);
     expect(queries[0].text).toContain('SELECT customer_id FROM customers');
     expect(queries[1].text).toMatch(/FROM services/); // resolver service match
-    expect(queries[4].text).toContain('book_with_scheduling_atomic'); // after buffer + tz lookup
+    // after buffer + tz lookup + the cross-call duplicate guard (2026-07-31)
+    expect(queries.some((q) => q.text.includes('book_with_scheduling_atomic'))).toBe(true);
   });
 });
 

@@ -74,7 +74,32 @@ describe('fetchTenantConfig', () => {
       greetingCloser: null,
       businessHours: null,
       bookableThrough: null,
+      // Absent from the response ⇒ empty roster, never undefined: the prompt
+      // renders this list, and "you can ask for undefined" is not a sentence a
+      // receptionist says. 2026-07-31.
+      staffFirstNames: [],
     });
+  });
+
+  it('parses the staff roster, and drops blanks a stale backend might send', async () => {
+    // WHO: the "Jane" caller (2026-07-27) — asked for someone who does not
+    //       exist, and the agent had no roster to check the name against.
+    // WHY: this list is rendered into the prompt the model speaks from, so a
+    //       null or empty string in it becomes a spoken defect.
+    const client = clientWith({
+      status: 200,
+      body: {
+        success: true,
+        result: {
+          name: 'Thinking Hammer',
+          timezone: 'America/Chicago',
+          system_prompt: null,
+          staff_first_names: ['Dale', '', '   ', 'Maria', null],
+        },
+      },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg.staffFirstNames).toEqual(['Dale', 'Maria']);
   });
 
   it('maps forwarded_from_phone → forwardedFromPhone (snake → camel)', async () => {

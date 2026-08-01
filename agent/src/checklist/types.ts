@@ -17,6 +17,17 @@ export interface TextNodeDef {
   type: 'text';
   /** What to collect, phrased for the model (never read verbatim to the caller). */
   ask: string;
+  /**
+   * LISTEN-ONLY: never asked, never gates anything — recorded only if the
+   * caller volunteers it. Until now the only listen-ish nodes were the ones
+   * latent under an unanswered choice; this makes it a property a node can
+   * simply HAVE, for a fact that is worth catching and never worth asking
+   * (caller_timezone: "2:30 Eastern" must be caught and converted, but asking
+   * every local caller what zone they are in is noise). Deliberately excluded
+   * from the frontier AND from the goodbye gate — an optional node that could
+   * hold a call open would be the wrong-tree deadlock all over again.
+   */
+  listen?: boolean;
 }
 
 /**

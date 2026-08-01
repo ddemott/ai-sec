@@ -250,6 +250,13 @@ export class ChecklistTracker {
     if (liveness === 'unselected') return 'unselected';
     if (liveness === 'dead') return 'not_applicable';
     if (liveness === 'latent') return this.#values.has(nodeId) ? 'pending' : 'latent';
+    // A listen-only node is never OPEN: unanswered, it is simply waiting to
+    // overhear something, which is a resolved state for a call that can end.
+    if (entry.def.type === 'text' && entry.def.listen) {
+      if (this.#values.has(nodeId)) return 'answered';
+      if (this.#declined.has(nodeId)) return 'declined';
+      return 'latent';
+    }
     if (entry.def.type === 'action') {
       if (this.#declined.has(nodeId)) return 'declined';
       if (this.#actionDone.has(nodeId)) return 'done';
@@ -492,7 +499,11 @@ export class ChecklistTracker {
           break;
         case 'latent':
           lines.push(
-            `[listen] ${nodeId} — ${(def as { ask: string }).ask} (${this.#latentTrigger(entry)}; do NOT ask yet — record it if the caller volunteers it)`
+            def.type === 'text' && def.listen
+              ? // Listen-ONLY: no trigger to name and nothing to wait for — it is
+                // never asked at all, in any branch, on any call.
+                `[listen] ${nodeId} — ${def.ask} (NEVER ask this; record it only if the caller volunteers it)`
+              : `[listen] ${nodeId} — ${(def as { ask: string }).ask} (${this.#latentTrigger(entry)}; do NOT ask yet — record it if the caller volunteers it)`
           );
           break;
         case 'pending':
@@ -542,7 +553,17 @@ export class ChecklistTracker {
    */
   isResolved(): boolean {
     if (!this.hasSelection()) return false;
-    return this.#selectedWalk().every((nodeId) => RESOLVED_STATUSES.has(this.status(nodeId)));
+    return this.#selectedWalk().every((nodeId) => {
+      const status = this.status(nodeId);
+      if (RESOLVED_STATUSES.has(status)) return true;
+      // A LISTEN-ONLY node never holds the door shut. It was never asked, so a
+      // caller cannot answer it, so waiting on it would mean waiting forever —
+      // exactly the shape of the wrong-tree deadlock that stranded a caller on
+      // dead air (2026-07-22). Latent-under-a-choice nodes still gate normally:
+      // their parent choice is the real open question.
+      const def = this.#entries.get(nodeId)?.def;
+      return status === 'latent' && def?.type === 'text' && def.listen === true;
+    });
   }
 
   /** Full node → state view, for tests, logs, and the eventual dashboard view. */
