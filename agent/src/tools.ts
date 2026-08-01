@@ -483,11 +483,16 @@ export function buildTools(
             description: 'Date in YYYY-MM-DD format in the tenant timezone.',
             pattern: '^\\d{4}-\\d{2}-\\d{2}$',
           },
+          requested_time: {
+            type: 'string',
+            description:
+              'The exact time the CALLER asked for, if they named one ("2:30 PM", "9am"). Pass it whenever they have a time in mind: the result then tells you whether THAT time works and, if not, WHY (their own appointment is on it, someone else has it, nobody is on shift, it has already passed). Without it you get only a list — and a list alone is why a caller who asked for 2:30 was told "we can only book on the quarter hour", which was not true and not the reason.',
+          },
         },
         required: ['service_type', 'date'],
         additionalProperties: false,
       },
-      execute: async (args: { service_type: string; date: string }) => {
+      execute: async (args: { service_type: string; date: string; requested_time?: string }) => {
         speakFiller?.('Let me check what we have open...');
         const res = await client.call(
           '/agent-tools/available-slots',
@@ -495,6 +500,10 @@ export function buildTools(
             tenant_id: ctx.tenantId,
             service_type: args.service_type,
             date: args.date,
+            requested_time: args.requested_time,
+            // Server-injected, never model-supplied: lets the backend say "you
+            // already have that time" instead of the anonymous "it's taken".
+            caller_phone: firstPhone(ctx.callerPhone, ctx.spokenPhone),
             // Attribute a pure availability inquiry to this call so a caller
             // who never books still counts toward abandonment-by-service.
             call_id: ctx.callId || undefined,
