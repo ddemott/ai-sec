@@ -28,6 +28,21 @@ function errorCount(event: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Read any counter's value for a given label set from the live registry. */
+function counterValue(metric: string, labels: Record<string, string>): number {
+  const line = registry
+    .expose()
+    .split('\n')
+    .find(
+      (l) =>
+        l.startsWith(`${metric}{`) &&
+        Object.entries(labels).every(([k, v]) => l.includes(`${k}="${v}"`))
+    );
+  if (!line) return 0;
+  const n = Number(line.trim().split(/\s+/).pop());
+  return Number.isFinite(n) ? n : 0;
+}
+
 // The capture-job-inquiry route emails the owner via systemEmail. Mock it so we
 // can (a) assert it's called with the resolved recipient + collected fields and
 // (b) simulate an SMTP failure to exercise the best-effort/instrumented sad path
@@ -3966,6 +3981,36 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     expect(prune.text).toContain('FROM customer_messages');
     expect(prune.text).toContain('FROM job_inquiries');
     expect(prune.text).toContain('other.call_id <> $2');
+  });
+
+  it('a greeting-only hangup is COUNTED, bucketed either side of the silent-call line', async () => {
+    // WHO: four calls on 2026-07-27, 13-42s, greeting and nothing else
+    //      (CALL_IMPROVEMENTS.md #4, #5, #6, #11).
+    // WHAT: greeting_only_hangups_total, separate from the no_caller_audio alarm.
+    // WHY: nobody could say whether that afternoon meant a long greeting, a
+    //       surprised caller, or a bad day — because nothing counted them. #4
+    //       says measure before shortening the greeting; this is the measurement.
+    const before = counterValue('greeting_only_hangups_total', { bucket: 'under_20s' });
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'SCL_nqDRGYRWXbHi',
+      duration_seconds: 13,
+      transcript: "Assistant [0:00]: Thanks for calling! I'm Piper.",
+    });
+    expect(counterValue('greeting_only_hangups_total', { bucket: 'under_20s' })).toBe(before + 1);
+  });
+
+  it('a call where the caller spoke is NOT a greeting-only hangup', async () => {
+    const before = counterValue('greeting_only_hangups_total', { bucket: 'over_20s' });
+    const { app } = buildApp({ queryResponses: [{ rows: [{ ended: true }] }] });
+    await post(app, '/agent-tools/voice-session-end', {
+      tenant_id: TENANT_ID,
+      call_id: 'SCL_spoke',
+      duration_seconds: 45,
+      transcript: 'Assistant [0:00]: Hello.\nCaller [0:05]: Hi there.',
+    });
+    expect(counterValue('greeting_only_hangups_total', { bucket: 'over_20s' })).toBe(before);
   });
 
   it('a MISSING transcript never prunes — a capture failure is not evidence of silence', async () => {

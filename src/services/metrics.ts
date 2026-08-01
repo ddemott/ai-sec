@@ -309,6 +309,22 @@ export const errorsTotal = registry.counter(
   'Errors logged via logError(), partitioned by event name'
 );
 
+// Calls that ended with the greeting and nothing else — the caller never spoke.
+//
+// SEPARATE from errors_total{no_caller_audio} on purpose. That one means the
+// inbound audio path is broken (codec/RTP) and deliberately ignores calls under
+// 20 seconds, because a short hang-up is the ordinary explanation. This one
+// counts the hang-ups themselves, bucketed either side of that line: four such
+// calls landed in a single afternoon (CALL_IMPROVEMENTS.md #4, #5, #6, #11) and
+// nobody could say whether that was a long greeting, a surprised caller, or a
+// bad day — because nothing counted them. Measure first, then decide whether the
+// greeting needs shortening; a rate that climbs after a greeting change is the
+// only honest way to know it made things worse.
+export const greetingOnlyHangupsTotal = registry.counter(
+  'greeting_only_hangups_total',
+  'Calls whose transcript held the greeting and no caller speech, bucketed under/over the silent-call threshold'
+);
+
 // Reminder delivery outcomes per channel. Closes TODO.md Phase 5
 // "Monitoring dashboard for reminder delivery rates." A regression that
 // silently breaks the SMS provider or Gmail SMTP shows up here as

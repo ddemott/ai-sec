@@ -544,7 +544,7 @@ export function registerVoiceRoutes(
       const rows = await withTenantClient(tenantId, (client) =>
         client.query(
           `SELECT message_id, caller_name, caller_phone, callback_phone, message,
-                  status, call_id, created_at
+                  status, call_id, created_at, is_urgent
            FROM customer_messages
           WHERE tenant_id = $1
             ${status ? 'AND status = $4' : ''}
@@ -555,6 +555,43 @@ export function registerVoiceRoutes(
       );
       return reply.send(rows.rows);
     }, 'Failed to fetch messages')
+  );
+
+  /**
+   * GET /voice/job-inquiries
+   *
+   * THE LEAD THE OWNER COULD NOT SEE. On 2026-07-27 a recruiter call captured a
+   * complete job inquiry — agency, client, role, rate, location — and the call
+   * was filed under an outcome that said "message". The Messages inbox was
+   * empty, because a job inquiry is not a message; it lived in its own table
+   * with NO route, NO API client method and NO screen (CALL_IMPROVEMENTS.md #1).
+   * A lead nobody can find is a lead nobody called back.
+   *
+   * Same shape as /voice/messages so the inbox can render both in one list.
+   */
+  app.get(
+    '/voice/job-inquiries',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const query = req.query as Record<string, string | undefined>;
+      const limit = Math.min(parseInt(query['limit'] ?? '') || 50, 200);
+      const offset = parseInt(query['offset'] ?? '') || 0;
+
+      const rows = await withTenantClient(tenantId, (client) =>
+        client.query(
+          `SELECT job_inquiry_id, caller_name, callback_phone, caller_company, client_company,
+                  represents_company, employment_type, role_description, rate_range, duration,
+                  location_type, address, timezone, call_id, appointment_id, created_at
+             FROM job_inquiries
+            WHERE tenant_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2 OFFSET $3`,
+          [tenantId, limit, offset]
+        )
+      );
+      return reply.send(rows.rows);
+    }, 'Failed to fetch job inquiries')
   );
 
   /**

@@ -58,7 +58,32 @@ export const TOOL_FALLBACK_LINE =
   "Sorry, I'm having a little trouble with that right now. Would you like me to take a message and have someone get back to you?";
 
 /**
+ * Spoken when the CALLER has gone quiet — not the agent (2026-08-01).
+ *
+ * Four calls on 2026-07-27 held 13-42 seconds of silence after the greeting and
+ * said nothing at all into it; one was a caller who had been told to ring back at
+ * that exact time and was waiting for a human (CALL_IMPROVEMENTS.md #5, #6).
+ *
+ * It offers the two things that are always true on this line — a message and a
+ * booking — because "are you still there?" on its own gives a hesitating caller
+ * nothing to grab. It promises no transfer, since there is none.
+ */
+export const CALLER_CHECK_IN_LINE =
+  "Are you still there? I can take a message or set up a time — whichever is easier.";
+
+/** Spoken as the call ends after the caller never answered the check-in. */
+export const CALLER_SILENCE_GOODBYE =
+  "I'll let you go for now — do call back any time and I'll be glad to help.";
+
+/**
  * Every fixed line worth pre-synthesizing per tenant voice, minus the greeting
  * (which is tenant-specific and warmed alongside these at call start).
  */
-export const HOLD_LINES = [HOLD_LINE, THINKING_LINE, RECOVERY_LINE, TOOL_FALLBACK_LINE] as const;
+export const HOLD_LINES = [
+  HOLD_LINE,
+  THINKING_LINE,
+  RECOVERY_LINE,
+  TOOL_FALLBACK_LINE,
+  CALLER_CHECK_IN_LINE,
+  CALLER_SILENCE_GOODBYE,
+] as const;

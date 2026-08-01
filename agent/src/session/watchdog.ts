@@ -433,3 +433,125 @@ export function attachSilentTurnRecovery(
     session.off(voice.AgentSessionEventTypes.AgentStateChanged, onAgentState);
   };
 }
+
+/** Default quiet time before the agent checks whether the caller is still there. */
+const DEFAULT_CALLER_SILENCE_MS = 10_000;
+/** Further quiet after the check-in before the call is closed out. */
+const DEFAULT_CALLER_GIVEUP_MS = 12_000;
+
+/**
+ * CALLER-SIDE silence — the gap neither watchdog above was ever watching.
+ *
+ * attachOutputWatchdog covers a turn that is SLOW; attachSilentTurnRecovery
+ * covers a turn that ENDED without audio. Both arm on the AGENT's state, and
+ * both stand down the moment the agent finishes speaking — which is precisely
+ * when a caller's silence begins. So the one thing nobody was watching was the
+ * caller.
+ *
+ * On 2026-07-27 four calls (13-42s) contain the greeting and NOTHING else: no
+ * "are you still there?", no close, no breadcrumb — one of them from a caller
+ * who had been told to ring back at that exact time and was waiting for a human
+ * (CALL_IMPROVEMENTS.md #5, #6, #4, #11). Forty seconds of dead air, then a
+ * hang-up, and the product's only record was a blank transcript.
+ *
+ * Two beats, then out:
+ *   1. after `silenceMs` of quiet with the agent idle → ONE check-in, spoken.
+ *   2. after `giveUpMs` more → hand back to the caller-facing close.
+ *
+ * The timer starts only when the agent is LISTENING (its own speech never
+ * counts as the caller's silence) and is cancelled the instant the caller makes
+ * a sound — Silero's `speaking` verdict, not a transcript, so a caller who
+ * mumbles still counts as present.
+ */
+export function attachCallerSilenceWatch(
+  session: voice.AgentSession,
+  opts: {
+    /** Spoken once, after the first stretch of quiet. */
+    checkInText: string;
+    /** Called when the caller stays silent after the check-in. */
+    onGiveUp: () => void;
+    silenceMs?: number;
+    giveUpMs?: number;
+    log: { info: LogFn; warn: LogFn };
+    /** Same contract as WatchdogOptions.onSpoken — the check-in is
+     *  addToChatCtx:false, so only this callback gets it into the transcript. */
+    onSpoken?: (text: string) => void;
+  }
+): () => void {
+  const silenceMs = opts.silenceMs ?? DEFAULT_CALLER_SILENCE_MS;
+  const giveUpMs = opts.giveUpMs ?? DEFAULT_CALLER_GIVEUP_MS;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let checkedIn = false;
+  let finished = false;
+
+  const clear = () => {
+    if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+
+  const giveUp = () => {
+    if (finished) return;
+    finished = true;
+    clear();
+    opts.log.warn(
+      { event: 'caller_silence_give_up' },
+      'caller stayed silent after the check-in — closing the call rather than holding an empty line'
+    );
+    opts.onGiveUp();
+  };
+
+  const checkIn = () => {
+    if (finished || checkedIn) return;
+    checkedIn = true;
+    try {
+      // addToChatCtx:false for the same reason the hold lines are: this is the
+      // RUNTIME speaking, not a turn the model should reason about later.
+      session.say(opts.checkInText, { allowInterruptions: true, addToChatCtx: false });
+      opts.onSpoken?.(opts.checkInText);
+      opts.log.info(
+        { event: 'caller_silence_check_in' },
+        'caller has been quiet — asked whether they are still there'
+      );
+    } catch {
+      // Session draining/closed — nothing to play into.
+    }
+    clear();
+    timer = setTimeout(giveUp, giveUpMs);
+  };
+
+  const arm = () => {
+    if (finished) return;
+    clear();
+    timer = setTimeout(checkedIn ? giveUp : checkIn, checkedIn ? giveUpMs : silenceMs);
+  };
+
+  const onAgentState = (ev: voice.AgentStateChangedEvent) => {
+    // The agent has stopped talking and is waiting on the caller: the clock
+    // starts here, and only here.
+    if (ev.newState === 'listening') arm();
+    else clear();
+  };
+
+  const onUserState = (ev: voice.UserStateChangedEvent) => {
+    if (ev.newState === 'speaking') {
+      // They are there. Reset EVERYTHING, including the check-in latch: a
+      // caller who speaks, then goes quiet again later, deserves the same two
+      // beats rather than being dropped straight out.
+      checkedIn = false;
+      clear();
+    } else if (session.agentState === 'listening') {
+      arm();
+    }
+  };
+
+  session.on(voice.AgentSessionEventTypes.AgentStateChanged, onAgentState);
+  session.on(voice.AgentSessionEventTypes.UserStateChanged, onUserState);
+
+  return () => {
+    finished = true;
+    clear();
+    session.off(voice.AgentSessionEventTypes.AgentStateChanged, onAgentState);
+    session.off(voice.AgentSessionEventTypes.UserStateChanged, onUserState);
+  };
+}

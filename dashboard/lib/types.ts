@@ -656,6 +656,35 @@ export interface CustomerMessage {
   status: 'new' | 'read' | 'actioned';
   call_id: string | null;
   created_at: string;
+  /** The caller said it could not wait (their words, never inferred). */
+  is_urgent?: boolean;
+}
+
+/**
+ * A recruiter's job inquiry — captured on a call, and until 2026-08-01 visible
+ * NOWHERE in the dashboard: no route, no client method, no screen. The lead sat
+ * in its own table while the call's outcome said "message" and the Messages
+ * inbox was empty (CALL_IMPROVEMENTS.md #1).
+ */
+export interface JobInquiry {
+  job_inquiry_id: string;
+  caller_name: string | null;
+  callback_phone: string | null;
+  /** The agency that rang. */
+  caller_company: string | null;
+  /** Where the work would actually happen. */
+  client_company: string | null;
+  represents_company: boolean | null;
+  employment_type: string | null;
+  role_description: string | null;
+  rate_range: string | null;
+  duration: string | null;
+  location_type: string | null;
+  address: string | null;
+  timezone: string | null;
+  call_id: string | null;
+  appointment_id: string | null;
+  created_at: string;
 }
 
 /** Reminder delivery aggregates for the owner-facing monitoring panel
