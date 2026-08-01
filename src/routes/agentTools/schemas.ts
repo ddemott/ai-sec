@@ -189,6 +189,18 @@ export const IdentifyCallerSchema = z.object({
   tenant_id: z.string().uuid(),
   phone: z.string().min(5),
   name: z.string().min(1).max(200).optional(),
+  // THE CALLER CORRECTED A NAME **WE** GOT WRONG ON THIS CALL.
+  //
+  // The upsert only overwrites a PLACEHOLDER name, which is right for the
+  // ordinary case: a later call must not be able to rename an established
+  // customer, because anyone can dial a number and claim to be someone. But it
+  // also made a mishearing permanent — "Jamil" was saved, the caller said "no,
+  // Camille, C-A-M-I-L-L-E" thirty seconds later, and the record kept Jamil
+  // (CALL_IMPROVEMENTS.md #2).
+  //
+  // Set ONLY by the agent's host code, and only when THIS CALL already wrote a
+  // name and the caller then changed it. Never model-supplied.
+  is_correction: z.boolean().optional().default(false),
   // WHO IS ASSERTING THIS NUMBER? (2026-07-13 — closes a data leak.)
   //
   //   'caller_id' → the CARRIER attested it. The phone network vouches that the

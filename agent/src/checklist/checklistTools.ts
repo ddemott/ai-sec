@@ -25,13 +25,14 @@
 import { llm } from '@livekit/agents';
 import { getLogger } from '../logger.js';
 import { sanitizeVolunteered } from '../tasks/sanitize.js';
+import { normalizeSpelledName, splitNameAndCompany } from '../nameCleanup.js';
 import {
   type ChecklistTracker,
   RecordError,
   UnknownNodeError,
   UnknownTreeError,
 } from './tracker.js';
-import type { ActionNodeDef, QuestionTreeDef } from './types.js';
+import type { ActionNodeDef, NodeId, QuestionTreeDef } from './types.js';
 import { CALLER_NAME, CALLER_PHONE } from './trees.js';
 
 /** The JSON field whose presence in a tool's result proves the write LANDED. */
@@ -41,6 +42,28 @@ const ACTION_ID_FIELDS: Record<string, string> = {
   capture_job_inquiry: 'job_inquiry_id',
   cancel_appointment: 'appointment_id',
   reschedule_appointment: 'appointment_id',
+};
+
+/**
+ * Actions whose write can be REDONE when an answer it consumed is corrected.
+ *
+ * 2026-07-27 (SCL_ReG7kLRiY94c, CALL_IMPROVEMENTS.md #2): the caller's name was
+ * heard as "Jamil", take_message wrote the row, and thirty seconds later she
+ * corrected it — "Camille, C-A-M-I-L-L-E". The tracker updated. The row did
+ * not. It still says Jamil in production. Host-owned state that a landed write
+ * ignores is the same state theater as the dropped location_type, one layer
+ * later: we fixed what the write READS and never fixed what happens when the
+ * reading CHANGES.
+ *
+ * Only tools that are idempotent per call belong here — take_message upserts on
+ * (tenant_id, call_id) since migration 20260801000000, so re-firing rewrites its
+ * own row. capture_job_inquiry is deliberately ABSENT despite being idempotent:
+ * its route returns the existing row unchanged on conflict (DO NOTHING), so a
+ * re-fire would be a lie dressed as a fix. Booking actions are absent for a
+ * blunter reason — a corrected name must never silently move an appointment.
+ */
+const REWRITABLE_ON_CORRECTION: Record<string, readonly NodeId[]> = {
+  take_message: [CALLER_NAME, CALLER_PHONE, 'message_body'],
 };
 
 /** Read tools a tree needs alongside its action (the calendar for a booking). */
@@ -101,6 +124,16 @@ export const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
     { arg: 'timezone', from: ['team_timezone'] },
   ],
   book_with_scheduling: [{ arg: 'phone', from: ['caller_phone'] }],
+  // take_message had NO backfill at all: every value came from the model
+  // retyping it, which is the same state-theater exposure that lost
+  // location_type and role_description on other tools — and it is what made a
+  // CORRECTION re-fire arrive empty (found by the batch-D test, 2026-08-01).
+  // The checklist holds all three facts; the write should read them from there.
+  take_message: [
+    { arg: 'caller_name', from: [CALLER_NAME] },
+    { arg: 'callback_phone', from: [CALLER_PHONE] },
+    { arg: 'message', from: ['message_body'] },
+  ],
 };
 
 /** How many times set_purpose may fire before the call is told to wrap up. */
@@ -186,7 +219,12 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   const treeIds = deps.library.map((t) => t.tree_id);
 
   let purposeRounds = 0;
-  let identifySent = false;
+  // What identify_caller was last told, so a CORRECTION can be re-sent. It used
+  // to be a plain "sent once" latch, which meant the first (name, phone) pair
+  // the call produced was the only one the phone book ever heard: "Jamil" was
+  // saved, "Camille" was recorded in the tracker, and the CRM kept Jamil
+  // (CALL_IMPROVEMENTS.md #2).
+  let identifiedAs: { name: string; phone: string } | null = null;
   let closing = false;
   const failCounts = new Map<string, number>();
 
@@ -212,13 +250,28 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     const name = tracker.value(CALLER_NAME);
     const phone = tracker.value(CALLER_PHONE);
     const identify = realTools['identify_caller'];
-    if (identifySent || !name || !phone || !identify) return;
-    identifySent = true;
+    if (!name || !phone || !identify) return;
+    // Unchanged since the last send → nothing to do. CHANGED → send again: the
+    // caller corrected something, and the phone book must hear the correction.
+    if (identifiedAs && identifiedAs.name === name && identifiedAs.phone === phone) return;
+    const isCorrection = identifiedAs !== null;
+    identifiedAs = { name, phone };
     void shape(identify)
-      .execute({ name, phone }, undefined)
+      .execute(
+        {
+          name,
+          phone,
+          // Scoped on purpose: this permits overwriting a name THIS CALL wrote.
+          // It is never a licence to rename an established customer from a
+          // later call — anyone can dial a number and claim a name, and that
+          // is the claim-based trust the OTP call-binding exists to destroy.
+          ...(isCorrection ? { is_correction: true } : {}),
+        },
+        undefined
+      )
       .catch((err: unknown) => {
         getLogger().warn(
-          { event: 'checklist_identify_failed', err: String(err) },
+          { event: 'checklist_identify_failed', is_correction: isCorrection, err: String(err) },
           'host-code identify_caller failed — caller not saved to phone book'
         );
       });
@@ -458,7 +511,39 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       Promise.resolve(runRecordAnswer(args)),
   });
 
+  /**
+   * Clean up the two shapes a caller's NAME arrives in that the record cannot
+   * use as-is. Both were live defects, both stored verbatim:
+   *
+   *   "C-A-M-I-L-L-E"              — a correction, SPELLED. Stored letter by
+   *                                  letter, so the fix for a wrong name was a
+   *                                  differently wrong name (#2).
+   *   "Jaya from Connolly Systems" — a person AND their company in one breath.
+   *                                  splitName filed "from Connolly System" as
+   *                                  a SURNAME (#10).
+   *
+   * The company half is recorded onto whichever company node this call has
+   * open, so the fact is kept rather than discarded — and never guessed at when
+   * there is nowhere for it to go.
+   */
+  const cleanNameValue = (raw: string | undefined): string | undefined => {
+    if (!raw) return raw;
+    const { name, company } = splitNameAndCompany(raw);
+    if (company) {
+      for (const nodeId of ['callers_company', 'client_company']) {
+        if (tracker.status(nodeId) === 'open' || tracker.status(nodeId) === 'latent') {
+          recordIfOpen(nodeId, company);
+          break;
+        }
+      }
+    }
+    return normalizeSpelledName(name);
+  };
+
   function runRecordAnswer(args: { node_id: string; value?: string; declined?: boolean }): string {
+    if (args.node_id === CALLER_NAME && args.value && !args.declined) {
+      args = { ...args, value: cleanNameValue(args.value) };
+    }
     try {
       tracker.record(args.node_id, { value: args.value, declined: args.declined });
     } catch (err) {
@@ -467,6 +552,10 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       throw err;
     }
     maybeIdentify();
+    // If this answer CORRECTS something a completed write already consumed,
+    // rewrite that row — the tracker being right is not the same as the record
+    // being right (#2, "Jamil").
+    rewriteCorrectedWrites(args.node_id);
     // HOST-ENFORCED READ-BACK (2026-07-21): the prompt rule "read a dictated number
     // back exactly once" was skipped on two consecutive live calls — a prompt-tier
     // rule the model ignores twice gets promoted to the runtime. When the recorded
@@ -576,6 +665,81 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     });
   }
 
+  /**
+   * Merge the model's args with the tracker's recorded answers. Model-provided
+   * values always win; everything else is filled from host-owned state (the
+   * 2026-07-21 lesson: a write that ignores what the checklist holds is state
+   * theater). Extracted so a CORRECTION re-fire builds its args exactly the way
+   * the original write did — a second code path here would be a second set of
+   * bugs.
+   */
+  const buildActionArgs = (toolName: string, args: unknown): Record<string, unknown> => {
+    const provided: Record<string, unknown> = {
+      ...((args as Record<string, unknown> | null) ?? {}),
+    };
+    for (const f of ACTION_ARG_BACKFILL[toolName] ?? []) {
+      const cur = provided[f.arg];
+      if (cur !== undefined && cur !== null && cur !== '') continue;
+      delete provided[f.arg];
+      for (const nodeId of f.from) {
+        const v = tracker.value(nodeId);
+        if (v === undefined || v === '') continue;
+        const mapped = f.map ? f.map(v) : v;
+        if (mapped !== undefined) {
+          provided[f.arg] = mapped;
+          break;
+        }
+      }
+    }
+    return provided;
+  };
+
+  /**
+   * A CORRECTION REACHES THE ROW THAT WAS ALREADY WRITTEN.
+   *
+   * "You got my name wrong… Camille, C-A-M-I-L-L-E" arrived thirty seconds
+   * after take_message had saved the row as Jamil. record_answer updated the
+   * tracker, the agent said thank you, and the row never changed — it still
+   * says Jamil in prod (CALL_IMPROVEMENTS.md #2). Re-fire the landed write with
+   * the corrected values; take_message upserts on (tenant_id, call_id), so this
+   * rewrites its own row rather than appending a contradiction.
+   *
+   * On a MACROTASK, and fire-and-forget: this runs inside record_answer's own
+   * execute, and a correction must never make the model wait on a backend
+   * round-trip — nor fail the answer it just recorded if that round-trip dies.
+   */
+  const rewriteCorrectedWrites = (nodeId: NodeId): void => {
+    for (const site of actionSites.values()) {
+      const sources = REWRITABLE_ON_CORRECTION[site.def.tool];
+      if (!sources?.includes(nodeId)) continue;
+      if (tracker.status(site.def.node_id) !== 'done') continue;
+      const real = realTools[site.def.tool];
+      if (!real) continue;
+      const toolName = site.def.tool;
+      setTimeout(() => {
+        void (async () => {
+          try {
+            await shape(real).execute(buildActionArgs(toolName, {}), undefined);
+            getLogger().info(
+              { event: 'checklist_correction_rewrite', tool: toolName, node_id: nodeId },
+              'corrected answer re-applied to the write it had already landed in'
+            );
+          } catch (err: unknown) {
+            getLogger().warn(
+              {
+                event: 'checklist_correction_rewrite_failed',
+                tool: toolName,
+                node_id: nodeId,
+                err: String(err),
+              },
+              'correction could NOT be re-applied — the stored row still holds the old value'
+            );
+          }
+        })();
+      }, 0);
+    }
+  };
+
   const wrapAction = (site: ActionSite): llm.ToolContext[string] => {
     const { def } = site;
     const real = realTools[def.tool];
@@ -601,23 +765,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         }
         // Backfill omitted args from the tracker's recorded answers (see
         // ACTION_ARG_BACKFILL) — model-provided values always win.
-        const provided: Record<string, unknown> = {
-          ...((args as Record<string, unknown> | null) ?? {}),
-        };
-        for (const f of ACTION_ARG_BACKFILL[def.tool] ?? []) {
-          const cur = provided[f.arg];
-          if (cur !== undefined && cur !== null && cur !== '') continue;
-          delete provided[f.arg];
-          for (const nodeId of f.from) {
-            const v = tracker.value(nodeId);
-            if (v === undefined || v === '') continue;
-            const mapped = f.map ? f.map(v) : v;
-            if (mapped !== undefined) {
-              provided[f.arg] = mapped;
-              break;
-            }
-          }
-        }
+        const provided = buildActionArgs(def.tool, args);
         const raw = await shape(real).execute(provided, toolCtx);
         const id = extractSuccessId(raw, idField);
         const rawText = typeof raw === 'string' ? raw : JSON.stringify(raw);

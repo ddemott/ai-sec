@@ -902,7 +902,7 @@ export function buildTools(
         required: ['name'],
         additionalProperties: false,
       },
-      execute: async (args: { name: string; phone?: string }) => {
+      execute: async (args: { name: string; phone?: string; is_correction?: boolean }) => {
         const contactPhone = args.phone?.trim() || ctx.callerPhone;
         if (!contactPhone) {
           return 'No phone number available — ask the caller for their number, then save the contact.';
@@ -943,6 +943,10 @@ export function buildTools(
           name: args.name,
           phone_source: phoneSource,
           call_id: ctx.callId ?? undefined,
+          // Set by the checklist's host code when the caller corrects a name
+          // THIS call already saved — the one case where overwriting a real
+          // (non-placeholder) name is right. Never set by the model.
+          is_correction: args.is_correction === true,
         });
 
         // THE SYSTEM REMEMBERS THE NUMBER, SO THE MODEL DOESN'T HAVE TO.

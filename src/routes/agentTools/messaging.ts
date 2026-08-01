@@ -195,10 +195,30 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
           );
         }
 
+        // UPSERT, keyed on this CALL (migration 20260801000000).
+        //
+        // This was INSERT-only, which made two failures inevitable and one of
+        // them is live in prod right now: a caller's name was heard as "Jamil",
+        // the message was written, she corrected it to "Camille" thirty seconds
+        // later — and the row could not be reached, because nothing identified
+        // which row belonged to this call. It still says Jamil.
+        //
+        // Now a second take_message on the same call REWRITES its own row, so a
+        // correction lands and a retry cannot duplicate. The updated_at bump is
+        // what tells the owner (and a postmortem) that the row was revised.
+        // Dashboard-created messages carry no call_id and are untouched by this.
         const res = await client.query<{ message_id: string }>(
           `INSERT INTO customer_messages
              (tenant_id, customer_id, caller_phone, caller_name, callback_phone, message, call_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (tenant_id, call_id) WHERE call_id IS NOT NULL
+           DO UPDATE SET
+             caller_name    = EXCLUDED.caller_name,
+             callback_phone = EXCLUDED.callback_phone,
+             message        = EXCLUDED.message,
+             caller_phone   = COALESCE(EXCLUDED.caller_phone, customer_messages.caller_phone),
+             customer_id    = COALESCE(EXCLUDED.customer_id, customer_messages.customer_id),
+             updated_at     = now()
            RETURNING message_id`,
           [
             args.tenant_id,

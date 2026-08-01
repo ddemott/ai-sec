@@ -85,6 +85,42 @@ afterEach(() => {
 });
 
 describe('/agent-tools/take-message', () => {
+  it('THE "JAMIL" ROW: the write is an UPSERT keyed on this call, so a correction lands', async () => {
+    // WHO: SCL_ReG7kLRiY94c, 2026-07-27 (CALL_IMPROVEMENTS.md #2). The name was
+    //       heard as "Jamil", the message was saved, and thirty seconds later
+    //       she corrected it — "Camille, C-A-M-I-L-L-E". The row never changed.
+    //       It still says Jamil in production.
+    // WHAT: INSERT ... ON CONFLICT (tenant_id, call_id) DO UPDATE, so a second
+    //        take_message on the same call REWRITES its own row.
+    // WHY: INSERT-only had no way to be corrected and no way to be retried
+    //        safely — one defect wearing two faces (cf. the job-inquiry
+    //        duplicates behind a hung SMTP send, migration 20260717230000).
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-1' }] },
+        { rows: [] },
+        { rows: [{ message_id: 'msg-1' }] },
+        { rows: [{ owner_phone: null, forward_phone: null, inbound_phone: null }] },
+      ],
+    });
+    const res = await post(app, {
+      tenant_id: TENANT_ID,
+      caller_name: 'Camille',
+      caller_phone: '2624979039',
+      message: 'returning your call',
+      call_id: 'SCL_ReG7kLRiY94c',
+    });
+    expect(res.statusCode).toBe(200);
+    const insert = queries.find((q) => q.text.includes('INSERT INTO customer_messages'))!;
+    expect(insert.text).toContain('ON CONFLICT (tenant_id, call_id)');
+    expect(insert.text).toContain('DO UPDATE');
+    expect(insert.text).toContain('caller_name    = EXCLUDED.caller_name');
+    // A revised row SAYS it was revised.
+    expect(insert.text).toContain('updated_at     = now()');
+    // Partial: dashboard-created messages carry no call_id and are untouched.
+    expect(insert.text).toContain('WHERE call_id IS NOT NULL');
+  });
+
   it('HAPPY: saves message and returns saved:true (no forward_phone → no SMS)', async () => {
     // WHO: Caller reaching out after-hours or when owner unavailable
     // WHAT: Message persists to customer_messages; SMS skipped (no forward_phone configured)

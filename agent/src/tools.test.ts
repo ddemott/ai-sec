@@ -1315,6 +1315,9 @@ describe('identify_caller', () => {
       // supplied nothing and cannot lie about it. (2026-07-13)
       phone_source: 'caller_id',
       call_id: CALL_ID,
+      // Default false: only the checklist's host code sets this, and only when
+      // the caller corrects a name THIS call already saved (2026-08-01).
+      is_correction: false,
     });
   });
 
@@ -1341,6 +1344,7 @@ describe('identify_caller', () => {
       // let anyone unlock any account by simply reciting its phone number.
       phone_source: 'spoken',
       call_id: CALL_ID,
+      is_correction: false,
     });
   });
 

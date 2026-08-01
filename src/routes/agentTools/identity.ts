@@ -363,11 +363,24 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
                WHEN customers.name IS NULL
                  OR customers.name = ''
                  OR customers.name = ANY($4::text[])
+                 -- A CORRECTION to a name THIS CALL wrote (2026-08-01). Scoped
+                 -- by the agent's host code, which sets the flag only after it
+                 -- has already identified this caller on this call and the
+                 -- caller then changed the answer. Without it a mishearing was
+                 -- permanent: the tracker said Camille and the record said
+                 -- Jamil, forever.
+                 OR $5::boolean IS TRUE
                THEN EXCLUDED.name
                ELSE customers.name
              END
            RETURNING customer_id, (xmax = 0) AS is_new, name`,
-          [args.tenant_id, normalized, args.name ?? null, PLACEHOLDER_NAMES as unknown as string[]]
+          [
+            args.tenant_id,
+            normalized,
+            args.name ?? null,
+            PLACEHOLDER_NAMES as unknown as string[],
+            args.is_correction === true && Boolean(args.name),
+          ]
         );
         // Backfill the verbally-captured number + customer onto the live call row
         // so the Calls tab shows it (forwarded-line calls started caller_phone

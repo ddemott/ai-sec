@@ -684,6 +684,47 @@ describe('agentTools /find-customer-by-name', () => {
 });
 
 describe('agentTools /identify-caller', () => {
+  it('is_correction lets THIS CALL fix a name it got wrong — and nothing else can', async () => {
+    // WHO: the caller whose name we heard as "Jamil" and who corrected it.
+    // WHAT: the upsert's CASE normally protects a real (non-placeholder) name
+    //        from being overwritten — that is what stops a later caller
+    //        renaming an established customer by simply claiming to be them.
+    //        is_correction opens that door for exactly one case: a name THIS
+    //        call wrote, which the caller then changed.
+    // WHY: without it a mishearing was permanent (CALL_IMPROVEMENTS.md #2);
+    //       with it unscoped, the phone book would be rewritable by anyone who
+    //       dials the number — the claim-based trust the OTP binding destroys.
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ customer_id: 'cust-1', is_new: false, name: 'Camille' }] }],
+    });
+    const res = await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '2624979039',
+      name: 'Camille',
+      phone_source: 'caller_id',
+      is_correction: true,
+    });
+    expect(res.statusCode).toBe(200);
+    const upsert = queries.find((q) => q.text.includes('INSERT INTO customers'))!;
+    expect(upsert.text).toContain('$5::boolean IS TRUE');
+    expect(upsert.params[4]).toBe(true);
+  });
+
+  it('a correction with NO name cannot blank an existing record', async () => {
+    // The flag only unlocks an overwrite when there is something to write.
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ customer_id: 'cust-1', is_new: false, name: 'Camille' }] }],
+    });
+    await post(app, '/agent-tools/identify-caller', {
+      tenant_id: TENANT_ID,
+      phone: '2624979039',
+      phone_source: 'caller_id',
+      is_correction: true,
+    });
+    const upsert = queries.find((q) => q.text.includes('INSERT INTO customers'))!;
+    expect(upsert.params[4]).toBe(false);
+  });
+
   it('HAPPY: new phone creates a customer row', async () => {
     // WHO: First-time caller who gives their name during a non-booking call
     // WHAT: Route inserts a new customer row via ON CONFLICT upsert
@@ -712,6 +753,10 @@ describe('agentTools /identify-caller', () => {
       '+15551234567',
       'Dale DeMott',
       ['Valued Customer', 'Caller', 'Unknown'],
+      // $5 — the mid-call correction flag (2026-08-01). False on a first save;
+      // only the agent's host code sets it, and only when THIS call already
+      // wrote a name that the caller then changed.
+      false,
     ]);
   });
 

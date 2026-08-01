@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 0T0xVcK7cD87eTbmHeWFchf0s95iMSZ6gXeJTxjTLCrB8KVZGYbrgZnAnHrx0OW
+\restrict yHehWn7tckzhGt1ESkKbHuqeiQdRGM4GiOdrN7bHCqyrmF1QaBmiWl60fhyaVsG
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2773,7 +2773,8 @@ CREATE TABLE public.customer_messages (
     message text NOT NULL,
     call_id text,
     status text DEFAULT 'new'::text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 ALTER TABLE ONLY public.customer_messages FORCE ROW LEVEL SECURITY;
@@ -4251,6 +4252,20 @@ ALTER TABLE ONLY public.voice_sessions
 --
 
 CREATE INDEX ai_cost_events_tenant_month ON public.ai_cost_events USING btree (tenant_id, created_at);
+
+
+--
+-- Name: customer_messages_one_per_call; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX customer_messages_one_per_call ON public.customer_messages USING btree (tenant_id, call_id) WHERE (call_id IS NOT NULL);
+
+
+--
+-- Name: INDEX customer_messages_one_per_call; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON INDEX public.customer_messages_one_per_call IS 'One message per call: makes take-message idempotent under retry AND lets a mid-call correction update the row instead of appending a contradictory second one.';
 
 
 --
@@ -5965,5 +5980,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 0T0xVcK7cD87eTbmHeWFchf0s95iMSZ6gXeJTxjTLCrB8KVZGYbrgZnAnHrx0OW
+\unrestrict yHehWn7tckzhGt1ESkKbHuqeiQdRGM4GiOdrN7bHCqyrmF1QaBmiWl60fhyaVsG
 

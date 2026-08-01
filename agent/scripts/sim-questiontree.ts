@@ -972,6 +972,32 @@ another.`,
     ],
   },
   {
+    // Batch D — SCL_ReG7kLRiY94c (#2). The name is heard wrong, the message is
+    // saved, and the caller corrects it. The correction must reach the ROW,
+    // not just the tracker — and the agent must not re-ask everything.
+    title: 'NAME CORRECTED — the fix reaches the record, spelled letters and all',
+    callerPhone: '2624979039',
+    persona: {
+      opener: "Hi, I'm returning Dale's call — can you take a message for him?",
+      facts: `Your name is Camille. The agent will very likely MISHEAR it as "Jamil" —
+when it says the wrong name back, correct it firmly and SPELL it: "No, it's Camille.
+C-A-M-I-L-L-E." The message: you are returning his call and he can reach you on this
+number. Nothing else.`,
+      behaviour:
+        'Polite but insistent about your name. You correct it the moment you hear it wrong, ' +
+        'and you spell it out.',
+    },
+    grade: (o) => [
+      ...has(o, 'take_message_action', ['done']),
+      // The tracker must end on the corrected name — not the misheard one.
+      ...valueMatch(o, 'caller_name', /^camille$/i),
+      // And the agent must acknowledge rather than argue or re-ask everything.
+      ...(agentSaid(o, /camille/i) ? [] : ['never said the corrected name back']),
+      ...mustResolve(o),
+      ...mustClose(o),
+    ],
+  },
+  {
     // Batch C — SCL_VcKTTgo4kS2v (#8). The caller asks for 2:30; her OWN
     // appointment is on it. The tool now says so; the agent must RELAY that,
     // not invent "we only book on the quarter hour" (2:30 IS a quarter hour).
