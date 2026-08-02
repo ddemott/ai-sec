@@ -1,0 +1,27 @@
+-- schema_migrations does not need RLS, and having it BREAKS the migration runner.
+--
+-- Found 2026-08-02, probing prod after the DATABASE_URL repoint to app_user.
+-- In production this table has RLS ENABLED with ZERO policies (locally it has
+-- neither). RLS with no policy is deny-all for anyone who is not the owner and
+-- cannot bypass — which is now exactly what the application role is.
+--
+-- Nobody has hit it because today's migrations were applied over the old
+-- superuser URL. But prod's DATABASE_URL is app_user now, so the next person to
+-- run `npm run db:migrate` against prod gets one of two outcomes, and the second
+-- is worse than an error:
+--
+--   - a permission failure on the bookkeeping table, or
+--   - an EMPTY read of schema_migrations, after which the runner cheerfully
+--     decides that none of the 178 migrations have ever been applied.
+--
+-- The fix is to stop pretending this table has a tenant dimension. It has no
+-- tenant_id and never will: it records which migration files have run. There is
+-- nothing here to isolate between tenants, so an RLS policy on it would be
+-- policy-shaped decoration — and a permissive allow-all policy would be worse,
+-- because it would LOOK like a control while enforcing nothing.
+--
+-- Every table that actually holds tenant data keeps RLS enabled AND forced; this
+-- changes nothing about that posture. Verified at the time of writing: 38 tables
+-- with RLS enabled, 52 policies, 0 of them reading current_setting() directly,
+-- and app_user with rolsuper=f, rolbypassrls=f.
+ALTER TABLE schema_migrations DISABLE ROW LEVEL SECURITY;
