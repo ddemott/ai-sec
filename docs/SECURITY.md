@@ -17,7 +17,7 @@ Out of scope (not a multi-tenant SaaS concern at this stage): DDoS, application-
 
 ## Multi-tenant isolation (cross-tenant leak)
 
-**Control: row-level security with FORCE, **plus** a per-request middleware gate. Two layers, both live.**
+**Control: row-level security with FORCE, plus a per-request middleware gate. TWO layers, both live.**
 
 > ### ✅ RLS IS ENFORCED IN PRODUCTION (verified 2026-08-02)
 >
