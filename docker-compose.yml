@@ -1,13 +1,13 @@
 services:
   db:
     image: ankane/pgvector:latest
-    container_name: ai-sec-db
+    container_name: secretary-hq-db
     ports:
       - "5433:5432"
     environment:
       POSTGRES_PASSWORD: postgres
     volumes:
-      - ai-sec-db-data:/var/lib/postgresql/data
+      - secretary-hq-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -15,4 +15,4 @@ services:
       retries: 5
 
 volumes:
-  ai-sec-db-data:
+  secretary-hq-db-data:

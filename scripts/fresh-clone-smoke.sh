@@ -27,7 +27,7 @@
 #   bash scripts/fresh-clone-smoke.sh --remote URL # use a specific clone source
 #
 # Caveats:
-# * The clone shares the local Docker DB (port 5433, container ai-sec-db) with
+# * The clone shares the local Docker DB (port 5433, container secretary-hq-db) with
 #   the parent repo. test_db gets re-migrated + re-seeded — same destructive
 #   behavior as `npm run bootstrap` in the working repo. Don't run this while
 #   live work is mid-transaction against test_db.
@@ -82,7 +82,7 @@ else
     fi
 fi
 
-TMP_DIR="$(mktemp -d -t ai-sec-fresh-XXXXXX)"
+TMP_DIR="$(mktemp -d -t secretary-hq-fresh-XXXXXX)"
 START_TS="$(date +%s)"
 
 cleanup() {
@@ -93,7 +93,7 @@ cleanup() {
     else
         echo ""
         echo "fresh-clone-smoke: --keep-dir set; clone preserved at:"
-        echo "  $TMP_DIR/ai-sec"
+        echo "  $TMP_DIR/secretary-hq"
     fi
     if [[ $rc -eq 0 ]]; then
         echo ""
@@ -108,13 +108,13 @@ cleanup() {
 trap cleanup EXIT
 
 echo "fresh-clone-smoke: cloning $REMOTE_URL"
-echo "fresh-clone-smoke: target: $TMP_DIR/ai-sec"
+echo "fresh-clone-smoke: target: $TMP_DIR/secretary-hq"
 # --depth 1 keeps the clone cheap. If a step inside bootstrap needs deeper
 # history (e.g., the drift detector resolving an old commit by SHA), that
 # is itself CI rot worth surfacing — the May 11 lesson.
-git clone --depth 1 "$REMOTE_URL" "$TMP_DIR/ai-sec"
+git clone --depth 1 "$REMOTE_URL" "$TMP_DIR/secretary-hq"
 
-cd "$TMP_DIR/ai-sec"
+cd "$TMP_DIR/secretary-hq"
 
 echo ""
 echo "fresh-clone-smoke: running 'npm run bootstrap' in the clone"

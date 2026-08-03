@@ -201,7 +201,7 @@ export default function DashboardPage() {
           if (activeTab !== 'dashboard') handleSetActiveTab('dashboard');
           // Defer to the next tick so Home's listener is mounted.
           setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('ai-sec:new-booking'));
+            window.dispatchEvent(new CustomEvent('secretary-hq:new-booking'));
           }, 50);
         },
       },

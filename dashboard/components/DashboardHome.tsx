@@ -140,8 +140,8 @@ export default function DashboardHome({ onNavigate }: DashboardHomeProps) {
       if (loading || needsSetup) return;
       setQuickBookOpen(true);
     }
-    window.addEventListener('ai-sec:new-booking', onShortcut);
-    return () => window.removeEventListener('ai-sec:new-booking', onShortcut);
+    window.addEventListener('secretary-hq:new-booking', onShortcut);
+    return () => window.removeEventListener('secretary-hq:new-booking', onShortcut);
   }, [loading, needsSetup]);
 
   function handleCloseWizard() {

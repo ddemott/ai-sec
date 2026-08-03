@@ -124,8 +124,8 @@ export default function SetupView() {
       const sub = (e as CustomEvent<{ subtab?: string }>).detail?.subtab;
       if (sub && VALID_SUB_TABS.includes(sub as SubTab)) handleSubTabChange(sub as SubTab);
     }
-    window.addEventListener('ai-sec:setup-subtab', onGoto);
-    return () => window.removeEventListener('ai-sec:setup-subtab', onGoto);
+    window.addEventListener('secretary-hq:setup-subtab', onGoto);
+    return () => window.removeEventListener('secretary-hq:setup-subtab', onGoto);
   }, [handleSubTabChange]);
 
   const tenantId = useActiveTenantId();

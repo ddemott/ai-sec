@@ -35,7 +35,7 @@ turn it into pages. §2 and §4 cover both. §3 is the rule catalog (collector-a
 
 ## 1. What emits metrics
 
-- **Endpoint:** `GET /metrics` on the backend (`https://ai-sec-production.up.railway.app/metrics`).
+- **Endpoint:** `GET /metrics` on the backend (`https://secretary-hq-production.up.railway.app/metrics`).
 - **Auth:** `Authorization: Bearer $METRICS_TOKEN`. Returns `404` when the env var is unset (strict opt-in), `401` on missing/wrong Bearer, `200` + Prometheus text format when correct.
 - **Format:** Prometheus exposition. Counters are monotonic since process boot (Railway restart resets them — alert on `rate()`, never absolute values).
 - **Skip list:** `/health`, `/ready`, `/metrics` are excluded from HTTP metrics (no recursive-scrape contamination).
@@ -74,7 +74,7 @@ scrape_configs:
       type: Bearer
       credentials: ${METRICS_TOKEN} # same value set on Railway
     static_configs:
-      - targets: ['ai-sec-production.up.railway.app']
+      - targets: ['secretary-hq-production.up.railway.app']
     scrape_interval: 30s
 ```
 

@@ -11,7 +11,7 @@ This guide walks through migrating from the local Docker development environment
 - **LiveKit Cloud Account**: [livekit.io](https://livekit.io) — voice agent orchestrator + SIP ingress
 - **Deepgram Account**: [deepgram.com](https://deepgram.com) — STT (Nova-3) used by the LiveKit agent
 - **OpenAI API Key**: LLM (GPT-4.1-mini voice; 4o-mini summaries/classify), RAG embeddings, post-call summaries. **TTS is Deepgram, not OpenAI** — see `DEEPGRAM_API_KEY`
-- **Railway Account**: For hosting the full stack (backend + ai-sec-agent worker + this Next.js dashboard) in production. Self-hosting or other platforms (e.g. Vercel for dashboard only) remain options for the Next.js part.
+- **Railway Account**: For hosting the full stack (backend + secretary-hq-agent worker + this Next.js dashboard) in production. Self-hosting or other platforms (e.g. Vercel for dashboard only) remain options for the Next.js part.
 - **Supabase CLI**: already in devDependencies — invoke via `npx supabase` (no global install needed). Migrations are applied via `npm run db:migrate` / `scripts/setup-db.sh`, not a direct CLI link.
 
 ---
@@ -21,7 +21,7 @@ This guide walks through migrating from the local Docker development environment
 ### 1.1 Create the Project
 
 1. Go to [supabase.com/dashboard](https://supabase.com/dashboard) and click **New Project**.
-2. Choose a name (e.g., `ai-sec-prod`), set a strong database password, and select a region close to your users.
+2. Choose a name (e.g., `secretary-hq-prod`), set a strong database password, and select a region close to your users.
 3. Wait for the project to provision (~2 minutes).
 
 ### 1.2 Note Your Credentials
@@ -176,7 +176,7 @@ curl -s -H "Authorization: Bearer $TELNYX_API_KEY" https://api.telnyx.com/v2/pub
 # → {"data":{"public":"9xjFf…arp8=","record_type":"public_key","organization_id":"…"}}
 ```
 
-The `data.public` value IS `TELNYX_PUBLIC_KEY`. Paste it verbatim into the **`ai-sec`**
+The `data.public` value IS `TELNYX_PUBLIC_KEY`. Paste it verbatim into the **`secretary-hq`**
 (backend) service's Railway variables. Bare base64, ~44 chars ending in `=` — that's
 32 raw Ed25519 key bytes; the loader also accepts a PEM-armored form.
 
@@ -197,13 +197,13 @@ Three Telnyx credentials, easily confused — they are not interchangeable:
 
 Setting the key is only half of enabling inbound SMS: the Telnyx number's messaging
 profile must also point its **inbound webhook URL** at
-`https://ai-sec-production.up.railway.app/communications/telnyx/inbound`, or Telnyx never
+`https://secretary-hq-production.up.railway.app/communications/telnyx/inbound`, or Telnyx never
 sends us anything to verify.
 
 Verify it took, once Railway has redeployed:
 
 ```bash
-curl -i -X POST https://ai-sec-production.up.railway.app/communications/telnyx/inbound \
+curl -i -X POST https://secretary-hq-production.up.railway.app/communications/telnyx/inbound \
   -H 'content-type: application/json' -d '{}'
 ```
 
@@ -299,13 +299,13 @@ Set `NEXT_PUBLIC_API_BASE_URL` to point to your deployed backend.
 
 ## Phase 5: Telephony Setup (Telnyx + LiveKit Cloud)
 
-The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** (SIP ingress) → **LiveKit Agent worker** (Node, deployed on Railway as `ai-sec-agent`). One LiveKit dispatch rule routes every tenant's number to the same agent worker; tenant identity flows in via SIP dispatch metadata. There are no per-tenant orchestrator entities — buying a Telnyx number and pointing it at the SIP Connection is the entire per-tenant config.
+The voice stack runs as: **Telnyx** (carrier + SIP trunk) → **LiveKit Cloud** (SIP ingress) → **LiveKit Agent worker** (Node, deployed on Railway as `secretary-hq-agent`). One LiveKit dispatch rule routes every tenant's number to the same agent worker; tenant identity flows in via SIP dispatch metadata. There are no per-tenant orchestrator entities — buying a Telnyx number and pointing it at the SIP Connection is the entire per-tenant config.
 
 ### 5.1 LiveKit Cloud: Project + dispatch rule (one-time)
 
 1. Sign in to [cloud.livekit.io](https://cloud.livekit.io) and create a project (e.g., `AI-Secretary`).
 2. From **Settings → Keys**, copy the WSS URL, API Key, and API Secret. Set them in Railway as `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
-3. Create a SIP inbound trunk and a dispatch rule that routes inbound SIP traffic to agent name `ai-secretary-agent`. The agent worker self-registers with this name when it boots.
+3. Create a SIP inbound trunk and a dispatch rule that routes inbound SIP traffic to agent name `secretary-hq-agent`. The agent worker self-registers with this name when it boots.
 4. Note the SIP FQDN LiveKit gives you (looks like `<project-slug>.sip.livekit.cloud:5060`). You'll point Telnyx at it.
 
 ### 5.2 Telnyx: SIP Connection pointing at LiveKit (one-time)
@@ -332,12 +332,12 @@ After step 4, calls to the new number flow Telnyx → LiveKit → agent. No Teln
 
 ### 5.4 Deploy the LiveKit agent worker
 
-The agent worker lives in `agent/` and runs as a separate Railway service (`ai-sec-agent`). It registers with LiveKit Cloud on boot using the `LIVEKIT_*` env vars and stays connected. Required env vars on the agent service:
+The agent worker lives in `agent/` and runs as a separate Railway service (`secretary-hq-agent`). It registers with LiveKit Cloud on boot using the `LIVEKIT_*` env vars and stays connected. Required env vars on the agent service:
 
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 5.1
 - `OPENAI_API_KEY` — LLM + TTS used by the agent
 - `DEEPGRAM_API_KEY` — STT (Nova-3) + TTS (Aura)
-- `BACKEND_URL` — base URL for the Fastify backend (e.g., `https://ai-sec-production.up.railway.app`)
+- `BACKEND_URL` — base URL for the Fastify backend (e.g., `https://secretary-hq-production.up.railway.app`)
 - `AGENT_SECRET` — shared secret the agent presents on every `/agent-tools/*` call (must match the same env var on the backend service)
 
 ---
@@ -371,7 +371,7 @@ Test a tool route directly against the deployed backend (the same path the LiveK
 
 ```bash
 # Get customer context — same payload shape the agent's tool client uses
-curl -X POST https://ai-sec-production.up.railway.app/agent-tools/customer-context \
+curl -X POST https://secretary-hq-production.up.railway.app/agent-tools/customer-context \
   -H "Content-Type: application/json" \
   -H "x-agent-secret: $AGENT_SECRET" \
   -d '{
@@ -405,10 +405,10 @@ Backend and agent both ship Pino JSON logs to stdout (Railway captures them) and
 
 ### One-time setup (one source for both services)
 
-1. Sign up at [betterstack.com/logs](https://betterstack.com/logs). Free tier is 1 GB / 3 days retention — sufficient for current ai-sec scale.
+1. Sign up at [betterstack.com/logs](https://betterstack.com/logs). Free tier is 1 GB / 3 days retention — sufficient for current secretary-hq scale.
 2. Create a new source: type **JavaScript / Pino**.
 3. Copy the source token.
-4. Set `BETTER_STACK_TOKEN=<token>` on the backend Railway service (`ai-sec-production`) AND on the agent Railway service (`ai-sec-agent`). Same value on both.
+4. Set `BETTER_STACK_TOKEN=<token>` on the backend Railway service (`secretary-hq-production`) AND on the agent Railway service (`secretary-hq-agent`). Same value on both.
 5. Restart both services. New log lines start flowing within ~5 seconds.
 
 If the token is unset, both services keep running with stdout-only logging — there's no fail-open / fail-closed surprise.
@@ -417,7 +417,7 @@ If the token is unset, both services keep running with stdout-only logging — t
 
 | Field          | Source                                                                                                         | Use                                                                                                              |
 | -------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `service`      | `ai-sec-backend` or `ai-sec-agent`                                                                             | Split the two services in one source                                                                             |
+| `service`      | `secretary-hq-backend` or `secretary-hq-agent`                                                                             | Split the two services in one source                                                                             |
 | `env`          | `production` / `development` / `test`                                                                          | Drop dev noise from prod incident filters                                                                        |
 | `tenant_id`    | Backend: `tenantMiddleware` enriches request logger. Agent: per-call child logger after `sessionCtx` resolves. | Pull all logs for one tenant                                                                                     |
 | `call_id`      | Agent: from SIP participant attributes (`sip.callID`).                                                         | Pull one specific call's full timeline                                                                           |
@@ -426,9 +426,9 @@ If the token is unset, both services keep running with stdout-only logging — t
 
 ### Common support queries
 
-- "The call dropped at 2:14pm" → filter `service: ai-sec-agent AND tenant_id: <id>`, find the call_id at the right timestamp, then re-filter `call_id: <id>` to see the full timeline (call_start → session_context_resolved → tenant_config_fetched → session_started → any tool calls → fallback_triggered if applicable).
-- "Why did the AI not book this customer?" → filter `service: ai-sec-backend AND tenant_id: <id> AND event: booking_*` for the relevant minute. The booking RPC error code (`TIMESLOT_OCCUPIED` / `NO_SKILLED_EMPLOYEE` / `EMPLOYEE_NOT_SCHEDULED` / `NO_AVAILABILITY` / `INVALID_PARAMS`) is logged at the route handler.
-- "Did fallback trigger today?" → filter `service: ai-sec-agent AND event: fallback_triggered`. Returns the dispatch-metadata-invalid and session-context-lost cases (other fallback paths inside `runFallback` itself are not yet logged — separate follow-up).
+- "The call dropped at 2:14pm" → filter `service: secretary-hq-agent AND tenant_id: <id>`, find the call_id at the right timestamp, then re-filter `call_id: <id>` to see the full timeline (call_start → session_context_resolved → tenant_config_fetched → session_started → any tool calls → fallback_triggered if applicable).
+- "Why did the AI not book this customer?" → filter `service: secretary-hq-backend AND tenant_id: <id> AND event: booking_*` for the relevant minute. The booking RPC error code (`TIMESLOT_OCCUPIED` / `NO_SKILLED_EMPLOYEE` / `EMPLOYEE_NOT_SCHEDULED` / `NO_AVAILABILITY` / `INVALID_PARAMS`) is logged at the route handler.
+- "Did fallback trigger today?" → filter `service: secretary-hq-agent AND event: fallback_triggered`. Returns the dispatch-metadata-invalid and session-context-lost cases (other fallback paths inside `runFallback` itself are not yet logged — separate follow-up).
 
 ### Cost knobs
 
@@ -447,13 +447,13 @@ This is the first observability slice; metrics, error monitoring, and expanded l
 
 ## Observability — Sentry error monitoring
 
-Sentry sits on top of Better Stack to provide error grouping, stack-trace deduplication, and alert-on-spike — things log aggregation alone can't do well. Both services use the same DSN; the `service` tag (`ai-sec-backend` vs `ai-sec-agent`) separates them in the Sentry UI.
+Sentry sits on top of Better Stack to provide error grouping, stack-trace deduplication, and alert-on-spike — things log aggregation alone can't do well. Both services use the same DSN; the `service` tag (`secretary-hq-backend` vs `secretary-hq-agent`) separates them in the Sentry UI.
 
 ### One-time setup
 
 1. Sign up at [sentry.io](https://sentry.io). Free tier is 5k events / month — enough for pre-beta and the first few weeks of customer traffic.
 2. Create a Node.js project. Copy the DSN.
-3. Set `SENTRY_DSN=<dsn>` on the backend Railway service (`ai-sec-production`) AND the agent Railway service (`ai-sec-agent`). Same value on both.
+3. Set `SENTRY_DSN=<dsn>` on the backend Railway service (`secretary-hq-production`) AND the agent Railway service (`secretary-hq-agent`). Same value on both.
 4. Optional but recommended: set `SENTRY_RELEASE=$RAILWAY_GIT_COMMIT_SHA` on both services so Sentry can group events by build (helps spot "regressions started in commit X").
 5. Restart both services. New errors start appearing in the Sentry UI within seconds.
 
@@ -473,8 +473,8 @@ If `SENTRY_DSN` is unset, both services keep running with logging-only error obs
 
 Same opt-in pattern via `@sentry/nextjs`. Three files own it:
 
-- `dashboard/instrumentation.ts` — server-side init (Node + Edge runtimes). Next.js calls `register()` once at process start. Also exports `onRequestError = Sentry.captureRequestError` so server-render errors surface in Sentry instead of being silently absorbed by Next's error boundary. Tagged `service: ai-sec-dashboard`.
-- `dashboard/sentry.client.config.ts` — browser-side init. Reads `NEXT_PUBLIC_SENTRY_DSN` because client-side env vars need the `NEXT_PUBLIC_` prefix. Same `service: ai-sec-dashboard` tag, with `runtime: browser` so the UI can split client vs server events.
+- `dashboard/instrumentation.ts` — server-side init (Node + Edge runtimes). Next.js calls `register()` once at process start. Also exports `onRequestError = Sentry.captureRequestError` so server-render errors surface in Sentry instead of being silently absorbed by Next's error boundary. Tagged `service: secretary-hq-dashboard`.
+- `dashboard/sentry.client.config.ts` — browser-side init. Reads `NEXT_PUBLIC_SENTRY_DSN` because client-side env vars need the `NEXT_PUBLIC_` prefix. Same `service: secretary-hq-dashboard` tag, with `runtime: browser` so the UI can split client vs server events.
 - `dashboard/next.config.mjs` — wrapped with `withSentryConfig`. Source-map upload is gated on `SENTRY_AUTH_TOKEN` so CI/CD uploads symbol maps while local builds stay silent. `tunnelRoute: '/monitoring'` proxies Sentry events through the dashboard origin so ad blockers don't drop them.
 
 Env vars on the dashboard Railway service (`dashboard-production-cee3`):

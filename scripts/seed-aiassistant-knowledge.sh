@@ -12,10 +12,10 @@ set -euo pipefail
 # for the tenant first.
 #
 # Usage:
-#   BACKEND_URL=https://ai-sec-production.up.railway.app ./scripts/seed-aiassistant-knowledge.sh
+#   BACKEND_URL=https://secretary-hq-production.up.railway.app ./scripts/seed-aiassistant-knowledge.sh
 # ============================================================================
 
-BACKEND_URL="${BACKEND_URL:-https://ai-sec-production.up.railway.app}"
+BACKEND_URL="${BACKEND_URL:-https://secretary-hq-production.up.railway.app}"
 OWNER_EMAIL="${OWNER_EMAIL:-daledemott@gmail.com}"
 OWNER_PASS="${OWNER_PASS:-password}"
 

@@ -3,8 +3,8 @@ import pino, { type Logger } from 'pino';
 /**
  * Pino logger for the LiveKit agent worker. Same shape as the backend's
  * logger (src/services/logger.ts) so a single Better Stack source can host
- * both services and a UI filter (`service: ai-sec-backend` vs
- * `service: ai-sec-agent`) splits them.
+ * both services and a UI filter (`service: secretary-hq-backend` vs
+ * `service: secretary-hq-agent`) splits them.
  *
  * Always writes JSON to stdout (Railway captures it). When
  * `BETTER_STACK_TOKEN` is set, also forwards via @logtail/pino. Falls back
@@ -13,7 +13,7 @@ import pino, { type Logger } from 'pino';
  * never blocks the agent because Pino transports run in a worker thread.
  *
  * Filterable fields baked in:
- * - `service` — `ai-sec-agent`
+ * - `service` — `secretary-hq-agent`
  * - `env` — production / development / test
  * - per-call children add `tenant_id` + `call_id` so support can pull a
  *   specific call's full timeline with one filter.
@@ -26,7 +26,7 @@ export function getLogger(): Logger {
   const token = process.env.BETTER_STACK_TOKEN;
   const env = process.env.NODE_ENV ?? 'development';
   const level = process.env.LOG_LEVEL ?? (env === 'production' ? 'info' : 'debug');
-  const baseContext = { service: 'ai-sec-agent', env };
+  const baseContext = { service: 'secretary-hq-agent', env };
 
   if (!token) {
     cached = pino({ level, base: baseContext });

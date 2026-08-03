@@ -83,12 +83,12 @@ Below is a full list of its features:
 
 ## Status
 
-[![CI](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml/badge.svg)](https://github.com/ddemott/ai-sec/actions/workflows/ci.yml)
+[![CI](https://github.com/ddemott/secretary-hq/actions/workflows/ci.yml/badge.svg)](https://github.com/ddemott/secretary-hq/actions/workflows/ci.yml)
 
 |               |                                                                                                                                                                                                                                                                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Phase**     | 13 — Production Readiness                                                                                                                                                                                                                                                                                                                         |
-| **Backend**   | Live on Railway (`ai-sec-production.up.railway.app`)                                                                                                                                                                                                                                                                                              |
+| **Backend**   | Live on Railway (`secretary-hq-production.up.railway.app`)                                                                                                                                                                                                                                                                                        |
 | **Dashboard** | Live at `https://www.secretaryhq.com` (Railway origin `dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                                                                                                                      |
 | **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4.1-mini (LLM) + Deepgram Aura (TTS). Call flow = question trees (`agent/src/checklist/`). PSTN inbound reaches the agent (confirmed 2026-06-30); the booking + transfer legs still need a live different-carrier call — see `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7. |
 | **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                                                                                                                                                      |
@@ -142,16 +142,16 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                 Next.js 14 Dashboard
 ```
 
-| Layer             | Tech                                                                                                                                                                                                                                                                               |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4.1-mini (voice LLM; 4o-mini for summaries/classify), Deepgram Aura (TTS, streaming, per-tenant voice via dashboard AI Persona page; `tts_speed` is inert under Aura)                |
-| **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                                        |
-| **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                |
-| **Database**      | PostgreSQL + pgvector, 154 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                 |
-| **Agent runtime** | LiveKit Agents (Node) on Railway as `ai-sec-agent`. Call flow = **question trees** (`agent/src/checklist/`): host-owned checklist, purpose-selected trees, goodbye gate. 26 tools defined in `agent/src/tools.ts`; **12 are offered to the model** — see `docs/ARCHITECTURE.md` §7 |
-| **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                 |
-| **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                                                  |
-| **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                                                          |
+| Layer             | Tech                                                                                                                                                                                                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4.1-mini (voice LLM; 4o-mini for summaries/classify), Deepgram Aura (TTS, streaming, per-tenant voice via dashboard AI Persona page; `tts_speed` is inert under Aura)                      |
+| **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                                              |
+| **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                      |
+| **Database**      | PostgreSQL + pgvector, 154 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                       |
+| **Agent runtime** | LiveKit Agents (Node) on Railway as `secretary-hq-agent`. Call flow = **question trees** (`agent/src/checklist/`): host-owned checklist, purpose-selected trees, goodbye gate. 26 tools defined in `agent/src/tools.ts`; **12 are offered to the model** — see `docs/ARCHITECTURE.md` §7 |
+| **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                       |
+| **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                                                        |
+| **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                                                                |
 
 See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
@@ -285,7 +285,7 @@ it('should reject country-code-only "+1" (BUG-060 root cause)', () => {
 
 ## Deployment
 
-All three Railway services (`ai-sec` backend, `ai-sec-agent`, `dashboard`) deploy
+All three Railway services (`secretary-hq` backend, `secretary-hq-agent`, `dashboard`) deploy
 from `main`. **Shipping means merging to `main` via PR** — a push to a feature
 branch deploys nothing. Branch protection gates the merge behind green CI.
 

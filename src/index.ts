@@ -9,7 +9,7 @@ import 'dotenv/config';
 // (a module-load throw, a malformed env var) still gets captured.
 // No-op when SENTRY_DSN is unset — local dev / tests don't phone home.
 import { initSentry, captureException as captureSentry } from './services/sentry';
-initSentry({ service: 'ai-sec-backend' });
+initSentry({ service: 'secretary-hq-backend' });
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -105,7 +105,7 @@ const expandQueryForEmbedding = createQueryExpander(OPENAI_API_KEY);
 // doesn't boot TLS the self-signed cert nobody else in the job trusts.
 const useHttps = process.env.NODE_ENV !== 'production' && process.env.USE_HTTPS !== 'false';
 const certDir = path.resolve(__dirname, '..', '..', 'certs');
-const logger = buildLogger({ service: 'ai-sec-backend' });
+const logger = buildLogger({ service: 'secretary-hq-backend' });
 const app = Fastify(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify options are a discriminated union (FastifyHttpsOptions | FastifyServerOptions); the ternary widens past it
   (useHttps

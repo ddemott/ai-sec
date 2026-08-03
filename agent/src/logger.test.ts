@@ -29,10 +29,10 @@ describe('agent logger', () => {
     // WHO: agent worker booting in local dev / CI / a Railway slot whose token hasn't been set yet | WHAT: getLogger() returns a usable instance even with no Better Stack credentials | WHEN: BETTER_STACK_TOKEN absent (the default everywhere except prod after token rotation) | WHERE: agent/src/logger.ts token-absent branch | WHY: a logger crash at import-time would prevent the agent from registering with LiveKit Cloud, leaving every call to dead-air; pinning the silent-fallback contract is critical because the worker has no human nearby to read a stack trace
   });
 
-  test('tags every log with service: ai-sec-agent so the backend and agent share one Better Stack source', () => {
+  test('tags every log with service: secretary-hq-agent so the backend and agent share one Better Stack source', () => {
     const log = getLogger();
-    expect(log.bindings().service).toBe('ai-sec-agent');
-    // WHO: support filtering across both services on one call | WHAT: agent log lines tagged distinct from backend (`ai-sec-backend`) | WHEN: a "the call dropped" question that involves both an agent-side STT failure AND a backend tool-call timeout | WHERE: agent logger base context | WHY: distinguishing the two services is the difference between "tool call X took 14 seconds" and "the agent waited 14 seconds for tool call X to return" — both are relevant; without the service tag they're indistinguishable
+    expect(log.bindings().service).toBe('secretary-hq-agent');
+    // WHO: support filtering across both services on one call | WHAT: agent log lines tagged distinct from backend (`secretary-hq-backend`) | WHEN: a "the call dropped" question that involves both an agent-side STT failure AND a backend tool-call timeout | WHERE: agent logger base context | WHY: distinguishing the two services is the difference between "tool call X took 14 seconds" and "the agent waited 14 seconds for tool call X to return" — both are relevant; without the service tag they're indistinguishable
   });
 
   test('returns the same instance across multiple calls (singleton cache)', () => {
@@ -46,7 +46,7 @@ describe('agent logger', () => {
     const log = getLogger();
     const callLog = log.child({ tenant_id: 't-123', call_id: 'c-456' });
     const bindings = callLog.bindings();
-    expect(bindings.service).toBe('ai-sec-agent');
+    expect(bindings.service).toBe('secretary-hq-agent');
     expect(bindings.tenant_id).toBe('t-123');
     expect(bindings.call_id).toBe('c-456');
     // WHO: agent index.ts building a per-call child after sessionCtx resolves | WHAT: tenant_id + call_id propagate to every subsequent log line on that call | WHEN: voice session lifecycle (session_started, tenant_config_fetched, fallback_triggered) | WHERE: Pino child-logger pattern in agent/src/index.ts | WHY: this is the load-bearing piece for support — without per-call bindings the timeline of a specific call is buried in interleaved logs from every concurrent call on the worker; with them, one filter (`tenant_id=X AND call_id=Y`) recovers the full sequence

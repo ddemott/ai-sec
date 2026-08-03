@@ -89,7 +89,7 @@ interruption: {
 - Measure `gpt-4o-mini-tts` first-audio latency directly during the test to settle the ElevenLabs question.
 
 ## Deploy
-Agent-only change → merge to main → `ai-sec-agent` redeploys. No DB, no backend, no persona change.
+Agent-only change → merge to main → `secretary-hq-agent` redeploys. No DB, no backend, no persona change.
 Confirm the live build via the boot marker before the real-call test.
 
 ## Risks

@@ -57,11 +57,11 @@ Go to **Settings → Branches → Branch protection rules → Add rule** for the
 
 1. Go to the repository on GitHub.
 2. **Settings** → **Branches**.
-3. Under "Branch protection rules", edit the rule for `main` (or use `gh api repos/ddemott/ai-sec/branches/main/protection` to inspect).
+3. Under "Branch protection rules", edit the rule for `main` (or use `gh api repos/ddemott/secretary-hq/branches/main/protection` to inspect).
 4. Ensure the boxes and required status checks listed above are selected.
 5. Save changes.
 
-To verify live: `gh api repos/ddemott/ai-sec/branches/main/protection` (should show the 4 contexts + enforce_admins true). Use `./scripts/simulate.sh ci` before any merge to `main`.
+To verify live: `gh api repos/ddemott/secretary-hq/branches/main/protection` (should show the 4 contexts + enforce_admins true). Use `./scripts/simulate.sh ci` before any merge to `main`.
 
 ## Enforcement Alignment with Our Workflow
 

@@ -160,7 +160,7 @@ export default function BusinessSettingsView() {
             style={{ backgroundColor: 'var(--bg-raised)', borderColor: 'var(--border-soft)' }}
             onClick={() => {
               window.dispatchEvent(
-                new CustomEvent('ai-sec:setup-subtab', { detail: { subtab: 'services' } })
+                new CustomEvent('secretary-hq:setup-subtab', { detail: { subtab: 'services' } })
               );
             }}
             onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-soft)')}

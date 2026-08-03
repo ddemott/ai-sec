@@ -42,7 +42,7 @@
 - [ ] Other relevant `*.md` files updated
 - [ ] `npm run verify:claude-md` passes
 
-## Checklist (from [docs/DEVELOPMENT_WORKFLOW.md](/home/dale/projects/ai-sec/docs/DEVELOPMENT_WORKFLOW.md))
+## Checklist (from [docs/DEVELOPMENT_WORKFLOW.md](/home/dale/projects/secretary-hq/docs/DEVELOPMENT_WORKFLOW.md))
 
 - [ ] All code is linted and formatted (`npm run lint && npm run format:check`)
 - [ ] TypeScript is clean (root + dashboard)

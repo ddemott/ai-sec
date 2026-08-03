@@ -18,7 +18,7 @@
  *   - DEFAULT IS A DRY RUN. It reports what it WOULD delete and exits. Pass
  *     --execute to actually delete, and --yes to skip the confirmation.
  *   - Refuses any non-local host (localhost / 127.0.0.1 / db / postgres /
- *     ai-sec-db) unless you pass --force. This wipes test data — it must never
+ *     secretary-hq-db) unless you pass --force. This wipes test data — it must never
  *     be aimed at production by accident.
  *   - Runs inside a single transaction with FK triggers disabled
  *     (session_replication_role = replica), so it is all-or-nothing and needs no
@@ -111,7 +111,7 @@ function hostOf(url: string): string | null {
 // '' is a SUCCESSFULLY PARSED URL with no host — a local-socket DSN like
 // "postgres:///dbname" — and is safe to allow because an unparseable string is now
 // null (refused), not ''. The two used to be conflated, which was the bypass.
-const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db', ''];
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'secretary-hq-db', ''];
 
 async function main() {
   const host = hostOf(DB_URL);

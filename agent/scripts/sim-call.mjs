@@ -18,11 +18,11 @@ const secret = process.env.LIVEKIT_API_SECRET;
 const tenant = process.env.SIM_TENANT || 'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0';
 // Same var the worker reads (agent/src/index.ts). Default = production's name, so
 // `simulate.sh call` with no env still tests the deployed agent. Set
-// AGENT_NAME=ai-secretary-agent-dev on BOTH a local worker and this dispatcher to
+// AGENT_NAME=secretary-hq-agent-dev on BOTH a local worker and this dispatcher to
 // hear a BRANCH — otherwise LiveKit load-balances the job across every worker with
 // the same name and your local build races the Railway one for it. You would not
 // be able to tell which code answered.
-const AGENT_NAME = process.env.AGENT_NAME ?? 'ai-secretary-agent';
+const AGENT_NAME = process.env.AGENT_NAME ?? 'secretary-hq-agent';
 
 if (!url || !key || !secret) {
   console.error('sim-call: missing LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET');

@@ -16,13 +16,13 @@ import { buildLogger } from '../logger.js';
  * create a second shipper alongside the one in index.ts for every process that
  * merely imports this file — including the unit-test runner.
  *
- * `service` stays `ai-sec-backend`: logger.ts documents it as the top-level
- * discriminator (`ai-sec-backend` | `ai-sec-agent`) that Better Stack filters on.
+ * `service` stays `secretary-hq-backend`: logger.ts documents it as the top-level
+ * discriminator (`secretary-hq-backend` | `secretary-hq-agent`) that Better Stack filters on.
  * A third value would fragment backend logs. The subsystem goes in `component`.
  */
 let smsLogger: ReturnType<typeof buildLogger> | null = null;
 function log() {
-  smsLogger ??= buildLogger({ service: 'ai-sec-backend' }).child({ component: 'sms' });
+  smsLogger ??= buildLogger({ service: 'secretary-hq-backend' }).child({ component: 'sms' });
   return smsLogger;
 }
 

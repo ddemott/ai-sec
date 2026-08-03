@@ -47,7 +47,7 @@
 > - LiveKit inbound trunk `ST_aUM3GuCuc9wL` "telnyx-inbound": `numbers` now
 >   `["+16308661960","+16308229086"]` (normalized to +E.164 from bare digits 2026-06-04),
 >   `allowedAddresses ["0.0.0.0/0"]`. Dispatch rule `SDR_WEL49AwBB4NW` → agent
->   `ai-secretary-agent`. LiveKit creds WORK (the "dead creds" note is stale).
+>   `secretary-hq-agent`. LiveKit creds WORK (the "dead creds" note is stale).
 >
 > **Open question (the only real one left):** does a call that reaches Telnyx land in
 > LiveKit? Decisive test: call `+16308229086` from a **different carrier** (Google

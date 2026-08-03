@@ -2,7 +2,7 @@
 
 **Purpose:** a living rulebook so a new customer voice agent can be built **without days of troubleshooting.** Every rule here is something we verified the hard way (mostly the 2026-06-24→26 go-live + Realtime work). Append new rules as we learn — date them.
 
-**Stack this covers (CURRENT as of 2026-07-27):** LiveKit Agents (Node/TS, `@livekit/agents` 1.4.x) + Deepgram Nova-3 STT + **OpenAI GPT-4.1-mini** (voice LLM; 4o-mini still runs summaries/classify/fallback) + **Deepgram Aura TTS** (`aura-asteria-en`, native WebSocket streaming) + Telnyx/SIP. Agent code in `/agent`; per-tenant config in `tenants` (DB). Deploys from `main` to Railway service `ai-sec-agent`.
+**Stack this covers (CURRENT as of 2026-07-27):** LiveKit Agents (Node/TS, `@livekit/agents` 1.4.x) + Deepgram Nova-3 STT + **OpenAI GPT-4.1-mini** (voice LLM; 4o-mini still runs summaries/classify/fallback) + **Deepgram Aura TTS** (`aura-asteria-en`, native WebSocket streaming) + Telnyx/SIP. Agent code in `/agent`; per-tenant config in `tenants` (DB). Deploys from `main` to Railway service `secretary-hq-agent`.
 
 > **CALL FLOW — read this before any rule below.** The rules here are about the
 > voice PIPELINE (STT/LLM/TTS, turn-taking, latency), which is shared by every call.
@@ -173,11 +173,11 @@ The `agent_session_error` log's `error_body` carries the provider's exact error 
 
 ## 10. Deploy & config mechanics
 
-**RULE 10.1** — Agent code deploys by **merge to `main`** → Railway auto-redeploys `ai-sec-agent`. A branch push deploys nothing. An **env-var change auto-redeploys** too.
+**RULE 10.1** — Agent code deploys by **merge to `main`** → Railway auto-redeploys `secretary-hq-agent`. A branch push deploys nothing. An **env-var change auto-redeploys** too.
 
 **RULE 10.2** — Ship risky/unvalidatable-in-CI features **flag-gated, default OFF**, so merge is inert; enable on Railway + validate on a real call; instantly reversible. (`ENABLE_REALTIME`, `ENABLE_OUTPUT_WATCHDOG`, `UNTRUSTED_CALLER_ID_TENANTS`.)
 
-**RULE 10.3 — config knobs (env on `ai-sec-agent`):** `ENABLE_REALTIME`, `REALTIME_MODEL` (verify id!), `REALTIME_VOICE`, `ENABLE_OUTPUT_WATCHDOG`, `ENABLE_THINKING_SOUND` + `THINKING_SOUND_VOLUME` (0–1, default 0.5), `UNTRUSTED_CALLER_ID_TENANTS`. Blank-in-UI env values bypass `.default()` — coerce blank→default (we do for `REALTIME_MODEL`/`VOICE`, and `THINKING_SOUND_VOLUME` clamps blank/invalid→0.5).
+**RULE 10.3 — config knobs (env on `secretary-hq-agent`):** `ENABLE_REALTIME`, `REALTIME_MODEL` (verify id!), `REALTIME_VOICE`, `ENABLE_OUTPUT_WATCHDOG`, `ENABLE_THINKING_SOUND` + `THINKING_SOUND_VOLUME` (0–1, default 0.5), `UNTRUSTED_CALLER_ID_TENANTS`. Blank-in-UI env values bypass `.default()` — coerce blank→default (we do for `REALTIME_MODEL`/`VOICE`, and `THINKING_SOUND_VOLUME` clamps blank/invalid→0.5).
 
 **RULE 10.4 — validate on a real/sim call, never CI alone.** Acoustic/timing/turn behavior has no unit-test seam. `./scripts/simulate.sh call --env prod --tenant <id>` → browser join URL → headphones. CI-green ≠ behavior-verified for voice.
 

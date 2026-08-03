@@ -35,10 +35,10 @@ const REPO_ROOT = resolve(__dirname, '..', '..');
 /**
  * Hosts an E2E run is allowed to touch. Mirrors the allowlist in
  * scripts/rebuild-db.sh so the two guards cannot drift into disagreeing about
- * what "local" means. `db` / `postgres` / `ai-sec-db` are container hostnames
+ * what "local" means. `db` / `postgres` / `secretary-hq-db` are container hostnames
  * (docker-compose, CI service containers).
  */
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '', 'db', 'postgres', 'ai-sec-db']);
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '', 'db', 'postgres', 'secretary-hq-db']);
 
 function hostOf(url: string): string {
   try {

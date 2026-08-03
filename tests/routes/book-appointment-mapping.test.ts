@@ -198,7 +198,7 @@ describe('book_appointment_atomic — service_employee mapping enforcement', () 
     const svcId = await createService(root, tenantId, 'Brake Job', 60);
     const customerId = await createCustomerFull(root, tenantId, '+15555550104', 'Dee');
     // Configure required_skills on the service, do NOT create service_employee row.
-    // This is the legacy model from when ai-sec used array-based skill matching.
+    // This is the legacy model from when secretary-hq used array-based skill matching.
     await root.query(
       `UPDATE services SET required_skills = ARRAY['brake-cert'] WHERE service_id = $1`,
       [svcId]
