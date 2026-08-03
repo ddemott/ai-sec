@@ -3,6 +3,7 @@ import {
   checkCriticalIdColumns,
   checkMigrationColumnsInBaseline,
   checkMigrationTablesInBaseline,
+  checkRlsPolicyCoverage,
   CRITICAL_TABLES,
 } from './verify-schema-alignment';
 import { readFileSync, readdirSync } from 'fs';
@@ -108,5 +109,55 @@ describe('baseline ↔ migration TABLE drift guard', () => {
     const commented = '-- pure additive CREATE TABLE IF NOT EXISTS, no backfill\nSELECT 1;';
     const drifts = checkMigrationTablesInBaseline(baseline, [...migrations, commented]);
     expect(drifts.some((d) => d.message.includes('"if"'))).toBe(false);
+  });
+});
+
+describe('RLS policy coverage guard', () => {
+  // WHO: a dev who ships CREATE TABLE + ENABLE ROW LEVEL SECURITY but no policy.
+  // WHAT: every RLS-enabled table in baseline.sql must have >=1 CREATE POLICY
+  //       and must be FORCEd, not just ENABLEd.
+  // WHEN: prepare-commit / CI on the committed baseline.
+  // WHERE: checkRlsPolicyCoverage.
+  // WHY: RLS-enabled-with-zero-policies is deny-all for any non-bypassing role
+  //      (app_user, since 2026-07-24) — this is exactly the shape of the
+  //      message_delivery_status landmine (found 2026-07-13, fixed 2026-07-24
+  //      by 20260724000050_rls_close_gaps.sql). Nothing previously checked for
+  //      a repeat.
+  it('passes: every RLS-enabled table in the committed baseline has a policy and is forced', () => {
+    const drifts = checkRlsPolicyCoverage(baseline);
+    expect(drifts).toEqual([]);
+  });
+
+  it('detects a table with RLS enabled but no policy', () => {
+    const broken = `
+      ALTER TABLE ONLY public.zzz_rls_probe FORCE ROW LEVEL SECURITY;
+      ALTER TABLE public.zzz_rls_probe ENABLE ROW LEVEL SECURITY;
+    `;
+    const drifts = checkRlsPolicyCoverage(broken);
+    expect(
+      drifts.some(
+        (d) => d.message.includes('zzz_rls_probe') && d.message.includes('no CREATE POLICY')
+      )
+    ).toBe(true);
+  });
+
+  it('detects a table with RLS enabled but not forced', () => {
+    const broken = `
+      ALTER TABLE public.zzz_rls_probe ENABLE ROW LEVEL SECURITY;
+      CREATE POLICY "Tenant isolation for zzz_rls_probe" ON public.zzz_rls_probe USING (tenant_id = tenant_ctx_uuid());
+    `;
+    const drifts = checkRlsPolicyCoverage(broken);
+    expect(
+      drifts.some((d) => d.message.includes('zzz_rls_probe') && d.message.includes('not FORCED'))
+    ).toBe(true);
+  });
+
+  it('is clean when a table is enabled, forced, and has a policy', () => {
+    const ok = `
+      ALTER TABLE ONLY public.zzz_rls_probe FORCE ROW LEVEL SECURITY;
+      ALTER TABLE public.zzz_rls_probe ENABLE ROW LEVEL SECURITY;
+      CREATE POLICY "Tenant isolation for zzz_rls_probe" ON public.zzz_rls_probe USING (tenant_id = tenant_ctx_uuid());
+    `;
+    expect(checkRlsPolicyCoverage(ok)).toEqual([]);
   });
 });
