@@ -1,5 +1,5 @@
 {
-  "name": "ai-sec-agent",
+  "name": "secretary-hq-agent",
   "version": "0.1.0",
   "private": true,
   "description": "LiveKit voice agent worker for SecretaryHQ \u2014 replaces Vapi as the orchestrator between Telnyx (SIP) and Deepgram/OpenAI (TTS fully OpenAI since 2026-06-25).",

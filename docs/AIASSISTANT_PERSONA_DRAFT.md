@@ -107,4 +107,4 @@ This is its own branch + live verification. Until then the message-taking interi
 
 ## Tuning notes (after a live call)
 - Pace: ~~`tts_speed` 0.8 ↔ 0.9–1.0 via dashboard~~ — **`tts_speed` is INERT since the 2026-07-14 move to Deepgram Aura.** It is deliberately not passed: sending it appends `?speed=` to the Aura WebSocket upgrade URL, which answers 400 and leaves the call with no TTS at all. The dashboard control still writes the column; nothing reads it.
-- All `ai-sec-agent` Railway env vars → change = redeploy → call to judge by ear. (Voice now configured primarily in DB per-tenant + dashboard AI Persona.)
+- All `secretary-hq-agent` Railway env vars → change = redeploy → call to judge by ear. (Voice now configured primarily in DB per-tenant + dashboard AI Persona.)

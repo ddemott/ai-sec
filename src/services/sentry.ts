@@ -13,7 +13,7 @@
  *   layer is for "alert me when error-rate spikes."
  * - Auto-installs process-level handlers (uncaughtException +
  *   unhandledRejection) — Sentry's default integrations cover those.
- * - Tagged with `service: ai-sec-backend` so when the agent (which
+ * - Tagged with `service: secretary-hq-backend` so when the agent (which
  *   uses the same DSN) sends events, a single Sentry UI filter splits
  *   them.
  *
@@ -42,7 +42,7 @@ export function initSentry(opts: { service?: string } = {}): void {
     // code path calls captureException.
   });
 
-  Sentry.setTag('service', opts.service || 'ai-sec-backend');
+  Sentry.setTag('service', opts.service || 'secretary-hq-backend');
   initialized = true;
 }
 

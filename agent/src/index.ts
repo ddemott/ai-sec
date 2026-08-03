@@ -155,7 +155,7 @@ export default defineAgent({
         // stamp inside the PR that fixes a lying stamp. Report what will actually run.
         tts: process.env.ENABLE_REALTIME === 'true' ? 'openai-realtime (s2s)' : 'deepgram-aura',
       },
-      `ai-sec-agent worker booting — commit ${commit}`
+      `secretary-hq-agent worker booting — commit ${commit}`
     );
     // LET PEOPLE FINISH THEIR SENTENCES.
     //
@@ -1875,7 +1875,7 @@ cli.runApp(
   new WorkerOptions({
     agent: fileURLToPath(import.meta.url),
     // Must match the agentName in the LiveKit dispatch rule
-    // (SDR_if97ky4Zf7e6 / dynatire-dispatch). If these drift, dispatched
+    // (SDR_WEL49AwBB4NW / thinkinghammer-dispatch). If these drift, dispatched
     // jobs won't route to this worker and calls will hit dead air.
     //
     // OVERRIDABLE so a BRANCH can be heard without racing production.
@@ -1891,8 +1891,8 @@ cli.runApp(
     // worker did not actually restart until five minutes after he hung up. A test
     // whose result you cannot attribute to a specific commit is not a test.
     //
-    // Set AGENT_NAME=ai-secretary-agent-dev on both the worker and the dispatcher
+    // Set AGENT_NAME=secretary-hq-agent-dev on both the worker and the dispatcher
     // (scripts/sim-call.mjs reads the same var) and the job can ONLY land on yours.
-    agentName: process.env.AGENT_NAME ?? 'ai-secretary-agent',
+    agentName: process.env.AGENT_NAME ?? 'secretary-hq-agent',
   })
 );

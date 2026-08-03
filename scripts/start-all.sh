@@ -38,7 +38,7 @@ if command -v docker-compose >/dev/null 2>&1 || docker compose version >/dev/nul
   docker compose up -d
 
   # Find the actual container name for Postgres
-  POSTGRES_CONTAINER=$(docker ps -a --format '{{.Names}}' | grep ai-sec-db | head -n 1)
+  POSTGRES_CONTAINER=$(docker ps -a --format '{{.Names}}' | grep secretary-hq-db | head -n 1)
   if [ -z "$POSTGRES_CONTAINER" ]; then
     echo "[secretaryhq] ❌ Could not find Postgres container."
     exit 1

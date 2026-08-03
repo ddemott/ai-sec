@@ -8,9 +8,9 @@
  */
 
 /**
- * DatabaseService - Adapter layer for ai-sec database operations.
+ * DatabaseService - Adapter layer for secretary-hq database operations.
  *
- * Bridges the gap between ai-sec's withTenantClient(pool) pattern and
+ * Bridges the gap between secretary-hq's withTenantClient(pool) pattern and
  * the DatabaseService interface expected by migrated communications/reminders services.
  *
  * Pattern: Repository with lazy pool initialization.
@@ -298,7 +298,7 @@ export interface DatabaseService {
 
 /**
  * PostgreSQL implementation of DatabaseService.
- * Uses ai-sec's pool and RLS patterns.
+ * Uses secretary-hq's pool and RLS patterns.
  */
 export class PostgresDatabaseService implements DatabaseService {
   private pool: Pool;

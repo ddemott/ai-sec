@@ -73,16 +73,16 @@ describe('agent/src/sentry.ts', () => {
     expect(captured).toHaveLength(0);
   });
 
-  it('HAPPY: SENTRY_DSN set — init runs once, tags with service=ai-sec-agent', () => {
+  it('HAPPY: SENTRY_DSN set — init runs once, tags with service=secretary-hq-agent', () => {
     // WHO: production agent worker
-    // WHAT: SENTRY_DSN is set on the Railway ai-sec-agent service
+    // WHAT: SENTRY_DSN is set on the Railway secretary-hq-agent service
     // WHY: agent-side errors need the service tag to separate them
     //      from backend errors in the same Sentry project
     process.env.SENTRY_DSN = 'https://fake@sentry.io/12345';
     initSentry();
     expect(isSentryInitializedForTesting()).toBe(true);
     expect(initCalls).toBe(1);
-    expect(scopeTagsAccum.service).toBe('ai-sec-agent');
+    expect(scopeTagsAccum.service).toBe('secretary-hq-agent');
   });
 
   it('HAPPY: captureException forwards call_id + tenant_id as both extras and tags', () => {

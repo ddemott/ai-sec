@@ -6,7 +6,7 @@
  *
  * Same opt-in pattern as the backend (`src/services/sentry.ts`) and
  * agent (`agent/src/sentry.ts`). All three services can share one DSN;
- * the `service: ai-sec-dashboard` tag separates them in the Sentry UI.
+ * the `service: secretary-hq-dashboard` tag separates them in the Sentry UI.
  */
 import * as Sentry from '@sentry/nextjs';
 
@@ -21,7 +21,7 @@ export function register() {
       release: process.env.SENTRY_RELEASE || undefined,
       tracesSampleRate: 0,
       profilesSampleRate: 0,
-      initialScope: { tags: { service: 'ai-sec-dashboard', runtime: 'nodejs' } },
+      initialScope: { tags: { service: 'secretary-hq-dashboard', runtime: 'nodejs' } },
     });
   }
 
@@ -31,7 +31,7 @@ export function register() {
       environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
       release: process.env.SENTRY_RELEASE || undefined,
       tracesSampleRate: 0,
-      initialScope: { tags: { service: 'ai-sec-dashboard', runtime: 'edge' } },
+      initialScope: { tags: { service: 'secretary-hq-dashboard', runtime: 'edge' } },
     });
   }
 }

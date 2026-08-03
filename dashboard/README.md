@@ -46,7 +46,7 @@ You should see:
 
 ## Deployment
 
-The dashboard (and full stack) is deployed on **Railway** in production (see `docs/DEPLOYMENT.md` for the current setup with `railway.json` + nixpacks for all three services: backend, `ai-sec-agent`, and this dashboard).
+The dashboard (and full stack) is deployed on **Railway** in production (see `docs/DEPLOYMENT.md` for the current setup with `railway.json` + nixpacks for all three services: backend, `secretary-hq-agent`, and this dashboard).
 
 For local/self-host development:
 

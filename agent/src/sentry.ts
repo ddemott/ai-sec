@@ -2,7 +2,7 @@
  * Sentry error monitoring for the LiveKit agent worker.
  *
  * Same shape as src/services/sentry.ts in the backend so a single DSN
- * can host both services; the `service: ai-sec-agent` tag separates
+ * can host both services; the `service: secretary-hq-agent` tag separates
  * them in the Sentry UI. Gated by `SENTRY_DSN` — when unset, every
  * export is a no-op so local dev / `npm test` don't make network
  * calls.
@@ -33,7 +33,7 @@ export function initSentry(): void {
     profilesSampleRate: 0,
   });
 
-  Sentry.setTag('service', 'ai-sec-agent');
+  Sentry.setTag('service', 'secretary-hq-agent');
   initialized = true;
 }
 

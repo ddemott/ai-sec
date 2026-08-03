@@ -9,7 +9,7 @@ description: >
 
 You are an **active automation agent**, not a passive instructor.
 
-Your job is to **do the work** of adopting the Portable Development Workflow (the battle-tested system from this ai-sec repo) into another project using your tools (`run_terminal_command`, `list_dir`, `read_file`, `write`, `search_replace`, etc.).
+Your job is to **do the work** of adopting the Portable Development Workflow (the battle-tested system from this secretary-hq repo) into another project using your tools (`run_terminal_command`, `list_dir`, `read_file`, `write`, `search_replace`, etc.).
 
 **Core rule**: When the user says yes (or "just do it", "go ahead", "automate it"), execute the steps directly instead of explaining the next manual copy-paste command.
 
@@ -19,10 +19,10 @@ Your job is to **do the work** of adopting the Portable Development Workflow (th
 
 1. **Start by establishing context** (one short question max):
    - What is the target project directory? (Default: use `pwd` via terminal to detect the current directory.)
-   - Where is the ai-sec source repo? (Default: check for sibling `../ai-sec` or `../ai-sec` relative to target.)
+   - Where is the secretary-hq source repo? (Default: check for sibling `../secretary-hq` or `../secretary-hq` relative to target.)
 
 2. **Always confirm the target before making changes**:
-   - "I will perform a full automated adoption into: `/absolute/path/to/target-project` using the latest node-fullstack kit from ai-sec at `/path/to/ai-sec`.
+   - "I will perform a full automated adoption into: `/absolute/path/to/target-project` using the latest node-fullstack kit from secretary-hq at `/path/to/secretary-hq`.
    - Is this correct? (yes / no / different path)"
 
 3. **Present a short "What I will automate" plan** before starting bulk work. Get an explicit "yes, do the full adoption" or "proceed".
@@ -44,13 +44,13 @@ Your job is to **do the work** of adopting the Portable Development Workflow (th
 
 You will normally perform these steps using tools (adapt order intelligently):
 
-1. **Refresh the source kit** (in ai-sec):
-   - `cd /path/to/ai-sec && bash scripts/refresh-workflow-kits.sh`
-   - This ensures `../portable-workflow-kit-node-fullstack-latest/` (sibling to ai-sec) and the dated zip are up to date.
+1. **Refresh the source kit** (in secretary-hq):
+   - `cd /path/to/secretary-hq && bash scripts/refresh-workflow-kits.sh`
+   - This ensures `../portable-workflow-kit-node-fullstack-latest/` (sibling to secretary-hq) and the dated zip are up to date.
 
 2. **Copy the specialized SaaS kit + guide** into the target project:
    - The pre-specialized folder: `portable-workflow-kit-node-fullstack-latest/` (or the dated equivalent)
-   - `docs/ADOPTING_THE_WORKFLOW.md` from ai-sec (or from the kit)
+   - `docs/ADOPTING_THE_WORKFLOW.md` from secretary-hq (or from the kit)
 
 3. **Install the automation scripts** into the target's `scripts/` directory:
    - `create-feature-branch.sh`
@@ -99,7 +99,7 @@ You will normally perform these steps using tools (adapt order intelligently):
 ## Handling Different Situations
 
 - **Target already has some workflow files**: Detect collisions. Offer to overwrite only the managed files, or show diffs and let the user choose per file.
-- **Target is not a sibling to ai-sec**: Fall back to cloning instructions or ask the user to provide the absolute path to a freshly cloned ai-sec so you can run the generator.
+- **Target is not a sibling to secretary-hq**: Fall back to cloning instructions or ask the user to provide the absolute path to a freshly cloned secretary-hq so you can run the generator.
 - **User wants a Python or generic kit instead**: The same skill can be used — just change the `--project-type` when refreshing and adjust the script names/commands you inject. The core logic is identical.
 - **User only wants the scripts + config (no docs/templates)**: Support a "minimal" mode when they say so.
 

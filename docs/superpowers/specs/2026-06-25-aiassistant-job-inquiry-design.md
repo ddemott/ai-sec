@@ -135,7 +135,7 @@ prior persona edits); back up the current value first.
    *simulation mode* — emails appear to succeed but are never delivered. Verify before trusting.
 2. **Apply migration to prod BEFORE merge** (merge-before-migrate rule) or the route's INSERT /
    `job_inquiry_email` read fails against the old schema.
-3. Agent code change → **merge to main → Railway redeploys `ai-sec-agent`** (auto-deploy is on).
+3. Agent code change → **merge to main → Railway redeploys `secretary-hq-agent`** (auto-deploy is on).
    A branch push deploys nothing.
 4. Write persona + `job_inquiry_email='DaleDeMott@thinkinghammer.com'` directly to prod `tenants`.
 5. **Real-call verification** (Dale's transport test): confirm __PERSONA_NAME__ walks the branch and the tool

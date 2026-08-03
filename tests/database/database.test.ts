@@ -8,7 +8,7 @@
  * Database Adapter Tests
  *
  * Comprehensive tests for the DatabaseService adapter layer
- * that bridges ai-sec patterns with the communications/reminders services.
+ * that bridges secretary-hq patterns with the communications/reminders services.
  *
  * Test Structure:
  * - Happy Paths: Successful operations with valid inputs

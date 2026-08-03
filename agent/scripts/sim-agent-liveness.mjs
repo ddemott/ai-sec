@@ -20,7 +20,7 @@ const secret = process.env.LIVEKIT_API_SECRET;
 // Any real tenant works — the agent only needs it to fetch config; the JOIN is
 // the signal. Defaults to the Thinking Hammer (__PERSONA_NAME__) prod tenant.
 const tenant = process.env.SIM_TENANT || 'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0';
-const AGENT_NAME = 'ai-secretary-agent';
+const AGENT_NAME = 'secretary-hq-agent';
 const TIMEOUT_MS = 10000;
 
 if (!url || !key || !secret) {

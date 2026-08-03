@@ -1145,12 +1145,12 @@ node dist/src/index.js &                       # https://localhost:4001
 
 # worker on the task-group flow, its OWN name so it can't take prod's calls
 cd agent
-ENABLE_TASK_GROUP=true AGENT_NAME=ai-secretary-agent-dev \
+ENABLE_TASK_GROUP=true AGENT_NAME=secretary-hq-agent-dev \
   BACKEND_URL=https://localhost:4001 NODE_TLS_REJECT_UNAUTHORIZED=0 \
   node dist/index.js start
 
 # dispatch a browser call to it
-AGENT_NAME=ai-secretary-agent-dev SIM_TENANT=<tenant-uuid> node agent/scripts/sim-call.mjs
+AGENT_NAME=secretary-hq-agent-dev SIM_TENANT=<tenant-uuid> node agent/scripts/sim-call.mjs
 
 # or run the whole call end-to-end, no voice:
 BACKEND_URL=https://localhost:4001 npx tsx agent/scripts/sim-taskgroup.ts

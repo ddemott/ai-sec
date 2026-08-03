@@ -98,7 +98,7 @@ case "$ENV" in
     CURL_OPTS="-sk"
     ;;
   prod)
-    BACKEND="https://ai-sec-production.up.railway.app"
+    BACKEND="https://secretary-hq-production.up.railway.app"
     DASHBOARD="https://dashboard-production-cee3.up.railway.app"
     CURL_OPTS="-s"
     ;;
@@ -195,7 +195,7 @@ cmd_ci() {
   echo ""
 
   # Derive repo from git remote (fallback to known)
-  local repo="ddemott/ai-sec"
+  local repo="ddemott/secretary-hq"
   local remote_url
   remote_url=$(git -C "$ROOT_DIR" remote get-url origin 2>/dev/null || echo "")
   if echo "$remote_url" | grep -q 'github.com'; then
