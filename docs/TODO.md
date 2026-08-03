@@ -86,24 +86,15 @@ _Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voi
 - [ ] **(Dale)** **Rotate the Railway team token** created 2026-06-12 — it was pasted into a Claude session. Burn + reissue.
 - [ ] **(Dale)** **Rotate the Supabase DB password** — exposed in a session transcript 2026-07-11.
 
-### 4a. 🔴 RLS IS NOT ENFORCED IN PRODUCTION — the single biggest thing on this list
+### 4a. ✅ RLS enforcement — RESOLVED 2026-07-24 (docs corrected 2026-08-01, #315)
 
-**Found 2026-07-13 by an adversarial review of the remediation plan itself.** Verified against prod, not inferred:
+**Originally found 2026-07-13**: the app connected as a `BYPASSRLS` superuser, so every policy and `FORCE ROW LEVEL SECURITY` was decorative. **Fixed 2026-07-24** by three migrations: `20260724000000_rls_null_safe_context.sql` (49 policies rewritten onto null-safe `tenant_ctx()`/`tenant_ctx_uuid()` — closes the cold-connection `NULL = ''` landmine, where `current_setting(...) = ''` reads NULL on a fresh pool connection and silently denies), `20260724000050_rls_close_gaps.sql` (`message_delivery_status` — RLS enabled + forced + 2 policies), `20260724000100_app_user_role.sql` (creates non-superuser, non-BYPASSRLS `app_user`; prod `DATABASE_URL` repointed). Verified against prod 2026-08-02: `/ready` reports `rls_enforced=true`/`db_role=app_user`; 38/38 tables RLS-enabled+forced; 52 policies; `app_user` cannot bypass. `tests/regression/rlsIsolation.test.ts` proves it by connecting AS `app_user` (the only kind of test that can). CLAUDE.md + `docs/SECURITY.md` were still asserting the opposite until **#315 (2026-08-01)** corrected them — that stale claim, not the RLS gap itself, was the live risk for a while.
 
-```
-current_user = postgres   rolsuper = f   rolbypassrls = t
-set_config('app.current_tenant_id','00000000-0000-0000-0000-0000000000ff')   -- owns nothing
-select count(*) from customers;  -> 1
-select count(*) from tenants;    -> 3      -- ALL of them
-```
-
-The app connects as a role with **`BYPASSRLS`**. Every RLS policy and every `FORCE ROW LEVEL SECURITY` is **decorative** — FORCE only removes the table-_owner_ exemption, it does not override BYPASSRLS. Local + CI connect as a **superuser**, which also bypasses. **No test in this repo could ever have caught it, and none did**: the 39 isolation probes exercise the _middleware_, and their RLS assertions check _configuration metadata_ (policies exist) rather than that policies _apply to the connecting role_.
-
-**`tenantMiddleware` is not defense-in-depth. It is the entire defense.** That is why the 2026-05-21 anonymous-`?tenant_id=` bug was a full read/write/delete and not a near-miss.
-
-- [x] ~~**Make it visible**~~ — **DONE 2026-07-13 (#245).** `GET /ready` reports `rls_enforced` + `db_role`; boot logs `rls_not_enforced` + `errors_total{event="rls_not_enforced"}`; CLAUDE.md + `docs/SECURITY.md` corrected (both asserted RLS was enforced — that false claim is what let this hide).
-- [ ] **(code)** **Migrate to a non-BYPASSRLS `app_user` role.** Its own staged project, **not a patch**. ⚠️ **LANDMINE — read before starting:** the `admin_bypass` policies test `current_setting('app.current_tenant_id', true) = ''`, but on a **cold pool connection** that GUC is **NULL**, and `NULL = ''` is NULL — _not_ true. Flipping the role without fixing this first makes `getDueReminders()` (raw cross-tenant sweep) return **zero rows on a cold connection** → **every reminder silently stops**. Required order: (1) rewrite every admin_bypass policy as `coalesce(current_setting(...), '') = ''`; (2) create the non-superuser, non-BYPASSRLS role; (3) migrate `DATABASE_URL`; (4) **prove isolation with a test that connects AS THAT ROLE** — the only kind of test that can prove it; (5) then rewrite the docs.
-- [ ] **(code)** **Prod has drifted from `baseline.sql` on RLS flags and the schema guard can't see it.** In prod `message_delivery_status` has RLS **enabled with zero policies** (deny-all for any non-bypassing role); `baseline.sql` declares no RLS for it. The schema-alignment guard compares tables + columns, **not RLS flags**. Extend it.
+- [x] ~~**Make it visible**~~ — DONE 2026-07-13 (#245). `GET /ready` reports `rls_enforced` + `db_role`.
+- [x] ~~**Migrate to a non-BYPASSRLS `app_user` role.**~~ DONE 2026-07-24 — see migrations above.
+- [x] ~~**`message_delivery_status` RLS gap.**~~ DONE 2026-07-24 (`rls_close_gaps.sql`).
+- [x] ~~**Extend the schema-alignment guard to catch RLS-flag drift** (the guard only diffed tables/columns, never noticed a table shipped with RLS enabled and zero policies — the message_delivery_status bug could recur silently).~~ DONE 2026-08-03 — `checkRlsPolicyCoverage()` added to `scripts/verify-schema-alignment.ts`, reads `baseline.sql` (a pg_dump, so it sees policies created by dynamic/looped migration SQL that a migration-text regex would miss) and flags any RLS-enabled table with no `CREATE POLICY` or without `FORCE`. Currently clean: 37/37 enabled tables forced + policied. 4 new tests in `verify-schema-alignment.test.ts`.
+- **Remaining, not urgent:** keep the old superuser `DATABASE_URL` on hand as the revert path (one env var); re-verify `rls_enforced: true` after any Railway DB credential rotation.
 
 ### 4b. Code review 2026-07-13 — four-reviewer sweep (backend, security, reliability, dead code)
 

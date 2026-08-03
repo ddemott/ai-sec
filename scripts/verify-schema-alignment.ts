@@ -198,6 +198,64 @@ export function checkMigrationTablesInBaseline(
   return drifts;
 }
 
+/**
+ * Catch a table with RLS ENABLED but ZERO policies — deny-all for any role
+ * that cannot bypass RLS (app_user, since the 2026-07-24 migration to a
+ * non-BYPASSRLS role). This is the exact shape of the message_delivery_status
+ * landmine (found 2026-07-13): RLS enabled, no CREATE POLICY, silently
+ * returns/writes zero rows for the app role instead of erroring.
+ *
+ * Deliberately reads baseline.sql only, not the migrations — baseline.sql is
+ * a pg_dump snapshot of the real resulting state, so it sees policies created
+ * by dynamic/looped SQL (e.g. rls_close_gaps.sql's DO block with EXECUTE
+ * format(...)) that a migration-text regex would miss entirely.
+ *
+ * Also flags ENABLE without FORCE — FORCE is what actually removes the
+ * table-owner exemption; ENABLE alone is not what this codebase's RLS model
+ * assumes (CLAUDE.md: "FORCE ROW LEVEL SECURITY is declared on every table
+ * that holds tenant data").
+ */
+export function checkRlsPolicyCoverage(baselineSql: string): Drift[] {
+  const drifts: Drift[] = [];
+
+  const enabled = new Set(
+    [
+      ...baselineSql.matchAll(
+        /ALTER TABLE (?:ONLY )?(?:public\.)?(\w+) ENABLE ROW LEVEL SECURITY/gi
+      ),
+    ].map((m) => m[1].toLowerCase())
+  );
+  const forced = new Set(
+    [
+      ...baselineSql.matchAll(
+        /ALTER TABLE (?:ONLY )?(?:public\.)?(\w+) FORCE ROW LEVEL SECURITY/gi
+      ),
+    ].map((m) => m[1].toLowerCase())
+  );
+  const withPolicy = new Set(
+    [...baselineSql.matchAll(/CREATE POLICY (?:"[^"]+"|\S+) ON (?:public\.)?(\w+)/gi)].map((m) =>
+      m[1].toLowerCase()
+    )
+  );
+
+  for (const table of enabled) {
+    if (!withPolicy.has(table)) {
+      drifts.push({
+        check: 'rls-policy-coverage',
+        message: `Table "${table}" has RLS ENABLED but no CREATE POLICY in baseline.sql — deny-all for any non-bypassing role (app_user). Add a policy or disable RLS deliberately (see message_delivery_status / schema_migrations precedent).`,
+      });
+    }
+    if (!forced.has(table)) {
+      drifts.push({
+        check: 'rls-policy-coverage',
+        message: `Table "${table}" has RLS ENABLED but not FORCED in baseline.sql — table owner still bypasses. Add ALTER TABLE ${table} FORCE ROW LEVEL SECURITY.`,
+      });
+    }
+  }
+
+  return drifts;
+}
+
 function main(): number {
   const repoRoot = process.cwd();
   const baselinePath = join(repoRoot, 'supabase/baseline.sql');
@@ -219,6 +277,7 @@ function main(): number {
     ...checkCriticalIdColumns(baselineSql),
     ...checkMigrationColumnsInBaseline(baselineSql, migrationsSql),
     ...checkMigrationTablesInBaseline(baselineSql, migrationsSql),
+    ...checkRlsPolicyCoverage(baselineSql),
   ];
 
   if (drifts.length === 0) {
