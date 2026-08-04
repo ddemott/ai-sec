@@ -172,6 +172,67 @@ describe('emailLogoAttachment', () => {
   });
 });
 
+/**
+ * MIME-level tests.
+ *
+ * Every other test in this file inspects a STRING. That is not enough: the app
+ * runs against a stub transporter under NODE_ENV=test (`sendMail` resolves
+ * immediately), so no unit test proves nodemailer actually assembles a valid
+ * message from what we hand it. These build a REAL MIME document via
+ * nodemailer's stream transport — no network, nothing sent — and assert the
+ * structure a mail client depends on.
+ *
+ * This is the same lesson as `verify:tts`: green tests that mock the thing
+ * being tested prove the mock works.
+ */
+describe('MIME assembly (real nodemailer, nothing sent)', () => {
+  async function buildMime(): Promise<string> {
+    const nodemailer = (await import('nodemailer')).default;
+    const t = nodemailer.createTransport({ streamTransport: true, buffer: true });
+    const info = (await t.sendMail({
+      from: '"SecretaryHQ" <no-reply@secretaryhq.com>',
+      to: 'recipient@example.test',
+      subject: 'Reset your SecretaryHQ password',
+      text: 'plain fallback',
+      html: renderEmailShell({ heading: 'Reset', bodyHtml: '<p>Body</p>' }),
+      attachments: [emailLogoAttachment()],
+    })) as unknown as { message: Buffer };
+    return info.message.toString('utf8');
+  }
+
+  // WHO: every recipient | WHAT: the client renders HTML, not the text part |
+  // WHEN: every send | WHERE: multipart/alternative ordering | WHY: clients display
+  // the LAST alternative. If the html part were emitted before text/plain, the
+  // client would show plain text — the exact "it looks like text" report that
+  // started this work. Ordering is nodemailer's job, so this pins the contract.
+  it('HAPPY: emits text/plain BEFORE text/html so clients prefer the HTML', async () => {
+    const mime = await buildMime();
+    expect(mime).toMatch(/multipart\/alternative/);
+    expect(mime.indexOf('text/plain')).toBeLessThan(mime.indexOf('text/html'));
+  });
+
+  // WHO: the recipient's client | WHAT: the inline image resolves | WHEN: opening the
+  // mail | WHERE: multipart/related + Content-ID | WHY: a `cid:` reference only
+  // resolves when the image is a related part carrying a matching Content-ID. Get
+  // either half wrong and the header silently renders as a broken image.
+  it('HAPPY: binds the logo as a related part whose Content-ID matches the cid', async () => {
+    const mime = await buildMime();
+    expect(mime).toMatch(/multipart\/related/);
+    expect(mime).toContain(`Content-ID: <${EMAIL_LOGO_CID}>`);
+    expect(mime).toContain(`cid:${EMAIL_LOGO_CID}`);
+    expect(mime).toMatch(/Content-Type: image\/png/);
+  });
+
+  // WHO: the recipient | WHAT: the logo stays out of the attachment list | WHEN:
+  // every send | WHERE: Content-Disposition | WHY: `attachment` makes a paperclip
+  // appear and the logo reads as a file the sender meant to include.
+  it('HAPPY: marks the image inline rather than as an attachment', async () => {
+    const mime = await buildMime();
+    expect(mime).toMatch(/Content-Disposition: inline/);
+    expect(mime).not.toMatch(/Content-Disposition: attachment[^]*image\/png/);
+  });
+});
+
 describe('escapeHtml', () => {
   it('HAPPY: escapes all five significant characters', () => {
     expect(escapeHtml(`&<>"'`)).toBe('&amp;&lt;&gt;&quot;&#39;');
