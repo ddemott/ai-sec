@@ -63,13 +63,18 @@ _Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voi
   - **Key differentiator to keep:** include booking + call transfer at ALL tiers — competitors (Rosie, Goodcall) gate these to mid-tier. Lead with "full receptionist from day one."
   - **Suggested tier shape:** Solo ~$99–129/mo (1 location, ~300 calls/mo cap, full booking+transfer) · Growth ~$199–249/mo (multi-location or higher volume, Square CRM sync, analytics) · Pro ~$349+/mo (unlimited volume, priority support)
   - **Volume metering is NOT built yet** — tiers are flat subscriptions today; cap enforcement + usage meter is a P1 build item (see P2 section below). Go flat-rate for first customer, retrofit volume once real usage data exists.
-- [ ] **(Dale)** **Stripe setup** — do these in order:
+- [ ] **(Dale)** **Stripe setup — part A: test-mode wiring. NO BANK ACCOUNT NEEDED.** A bank account gates **payouts**, not API configuration; every step below works today on the `sk_test` key prod already carries. Test mode has its own separate keys and webhook endpoints, so none of this touches live money. Only the pricing decision above is a real prerequisite (price IDs get baked into env vars).
+  1. **Create products + prices** in Stripe **test mode** — Solo, Growth, Pro. Note the 3 price IDs.
+  2. **Set 5 env vars on Railway**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID`.
+  3. **Register the webhook** in Stripe dashboard → `https://secretary-hq-production.up.railway.app/billing/webhook` for 3 events: `checkout.session.completed`, `invoice.payment_failed`, `customer.subscription.deleted`.
+     - **Status 2026-08-04: NOT registered.** Probed the live account directly — `webhook_endpoints` returns **zero** endpoints, and prod's `STRIPE_SECRET_KEY` is an `sk_test` key. CLAUDE.md's Production section states this URL as if it were wired; it is not. Nothing has ever delivered to it.
+  4. **Test-mode round-trip** (no real money): run `stripe listen --forward-to https://secretary-hq-production.up.railway.app/billing/webhook`, trigger a test checkout, verify each event activates/revokes the tenant gate. (`./scripts/simulate.sh stripe` path-checks the wiring first.)
+- [ ] **(Dale)** **Stripe setup — part B: live mode. THIS is what needs the bank account.** Do only after part A's round-trip passes.
   1. **Open an LLC bank account** for Thinking Hammer LLC — required before Stripe can pay out. (Also listed under Legal §5 below.)
-  2. **Connect bank account to Stripe** — add it in Stripe dashboard → Settings → Bank accounts & scheduling.
-  3. **Create products + prices** in Stripe dashboard — Solo, Growth, Pro plans. Note the 3 price IDs.
-  4. **Set 5 env vars on Railway**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SOLO_PRICE_ID`, `STRIPE_GROWTH_PRICE_ID`, `STRIPE_PRO_PRICE_ID`.
-  5. **Register the webhook** in Stripe dashboard → `https://secretary-hq-production.up.railway.app/billing/webhook` for 3 events: `checkout.session.completed`, `invoice.payment_failed`, `customer.subscription.deleted`.
-  6. **Test-mode round-trip** (no real money): run `stripe listen --forward-to https://secretary-hq-production.up.railway.app/billing/webhook`, trigger a test checkout, verify each event activates/revokes the tenant gate. (`./scripts/simulate.sh stripe` path-checks the wiring first.)
+  2. **Connect bank account to Stripe** — Stripe dashboard → Settings → Bank accounts & scheduling.
+  3. **Re-create products + prices in LIVE mode** — test-mode objects do not carry over. New price IDs.
+  4. **Swap the 5 Railway env vars to live values** — live secret key, live price IDs, and a **new** `STRIPE_WEBHOOK_SECRET` (live-mode endpoints are separate objects with their own signing secret).
+  5. **Register the webhook again in live mode**, same URL and same 3 events.
 - [ ] **(Dale)** **Stripe Tax** (after round-trip verified): enable Stripe Tax in Stripe dashboard → Tax → Settings; register nexus for IL + customer states; set `STRIPE_AUTO_TAX=true` on Railway. (Code done — `automatic_tax` gated behind the flag.)
 
 ### 3. Deploy gate — protect main
