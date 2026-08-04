@@ -1,4 +1,5 @@
 import nodemailer, { type Transporter } from 'nodemailer';
+import { emailLogoAttachment, escapeHtml, renderDetailRows, renderEmailShell } from './emailLayout';
 
 let transporter: Transporter | null = null;
 
@@ -73,6 +74,11 @@ async function sendSystemMail(opts: {
   const send = getTransporter().sendMail({
     from: `"SecretaryHQ" <${process.env.EMAIL_USER ?? 'no-reply@secretaryhq.com'}>`,
     ...opts,
+    // The shell's header `<img>` points at `cid:secretaryhq-logo`. Attach it on
+    // every system send or that image resolves to nothing — attaching here, in
+    // the one function all of them funnel through, is what stops a future email
+    // from being added without it.
+    attachments: [emailLogoAttachment()],
   });
   let timer: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_, reject) => {
@@ -116,13 +122,19 @@ ${resetLink}
 
 If you weren't expecting this invitation, you can safely ignore this email — no account will be created against your name.`;
 
-  const html = `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1a1a1a;max-width:560px;margin:0 auto;padding:24px">
-<h2 style="margin:0 0 16px">You're invited to ${businessName}</h2>
-<p>${businessName} added you to their SecretaryHQ workspace as <strong>${roleLabel}</strong>. Set a password to sign in.</p>
-<p style="margin:24px 0"><a href="${resetLink}" style="background:#0066cc;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;display:inline-block">Set my password</a></p>
-<p style="color:#666;font-size:14px">This link expires in ${ttlMinutes} minutes. If the button doesn't work, paste this URL into your browser:<br><span style="word-break:break-all">${resetLink}</span></p>
-<p style="color:#666;font-size:14px">If you weren't expecting this, you can safely ignore the email — no account will be created against your name.</p>
-</body></html>`;
+  // businessName is tenant-supplied, so it is escaped rather than interpolated
+  // raw — it reaches this template straight from the tenants table.
+  const safeBusiness = escapeHtml(businessName);
+  const html = renderEmailShell({
+    heading: `You're invited to ${businessName}`,
+    preheader: `Set your password to join ${businessName} as ${roleLabel}.`,
+    bodyHtml: `<p style="margin:0 0 16px">${safeBusiness} added you to their SecretaryHQ workspace as <strong>${escapeHtml(roleLabel)}</strong>. Set a password to sign in.</p>`,
+    cta: { label: 'Set my password', url: resetLink },
+    footerHtml:
+      `This link expires in ${ttlMinutes} minutes. If the button doesn't work, paste this URL into your browser:<br>` +
+      `<span style="word-break:break-all">${escapeHtml(resetLink)}</span>` +
+      `<br><br>If you weren't expecting this, you can safely ignore the email — no account will be created against your name.`,
+  });
 
   await sendSystemMail({ to, subject, text, html });
 }
@@ -141,13 +153,17 @@ ${resetLink}
 
 If you did not request this, you can safely ignore this email — your password will not change.`;
 
-  const html = `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1a1a1a;max-width:560px;margin:0 auto;padding:24px">
-<h2 style="margin:0 0 16px">Reset your SecretaryHQ password</h2>
-<p>Someone requested a password reset for your SecretaryHQ account.</p>
-<p style="margin:24px 0"><a href="${resetLink}" style="background:#0066cc;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;display:inline-block">Set a new password</a></p>
-<p style="color:#666;font-size:14px">This link expires in ${ttlMinutes} minutes. If the button doesn't work, paste this URL into your browser:<br><span style="word-break:break-all">${resetLink}</span></p>
-<p style="color:#666;font-size:14px">If you did not request this, you can safely ignore this email — your password will not change.</p>
-</body></html>`;
+  const html = renderEmailShell({
+    heading: 'Reset your SecretaryHQ password',
+    preheader: `Set a new password — this link expires in ${ttlMinutes} minutes.`,
+    bodyHtml:
+      '<p style="margin:0 0 16px">Someone requested a password reset for your SecretaryHQ account.</p>',
+    cta: { label: 'Set a new password', url: resetLink },
+    footerHtml:
+      `This link expires in ${ttlMinutes} minutes. If the button doesn't work, paste this URL into your browser:<br>` +
+      `<span style="word-break:break-all">${escapeHtml(resetLink)}</span>` +
+      `<br><br>If you did not request this, you can safely ignore this email — your password will not change.`,
+  });
 
   await sendSystemMail({ to, subject, text, html });
 }
@@ -226,28 +242,23 @@ export async function sendJobInquiryEmail(to: string, fields: JobInquiryFields):
     rows.map(([k, v]) => `${k}: ${v}`).join('\n') +
     `\n\nThe caller was asked to email a full job description to your inbox with their name and company in the subject line.`;
 
-  // Escape caller-provided values before embedding in HTML — fields like
-  // company/caller name/address come straight from the call, so an unescaped
-  // '<' or '"' could inject markup into the owner's notification email.
-  const esc = (s: string): string =>
-    s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  const htmlRows = rows
-    .map(
-      ([k, v]) =>
-        `<tr><td style="padding:4px 12px 4px 0;color:#666;white-space:nowrap">${esc(k)}</td><td style="padding:4px 0"><strong>${esc(v)}</strong></td></tr>`
-    )
-    .join('');
-  const html = `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1a1a1a;max-width:560px;margin:0 auto;padding:24px">
-<h2 style="margin:0 0 16px">New job inquiry</h2>
-<p>A caller asked whether you're available for work. Details collected on the call:</p>
-<table style="border-collapse:collapse;margin:16px 0">${htmlRows}</table>
-<p style="color:#666;font-size:14px">The caller was asked to email a full job description with their name and company in the subject line.</p>
-</body></html>`;
+  // Caller-provided values (company, name, address) come straight off the call,
+  // so every one is escaped — `renderDetailRows` does that for the table, and
+  // the preheader below goes through `escapeHtml`. An unescaped '<' would
+  // inject markup into the owner's inbox.
+  const html = renderEmailShell({
+    heading: 'New job inquiry',
+    // The owner reads this next to the subject on a phone: lead with the role,
+    // which is the "do I want this?" signal.
+    preheader: fields.roleDescription
+      ? `${escapeHtml(fields.roleDescription)} — details collected on the call.`
+      : 'A caller asked whether you are available for work.',
+    bodyHtml:
+      `<p style="margin:0 0 4px">A caller asked whether you're available for work. Details collected on the call:</p>` +
+      renderDetailRows(rows),
+    footerHtml:
+      'The caller was asked to email a full job description with their name and company in the subject line.',
+  });
 
   await sendSystemMail({ to, subject, text, html });
 }
@@ -281,23 +292,18 @@ export async function sendPortRequestEmail(to: string, fields: PortRequestFields
     `Notes: ${orDash(fields.notes)}\n\n` +
     `This requires a manual port in the Telnyx portal — no automated action was taken.`;
 
-  const escPort = (s: string): string =>
-    s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-
-  const portHtml = `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#1a1a1a;max-width:560px;margin:0 auto;padding:24px">
-<h2 style="margin:0 0 16px">Port request — ${escPort(fields.tenantName)}</h2>
-<p><strong>${escPort(fields.tenantName)}</strong> (tenant <code>${escPort(fields.tenantId)}</code>) wants to port their existing number into Telnyx instead of forwarding.</p>
-<table style="border-collapse:collapse;margin:16px 0">
-<tr><td style="padding:4px 12px 4px 0;color:#666;white-space:nowrap">Number to port</td><td style="padding:4px 0"><strong>${escPort(fields.phoneNumber)}</strong></td></tr>
-<tr><td style="padding:4px 12px 4px 0;color:#666;white-space:nowrap">Notes</td><td style="padding:4px 0">${escPort(orDash(fields.notes))}</td></tr>
-</table>
-<p style="color:#666;font-size:14px">This requires a manual port in the Telnyx portal — no automated action was taken.</p>
-</body></html>`;
+  const portHtml = renderEmailShell({
+    heading: `Port request — ${fields.tenantName}`,
+    preheader: `${fields.tenantName} wants to port ${fields.phoneNumber} into Telnyx.`,
+    bodyHtml:
+      `<p style="margin:0 0 4px"><strong>${escapeHtml(fields.tenantName)}</strong> wants to port their existing number into Telnyx instead of forwarding.</p>` +
+      renderDetailRows([
+        ['Number to port', fields.phoneNumber],
+        ['Tenant', fields.tenantId],
+        ['Notes', orDash(fields.notes)],
+      ]),
+    footerHtml: 'This requires a manual port in the Telnyx portal — no automated action was taken.',
+  });
 
   await sendSystemMail({ to, subject, text, html: portHtml });
 }
