@@ -14,7 +14,7 @@
  * Usage:
  *   import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
  *   startReminderScheduler(); // Start processing
- *   stopReminderScheduler();  // Stop processing (for graceful shutdown)
+ *   stopReminderScheduler();  // Stop processing (for graceful shutdown) — now async
  */
 
 import type { Pool } from 'pg';
@@ -33,6 +33,7 @@ const MAX_BATCH_SIZE = 100;
 
 let schedulerInterval: NodeJS.Timeout | null = null;
 let isRunning = false;
+let _currentTick: Promise<void> | null = null;
 let db: DatabaseService | null = null;
 let configService: TenantConfigService | null = null;
 let reminderService: ReminderService | null = null;
@@ -167,19 +168,25 @@ export async function cleanupExpiredDemoTenants(poolOverride?: Pool): Promise<vo
 /**
  * Main scheduler tick - called on each interval.
  */
-async function tick(): Promise<void> {
+function tick(): Promise<void> {
   if (isRunning) {
     // Skip if previous tick is still running
-    return;
+    return Promise.resolve();
   }
 
   isRunning = true;
-  try {
-    await processBatch();
-    await cleanupExpiredDemoTenants();
-  } finally {
-    isRunning = false;
-  }
+  _currentTick = (async () => {
+    try {
+      await processBatch();
+      await cleanupExpiredDemoTenants();
+    } catch (error) {
+      console.error('Tick error:', error);
+    } finally {
+      isRunning = false;
+      _currentTick = null;
+    }
+  })();
+  return _currentTick;
 }
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -205,16 +212,29 @@ export function startReminderScheduler(intervalMs: number = DEFAULT_INTERVAL_MS)
 }
 
 /**
- * Stop the reminder scheduler.
+ * Stop the reminder scheduler. Drains current tick with timeout to prevent
+ * in-flight reminders from being abandoned mid-process.
  */
-export function stopReminderScheduler(): void {
+export async function stopReminderScheduler(timeoutMs = 10000): Promise<void> {
   if (schedulerInterval) {
     console.log('🛑 Stopping reminder scheduler');
     clearInterval(schedulerInterval);
     schedulerInterval = null;
   }
 
-  // Clean up reminder service timeouts
+  if (_currentTick) {
+    console.log('Draining current reminder tick...');
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('drain timeout')), timeoutMs)
+    );
+    try {
+      await Promise.race([_currentTick, timeout]);
+      console.log('Drain complete');
+    } catch (e) {
+      console.warn('Reminder worker drain timed out');
+    }
+  }
+
   if (reminderService) {
     reminderService.cleanup();
   }
@@ -251,8 +271,8 @@ export function getSchedulerStatus(): {
 
 // Handle process signals for graceful shutdown
 if (typeof process !== 'undefined') {
-  const handleShutdown = () => {
-    stopReminderScheduler();
+  const handleShutdown = async () => {
+    await stopReminderScheduler().catch(console.error);
   };
 
   process.once('SIGTERM', handleShutdown);

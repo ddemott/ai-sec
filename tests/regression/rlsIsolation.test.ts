@@ -24,19 +24,14 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
+import { ROOT_DB_URL, API_DB_URL } from '../utils';
+import { ROOT_DB_URL as ADMIN_URL } from '../utils.js';
 
 /**
- * A genuinely privileged URL, used only to seed and tear down fixtures.
- *
- * It must NOT fall back to DATABASE_URL. Once DATABASE_URL points at app_user
- * (which is the whole point of this work), that fallback makes the fixture
- * INSERTs fail under RLS — the suite dies in beforeAll, afterAll skips its
- * cleanup, and the leftover tenant rows then break unrelated tests later in the
- * run. That happened on the first full-suite run and cost more time to diagnose
- * than the seam it was testing.
+ * A genuinely privileged URL (now consistently test_db via tests/utils.ts).
+ * Used only to seed and tear down fixtures. Matches skipIfDbDown pattern
+ * and ROOT_DB_URL guard against using production DATABASE_URL.
  */
-const ADMIN_URL =
-  process.env.TEST_ADMIN_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 
 /**
  * The non-bypassing role. Defaults to the local placeholder password from

@@ -670,7 +670,7 @@ describe('agentTools /find-customer-by-name', () => {
     // WHY: Caller ID is the forwarding cell, not the caller — name is the only
     //        trustworthy first identifier, so name-search is the entry point
     const { app, queries } = buildApp({
-      queryResponses: [{ rows: [{ name: 'Jane Doe', phone: '+16125551234' }] }],
+      queryResponses: [{ rows: [{ name: 'Jane Doe', phone: '+16135551234' }] }],
     });
     const res = await post(app, '/agent-tools/find-customer-by-name', {
       tenant_id: TENANT_ID,
@@ -678,10 +678,27 @@ describe('agentTools /find-customer-by-name', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toEqual({
-      matches: [{ name: 'Jane Doe', phone: '+16125551234' }],
+      matches: [{ name: 'Jane Doe', phone: '+1•••-•••-1234' }],
     });
     // WHY: the trimmed name is passed to the ILIKE search
     expect(queries[0].params).toEqual([TENANT_ID, 'Jane']);
+  });
+
+  it('SECURITY: one-letter name probes return nothing instead of sweeping the address book', async () => {
+    // WHO: anyone trying a single common letter like "a"
+    // WHAT: the route must refuse to turn one-character probes into broad
+    //        customer enumeration across the tenant's address book
+    // WHY: a one-letter search plus phone numbers is the exact over-disclosure
+    //      called out in TODO.md — it is too cheap to be useful and too noisy to
+    //      be safe
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'a',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({ matches: [] });
+    expect(queries).toHaveLength(0);
   });
 
   it('HAPPY: no match returns an empty list (signal to create a new entry)', async () => {

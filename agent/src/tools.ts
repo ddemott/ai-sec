@@ -422,7 +422,7 @@ export function buildTools(
 
     find_caller_by_name: llm.tool({
       description:
-        "Look up callers by name in the CRM. Call this right after the caller gives you their name. Returns matching contacts with the phone number on file so you can confirm 'is this still your number?'. An empty list means no match — treat them as a new caller. Use this for name-first identification on this forwarded line, since caller ID is not the caller's own number.",
+        "Look up callers by name in the CRM. Call this right after the caller gives you their name. Returns matching contacts with a masked phone number on file so you can confirm 'is this still your number?' without reading the full number aloud. An empty list means no match — treat them as a new caller. Use this for name-first identification on this forwarded line, since caller ID is not the caller's own number.",
       parameters: {
         type: 'object',
         properties: {
