@@ -243,15 +243,18 @@ export async function sendJobInquiryEmail(to: string, fields: JobInquiryFields):
     `\n\nThe caller was asked to email a full job description to your inbox with their name and company in the subject line.`;
 
   // Caller-provided values (company, name, address) come straight off the call,
-  // so every one is escaped — `renderDetailRows` does that for the table, and
-  // the preheader below goes through `escapeHtml`. An unescaped '<' would
-  // inject markup into the owner's inbox.
+  // so every one is escaped — but each is escaped exactly ONCE, by the thing
+  // that emits the markup: `renderDetailRows` for the table, `renderEmailShell`
+  // for the preheader (it calls escapeHtml on whatever it is handed). Pass RAW
+  // text in here. Escaping at the call site too yields `&amp;lt;` in the inbox
+  // preview line — the caller's own words, mangled, in the first thing the
+  // owner reads.
   const html = renderEmailShell({
     heading: 'New job inquiry',
     // The owner reads this next to the subject on a phone: lead with the role,
     // which is the "do I want this?" signal.
     preheader: fields.roleDescription
-      ? `${escapeHtml(fields.roleDescription)} — details collected on the call.`
+      ? `${fields.roleDescription} — details collected on the call.`
       : 'A caller asked whether you are available for work.',
     bodyHtml:
       `<p style="margin:0 0 4px">A caller asked whether you're available for work. Details collected on the call:</p>` +
