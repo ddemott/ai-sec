@@ -28,7 +28,6 @@
  */
 
 import { Client } from 'pg';
-import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -39,7 +38,7 @@ const MIGRATIONS_DIR = path.join(ROOT_DIR, 'supabase/migrations');
 const ADMIN_URL =
   process.env.TEST_ADMIN_DATABASE_URL ??
   process.env.DATABASE_URL ??
-  'postgres://postgres:***@localhost:5433/postgres';
+  'postgres://postgres:postgres@localhost:5433/postgres';
 
 // Guard: never run on anything that looks like production.
 function isSafeTarget(url: string): boolean {
@@ -53,7 +52,7 @@ function isSafeTarget(url: string): boolean {
   if (!['localhost', '127.0.0.1', 'db', 'postgres', 'secretary-hq-db'].includes(host)) {
     return false;
   }
-  if (dbname.includes('prod') || dbname === 'postgres' && !lower.includes('test')) {
+  if (dbname.includes('prod') || (dbname === 'postgres' && !lower.includes('test'))) {
     // Allow postgres DB only if explicitly for test setup; prefer test_db.
     console.warn('[setup-test-db] Using postgres DB — consider test_db for isolation.');
   }
@@ -63,7 +62,9 @@ function isSafeTarget(url: string): boolean {
 if (!isSafeTarget(ADMIN_URL)) {
   console.error('[setup-test-db] REFUSED: Target does not look like a local test database.');
   console.error('  URL:', ADMIN_URL.replace(/:[^@]+@/, ':***@'));
-  console.error('  Use TEST_ADMIN_DATABASE_URL pointing at localhost test_db or pass --force (not recommended).');
+  console.error(
+    '  Use TEST_ADMIN_DATABASE_URL pointing at localhost test_db or pass --force (not recommended).'
+  );
   process.exit(2);
 }
 
@@ -74,9 +75,7 @@ const TEST_DB_URL = ADMIN_URL.includes('/test_db')
 console.log('[setup-test-db] Target test DB:', TEST_DB_URL.replace(/:[^@]+@/, ':***@'));
 
 async function createTestDbIfMissing(superClient: Client) {
-  const res = await superClient.query(
-    "SELECT 1 FROM pg_database WHERE datname = 'test_db'"
-  );
+  const res = await superClient.query("SELECT 1 FROM pg_database WHERE datname = 'test_db'");
   if (res.rows.length === 0) {
     console.log('[setup-test-db] Creating test_db...');
     // Use template0 to avoid encoding issues with template1 if it has data.
@@ -99,9 +98,10 @@ async function setupSchemaMigrations(client: Client) {
 }
 
 async function runMigrationsUpToTarget(client: Client) {
-  const files = fs.readdirSync(MIGRATIONS_DIR)
-    .filter(f => /^\d{14}_.*\.sql$/.test(f))
-    .sort();  // lexical = chronological due to timestamp prefix
+  const files = fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => /^\d{14}_.*\.sql$/.test(f))
+    .sort(); // lexical = chronological due to timestamp prefix
 
   const targetIndex = files.indexOf(TARGET_MIGRATION);
   if (targetIndex === -1) {
@@ -110,7 +110,9 @@ async function runMigrationsUpToTarget(client: Client) {
 
   const migrationsToRun = files.slice(0, targetIndex + 1);
 
-  console.log(`[setup-test-db] Will run ${migrationsToRun.length} migrations up to ${TARGET_MIGRATION}.`);
+  console.log(
+    `[setup-test-db] Will run ${migrationsToRun.length} migrations up to ${TARGET_MIGRATION}.`
+  );
 
   const appliedRes = await client.query('SELECT version FROM schema_migrations');
   const applied = new Set(appliedRes.rows.map((r: any) => r.version));
@@ -130,10 +132,10 @@ async function runMigrationsUpToTarget(client: Client) {
     try {
       await client.query('BEGIN');
       await client.query(sql);
-      await client.query(
-        'INSERT INTO schema_migrations (version, filename) VALUES ($1, $2)',
-        [version, fname]
-      );
+      await client.query('INSERT INTO schema_migrations (version, filename) VALUES ($1, $2)', [
+        version,
+        fname,
+      ]);
       await client.query('COMMIT');
       appliedCount++;
     } catch (err: any) {
