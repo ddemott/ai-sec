@@ -33,6 +33,7 @@ const MAX_BATCH_SIZE = 100;
 
 let schedulerInterval: NodeJS.Timeout | null = null;
 let isRunning = false;
+let isShuttingDown = false;
 let _currentTick: Promise<void> | null = null;
 let db: DatabaseService | null = null;
 let configService: TenantConfigService | null = null;
@@ -65,9 +66,32 @@ async function processBatch(): Promise<number> {
   initServices();
   if (!db || !reminderService) return 0;
 
+  const pool = getPool();
+
   try {
-    // Get all due reminders (scheduled_for <= NOW, status = 'scheduled')
-    const dueReminders = await db.getDueReminders();
+    // ATOMIC CLAIM prevents double-SMS race: UPDATE + FOR UPDATE SKIP LOCKED
+    // RETURNING guarantees only one worker claims a reminder. Sets 'sending'
+    // so concurrent ticks see it as in-flight. High impact on every deploy.
+    const claimRes = await pool.query(
+      `
+      UPDATE reminder_schedules
+         SET status = 'sending',
+             updated_at = NOW()
+       WHERE reminder_schedule_id IN (
+         SELECT reminder_schedule_id
+           FROM reminder_schedules
+          WHERE status = 'scheduled'
+            AND scheduled_for <= NOW()
+          ORDER BY scheduled_for ASC, reminder_schedule_id ASC
+          LIMIT $1
+          FOR UPDATE SKIP LOCKED
+       )
+       RETURNING *
+    `,
+      [MAX_BATCH_SIZE]
+    );
+
+    const dueReminders = claimRes.rows;
 
     if (dueReminders.length === 0) {
       return 0;
@@ -76,25 +100,20 @@ async function processBatch(): Promise<number> {
     console.log(`🔔 Processing ${dueReminders.length} due reminder(s)`);
 
     let processed = 0;
-    for (const reminder of dueReminders.slice(0, MAX_BATCH_SIZE)) {
+    for (const reminder of dueReminders) {
       try {
         await reminderService.processReminder(reminder.reminder_schedule_id.toString());
         processed++;
       } catch (error) {
         console.error(`❌ Failed to process reminder ${reminder.reminder_schedule_id}:`, error);
-        // Decide retry vs. permanent failure based on the error's HTTP
-        // status (when present) and the row's current retry_count.
-        // 4xx + exhausted retries → flip to 'failed'. Otherwise schedule
-        // the next attempt with exponential backoff (5m / 30m / 2h).
-        // Policy lives in src/services/reminders/retryPolicy.ts.
         const currentRetryCount = reminder.retry_count ?? 0;
         const decision = decideRetry(error, currentRetryCount);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         try {
           if (decision.action === 'retry') {
             await db.updateReminderSchedule(reminder.reminder_schedule_id.toString(), {
-              status: 'scheduled', // stay scheduled — worker picks up again after backoff
-              error: errorMessage, // keep latest error visible for debugging
+              status: 'scheduled',
+              error: errorMessage,
               retry_count: decision.nextRetryCount,
               next_retry_at: decision.nextRetryAt.toISOString(),
             });
@@ -116,13 +135,6 @@ async function processBatch(): Promise<number> {
     console.log(`✅ Processed ${processed}/${dueReminders.length} reminder(s)`);
     return processed;
   } catch (error) {
-    // This is the whole-batch failure — getDueReminders() itself dying, a pool
-    // checkout timing out, RLS refusing. It was a bare console.error: no metric,
-    // and not even Pino, so it reached only Railway stdout (which truncates) and
-    // nothing else. The other two workers (voiceSessionReaper, scheduleExtender)
-    // both increment errors_total here; this one — the only worker that TEXTS
-    // CUSTOMERS — was the odd one out. If reminders stop platform-wide, this
-    // counter is how we find out.
     errorsTotal.inc({ event: 'reminder_batch_failed' });
     console.error('❌ Reminder batch processing error:', error);
     return 0;
@@ -169,8 +181,7 @@ export async function cleanupExpiredDemoTenants(poolOverride?: Pool): Promise<vo
  * Main scheduler tick - called on each interval.
  */
 function tick(): Promise<void> {
-  if (isRunning) {
-    // Skip if previous tick is still running
+  if (isShuttingDown || isRunning) {
     return Promise.resolve();
   }
 
@@ -216,6 +227,7 @@ export function startReminderScheduler(intervalMs: number = DEFAULT_INTERVAL_MS)
  * in-flight reminders from being abandoned mid-process.
  */
 export async function stopReminderScheduler(timeoutMs = 10000): Promise<void> {
+  isShuttingDown = true;
   if (schedulerInterval) {
     console.log('🛑 Stopping reminder scheduler');
     clearInterval(schedulerInterval);
@@ -223,7 +235,7 @@ export async function stopReminderScheduler(timeoutMs = 10000): Promise<void> {
   }
 
   if (_currentTick) {
-    console.log('Draining current reminder tick...');
+    console.log('Draining current reminder tick (SIGTERM drain)...');
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('drain timeout')), timeoutMs)
     );
@@ -238,6 +250,7 @@ export async function stopReminderScheduler(timeoutMs = 10000): Promise<void> {
   if (reminderService) {
     reminderService.cleanup();
   }
+  isShuttingDown = false;
 }
 
 /**

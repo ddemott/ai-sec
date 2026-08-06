@@ -114,8 +114,10 @@ async function runMigrationsUpToTarget(client: Client) {
     `[setup-test-db] Will run ${migrationsToRun.length} migrations up to ${TARGET_MIGRATION}.`
   );
 
-  const appliedRes = await client.query('SELECT version FROM schema_migrations');
-  const applied = new Set(appliedRes.rows.map((r: any) => r.version));
+  const appliedRes = await client.query<{ version: string }>(
+    'SELECT version FROM schema_migrations'
+  );
+  const applied = new Set(appliedRes.rows.map((r) => r.version));
 
   let appliedCount = 0;
   for (const fname of migrationsToRun) {
@@ -138,10 +140,11 @@ async function runMigrationsUpToTarget(client: Client) {
       ]);
       await client.query('COMMIT');
       appliedCount++;
-    } catch (err: any) {
+    } catch (err: unknown) {
       await client.query('ROLLBACK').catch(() => {});
       console.error(`FAIL    ${fname}`);
-      console.error('  ', err.message);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('  ', msg);
       throw err;
     }
   }
@@ -228,8 +231,9 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((err) => {
-    console.error('[setup-test-db] FAILED:', err.message);
+  main().catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[setup-test-db] FAILED:', msg);
     process.exit(1);
   });
 }
