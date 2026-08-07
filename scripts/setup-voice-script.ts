@@ -164,7 +164,7 @@ function hostOf(url: string): string | null {
     return null;
   }
 }
-const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db', ''];
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'secretary-hq-db', ''];
 
 async function main(): Promise<void> {
   const host = hostOf(DB_URL);

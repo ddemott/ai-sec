@@ -177,18 +177,23 @@ beforeEach(async (ctx) => {
 });
 
 describe('find-customer-by-name — ILIKE name search against real Postgres', () => {
-  it('HAPPY: exact full-name match returns that customer with their stored phone', async () => {
+  it('HAPPY: exact full-name match returns that customer with their MASKED phone', async () => {
     // WHO: a returning caller who states their full name.
     // WHAT: exact match on the `name` column via ILIKE '%<name>%'.
     // WHEN: caller identification at the top of a call.
-    // WHERE: agentTools.ts find-customer-by-name SQL (name branch).
-    // WHY: the agent reads the stored phone back ("is this still your
-    //      number?") — wrong/missing phone breaks the confirm flow.
+    // WHERE: routes/agentTools/identity.ts find-customer-by-name (name branch).
+    // WHY: the agent reads the phone back to confirm identity ("is this still
+    //      your number?"), so the ROUTE masks it — `maskPhoneForConfirmation`
+    //      emits `+1•••-•••-0002`. A name is a claim anyone can make; handing
+    //      the full number to whoever guesses a name right would turn the
+    //      confirm step into a disclosure. The fixtures below still INSERT real
+    //      numbers — masking is a property of the read path, not the data, and
+    //      these expectations must stay masked.
     const res = await findByName('Michael Thornberry');
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: true,
-      result: { matches: [{ name: 'Michael Thornberry', phone: '+15552000002' }] },
+      result: { matches: [{ name: 'Michael Thornberry', phone: '+1•••-•••-0002' }] },
     });
   });
 
@@ -197,7 +202,7 @@ describe('find-customer-by-name — ILIKE name search against real Postgres', ()
     const res = await findByName('Michael');
     expect(res.statusCode).toBe(200);
     expect(res.json().result.matches).toEqual([
-      { name: 'Michael Thornberry', phone: '+15552000002' },
+      { name: 'Michael Thornberry', phone: '+1•••-•••-0002' },
     ]);
   });
 
@@ -206,7 +211,7 @@ describe('find-customer-by-name — ILIKE name search against real Postgres', ()
     const res = await findByName('Thornberr');
     expect(res.statusCode).toBe(200);
     expect(res.json().result.matches).toEqual([
-      { name: 'Michael Thornberry', phone: '+15552000002' },
+      { name: 'Michael Thornberry', phone: '+1•••-•••-0002' },
     ]);
   });
 
@@ -215,7 +220,7 @@ describe('find-customer-by-name — ILIKE name search against real Postgres', ()
     const res = await findByName('MICHAEL THORNBERRY');
     expect(res.statusCode).toBe(200);
     expect(res.json().result.matches).toEqual([
-      { name: 'Michael Thornberry', phone: '+15552000002' },
+      { name: 'Michael Thornberry', phone: '+1•••-•••-0002' },
     ]);
   });
 
@@ -229,7 +234,7 @@ describe('find-customer-by-name — ILIKE name search against real Postgres', ()
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: true,
-      result: { matches: [{ name: "Sarah O'Brien", phone: '+15552000001' }] },
+      result: { matches: [{ name: "Sarah O'Brien", phone: '+1•••-•••-0001' }] },
     });
   });
 
@@ -243,7 +248,7 @@ describe('find-customer-by-name — ILIKE name search against real Postgres', ()
     const res = await findByName('Priya Patelsdottir');
     expect(res.statusCode).toBe(200);
     expect(res.json().result.matches).toEqual([
-      { name: 'Priya Patelsdottir', phone: '+15552000003' },
+      { name: 'Priya Patelsdottir', phone: '+1•••-•••-0003' },
     ]);
   });
 
@@ -255,7 +260,7 @@ describe('find-customer-by-name — ILIKE name search against real Postgres', ()
     const res = await findByName('Emptyfield');
     expect(res.statusCode).toBe(200);
     expect(res.json().result.matches).toEqual([
-      { name: 'Emptyfield Nameless', phone: '+15552000004' },
+      { name: 'Emptyfield Nameless', phone: '+1•••-•••-0004' },
     ]);
   });
 

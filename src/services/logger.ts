@@ -20,7 +20,7 @@ import pino from 'pino';
  *   the destination is unreachable.
  *
  * Filterable fields baked into every line:
- * - `service` — `ai-sec-backend` or `ai-sec-agent` so the same Better Stack
+ * - `service` — `secretary-hq-backend` or `secretary-hq-agent` so the same Better Stack
  *   source can host both and a UI filter splits them.
  * - `env` — `production` / `development` / `test`.
  * - `tenant_id` (per-request) — added via Fastify's request-logger child;

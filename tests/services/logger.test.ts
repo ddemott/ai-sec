@@ -21,7 +21,7 @@ describe('buildLogger — observability factory', () => {
   });
 
   test('builds a working logger when BETTER_STACK_TOKEN is unset', () => {
-    const log = buildLogger({ service: 'ai-sec-backend' });
+    const log = buildLogger({ service: 'secretary-hq-backend' });
     expect(typeof log.info).toBe('function');
     expect(typeof log.error).toBe('function');
     expect(typeof log.child).toBe('function');
@@ -31,46 +31,46 @@ describe('buildLogger — observability factory', () => {
   });
 
   test('bakes the service name into every log line as a base context field', () => {
-    const log = buildLogger({ service: 'ai-sec-backend' });
+    const log = buildLogger({ service: 'secretary-hq-backend' });
     // Pino exposes the base bindings via .bindings() on Pino v9+.
     const bindings = log.bindings();
-    expect(bindings.service).toBe('ai-sec-backend');
-    // WHO: support engineer filtering Better Stack for one of the two services | WHAT: every line carries `service: ai-sec-backend` (or `ai-sec-agent`) | WHEN: cross-service correlation across one Better Stack source | WHERE: logger base context | WHY: a single Better Stack source hosts both services to keep the free tier; without a service tag every filter requires manual routing logic and "the call dropped" support questions become unanswerable
+    expect(bindings.service).toBe('secretary-hq-backend');
+    // WHO: support engineer filtering Better Stack for one of the two services | WHAT: every line carries `service: secretary-hq-backend` (or `secretary-hq-agent`) | WHEN: cross-service correlation across one Better Stack source | WHERE: logger base context | WHY: a single Better Stack source hosts both services to keep the free tier; without a service tag every filter requires manual routing logic and "the call dropped" support questions become unanswerable
   });
 
   test('reads NODE_ENV into the env tag', () => {
     process.env.NODE_ENV = 'production';
-    const log = buildLogger({ service: 'ai-sec-backend' });
+    const log = buildLogger({ service: 'secretary-hq-backend' });
     expect(log.bindings().env).toBe('production');
     // WHO: engineer triaging a production-only issue | WHAT: env tag distinguishes prod vs staging vs dev logs in the same Better Stack source | WHEN: a noisy dev session and a real prod incident overlap in time | WHERE: logger base context | WHY: filtering on `env: production` is the first thing support does; mistakenly treating a dev log as a prod incident wastes paging time
   });
 
   test('respects LOG_LEVEL env override', () => {
     process.env.LOG_LEVEL = 'warn';
-    const log = buildLogger({ service: 'ai-sec-backend' });
+    const log = buildLogger({ service: 'secretary-hq-backend' });
     expect(log.level).toBe('warn');
     // WHO: ops engineer responding to log volume cost spike | WHAT: env-var knob lets us turn down verbosity without redeploying | WHEN: Better Stack ingest approaches the free-tier 1GB cap mid-month | WHERE: buildLogger LOG_LEVEL handling | WHY: a code-only level flag forces a redeploy under a billing crunch; pinning the env-var path keeps a fast escape hatch
   });
 
   test('defaults to info level in production when LOG_LEVEL unset', () => {
     process.env.NODE_ENV = 'production';
-    const log = buildLogger({ service: 'ai-sec-backend' });
+    const log = buildLogger({ service: 'secretary-hq-backend' });
     expect(log.level).toBe('info');
     // WHO: engineer reading prod logs | WHAT: default prod level is info, not debug — keeps the signal-to-noise ratio sane | WHEN: BETTER_STACK_TOKEN set, NODE_ENV=production, LOG_LEVEL absent | WHERE: buildLogger level resolution | WHY: shipping with debug-default in prod would 10× our log volume and burn the free-tier quota in days; the per-env default IS the safety net
   });
 
   test('defaults to debug level in development when LOG_LEVEL unset', () => {
     process.env.NODE_ENV = 'development';
-    const log = buildLogger({ service: 'ai-sec-backend' });
+    const log = buildLogger({ service: 'secretary-hq-backend' });
     expect(log.level).toBe('debug');
     // WHO: developer running `npm start` locally | WHAT: dev default is debug so trace/info both flow to terminal during feature work | WHEN: NODE_ENV=development, LOG_LEVEL absent | WHERE: buildLogger level resolution | WHY: forcing local devs to set LOG_LEVEL=debug to see info-level lines is friction; the per-env default lets prod stay quiet and dev stay verbose without per-developer setup
   });
 
   test('child logger inherits service + env and adds the requested bindings', () => {
-    const log = buildLogger({ service: 'ai-sec-backend' });
+    const log = buildLogger({ service: 'secretary-hq-backend' });
     const child = log.child({ tenant_id: 't-123', request_id: 'r-456' });
     const bindings = child.bindings();
-    expect(bindings.service).toBe('ai-sec-backend');
+    expect(bindings.service).toBe('secretary-hq-backend');
     expect(bindings.tenant_id).toBe('t-123');
     expect(bindings.request_id).toBe('r-456');
     // WHO: per-request and per-call code paths (Fastify request loggers, agent's per-call child) | WHAT: child loggers add tenant_id / call_id / request_id without dropping the base service+env tags | WHEN: every Fastify request and every LiveKit agent call | WHERE: Pino child-logger contract | WHY: this is THE feature that makes "the call dropped at 2:14pm" support questions answerable — filtering on `tenant_id=X AND call_id=Y` returns the full timeline only because every line on that call inherits both the base context and the per-call bindings

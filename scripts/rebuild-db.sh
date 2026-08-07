@@ -32,7 +32,7 @@ set -euo pipefail
 #   ./scripts/rebuild-db.sh --force --yes URL # bypass the safety check
 #
 # Safety: refuses to run against any host that doesn't match one of
-# { localhost, 127.0.0.1, db, postgres, ai-sec-db }. Pass --force only
+# { localhost, 127.0.0.1, db, postgres, secretary-hq-db }. Pass --force only
 # when you genuinely intend to wipe a remote dev DB. There is no way
 # to override the prompt + safety check together except via --force
 # --yes — by design, so two independent decisions are required.
@@ -61,12 +61,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 HOST=$(echo "$DB_URL" | sed -En 's|.*@([^:/]+).*|\1|p')
 if [ "$FORCE" -eq 0 ]; then
   case "$HOST" in
-    ""|localhost|127.0.0.1|db|postgres|ai-sec-db)
+    ""|localhost|127.0.0.1|db|postgres|secretary-hq-db)
       : # safe — local-looking
       ;;
     *)
       echo "[rebuild-db] REFUSED: host '$HOST' doesn't look like a local dev DB."
-      echo "[rebuild-db] Allowed hosts: localhost, 127.0.0.1, db, postgres, ai-sec-db."
+      echo "[rebuild-db] Allowed hosts: localhost, 127.0.0.1, db, postgres, secretary-hq-db."
       echo "[rebuild-db] Pass --force to override (you will regret this)."
       exit 2
       ;;

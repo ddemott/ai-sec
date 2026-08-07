@@ -43,7 +43,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 
 **Layering:**
 
-- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`ai-sec-agent`: Deepgram Nova-3 STT, OpenAI GPT-4.1-mini LLM, **Deepgram Aura TTS**; no XAI key). Call sequencing = question trees (§6.3).
+- **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`secretary-hq-agent`: Deepgram Nova-3 STT, OpenAI GPT-4.1-mini LLM, **Deepgram Aura TTS**; no XAI key). Call sequencing = question trees (§6.3).
 - **Tools**: 26 voice tools defined in `agent/src/tools.ts` against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`. **12 of them are actually offered to the model** under question trees (§7).
 - **API**: Fastify (29 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
 - **DB**: Postgres + pgvector on Supabase, 154 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
@@ -72,7 +72,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 ├── supabase/
 │   ├── migrations/               154 SQL migrations
 │   └── seed.sql                  Platform admin + Bella's Hair Studio demo tenant
-├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `ai-sec-agent`
+├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `secretary-hq-agent`
 │   └── src/                      index.ts (entry), prompt.ts, toolsClient.ts, sessionContext.ts, tools.ts
 ├── shared/                       Cross-runtime code
 │   ├── getEmbedding.ts           OpenAI text-embedding-3-small wrapper
@@ -88,7 +88,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 
 **Shipped in LiveKit migration (commit `661d21d`):**
 
-- `agent/` — separate Node.js package for the LiveKit agent worker (deployed as Railway service `ai-sec-agent`)
+- `agent/` — separate Node.js package for the LiveKit agent worker (deployed as Railway service `secretary-hq-agent`)
 - `src/routes/agentTools/` — voice-AI tools (originals + OTP helpers); replaced the deleted `supabase/functions/vapi-tools/`
 
 ---
@@ -114,14 +114,14 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
                                 │ WebSocket (room dispatch)
                                 ▼
                       ┌────────────────────┐
-                      │  Agent Worker      │  Railway: ai-sec-agent
+                      │  Agent Worker      │  Railway: secretary-hq-agent
                       │  (Node, LiveKit    │  worker AW_vPmGExrgTeGn
                       │   Agents SDK)      │
                       └─────────┬──────────┘
                                 │ HTTP + x-agent-secret
                                 ▼
                     ┌─────────────────────┐
-                    │  Fastify Backend    │  ai-sec-production.up.railway.app
+                    │  Fastify Backend    │  secretary-hq-production.up.railway.app
                     │  29 route modules   │  Railway (Nixpacks, Node 20)
                     └──────────┬──────────┘
                                │
@@ -143,12 +143,12 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 
 | Service            | Platform                               | Region / URL                                                                                                     | Deploy mechanism                                                                                                       |
 | ------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Backend (Fastify)  | Railway                                | `ai-sec-production.up.railway.app`                                                                               | Nixpacks auto-deploy from `main`                                                                                       |
-| Agent worker       | Railway (service `ai-sec-agent`)       | WebSocket long-runner, worker ID `AW_vPmGExrgTeGn`, registers with LiveKit under agent name `ai-secretary-agent` | Node.js package under `agent/`                                                                                         |
+| Backend (Fastify)  | Railway                                | `secretary-hq-production.up.railway.app`                                                                               | Nixpacks auto-deploy from `main`                                                                                       |
+| Agent worker       | Railway (service `secretary-hq-agent`)       | WebSocket long-runner, worker ID `AW_vPmGExrgTeGn`, registers with LiveKit under agent name `secretary-hq-agent` | Node.js package under `agent/`                                                                                         |
 | Database           | Supabase (managed Postgres + pgvector) | `sgibijfchvfuizudrmir` (us-west-2)                                                                               | Migrations applied via `npm run db:migrate`                                                                            |
 | Dashboard          | Railway                                | `dashboard-production-cee3.up.railway.app`                                                                       | Next.js build via `dashboard/server.js`                                                                                |
 | Telephony          | Telnyx                                 | `+1 (630) 822-9086` (live; `937-9478` + `866-1960` decommissioned)                                               | SIP Connection `livekit-outbound` (ID `2945038451784812111`); provisioned per tenant via `POST /provisioning/activate` |
-| Voice orchestrator | LiveKit Cloud                          | `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` (SIP); WebSocket for agent                                        | Dispatch rule `SDR_if97ky4Zf7e6` routes to agent name `ai-secretary-agent`                                             |
+| Voice orchestrator | LiveKit Cloud                          | `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` (SIP); WebSocket for agent                                        | Dispatch rule `SDR_WEL49AwBB4NW` routes to agent name `secretary-hq-agent`                                             |
 | Stripe             | Hosted                                 | Webhook: `/billing/webhook` on Railway                                                                           | Products + price IDs in Stripe dashboard                                                                               |
 
 **Graceful shutdown:** Backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
@@ -291,10 +291,10 @@ Super-admin operations (cross-tenant queries, tenant listing, user registration)
 ### 6.1 Current flow (LiveKit Agents, shipped in `661d21d`)
 
 1. **Inbound call** — Telnyx SIP trunk → LiveKit Cloud SIP inbound trunk.
-2. **Room creation** — LiveKit dispatch rule `SDR_if97ky4Zf7e6` creates a room with metadata `{ tenant_id }` (agent name `ai-secretary-agent`).
-3. **Agent worker** — Node.js worker (Railway service `ai-sec-agent`) joins the room. `agent/src/index.ts` speaks the tenant's pre-generated greeting (`buildGreeting()`, via `session.say()`) and then constructs ONE of three call architectures — see §6.3.
+2. **Room creation** — LiveKit dispatch rule `SDR_WEL49AwBB4NW` creates a room with metadata `{ tenant_id }` (agent name `secretary-hq-agent`).
+3. **Agent worker** — Node.js worker (Railway service `secretary-hq-agent`) joins the room. `agent/src/index.ts` speaks the tenant's pre-generated greeting (`buildGreeting()`, via `session.say()`) and then constructs ONE of three call architectures — see §6.3.
 4. **Conversation** — Deepgram Nova-3 (STT) → **OpenAI GPT-4.1-mini** (voice LLM since 2026-07-20; 4o-mini still runs summaries/classify/fallback) → **Deepgram Aura TTS** (`aura-asteria-en`; per-tenant `tenants.tts_voice`). **`tenants.tts_speed` is INERT under Aura** — the plugin appends `?speed=` to the WS upgrade URL, Aura answers 400, the socket never opens and the line goes completely silent. That outage (2026-07-14) is why `cd agent && npm run verify:tts` exists and is mandatory before any TTS change ships.
-5. **Tool execution** — LLM issues tool calls → HTTP POST to `https://ai-sec-production.up.railway.app/agent-tools/*` with `x-agent-secret` header.
+5. **Tool execution** — LLM issues tool calls → HTTP POST to `https://secretary-hq-production.up.railway.app/agent-tools/*` with `x-agent-secret` header.
 6. **Business logic** — Fastify route → `withTenantClient()` → Postgres RPCs and pgvector queries.
 7. **Response** — JSON `{ success: true, result: ... }` or `{ success: false, error: ... }` with HTTP 200 — the LLM relays both shapes naturally.
 8. **Call end** — LiveKit room close event → `src/routes/voice.ts` handles summary generation + embedding + `link_orphaned_transcripts()`.
@@ -401,7 +401,7 @@ Caller-ID phones that pass `isValidPhone()` skip the OTP loop entirely.
 1. Owner clicks "Activate Phone" in the setup wizard with an area code.
 2. Backend calls **Telnyx Numbers API** to search inventory + purchase a number (`src/services/telnyxNumbers.ts`).
 3. Backend assigns the number to SIP Connection `livekit-outbound` (ID `2945038451784812111`) so Telnyx routes inbound calls to LiveKit Cloud's SIP ingress.
-4. LiveKit dispatch rule `SDR_if97ky4Zf7e6` (already configured at the project level, not per-tenant) routes inbound calls to a room with metadata `{ tenant_id }`. The agent worker `ai-sec-agent` picks up rooms with agent name `ai-secretary-agent`.
+4. LiveKit dispatch rule `SDR_WEL49AwBB4NW` (already configured at the project level, not per-tenant) routes inbound calls to a room with metadata `{ tenant_id }`. The agent worker `secretary-hq-agent` picks up rooms with agent name `secretary-hq-agent`.
 5. Tenant row updated: `inbound_phone`, `telnyx_phone_number_id`, `phone_status = 'active'`.
 
 Rollback on failure — if step 3 fails, step 2's number is released. (No Vapi assistant creation step — that was retired with the LiveKit migration in `661d21d`.)

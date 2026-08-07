@@ -8,9 +8,9 @@
  */
 
 /**
- * DatabaseService - Adapter layer for ai-sec database operations.
+ * DatabaseService - Adapter layer for secretary-hq database operations.
  *
- * Bridges the gap between ai-sec's withTenantClient(pool) pattern and
+ * Bridges the gap between secretary-hq's withTenantClient(pool) pattern and
  * the DatabaseService interface expected by migrated communications/reminders services.
  *
  * Pattern: Repository with lazy pool initialization.
@@ -298,7 +298,7 @@ export interface DatabaseService {
 
 /**
  * PostgreSQL implementation of DatabaseService.
- * Uses ai-sec's pool and RLS patterns.
+ * Uses secretary-hq's pool and RLS patterns.
  */
 export class PostgresDatabaseService implements DatabaseService {
   private pool: Pool;
@@ -467,21 +467,19 @@ export class PostgresDatabaseService implements DatabaseService {
         // THE JOIN IS LOAD-BEARING (2026-07-13). Soft-deleting a tenant does NOT
         // cascade — its reminder_schedules rows survive, still 'scheduled', still
         // due. This sweep is cross-tenant, so without the is_deleted filter A
-        // DELETED BUSINESS WOULD KEEP TEXTING ITS CUSTOMERS: appointment reminders
-        // and confirmations, from a company that no longer exists, on a phone number
-        // that may have been released. That is the single worst shape a zombie-tenant
-        // leak could take — it reaches real people, and it is a TCPA problem, not
-        // just a bug.
+        // DELETED BUSINESS WOULD KEEP TEXTING ITS CUSTOMERS...
         //
-        // This is the cost of soft-delete, and it is why the filter has to be
-        // enumerated rather than assumed: a hard delete took these rows with it.
+        // FOR UPDATE SKIP LOCKED claims rows atomically. Prevents duplicate
+        // processing if multiple workers or overlapping ticks hit the same due row.
+        // SKIP LOCKED avoids blocking on rows already claimed by another worker.
         `SELECT rs.* FROM reminder_schedules rs
            JOIN tenants t ON t.tenant_id = rs.tenant_id AND t.is_deleted = false
           WHERE rs.status = 'scheduled'
             AND rs.scheduled_for <= NOW()
             AND (rs.next_retry_at IS NULL OR rs.next_retry_at <= NOW())
           ORDER BY rs.scheduled_for
-          LIMIT 100`
+          LIMIT 100
+          FOR UPDATE SKIP LOCKED`
       );
       return result.rows;
     });

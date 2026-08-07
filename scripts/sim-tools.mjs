@@ -217,19 +217,26 @@ async function main() {
   else fail('voice-session-end', `status ${end.status} ${JSON.stringify(end.json)}`);
 
   // ── S8b. DB read-back — prove the link/outcome/summary actually PERSISTED,
-  //         not just that the endpoint returned ok (local only; needs SIM_DB_URL).
+  //         not just that the endpoint returned ok (needs SIM_DB_URL).
   if (process.env.SIM_DB_URL) {
     try {
       const { default: pg } = await import('pg');
       const c = new pg.Client({ connectionString: process.env.SIM_DB_URL });
       await c.connect();
+      // RLS: prod connects as `app_user` (rolbypassrls=false), so every policy
+      // filters on `app.current_tenant_id`. A raw connection has that GUC unset,
+      // which silently yields ZERO rows — the check then reports a FAIL for a
+      // row that persisted perfectly. Set the tenant context first, exactly as
+      // `createWithTenantClient` does for a real request. Locally this is a
+      // harmless no-op when the URL happens to be a bypassing superuser.
+      await c.query('SELECT set_config($1, $2, false)', ['app.current_tenant_id', TENANT]);
       const r = await c.query(
         'SELECT appointment_id, outcome, summary FROM voice_sessions WHERE tenant_id=$1 AND call_id=$2',
         [TENANT, callId]
       );
-      await c.end();
       const row = r.rows[0];
       if (row && row.appointment_id && row.outcome === 'booked' && row.summary === callSummary) {
+        await c.end();
         pass(
           'call → appointment link (DB)',
           `voice_session.appointment_id = ${String(row.appointment_id).slice(0, 8)}…, outcome=booked, summary stored`
@@ -241,7 +248,20 @@ async function main() {
           );
         }
       } else {
-        fail('call → appointment link (DB)', `row=${JSON.stringify(row)}`);
+        // A missing row is ambiguous: never written, or written but invisible to
+        // this role. Report which, so the next reader doesn't re-debug the app
+        // when the answer is "your connection can't see it".
+        const d = await c
+          .query(
+            "SELECT current_user AS role, current_setting('app.current_tenant_id', true) AS ctx, (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user) AS bypass"
+          )
+          .catch(() => ({ rows: [] }));
+        await c.end();
+        const who = d.rows[0];
+        const ctx = who
+          ? ` [role=${who.role} bypassrls=${who.bypass} tenant_ctx=${who.ctx || 'UNSET'}]`
+          : '';
+        fail('call → appointment link (DB)', `row=${JSON.stringify(row)}${ctx}`);
       }
     } catch (e) {
       gap('call → appointment link (DB)', `read-back skipped: ${e?.message ?? e}`);

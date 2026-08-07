@@ -11,7 +11,7 @@ Pairs with `docs/DEPLOYMENT.md` (how prod is wired) and `docs/SECURITY.md`.
 
 | Thing         | Value                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------ |
-| Backend       | `https://ai-sec-production.up.railway.app/`                                                |
+| Backend       | `https://secretary-hq-production.up.railway.app/`                                                |
 | Liveness      | `GET /health` — process up only, no DB (`{status, started_at}`)                            |
 | Readiness     | `GET /ready` — pings DB + reports pool saturation; 503 when DB unreachable                 |
 | Metrics       | `GET /metrics` — Prometheus text, Bearer `METRICS_TOKEN` (404 if token unset)              |
@@ -19,7 +19,7 @@ Pairs with `docs/DEPLOYMENT.md` (how prod is wired) and `docs/SECURITY.md`.
 | Inbound trunk | LiveKit trunk `ST_aUM3GuCuc9wL`                                                            |
 | Logs          | Railway live-tail (stdout) + Better Stack (if `BETTER_STACK_TOKEN` set)                    |
 | Errors        | Sentry (if `SENTRY_DSN` set)                                                               |
-| Services      | Railway: `ai-sec` (backend), `ai-sec-agent` (worker), `dashboard` — all deploy from `main` |
+| Services      | Railway: `secretary-hq` (backend), `secretary-hq-agent` (worker), `dashboard` — all deploy from `main` |
 
 **Key metric series** (`/metrics`): `errors_total{event}`, `http_requests_total{route,method,status}`, `http_request_duration_ms`, `booking_attempts_total{outcome,source}`, `tool_calls_total{tool,outcome}`, `sync_dispatches_total{provider,entity,action}`.
 
@@ -27,7 +27,7 @@ Pairs with `docs/DEPLOYMENT.md` (how prod is wired) and `docs/SECURITY.md`.
 
 ## 1. Triage signals
 
-1. **Is the process up?** `curl https://ai-sec-production.up.railway.app/health` → expect `200 {status:"ok",...}`. No response = backend down → §5.
+1. **Is the process up?** `curl https://secretary-hq-production.up.railway.app/health` → expect `200 {status:"ok",...}`. No response = backend down → §5.
 2. **Is the DB reachable?** `curl .../ready` → `503` or `pool.waiting > 0` sustained = DB/pool problem → §6.
 3. **Error rate?** `rate(errors_total[5m])` climbing, or Sentry alerting → find the `event` label, grep Better Stack for it.
 4. **Build current?** `./scripts/simulate.sh ci` shows local build freshness + the 4 CI job conclusions. A backend running longer than the last `src/` change suggests a stale binary (see Build Principles in `CLAUDE.md`).
@@ -40,9 +40,9 @@ Symptom: caller hears ringing then dead air, or the call connects but the AI nev
 
 Check in order:
 
-1. **Agent worker alive?** `./scripts/simulate.sh status --env prod --deep` dispatch-tests the `ai-sec-agent` worker. If the deep check fails, the worker is down → redeploy `ai-sec-agent` on Railway, confirm it booted (Railway logs show the LiveKit worker registering).
-2. **Agent → backend auth.** The worker calls `/agent-tools/*` with `x-agent-secret`. A mismatch returns 401 and the agent can't fetch tenant context. Symptom in logs: `Agent not authorized — check AGENT_SECRET config`. Fix: ensure `AGENT_SECRET` is identical on `ai-sec` and `ai-sec-agent`.
-3. **Agent `BACKEND_URL`.** Must be `https://ai-sec-production.up.railway.app` on `ai-sec-agent` (the worker exits at boot if unset). A wrong URL = every tool call fails.
+1. **Agent worker alive?** `./scripts/simulate.sh status --env prod --deep` dispatch-tests the `secretary-hq-agent` worker. If the deep check fails, the worker is down → redeploy `secretary-hq-agent` on Railway, confirm it booted (Railway logs show the LiveKit worker registering).
+2. **Agent → backend auth.** The worker calls `/agent-tools/*` with `x-agent-secret`. A mismatch returns 401 and the agent can't fetch tenant context. Symptom in logs: `Agent not authorized — check AGENT_SECRET config`. Fix: ensure `AGENT_SECRET` is identical on `secretary-hq` and `secretary-hq-agent`.
+3. **Agent `BACKEND_URL`.** Must be `https://secretary-hq-production.up.railway.app` on `secretary-hq-agent` (the worker exits at boot if unset). A wrong URL = every tool call fails.
 4. **TTS / LLM provider down.** Dead air after the greeting can be **Deepgram Aura** (TTS) or OpenAI (LLM) timing out. Check the dead-air guard logs (`agent/src/fallback.ts`) and the hold-line watchdog (`agent/src/session/holdLines.ts`). Check OpenAI quota (a 429 surfaces as a tool 500) AND the Deepgram key. **If the line is SILENT rather than slow, suspect the Aura WebSocket handshake** — a bad param (e.g. `speed`) makes Aura answer 400, the socket never opens, and there is no TTS at all: run `cd agent && npm run verify:tts`.
 5. **Inbound never reached the agent at all** → this is a telephony-path problem, not an agent problem → §7.
 
@@ -69,7 +69,7 @@ Symptom: customer pays but the tenant gate doesn't flip; Stripe dashboard shows 
 Check in order:
 
 1. **`STRIPE_WEBHOOK_SECRET` set + correct?** An empty/mismatched secret makes the handler reject every event 400 (signature verify fails — boot warning fires when `STRIPE_SECRET_KEY` is set but the webhook secret isn't). Fix: copy the signing secret from the Stripe webhook endpoint into Railway.
-2. **Webhook registered at the right URL?** `https://ai-sec-production.up.railway.app/billing/webhook`, subscribed to the 3 events (`checkout.session.completed`, `invoice.payment_failed`, `customer.subscription.deleted`).
+2. **Webhook registered at the right URL?** `https://secretary-hq-production.up.railway.app/billing/webhook`, subscribed to the 3 events (`checkout.session.completed`, `invoice.payment_failed`, `customer.subscription.deleted`).
 3. **Price IDs.** A missing `STRIPE_SOLO/GROWTH/PRO_PRICE_ID` makes that plan's checkout 503 before any webhook.
 4. **Verify the round-trip locally** with `stripe listen` + `./scripts/simulate.sh stripe` before blaming prod.
 
@@ -101,7 +101,7 @@ Check:
 
 ## 7. Telephony troubleshooting (Telnyx → LiveKit → agent)
 
-The inbound path: **PSTN caller → Telnyx DID → Telnyx SIP Connection → LiveKit Cloud SIP trunk → LiveKit dispatch rule → `ai-sec-agent` worker (tenant via SIP metadata).**
+The inbound path: **PSTN caller → Telnyx DID → Telnyx SIP Connection → LiveKit Cloud SIP trunk → LiveKit dispatch rule → `secretary-hq-agent` worker (tenant via SIP metadata).**
 
 ### 7a. Call doesn't connect at all (busy / fast-busy / no ring)
 

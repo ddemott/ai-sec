@@ -70,4 +70,4 @@ UPDATE tenants
    `tenants.job_inquiry_email`). Without it, the UPDATE above and the route's INSERT fail.
 2. `EMAIL_USER` / `EMAIL_PASS` set on the prod backend — else email runs in simulation mode
    (appears to succeed, never delivered). The row still saves regardless.
-3. Code merged to `main` so `ai-sec-agent` redeploys with the new tool.
+3. Code merged to `main` so `secretary-hq-agent` redeploys with the new tool.

@@ -283,12 +283,12 @@ the Railway deploy lands (verify `/health` `started_at` moved — see CLAUDE.md
 on SKIPPED being terminal), verify on prod:
 
 ```
-time curl -s -m 30 -X POST https://ai-sec-production.up.railway.app/forgot-password \
+time curl -s -m 30 -X POST https://secretary-hq-production.up.railway.app/forgot-password \
   -H 'content-type: application/json' -d '{"email":"daledemott@gmail.com"}'
 ```
 
 Must return `{"success":true}` in **< 3s** (was: 30s timeout, HTTP 000). Then
-check `railway logs --service ai-sec` for either nothing (mail went out) or
+check `railway logs --service secretary-hq` for either nothing (mail went out) or
 the new `password_reset_email_failed` line (transport still down — expected
 until the provider question is settled; the point is it is now VISIBLE and
 the endpoint is fast). Mind the 3/hour rate limit on this endpoint when

@@ -68,7 +68,7 @@ function hostOf(url: string): string | null {
     return null;
   }
 }
-const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'ai-sec-db', ''];
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', 'db', 'postgres', 'secretary-hq-db', ''];
 
 /**
  * Child tables keyed directly by customer_id (FK graph verified 2026-07-20),

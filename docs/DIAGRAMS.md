@@ -31,10 +31,10 @@ flowchart TB
   Telnyx["Telnyx SIP Trunk<br/>+1 630 822 9086 (live)"]
   Caller -->|PSTN| Telnyx
 
-  LiveKit["LiveKit Cloud<br/>SIP bridge + rooms<br/>dispatch rule SDR_if97ky4Zf7e6"]
+  LiveKit["LiveKit Cloud<br/>SIP bridge + rooms<br/>dispatch rule SDR_WEL49AwBB4NW"]
   Telnyx -->|SIP via livekit-outbound| LiveKit
 
-  subgraph agentBox["Agent Worker — Railway: ai-sec-agent"]
+  subgraph agentBox["Agent Worker — Railway: secretary-hq-agent"]
     direction TB
     Agent["Node + LiveKit Agents SDK<br/>worker AW_vPmGExrgTeGn"]
     DG["Deepgram Nova-3 STT"]
@@ -47,7 +47,7 @@ flowchart TB
 
   LiveKit -->|WebSocket| Agent
 
-  Fastify["Fastify Backend<br/>29 route modules<br/>ai-sec-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
+  Fastify["Fastify Backend<br/>29 route modules<br/>secretary-hq-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
   Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>154 migrations")]
@@ -236,7 +236,7 @@ sequenceDiagram
 
   Caller->>Telnyx: Dial +1 (630) 937-9478 (historical; current live +1 630-822-9086)
   Telnyx->>LK: SIP INVITE → inbound trunk
-  LK->>LK: dispatch rule SDR_if97ky4Zf7e6<br/>→ create room, metadata = { tenant_id }
+  LK->>LK: dispatch rule SDR_WEL49AwBB4NW<br/>→ create room, metadata = { tenant_id }
   LK->>Agent: room.created event (WebSocket)
   Agent->>LK: join room
   Agent->>Caller: greeting (TTS audio)

@@ -4,7 +4,7 @@
  * which keeps local dev quiet and avoids leaking events when a build
  * is staged without prod credentials.
  *
- * Tagged `service: ai-sec-dashboard` to match the server-side init.
+ * Tagged `service: secretary-hq-dashboard` to match the server-side init.
  * Browser-side errors land in the same Sentry project as backend +
  * agent so a single alert can fire on cross-service error spikes.
  */
@@ -19,6 +19,6 @@ if (dsn) {
     tracesSampleRate: 0,
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
-    initialScope: { tags: { service: 'ai-sec-dashboard', runtime: 'browser' } },
+    initialScope: { tags: { service: 'secretary-hq-dashboard', runtime: 'browser' } },
   });
 }

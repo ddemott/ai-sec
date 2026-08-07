@@ -90,10 +90,10 @@ describe('src/services/sentry.ts', () => {
       // WHAT: SENTRY_DSN is set; init should flip the flag
       // WHY: subsequent captureException calls need to actually forward
       process.env.SENTRY_DSN = 'https://fake@sentry.io/12345';
-      initSentry({ service: 'ai-sec-backend' });
+      initSentry({ service: 'secretary-hq-backend' });
       expect(isSentryInitializedForTesting()).toBe(true);
       expect(initCalls).toBe(1);
-      expect(scopeTagsAccum.service).toBe('ai-sec-backend');
+      expect(scopeTagsAccum.service).toBe('secretary-hq-backend');
     });
 
     it('HAPPY: initSentry is idempotent — second call is a no-op', () => {
