@@ -10,6 +10,12 @@ import type { ConsentService } from '../consentService.js';
 import type { EmailMessage, CommunicationResult } from './types.js';
 import { EmailTemplateService, type EmailTemplateData } from './emailTemplates.js';
 import { recordCommunicationHistory } from './communicationHistory.js';
+import {
+  EMAIL_LOGO_CID,
+  emailLogoAttachment,
+  escapeHtml,
+  renderEmailShell,
+} from './emailLayout.js';
 
 export class EmailService {
   private transporter: nodemailer.Transporter;
@@ -105,6 +111,13 @@ export class EmailService {
         subject,
         text,
         html,
+        // Attach the inline logo ONLY when the body actually references it.
+        // Tenant→customer templates deliberately carry no platform logo (see
+        // `logoUrl` below), and an attachment nothing points at surfaces in the
+        // client as a stray file the sender appears to have meant to send.
+        ...(html?.includes(`cid:${EMAIL_LOGO_CID}`)
+          ? { attachments: [emailLogoAttachment()] }
+          : {}),
       };
 
       const result = await this.transporter.sendMail(mailOptions);
@@ -190,7 +203,20 @@ export class EmailService {
       notes: d.notes,
       reason: d.reason,
       hoursUntil: d.hoursUntil,
-      logoUrl: undefined, // Not currently stored
+      // Deliberately EMPTY, and not a TODO.
+      //
+      // This template is a TENANT-to-CUSTOMER email: Thinking Hammer LLC
+      // writing to their customer. The header belongs to the business, whose
+      // name is already the masthead. Putting the SecretaryHQ mark there brands
+      // the business's mail with its vendor's logo — the customer has no
+      // relationship with SecretaryHQ and would rightly wonder who sent this.
+      // The platform mark instead appears once, small, in the footer (see
+      // `generateBaseTemplate`), which is the honest placement.
+      //
+      // A per-tenant logo is what belongs here. That needs a `tenants.logo_url`
+      // column + upload UI + storage — tracked in docs/TODO.md, not sneaked in
+      // by pointing at the platform asset.
+      logoUrl: undefined,
       primaryColor: undefined, // Not currently stored
       secondaryColor: undefined, // Not currently stored
     };
@@ -216,12 +242,21 @@ export class EmailService {
           businessAddress: undefined,
         });
 
-      default:
+      default: {
+        // Generic passthrough message. Previously emitted a bare `<p>${message}</p>`
+        // — unstyled (so it read as plain text in a client) AND unescaped, which
+        // let message content inject markup. Both fixed by going through the shell.
+        const body = d.message || 'You have a message from AI Secretary';
         return {
           subject: d.subject || 'Message from AI Secretary',
-          text: d.message || 'You have a message from AI Secretary',
-          html: `<p>${d.message || 'You have a message from AI Secretary'}</p>`,
+          text: body,
+          html: renderEmailShell({
+            heading: d.subject || `Message from ${businessName}`,
+            preheader: body.slice(0, 90),
+            bodyHtml: `<p style="margin:0">${escapeHtml(body)}</p>`,
+          }),
         };
+      }
     }
   }
 }

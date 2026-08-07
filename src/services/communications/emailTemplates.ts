@@ -214,6 +214,16 @@ export class EmailTemplateService {
         You're receiving this because you have an appointment with us.<br>
         <a href="#" style="color: #9ca3af;">Unsubscribe</a> from future emails.
       </div>
+      <!--
+        Platform attribution, footer-only and deliberately small. This email is
+        the BUSINESS writing to THEIR customer, so the masthead stays theirs;
+        the vendor mark belongs down here, at "powered by" size, or the customer
+        is left wondering who SecretaryHQ is. Rendered as text rather than the
+        logo image so it needs no attachment on the tenant send path.
+      -->
+      <div style="margin-top:14px;font-size:12px;color:#9ca3af">
+        Powered by <span style="color:#1B2B4B;font-weight:bold">Secretary</span><span style="color:#5E8DD6;font-weight:bold">HQ</span>
+      </div>
     </div>
   </div>
 </body>

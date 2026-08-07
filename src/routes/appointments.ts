@@ -690,6 +690,38 @@ export function registerAppointmentRoutes(
           .send({ success: false, error: 'Customer has no phone number on file.' });
       }
 
+      const normalizedTo = normalizePhone(row.customer_phone);
+      if (!normalizedTo || !isValidPhone(normalizedTo)) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'Invalid phone number — check customer phone on file.' });
+      }
+
+      const consented = await withTenantClient(tenantId, async (client) => {
+        const res = await client.query<{ consent_given: boolean; revoked_at: string | null }>(
+          `SELECT consent_given, revoked_at
+             FROM consent_records
+            WHERE tenant_id = $1
+              AND customer_phone = $2
+              AND consent_type IN ('sms', 'both')
+            ORDER BY consent_date DESC
+            LIMIT 1`,
+          [tenantId, normalizedTo]
+        );
+
+        const latest = res.rows[0];
+        if (!latest) return false;
+        if (latest.revoked_at) return false;
+        return latest.consent_given === true;
+      });
+
+      if (!consented) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Customer has not consented to SMS communications.',
+        });
+      }
+
       const cancelToken = generateSelfServiceToken(id, tenantId, 'cancel');
       const rescheduleToken = generateSelfServiceToken(id, tenantId, 'reschedule');
       if (!cancelToken || !rescheduleToken) {
@@ -709,7 +741,6 @@ export function registerAppointmentRoutes(
 
       const fromPhone = row.inbound_phone ?? process.env.TELNYX_PHONE_NUMBER ?? '';
       const normalizedFrom = fromPhone ? normalizePhone(fromPhone) : null;
-      const normalizedTo = normalizePhone(row.customer_phone);
 
       if (
         !normalizedFrom ||

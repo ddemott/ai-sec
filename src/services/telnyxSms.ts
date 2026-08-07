@@ -18,7 +18,7 @@
  * catch (see metrics.ts), and the counter could not see it.
  */
 import { randomInt } from 'node:crypto';
-import { smsSendsTotal } from './metrics';
+import { smsSendsTotal, errorsTotal } from './metrics';
 
 export interface TelnyxSmsResult {
   ok: boolean;
@@ -49,6 +49,7 @@ export async function sendSms(params: {
     // A missing credential is a send failure like any other, and it is exactly
     // the kind that reads as silence rather than as an error.
     smsSendsTotal.inc({ provider: 'telnyx', outcome: 'failed', reason: 'not_configured' });
+    errorsTotal.inc({ event: 'sms_send_failed', provider: 'telnyx', reason: 'not_configured' });
     return { ok: false, error: 'TELNYX_API_KEY not configured' };
   }
 
@@ -70,6 +71,11 @@ export async function sendSms(params: {
     if (!res.ok) {
       const errBody = await res.text().catch(() => '');
       smsSendsTotal.inc({ provider: 'telnyx', outcome: 'failed', reason: `http_${res.status}` });
+      errorsTotal.inc({
+        event: 'sms_send_failed',
+        provider: 'telnyx',
+        reason: `http_${res.status}`,
+      });
       return { ok: false, status: res.status, error: errBody || `HTTP ${res.status}` };
     }
     smsSendsTotal.inc({ provider: 'telnyx', outcome: 'sent' });
@@ -81,6 +87,11 @@ export async function sendSms(params: {
     smsSendsTotal.inc({
       provider: 'telnyx',
       outcome: 'failed',
+      reason: timedOut ? 'timeout' : 'network',
+    });
+    errorsTotal.inc({
+      event: 'sms_send_failed',
+      provider: 'telnyx',
       reason: timedOut ? 'timeout' : 'network',
     });
     return {

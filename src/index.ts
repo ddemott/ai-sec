@@ -408,7 +408,7 @@ app
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
     app.log.info(`Received ${signal}, shutting down...`);
-    stopReminderScheduler();
+    await stopReminderScheduler();
     stopVoiceSessionReaper();
     stopScheduleExtender();
     await app.close();

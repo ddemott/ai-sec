@@ -76,6 +76,15 @@ const TREE_PASSTHROUGH_TOOLS: Record<string, string[]> = {
   // reach the owner ON the meeting; unwrapped, so it never gates anything and is
   // simply unavailable-by-error when no booking happened.
   buy_service: ['attach_meeting_notes'],
+  // Recognizing a returning caller and proving a SPOKEN number both live behind
+  // the identity tree — every goal-bearing call selects it (its own description:
+  // "Select for EVERY call whose goals need a contact"). Before this, these three
+  // tools were fully built end-to-end on the backend (the disclosure gate in
+  // callerMayHearCustomerData, the call-bound phone_verifications row, ctx.callerPhone
+  // adoption on verify_phone_code success) and completely unreachable on a live
+  // call: selectedTools() never offered them, so a forwarded-line caller could
+  // never be recognized or proven, no matter what the backend was ready to do.
+  identity: ['get_customer_context', 'send_verification_code', 'verify_phone_code'],
 };
 
 /**
