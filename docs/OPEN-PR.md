@@ -26,7 +26,7 @@ Column meanings:
 |---|---|---|---|---|---|---|---|---|
 | 1 | 2026-07-12 01:02 | 07-11 22:22 | 2 | `feat/setup-removal-impact-warning` | #240 | MERGED → **PURGED** 2026-08-06 | yes | `062cd67b8a7ed909551c18603336e19f0191db71` |
 | 2 | 2026-07-12 18:37 | 07-12 18:37 | 2 | `chore/blueprints-plan-and-deno-cleanup` | — | no PR → **SUPERSEDED**, ready to purge | **no** | `75553c253a95a34028ababd57ca1baf19ce2f6d8` |
-| 3 | 2026-07-14 05:14 | 07-14 03:03 | 2 | `feat/phone-verification-kill-switch` | #260 | CLOSED (dup of #262) | **no** | `ddd902414b17d74aa01ddd965bb1edd854d299d5` |
+| 3 | 2026-07-14 05:14 | 07-14 03:03 | 2 | `feat/phone-verification-kill-switch` | #260 | CLOSED (dup of #262) → **PURGED** 2026-08-07 | no (content shipped via #262) | `ddd902414b17d74aa01ddd965bb1edd854d299d5` |
 | 4 | 2026-07-14 09:29 | 07-14 05:18 | 11 | `fix/tool-calling-reliability` | #261 | MERGED | yes | `dd1c9e1ea89dd75d274b3f8dd64014611d2f56a4` |
 | 5 | 2026-07-14 09:43 | 07-14 09:43 | 1 | `feat/otp-kill-switch` | #262 | MERGED | yes | `3cafc58e8eeda27edd8939815cfb9f3a1ac18d88` |
 | 6 | 2026-07-15 06:42 | — | 0 | `spike/task-group-ladder` | #264 | MERGED | yes | `59651f3ec06695d483c436f2c15b5a4f9ef5a8e5` |
@@ -34,16 +34,16 @@ Column meanings:
 | 8 | 2026-07-21 01:37 | 07-21 01:37 | 1 | `feat/usage-billing-statement` | — | no PR | **no** (wip) | `556fd45132bdd7ecca9ca4d5111fae6b5515c1a8` |
 | 9 | 2026-07-21 15:08 | 07-21 01:40 | 11 | `feat/question-tree-architecture` | #292 | MERGED | yes | `b64c84925a4c4cb602c0d450f3a2062e052eb916` |
 | 10 | 2026-07-22 03:45 | 07-22 03:11 | 6 | `feat/templates-list-services` | #294 | MERGED | yes | `5629355b8e2dcce729a2365ddb6b7d574bc146a9` |
-| 11 | 2026-07-27 04:18 | 07-23 13:35 | 6 | `feat/message-default-transfer-guard-name-backfill` | #296 MERGED / #297 CLOSED | mixed | partial | `057867ab5504a04f0959eae641ef659317a82393` |
+| 11 | 2026-07-27 04:18 | 07-23 13:35 | 6 | `feat/message-default-transfer-guard-name-backfill` | #296 MERGED / #297 CLOSED | **PURGED** 2026-08-07 | yes — all 6 commits verified landed | `057867ab5504a04f0959eae641ef659317a82393` |
 | 12 | 2026-07-27 05:44 | 07-27 05:44 | 1 | `docs/deploy-gate-lesson` | #299 | MERGED | yes | `43c389b0420c6f06288466a9e9aaecc7327ffb83` |
 | 13 | 2026-07-28 04:24 | — | 0 | `fix/forgot-password-email-delivery` | #305 | MERGED | yes | `63f0c75b1831ec60acd80198319fd9a0a2bdc9c5` |
-| 14 | 2026-08-03 12:32 | 08-03 12:32 | 1 | `feat/wire-otp-identity-tools` | #318 | **OPEN** | **no** | `40931c2f4e8669f4f549178b6d5a0c71f9c5a3bf` |
+| 14 | 2026-08-03 12:32 | 08-03 12:32 | 1 | `feat/wire-otp-identity-tools` | #318 | **MERGED** 2026-08-07 (`2c3bafd`) → PURGED | yes | `40931c2f4e8669f4f549178b6d5a0c71f9c5a3bf` |
 | 15 | 2026-08-03 14:41 | 08-03 14:41 | 1 | `chore/rename-ai-sec-to-secretary-hq` | #319 | MERGED | yes | `1442acf85c1c236a5b5ad0f4027361bfd3a6da8d` |
 | 16 | 2026-08-03 15:57 | 08-03 15:57 | 1 | `fix/sim-tools-rls-tenant-context` | #320 | MERGED | yes | `356ccd3c0c83b94ba38520413bf0d35328a18ef6` |
-| 17 | 2026-08-04 16:15 | 08-04 16:15 | 1 | `docs/stripe-setup-split` | #321 | **OPEN** | **no** | `8130307d1b5ec4b5f9dd277e792b9b479b407d76` |
-| 18 | 2026-08-05 15:19 | 08-04 16:41 | 3 | `feat/branded-html-emails` | #322 | **OPEN** | **no** | `9fe56e17dadd249b2d9eceec769fd9e9614ab628` |
-| 19 | 2026-08-06 11:58 | 08-06 11:58 | 1 | `chore/deno-toolchain-removal` | **#323** | **OPEN**, blocked by GitHub outage — replaces row 2 | **no** | `71e413c023dab4535de0fba2936c36ff0d964d8c` |
-| 20 | 2026-08-06 12:14 | 08-06 12:14 | 1 | `docs/business-blueprints-spec` | *no PR yet* | **NEW**, pushed — salvage off row 2 | **no** | `1e96bc5c489c6ada949881807397111ac3b9a084` |
+| 17 | 2026-08-04 16:15 | 08-04 16:15 | 1 | `docs/stripe-setup-split` | #321 | **MERGED** 2026-08-07 (`aba5f64`) → PURGED | yes | `8130307d1b5ec4b5f9dd277e792b9b479b407d76` |
+| 18 | 2026-08-05 15:19 | 08-04 16:41 | 3 | `feat/branded-html-emails` | #322 | **MERGED** 2026-08-07 (`6d94cf9`) → PURGED | yes | `9fe56e17dadd249b2d9eceec769fd9e9614ab628` |
+| 19 | 2026-08-06 11:58 | 08-06 11:58 | 1 | `chore/deno-toolchain-removal` | **#323** | **MERGED** 2026-08-06 (`1be2e97`) → PURGED — replaced row 2 | yes | `71e413c023dab4535de0fba2936c36ff0d964d8c` |
+| 20 | 2026-08-06 12:14 | 08-06 12:14 | 1 | `docs/business-blueprints-spec` | *this PR* | salvage off row 2 + this inventory | **no** | `1e96bc5c489c6ada949881807397111ac3b9a084` |
 
 Rows 6, 7 and 13 show 0 commits ahead — their tips are already reachable from `main`, so there is nothing to merge.
 
@@ -97,22 +97,29 @@ Only **3** branches genuinely need merging, and PR-number order is also the leas
 - `required_conversation_resolution: true`
 - `required_approving_review_count: 0` — no reviewer needed; every current blocker is mechanical
 
-## The three unlanded branches that are not merges
+## Outcome — what actually happened to the three "decision" branches
 
-These are decisions, not merge candidates:
+All three were resolved on 2026-08-06/07 rather than merged:
 
-- **`chore/blueprints-plan-and-deno-cleanup`** (no PR, 172 behind) — removes the dead Deno/Vapi toolchain. Most of that code is likely already gone; re-do the cleanup fresh off `main` rather than merging a July branch.
-- **`feat/phone-verification-kill-switch`** (#260 CLOSED, 156 behind) — closed as the duplicate of #262, which landed. Delete.
-- **`feat/usage-billing-statement`** (no PR, 33 behind) — tip commit is `wip(billing+agent)`. Cherry-pick if the work is still wanted; otherwise delete.
+- **`chore/blueprints-plan-and-deno-cleanup`** (no PR, 172 behind) — **purged.** Its Deno cleanup was redone fresh off `main` as #323 (plus a fifth dead file it had missed, `tests/template_test.ts`). Its unique 327-line design spec was salvaged byte-identical onto `docs/business-blueprints-spec`; its stale `docs/TODO.md` delta was dropped.
+- **`feat/phone-verification-kill-switch`** (#260 CLOSED, 156 behind) — **purged.** Verified first that `ENABLE_PHONE_VERIFICATION` is live in `main` (`agent/src/configSchema.ts`, `agent/src/index.ts`, plus a test asserting the two OTP tools drop when it is false). #262 carried the same work and merged six minutes after #260 was closed as the duplicate.
+- **`feat/message-default-transfer-guard-name-backfill`** — **purged.** The suspected orphan `057867a` (from the closed #297) turned out to be the one commit `git cherry` positively confirms landed; the other five showed `+` only because squash-merging rewrote their patch-ids. Content spot-verified in `main`: `phoneLoopGuard.ts`, the message-by-default work in `blocks.ts`, the greeting-only fabrication guard in `callSummary.test.ts`, the ghost-dispatch guard, and `scripts/onboard-tenant.ts`.
 
-Also unresolved: **`feat/message-default-transfer-guard-name-backfill`** — #296 merged 2026-07-23, but commit `057867a` (2026-07-27, *"Message callers become customers; the tool that acted records the outcome"*) came after that merge and belonged to the closed #297. Verify whether that content landed by another route before deleting the branch.
+**Method worth reusing:** `git cherry -v main <branch>` marks a commit `-` when patch-equivalent content is already upstream. A `+` is NOT proof the work is missing — squash merges rewrite patch-ids, so every commit of a squashed PR shows `+`. When it says `+`, check the content, not the patch-id.
 
-## Safe to delete (content shipped)
+Still undecided as of 2026-08-07: **`feat/usage-billing-statement`** (tip `556fd45`, a `wip(billing+agent)` commit, never had a PR). Salvage or purge — its hash is recorded above either way.
 
-Tips reachable from `main`: `fix/forgot-password-email-delivery`, `rung-architecture`, `origin/spike/task-group-ladder`.
+## Final state (2026-08-07)
 
-Squash-merged (tip unreachable, content shipped): `feat/setup-removal-impact-warning` (#240), `fix/tool-calling-reliability` (#261), `feat/otp-kill-switch` (#262), `feat/question-tree-architecture` (#292), `feat/templates-list-services` (#294), `docs/deploy-gate-lesson` (#299), `chore/rename-ai-sec-to-secretary-hq` (#319), `fix/sim-tools-rls-tenant-context` (#320).
+Started at **19 remote branches**; ended at **4**:
 
-Two branches were never pushed and exist only locally: `chore/rename-ai-sec-to-secretary-hq` and `fix/sim-tools-rls-tenant-context`. Both correspond to merged PRs (#319, #320), so the pushed copies were deleted after merge.
+| Branch | Why it survives |
+|---|---|
+| `main` | — |
+| `rung-architecture` | Deliberate rollback anchor for the pre-question-tree era, kept at Dale's explicit request. Not stale by accident. |
+| `feat/usage-billing-statement` | Undecided (see above). |
+| `docs/business-blueprints-spec` | This PR. |
 
-> Merging any of these to `main` deploys to all 3 Railway services. Per `CLAUDE.md`, verify the deploy actually happened afterwards (`npm run status -- --env prod`; `/health`'s `started_at` must move) — a green merge is not a deploy.
+Merged and deployed this pass: **#323** (`1be2e97`), **#322** (`6d94cf9`), **#318** (`2c3bafd`), **#321** (`aba5f64`). Every purge was preceded by a content check, and every purged tip hash is recorded in the `branch-hash-anchors` note.
+
+**One operational lesson worth keeping:** `git push origin --delete <branch>` fires the pre-push hook, which runs the FULL test suite even though a deletion pushes no commits. It looks like a hang for 2+ minutes. Use `--no-verify` on deletions.
