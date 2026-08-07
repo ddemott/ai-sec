@@ -1336,6 +1336,14 @@ export default defineAgent({
           ? new ChecklistAgent({
               tools: allTools,
               persona: `You are ${tenantConfig.personaName?.trim() || 'Clara'}, the AI receptionist for ${tenantConfig.name}.`,
+              // WHAT THE BUSINESS IS. The persona line names it; these two say
+              // what it DOES. Without them the model could not answer "what is
+              // this?" without inventing services (which the prompt forbids), so
+              // it answered with a bare "no, this is X" and went quiet — the
+              // wrong-number dead air. greeting_menu is already the owner's own
+              // spoken services line, so it is the same words the caller heard.
+              businessName: tenantConfig.name,
+              businessBlurb: tenantConfig.greetingMenu,
               runtime: {
                 currentDate: formatDateForPrompt(new Date(), tenantConfig.timezone),
                 timezone: tenantConfig.timezone,

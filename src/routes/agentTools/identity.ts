@@ -208,6 +208,20 @@ async function hasSmsConsent(
   }
 }
 
+function maskPhoneForConfirmation(phone: string | null): string | null {
+  if (!phone) return null;
+
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 4) return '••••';
+
+  const last4 = digits.slice(-4);
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `+1•••-•••-${last4}`;
+  }
+
+  return `•••-•••-${last4}`;
+}
+
 export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps): void {
   // record-consent — the caller verbally agreed on the call to receive SMS
   // appointment confirmations/reminders. Writes a dated `consent_records` row
@@ -649,6 +663,9 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
       if (!trimmed) {
         return ok(reply, { matches: [] });
       }
+      if (trimmed.length < 2) {
+        return ok(reply, { matches: [] });
+      }
       // Escape LIKE metacharacters so a spoken/transcribed name containing
       // `%` or `_` matches literally instead of acting as a wildcard — an
       // unescaped `%` would ILIKE-match the tenant's entire address book and
@@ -686,7 +703,7 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
       return ok(reply, {
         matches: matches.map((m) => ({
           name: m.name || 'Unknown',
-          phone: m.phone || null,
+          phone: maskPhoneForConfirmation(m.phone),
         })),
       });
     },

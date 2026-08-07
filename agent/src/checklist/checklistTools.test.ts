@@ -49,6 +49,9 @@ function makeKit(overrides: Partial<ChecklistToolDeps> = {}) {
     cancel_appointment: fakeTool(ok({ appointment_id: 'appt_9' })),
     reschedule_appointment: fakeTool(ok({ appointment_id: 'appt_9' })),
     attach_meeting_notes: fakeTool(ok({ appointment_id: 'appt_1' })),
+    get_customer_context: fakeTool(ok({ name: 'Camille', preferences: {}, history: '' })),
+    send_verification_code: fakeTool(ok({ sent: true })),
+    verify_phone_code: fakeTool(ok({ verified: true, phone: '+15551234567' })),
   };
   const tracker = new ChecklistTracker(PLATFORM_TREE_LIBRARY);
   const onSelectionChanged = vi.fn();
@@ -113,6 +116,39 @@ describe('the toolset composition', () => {
     expect(names).toContain('attach_meeting_notes');
     // No node in the checklist is completed by it — nothing gates on it.
     expect(tracker.frontier().every((f) => f.node_id !== 'attach_meeting_notes')).toBe(true);
+  });
+
+  it('identity brings the caller-recognition + OTP tools as UNWRAPPED passthroughs', async () => {
+    // WHY: these three are fully built end-to-end on the backend (disclosure gate,
+    //      call-bound verification, ctx.callerPhone adoption) and were completely
+    //      unreachable on a live call because selectedTools() never offered them —
+    //      a forwarded-line caller could never be recognized or proven regardless
+    //      of what the backend was ready to do. Unwrapped like attach_meeting_notes:
+    //      none of the three complete a checklist node, so nothing should gate them.
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity'] });
+    const names = Object.keys(toolkit.selectedTools());
+    expect(names).toContain('get_customer_context');
+    expect(names).toContain('send_verification_code');
+    expect(names).toContain('verify_phone_code');
+    expect(
+      tracker
+        .frontier()
+        .every(
+          (f) =>
+            f.node_id !== 'get_customer_context' &&
+            f.node_id !== 'send_verification_code' &&
+            f.node_id !== 'verify_phone_code'
+        )
+    ).toBe(true);
+  });
+
+  it('caller-recognition + OTP tools are absent before identity is selected', () => {
+    const { toolkit } = makeKit();
+    const names = Object.keys(toolkit.selectedTools());
+    expect(names).not.toContain('get_customer_context');
+    expect(names).not.toContain('send_verification_code');
+    expect(names).not.toContain('verify_phone_code');
   });
 
   it('buy_service alone offers no write of its own', async () => {

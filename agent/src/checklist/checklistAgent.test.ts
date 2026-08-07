@@ -32,7 +32,10 @@ describe('buildChecklistPrompt — wrong-business handling', () => {
     expect(prompt).toMatch(/WRONG BUSINESS/);
     expect(prompt).toMatch(/do NOT select any tree/i);
     // The graceful answer the caller expected: restate who this business is.
-    expect(prompt).toMatch(/No, this is/i);
+    // Wording tightened 2026-08-04 — the correction now leads with an apology and
+    // is followed by what the business DOES plus an offer, because the bare
+    // one-sentence "no" this used to assert is what left callers on dead air.
+    expect(prompt).toMatch(/No, sorry\s*—\s*this is/i);
   });
 
   it('gives a wrong-number EXIT — deselect via wrong_trees, then finish_call — if a tree was already selected', () => {
@@ -78,9 +81,7 @@ describe('the stall detector (SCL_nRKo3KEVw8Yh — five minutes of bot-mirror)',
     for (let i = 0; i < STALL_TURN_LIMIT + 2; i++) {
       await agent.onUserTurnCompleted(ctx, fakeMsg);
     }
-    const notes = ctx.items.filter(
-      (it) => it.type === 'message' && it.role === 'system'
-    );
+    const notes = ctx.items.filter((it) => it.type === 'message' && it.role === 'system');
     expect(notes).toHaveLength(1); // fires once per stall, never spams
     expect(JSON.stringify(notes[0])).toContain('summarize');
   });
@@ -216,5 +217,199 @@ describe('batch B — the Jaya-cascade prompt guarantees', () => {
     const p = build();
     expect(p).toMatch(/companies like Capgemini/);
     expect(p).toMatch(/ask one plain question to confirm it/i);
+  });
+});
+
+/**
+ * ORIENTATION + NEVER-GO-SILENT.
+ *
+ * Origin (owner, 2026-08-04): "many people are baffled" by reaching an AI. They
+ * open by asking what this is, whether it is a real person, or whether they got
+ * Dale's phone — anything but an answer to "how can I help you?" The failure
+ * being prevented is the agent treating that as noise and going quiet, which
+ * reads to the caller as a dropped line.
+ *
+ * The ROOT CAUSE was not missing instructions. The persona line was the only
+ * thing the model knew about the business, and the prompt forbids inventing
+ * services — so on "is this Barb's Waxing?" it had nothing true to say past a
+ * bare "no", and stopped. These tests pin BOTH halves: the facts, and the rule.
+ */
+describe('buildChecklistPrompt — orientation, off-topic, and never going silent', () => {
+  const withBusiness = buildChecklistPrompt({
+    persona: 'You are Chris, the receptionist for Thinking Hammer.',
+    runtime: {
+      currentDate: 'Wednesday, July 22, 2026',
+      timezone: 'America/Chicago',
+      businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+      bookableThrough: 'Friday, August 21, 2026',
+    },
+    library: PLATFORM_TREE_LIBRARY,
+    businessName: 'Thinking Hammer LLC',
+    businessBlurb: 'We build software and AI phone assistants for small businesses.',
+  });
+
+  // WHO: the "what is this?" caller | WHAT: the model has a true description to give |
+  // WHEN: any orientation question | WHERE: "# What this business is" | WHY: this is the
+  // fact whose absence caused the silence. Without it the only honest answer is "no".
+  it('HAPPY: carries the business name and the owner-written blurb as FACTS', () => {
+    expect(withBusiness).toContain('# What this business is');
+    expect(withBusiness).toContain('Thinking Hammer LLC');
+    expect(withBusiness).toContain('We build software and AI phone assistants');
+  });
+
+  // WHO: a tenant with no greeting_menu configured | WHAT: an explicit fallback |
+  // WHEN: blurb is null | WHERE: business section | WHY: the absence of a blurb must
+  // produce "say what you can DO", never an invented description of the business.
+  it('SAD: with no blurb configured, forbids inventing one', () => {
+    const noBlurb = buildChecklistPrompt({
+      persona: 'You are Chris.',
+      runtime: {
+        currentDate: 'Wednesday, July 22, 2026',
+        timezone: 'America/Chicago',
+        businessHours: null,
+        bookableThrough: null,
+      },
+      library: PLATFORM_TREE_LIBRARY,
+      businessName: 'Thinking Hammer LLC',
+      businessBlurb: null,
+    });
+    expect(noBlurb).toContain('never invent a description');
+  });
+
+  // WHO: every caller | WHAT: the absolute rule | WHEN: every turn | WHERE: conversation
+  // rules | WHY: the owner's instruction was explicit — "NOT JUST GO SILENT". A turn that
+  // ends without speech reads as a dropped call.
+  it('HAPPY: states that every turn ends in speech and silence is never correct', () => {
+    expect(withBusiness).toContain('NEVER GO SILENT');
+    expect(withBusiness).toMatch(/Every single turn you take ends in speech/);
+  });
+
+  // WHO: the baffled first-time caller | WHAT: answer-then-steer, in that order |
+  // WHEN: they ask instead of answering | WHERE: orientation block | WHY: answering a
+  // question with a question is what makes people repeat themselves and hang up.
+  it('HAPPY: instructs ANSWER FIRST, then one easy question back', () => {
+    expect(withBusiness).toContain('ANSWER FIRST, THEN STEER');
+    expect(withBusiness).toContain('Never answer a question with a question');
+    // An orientation question is not a purpose. The eval caught the model calling
+    // set_purpose on "is this <owner>'s phone?", which puts unasked-for questions
+    // on the checklist and lets the goodbye gate hold the call open on them.
+    expect(withBusiness).toMatch(/NONE OF THOSE IS A PURPOSE/);
+    expect(withBusiness).toMatch(/Do NOT call set_purpose on an orientation question/);
+  });
+
+  // WHO: "am I talking to a robot?" | WHAT: honest disclosure, no evasion | WHEN: asked
+  // directly | WHERE: orientation examples | WHY: denying it is both a trust failure and,
+  // in several states, a legal one. The greeting already discloses; this keeps the
+  // mid-call answer consistent with it.
+  it('HAPPY: answers "are you a real person" honestly and never denies being an AI', () => {
+    expect(withBusiness).toContain('Never deny it');
+    expect(withBusiness).toMatch(/I'm an AI assistant/);
+  });
+
+  // WHO: a caller making small talk | WHAT: a human reply, then a bridge | WHEN: off-topic
+  // | WHERE: OFF-TOPIC block | WHY: the owner asked for a chatbot that talks back and then
+  // steers — not one that stonewalls or that answers a joke with a checklist question.
+  it('HAPPY: permits real small talk but requires every reply to bridge back', () => {
+    expect(withBusiness).toContain('IDLE CHAT IS FINE');
+    expect(withBusiness).toContain('TALK BACK LIKE A PERSON');
+    // Engage with the substance, not a generic acknowledgement.
+    expect(withBusiness).toMatch(/react to the substance/);
+    // Permission to engage with the SUBJECT briefly, with real content in it —
+    // a warm-but-empty "That's nice!" reads as a machine waiting for you to finish.
+    expect(withBusiness).toMatch(/ACTUALLY TALK ABOUT THEIR TOPIC/);
+    expect(withBusiness).toMatch(/worse than none/);
+    // ...but the agent steers it home; the call must not be lost in the chatting.
+    expect(withBusiness).toMatch(/THEN LEAD THEM BACK/);
+    expect(withBusiness).toMatch(/never LOSE the call in the\s+chatting/);
+    expect(withBusiness).toMatch(/never let the reason they called go\s+unasked/);
+  });
+
+  // WHO: any caller making small talk | WHAT: tone guardrail | WHEN: idle chat |
+  // WHERE: KEEP IT LIGHT AND KIND | WHY: this is the first thing a stranger hears from
+  // the business. Negativity, sarcasm or an opinion on politics/illness/money costs the
+  // owner a customer, and forced cheerfulness reads as fake.
+  it('HAPPY: requires warm-neutral tone and forbids negative or edgy chat', () => {
+    expect(withBusiness).toMatch(/KEEP IT LIGHT AND KIND/);
+    expect(withBusiness).toMatch(/never negative/);
+    expect(withBusiness).toMatch(/sarcastic, edgy or strange/);
+    expect(withBusiness).toMatch(/politics, religion, illness/);
+    // Not the opposite failure either — relentless cheerfulness reads as fake.
+    expect(withBusiness).toMatch(/forced cheerfulness reads as fake/);
+  });
+
+  // WHO: a caller chatting with an AI | WHAT: no fabricated personal life | WHEN: small
+  // talk | WHERE: DO NOT INVENT A PERSONAL LIFE | WHY: an assistant that claims a dog or
+  // a commute is asserting something untrue, and it directly contradicts answering "are
+  // you a real person?" honestly two paragraphs earlier.
+  it('HAPPY: forbids inventing personal experiences it cannot have', () => {
+    expect(withBusiness).toMatch(/DO NOT INVENT A PERSONAL LIFE/);
+    expect(withBusiness).toMatch(/Never claim experiences you cannot have/);
+    // And the worked examples must not model the failure.
+    expect(withBusiness).not.toMatch(/Ours ate a remote/);
+    expect(withBusiness).not.toMatch(/my coffee went cold/);
+    // The OPPOSITE failure: lecturing the caller about being an AI. Acknowledge
+    // once, lightly, then get back to their call.
+    expect(withBusiness).toMatch(/no speech about your nature/);
+    expect(withBusiness).toMatch(/Do not\s+apologise for being an AI/);
+    expect(withBusiness).toMatch(/Light and realistic/);
+  });
+
+  // WHO: a caller who wanders instead of answering | WHAT: the question is re-asked, not
+  // recorded and not skipped | WHEN: a tangent lands where an answer should be | WHERE:
+  // A NON-ANSWER IS NOT AN ANSWER | WHY: a checklist filled with near-misses is worse than
+  // an empty one, because the owner acts on it.
+  it('HAPPY: refuses to record a tangent as an answer and re-asks the same question', () => {
+    expect(withBusiness).toMatch(/A NON-ANSWER IS NOT AN ANSWER/);
+    expect(withBusiness).toMatch(/put\s+the\s+SAME question back/);
+    expect(withBusiness).toMatch(/never fill in a plausible answer they never actually gave/);
+  });
+
+  // WHO: a caller re-asked too many times | WHAT: escalation, then an exit | WHEN: third
+  // attempt | WHERE: same block | WHY: asking a fourth time is the loop callers hang up on.
+  it('HAPPY: caps re-asking and changes shape rather than looping', () => {
+    expect(withBusiness).toMatch(/Third time on the same question/);
+    expect(withBusiness).toMatch(/Never ask the same question a fourth time/);
+  });
+
+  // WHO: "never mind, I'll book later" | WHAT: the tree is released AND alternatives are
+  // offered | WHEN: the caller backs out | WHERE: THEY CHANGED THEIR MIND | WHY: a dropped
+  // goal left selected freezes the goodbye gate — the same jam as the wrong-number freeze —
+  // and "okay, bye" sends away someone who still wanted something.
+  it('HAPPY: on a change of mind, releases the tree and offers the other options', () => {
+    expect(withBusiness).toMatch(/THEY CHANGED THEIR MIND/);
+    expect(withBusiness).toMatch(/Remove that tree with set_purpose \(wrong_trees\)/);
+    expect(withBusiness).toMatch(/OFFER WHAT IS LEFT/);
+    expect(withBusiness).toMatch(/do not just say "okay" and hang up/);
+    // SPEAK FIRST. The eval caught the model spending its whole turn on the
+    // set_purpose call and saying NOTHING — the caller says "never mind" and
+    // hears silence. Ordering the instruction tool-first is what caused it.
+    expect(withBusiness).toMatch(/SPEAK IN THE SAME TURN/);
+    expect(withBusiness).toMatch(/SPEAK FIRST/);
+    expect(withBusiness).toMatch(/only a set_purpose call and no words is DEAD AIR/);
+  });
+
+  // WHO: a caller who declines the alternative too | WHAT: one offer, not three | WHEN:
+  // second refusal | WHERE: same block | WHY: pushing past a second no loses the customer.
+  it('HAPPY: accepts a second refusal instead of pushing', () => {
+    expect(withBusiness).toMatch(/one offer, not three/);
+    expect(withBusiness).toMatch(/Pushing after a second no/);
+  });
+
+  // WHO: a caller on bad phone audio | WHAT: an explicit repair line | WHEN: STT garbles
+  // them | WHERE: repair block | WHY: there was NO no-match handling anywhere in the agent
+  // before this — grep for "didn't catch" returned nothing. Guessing books the wrong thing.
+  it('HAPPY: gives an explicit repair line instead of guessing or stalling', () => {
+    expect(withBusiness).toMatch(/didn't\s+catch that/);
+    expect(withBusiness).toContain('do not guess and do not stall');
+  });
+
+  // WHO: the wrong-number caller | WHAT: a real answer, not a bare "no" | WHEN: "is this
+  // Barb's Waxing?" | WHERE: WRONG BUSINESS branch | WHY: the previous rule said answer in
+  // ONE plain sentence and "let them steer" — which is precisely the dead air the owner
+  // reported. The answer now carries what the business does and ends in an offer.
+  it('HAPPY: wrong-business answer names the business, says what it does, and offers a way in', () => {
+    expect(withBusiness).toContain('do NOT answer with a bare "no"');
+    expect(withBusiness).toContain('Say what this business actually does');
+    expect(withBusiness).toMatch(/anything there I can help with/i);
   });
 });

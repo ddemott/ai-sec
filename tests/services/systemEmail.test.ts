@@ -131,3 +131,41 @@ describe('system email transport', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe('job inquiry email — escaping happens ONCE, at the emitter', () => {
+  it('the preheader shows the caller\'s words, not HTML entities for them', async () => {
+    // WHO: the business owner, reading the inbox preview line on a phone.
+    // WHAT: a role description containing '&' and '<' — ordinary punctuation in
+    //       a job title ("R&D lead", "<40hrs/week"), not an attack.
+    // WHEN: every job-inquiry call; found on PR #322 review 2026-08-06.
+    // WHERE: sendJobInquiryEmail's preheader vs renderEmailShell's own escape.
+    // WHY: the call site USED to call escapeHtml on the preheader, and
+    //      renderEmailShell escapes whatever it is handed. Two escapes turn
+    //      '&' into '&amp;amp;' and '<' into '&amp;lt;', so the FIRST thing the
+    //      owner reads is the caller's own words mangled into entity soup.
+    //      Escaping is the emitter's job and must happen exactly once.
+    // Credentials are set so getTransporter() builds the MOCKED nodemailer
+    // transport. The credential-less stub substitutes its own sendMail and
+    // would never reach sendMailMock, leaving nothing to assert against.
+    process.env.NODE_ENV = 'test';
+    process.env.EMAIL_USER = 'sender@example.test';
+    process.env.EMAIL_PASS = 'secret';
+    sendMailMock.mockResolvedValue({ messageId: 'test-message-id' });
+
+    const { sendJobInquiryEmail } =
+      await import('../../src/services/communications/systemEmail');
+
+    await sendJobInquiryEmail('owner@example.test', {
+      callerName: 'Pat Quinn',
+      callerCompany: 'Acme Staffing',
+      roleDescription: 'R&D lead <contract>',
+    } as Parameters<typeof sendJobInquiryEmail>[1]);
+
+    // The stub transport still records the message it was asked to send.
+    const html = String(sendMailMock.mock.calls[0]?.[0]?.html ?? '');
+    expect(html).not.toContain('&amp;amp;');
+    expect(html).not.toContain('&amp;lt;');
+    // Escaped exactly once: safe in the markup, faithful when rendered.
+    expect(html).toContain('R&amp;D lead &lt;contract&gt; — details collected on the call.');
+  });
+});
