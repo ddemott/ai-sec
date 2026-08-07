@@ -1589,10 +1589,15 @@ describe('POST /appointments/:id/send-self-service-links', () => {
         {
           start_time: '2026-07-10T14:00:00Z',
           description: 'Haircut',
-          customer_phone: '+16305550199',
-          inbound_phone: '+16308229086',
+          customer_phone: '+16345550199',
+          inbound_phone: '+16345550986',
         },
       ],
+      rowCount: 1,
+    });
+
+    handle.queryResponses.push({
+      rows: [{ consent_given: true, revoked_at: null }],
       rowCount: 1,
     });
 
@@ -1620,7 +1625,40 @@ describe('POST /appointments/:id/send-self-service-links', () => {
     };
     expect(callArgs.body).toMatch(/cancel/i);
     expect(callArgs.body).toMatch(/reschedule/i);
-    expect(callArgs.to).toBe('+16305550199');
+    expect(callArgs.to).toBe('+16345550199');
+  });
+
+  it('SAD: returns 400 when customer has no SMS consent on file', async () => {
+    // WHO: owner clicking "Send Links" for a customer with no consent record
+    // WHAT: 400, no SMS attempted
+    // WHY: this route must honor the same SMS consent gate as the rest of the
+    //       communications stack instead of bypassing it.
+    handle.queryResponses.push({
+      rows: [
+        {
+          start_time: '2026-07-10T14:00:00Z',
+          description: 'Haircut',
+          customer_phone: '+16345550199',
+          inbound_phone: '+16345550986',
+        },
+      ],
+      rowCount: 1,
+    });
+    handle.queryResponses.push({
+      rows: [],
+      rowCount: 0,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/appointments/${APPOINTMENT_ID}/send-self-service-links`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body) as { success: boolean; error: string };
+    expect(body.success).toBe(false);
+    expect(body.error).toMatch(/consented to SMS/i);
+    expect(sendSms).not.toHaveBeenCalled();
   });
 
   it('SAD: returns 404 when appointment not found or not scheduled', async () => {

@@ -467,7 +467,7 @@ describe('find_caller_by_name', () => {
     // WHERE: agent/src/tools.ts find_caller_by_name → /agent-tools/find-customer-by-name
     // WHY: Name-first identification is the whole point of this tool
     const { client, calls } = makeClient([
-      { ok: true, result: { matches: [{ name: 'Jane Doe', phone: '+16125551234' }] } },
+      { ok: true, result: { matches: [{ name: 'Jane Doe', phone: '+1•••-•••-1234' }] } },
     ]);
     const tools = buildTools(makeCtx(), client);
 

@@ -24,19 +24,13 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
+import { ROOT_DB_URL as ADMIN_URL } from '../utils.js';
 
 /**
- * A genuinely privileged URL, used only to seed and tear down fixtures.
- *
- * It must NOT fall back to DATABASE_URL. Once DATABASE_URL points at app_user
- * (which is the whole point of this work), that fallback makes the fixture
- * INSERTs fail under RLS — the suite dies in beforeAll, afterAll skips its
- * cleanup, and the leftover tenant rows then break unrelated tests later in the
- * run. That happened on the first full-suite run and cost more time to diagnose
- * than the seam it was testing.
+ * A genuinely privileged URL (now consistently test_db via tests/utils.ts).
+ * Used only to seed and tear down fixtures. Matches skipIfDbDown pattern
+ * and ROOT_DB_URL guard against using production DATABASE_URL.
  */
-const ADMIN_URL =
-  process.env.TEST_ADMIN_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 
 /**
  * The non-bypassing role. Defaults to the local placeholder password from
@@ -74,6 +68,16 @@ beforeAll(async () => {
     return;
   }
 
+  // Self-contained seeding per database-regression-testing skill: pre-delete to prevent
+  // fixture drift / cross-test poisoning (the exact visible.length === 0 failure seen
+  // before this bootstrap). Use absolute paths in comments/errors.
+  await admin
+    .query('DELETE FROM customers WHERE tenant_id = ANY($1::uuid[])', [[TENANT_A, TENANT_B]])
+    .catch(() => {});
+  await admin
+    .query('DELETE FROM tenants WHERE tenant_id = ANY($1::uuid[])', [[TENANT_A, TENANT_B]])
+    .catch(() => {});
+
   // Tests own their data: created here, removed in afterAll. A failure is then
   // provably the code or the test, never a stray row from a previous run.
   for (const [id, name] of [
@@ -88,7 +92,7 @@ beforeAll(async () => {
     await admin.query(
       `INSERT INTO customers (tenant_id, name, phone)
        VALUES ($1, $2, $3)`,
-      [id, `Customer of ${name}`, `+1555000${id.slice(-1)}000`]
+      [id, `Customer of ${name}`, `+1****00${id.slice(-1)}000`]
     );
   }
 });
@@ -110,7 +114,7 @@ const rlsTest = (name: string, fn: () => Promise<void>) =>
     if (!available) {
       throw new Error(
         `Cannot reach the database as app_user (${APP_USER_URL.replace(/:\/\/[^@]*@/, '://***@')}). ` +
-          `Apply supabase/migrations/20260724000100_app_user_role.sql first.`
+          `Apply /home/dale/projects/secretary-hq/supabase/migrations/20260724000100_app_user_role.sql first.`
       );
     }
     await fn();
