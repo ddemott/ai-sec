@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecretaryHQ Caller Simulator</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121c31;
+      --panel-2: #0f1728;
+      --text: #e6eefc;
+      --muted: #8fa3c7;
+      --accent: #3b82f6;
+      --accent-2: #60a5fa;
+      --border: rgba(96, 165, 250, 0.18);
+      --ok: #34d399;
+      --bad: #f87171;
+      --warn: #fbbf24;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 40%),
+        linear-gradient(180deg, #0b1220 0%, #09101c 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 20px 56px;
+    }
+
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .hero {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      color: var(--accent-2);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.4rem, 5vw, 4rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .sub {
+      color: var(--muted);
+      max-width: 760px;
+      font-size: 1.05rem;
+      line-height: 1.6;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.95fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(18, 28, 49, 0.96), rgba(11, 18, 32, 0.98));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+    }
+
+    .card h2, .card h3 {
+      margin: 0 0 12px;
+      font-size: 1.15rem;
+    }
+
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    label {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    input {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(143, 163, 199, 0.2);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 13px 14px;
+      font-size: 0.98rem;
+    }
+
+    input:focus {
+      outline: 2px solid rgba(96, 165, 250, 0.5);
+      border-color: rgba(96, 165, 250, 0.4);
+    }
+
+    button, .link-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 0;
+      border-radius: 999px;
+      padding: 14px 18px;
+      font-size: 0.98rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover, .link-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.7;
+      transform: none;
+    }
+
+    .primary {
+      background: linear-gradient(180deg, var(--accent), #2563eb);
+      color: white;
+      box-shadow: 0 12px 30px rgba(37, 99, 235, 0.35);
+    }
+
+    .secondary {
+      background: rgba(96, 165, 250, 0.08);
+      border: 1px solid rgba(96, 165, 250, 0.18);
+      color: var(--text);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .status {
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-weight: 600;
+      background: rgba(96, 165, 250, 0.08);
+      border: 1px solid rgba(96, 165, 250, 0.16);
+    }
+
+    .status.ok { color: var(--ok); border-color: rgba(52, 211, 153, 0.28); background: rgba(52, 211, 153, 0.08); }
+    .status.error { color: var(--bad); border-color: rgba(248, 113, 113, 0.28); background: rgba(248, 113, 113, 0.08); }
+    .status.info { color: var(--accent-2); }
+
+    .facts {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .fact {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(15, 23, 40, 0.95);
+      border: 1px solid rgba(143, 163, 199, 0.12);
+    }
+
+    .fact strong {
+      display: block;
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    .join-url {
+      word-break: break-all;
+      color: var(--accent-2);
+    }
+
+    ol, ul {
+      margin: 0;
+      padding-left: 1.2rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .call-script {
+      display: grid;
+      gap: 10px;
+    }
+
+    .call-script li strong {
+      color: var(--text);
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="eyebrow">Browser caller test rig</div>
+      <h1>Call your AI from browser.<br>Mic in. Headphones on.</h1>
+      <div class="sub">
+        This launches a real LiveKit caller session against SecretaryHQ voice stack. No PSTN theater. You talk through your browser, the agent answers like a real inbound caller path minus carrier leg.
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card stack">
+        <div>
+          <h2>Start caller session</h2>
+          <div class="small">Leave fields blank to use server defaults. If you know exact tenant or alternate agent worker name, override them here.</div>
+        </div>
+
+        <label>
+          Tenant ID (optional)
+          <input id="tenant-id" placeholder="demo tenant UUID or leave blank">
+        </label>
+
+        <label>
+          Agent name (optional)
+          <input id="agent-name" placeholder="secretary-hq-agent">
+        </label>
+
+        <div class="actions">
+          <button id="start-btn" class="primary">Start call session</button>
+          <a id="open-btn" class="link-btn secondary" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">Open voice call</a>
+          <button id="copy-btn" class="secondary" style="display:none;">Copy join URL</button>
+        </div>
+
+        <div id="status" class="status info">Idle. Click start, allow mic in next tab, talk like real caller.</div>
+
+        <div class="facts" id="facts" style="display:none;">
+          <div class="fact"><strong>Join URL</strong><div id="join-url" class="join-url"></div></div>
+          <div class="fact"><strong>Room</strong><code id="room"></code></div>
+          <div class="fact"><strong>Tenant</strong><code id="tenant"></code></div>
+          <div class="fact"><strong>Agent</strong><code id="agent"></code></div>
+        </div>
+      </section>
+
+      <section class="card stack">
+        <div>
+          <h3>How to run it</h3>
+          <ol>
+            <li>Click <strong>Start call session</strong>.</li>
+            <li>Open spawned join link.</li>
+            <li>Allow microphone.</li>
+            <li>Use headphones unless you enjoy feedback loops. Browser gods do not protect the careless.</li>
+            <li>Talk naturally. Interrupt. Change your mind. Make it sweat.</li>
+          </ol>
+        </div>
+
+        <div>
+          <h3>Good test prompts</h3>
+          <ul class="call-script">
+            <li><strong>Confused opener:</strong> “hello what is this”</li>
+            <li><strong>Filler:</strong> “yeah uh-huh okay go on”</li>
+            <li><strong>Meaningful interruption:</strong> “wait, I don’t get that part”</li>
+            <li><strong>Mind change:</strong> “book repair for my laptop... actually it’s my desktop and it has malware”</li>
+            <li><strong>Service in message:</strong> “tell Dale my wifi is down and computer has a virus”</li>
+          </ul>
+        </div>
+
+        <div class="small">
+          What this proves: browser mic → LiveKit room → real agent dispatch → real STT/LLM/TTS path. What it does not prove: carrier/PSTN inbound leg. Different dragon.
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const startBtn = document.getElementById('start-btn');
+    const openBtn = document.getElementById('open-btn');
+    const copyBtn = document.getElementById('copy-btn');
+    const statusEl = document.getElementById('status');
+    const factsEl = document.getElementById('facts');
+    const tenantInput = document.getElementById('tenant-id');
+    const agentInput = document.getElementById('agent-name');
+    const joinUrlEl = document.getElementById('join-url');
+    const roomEl = document.getElementById('room');
+    const tenantEl = document.getElementById('tenant');
+    const agentEl = document.getElementById('agent');
+
+    let latestJoinUrl = '';
+
+    function setStatus(message, kind) {
+      statusEl.textContent = message;
+      statusEl.className = 'status ' + kind;
+    }
+
+    async function startSession() {
+      startBtn.disabled = true;
+      openBtn.style.display = 'none';
+      copyBtn.style.display = 'none';
+      factsEl.style.display = 'none';
+      setStatus('Starting session. Spinning room, minting caller token, dispatching agent.', 'info');
+
+      try {
+        const payload = {
+          tenant_id: tenantInput.value.trim() || undefined,
+          agent_name: agentInput.value.trim() || undefined,
+        };
+
+        const response = await fetch('/call-simulator/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const body = await response.json();
+        if (!response.ok || !body.success) {
+          throw new Error(body.error || 'Failed to start caller session');
+        }
+
+        latestJoinUrl = body.join_url;
+        openBtn.href = latestJoinUrl;
+        openBtn.style.display = 'inline-flex';
+        copyBtn.style.display = 'inline-flex';
+        joinUrlEl.textContent = latestJoinUrl;
+        roomEl.textContent = body.room;
+        tenantEl.textContent = body.tenant;
+        agentEl.textContent = body.agent;
+        factsEl.style.display = 'grid';
+        setStatus('Session ready. Open voice call, allow mic, then talk.', 'ok');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to start caller session';
+        setStatus(message, 'error');
+      } finally {
+        startBtn.disabled = false;
+      }
+    }
+
+    async function copyJoinUrl() {
+      if (!latestJoinUrl) return;
+      try {
+        await navigator.clipboard.writeText(latestJoinUrl);
+        setStatus('Join URL copied. Handy little weapon.', 'ok');
+      } catch {
+        setStatus('Clipboard blocked. Copy from screen like it is 2009.', 'error');
+      }
+    }
+
+    startBtn.addEventListener('click', startSession);
+    copyBtn.addEventListener('click', copyJoinUrl);
+  </script>
+</body>
+</html>
