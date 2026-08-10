@@ -602,6 +602,8 @@ const PUBLIC_ROUTES = [
   '/',
   '/demo',
   '/demo/start',
+  '/call-simulator',
+  '/call-simulator/start',
   '/billing/webhook',
   // Prometheus scrape endpoint — auth is via METRICS_TOKEN bearer header
   // checked inside the route handler (not JWT). When the env var is unset

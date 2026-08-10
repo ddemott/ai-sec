@@ -49,6 +49,7 @@ import { registerVersionHistoryRoutes } from './routes/versionHistory';
 import { registerCommunicationRoutes } from './routes/communications';
 import { registerReminderRoutes } from './routes/reminders';
 import { registerHealthRoutes } from './routes/health';
+import { registerCallerSimulatorRoutes } from './routes/callerSimulator';
 import { registerSelfServiceRoutes } from './routes/selfService';
 import { registerExportRoutes } from './routes/exportData';
 import { registerAuditLogRoutes } from './routes/auditLog';
@@ -239,6 +240,7 @@ app.setErrorHandler(
 // --- Register Route Modules ---
 
 registerHealthRoutes(app, pool);
+registerCallerSimulatorRoutes(app);
 registerAuthRoutes(app, pool, generateToken);
 registerTenantRoutes(app, pool, withTenantClient);
 registerAppointmentRoutes(app, pool, withTenantClient);
