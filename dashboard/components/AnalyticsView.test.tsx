@@ -276,28 +276,12 @@ describe('AnalyticsView — copy defects (UX review)', () => {
       by_outcome: [],
       by_day: [],
     });
-    mockApi.analytics.getAiCost.mockResolvedValue({
-      total_estimated_cost_usd: 0.12,
-      breakdown: [
-        {
-          provider: 'openai',
-          model: 'gpt-4o-mini',
-          source: 'voice_session',
-          input_tokens: 1000,
-          output_tokens: 500,
-          audio_duration_ms: 0,
-          characters_count: 0,
-          estimated_cost_usd: 0.12,
-        },
-      ],
-    });
-
     render(<AnalyticsView />);
 
     await screen.findByText(/Analytics/i);
     expect(screen.queryByText(/AI Usage/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/estimated cost/i)).not.toBeInTheDocument();
-    expect(mockApi.analytics.getAiCost).not.toHaveBeenCalled();
+    expect(screen.queryByText(/\$0\./)).not.toBeInTheDocument();
   });
 
   test('HAPPY: the reliability snapshot does not leak the internal endpoint path', async () => {

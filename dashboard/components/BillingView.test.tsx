@@ -167,7 +167,9 @@ describe('BillingView — checkout flow', () => {
     delete (window as unknown as Record<string, unknown>).location;
     (window as unknown as Record<string, unknown>).location = { href: '' };
     render(<BillingView />);
-    await waitFor(() => expect(screen.getAllByRole('button', { name: /upgrade/i })).toHaveLength(3));
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /upgrade/i })).toHaveLength(3)
+    );
     fireEvent.click(screen.getAllByRole('button', { name: /upgrade/i })[0]);
     await waitFor(() =>
       expect(mockApi.billing.checkout).toHaveBeenCalledWith('tenant-test', 'solo')
@@ -177,7 +179,9 @@ describe('BillingView — checkout flow', () => {
   test('SAD: checkout failure shows error toast and re-enables button', async () => {
     mockApi.billing.checkout.mockRejectedValue(new Error('Stripe error'));
     render(<BillingView />);
-    await waitFor(() => expect(screen.getAllByRole('button', { name: /upgrade/i })).toHaveLength(3));
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /upgrade/i })).toHaveLength(3)
+    );
     fireEvent.click(screen.getAllByRole('button', { name: /upgrade/i })[0]);
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith('Could not start checkout — try again.', 'error')
@@ -212,18 +216,16 @@ describe('BillingView — billing portal', () => {
       expect(screen.getByRole('button', { name: /manage billing/i })).toBeInTheDocument()
     );
     fireEvent.click(screen.getByRole('button', { name: /manage billing/i }));
-    await waitFor(() =>
-      expect(mockToast).toHaveBeenCalledWith('Portal unavailable', 'error')
-    );
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith('Portal unavailable', 'error'));
   });
 });
 
 describe('BillingView — usage statements', () => {
-  test('HAPPY: renders monthly answered-call statement rows and pack overage math', async () => {
-    // WHO: owner checking how many answered calls actually billed this month.
-    // WHAT: Billing page should load /billing/usage and show the statement table.
-    // WHY: this is the no-paper monthly statement; without it the pricing model
-    //      exists only in docs and backend code.
+  test('HAPPY: renders the current-month meter, overage packs, and monthly statement rows', async () => {
+    // WHO: owner checking what this month will cost.
+    // WHAT: Billing page should show answered vs included, free-call carveout,
+    //       and the pack overage summary. This card is the online statement.
+    // WHY: if usage fails silently or looks like $0, billing trust dies first.
     mockApi.billing.status.mockResolvedValue({
       subscription_status: 'active',
       subscription_plan: 'solo',
@@ -236,13 +238,24 @@ describe('BillingView — usage statements', () => {
       statements: [
         {
           month: '2026-07',
-          totalCalls: 181,
-          answeredCalls: 181,
-          freeCalls: 0,
+          totalCalls: 170,
+          answeredCalls: 162,
+          freeCalls: 8,
           includedCalls: 150,
-          overageCalls: 31,
-          packsApplied: 2,
-          packChargeUsd: 50,
+          overageCalls: 12,
+          packsApplied: 1,
+          packChargeUsd: 25,
+          inProgress: true,
+        },
+        {
+          month: '2026-06',
+          totalCalls: 90,
+          answeredCalls: 84,
+          freeCalls: 6,
+          includedCalls: 150,
+          overageCalls: 0,
+          packsApplied: 0,
+          packChargeUsd: 0,
           inProgress: false,
         },
       ],
@@ -250,15 +263,28 @@ describe('BillingView — usage statements', () => {
 
     render(<BillingView />);
 
-    expect(await screen.findByText(/usage & statements/i)).toBeInTheDocument();
-    const row = screen.getByText('2026-07').closest('tr');
-    expect(row).not.toBeNull();
-    expect(row).toHaveTextContent('2026-07');
-    expect(row).toHaveTextContent('181');
-    expect(row).toHaveTextContent('150');
-    expect(row).toHaveTextContent('31');
-    expect(row).toHaveTextContent('2');
-    expect(row).toHaveTextContent('$50');
+    expect(await screen.findByText('Usage & Statements')).toBeInTheDocument();
+    expect(screen.getByText(/162 of 150 answered calls/i)).toBeInTheDocument();
+    expect(screen.getByText(/8 short\/spam \(free\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/12 calls over your plan this month/i)).toBeInTheDocument();
+    expect(screen.getByText(/your line keeps answering either way/i)).toBeInTheDocument();
+    expect(screen.getByText('2026-06')).toBeInTheDocument();
+    expect(screen.getByText('included')).toBeInTheDocument();
+    expect(screen.getByText(/\+\$25 packs/i)).toBeInTheDocument();
+    expect(screen.getByText(/15\+ seconds/i)).toBeInTheDocument();
     expect(mockApi.billing.usage).toHaveBeenCalledWith('tenant-test', 6);
+  });
+
+  test('SAD: usage endpoint failure shows an honest error, never fake zero usage', async () => {
+    mockApi.billing.status.mockResolvedValue({
+      subscription_status: 'active',
+      subscription_plan: 'solo',
+    });
+    mockApi.billing.usage.mockRejectedValue(new Error('boom'));
+
+    render(<BillingView />);
+
+    expect(await screen.findByText(/couldn't load usage right now/i)).toBeInTheDocument();
+    expect(screen.queryByText(/answered calls/i)).not.toBeInTheDocument();
   });
 });

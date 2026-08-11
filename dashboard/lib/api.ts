@@ -19,7 +19,6 @@ import type {
   AnalyticsStats,
   AnalyticsCohorts,
   AnalyticsUtilization,
-  AiCostSummary,
   UsageStatementResult,
   Vocabulary,
   CoverageItem,
@@ -680,9 +679,6 @@ export const Api = {
 
     getCalls: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
       apiFetch<AnalyticsCalls>(`/analytics/calls`, analyticsQuery(tenantId, range)),
-
-    getAiCost: (tenantId: string | null) =>
-      apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantParam(tenantId)),
 
     getCohorts: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
       apiFetch<AnalyticsCohorts>(`/analytics/cohorts`, analyticsQuery(tenantId, range)),

@@ -170,7 +170,9 @@ export default function AnalyticsView() {
   // (the /analytics/calls totals are unbounded without a filter) — so a fixed
   // "last 30 days" subtitle mislabeled an all-time count. The sparkline below
   // still shows the last-30-day trend, described by its own inner note.
-  const callVolumeSubtitle = hasDateFilter ? 'Calls in your selected date range' : 'All calls answered';
+  const callVolumeSubtitle = hasDateFilter
+    ? 'Calls in your selected date range'
+    : 'All calls answered';
 
   return (
     <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: 'var(--bg-base)' }}>
@@ -235,7 +237,8 @@ export default function AnalyticsView() {
           <ReminderDeliveryStats />
         </div>
 
-        {/* Internal AI spend is platform cost-of-goods, not tenant analytics. */}
+        {/* Internal AI spend stays operator-only. Tenant analytics should never
+            expose margin math back to the customer. */}
 
         {/* Roadmap: richer WHY analysis still ahead */}
         <div
