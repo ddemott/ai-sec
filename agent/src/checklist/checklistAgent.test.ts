@@ -379,6 +379,27 @@ describe('buildChecklistPrompt — orientation, off-topic, and never going silen
     expect(withBusiness).not.toMatch(/\bDale\b/);
   });
 
+  // WHO: tenant with no greeting_menu | WHAT: capability still has a no-invent fallback |
+  // WHEN: businessBlurb is absent | WHERE: capability section | WHY: Copilot review —
+  // referencing a missing "# What this business is" section is an impossible instruction.
+  it('HAPPY: without a blurb, capability lists three lanes and forbids inventing services', () => {
+    const noBiz = buildChecklistPrompt({
+      persona: 'You are Chris.',
+      runtime: {
+        currentDate: 'Wednesday, July 22, 2026',
+        timezone: 'America/Chicago',
+        businessHours: null,
+        bookableThrough: null,
+      },
+      library: PLATFORM_TREE_LIBRARY,
+    });
+    expect(noBiz).toContain('# What I can do for you');
+    // No populated business section (other rules may still mention the heading by name).
+    expect(noBiz).not.toMatch(/# What this business is\n/);
+    expect(noBiz).toMatch(/no business description is configured/);
+    expect(noBiz).toMatch(/never\s+invent services/);
+  });
+
   // WHO: a tenant with a single staff first name | WHAT: capability uses that name |
   // WHEN: staffFirstNames is provided | WHERE: capability menu | WHY: "message for the
   // owner" is colder than "message for Jane" when we already know who works there.

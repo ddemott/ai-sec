@@ -135,20 +135,27 @@ export function buildChecklistPrompt(opts: {
   // (greeting_menu), never paraphrased into invented services.
   const bizName = opts.businessName?.trim() || '';
   const blurb = opts.businessBlurb?.trim() || '';
-  const staff = (opts.staffFirstNames ?? []).filter((n) => n && n.trim());
+  const staff = (opts.staffFirstNames ?? [])
+    .map((n) => (typeof n === 'string' ? n.trim() : ''))
+    .filter((n) => n.length > 0);
   // CAPABILITY MENU (plan 08-10-2026). Vague openers ("hello", "what is this?")
   // need a concrete "what I can do" list immediately — not a silent wait for a
   // purpose. Owner name comes from the tenant roster (never a hardcoded person).
-  // Service detail lives in greeting_menu / "# What this business is", not here.
+  // Service detail lives in greeting_menu / the business section when present.
   const ownerRef =
     staff.length === 1 ? staff[0]! : staff.length > 1 ? 'someone on the team' : 'the owner';
+  const serviceFactLine = blurb
+    ? `When a caller asks what you offer, use only the facts in "# What this business is" ` +
+      `(never invent services). `
+    : `When a caller asks what you offer and no business description is configured, list ` +
+      `those three lanes plainly — book a time, take a message, answer questions — and never ` +
+      `invent services. `;
   const capabilitySection =
     `\n# What I can do for you\n` +
     `I answer any complete question about the business, take a message for ${ownerRef}, or ` +
-    `help you pick a service and book an appointment. When a caller asks what you offer, ` +
-    `use only the facts in "# What this business is" (never invent services). Callers can ` +
-    `also schedule a time simply to talk with ${ownerRef} about any of those items or ` +
-    `something else. Talk like a regular person — ask anything.\n`;
+    `help you pick a service and book an appointment. ${serviceFactLine}` +
+    `Callers can also schedule a time simply to talk with ${ownerRef} about any of those ` +
+    `items or something else. Talk like a regular person — ask anything.\n`;
   const businessSection =
     (bizName || blurb
       ? `\n# What this business is\n` +
