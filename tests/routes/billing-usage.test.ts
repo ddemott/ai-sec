@@ -69,6 +69,11 @@ afterAll(async () => {
 
 describe('billingUsage — the answered-call definition', () => {
   it('HAPPY: a completed call where the caller spoke for >= 15s bills; spam/silent/short/active calls are FREE', async (ctx) => {
+    // WHO: a tenant owner reviewing whether mixed call outcomes affect billing.
+    // WHAT: only completed, caller-spoke, >= threshold calls bill; others stay free.
+    // WHEN: the month contains answered, silent, short, null-duration, and active calls.
+    // WHERE: computeUsageStatements() answered-call classifier.
+    // WHY: billing must charge real answered calls without counting noise or in-flight sessions.
     skipIfDbDown(ctx, () => dbAvailable);
     await insertSession(tenantId, {});
     await insertSession(tenantId, { callerSpoke: false });

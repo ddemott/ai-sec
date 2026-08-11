@@ -24,6 +24,11 @@ describe('health routes', () => {
   });
 
   it('HAPPY: GET /demo redirects to dashboard /demo using DASHBOARD_URL', async () => {
+    // WHO: a tenant owner opening /demo from the backend entrypoint.
+    // WHAT: redirect should target the configured dashboard /demo route.
+    // WHEN: DASHBOARD_URL is present.
+    // WHERE: registerHealthRoutes() /demo handler.
+    // WHY: production demo traffic must land on the real dashboard experience.
     const app = buildApp();
     process.env.DASHBOARD_URL = 'https://dash.example.com';
 
