@@ -481,3 +481,306 @@ describe('buildChecklistPrompt — orientation, off-topic, and never going silen
     expect(withBusiness).toMatch(/anything there I can help with/i);
   });
 });
+
+/**
+ * Plan 08-10-2026 — initial clarification + filler vs real interruption.
+ *
+ * Prompt-level guarantees for vague openers and mid-call noise. Service detail
+ * is tenant data (greeting_menu / roster), never a hardcoded person. If any of
+ * these pins break, callers hear silence, re-asks, or another tenant's name.
+ */
+describe('plan 08-10-2026 — capability menu + filler/interrupt (matrix)', () => {
+  const runtime = {
+    currentDate: 'Monday, August 10, 2026',
+    timezone: 'America/Chicago',
+    businessHours: 'Monday to Friday, 9:00 AM to 5:00 PM',
+    bookableThrough: 'Friday, September 11, 2026',
+  } as const;
+
+  const build = (over: Partial<Parameters<typeof buildChecklistPrompt>[0]> = {}) =>
+    buildChecklistPrompt({
+      persona: 'You are Piper, the AI receptionist.',
+      runtime,
+      library: PLATFORM_TREE_LIBRARY,
+      ...over,
+    });
+
+  /** Capability section only — everything after the heading until the next `#`. */
+  function capabilityBody(p: string): string {
+    const m = p.match(/# What I can do for you\n([\s\S]*?)(?=\n# |\n\n# |$)/);
+    expect(m, 'capability section missing').toBeTruthy();
+    return m![1]!;
+  }
+
+  // ── Always present ────────────────────────────────────────────────────────
+
+  it.each([
+    { label: 'empty tenant', opts: {} },
+    { label: 'name only', opts: { businessName: 'Acme Shop' } },
+    { label: 'blurb only', opts: { businessBlurb: 'We fix bikes and tune gears.' } },
+    {
+      label: 'name + blurb',
+      opts: { businessName: 'Acme Shop', businessBlurb: 'We fix bikes and tune gears.' },
+    },
+    { label: 'roster only', opts: { staffFirstNames: ['Sam'] } },
+    {
+      label: 'full tenant',
+      opts: {
+        businessName: 'Acme Shop',
+        businessBlurb: 'We fix bikes.',
+        staffFirstNames: ['Sam', 'Alex'],
+        callerPhone: '+15551234567',
+      },
+    },
+  ])('HAPPY: capability menu always present ($label)', ({ opts }) => {
+    const p = build(opts);
+    expect(p).toContain('# What I can do for you');
+    const body = capabilityBody(p);
+    // Three core lanes — the thing a vague "hello" caller must hear.
+    expect(body).toMatch(/complete question about the business/i);
+    expect(body).toMatch(/take a message/i);
+    expect(body).toMatch(/book an appointment/i);
+    expect(body).toMatch(/Talk like a regular person/i);
+  });
+
+  // ── Blurb vs no-blurb service fact lines (mutually exclusive) ─────────────
+
+  it('HAPPY: with blurb, defers service facts to the business section (no invent)', () => {
+    const p = build({
+      businessName: 'Acme',
+      businessBlurb: 'We repair laptops and remove malware.',
+    });
+    const body = capabilityBody(p);
+    expect(body).toMatch(/use only the facts in "# What this business is"/);
+    expect(body).toMatch(/never invent services/);
+    expect(body).not.toMatch(/no business description is configured/);
+    // Blurb itself is in the business section, not re-hardcoded into capability.
+    expect(p).toMatch(/# What this business is/);
+    expect(p).toContain('We repair laptops and remove malware.');
+  });
+
+  it('HAPPY: without blurb, lists three plain lanes and forbids inventing', () => {
+    const p = build({ businessName: 'Acme' });
+    const body = capabilityBody(p);
+    expect(body).toMatch(/no business description is configured/);
+    expect(body).toMatch(/book a time, take a message, answer questions/);
+    expect(body).toMatch(/never\s+invent services/);
+    expect(body).not.toMatch(/use only the facts in "# What this business is"/);
+  });
+
+  it('HAPPY: blurb-only tenant still gets a business section + capability', () => {
+    const p = build({ businessBlurb: 'Mobile oil changes at your driveway.' });
+    expect(p).toMatch(/# What this business is/);
+    expect(p).toContain('Mobile oil changes at your driveway.');
+    expect(capabilityBody(p)).toMatch(/use only the facts in "# What this business is"/);
+  });
+
+  // ── Owner reference matrix (roster → spoken name) ─────────────────────────
+
+  it('HAPPY: zero staff → "the owner" (never a platform founder name)', () => {
+    const body = capabilityBody(build({ staffFirstNames: [] }));
+    expect(body).toMatch(/take a message for the owner/);
+    expect(body).toMatch(/talk with the owner/);
+    expect(body).not.toMatch(/\bDale\b/);
+    expect(body).not.toMatch(/\bDeMott\b/i);
+  });
+
+  it('HAPPY: one staff name → that name in message + talk lines', () => {
+    const body = capabilityBody(build({ staffFirstNames: ['Jordan'] }));
+    expect(body).toMatch(/take a message for Jordan/);
+    expect(body).toMatch(/talk with Jordan/);
+    expect(body).not.toMatch(/the owner/);
+    expect(body).not.toMatch(/someone on the team/);
+  });
+
+  it('HAPPY: multiple staff → "someone on the team" (no arbitrary first pick)', () => {
+    const body = capabilityBody(build({ staffFirstNames: ['Sam', 'Alex', 'Riley'] }));
+    expect(body).toMatch(/take a message for someone on the team/);
+    expect(body).toMatch(/talk with someone on the team/);
+    // Roster still lists real names for the WHO WORKS HERE line — just not in capability.
+    const p = build({ staffFirstNames: ['Sam', 'Alex', 'Riley'] });
+    expect(p).toContain('WHO WORKS HERE: Sam, Alex, Riley');
+    expect(body).not.toMatch(/take a message for Sam/);
+  });
+
+  it('SAD: whitespace-only / empty staff entries are dropped (not spoken as blank)', () => {
+    const p = build({ staffFirstNames: ['  ', '', '\t', '  Pat  '] });
+    // Trimmed sole real name → treated as single staff.
+    expect(capabilityBody(p)).toMatch(/take a message for Pat/);
+    // Exact roster line — no empty slots, name trimmed.
+    expect(p).toMatch(/WHO WORKS HERE: Pat\./);
+    expect(p).not.toMatch(/WHO WORKS HERE: ,/);
+    expect(p).not.toMatch(/WHO WORKS HERE:  /);
+  });
+
+  it('SAD: all-whitespace roster collapses to "the owner"', () => {
+    const body = capabilityBody(build({ staffFirstNames: ['  ', '\n', ''] }));
+    expect(body).toMatch(/take a message for the owner/);
+    expect(build({ staffFirstNames: ['  ', '\n', ''] })).not.toContain('WHO WORKS HERE');
+  });
+
+  it('SAD: capability never hardcodes a denied real-person name when roster is empty', () => {
+    // Mirrors tests/noHardcodedNames.test.ts intent at the PROMPT OUTPUT layer —
+    // even if source drifted, the empty-roster path must stay neutral.
+    const body = capabilityBody(build());
+    for (const banned of ['Dale', 'DeMott', 'ThinkingHammer', 'thinkinghammer']) {
+      expect(body).not.toMatch(new RegExp(`\\b${banned}\\b`, 'i'));
+    }
+  });
+
+  // ── Filler vs real interruption ───────────────────────────────────────────
+
+  describe('filler vs real interruption rules', () => {
+    const p = build({
+      businessName: 'Acme',
+      businessBlurb: 'We fix things.',
+    });
+
+    it('HAPPY: names the rule block so future edits cannot silently drop it', () => {
+      expect(p).toMatch(/FILLER VS REAL INTERRUPTION/);
+    });
+
+    it.each(['yeah', 'uh-huh', 'k', 'okay', 'go on', 'mm-hmm'])(
+      'HAPPY: filler word %j is listed as empty noise to ignore',
+      (word) => {
+        expect(p).toContain(word);
+      }
+    );
+
+    it('HAPPY: filler must not be recorded, re-asked, or treated as purpose', () => {
+      expect(p).toMatch(/Ignore empty noise/);
+      expect(p).toMatch(/Do NOT record them/);
+      expect(p).toMatch(/do NOT\s+re-ask the last question/i);
+      expect(p).toMatch(/do NOT treat them as a new purpose/i);
+      expect(p).toMatch(/Continue as if they\s+said nothing/);
+      expect(p).toMatch(/a short "yeah" is not consent and not an answer/);
+    });
+
+    it.each([
+      'what?',
+      'can you repeat that',
+      "wait I\ndon't get it",
+      "I'm confused",
+      'hold on',
+    ])('HAPPY: real clarification cue is present: %j', (cue) => {
+      // Prompt may wrap lines — normalize whitespace for multi-word cues.
+      const compact = p.replace(/\s+/g, ' ');
+      const needle = cue.replace(/\s+/g, ' ');
+      expect(compact).toContain(needle);
+    });
+
+    it('HAPPY: real interrupt → intelligent recovery, not a fixed script', () => {
+      expect(p).toMatch(/REAL clarification request/);
+      expect(p).toMatch(/repeat the\s+last sentence/i);
+      expect(p).toMatch(/simplify/i);
+      expect(p).toMatch(/what part is confusing/);
+      expect(p).toMatch(/never hardcode a fixed recovery phrase/i);
+      expect(p).toMatch(/use the checklist and what the caller already\s+said/i);
+    });
+
+    it('HAPPY: filler block sits with non-answer handling (before re-ask cap)', () => {
+      // Ordering: NON-ANSWER → FILLER → Third time. If filler moves after the
+      // re-ask cap, the model may re-ask before deciding the turn was noise.
+      const nonAnswer = p.indexOf('A NON-ANSWER IS NOT AN ANSWER');
+      const filler = p.indexOf('FILLER VS REAL INTERRUPTION');
+      const third = p.indexOf('Third time on the same question');
+      expect(nonAnswer).toBeGreaterThan(-1);
+      expect(filler).toBeGreaterThan(nonAnswer);
+      expect(third).toBeGreaterThan(filler);
+    });
+  });
+
+  // ── Integration with orientation / change-of-mind (still intact) ──────────
+
+  it('HAPPY: vague orientation still is NOT a purpose (capability does not override)', () => {
+    const p = build({ businessName: 'Acme', businessBlurb: 'We fix bikes.' });
+    expect(p).toMatch(/NONE OF THOSE IS A PURPOSE/);
+    expect(p).toMatch(/Do NOT call set_purpose on an orientation question/);
+    // Capability gives something to SAY; orientation still forbids tree select.
+    expect(p).toContain('# What I can do for you');
+  });
+
+  it('HAPPY: mind-change still releases trees + speaks in the same turn', () => {
+    const p = build();
+    expect(p).toMatch(/THEY CHANGED THEIR MIND/);
+    expect(p).toMatch(/SPEAK FIRST/);
+    expect(p).toMatch(/wrong_trees/);
+  });
+
+  it('HAPPY: three lanes survive alongside known-caller and caller-ID lines', () => {
+    const p = build({
+      businessName: 'Acme',
+      businessBlurb: 'We fix bikes.',
+      staffFirstNames: ['Sam'],
+      callerPhone: '+15551234567',
+      knownCustomer: {
+        name: 'Casey',
+        history: '',
+        preferences: {},
+        upcomingAppointments: [],
+      },
+    });
+    expect(p).toContain('# Known caller');
+    expect(p).toMatch(/RETURNING caller/);
+    expect(p).toMatch(/NEVER ask for it and NEVER recite it back/);
+    expect(capabilityBody(p)).toMatch(/take a message for Sam/);
+  });
+});
+
+describe('stall detector — re-arm after recovery (plan companion)', () => {
+  // Extends the SCL_nRKo3KEVw8Yh suite: after a stall fires, movement must re-arm
+  // so a later freeze can fire again (not permanently silenced by #stallNudged).
+
+  function makeAgent() {
+    return new ChecklistAgent({
+      tools: {} as llm.ToolContext,
+      persona: 'You are Piper.',
+      runtime: {
+        currentDate: 'Monday, August 10, 2026',
+        timezone: 'America/Chicago',
+        businessHours: null,
+        bookableThrough: null,
+      },
+    });
+  }
+
+  it('HAPPY: after stall fires, checklist movement re-arms for a later stall', async () => {
+    const agent = makeAgent();
+    const ctx = llm.ChatContext.empty();
+    const fakeMsg = {} as llm.ChatMessage;
+    const tools = agent.currentTools();
+    const exec = (name: string, args: unknown) =>
+      (tools[name] as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }).execute(
+        args,
+        undefined
+      );
+
+    // Stall #1
+    for (let i = 0; i < STALL_TURN_LIMIT; i++) {
+      await agent.onUserTurnCompleted(ctx, fakeMsg);
+    }
+    let notes = ctx.items.filter((it) => it.type === 'message' && it.role === 'system');
+    expect(notes).toHaveLength(1);
+
+    // Movement re-arms
+    await exec('set_purpose', { trees: ['identity'] });
+    await agent.onUserTurnCompleted(ctx, fakeMsg);
+
+    // Stall #2 — fresh stationary streak
+    for (let i = 0; i < STALL_TURN_LIMIT; i++) {
+      await agent.onUserTurnCompleted(ctx, fakeMsg);
+    }
+    notes = ctx.items.filter((it) => it.type === 'message' && it.role === 'system');
+    expect(notes.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('SAD: fewer than STALL_TURN_LIMIT stationary turns injects nothing', async () => {
+    const agent = makeAgent();
+    const ctx = llm.ChatContext.empty();
+    const fakeMsg = {} as llm.ChatMessage;
+    for (let i = 0; i < STALL_TURN_LIMIT - 1; i++) {
+      await agent.onUserTurnCompleted(ctx, fakeMsg);
+    }
+    expect(ctx.items.filter((it) => it.type === 'message' && it.role === 'system')).toHaveLength(0);
+  });
+});
