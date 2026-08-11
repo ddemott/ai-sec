@@ -1,6 +1,6 @@
 # Secretary HQ
 
-**AI receptionist for service businesses.** Answers calls 24/7, books appointments, answers policy questions, transfers to a human when needed, and logs every interaction — call summaries, transcripts, and analytics — to the owner's dashboard. No missed calls, no hold music, no voicemail.
+**AI receptionist for service businesses.** Answers calls 24/7, books appointments, answers policy questions, takes messages for escalation when needed, and logs every interaction — call summaries, transcripts, and analytics — to the owner's dashboard. No missed calls, no hold music, no voicemail.
 
 Built for tire shops, salons, auto repair, fitness studios, trades, and food & beverage businesses.
 
@@ -11,7 +11,7 @@ Below is a full list of its features:
 - Answers inbound calls 24/7 with a low-latency, human-like voice (Deepgram Aura TTS, streaming)
 - Identifies callers on arrival and matches them to existing customer records
 - Greets callers by name when recognized, captures new callers into the address book automatically
-- Live call transfer to a human agent via SIP REFER when the caller needs escalation
+- Takes messages for escalation today; SIP REFER handoff plumbing exists in code, but the live question-tree path does not yet expose human transfer
 - Records full call transcripts and generates AI post-call summaries
 - Handles rejections, off-topic questions, and policy queries naturally
 
@@ -57,7 +57,7 @@ Below is a full list of its features:
 - 7-step onboarding wizard: repeatable, re-enterable, with live coverage feedback and phone activation
 - Service, employee, resource, and skill management
 - Weekly schedule grid that fans out to a 4-week `employee_schedule` (copy-week button for forward extension)
-- Per-tenant AI persona: voice, speed, and tone controlled from the Phone Assistant page
+- Per-tenant AI persona: voice, greeting, and style controlled from the Phone Assistant page (`tts_speed` is currently inert under Aura)
 - Website scan during onboarding to seed initial knowledge base
 
 **Automated Reminders**
@@ -68,9 +68,9 @@ Below is a full list of its features:
 
 **Billing**
 
-- Stripe Checkout: Solo ($129/mo) and Growth ($279/mo) plans
-- Subscription gate middleware — unsubscribed tenants blocked from paid features
-- Webhook handling for subscription events
+- Stripe Checkout + subscription-gate wiring are built, but launch pricing is not finalized
+- Subscription gate middleware — unsubscribed tenants are blocked from paid features once billing is wired
+- Billing webhook route exists at `/billing/webhook`, but no Stripe endpoint is registered yet
 
 **Security & Multi-Tenancy**
 
@@ -92,8 +92,8 @@ Below is a full list of its features:
 | **Dashboard** | Live at `https://www.secretaryhq.com` (Railway origin `dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                                                                                                                      |
 | **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4.1-mini (LLM) + Deepgram Aura (TTS). Call flow = question trees (`agent/src/checklist/`). PSTN inbound reaches the agent (confirmed 2026-06-30); the booking + transfer legs still need a live different-carrier call — see `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7. |
 | **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                                                                                                                                                      |
-| **Tests**     | ~3,853 passing (~2,340 backend + ~1,017 dashboard + ~496 agent) + 0 skips, zero TypeScript errors                                                                                                                                                                                                                                                 |
-| **E2E**       | 35 Playwright spec files                                                                                                                                                                                                                                                                                                                          |
+| **Tests**     | 5,186 passing (2,675 backend + 1,031 dashboard + 1,480 agent) from the latest verified run                                                                                                                                                                                                                                                        |
+| **E2E**       | 38 Playwright spec files                                                                                                                                                                                                                                                                                                                          |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -119,7 +119,7 @@ See `docs/TODO.md` for remaining work and `docs/RESOLVED.md` for completed phase
 - **Calendar Sync** — Google Calendar and Outlook Calendar OAuth integration. Appointments auto-sync on create, update, delete, and cancel.
 - **Coverage Visibility** — Gaps shown across scheduler, services list, skill map, and setup wizard.
 - **Analytics** — Busiest hours, return rate, and no-show patterns from booking data.
-- **Billing** — Stripe Checkout with subscription gate (Solo $129/mo, Growth $279/mo).
+- **Billing** — Stripe Checkout route + subscription gate exist in code; launch pricing is still provisional and the webhook endpoint is not yet registered.
 
 ---
 
@@ -142,16 +142,16 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                 Next.js 14 Dashboard
 ```
 
-| Layer             | Tech                                                                                                                                                                                                                                                                                     |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4.1-mini (voice LLM; 4o-mini for summaries/classify), Deepgram Aura (TTS, streaming, per-tenant voice via dashboard AI Persona page; `tts_speed` is inert under Aura)                      |
-| **Backend**       | Fastify 4.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                                              |
-| **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                      |
-| **Database**      | PostgreSQL + pgvector, 154 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                       |
-| **Agent runtime** | LiveKit Agents (Node) on Railway as `secretary-hq-agent`. Call flow = **question trees** (`agent/src/checklist/`): host-owned checklist, purpose-selected trees, goodbye gate. 26 tools defined in `agent/src/tools.ts`; **12 are offered to the model** — see `docs/ARCHITECTURE.md` §7 |
-| **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                       |
-| **Billing**       | Stripe Checkout, webhook (3 events), subscription gate middleware                                                                                                                                                                                                                        |
-| **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                                                                |
+| Layer             | Tech                                                                                                                                                                                                                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4.1-mini (voice LLM; 4o-mini for summaries/classify), Deepgram Aura (TTS, streaming, per-tenant voice via dashboard AI Persona page; `tts_speed` is inert under Aura)                                      |
+| **Backend**       | Fastify 5.x, 29 route modules, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                                                              |
+| **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                                      |
+| **Database**      | PostgreSQL + pgvector, 179 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                                       |
+| **Agent runtime** | LiveKit Agents (Node) on Railway as `secretary-hq-agent`. Call flow = **question trees** (`agent/src/checklist/`): host-owned checklist, purpose-selected trees, goodbye gate. 26 tools are defined in `agent/src/tools.ts`; the live question-tree path offers a subset — see `docs/ARCHITECTURE.md` §7 |
+| **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                                       |
+| **Billing**       | Stripe Checkout route + subscription gate exist in code; pricing is provisional and the webhook endpoint is not yet registered                                                                                                                                                                           |
+| **Security**      | @fastify/helmet, @fastify/rate-limit, CORS restriction, bcrypt, FORCE RLS                                                                                                                                                                                                                                |
 
 See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
@@ -161,7 +161,7 @@ See `docs/ARCHITECTURE.md` for the full technical deep-dive.
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - Docker (for local PostgreSQL)
 - npm
 
@@ -227,7 +227,7 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   ├── lib/                API client, hooks, types, SessionContext
 │   └── e2e/                Playwright tests
 ├── supabase/
-│   ├── migrations/         154 SQL migrations
+│   ├── migrations/         179 SQL migrations
 │   └── seed.sql            Platform admin + Bella's Hair Studio demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling, voice CRM types + prompt formatter)
 ├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
@@ -239,9 +239,9 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (~2,340 tests)
-cd dashboard && npx vitest run        # Dashboard (~1,017 tests)
-cd dashboard && npx playwright test   # E2E (35 spec files)
+npm test                              # Backend (2,675 passing in the latest verified run)
+cd dashboard && npx vitest run        # Dashboard (1,031 passing in the latest verified run)
+cd dashboard && npx playwright test   # E2E (38 spec files)
 ```
 
 ### Coverage
@@ -252,7 +252,7 @@ cd dashboard && npx playwright test   # E2E (35 spec files)
 | Backend services                  | ~570  |
 | Middleware, scheduling, constants | ~500  |
 | Dashboard components + views      | ~747  |
-| Playwright e2e (35 spec files)    | —     |
+| Playwright e2e (38 spec files)    | —     |
 
 ### Test Philosophy
 
@@ -304,19 +304,19 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 ## Key Features
 
-| Feature                | Details                                                               |
-| ---------------------- | --------------------------------------------------------------------- |
-| 29 business types      | 6 categories with per-type vocabulary                                 |
-| Scheduler              | Staff swimlanes, resource columns, list view, calendar, quick book    |
-| Skill relationship map | Interactive 3-column employee > service > resource view               |
-| 7-step setup wizard    | Repeatable, re-enterable, live coverage feedback, phone activation    |
-| 8 themes               | Light, dark, midnight, nord, sunset, forest, high-contrast, solarized |
-| Stripe billing         | Solo ($129/mo) + Growth ($279/mo), subscription gate                  |
-| Calendar sync          | Google + Outlook, OAuth, auto-sync on all mutations                   |
-| Square CRM sync        | Bidirectional customer + appointment sync                             |
-| Knowledge base         | 40 policy Q&A pairs, document upload, RAG via pgvector                |
-| Contextual feedback    | In-app feedback button on every page                                  |
-| Playwright e2e         | 35 spec files                                                         |
+| Feature                | Details                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| 29 business types      | 6 categories with per-type vocabulary                                                 |
+| Scheduler              | Staff swimlanes, resource columns, list view, calendar, quick book                    |
+| Skill relationship map | Interactive 3-column employee > service > resource view                               |
+| 7-step setup wizard    | Repeatable, re-enterable, live coverage feedback, phone activation                    |
+| 8 themes               | Light, dark, midnight, nord, sunset, forest, high-contrast, solarized                 |
+| Stripe billing         | Checkout + subscription gate in code; pricing provisional; webhook not yet registered |
+| Calendar sync          | Google + Outlook, OAuth, auto-sync on all mutations                                   |
+| Square CRM sync        | Bidirectional customer + appointment sync                                             |
+| Knowledge base         | 40 policy Q&A pairs, document upload, RAG via pgvector                                |
+| Contextual feedback    | In-app feedback button on every page                                                  |
+| Playwright e2e         | 38 spec files                                                                         |
 
 ---
 

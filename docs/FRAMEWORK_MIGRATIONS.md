@@ -2,7 +2,7 @@
 
 Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `docs/TODO.md`.
 
-**Last updated:** 2026-07-28 (added §5 Deepgram Aura TTS — the current provider — and §6, the call-flow rebuilds: ladder → rungs → question trees)
+**Last updated:** 2026-08-11 (refreshed current tool-count wording and kept the live voice stack / question-tree status aligned with the repo)
 
 ---
 
@@ -24,7 +24,7 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 **Why:** LiveKit agent runs as a Node.js worker; keeping tools in Deno edge functions added a network hop and a second runtime. Consolidating into Fastify lets tools share the existing DB pool, middleware, and types.
 
-**Current implementation:** 23 voice tools (capability-composed) in `src/routes/agentTools.ts` + `agent/src/tools.ts`. Auth via `x-agent-secret` header. All booking routes gate on `isValidPhone`. See agent tools catalog in `docs/ARCHITECTURE.md`.
+**Current implementation:** 26 defined voice tools across `src/routes/agentTools/` + `agent/src/tools.ts`. Auth via `x-agent-secret` header. The live question-tree path exposes a subset of those tools, not the entire catalog. See `docs/ARCHITECTURE.md` for the current reachability split.
 
 ---
 

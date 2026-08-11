@@ -19,6 +19,8 @@ import { sanitizeStream } from '../speechSanitizer.js';
 import type { KnownCustomer } from '../customerContext.js';
 import { runtimePreamble, type CallRuntime } from '../tasks/callPlan.js';
 import { ChecklistTracker } from './tracker.js';
+import { compileRuntimeConfig } from './blockCompiler.js';
+import type { TenantRuntimeConfig } from './blockTypes.js';
 import { createChecklistTools, type ChecklistToolkit } from './checklistTools.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
 import type { QuestionTreeDef } from './types.js';
@@ -43,6 +45,8 @@ export interface ChecklistAgentOptions {
   knownCustomer?: KnownCustomer | null;
   /** Override for tests/tenants; defaults to the platform library. */
   library?: QuestionTreeDef[];
+  /** Declarative tenant tree selection compiled into the live tree library. */
+  runtimeConfig?: TenantRuntimeConfig;
   /** The tenant's display name, so the agent can say WHO the caller reached. */
   businessName?: string | null;
   /**
@@ -71,6 +75,27 @@ function formatAppointmentTime(iso: string, timezone: string): string {
     hour: 'numeric',
     minute: '2-digit',
   }).format(d);
+}
+
+export function resolveChecklistLibrary(opts: {
+  library?: QuestionTreeDef[];
+  runtimeConfig?: TenantRuntimeConfig;
+}): QuestionTreeDef[] {
+  if (opts.library && opts.runtimeConfig) {
+    throw new Error('Pass either library or runtimeConfig, not both.');
+  }
+  return opts.library ?? PLATFORM_TREE_LIBRARY;
+}
+
+export function resolveSelectableTreeIds(opts: {
+  library?: QuestionTreeDef[];
+  runtimeConfig?: TenantRuntimeConfig;
+}): string[] {
+  if (opts.library && opts.runtimeConfig) {
+    throw new Error('Pass either library or runtimeConfig, not both.');
+  }
+  if (opts.runtimeConfig) return compileRuntimeConfig(opts.runtimeConfig).map((tree) => tree.tree_id);
+  return (opts.library ?? PLATFORM_TREE_LIBRARY).map((tree) => tree.tree_id);
 }
 
 /** The `# Known caller` prompt section — CRM facts the model must not
@@ -122,13 +147,18 @@ export function buildChecklistPrompt(opts: {
   persona: string;
   runtime: CallRuntime;
   library: QuestionTreeDef[];
+  selectableTreeIds?: string[];
   callerPhone?: string | null;
   knownCustomer?: KnownCustomer | null;
   staffFirstNames?: string[];
   businessName?: string | null;
   businessBlurb?: string | null;
 }): string {
-  const menu = opts.library.map((tree) => `- ${tree.tree_id}: ${tree.description}`).join('\n');
+  const selectable = new Set(opts.selectableTreeIds ?? opts.library.map((tree) => tree.tree_id));
+  const menu = opts.library
+    .filter((tree) => selectable.has(tree.tree_id))
+    .map((tree) => `- ${tree.tree_id}: ${tree.description}`)
+    .join('\n');
   const knownSection = renderKnownCaller(opts.knownCustomer ?? null, opts.runtime.timezone);
   // WHAT THIS BUSINESS DOES. The one thing the model needs in order to answer
   // "what is this?" without either guessing or falling silent. Owner's words
@@ -527,7 +557,8 @@ export class ChecklistAgent extends voice.Agent {
   #stallNudged = false;
 
   constructor(opts: ChecklistAgentOptions) {
-    const library = opts.library ?? PLATFORM_TREE_LIBRARY;
+    const library = resolveChecklistLibrary(opts);
+    const selectableTreeIds = resolveSelectableTreeIds(opts);
     const tracker = new ChecklistTracker(library);
 
     // The toolkit's effect callbacks capture `this` lazily (arrow bodies run at
@@ -535,6 +566,7 @@ export class ChecklistAgent extends voice.Agent {
     const toolkit = createChecklistTools({
       tracker,
       library,
+      selectableTreeIds,
       realTools: opts.tools,
       callerPhone: opts.callerPhone,
       onSelectionChanged: () => {
@@ -571,6 +603,7 @@ export class ChecklistAgent extends voice.Agent {
         persona: opts.persona,
         runtime: opts.runtime,
         library,
+        selectableTreeIds,
         callerPhone: opts.callerPhone,
         knownCustomer: opts.knownCustomer,
         staffFirstNames: opts.staffFirstNames,
