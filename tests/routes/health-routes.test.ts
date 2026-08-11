@@ -33,7 +33,12 @@ describe('health routes', () => {
     expect(res.headers.location).toBe('https://dash.example.com/demo');
   });
 
-  it('REGRESSION: GET /demo falls back to localhost dashboard when DASHBOARD_URL is unset', async () => {
+  it('HAPPY: GET /demo falls back to localhost dashboard when DASHBOARD_URL is unset', async () => {
+    // WHO: a developer opening /demo locally without DASHBOARD_URL configured.
+    // WHAT: backend redirect should fall back to localhost dashboard /demo.
+    // WHEN: env var is unset.
+    // WHERE: registerHealthRoutes() /demo handler.
+    // WHY: local demo path must stay usable without extra env wiring.
     const app = buildApp();
 
     const res = await app.inject({ method: 'GET', url: '/demo' });

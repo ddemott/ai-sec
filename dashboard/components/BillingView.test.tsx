@@ -276,6 +276,11 @@ describe('BillingView — usage statements', () => {
   });
 
   test('SAD: usage endpoint failure shows an honest error, never fake zero usage', async () => {
+    // WHO: an owner opening Billing during a usage-endpoint failure.
+    // WHAT: UI shows explicit load failure, not a fake zero-usage statement.
+    // WHEN: Api.billing.usage rejects.
+    // WHERE: BillingView usage statement card.
+    // WHY: billing outages must be honest; fake $0 is worse than an error.
     mockApi.billing.status.mockResolvedValue({
       subscription_status: 'active',
       subscription_plan: 'solo',

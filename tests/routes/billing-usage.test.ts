@@ -91,6 +91,11 @@ describe('billingUsage — the answered-call definition', () => {
   });
 
   it('HAPPY: exactly BILLABLE_MIN_SECONDS bills (boundary is inclusive)', async (ctx) => {
+    // WHO: an owner whose call hits the exact billable threshold.
+    // WHAT: 15 seconds counts as billable; boundary is inclusive.
+    // WHEN: duration_seconds === BILLABLE_MIN_SECONDS.
+    // WHERE: computeUsageStatements() answered-call filter.
+    // WHY: off-by-one here changes invoices.
     skipIfDbDown(ctx, () => dbAvailable);
     const before = await computeUsageStatements(pool, tenantId, 1);
     await insertSession(tenantId, { durationSeconds: BILLABLE_MIN_SECONDS });
@@ -99,6 +104,11 @@ describe('billingUsage — the answered-call definition', () => {
   });
 
   it('SAD: a tenant with NO plan gets usage numbers but null quota/overage/charge', async (ctx) => {
+    // WHO: a tenant without a recognized subscription plan.
+    // WHAT: usage still computes, but quota/overage fields stay null.
+    // WHEN: subscription_plan is NULL.
+    // WHERE: computeUsageStatements() quota shaping.
+    // WHY: informational usage must not invent billing policy.
     skipIfDbDown(ctx, () => dbAvailable);
     await insertSession(noPlanTenantId, {});
     const res = await computeUsageStatements(pool, noPlanTenantId, 1);
@@ -113,6 +123,11 @@ describe('billingUsage — the answered-call definition', () => {
   });
 
   it('SAD: unknown tenant throws Tenant not found', async (ctx) => {
+    // WHO: route caller asking for usage on a nonexistent tenant.
+    // WHAT: service throws Tenant not found.
+    // WHEN: tenant lookup returns zero rows.
+    // WHERE: computeUsageStatements() tenant preflight.
+    // WHY: route maps this to 404 instead of fake empty statements.
     skipIfDbDown(ctx, () => dbAvailable);
     await expect(
       computeUsageStatements(pool, '00000000-0000-4000-8000-00000000dead', 1)
@@ -123,6 +138,11 @@ describe('billingUsage — the answered-call definition', () => {
 
 describe('billingUsage — pack math', () => {
   it('HAPPY: overage rounds UP to whole packs, priced at packPriceUsd each', async (ctx) => {
+    // WHO: a solo-plan tenant who goes over quota.
+    // WHAT: overage rounds up to whole packs at flat pack pricing.
+    // WHEN: answeredCalls exceed includedCalls by 31.
+    // WHERE: computeUsageStatements() pack math.
+    // WHY: undercharging leaks revenue; overcharging torches trust.
     skipIfDbDown(ctx, () => dbAvailable);
     const packTenant = await createTenant(client, 'Billing Usage Pack Tenant', 'salon');
     try {

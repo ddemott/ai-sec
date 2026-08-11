@@ -9,6 +9,7 @@
 import type { Pool } from 'pg';
 
 export const BILLABLE_MIN_SECONDS = 15;
+const CALLER_LINE_RE = '(?:^|\\n)Caller(?: \\[\\d+:\\d{2}\\])?: ';
 
 export interface PlanQuota {
   includedCalls: number;
@@ -63,7 +64,7 @@ export async function computeUsageStatements(
             COUNT(*) FILTER (
               WHERE status = 'completed'
                 AND COALESCE(duration_seconds, 0) >= $3
-                AND transcript LIKE '%Caller:%'
+                AND transcript ~ $4
             )::int AS answered
        FROM voice_sessions
       WHERE tenant_id = $1
@@ -71,7 +72,7 @@ export async function computeUsageStatements(
         AND (is_deleted IS NULL OR is_deleted = false)
       GROUP BY 1
       ORDER BY 1 DESC`,
-    [tenantId, months, BILLABLE_MIN_SECONDS]
+    [tenantId, months, BILLABLE_MIN_SECONDS, CALLER_LINE_RE]
   );
 
   const currentMonth = new Date().toISOString().slice(0, 7);

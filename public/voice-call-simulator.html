@@ -135,7 +135,7 @@ function processUserResponse(transcript) {
     setTimeout(() => startListening(), 1200);
   } else if (lower.includes('name') || lower.includes('phone')) {
     customer.name = transcript.replace(/my name is|phone is/gi, '').trim() || 'Caller';
-    addLog(`Thank you, ${customer.name}. Appointment confirmed for tomorrow 10am. I've updated your CRM record, sent the branded confirmation email and SMS, and queued the reminder.`);
+    addLog(`Thank you, ${customer.name}. This simulator now shows a preview of the booking summary for tomorrow at 10am. It does not write to CRM or send email/SMS.`);
     showCRM();
     addLog('Call complete. Anything else?');
     stopBtn.style.display = 'inline-block';
@@ -147,17 +147,17 @@ function processUserResponse(transcript) {
 
 function showCRM() {
   crmPanel.style.display = 'block';
-  crmOutput.textContent = `CUSTOMER RECORD (Production CRM write):
+  crmOutput.textContent = `CUSTOMER RECORD (Simulated preview only):
   • Name: ${customer.name}
   • Phone: ${customer.phone}
   • Appointment: ${appointment.service || 'Oil Change'} @ tomorrow 10am (Bay 1, Alex)
-  • Status: Confirmed
+  • Status: Simulated confirmation preview
   • Preferences: None saved yet
-  • CRM Sync: SUCCESS (added to dashboard, Google Calendar, reminder queue)
-  • Branded Email: SENT (HTML with logo, map, cancel link, ical)
-  • SMS: SENT (consent recorded, no_consent gate bypassed)
-  • RLS Tenant: PRODUCTION (isolated from other customers)
-  • Call Summary: Natural booking flow, duration from requirements, tiered opener used`;
+  • CRM Sync: Not performed by this browser-only page
+  • Branded Email: Not sent
+  • SMS: Not sent
+  • Tenant / RLS: Not applicable in simulator mode
+  • Call Summary: Natural booking-flow preview only`;
 }
 
 function startCall() {
@@ -165,7 +165,7 @@ function startCall() {
   startBtn.style.display = 'none';
   stopBtn.style.display = 'inline-block';
   logEl.innerHTML = '';
-  addLog('🔴 Production call connected. AI Secretary (natural voice mode) online.');
+  addLog('🔴 Simulator call connected. AI Secretary preview (browser-only, no backend writes).');
   setTimeout(() => {
     addLog('Hello, this is Sarah from Quick Lube. How can I help you today? What brings you in?');
     startListening();
@@ -179,7 +179,7 @@ function stopCall() {
   startBtn.style.display = 'inline-block';
   stopBtn.style.display = 'none';
   statusEl.style.display = 'none';
-  addLog('📴 Call ended. CRM record saved to production. Test complete.');
+  addLog('📴 Call ended. Simulator preview closed. No production data was written.');
 }
 </script>
 </body>
