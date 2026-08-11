@@ -1,5 +1,5 @@
+import type { ConversationBlockDef, TenantRuntimeConfig } from './blockTypes.js';
 import type { QuestionTreeDef } from './types.js';
-import type { TenantRuntimeConfig } from './blockTypes.js';
 import { BLOCK_LIBRARY } from './blockLibrary.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
 
@@ -7,7 +7,10 @@ const TREE_BY_ID = new Map<string, QuestionTreeDef>(
   PLATFORM_TREE_LIBRARY.map((tree) => [tree.tree_id, tree])
 );
 
-export function compileRuntimeConfig(config: TenantRuntimeConfig): QuestionTreeDef[] {
+export function compileRuntimeConfig(
+  config: TenantRuntimeConfig,
+  blockLibrary: Record<string, ConversationBlockDef> = BLOCK_LIBRARY
+): QuestionTreeDef[] {
   const seenBlocks = new Set<string>();
   const seenTrees = new Set<string>();
   const compiled: QuestionTreeDef[] = [];
@@ -16,7 +19,7 @@ export function compileRuntimeConfig(config: TenantRuntimeConfig): QuestionTreeD
     if (seenBlocks.has(blockId)) continue;
     seenBlocks.add(blockId);
 
-    const block = BLOCK_LIBRARY[blockId];
+    const block = blockLibrary[blockId];
     if (!block) {
       throw new Error(`Conversation block '${blockId}' not found in block library.`);
     }

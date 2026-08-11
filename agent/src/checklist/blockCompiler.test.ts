@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ConversationBlockDef } from './blockTypes.js';
 import { compileRuntimeConfig } from './blockCompiler.js';
 import { BLOCK_LIBRARY } from './blockLibrary.js';
 import { BOOKING_TREE, IDENTITY_TREE, JOB_TREE, MESSAGE_TREE } from './trees.js';
@@ -61,16 +62,29 @@ describe('compileRuntimeConfig', () => {
   });
 
   it('throws when a block resolves to a tree id that does not exist in the live library', () => {
+    const brokenBlockLibrary: Record<string, ConversationBlockDef> = {
+      ...BLOCK_LIBRARY,
+      broken_tree_ref: {
+        block_id: 'broken_tree_ref',
+        kind: 'conversation',
+        description: 'Intentional bad fixture for compiler failure tests.',
+        tree_refs: ['missing_live_tree'],
+      },
+    };
+
     expect(() =>
-      compileRuntimeConfig({
-        preset_id: 'broken-tree-ref',
-        enabled_conversation_blocks: ['broken_tree_ref'],
-        enabled_policy_blocks: [],
-        enabled_knowledge_blocks: [],
-        enabled_outcome_blocks: [],
-        overrides: {},
-        version: 1,
-      })
+      compileRuntimeConfig(
+        {
+          preset_id: 'broken-tree-ref',
+          enabled_conversation_blocks: ['broken_tree_ref'],
+          enabled_policy_blocks: [],
+          enabled_knowledge_blocks: [],
+          enabled_outcome_blocks: [],
+          overrides: {},
+          version: 1,
+        },
+        brokenBlockLibrary
+      )
     ).toThrow(/not found in platform tree library/i);
   });
 });

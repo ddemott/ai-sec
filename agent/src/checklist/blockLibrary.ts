@@ -26,10 +26,4 @@ export const BLOCK_LIBRARY: Record<string, ConversationBlockDef> = {
     tree_refs: ['job'],
     pairs_with: ['identity', 'booking', 'message'],
   },
-  broken_tree_ref: {
-    block_id: 'broken_tree_ref',
-    kind: 'conversation',
-    description: 'Intentional bad fixture for compiler failure tests.',
-    tree_refs: ['missing_live_tree'],
-  },
 };
