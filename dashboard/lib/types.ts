@@ -341,6 +341,32 @@ export interface AiCostSummary {
   total_estimated_cost_usd: number;
 }
 
+export interface PlanQuota {
+  includedCalls: number;
+  packCalls: number;
+  packPriceUsd: number;
+}
+
+export interface MonthlyStatement {
+  month: string;
+  totalCalls: number;
+  answeredCalls: number;
+  freeCalls: number;
+  includedCalls: number | null;
+  overageCalls: number | null;
+  packsApplied: number | null;
+  packChargeUsd: number | null;
+  inProgress: boolean;
+}
+
+export interface UsageStatementResult {
+  plan: string | null;
+  quota: PlanQuota | null;
+  billableMinSeconds: number;
+  monthBoundaries: 'utc';
+  statements: MonthlyStatement[];
+}
+
 export interface Vocabulary {
   resource_label: string;
   resource_plural: string;

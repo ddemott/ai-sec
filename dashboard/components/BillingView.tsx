@@ -7,6 +7,7 @@ import { Button } from './ui/Button';
 import { Api } from '../lib/api';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { showToast } from './ui/Toast';
+import type { UsageStatementResult } from '../lib/types';
 
 type PlanKey = 'solo' | 'growth' | 'professional';
 type SubscriptionStatus = 'inactive' | 'active' | 'past_due' | 'canceled';
@@ -62,15 +63,18 @@ function statusBadge(status: SubscriptionStatus) {
 export default function BillingView() {
   const tenantId = useActiveTenantId();
   const [status, setStatus] = useState<BillingStatus | null>(null);
+  const [usage, setUsage] = useState<UsageStatementResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState<PlanKey | null>(null);
   const [openingPortal, setOpeningPortal] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
-    Api.billing
-      .status(tenantId)
-      .then((s) => setStatus(s as BillingStatus))
+    Promise.all([Api.billing.status(tenantId), Api.billing.usage(tenantId, 6)])
+      .then(([s, u]) => {
+        setStatus(s as BillingStatus);
+        setUsage(u);
+      })
       .catch(() => showToast('Failed to load billing status', 'error'))
       .finally(() => setLoading(false));
   }, [tenantId]);
@@ -230,6 +234,52 @@ export default function BillingView() {
         Payments are processed securely by Stripe. Subscriptions renew monthly and can be canceled
         at any time.
       </p>
+
+      <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
+        <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+          <div>
+            <h3 className="text-base font-semibold">Usage & Statements</h3>
+            <p className="text-xs text-muted mt-1">
+              Answered calls bill at {usage?.billableMinSeconds ?? 15}+ seconds. Silent or short calls are free.
+            </p>
+          </div>
+        </div>
+
+        {usage?.statements.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted border-b" style={{ borderColor: 'var(--border)' }}>
+                  <th className="py-2 pr-3">Month</th>
+                  <th className="py-2 pr-3">Total</th>
+                  <th className="py-2 pr-3">Answered</th>
+                  <th className="py-2 pr-3">Included</th>
+                  <th className="py-2 pr-3">Overage</th>
+                  <th className="py-2 pr-3">Packs</th>
+                  <th className="py-2 pr-0">Pack Charge</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usage.statements.map((statement) => (
+                  <tr key={statement.month} className="border-b" style={{ borderColor: 'var(--border-soft)' }}>
+                    <td className="py-2 pr-3">{statement.month}</td>
+                    <td className="py-2 pr-3">{statement.totalCalls}</td>
+                    <td className="py-2 pr-3">{statement.answeredCalls}</td>
+                    <td className="py-2 pr-3">{statement.includedCalls ?? '—'}</td>
+                    <td className="py-2 pr-3">{statement.overageCalls ?? '—'}</td>
+                    <td className="py-2 pr-3">{statement.packsApplied ?? '—'}</td>
+                    <td className="py-2 pr-0">
+                      {statement.packChargeUsd == null ? '—' : `$${statement.packChargeUsd}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">No answered calls yet.</p>
+        )}
+      </Card>
     </div>
   );
 }

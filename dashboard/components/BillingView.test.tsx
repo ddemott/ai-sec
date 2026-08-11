@@ -22,6 +22,7 @@ const { mockApi } = vi.hoisted(() => ({
       status: vi.fn(),
       checkout: vi.fn(),
       portal: vi.fn(),
+      usage: vi.fn(),
     },
   },
 }));
@@ -41,6 +42,13 @@ beforeEach(() => {
   mockApi.billing.status.mockResolvedValue({
     subscription_status: 'inactive',
     subscription_plan: null,
+  });
+  mockApi.billing.usage.mockResolvedValue({
+    plan: null,
+    quota: null,
+    billableMinSeconds: 15,
+    monthBoundaries: 'utc',
+    statements: [],
   });
 });
 
@@ -207,5 +215,50 @@ describe('BillingView — billing portal', () => {
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith('Portal unavailable', 'error')
     );
+  });
+});
+
+describe('BillingView — usage statements', () => {
+  test('HAPPY: renders monthly answered-call statement rows and pack overage math', async () => {
+    // WHO: owner checking how many answered calls actually billed this month.
+    // WHAT: Billing page should load /billing/usage and show the statement table.
+    // WHY: this is the no-paper monthly statement; without it the pricing model
+    //      exists only in docs and backend code.
+    mockApi.billing.status.mockResolvedValue({
+      subscription_status: 'active',
+      subscription_plan: 'solo',
+    });
+    mockApi.billing.usage.mockResolvedValue({
+      plan: 'solo',
+      quota: { includedCalls: 150, packCalls: 30, packPriceUsd: 25 },
+      billableMinSeconds: 15,
+      monthBoundaries: 'utc',
+      statements: [
+        {
+          month: '2026-07',
+          totalCalls: 181,
+          answeredCalls: 181,
+          freeCalls: 0,
+          includedCalls: 150,
+          overageCalls: 31,
+          packsApplied: 2,
+          packChargeUsd: 50,
+          inProgress: false,
+        },
+      ],
+    });
+
+    render(<BillingView />);
+
+    expect(await screen.findByText(/usage & statements/i)).toBeInTheDocument();
+    const row = screen.getByText('2026-07').closest('tr');
+    expect(row).not.toBeNull();
+    expect(row).toHaveTextContent('2026-07');
+    expect(row).toHaveTextContent('181');
+    expect(row).toHaveTextContent('150');
+    expect(row).toHaveTextContent('31');
+    expect(row).toHaveTextContent('2');
+    expect(row).toHaveTextContent('$50');
+    expect(mockApi.billing.usage).toHaveBeenCalledWith('tenant-test', 6);
   });
 });

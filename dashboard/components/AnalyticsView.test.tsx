@@ -266,14 +266,11 @@ describe('AnalyticsView — call analytics panels (gap #2)', () => {
 });
 
 describe('AnalyticsView — copy defects (UX review)', () => {
-  test('HAPPY: AI usage footer names OpenAI TTS, never the removed xAI vendor', async () => {
-    // WHO: an owner reading the AI Usage cost note.
-    // WHAT: the rate footer must reflect the current stack — OpenAI TTS. xAI/Grok
-    //        TTS was fully removed 2026-06-25; "xAI TTS cost TBD" is dead copy.
-    // WHEN: any Analytics visit with AI-cost rows present.
-    // WHERE: AnalyticsView AI Usage rate footer.
-    // WHY: a dead vendor name + a stale "cost TBD" misrepresent what the tenant
-    //       is billed for; regression guard so it can't creep back.
+  test('HAPPY: internal AI cost is NEVER shown to the tenant', async () => {
+    // WHO: an owner reading their Analytics page.
+    // WHAT: the per-tenant AI spend is the platform's cost-of-goods and must
+    //       stay out of the tenant-facing analytics surface.
+    // WHY: showing internal margin math in customer UI is self-harm with CSS.
     mockApi.analytics.getCalls.mockResolvedValue({
       totals: { total: 3, booked: 1, abandoned: 1 },
       by_outcome: [],
@@ -297,9 +294,10 @@ describe('AnalyticsView — copy defects (UX review)', () => {
 
     render(<AnalyticsView />);
 
-    expect(await screen.findByText(/OpenAI TTS/i)).toBeInTheDocument();
-    expect(screen.queryByText(/xAI TTS/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/cost\s*TBD/i)).not.toBeInTheDocument();
+    await screen.findByText(/Analytics/i);
+    expect(screen.queryByText(/AI Usage/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/estimated cost/i)).not.toBeInTheDocument();
+    expect(mockApi.analytics.getAiCost).not.toHaveBeenCalled();
   });
 
   test('HAPPY: the reliability snapshot does not leak the internal endpoint path', async () => {

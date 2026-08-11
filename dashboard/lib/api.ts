@@ -15,11 +15,12 @@ import type {
   BusinessTemplate,
   Tenant,
   CalendarSettings,
-  AnalyticsStats,
   AnalyticsCalls,
+  AnalyticsStats,
   AnalyticsCohorts,
   AnalyticsUtilization,
   AiCostSummary,
+  UsageStatementResult,
   Vocabulary,
   CoverageItem,
   WizardDraftGraph,
@@ -1076,6 +1077,12 @@ export const Api = {
 
     portal: (tenantId: string) =>
       apiMutate<{ url: string }>(`/billing/portal`, 'POST', { tenant_id: tenantId }),
+
+    usage: (tenantId: string, months = 6) =>
+      apiFetch<UsageStatementResult>(`/billing/usage`, {
+        tenant_id: tenantId,
+        months: String(months),
+      }),
   },
 
   // --- PHONE PROVISIONING ---
