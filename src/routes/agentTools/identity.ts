@@ -663,7 +663,13 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
       if (!trimmed) {
         return ok(reply, { matches: [] });
       }
-      if (trimmed.length < 2) {
+      // Single-word partial search is still legitimate ("Michael", "Thorn"),
+      // but ultra-short probes are not. A 2- or 3-character substring over
+      // ILIKE '%…%' is cheap address-book fishing and too noisy to help a live
+      // caller; require at least 4 characters while still allowing one-word
+      // partials. This is the compromise restored on 2026-08-07 after an
+      // over-tight "must be two words" gate broke real callers.
+      if (trimmed.length < 4) {
         return ok(reply, { matches: [] });
       }
       // Escape LIKE metacharacters so a spoken/transcribed name containing

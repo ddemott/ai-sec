@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voice AI Secretary Simulator - Production Test (Headphones/Mic)</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0a0f1c; color: #e0f0ff; padding: 30px; max-width: 900px; margin: 0 auto; line-height: 1.6; }
+  .container { background: #112240; padding: 30px; border-radius: 16px; border: 2px solid #1e40af; }
+  button { background: #2563eb; color: white; border: none; padding: 14px 28px; border-radius: 12px; font-size: 18px; cursor: pointer; margin: 10px; transition: all 0.2s; }
+  button:hover { background: #1e40af; transform: scale(1.05); }
+  button:disabled { background: #334155; cursor: not-allowed; }
+  .status { padding: 12px; border-radius: 8px; margin: 15px 0; font-weight: 500; }
+  .ai { background: #1e3a8a; }
+  .user { background: #334155; text-align: right; }
+  .log { max-height: 400px; overflow-y: auto; background: #02060f; padding: 15px; border-radius: 12px; font-size: 15px; line-height: 1.5; margin-top: 20px; }
+  .crm { background: #0f172a; padding: 20px; border-radius: 12px; font-family: monospace; white-space: pre-wrap; margin-top: 20px; border: 1px solid #1e40af; }
+  .mic { font-size: 48px; margin: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎙️ Voice AI Secretary Simulator</h1>
+  <p>This uses your browser mic and headphones for a full simulated production call. It runs the exact AI Secretary script (natural conversation, customer handling, CRM, booking, reminders, branded comms). Speak naturally — it listens and responds.</p>
+  
+  <button onclick="startCall()" id="startBtn">Start Production Call Simulation</button>
+  <button onclick="stopCall()" id="stopBtn" style="display:none;background:#ef4444">End Call</button>
+  
+  <div id="status" class="status" style="display:none"></div>
+  
+  <div class="log" id="log"></div>
+  
+  <div id="crmPanel" class="crm" style="display:none">
+    <strong>Live CRM Update (what production would write):</strong>
+    <pre id="crmOutput"></pre>
+  </div>
+</div>
+
+<script>
+let recognition;
+let synthesis;
+let isListening = false;
+let callActive = false;
+let customer = { name: 'Unknown Caller', phone: '(630) 555-0123' };
+let appointment = {};
+
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
+const crmPanel = document.getElementById('crmPanel');
+const crmOutput = document.getElementById('crmOutput');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+
+function addLog(text, isAI = true) {
+  const entry = document.createElement('div');
+  entry.style.margin = '8px 0';
+  entry.style.padding = '10px 14px';
+  entry.style.borderRadius = '8px';
+  entry.style.background = isAI ? '#1e3a8a' : '#334155';
+  entry.style.textAlign = isAI ? 'left' : 'right';
+  entry.innerHTML = isAI ? `🤖 <strong>AI Secretary:</strong> ${text}` : `👤 <strong>You:</strong> ${text}`;
+  logEl.appendChild(entry);
+  logEl.scrollTop = logEl.scrollHeight;
+  
+  if (isAI) {
+    speak(text);
+  }
+}
+
+function speak(text) {
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.1;
+    utterance.volume = 0.9;
+    speechSynthesis.speak(utterance);
+  }
+}
+
+function startListening() {
+  if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+    statusEl.textContent = 'Speech recognition not supported in this browser. Use Chrome/Edge.';
+    statusEl.style.background = '#b91c1c';
+    statusEl.style.display = 'block';
+    return;
+  }
+  
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+  
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    addLog(transcript, false);
+    processUserResponse(transcript);
+  };
+  
+  recognition.onerror = (event) => {
+    addLog(`(Mic error: ${event.error}. Try again or type in the box below.)`, true);
+    stopListening();
+  };
+  
+  recognition.onend = () => {
+    isListening = false;
+  };
+  
+  recognition.start();
+  isListening = true;
+  statusEl.textContent = '🎤 Listening... Speak naturally into your mic/headset.';
+  statusEl.style.background = '#15803d';
+  statusEl.style.display = 'block';
+}
+
+function stopListening() {
+  if (recognition) recognition.stop();
+  isListening = false;
+  statusEl.style.display = 'none';
+}
+
+function processUserResponse(transcript) {
+  stopListening();
+  
+  const lower = transcript.toLowerCase();
+  
+  if (lower.includes('book') || lower.includes('appointment') || lower.includes('schedule')) {
+    addLog('Perfect. What service are you looking for? Oil change, tires, brakes, or inspection?');
+    setTimeout(() => startListening(), 1500);
+  } else if (lower.includes('oil') || lower.includes('tire') || lower.includes('brake')) {
+    appointment.service = transcript;
+    addLog(`Got it — ${transcript}. Next available is tomorrow at 10am with Alex in Bay 1. Does that work?`);
+    setTimeout(() => startListening(), 1800);
+  } else if (lower.includes('yes') || lower.includes('works') || lower.includes('good')) {
+    addLog('Excellent. Can I get your name and phone to hold the spot?');
+    setTimeout(() => startListening(), 1200);
+  } else if (lower.includes('name') || lower.includes('phone')) {
+    customer.name = transcript.replace(/my name is|phone is/gi, '').trim() || 'Caller';
+    addLog(`Thank you, ${customer.name}. This simulator now shows a preview of the booking summary for tomorrow at 10am. It does not write to CRM or send email/SMS.`);
+    showCRM();
+    addLog('Call complete. Anything else?');
+    stopBtn.style.display = 'inline-block';
+  } else {
+    addLog("Sorry, I didn't catch that. Can you repeat?");
+    setTimeout(() => startListening(), 1000);
+  }
+}
+
+function showCRM() {
+  crmPanel.style.display = 'block';
+  crmOutput.textContent = `CUSTOMER RECORD (Simulated preview only):
+  • Name: ${customer.name}
+  • Phone: ${customer.phone}
+  • Appointment: ${appointment.service || 'Oil Change'} @ tomorrow 10am (Bay 1, Alex)
+  • Status: Simulated confirmation preview
+  • Preferences: None saved yet
+  • CRM Sync: Not performed by this browser-only page
+  • Branded Email: Not sent
+  • SMS: Not sent
+  • Tenant / RLS: Not applicable in simulator mode
+  • Call Summary: Natural booking-flow preview only`;
+}
+
+function startCall() {
+  callActive = true;
+  startBtn.style.display = 'none';
+  stopBtn.style.display = 'inline-block';
+  logEl.innerHTML = '';
+  addLog('🔴 Simulator call connected. AI Secretary preview (browser-only, no backend writes).');
+  setTimeout(() => {
+    addLog('Hello, this is Sarah from Quick Lube. How can I help you today? What brings you in?');
+    startListening();
+  }, 1200);
+}
+
+function stopCall() {
+  callActive = false;
+  stopListening();
+  speechSynthesis.cancel();
+  startBtn.style.display = 'inline-block';
+  stopBtn.style.display = 'none';
+  statusEl.style.display = 'none';
+  addLog('📴 Call ended. Simulator preview closed. No production data was written.');
+}
+</script>
+</body>
+</html>

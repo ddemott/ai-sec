@@ -15,11 +15,11 @@ import type {
   BusinessTemplate,
   Tenant,
   CalendarSettings,
-  AnalyticsStats,
   AnalyticsCalls,
+  AnalyticsStats,
   AnalyticsCohorts,
   AnalyticsUtilization,
-  AiCostSummary,
+  UsageStatementResult,
   Vocabulary,
   CoverageItem,
   WizardDraftGraph,
@@ -680,9 +680,6 @@ export const Api = {
     getCalls: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
       apiFetch<AnalyticsCalls>(`/analytics/calls`, analyticsQuery(tenantId, range)),
 
-    getAiCost: (tenantId: string | null) =>
-      apiFetch<AiCostSummary>(`/analytics/ai-cost`, tenantParam(tenantId)),
-
     getCohorts: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
       apiFetch<AnalyticsCohorts>(`/analytics/cohorts`, analyticsQuery(tenantId, range)),
 
@@ -1076,6 +1073,12 @@ export const Api = {
 
     portal: (tenantId: string) =>
       apiMutate<{ url: string }>(`/billing/portal`, 'POST', { tenant_id: tenantId }),
+
+    usage: (tenantId: string, months = 6) =>
+      apiFetch<UsageStatementResult>(`/billing/usage`, {
+        tenant_id: tenantId,
+        months: String(months),
+      }),
   },
 
   // --- PHONE PROVISIONING ---

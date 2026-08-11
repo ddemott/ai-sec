@@ -701,6 +701,27 @@ describe('agentTools /find-customer-by-name', () => {
     expect(queries).toHaveLength(0);
   });
 
+  it('SECURITY: two- and three-letter probes also short-circuit before SQL', async () => {
+    // WHO: anyone trying cheap partial sweeps like "Al" or "Ann"
+    // WHAT: route returns no matches without touching the DB
+    // WHY: one-word partial lookup is legitimate, but sub-4-character ILIKE
+    //      probes are still broad enough to fish the address book
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const two = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Al',
+    });
+    const three = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Ann',
+    });
+    expect(two.statusCode).toBe(200);
+    expect(two.json().result).toEqual({ matches: [] });
+    expect(three.statusCode).toBe(200);
+    expect(three.json().result).toEqual({ matches: [] });
+    expect(queries).toHaveLength(0);
+  });
+
   it('HAPPY: no match returns an empty list (signal to create a new entry)', async () => {
     // WHO: First-time caller whose name is not in the CRM
     // WHAT: Empty matches array, not an error — the agent treats them as new
@@ -2578,6 +2599,66 @@ describe('agentTools /book-with-scheduling', () => {
     // The next-available alternatives field is always present in failure
     // responses so the agent prompt can branch on it deterministically.
     expect(body.next_available).toEqual([]);
+  });
+
+  it('REGRESSION: next-available fallback uses requested service duration, not hardcoded 30 minutes', async () => {
+    // WHO: caller asking for a 45-minute service whose requested slot is taken
+    // WHAT: fallback slot search must preserve that 45-minute duration when it
+    //       looks for alternatives, or the agent offers times the booking RPC
+    //       cannot actually honor for the requested service
+    // WHY: feat/demo-match-live had the fix; main still hardcoded 30 minutes in
+    //      the failure branch, which quietly made alternative offers lie
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-duration' }] },
+        {
+          rows: [
+            {
+              service_id: 'svc-45',
+              name: 'Deep Consultation',
+              duration_minutes: 45,
+              price: null,
+              required_skills: [],
+            },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] },
+        { rows: [] },
+        {
+          rows: [
+            {
+              success: false,
+              appointment_id: null,
+              resource_id: null,
+              resource_name: null,
+              employee_id: null,
+              employee_name: null,
+              booked_start: null,
+              booked_end: null,
+              customer_id: null,
+              error_message: 'That time slot is already booked.',
+              error_code: 'TIMESLOT_OCCUPIED',
+            },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago' }] },
+        { rows: [] },
+      ],
+    });
+    const res = await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      requirements: { serviceType: 'Deep Consultation', durationMinutes: 45 },
+      window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T14:45:00Z' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().error_code).toBe('TIMESLOT_OCCUPIED');
+    const fallbackSlotsQuery = queries.find(
+      (q) => q.text.includes('WITH grid_start AS') && q.params[2] === '45'
+    );
+    expect(fallbackSlotsQuery, 'fallback availability search must keep 45-minute duration').toBeTruthy();
   });
 
   it('SAD: missing RPC row falls back to NO_AVAILABILITY', async () => {

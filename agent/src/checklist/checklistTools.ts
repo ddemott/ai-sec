@@ -248,9 +248,18 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     const pointer = !next
       ? ''
       : next.kind === 'action'
-        ? `\nNEXT: ${next.node_id} — an ACTION, not a question. Do it now, before asking anything else.`
-        : `\nNEXT: ask ${next.node_id}.`;
+        ? `\nNEXT: ${next.node_id} — an ACTION, not a question. Do it now, before asking anything else. Do NOT ask another question until this action is handled or explicitly blocked.`
+        : `\nNEXT: ask ${next.node_id}. This is the ONLY question you may ask next.`;
     return `CHECKLIST STATE:\n${tracker.renderState()}${pointer}`;
+  };
+
+  const repeatGuardDirective = (resolvedNodeId: string): string => {
+    const next = tracker.frontier()[0];
+    const noRepeat = `\n\n${resolvedNodeId} is already resolved. Do NOT ask ${resolvedNodeId} again.`;
+    if (!next) return noRepeat;
+    return next.kind === 'action'
+      ? `${noRepeat} ${next.node_id} is an ACTION now — do that before asking anything else.`
+      : `${noRepeat} The ONLY question you may ask next is ${next.node_id}.`;
   };
 
   /** Host-code phone-book save the moment both identity facts are in — never
@@ -572,8 +581,8 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     // string to speak, so the read-back is one instruction away instead of one
     // remembered style rule away. (Caller-ID-prefilled numbers never pass through
     // record_answer, so this fires only on genuinely dictated numbers.)
-    let directive = readbackDirective(args.value);
-    if (!directive && args.node_id === 'meeting_offer' && args.value === 'wants_meeting') {
+    let directive = repeatGuardDirective(args.node_id) + readbackDirective(args.value);
+    if (args.node_id === 'meeting_offer' && args.value === 'wants_meeting') {
       // The offer's YES is a booking ask — and the HOST does the selecting, not
       // the model. First shipped as a directive ("call set_purpose NOW adding
       // booking"); on the very next sim run the model recorded the yes and never
@@ -588,18 +597,18 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         recordIfOpen('meeting_topic', TREE_TOPIC['job']);
       }
       deps.onSelectionChanged();
-      directive =
+      directive +=
         '\n\nThey want the meeting — booking is now ON YOUR CHECKLIST. Offer real times ' +
         'next (get_available_slots). Nothing is booked until book_with_scheduling ' +
         'returns success — never say "booked" before it.';
     }
-    if (!directive && args.node_id === CALLER_NAME && args.value && !args.declined) {
+    if (args.node_id === CALLER_NAME && args.value && !args.declined) {
       // 2026-07-21 live call: the caller gave his name and never heard it again
       // until the goodbye. A receptionist who learns a name USES it — nudge at
       // the exact moment it lands, when the acknowledgement is being composed.
       // First name only: "Thanks, Dale." — never "Thanks, Dale DeMott."
       const first = args.value.trim().split(/\s+/)[0];
-      directive =
+      directive +=
         `\n\nUse their first name in your acknowledgement right now ("Thanks, ${first}.") ` +
         `and again at natural moments later — confirming the booking, wrapping up. ` +
         `Not every sentence; that reads as salesy.`;

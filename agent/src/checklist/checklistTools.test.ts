@@ -447,6 +447,18 @@ describe('record_answer', () => {
     expect(res).toContain('Do it now, before asking anything else.');
   });
 
+  it('HOST REPEAT GUARD: once a node is answered, the tool result forbids re-asking it and names the only valid next question', async () => {
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'hiring_for',
+      value: 'own_company',
+    });
+    expect(res).toContain('hiring_for is already resolved. Do NOT ask hiring_for again.');
+    expect(res).toContain('The ONLY question you may ask next is caller_name.');
+    expect(res).toContain('NEXT: ask caller_name. This is the ONLY question you may ask next.');
+  });
+
   it('HOST NAME NUDGE: recording the caller name tells the model to USE it — first name only', async () => {
     // WHO: the 2026-07-21 test caller — gave his name, never heard it again until
     //      the goodbye. WHAT: the tool result nudges at the exact moment the name

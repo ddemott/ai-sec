@@ -7,6 +7,7 @@ import { Button } from './ui/Button';
 import { Api } from '../lib/api';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { showToast } from './ui/Toast';
+import type { UsageStatementResult } from '../lib/types';
 
 type PlanKey = 'solo' | 'growth' | 'professional';
 type SubscriptionStatus = 'inactive' | 'active' | 'past_due' | 'canceled';
@@ -35,14 +36,24 @@ const PLANS: {
     name: 'Growth',
     price: 279,
     calls: '500 calls/month',
-    features: ['Everything in Solo', 'Call transfer to staff', 'Analytics dashboard', 'Priority support'],
+    features: [
+      'Everything in Solo',
+      'Call transfer to staff',
+      'Analytics dashboard',
+      'Priority support',
+    ],
   },
   {
     key: 'professional',
     name: 'Professional',
     price: 449,
     calls: '2,000 calls/month',
-    features: ['Everything in Growth', 'Custom AI persona', 'Calendar sync', 'Dedicated onboarding'],
+    features: [
+      'Everything in Growth',
+      'Custom AI persona',
+      'Calendar sync',
+      'Dedicated onboarding',
+    ],
   },
 ];
 
@@ -62,17 +73,27 @@ function statusBadge(status: SubscriptionStatus) {
 export default function BillingView() {
   const tenantId = useActiveTenantId();
   const [status, setStatus] = useState<BillingStatus | null>(null);
+  const [usage, setUsage] = useState<UsageStatementResult | null>(null);
+  const [usageError, setUsageError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState<PlanKey | null>(null);
   const [openingPortal, setOpeningPortal] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
+    setUsageError(false);
     Api.billing
       .status(tenantId)
       .then((s) => setStatus(s as BillingStatus))
       .catch(() => showToast('Failed to load billing status', 'error'))
       .finally(() => setLoading(false));
+    Api.billing
+      .usage(tenantId, 6)
+      .then((u) => setUsage(u))
+      .catch(() => {
+        setUsage(null);
+        setUsageError(true);
+      });
   }, [tenantId]);
 
   // Consume ?billing=success or ?billing=cancel from Stripe redirect
@@ -140,9 +161,7 @@ export default function BillingView() {
               <p className="text-sm text-muted">Loading…</p>
             ) : (
               <div className="flex items-center gap-3">
-                <span className="text-2xl font-bold capitalize">
-                  {currentPlan ?? 'Free Trial'}
-                </span>
+                <span className="text-2xl font-bold capitalize">{currentPlan ?? 'Free Trial'}</span>
                 {statusBadge(currentStatus)}
               </div>
             )}
@@ -230,6 +249,113 @@ export default function BillingView() {
         Payments are processed securely by Stripe. Subscriptions renew monthly and can be canceled
         at any time.
       </p>
+
+      <Card className="p-6" style={{ backgroundColor: 'var(--bg-raised)' }}>
+        <h3 className="text-base font-semibold">Usage & Statements</h3>
+
+        {usage === null && !usageError && <p className="text-sm text-muted mt-3">Loading usage…</p>}
+
+        {usageError && (
+          <p className="text-sm mt-3" style={{ color: 'var(--danger)' }}>
+            Couldn't load usage right now — your calls are still being recorded.
+          </p>
+        )}
+
+        {usage && usage.statements.length > 0 ? (
+          <div className="space-y-4 mt-3">
+            {(() => {
+              const current = usage.statements.find((statement) => statement.inProgress);
+              if (!current) return null;
+
+              const included = current.includedCalls;
+              const percent =
+                included && included > 0
+                  ? Math.min(100, Math.round((current.answeredCalls / included) * 100))
+                  : null;
+
+              return (
+                <div>
+                  <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                    <span className="text-sm font-medium">This month</span>
+                    <span className="text-sm text-muted">
+                      {current.answeredCalls}
+                      {included ? ` of ${included}` : ''} answered calls
+                      {current.freeCalls > 0 ? ` · ${current.freeCalls} short/spam (free)` : ''}
+                    </span>
+                  </div>
+
+                  {percent !== null && (
+                    <div
+                      className="mt-2 h-2 rounded-full overflow-hidden"
+                      style={{ backgroundColor: 'var(--bg-surface)' }}
+                      role="progressbar"
+                      aria-valuenow={current.answeredCalls}
+                      aria-valuemin={0}
+                      aria-valuemax={included ?? undefined}
+                      aria-label="Answered calls used this month"
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${percent}%`,
+                          backgroundColor: percent >= 100 ? 'var(--warning)' : 'var(--accent)',
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {current.overageCalls !== null && current.overageCalls > 0 && (
+                    <p className="text-xs mt-2" style={{ color: 'var(--warning)' }}>
+                      {current.overageCalls} calls over your plan this month —{' '}
+                      {current.packsApplied} call pack{current.packsApplied === 1 ? '' : 's'} (+$
+                      {current.packChargeUsd}) will apply. Your line keeps answering either way.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="divide-y" style={{ borderColor: 'var(--border-soft)' }}>
+              {usage.statements.map((statement) => (
+                <div
+                  key={statement.month}
+                  className="py-2 flex items-center justify-between gap-3 text-sm"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium">{statement.month}</span>
+                    {statement.inProgress && <Badge variant="secondary">in progress</Badge>}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span>
+                      {statement.answeredCalls} answered
+                      {statement.freeCalls > 0 ? ` · ${statement.freeCalls} free` : ''}
+                    </span>
+                    <span className="ml-3 font-semibold">
+                      {statement.packChargeUsd == null
+                        ? '—'
+                        : statement.packChargeUsd > 0
+                          ? `+$${statement.packChargeUsd} packs`
+                          : 'included'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-muted">
+              An answered call means a caller actually spoke for {usage.billableMinSeconds}+ seconds
+              — short rings, silent calls, and spam are always free. Statements live right here;
+              nothing is mailed.
+              {usage.plan === null &&
+                ' No active plan yet, so usage is informational — pick a plan below.'}
+            </p>
+          </div>
+        ) : null}
+
+        {usage && usage.statements.length === 0 && !usageError && (
+          <p className="text-sm text-muted mt-3">No calls recorded yet — usage will appear here.</p>
+        )}
+      </Card>
     </div>
   );
 }
