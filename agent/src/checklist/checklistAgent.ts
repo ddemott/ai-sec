@@ -135,8 +135,22 @@ export function buildChecklistPrompt(opts: {
   // (greeting_menu), never paraphrased into invented services.
   const bizName = opts.businessName?.trim() || '';
   const blurb = opts.businessBlurb?.trim() || '';
+  const staff = (opts.staffFirstNames ?? []).filter((n) => n && n.trim());
+  // CAPABILITY MENU (plan 08-10-2026). Vague openers ("hello", "what is this?")
+  // need a concrete "what I can do" list immediately — not a silent wait for a
+  // purpose. Owner name comes from the tenant roster (never a hardcoded person).
+  // Service detail lives in greeting_menu / "# What this business is", not here.
+  const ownerRef =
+    staff.length === 1 ? staff[0]! : staff.length > 1 ? 'someone on the team' : 'the owner';
+  const capabilitySection =
+    `\n# What I can do for you\n` +
+    `I answer any complete question about the business, take a message for ${ownerRef}, or ` +
+    `help you pick a service and book an appointment. When a caller asks what you offer, ` +
+    `use only the facts in "# What this business is" (never invent services). Callers can ` +
+    `also schedule a time simply to talk with ${ownerRef} about any of those items or ` +
+    `something else. Talk like a regular person — ask anything.\n`;
   const businessSection =
-    bizName || blurb
+    (bizName || blurb
       ? `\n# What this business is\n` +
         (bizName ? `- NAME: ${bizName}. This is who the caller reached.\n` : '') +
         (blurb
@@ -147,8 +161,7 @@ export function buildChecklistPrompt(opts: {
           : `- No services blurb is configured. If asked what this business does, say plainly ` +
             `that you can book a time, take a message, or answer questions, and ask what they ` +
             `need — never invent a description.\n`)
-      : '';
-  const staff = (opts.staffFirstNames ?? []).filter((n) => n && n.trim());
+      : '') + capabilitySection;
   // THE ROSTER. 2026-07-27: a caller asked for "Jane" — STT for "Dale", the
   // only person who works there — and the agent adopted the name unchallenged,
   // then confirmed a meeting "with Jane" against a row that says Dale. It had
@@ -357,6 +370,14 @@ the SAME question back, shorter and more concrete than the first time.
     You: "What day works for you?" → Them: "My brother had a terrible time with the last
     guy we hired." → You: "Understood — I'll pass that along. What day works best
     for you?"
+  FILLER VS REAL INTERRUPTION (plan 08-10-2026). Ignore empty noise — "yeah", "uh-huh",
+  "k", "okay", "go on", "mm-hmm" — these are acknowledgments. Do NOT record them, do NOT
+  re-ask the last question, and do NOT treat them as a new purpose. Continue as if they
+  said nothing. On a REAL clarification request ("what?", "can you repeat that", "wait I
+  don't get it", "I'm confused", "hold on") respond intelligently from context: repeat the
+  last sentence, simplify it, add one concrete detail, or ask "what part is confusing?" —
+  never hardcode a fixed recovery phrase; use the checklist and what the caller already
+  said. Phone audio is messy; a short "yeah" is not consent and not an answer.
   Third time on the same question, stop re-asking and change the shape of it: offer two
   concrete choices ("Is mornings or afternoons better?"), or park it and take a message
   instead. Never ask the same question a fourth time — that is the loop that gets hung up

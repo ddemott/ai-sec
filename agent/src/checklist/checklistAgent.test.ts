@@ -364,6 +364,53 @@ describe('buildChecklistPrompt — orientation, off-topic, and never going silen
     expect(withBusiness).toMatch(/never fill in a plausible answer they never actually gave/);
   });
 
+  // WHO: vague "hello / what is this?" opener | WHAT: capability menu in prompt |
+  // WHEN: first turn before purpose is known | WHERE: "# What I can do for you" |
+  // WHY (plan 08-10-2026): model had nothing concrete to offer after orientation beyond a
+  // bare name — it went quiet or looped. The list is the thing it can say. Service detail
+  // stays in the owner-written blurb (no hardcoded person names — multi-tenant).
+  it('HAPPY: includes the capability menu (tenant-neutral) and defers services to the blurb', () => {
+    expect(withBusiness).toContain('# What I can do for you');
+    expect(withBusiness).toMatch(/take a message for the owner/);
+    expect(withBusiness).toMatch(/help you pick a service and book an appointment/);
+    expect(withBusiness).toMatch(/use only the facts in "# What this business is"/);
+    expect(withBusiness).toMatch(/schedule a time simply to talk with the owner/);
+    // No real person name may leak into the platform prompt for every tenant.
+    expect(withBusiness).not.toMatch(/\bDale\b/);
+  });
+
+  // WHO: a tenant with a single staff first name | WHAT: capability uses that name |
+  // WHEN: staffFirstNames is provided | WHERE: capability menu | WHY: "message for the
+  // owner" is colder than "message for Jane" when we already know who works there.
+  it('HAPPY: capability menu names the sole staff person when the roster has one name', () => {
+    const withStaff = buildChecklistPrompt({
+      persona: 'You are Chris.',
+      runtime: {
+        currentDate: 'Wednesday, July 22, 2026',
+        timezone: 'America/Chicago',
+        businessHours: null,
+        bookableThrough: null,
+      },
+      library: PLATFORM_TREE_LIBRARY,
+      businessName: 'Acme Shop',
+      staffFirstNames: ['Jordan'],
+    });
+    expect(withStaff).toMatch(/take a message for Jordan/);
+    expect(withStaff).toMatch(/talk with Jordan/);
+  });
+
+  // WHO: "yeah / uh-huh" vs "what? / I don't get it" | WHAT: filler ignored, real interrupt
+  // handled | WHEN: mid-checklist acknowledgments and clarification asks | WHERE: FILLER
+  // VS REAL INTERRUPTION | WHY (plan 08-10-2026): empty noise must not re-ask or re-route;
+  // a real "wait I don't get it" must not be treated as an answer.
+  it('HAPPY: distinguishes filler noise from real clarification requests', () => {
+    expect(withBusiness).toMatch(/FILLER VS REAL INTERRUPTION/);
+    expect(withBusiness).toMatch(/Ignore empty noise/);
+    expect(withBusiness).toMatch(/uh-huh/);
+    expect(withBusiness).toMatch(/REAL clarification request/);
+    expect(withBusiness).toMatch(/what part is confusing/);
+  });
+
   // WHO: a caller re-asked too many times | WHAT: escalation, then an exit | WHEN: third
   // attempt | WHERE: same block | WHY: asking a fourth time is the loop callers hang up on.
   it('HAPPY: caps re-asking and changes shape rather than looping', () => {
