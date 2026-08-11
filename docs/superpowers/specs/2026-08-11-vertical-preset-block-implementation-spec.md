@@ -1,11 +1,39 @@
 # Vertical preset / block architecture — implementation spec
 
-**Status:** implementation spec, not started. **Date:** 2026-08-11. **Owner:** Dale.
+**Status:** initial implementation checkpoint completed; broader preset rollout still in progress. **Date:** 2026-08-11. **Owner:** Dale.
 
 Related docs:
 - `docs/VERTICAL-PRESET-BLOCK-ARCHITECTURE.md`
 - `docs/ROADMAP.md`
 - `docs/QUESTION_TREE_ARCHITECTURE.md`
+
+## Checkpoint outcome now implemented
+
+This spec is no longer just a plan. The following slice is now real in the repo:
+
+- `agent/src/checklist/blockTypes.ts`
+- `agent/src/checklist/blockSchemas.ts`
+- `agent/src/checklist/runtimeConfig.ts`
+- `agent/src/checklist/blockLibrary.ts`
+- `agent/src/checklist/blockCompiler.ts`
+- `agent/src/checklist/presets.test.ts`
+- `agent/src/checklist/blockCompiler.test.ts`
+- `agent/src/checklist/checklistRuntimeConfig.test.ts`
+- `supabase/migrations/20260811160000_intake_submissions.sql`
+- `supabase/baseline.sql` regenerated to include the new table/policies
+
+Verified behavior for this checkpoint:
+- checklist runtime accepts `runtimeConfig`
+- enabled conversation blocks compile into selectable live tree ids
+- full live tree library remains available for tracker invariants
+- `capture-job-inquiry` writes `intake_submissions` before the existing `job_inquiries` projection
+- `intake_submissions` ships with FORCE RLS and repo-standard tenant/admin policies
+
+Still pending relative to the full spec:
+- second reusable path proof
+- real preset catalog/code definitions
+- setup/onboarding preset selection
+- tenant-safe override surface
 
 ## 1. Goal
 
@@ -55,17 +83,20 @@ Do not use vague stand-ins like "script object" or "flow blob" in code.
 
 ## 4. Scope of first implementation slice
 
-First slice is deliberately narrow.
+The delivered checkpoint stayed deliberately narrow.
 
-In scope:
+Completed in this slice:
 - schema/types for definitions and runtime config
 - compiler layer from defs/config to question-tree defs
 - extraction of the current live `job` path into defs
 - generic `intake_submissions` capture
-- `job_inquiry` projector preserving current behavior
-- second-path proof (`buy_service` preferred)
+- route-level preservation of current `job_inquiries` behavior after the generic envelope write
 
-Out of scope for first slice:
+Not completed in this slice:
+- second-path proof (`buy_service` preferred)
+- dedicated projector/service extraction beyond the current route implementation
+
+Still out of scope:
 - dashboard UI for preset editing
 - end-user visual flow builder
 - tenant-authored branching logic
@@ -84,23 +115,25 @@ Out of scope for first slice:
 - `src/routes/agentTools/messaging.ts`
 - `src/routes/agentTools/*.test.ts` (exact files depend on current layout)
 
-### New files likely to create
+### Files created in this checkpoint
 Agent/runtime side:
 - `agent/src/checklist/blockTypes.ts`
 - `agent/src/checklist/blockSchemas.ts`
 - `agent/src/checklist/blockCompiler.ts`
 - `agent/src/checklist/blockLibrary.ts`
-- `agent/src/checklist/presets.ts`
 - `agent/src/checklist/runtimeConfig.ts`
 - `agent/src/checklist/blockCompiler.test.ts`
 - `agent/src/checklist/presets.test.ts`
+- `agent/src/checklist/checklistRuntimeConfig.test.ts`
 
 Backend/persistence side:
-- `src/services/intake/intakeSubmissionService.ts`
-- `src/services/intake/projectors/jobInquiryProjector.ts`
-- `src/services/intake/projectors/*.test.ts`
-- `src/services/intake/types.ts`
-- migration for `intake_submissions`
+- `supabase/migrations/20260811160000_intake_submissions.sql`
+- `supabase/baseline.sql` regenerated
+
+Still pending after this checkpoint:
+- `agent/src/checklist/presets.ts`
+- dedicated intake service / projector extraction files
+- second-path preset/runtime work
 
 Docs/tests:
 - update `docs/VERTICAL-PRESET-BLOCK-ARCHITECTURE.md` only if names or scope move
@@ -304,7 +337,9 @@ This likely means one of:
 
 ## 10. Step-by-step implementation tasks
 
-### Task 1 — Add code-facing naming comments and scaffold files
+Status note: tasks 1-6 landed in this checkpoint, task 7 is only partially landed at the route level, and tasks 8-9 remain pending. The bullets below preserve the implementation plan shape; for the exact files that actually shipped, use §5 above.
+
+### Task 1 — Add code-facing naming comments and scaffold files *(completed)*
 Objective:
 - create home for new types without disturbing runtime behavior yet
 
@@ -316,7 +351,7 @@ Files:
 Verification:
 - `cd agent && npm run typecheck`
 
-### Task 2 — Define minimal block/preset/runtime interfaces
+### Task 2 — Define minimal block/preset/runtime interfaces *(completed)*
 Objective:
 - encode canonical vocabulary in types and schemas
 
@@ -331,7 +366,7 @@ Verification:
 - `cd agent && npm test -- presets`
 - `cd agent && npm run typecheck`
 
-### Task 3 — Create thin wrappers for current live trees
+### Task 3 — Create thin wrappers for current live trees *(completed)*
 Objective:
 - represent current trees as reusable definitions without changing actual call behavior
 
@@ -344,7 +379,7 @@ Verification:
 - block library contains entries for `identity`, `booking`, `message`, `job`
 - compiler returns the same tree ids expected by runtime
 
-### Task 4 — Build first compiler path
+### Task 4 — Build first compiler path *(completed)*
 Objective:
 - compile `TenantRuntimeConfig` → selected `QuestionTreeDef[]`
 
@@ -357,7 +392,7 @@ Verification:
 - invalid block refs fail deterministically
 - no runtime changes yet
 
-### Task 5 — Introduce parity path for JOB_TREE
+### Task 5 — Introduce parity path for JOB_TREE *(completed)*
 Objective:
 - allow checklist runtime to source selected trees through compiler for the job flow
 
@@ -370,7 +405,7 @@ Verification:
 - meeting-offer behavior preserved
 - duplicate-answer / already-answered behavior preserved
 
-### Task 6 — Add generic intake submission persistence
+### Task 6 — Add generic intake submission persistence *(completed at route + migration level)*
 Objective:
 - add generic durable envelope before projector split
 
@@ -385,7 +420,7 @@ Verification:
 - RLS isolation mirrors current tenant tables
 - duplicate-call path tested
 
-### Task 7 — Split job inquiry into projector pattern
+### Task 7 — Split job inquiry into projector pattern *(partially completed)*
 Objective:
 - preserve current inquiry behavior while making it a reusable outcome adapter
 
@@ -401,7 +436,7 @@ Verification:
 - appointment stamping still exact-once
 - same retry does not duplicate either row
 
-### Task 8 — Prove second path through same architecture
+### Task 8 — Prove second path through same architecture *(pending)*
 Objective:
 - validate reuse before preset rollout
 
@@ -417,7 +452,7 @@ Verification:
 - second path works without bespoke compiler branch
 - no one-off persistence hack is needed if it remains message/booking-only initially
 
-### Task 9 — Define first three presets in code
+### Task 9 — Define first three presets in code *(pending)*
 Objective:
 - ship preset definitions that map to current product direction
 

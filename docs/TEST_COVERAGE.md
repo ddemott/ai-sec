@@ -1,6 +1,6 @@
 # Test Coverage
 
-**Headline counts last reconciled:** 2026-08-11 to the latest verified suite totals from this session — **2,675 backend + 1,031 dashboard + 1,480 agent = 5,186 passing tests**. The **per-file V8 coverage %** + the e2e workflow tables below are still from the **2026-05-22** coverage run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
+**Headline counts last reconciled:** 2026-08-11 to the latest verified suite totals tied to the vertical-preset/block + intake-submission checkpoint — **2,675 backend + 1,031 dashboard + 1,498 agent = 5,204 passing tests**. The **per-file V8 coverage %** + the e2e workflow tables below are still from the **2026-05-22** coverage run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
 
 **Prior refresh:** 2026-05-22 — Walk-in customer create modal work. Replaced the single "Full name" field in CustomerCombobox with a proper `CustomerCreateModal` (split name, phone, email, address, timezone, internal notes). `name` is now derived from first+last on submit. Dashboard test count: 705 → 716.
 
@@ -19,12 +19,13 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 2,675 passing | ✅ | latest verified run |
-| Dashboard (`cd dashboard && npm test`) | 1,031 passing | ✅ | latest verified run |
-| Agent (`cd agent && npm test`) | 1,480 passing | ✅ | latest verified run |
+| Backend (`npm test`) | 2,675 passing | ✅ | latest verified full-suite run |
+| Dashboard (`cd dashboard && npm test`) | 1,031 passing | ✅ | latest separately verified full-suite run |
+| Agent (`cd agent && npm test`) | 1,498 passing | ✅ | latest verified full-suite run |
 | Playwright e2e (`cd dashboard && npx playwright test`) | 38 spec files (exact pass/skip count: re-run to verify) | not re-run in this sweep | last known runtime ~175s |
+| Targeted backend checkpoint run | 185 passing | ✅ | docs/intake-related verification subset for this checkpoint |
 
-Total verified tests from the latest session run: **5,186 passing** (2,675 backend + 1,031 dashboard + 1,480 agent).
+Total latest known verified suite counts: **5,204 passing** (2,675 backend + 1,031 dashboard + 1,498 agent).
 
 > **On skipped e2e tests**: `calendar-sync.spec.ts` tests skip without `SYNC_TEST_RECORDER=1` (set it + restart the backend to run them). One test in `full-functional-audit.spec.ts` (Voice Calls) is deferred until Telnyx PSTN clears. Re-run the suite to get current pass/skip counts.
 
