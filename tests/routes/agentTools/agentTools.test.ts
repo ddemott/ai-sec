@@ -701,6 +701,27 @@ describe('agentTools /find-customer-by-name', () => {
     expect(queries).toHaveLength(0);
   });
 
+  it('SECURITY: two- and three-letter probes also short-circuit before SQL', async () => {
+    // WHO: anyone trying cheap partial sweeps like "Al" or "Ann"
+    // WHAT: route returns no matches without touching the DB
+    // WHY: one-word partial lookup is legitimate, but sub-4-character ILIKE
+    //      probes are still broad enough to fish the address book
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const two = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Al',
+    });
+    const three = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Ann',
+    });
+    expect(two.statusCode).toBe(200);
+    expect(two.json().result).toEqual({ matches: [] });
+    expect(three.statusCode).toBe(200);
+    expect(three.json().result).toEqual({ matches: [] });
+    expect(queries).toHaveLength(0);
+  });
+
   it('HAPPY: no match returns an empty list (signal to create a new entry)', async () => {
     // WHO: First-time caller whose name is not in the CRM
     // WHAT: Empty matches array, not an error — the agent treats them as new
