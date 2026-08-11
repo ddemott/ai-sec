@@ -480,6 +480,23 @@ describe('buildChecklistPrompt — orientation, off-topic, and never going silen
     expect(withBusiness).toContain('Say what this business actually does');
     expect(withBusiness).toMatch(/anything there I can help with/i);
   });
+
+  it('HAPPY: sophisticated first turns are answered at their level before narrowing', () => {
+    expect(withBusiness).toMatch(/SOPHISTICATED OPENERS ARE STILL OPENERS/);
+    expect(withBusiness).toMatch(/rich evaluating question/i);
+    expect(withBusiness).toMatch(/do not chop it down to "How can I help\?"/i);
+    expect(withBusiness).toMatch(/answer the highest-level part you honestly can/i);
+    expect(withBusiness).toMatch(/mirror the real dimensions they named/i);
+    expect(withBusiness).toMatch(/ask one narrowing question/i);
+  });
+
+  it('HAPPY: multi-part buyers are not flattened into one checkbox or one thread', () => {
+    expect(withBusiness).toMatch(/multi-part buyer/i);
+    expect(withBusiness).toMatch(/multiple locations, calendar sync, price, and compliance/i);
+    expect(withBusiness).toMatch(/do not pretend they asked only one thing/i);
+    expect(withBusiness).toMatch(/record every concrete fact they\s+already gave/i);
+    expect(withBusiness).toMatch(/select every tree that truly matches/i);
+  });
 });
 
 /**

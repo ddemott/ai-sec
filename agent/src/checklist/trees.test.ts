@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { ChecklistTracker } from './tracker.js';
 import { buildChecklistPrompt } from './checklistAgent.js';
+import type { ChoiceNodeDef } from './types.js';
 import {
   BOOKING_TREE,
   BUY_SERVICE_TREE,
@@ -133,6 +134,19 @@ describe('the job call (identity + job on the real trees)', () => {
     // client_company must not exist anywhere the model can see.
     expect(t.status('client_company')).toBe('not_applicable');
     expect(t.renderState()).not.toContain('client_company');
+  });
+
+  it('uses plain job and calendar wording instead of team timezone / diary wording', () => {
+    const workMode = JOB_TREE.nodes.find((n) => n.node_id === 'work_mode') as ChoiceNodeDef | undefined;
+    const timezone = workMode?.options.remote.find((n) => n.node_id === 'team_timezone');
+    const offer = JOB_TREE.nodes.find((n) => n.node_id === 'meeting_offer');
+    const timezoneAsk = timezone && 'ask' in timezone ? timezone.ask : '';
+    const offerAsk = offer && 'ask' in offer ? offer.ask : '';
+    expect(timezoneAsk).toContain('what time zone is the job in?');
+    expect(timezoneAsk).not.toMatch(/team/i);
+    expect(offerAsk).toContain('meeting');
+    expect(offerAsk).toContain('calendar');
+    expect(offerAsk).not.toMatch(/diary/i);
   });
 
   it('an early "it pays 65 to 80" survives whichever paid branch is chosen', () => {

@@ -405,7 +405,7 @@ export const JOB_TREE: QuestionTreeDef = {
           {
             node_id: 'team_timezone',
             type: 'text',
-            ask: 'the timezone, so the owner knows the office hours',
+            ask: 'what time zone is the job in?',
           },
         ],
       },
@@ -424,8 +424,8 @@ export const JOB_TREE: QuestionTreeDef = {
       node_id: 'meeting_offer',
       type: 'choice',
       ask:
-        'offer ONCE, in one line with both doors open: "Would you like me to put some ' +
-        'time in the diary with the owner so you can talk it through, or shall I just ' +
+        'offer ONCE, in one line with both doors open: "Would you like me to schedule a ' +
+        'meeting on the owner\'s calendar so you can talk it through, or should I just ' +
         'pass the details along?" A no is an answer — NEVER offer twice; a repeated ' +
         'offer is a sales pitch. If they already asked for a meeting themselves, record ' +
         'wants_meeting without asking; if they already said "just pass it along" or ' +
