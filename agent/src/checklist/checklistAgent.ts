@@ -173,7 +173,7 @@ export function buildChecklistPrompt(opts: {
   // purpose. Owner name comes from the tenant roster (never a hardcoded person).
   // Service detail lives in greeting_menu / the business section when present.
   const ownerRef =
-    staff.length === 1 ? staff[0]! : staff.length > 1 ? 'someone on the team' : 'the owner';
+    staff.length === 1 ? staff[0] : staff.length > 1 ? 'someone on the team' : 'the owner';
   const serviceFactLine = blurb
     ? `When a caller asks what you offer, use only the facts in "# What this business is" ` +
       `(never invent services). `
@@ -653,7 +653,7 @@ export class ChecklistAgent extends voice.Agent {
    * stalled turn — repeating it would bury the context) and re-arms as soon as
    * the checklist moves again.
    */
-  override async onUserTurnCompleted(
+  override onUserTurnCompleted(
     chatCtx: llm.ChatContext,
     _newMessage: llm.ChatMessage
   ): Promise<void> {
@@ -662,10 +662,10 @@ export class ChecklistAgent extends voice.Agent {
       this.#lastMutationCount = mutations;
       this.#stallTurns = 0;
       this.#stallNudged = false;
-      return;
+      return Promise.resolve();
     }
     this.#stallTurns++;
-    if (this.#stallTurns < STALL_TURN_LIMIT || this.#stallNudged) return;
+    if (this.#stallTurns < STALL_TURN_LIMIT || this.#stallNudged) return Promise.resolve();
     this.#stallNudged = true;
     chatCtx.addMessage({
       role: 'system',
@@ -677,6 +677,7 @@ export class ChecklistAgent extends voice.Agent {
         'a required item is still missing, ask for that single item ONCE and accept a ' +
         'decline; then wrap up the call.',
     });
+    return Promise.resolve();
   }
 
   // Markdown must never reach the voice — same guarantee every agent path gives.

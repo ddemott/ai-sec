@@ -39,6 +39,9 @@ module.exports = {
     // gets linted by default.
     'scripts/sim-toolselect.ts',
     'scripts/sim-taskgroup.ts',
+    'scripts/sim-begincall.ts',
+    'scripts/sim-offscript.ts',
+    'scripts/sim-questiontree.ts',
   ],
   rules: {
     '@typescript-eslint/no-explicit-any': 'warn',

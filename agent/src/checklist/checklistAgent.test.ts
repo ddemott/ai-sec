@@ -526,7 +526,7 @@ describe('plan 08-10-2026 — capability menu + filler/interrupt (matrix)', () =
   function capabilityBody(p: string): string {
     const m = p.match(/# What I can do for you\n([\s\S]*?)(?=\n# |\n\n# |$)/);
     expect(m, 'capability section missing').toBeTruthy();
-    return m![1]!;
+    return m?.[1] ?? '';
   }
 
   // ── Always present ────────────────────────────────────────────────────────
@@ -627,7 +627,7 @@ describe('plan 08-10-2026 — capability menu + filler/interrupt (matrix)', () =
     // Exact roster line — no empty slots, name trimmed.
     expect(p).toMatch(/WHO WORKS HERE: Pat\./);
     expect(p).not.toMatch(/WHO WORKS HERE: ,/);
-    expect(p).not.toMatch(/WHO WORKS HERE:  /);
+    expect(p).not.toMatch(/WHO WORKS HERE: {2}/);
   });
 
   it('SAD: all-whitespace roster collapses to "the owner"', () => {

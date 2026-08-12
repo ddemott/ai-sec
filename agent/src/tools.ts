@@ -325,7 +325,7 @@ export function buildTools(
    * They are deliberately dumb. No arguments, no HTTP, no failure mode. A router
    * that could fail would be a new way to strand a caller mid-call.
    */
-  const routeTo = async (phase: CallPhase, reply: string): Promise<string> => {
+  const routeTo = (phase: CallPhase, reply: string): Promise<string> => {
     // DEFER THE SWAP. Do not mutate the toolset from inside a tool's own execute().
     //
     // agent.updateTools() REPLACES the ToolContext — and start_booking is IN that
@@ -355,7 +355,7 @@ export function buildTools(
         }
       })();
     }, 0);
-    return JSON.stringify({ ok: true, next: reply });
+    return Promise.resolve(JSON.stringify({ ok: true, next: reply }));
   };
 
   const allTools: llm.ToolContext = {
@@ -476,7 +476,7 @@ export function buildTools(
           service_type: {
             type: 'string',
             description:
-              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: \"a meeting to talk about a contract role\", \"have the owner call me back\", \"look at my project\". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a \"Personal Callback\" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
+              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: "a meeting to talk about a contract role", "have the owner call me back", "look at my project". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a "Personal Callback" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
           },
           date: {
             type: 'string',
@@ -526,7 +526,7 @@ export function buildTools(
           service_type: {
             type: 'string',
             description:
-              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: \"a meeting to talk about a contract role\", \"have the owner call me back\", \"look at my project\". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a \"Personal Callback\" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
+              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: "a meeting to talk about a contract role", "have the owner call me back", "look at my project". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a "Personal Callback" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
           },
           required_resource_capabilities: {
             type: 'array',
@@ -698,7 +698,7 @@ export function buildTools(
           service_type: {
             type: 'string',
             description:
-              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: \"a meeting to talk about a contract role\", \"have the owner call me back\", \"look at my project\". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a \"Personal Callback\" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
+              'SAY WHAT THE CALLER SAID — not a catalog name you picked. Pass their own words for what they want: "a meeting to talk about a contract role", "have the owner call me back", "look at my project". The backend matches that to the right service SEMANTICALLY (it reads the catalog descriptions, which you cannot see in full). Do NOT try to pick the service yourself: on 2026-07-14 you decided a caller wanting a meeting about a six-month contract wanted a "Personal Callback" — a 15-minute call-me-back — and booked him into it. Report the intent; let the catalog choose. If the caller genuinely names a service, pass that name.',
           },
           required_resource_capabilities: { type: 'array', items: { type: 'string' } },
           required_employee_skills: { type: 'array', items: { type: 'string' } },

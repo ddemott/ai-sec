@@ -29,7 +29,7 @@
 export function normalizeSpelledName(raw: string | null | undefined): string {
   const input = (raw ?? '').trim();
   if (!input) return '';
-  const tokens = input.split(/[\s.\-]+/).filter(Boolean);
+  const tokens = input.split(/[\s.-]+/).filter(Boolean);
   if (tokens.length < 3 || !tokens.every((t) => /^[A-Za-z]$/.test(t))) return input;
   const word = tokens.join('');
   return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();

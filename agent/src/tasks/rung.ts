@@ -147,8 +147,9 @@ export function makeRung<R>(cfg: RungConfig<R>): voice.AgentTask<R> {
     }
 
     // SPEAK on entry, or the rung takes over the session and sits silent (gotcha #4).
-    override async onEnter(): Promise<void> {
-      this.session.generateReply();
+    override onEnter(): Promise<void> {
+      void this.session.generateReply();
+      return Promise.resolve();
     }
 
     // Strip markdown before TTS, or a bulleted answer reads as one flat run-on (gotcha #5).
