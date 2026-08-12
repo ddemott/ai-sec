@@ -56,7 +56,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 ```
 /
 ├── src/                          Fastify backend (Node)
-│   ├── index.ts                  Entry — registers 29 top-level route modules + `agentTools/` dir (~280 lines)
+│   ├── index.ts                  Entry — registers 29 top-level route modules + `agentTools/` dir (~420 lines)
 │   ├── middleware.ts             withHandler, tenantMiddleware, registerJwtAuthHook, generateToken, AppError, logEvent
 │   ├── routes/                   29 route modules + routeHelpers.ts
 │   ├── services/                 flat files (calendar sync, OAuth, name/token/SMS utilities) + communications/ (Telnyx-only SMS + delivery webhooks), reminders/, tenants/, usage/ subdirs
