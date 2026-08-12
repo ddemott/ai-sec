@@ -1566,10 +1566,17 @@ export function registerSchedulingRoutes({
         withTenantClient,
       });
 
-      if (!result.appointment_id) {
+      if (result.appointmentLinkMiss) {
         return fail(
           reply,
           "I couldn't find that meeting to attach the note to — nothing was saved. Offer to pass it along as a message for the owner instead."
+        );
+      }
+
+      if (result.appointmentStampMiss || !result.appointment_id) {
+        return fail(
+          reply,
+          "I saved the note for the owner, but I couldn't attach it to that meeting. Offer to pass it along as a message too if they want extra certainty."
         );
       }
 

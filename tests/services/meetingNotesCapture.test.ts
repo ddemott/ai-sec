@@ -33,14 +33,14 @@ describe('persistMeetingNotesCapture', () => {
     tenant_id: 'tenant-1',
     appointment_id: 'appt-1',
     caller_name: 'Kim',
-    callback_phone: '+16305550147',
+    callback_phone: '+163****0147',
     notes: 'They run a mobile dog grooming business and want help with everything.',
     call_id: 'call-1',
   };
 
   it('writes generic intake first, then projects onto appointment description', async () => {
     const deps = makeDeps([
-      { rows: [{ appointment_id: 'appt-1' }] },
+      { rows: [{ appointment_id: 'appt-1', description: '' }] },
       { rows: [{ submission_id: 'sub-1' }] },
       { rows: [{ appointment_id: 'appt-1' }], rowCount: 1 },
     ]);
@@ -62,6 +62,53 @@ describe('persistMeetingNotesCapture', () => {
     expect(deps.queries[2].params[2]).toBe(
       'Caller notes: They run a mobile dog grooming business and want help with everything.'
     );
+  });
+
+  it('does not duplicate the envelope or stamp when call_id is absent and the same note already exists', async () => {
+    const deps = makeDeps([
+      {
+        rows: [
+          {
+            appointment_id: 'appt-1',
+            description:
+              'Demo\n\nCaller notes: They run a mobile dog grooming business and want help with everything.',
+          },
+        ],
+      },
+      { rows: [{ submission_id: 'sub-existing' }] },
+    ]);
+
+    const result = await persistMeetingNotesCapture({
+      args: { ...args, call_id: undefined },
+      withTenantClient: deps.withTenantClient,
+    });
+
+    expect(result).toEqual({
+      appointment_id: 'appt-1',
+      appointmentLinkMiss: false,
+      appointmentStampMiss: false,
+    });
+    expect(deps.queries).toHaveLength(2);
+    expect(deps.queries[1].text).toContain('SELECT submission_id FROM intake_submissions');
+  });
+
+  it('returns stamp miss when appointment disappears after intake saved', async () => {
+    const deps = makeDeps([
+      { rows: [{ appointment_id: 'appt-1', description: '' }] },
+      { rows: [{ submission_id: 'sub-1' }] },
+      { rows: [], rowCount: 0 },
+    ]);
+
+    const result = await persistMeetingNotesCapture({
+      args,
+      withTenantClient: deps.withTenantClient,
+    });
+
+    expect(result).toEqual({
+      appointment_id: null,
+      appointmentLinkMiss: false,
+      appointmentStampMiss: true,
+    });
   });
 
   it('returns link miss when appointment is not live for this tenant', async () => {

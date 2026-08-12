@@ -1407,11 +1407,12 @@ describe('agentTools /attach-meeting-notes', () => {
 
   it("HAPPY: appends the caller's note to the appointment description", async () => {
     // WHO: the meeting-goals rung's one wrap-up question, answered.
-    // WHAT: first INSERTs a generic meeting_notes intake envelope, then appends
-    //        "Caller notes: …" to description and returns the id.
+    // WHAT: first checks for an existing meeting_notes envelope for this appointment/note,
+    //        then INSERTs when absent, then appends "Caller notes: …" to description.
     const { app, queries } = buildApp({
       queryResponses: [
-        { rows: [{ appointment_id: APPT }] },
+        { rows: [{ appointment_id: APPT, description: '' }] },
+        { rows: [] },
         { rows: [{ submission_id: 'sub-note-1' }] },
         { rows: [{ appointment_id: APPT }], rowCount: 1 },
       ],
@@ -1426,11 +1427,12 @@ describe('agentTools /attach-meeting-notes', () => {
       success: true,
       result: { appointment_id: APPT },
     });
-    expect(queries[1].text).toContain('INSERT INTO intake_submissions');
-    expect(queries[1].params[2]).toBe('meeting_notes');
-    expect(queries[2].text).toContain('UPDATE appointments');
-    expect(queries[2].text).toContain('description');
-    expect(queries[2].params[2]).toBe('Caller notes: bring the contract paperwork');
+    expect(queries[1].text).toContain('SELECT submission_id FROM intake_submissions');
+    expect(queries[2].text).toContain('INSERT INTO intake_submissions');
+    expect(queries[2].params[2]).toBe('meeting_notes');
+    expect(queries[3].text).toContain('UPDATE appointments');
+    expect(queries[3].text).toContain('description');
+    expect(queries[3].params[2]).toBe('Caller notes: bring the contract paperwork');
   });
 
   it('HAPPY: a multi-line note is flattened to one line before stamping', async () => {
@@ -1458,8 +1460,7 @@ describe('agentTools /attach-meeting-notes', () => {
   });
 
   it('SAD: unknown or deleted appointment → honest refusal, nothing reported saved', async () => {
-    // assertRowAffected-style honesty: a zero-row UPDATE must never read as success —
-    // the agent would tell the caller a note was saved that was not.
+    // assertRowAffected-style honesty: no live appointment means nothing lands.
     const { app } = buildApp({ queryResponses: [{ rows: [] }] });
     const res = await post(app, '/agent-tools/attach-meeting-notes', {
       tenant_id: TENANT_ID,
@@ -1469,6 +1470,25 @@ describe('agentTools /attach-meeting-notes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(false);
     expect(res.json().error).toMatch(/nothing was saved/i);
+  });
+
+  it('SAD: if the appointment vanishes after the intake save, the failure stays honest', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ appointment_id: APPT, description: '' }] },
+        { rows: [{ submission_id: 'sub-note-race' }] },
+        { rows: [], rowCount: 0 },
+      ],
+    });
+    const res = await post(app, '/agent-tools/attach-meeting-notes', {
+      tenant_id: TENANT_ID,
+      appointment_id: APPT,
+      notes: 'bring the contract paperwork',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
+    expect(res.json().error).toMatch(/saved the note for the owner/i);
+    expect(res.json().error).toMatch(/couldn't attach it to that meeting/i);
   });
 
   it('SAD: blank notes are rejected before any DB write', async () => {
