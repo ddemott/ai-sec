@@ -1,6 +1,6 @@
 # VERTICAL-PRESET-BLOCK-ARCHITECTURE
 
-**Status:** phases 1-2 checkpoint implemented and verified; wider preset rollout still in progress. **Date:** 2026-08-11. **Owner:** Dale.
+**Status:** phases 1-4 checkpoint implemented and verified; wider preset rollout still in progress. **Date:** 2026-08-12. **Owner:** Dale.
 
 **The ask:** turn the current one-off call flows into configurable, reusable building blocks that can be pre-packaged by business type. An auto shop should start with an auto-shop-ready set of blocks; a salon should start with salon-ready blocks; both should still be built from the same reusable primitives so the platform does not decay into twenty bespoke scripts.
 
@@ -18,7 +18,7 @@ Not one giant "auto shop flow" and one giant "salon flow" hardcoded forever. Not
 
 That gives fast onboarding, sane defaults, safe customization, and a product surface that can grow without turning every new industry into a fresh architecture project.
 
-### Implemented checkpoint (2026-08-11)
+### Implemented checkpoint (2026-08-12)
 
 The first real slice is now in the repo and verified:
 
@@ -28,9 +28,11 @@ The first real slice is now in the repo and verified:
 - `agent/src/checklist/blockCompiler.ts` compiles enabled conversation blocks into selectable live tree ids
 - the checklist runtime now accepts `runtimeConfig` while preserving the full live tree library for tracker invariants
 - `capture-job-inquiry` now writes a generic `intake_submissions` envelope before the existing `job_inquiries` projection
+- `src/services/jobInquiryCapture.ts` now owns the generic capture + `job_inquiry` projection write while `src/routes/agentTools/messaging.ts` stays the route shell
+- `src/services/meetingNotesCapture.ts` now proves a second reusable path by writing `submission_type='meeting_notes'` into `intake_submissions` before projecting to the appointment description
 - `supabase/migrations/20260811160000_intake_submissions.sql` adds the generic table with FORCE RLS and repo-standard tenant/admin policies
 
-What is **not** done yet: a second reusable intake path, real business-type preset definitions, setup/onboarding preset selection, and tenant-safe preset editing.
+What is **not** done yet: real business-type preset definitions, setup/onboarding preset selection, and tenant-safe preset editing.
 
 ---
 
