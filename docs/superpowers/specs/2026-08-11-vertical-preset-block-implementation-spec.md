@@ -1,11 +1,11 @@
 # Vertical preset / block architecture — implementation spec
 
-**Status:** initial implementation checkpoint plus Step 5/6 proof completed; broader preset rollout still in progress. **Date:** 2026-08-12. **Owner:** Dale.
+**Status:** initial implementation checkpoint plus Step 5/6 proof and first preset-catalog slice completed; broader preset rollout still in progress. **Date:** 2026-08-12. **Owner:** Dale.
 
 Related docs:
-- `docs/VERTICAL-PRESET-BLOCK-ARCHITECTURE.md`
-- `docs/ROADMAP.md`
-- `docs/QUESTION_TREE_ARCHITECTURE.md`
+- [VERTICAL-PRESET-BLOCK-ARCHITECTURE](../../VERTICAL-PRESET-BLOCK-ARCHITECTURE.md)
+- [ROADMAP](../../ROADMAP.md)
+- [QUESTION_TREE_ARCHITECTURE](../../QUESTION_TREE_ARCHITECTURE.md)
 
 ## Checkpoint outcome now implemented
 
@@ -16,7 +16,9 @@ This spec is no longer just a plan. The following slice is now real in the repo:
 - `agent/src/checklist/runtimeConfig.ts`
 - `agent/src/checklist/blockLibrary.ts`
 - `agent/src/checklist/blockCompiler.ts`
+- `agent/src/checklist/presets.ts`
 - `agent/src/checklist/presets.test.ts`
+- `agent/src/checklist/presetCatalog.test.ts`
 - `agent/src/checklist/blockCompiler.test.ts`
 - `agent/src/checklist/checklistRuntimeConfig.test.ts`
 - `supabase/migrations/20260811160000_intake_submissions.sql`
@@ -30,9 +32,11 @@ Verified behavior for this checkpoint:
 - `src/services/jobInquiryCapture.ts` now splits generic capture + `job_inquiry` projection out of the route shell
 - `attach-meeting-notes` now writes `submission_type='meeting_notes'` into `intake_submissions` before projecting to the appointment description
 - `intake_submissions` ships with FORCE RLS and repo-standard tenant/admin policies
+- first three real preset definitions now exist in code (`auto_shop_front_desk`, `salon_front_desk`, `local_service_front_desk`)
+- preset catalog tests now verify lookup, schema validation, runtime materialization, and compile-to-live-tree output
 
 Still pending relative to the full spec:
-- real preset catalog/code definitions
+- preset-specific call-path tests beyond compile/runtime coverage
 - setup/onboarding preset selection
 - tenant-safe override surface
 
@@ -94,9 +98,10 @@ Completed in this slice:
 - route-level preservation of current `job_inquiries` behavior after the generic envelope write
 - service extraction for the live `job_inquiry` projector path
 - second-path proof via `attach-meeting-notes` on the `buy_service` meeting-context path
+- first real preset catalog with three shipped preset definitions and compile/runtime tests
 
 Not completed in this slice:
-- preset catalog/code definitions
+- preset-specific call-path tests proving user journeys through those presets
 
 Still out of scope:
 - dashboard UI for preset editing
@@ -123,9 +128,11 @@ Agent/runtime side:
 - `agent/src/checklist/blockSchemas.ts`
 - `agent/src/checklist/blockCompiler.ts`
 - `agent/src/checklist/blockLibrary.ts`
+- `agent/src/checklist/presets.ts`
 - `agent/src/checklist/runtimeConfig.ts`
 - `agent/src/checklist/blockCompiler.test.ts`
 - `agent/src/checklist/presets.test.ts`
+- `agent/src/checklist/presetCatalog.test.ts`
 - `agent/src/checklist/checklistRuntimeConfig.test.ts`
 
 Backend/persistence side:
@@ -133,8 +140,8 @@ Backend/persistence side:
 - `supabase/baseline.sql` regenerated
 
 Still pending after this checkpoint:
-- `agent/src/checklist/presets.ts`
-- second-path preset/runtime work
+- setup/onboarding preset selection
+- preset-specific call-path tests
 
 Docs/tests:
 - update `docs/VERTICAL-PRESET-BLOCK-ARCHITECTURE.md` only if names or scope move
