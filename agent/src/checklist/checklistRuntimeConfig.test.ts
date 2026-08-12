@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { llm } from '@livekit/agents';
+import type { llm } from '@livekit/agents';
 import { buildChecklistPrompt, ChecklistAgent, resolveChecklistLibrary, resolveSelectableTreeIds } from './checklistAgent.js';
+import { AUTO_SHOP_PRESET, LOCAL_SERVICE_PRESET, SALON_PRESET } from './presets.js';
+import { materializeRuntimeConfig } from './runtimeConfig.js';
 import { BOOKING_TREE, IDENTITY_TREE, JOB_TREE, MESSAGE_TREE, PLATFORM_TREE_LIBRARY } from './trees.js';
 
 describe('resolveChecklistLibrary', () => {
@@ -133,5 +135,138 @@ describe('ChecklistAgent runtimeConfig path', () => {
       trees: ['qa'],
     });
     expect(String(refused)).toContain('No tree called "qa"');
+  });
+
+  it('auto shop preset keeps booking/message/qa/schedule-change available but blocks buy_service and job', async () => {
+    const runtimeConfig = materializeRuntimeConfig(AUTO_SHOP_PRESET);
+    const library = resolveChecklistLibrary({ runtimeConfig });
+    const selectableTreeIds = resolveSelectableTreeIds({ runtimeConfig });
+    const prompt = buildChecklistPrompt({
+      persona: 'You are Piper.',
+      runtime,
+      library,
+      selectableTreeIds,
+    });
+
+    expect(prompt).toContain('- booking:');
+    expect(prompt).toContain('- message:');
+    expect(prompt).toContain('- qa:');
+    expect(prompt).toContain('- schedule_change:');
+    expect(prompt).not.toContain('- buy_service:');
+    expect(prompt).not.toContain('- job:');
+
+    const agent = new ChecklistAgent({
+      tools: {} as llm.ToolContext,
+      persona: 'You are Piper.',
+      runtime,
+      runtimeConfig,
+    });
+    const tools = agent.currentTools();
+    const exec = (name: string, args: unknown) =>
+      (tools[name] as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }).execute(
+        args,
+        undefined
+      );
+
+    const ok = await exec('set_purpose', {
+      work_direction: 'caller_wants_something_from_business',
+      trees: ['identity', 'booking'],
+    });
+    expect(String(ok)).toContain('Purpose set: identity + booking');
+
+    const refused = await exec('set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['buy_service'],
+    });
+    expect(String(refused)).toContain('No tree called "buy_service"');
+  });
+
+  it('salon preset keeps booking/message/qa/schedule-change available but blocks buy_service and job', async () => {
+    const runtimeConfig = materializeRuntimeConfig(SALON_PRESET);
+    const library = resolveChecklistLibrary({ runtimeConfig });
+    const selectableTreeIds = resolveSelectableTreeIds({ runtimeConfig });
+    const prompt = buildChecklistPrompt({
+      persona: 'You are Piper.',
+      runtime,
+      library,
+      selectableTreeIds,
+    });
+
+    expect(prompt).toContain('- booking:');
+    expect(prompt).toContain('- message:');
+    expect(prompt).toContain('- qa:');
+    expect(prompt).toContain('- schedule_change:');
+    expect(prompt).not.toContain('- buy_service:');
+    expect(prompt).not.toContain('- job:');
+
+    const agent = new ChecklistAgent({
+      tools: {} as llm.ToolContext,
+      persona: 'You are Piper.',
+      runtime,
+      runtimeConfig,
+    });
+    const tools = agent.currentTools();
+    const exec = (name: string, args: unknown) =>
+      (tools[name] as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }).execute(
+        args,
+        undefined
+      );
+
+    const ok = await exec('set_purpose', {
+      work_direction: 'caller_wants_something_from_business',
+      trees: ['identity', 'booking'],
+    });
+    expect(String(ok)).toContain('Purpose set: identity + booking');
+
+    const refused = await exec('set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['buy_service'],
+    });
+    expect(String(refused)).toContain('No tree called "buy_service"');
+  });
+
+  it('local service preset exposes buy_service and generic_subject while still blocking job', async () => {
+    const runtimeConfig = materializeRuntimeConfig(LOCAL_SERVICE_PRESET);
+    const library = resolveChecklistLibrary({ runtimeConfig });
+    const selectableTreeIds = resolveSelectableTreeIds({ runtimeConfig });
+    const prompt = buildChecklistPrompt({
+      persona: 'You are Piper.',
+      runtime,
+      library,
+      selectableTreeIds,
+    });
+
+    expect(prompt).toContain('- booking:');
+    expect(prompt).toContain('- message:');
+    expect(prompt).toContain('- generic_subject:');
+    expect(prompt).toContain('- qa:');
+    expect(prompt).toContain('- buy_service:');
+    expect(prompt).toContain('- schedule_change:');
+    expect(prompt).not.toContain('- job:');
+
+    const agent = new ChecklistAgent({
+      tools: {} as llm.ToolContext,
+      persona: 'You are Piper.',
+      runtime,
+      runtimeConfig,
+    });
+    const tools = agent.currentTools();
+    const exec = (name: string, args: unknown) =>
+      (tools[name] as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }).execute(
+        args,
+        undefined
+      );
+
+    const ok = await exec('set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['buy_service'],
+    });
+    expect(String(ok)).toContain('Purpose set: buy_service');
+
+    const refused = await exec('set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['job'],
+    });
+    expect(String(refused)).toContain('No tree called "job"');
   });
 });

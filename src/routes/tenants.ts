@@ -19,6 +19,10 @@ import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { assertRowAffected } from './routeHelpers';
 import { createTenantWithOwner } from '../services/tenants/bootstrap';
 import { phonesWouldLoop } from '../services/phoneLoopGuard';
+import {
+  defaultChecklistPresetIdForBusinessType,
+  deriveChecklistRuntimeConfig,
+} from '../../shared/checklistPresetDerivation';
 
 const CreateTenantSchema = z.object({
   tenant_name: z.string().min(1).max(200),
@@ -51,6 +55,10 @@ const UpdateConfigSchema = z.object({
   default_service_id: z.string().uuid().optional().nullable(),
   voice_id: z.string().max(100).optional().nullable(),
   business_type: z.string().max(50).optional(),
+  checklist_preset_id: z
+    .enum(['auto_shop_front_desk', 'salon_front_desk', 'local_service_front_desk'])
+    .optional()
+    .nullable(),
   first_message: z.string().optional().nullable(),
   save_preferences_enabled: z.boolean().optional(),
   preferences_instructions: z.string().optional().nullable(),
@@ -214,13 +222,19 @@ export function registerTenantRoutes(
           // this row and seeds its Caller Disclosure field from it. Omitting the
           // column loads a saved custom disclosure as blank, and the next save then
           // writes null over it — silent data loss. (Copilot review, PR #234.)
-          'SELECT tenant_id, name, business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone, default_buffer_minutes, call_disclosure, call_disclosure_attested_at, call_disclosure_attested_by FROM tenants WHERE tenant_id = $1',
+          'SELECT tenant_id, name, business_type, checklist_preset_id, system_prompt, persona_name, default_service_id, voice_id, first_message, team_size, timezone, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, inbound_phone, forwarded_from_phone, default_buffer_minutes, call_disclosure, call_disclosure_attested_at, call_disclosure_attested_by FROM tenants WHERE tenant_id = $1',
           [id]
         )
       );
       if (res.rows.length === 0)
         return reply.status(404).send({ success: false, error: 'Tenant not found' });
-      return reply.send(res.rows[0]);
+      return reply.send({
+        ...res.rows[0],
+        checklist_runtime_config: deriveChecklistRuntimeConfig(
+          res.rows[0].business_type,
+          res.rows[0].checklist_preset_id
+        ),
+      });
     }, 'Failed to fetch tenant config')
   );
 
@@ -258,6 +272,7 @@ export function registerTenantRoutes(
         try {
           const priorRes = await client.query<{
             business_type: string | null;
+            checklist_preset_id: string | null;
             system_prompt: string | null;
             persona_name: string | null;
             default_service_id: string | null;
@@ -279,11 +294,12 @@ export function registerTenantRoutes(
             default_buffer_minutes: number | null;
             call_disclosure: string | null;
           }>(
-            'SELECT business_type, system_prompt, persona_name, default_service_id, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, forwarded_from_phone, inbound_phone, default_buffer_minutes, call_disclosure FROM tenants WHERE tenant_id = $1 FOR UPDATE',
+            'SELECT business_type, checklist_preset_id, system_prompt, persona_name, default_service_id, voice_id, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, owner_phone, forwarded_from_phone, inbound_phone, default_buffer_minutes, call_disclosure FROM tenants WHERE tenant_id = $1 FOR UPDATE',
             [id]
           );
           const prior = priorRes.rows[0];
           const priorBusinessType = prior?.business_type ?? null;
+          const priorChecklistPresetId = prior?.checklist_preset_id ?? null;
 
           // Partial-update safety: body fields not present (undefined) keep
           // the existing DB value; explicit null clears the field intentionally.
@@ -299,6 +315,16 @@ export function registerTenantRoutes(
             body.voice_id !== undefined ? body.voice_id : (prior?.voice_id ?? null);
           const finalBusinessType =
             body.business_type !== undefined ? body.business_type : priorBusinessType;
+          const priorPresetWasDerived =
+            priorChecklistPresetId === defaultChecklistPresetIdForBusinessType(priorBusinessType);
+          const finalChecklistPresetId =
+            body.checklist_preset_id !== undefined
+              ? body.checklist_preset_id
+              : body.business_type !== undefined && body.business_type !== priorBusinessType
+                ? priorChecklistPresetId === null || priorPresetWasDerived
+                  ? defaultChecklistPresetIdForBusinessType(body.business_type)
+                  : priorChecklistPresetId
+                : priorChecklistPresetId;
           const finalFirstMessage =
             body.first_message !== undefined ? body.first_message : (prior?.first_message ?? null);
           const finalSavePreferences =
@@ -380,14 +406,15 @@ export function registerTenantRoutes(
           }
 
           const updRes = await client.query(
-            `UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, first_message = $4, save_preferences_enabled = $5, preferences_instructions = $6, tts_voice = $7, tts_speed = $8, tts_soft = $9, tts_cheerful = $10, tts_formal = $11, tts_warm = $12, tts_concise = $13, forward_phone = $14, owner_phone = $15, forwarded_from_phone = $16, persona_name = $17, default_service_id = $18, default_buffer_minutes = $19, call_disclosure = $20,
-               call_disclosure_attested_at = CASE $21::text WHEN 'stamp' THEN NOW() WHEN 'clear' THEN NULL ELSE call_disclosure_attested_at END,
-               call_disclosure_attested_by = CASE $21::text WHEN 'stamp' THEN $22::uuid WHEN 'clear' THEN NULL ELSE call_disclosure_attested_by END
-             WHERE tenant_id = $23 RETURNING tenant_id`,
+            `UPDATE tenants SET system_prompt = $1, voice_id = $2, business_type = $3, checklist_preset_id = $4, first_message = $5, save_preferences_enabled = $6, preferences_instructions = $7, tts_voice = $8, tts_speed = $9, tts_soft = $10, tts_cheerful = $11, tts_formal = $12, tts_warm = $13, tts_concise = $14, forward_phone = $15, owner_phone = $16, forwarded_from_phone = $17, persona_name = $18, default_service_id = $19, default_buffer_minutes = $20, call_disclosure = $21,
+               call_disclosure_attested_at = CASE $22::text WHEN 'stamp' THEN NOW() WHEN 'clear' THEN NULL ELSE call_disclosure_attested_at END,
+               call_disclosure_attested_by = CASE $22::text WHEN 'stamp' THEN $23::uuid WHEN 'clear' THEN NULL ELSE call_disclosure_attested_by END
+             WHERE tenant_id = $24 RETURNING tenant_id`,
             [
               finalSystemPrompt,
               finalVoiceId,
               finalBusinessType,
+              finalChecklistPresetId,
               finalFirstMessage,
               finalSavePreferences,
               finalPreferencesInstructions,
