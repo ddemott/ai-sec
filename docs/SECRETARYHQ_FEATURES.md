@@ -2,7 +2,7 @@
 
 > Organized outline of SecretaryHQ's capabilities. Status legend:
 > **✅ built** (works today) · **🔨 in progress** · **💡 planned** (captured in
-> `docs/STRATEGY.md`, demand-gated). Last updated 2026-06-12.
+> `docs/STRATEGY.md`, demand-gated). Last updated 2026-08-11.
 >
 > One line: **an AI receptionist that answers the phone, books the work,
 > remembers the customer — and gives the owner just enough of a back office to
@@ -19,8 +19,8 @@
 - ✅ Recognizes returning callers + recalls their history and preferences
 - ✅ Saves customer preferences mid-call ("prefers Maria", "last service: oil change")
 - ✅ Phone verification (OTP via SMS) when caller-ID is blocked, before booking
-- ✅ Live transfer to a human (owner's cell) via SIP REFER, or takes a message _(needs Telnyx REFER enabled to function)_
-- ✅ Per-tenant persona — custom voice, speed, greeting, and system prompt (set on the AI Persona page)
+- 🔨 Live human transfer is **not** on the current question-tree path; production calls take a message for escalation today. SIP REFER plumbing exists in code for future handoff work.
+- ✅ Per-tenant persona — custom voice, greeting, style flags, and system prompt (set on the AI Persona page; `tts_speed` is currently inert under Aura)
 - ✅ Graceful error recovery — never speaks raw errors; recovers in-character
 - ✅ Customer-led booking — asks the caller's preferred time, widens the window if none fit, never imposes a slot
 
@@ -57,16 +57,17 @@
 
 ## 6. Reminders & Communications
 
-- ✅ Appointment reminders + confirmations (SMS / email), consent-gated
+- ✅ Email reminders + confirmations, consent-gated
+- 🔨 SMS reminder/confirmation code exists, but production SMS stays off until per-tenant 10DLC registration lands
 - ✅ Reminder scheduler (polls + delivers on a tick)
-- ✅ SMS rate-limiting + delivery retry policy
+- ✅ SMS rate-limiting + delivery retry policy in code once SMS is enabled
 - 💡 Delivery-receipt tracking (sent ≠ delivered) and a reminder-monitoring view
 
 ## 7. Integrations
 
 - ✅ Calendar sync — Google Calendar, Outlook (booking → owner's calendar)
 - ✅ CRM sync — Square only (`src/services/crm/squareSync.ts` + `squareClient.ts`, route `src/routes/square.ts`). _(Jobber, HubSpot, ServiceTitan **removed** 2026-06-12 as competitors — see `docs/STRATEGY.md`; the provider-agnostic sync layer was kept and drives Square.)_
-- ✅ Voice + telephony stack — Telnyx (PSTN), LiveKit (media), Deepgram, OpenAI (LLM + TTS; xAI Grok removed 2026-06-25)
+- ✅ Voice + telephony stack — Telnyx (PSTN), LiveKit (media), Deepgram Nova-3 (STT) + Deepgram Aura (TTS), OpenAI GPT-4.1-mini for the live voice LLM (xAI Grok removed 2026-06-25)
 - ✅ Phone provisioning — search / buy / route a phone number (Telnyx)
 
 ## 8. Owner Dashboard

@@ -155,6 +155,75 @@ export function jobSummaryLine(
   return `${JOB_DETAILS_PREFIX}${toStampText(detail) || 'see the job inquiry record'}.`;
 }
 
+function buildJobIntakePayload(
+  companies: {
+    clientCompany: string | null;
+    callerCompany: string | null;
+    representsCompany: boolean | null;
+  },
+  args: {
+    caller_name: string;
+    callback_phone?: string;
+    employment_type?: string;
+    role_description?: string;
+    rate_range?: string;
+    duration?: string;
+    location_type?: string;
+    address?: string;
+    timezone?: string;
+    call_id?: string;
+    appointment_id?: string;
+  }
+): string {
+  return JSON.stringify({
+    schema_version: 1,
+    submission_type: 'job_inquiry',
+    caller_name: args.caller_name,
+    callback_phone: args.callback_phone ?? null,
+    caller_company: companies.callerCompany,
+    client_company: companies.clientCompany,
+    represents_company: companies.representsCompany,
+    employment_type: args.employment_type ?? null,
+    role_description: args.role_description ?? null,
+    rate_range: args.rate_range ?? null,
+    duration: args.duration ?? null,
+    location_type: args.location_type ?? null,
+    address: args.address ?? null,
+    timezone: args.timezone ?? null,
+    call_id: args.call_id ?? null,
+    appointment_id: args.appointment_id ?? null,
+  });
+}
+
+async function resolveJobInquiryRecipient(
+  client: {
+    query: (
+      text: string,
+      params?: unknown[]
+    ) => Promise<{ rows: Array<{ email: string | null; owner_name: string | null }> }>;
+  },
+  tenantId: string
+): Promise<{ recipient: string | null; ownerName: string | null }> {
+  const recip = await client.query(
+    `SELECT COALESCE(
+              t.job_inquiry_email,
+              (SELECT u.email FROM users u
+                WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
+                ORDER BY u.created_at ASC LIMIT 1)
+            ) AS email,
+            (SELECT COALESCE(NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(u.full_name), ''))
+               FROM users u
+              WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
+              ORDER BY u.created_at ASC LIMIT 1) AS owner_name
+       FROM tenants t WHERE t.tenant_id = $1`,
+    [tenantId]
+  );
+  return {
+    recipient: recip.rows[0]?.email ?? null,
+    ownerName: recip.rows[0]?.owner_name ?? null,
+  };
+}
+
 export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentToolDeps): void {
   const { consentService, smsService } = buildSmsStack(pool);
 
@@ -502,27 +571,11 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             [args.tenant_id, args.call_id]
           );
           if (existing.rows[0]) {
-            const recipDup = await client.query<{
-              email: string | null;
-              owner_name: string | null;
-            }>(
-              `SELECT COALESCE(
-                        t.job_inquiry_email,
-                        (SELECT u.email FROM users u
-                          WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
-                          ORDER BY u.created_at ASC LIMIT 1)
-                      ) AS email,
-                      (SELECT COALESCE(NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(u.full_name), ''))
-                         FROM users u
-                        WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
-                        ORDER BY u.created_at ASC LIMIT 1) AS owner_name
-                 FROM tenants t WHERE t.tenant_id = $1`,
-              [args.tenant_id]
-            );
+            const recipDup = await resolveJobInquiryRecipient(client, args.tenant_id);
             return {
               job_inquiry_id: existing.rows[0].job_inquiry_id,
-              recipient: recipDup.rows[0]?.email ?? null,
-              ownerName: recipDup.rows[0]?.owner_name ?? null,
+              recipient: recipDup.recipient,
+              ownerName: recipDup.ownerName,
               duplicate: true,
             };
           }
@@ -561,6 +614,53 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
             );
           }
         }
+
+        // GENERIC ENVELOPE FIRST, SPECIALIZED PROJECTION SECOND.
+        //
+        // The architecture split is deliberate: every intake becomes a durable,
+        // type-tagged submission row before any domain-specific table claims it.
+        // job_inquiries remains the projection the owner reads today; the generic
+        // envelope is what lets later verticals reuse the same intake path without
+        // inventing a new table per flow. Per-call idempotency matches the domain
+        // row: retries update their own envelope instead of appending duplicates.
+        const intakePayload = buildJobIntakePayload(companies, {
+          caller_name: args.caller_name,
+          callback_phone: callbackPhone ?? undefined,
+          employment_type: args.employment_type,
+          role_description: args.role_description,
+          rate_range: args.rate_range,
+          duration: args.duration,
+          location_type: args.location_type,
+          address: args.address,
+          timezone: args.timezone,
+          call_id: args.call_id,
+          appointment_id: appointmentId ?? undefined,
+        });
+        await client.query<{ submission_id: string }>(
+          `INSERT INTO intake_submissions
+             (tenant_id, customer_id, submission_type, call_id, appointment_id,
+              caller_name, callback_phone, payload_json)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+           ON CONFLICT (tenant_id, submission_type, call_id)
+             WHERE call_id IS NOT NULL
+           DO UPDATE SET
+             customer_id    = COALESCE(EXCLUDED.customer_id, intake_submissions.customer_id),
+             appointment_id = COALESCE(EXCLUDED.appointment_id, intake_submissions.appointment_id),
+             caller_name    = EXCLUDED.caller_name,
+             callback_phone = EXCLUDED.callback_phone,
+             payload_json   = EXCLUDED.payload_json
+           RETURNING submission_id`,
+          [
+            args.tenant_id,
+            customerId,
+            'job_inquiry',
+            args.call_id ?? null,
+            appointmentId,
+            args.caller_name,
+            callbackPhone,
+            intakePayload,
+          ]
+        );
 
         // ON CONFLICT DO NOTHING against the job_inquiries_one_per_call partial
         // unique index (migration 20260717230000). The fast-path SELECT above
@@ -642,30 +742,12 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
         // spoken reply used to say "Dale" as a hardcoded string, in a route shared by
         // every tenant on the platform, so a salon's assistant would tell its caller
         // it had passed the details to Dale.
-        const recip = await client.query<{ email: string | null; owner_name: string | null }>(
-          `SELECT COALESCE(
-                    t.job_inquiry_email,
-                    (SELECT u.email FROM users u
-                      WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
-                      ORDER BY u.created_at ASC LIMIT 1)
-                  ) AS email,
-                  -- FIRST name: this is spoken aloud ("passed those details along to
-                  -- <owner>"), and a receptionist uses the first name. full_name is
-                  -- the fallback, not the preference. users has full_name/first_name/
-                  -- last_name and no bare name column; assuming otherwise 500d this
-                  -- route in test.
-                  (SELECT COALESCE(NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(u.full_name), ''))
-                     FROM users u
-                    WHERE u.tenant_id = t.tenant_id AND u.role = 'owner'
-                    ORDER BY u.created_at ASC LIMIT 1) AS owner_name
-             FROM tenants t WHERE t.tenant_id = $1`,
-          [args.tenant_id]
-        );
+        const recip = await resolveJobInquiryRecipient(client, args.tenant_id);
 
         return {
           job_inquiry_id: jobInquiryId,
-          recipient: recip.rows[0]?.email ?? null,
-          ownerName: recip.rows[0]?.owner_name ?? null,
+          recipient: recip.recipient,
+          ownerName: recip.ownerName,
           // A race-losing concurrent retry is a duplicate too: the winner's
           // request emails the owner and stamps the meeting; this one only
           // hands back the id.

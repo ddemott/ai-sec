@@ -33,6 +33,7 @@ This folder contains the project's technical and operational documentation.
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | [TODO.md](TODO.md)                   | **The one backlog** — all open work, prioritized (GAPS + ideas + go-live folded in 2026-07-05) |
 | [RESOLVED.md](RESOLVED.md)           | Completed phases + historical bug tracker + session archive (incl. the folded-doc snapshots)   |
+| [ROADMAP.md](ROADMAP.md)             | Ordered execution roadmap for the vertical preset/block architecture                            |
 | [TEST_COVERAGE.md](TEST_COVERAGE.md) | Test coverage status and gaps                                                                  |
 | [TEST_DB_AUDIT.md](TEST_DB_AUDIT.md) | Mocked-DB vs real-SQL coverage map                                                             |
 
@@ -44,7 +45,7 @@ This folder contains the project's technical and operational documentation.
 | [VOICE_DEADAIR_RESEARCH.md](VOICE_DEADAIR_RESEARCH.md)         | Dead-air / latency research findings (mostly shipped)             |
 | [AIASSISTANT_PERSONA_DRAFT.md](AIASSISTANT_PERSONA_DRAFT.md)   | Thinking Hammer persona + call-flow draft                         |
 | [aiassistant-knowledge-base.md](aiassistant-knowledge-base.md) | Source content for the Thinking Hammer AI assistant KB            |
-| [FRAMEWORK_MIGRATIONS.md](FRAMEWORK_MIGRATIONS.md)             | Voice-stack migration history (Vapi → LiveKit, Grok → OpenAI TTS) |
+| [FRAMEWORK_MIGRATIONS.md](FRAMEWORK_MIGRATIONS.md)             | Voice-stack migration history (Vapi → LiveKit, Grok/OpenAI TTS → Deepgram Aura) |
 
 ## Onboarding & Operations
 
@@ -62,6 +63,7 @@ This folder contains the project's technical and operational documentation.
 | [STRATEGY.md](STRATEGY.md)                           | Product + competitive strategy (positioning)    |
 | [COMPETITOR_WEAKPOINTS.md](COMPETITOR_WEAKPOINTS.md) | Competitor attack map                           |
 | [SECRETARYHQ_FEATURES.md](SECRETARYHQ_FEATURES.md)   | Organized capability outline with status legend |
+| [VERTICAL-PRESET-BLOCK-ARCHITECTURE.md](VERTICAL-PRESET-BLOCK-ARCHITECTURE.md) | Design for reusable block classes, business-type presets, and tenant-safe overrides |
 
 ## Design
 
@@ -86,6 +88,7 @@ This folder contains the project's technical and operational documentation.
 
 - `legaldocs/` — Consent/privacy language + Thinking Hammer LLC setup summary
 - `superpowers/` — Feature specs + implementation plans (per-feature design docs)
+  - Includes `2026-08-11-vertical-preset-block-implementation-spec.md` for the code-facing execution spec behind the vertical preset roadmap.
 - `diagrams/` — Visual diagram assets
 - `mockups/` — UI mockups
 - `secretaryhq-demo.html` — Standalone demo page
@@ -112,4 +115,4 @@ behaviour.
 
 ---
 
-**Last updated:** 2026-07-05 (TODO consolidation — `GAPS.md` / `IMPROVEMENT_IDEAS.md` / `IMPROVEMENTS_TODO.md` / `AIASSISTANT_GO_LIVE_TODO.md` folded into `docs/TODO.md` and deleted; done items + snapshots archived in `RESOLVED.md`; index rows removed. Prior pass 2026-07-04: full doc-inventory sync).
+**Last updated:** 2026-08-11 (repo-wide doc sync: test counts, e2e spec count, migration totals, billing/webhook reality, Node 22 deployment pin, and current voice-stack wording refreshed. Prior major pass 2026-07-05: TODO consolidation — `GAPS.md` / `IMPROVEMENT_IDEAS.md` / `IMPROVEMENTS_TODO.md` / `AIASSISTANT_GO_LIVE_TODO.md` folded into `docs/TODO.md` and deleted; done items + snapshots archived in `RESOLVED.md`; index rows removed.).

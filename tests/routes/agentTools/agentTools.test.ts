@@ -999,6 +999,7 @@ describe('agentTools /capture-job-inquiry', () => {
       queryResponses: [
         { rows: [] }, // customer lookup by callback phone — none
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
+        { rows: [{ submission_id: 'sub-1' }] }, // INSERT INTO intake_submissions
         { rows: [{ job_inquiry_id: 'ji-1' }] }, // INSERT ... RETURNING
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient resolve
       ],
@@ -1019,11 +1020,13 @@ describe('agentTools /capture-job-inquiry', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { email_queued: true } });
-    expect(queries[2].text).toContain('INSERT INTO job_inquiries');
+    expect(queries[2].text).toContain('INSERT INTO intake_submissions');
+    expect(String(queries[2].params[7])).toContain('senior Azure/M365 developer');
+    expect(queries[3].text).toContain('INSERT INTO job_inquiries');
     // The 2026-07-30 prod loss: the role itself must land in the ROW, not just
     // the transcript — column + placeholder in the INSERT, verbatim in values.
-    expect(queries[2].text).toContain('role_description');
-    expect(queries[2].params).toContain(
+    expect(queries[3].text).toContain('role_description');
+    expect(queries[3].params).toContain(
       'senior Azure/M365 developer — cloud-native and integration work'
     );
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
@@ -1076,6 +1079,7 @@ describe('agentTools /capture-job-inquiry', () => {
       queryResponses: [
         { rows: [] }, // customer lookup by callback phone — no match
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
+        { rows: [{ submission_id: 'sub-2' }] }, // INSERT INTO intake_submissions
         { rows: [{ job_inquiry_id: 'ji-2' }] }, // INSERT
         { rows: [{ email: 'owner@example.com' }] }, // recipient (fell back to owner email)
       ],
@@ -1092,10 +1096,11 @@ describe('agentTools /capture-job-inquiry', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ success: true, result: { email_queued: true } });
-    // 4 queries since 2026-07-27: lookup MISS now creates the customer (a lead
-    // the owner must be able to call back is a phonebook row), then the inquiry.
-    expect(queries).toHaveLength(4);
-    expect(queries[2].text).toContain('INSERT INTO job_inquiries');
+    // 5 queries now: lookup MISS creates the customer, generic intake envelope lands,
+    // then the specialized job_inquiries projection and recipient resolve.
+    expect(queries).toHaveLength(5);
+    expect(queries[2].text).toContain('INSERT INTO intake_submissions');
+    expect(queries[3].text).toContain('INSERT INTO job_inquiries');
     expect(vi.mocked(sendJobInquiryEmail)).toHaveBeenCalledWith(
       'owner@example.com',
       expect.objectContaining({
@@ -1123,6 +1128,7 @@ describe('agentTools /capture-job-inquiry', () => {
         // handled). Queue now matches the route's actual query order.
         { rows: [] }, // customer lookup by callback phone
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
+        { rows: [{ submission_id: 'sub-3' }] }, // INSERT INTO intake_submissions
         { rows: [{ job_inquiry_id: 'ji-3' }] }, // INSERT
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient
       ],
@@ -1156,6 +1162,7 @@ describe('agentTools /capture-job-inquiry', () => {
       queryResponses: [
         { rows: [] }, // customer lookup
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
+        { rows: [{ submission_id: 'sub-hang' }] }, // INSERT INTO intake_submissions
         { rows: [{ job_inquiry_id: 'ji-hang' }] }, // INSERT
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com' }] }, // recipient
       ],
@@ -1221,6 +1228,7 @@ describe('agentTools /capture-job-inquiry', () => {
         { rows: [] }, // fast-path dedupe SELECT — no committed row YET
         { rows: [] }, // customer lookup
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
+        { rows: [{ submission_id: 'sub-race' }] }, // INSERT INTO intake_submissions
         { rows: [] }, // INSERT ... ON CONFLICT DO NOTHING — lost the race, zero rows
         { rows: [{ job_inquiry_id: 'ji-winner' }] }, // winner lookup
         { rows: [{ email: 'DaleDeMott@thinkinghammer.com', owner_name: 'Dale' }] }, // recipient
@@ -1251,6 +1259,7 @@ describe('agentTools /capture-job-inquiry', () => {
       queryResponses: [
         { rows: [] }, // customer lookup by callback phone (queue was off by one pre-2026-07-17)
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
+        { rows: [{ submission_id: 'sub-4' }] }, // INSERT INTO intake_submissions
         { rows: [{ job_inquiry_id: 'ji-4' }] }, // INSERT
         { rows: [{ email: null }] }, // recipient resolve — none
       ],
@@ -1295,6 +1304,7 @@ describe('agentTools /capture-job-inquiry', () => {
         { rows: [] }, // customer lookup by callback phone — none
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ appointment_id: APPT }] }, // appointment belongs to tenant
+        { rows: [{ submission_id: 'sub-5' }] }, // INSERT INTO intake_submissions
         { rows: [{ job_inquiry_id: 'ji-5' }] }, // INSERT ... RETURNING
         { rows: [], rowCount: 1 }, // description stamp UPDATE
         { rows: [{ email: 'owner@example.com' }] }, // recipient resolve
@@ -1339,6 +1349,7 @@ describe('agentTools /capture-job-inquiry', () => {
         { rows: [] }, // customer lookup
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [{ appointment_id: APPT }] }, // appointment verifies live
+        { rows: [{ submission_id: 'sub-7' }] }, // INSERT INTO intake_submissions
         { rows: [{ job_inquiry_id: 'ji-7' }] }, // INSERT ... RETURNING
         { rows: [], rowCount: 0 }, // stamp UPDATE — appointment gone
         { rows: [{ email: null }] }, // recipient resolve — none
@@ -1368,6 +1379,7 @@ describe('agentTools /capture-job-inquiry', () => {
         { rows: [] }, // customer lookup
         { rows: [{ customer_id: 'cust-new' }] }, // INSERT INTO customers (get-or-create)
         { rows: [] }, // appointment check — no match for this tenant
+        { rows: [{ submission_id: 'sub-6' }] }, // INSERT INTO intake_submissions
         { rows: [{ job_inquiry_id: 'ji-6' }] }, // INSERT still lands
         { rows: [{ email: null }] }, // recipient resolve — none
       ],

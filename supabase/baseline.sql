@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rlArObfFeBVtr1lPyUZ93ZK59KuaQtNYyIUf4Hpfl5OBfGG47eY2ObIqDkyunJi
+\restrict moMGp7wZ5bqMFhMRv9HQhPIEomiGoG6U5Pe2sTDCOtpFmFSKNXTdMRSwlD7ezR7
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2977,6 +2977,49 @@ ALTER TABLE ONLY public.entity_sync_map FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: intake_submissions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.intake_submissions (
+    submission_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    customer_id uuid,
+    appointment_id uuid,
+    submission_type text NOT NULL,
+    call_id text,
+    caller_name text NOT NULL,
+    callback_phone text,
+    payload_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT intake_submissions_submission_type_chk CHECK ((submission_type <> ''::text))
+);
+
+ALTER TABLE ONLY public.intake_submissions FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE intake_submissions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.intake_submissions IS 'Generic structured intake envelope captured from calls before any domain-specific projection (job inquiry, estimate request, etc.).';
+
+
+--
+-- Name: COLUMN intake_submissions.submission_type; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.intake_submissions.submission_type IS 'Domain tag for the payload and downstream projector, e.g. job_inquiry.';
+
+
+--
+-- Name: COLUMN intake_submissions.payload_json; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.intake_submissions.payload_json IS 'Canonical captured payload in caller-facing terms. Projection tables may normalize subsets of this JSON into typed columns.';
+
+
+--
 -- Name: job_inquiries; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4024,6 +4067,14 @@ ALTER TABLE ONLY public.entity_sync_map
 
 
 --
+-- Name: intake_submissions intake_submissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intake_submissions
+    ADD CONSTRAINT intake_submissions_pkey PRIMARY KEY (submission_id);
+
+
+--
 -- Name: job_inquiries job_inquiries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4473,6 +4524,20 @@ CREATE INDEX idx_entity_sync_map_pending ON public.entity_sync_map USING btree (
 
 
 --
+-- Name: idx_intake_submissions_tenant_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_intake_submissions_tenant_created ON public.intake_submissions USING btree (tenant_id, created_at DESC);
+
+
+--
+-- Name: idx_intake_submissions_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_intake_submissions_type ON public.intake_submissions USING btree (tenant_id, submission_type, created_at DESC);
+
+
+--
 -- Name: idx_job_inquiries_tenant; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4711,6 +4776,20 @@ CREATE INDEX idx_voice_sessions_tenant_id ON public.voice_sessions USING btree (
 
 
 --
+-- Name: intake_submissions_one_per_call_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX intake_submissions_one_per_call_type ON public.intake_submissions USING btree (tenant_id, submission_type, call_id) WHERE (call_id IS NOT NULL);
+
+
+--
+-- Name: INDEX intake_submissions_one_per_call_type; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON INDEX public.intake_submissions_one_per_call_type IS 'Per-call idempotency for generic intake envelopes, keyed by tenant + submission_type + call_id.';
+
+
+--
 -- Name: job_inquiries_one_per_call; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4876,6 +4955,13 @@ CREATE TRIGGER trg_customer_messages_updated_at BEFORE UPDATE ON public.customer
 --
 
 CREATE TRIGGER trg_customers_updated_at BEFORE UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: intake_submissions trg_intake_submissions_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_intake_submissions_updated_at BEFORE UPDATE ON public.intake_submissions FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
 
 --
@@ -5096,6 +5182,30 @@ ALTER TABLE ONLY public.employees
 
 ALTER TABLE ONLY public.entity_sync_map
     ADD CONSTRAINT entity_sync_map_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
+-- Name: intake_submissions intake_submissions_appointment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intake_submissions
+    ADD CONSTRAINT intake_submissions_appointment_id_fkey FOREIGN KEY (appointment_id) REFERENCES public.appointments(appointment_id) ON DELETE SET NULL;
+
+
+--
+-- Name: intake_submissions intake_submissions_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intake_submissions
+    ADD CONSTRAINT intake_submissions_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(customer_id) ON DELETE SET NULL;
+
+
+--
+-- Name: intake_submissions intake_submissions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.intake_submissions
+    ADD CONSTRAINT intake_submissions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
 
 
 --
@@ -5678,6 +5788,26 @@ CREATE POLICY feedback_tenant_isolation ON public.user_feedback USING ((tenant_i
 
 
 --
+-- Name: intake_submissions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.intake_submissions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: intake_submissions intake_submissions_admin_bypass; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY intake_submissions_admin_bypass ON public.intake_submissions USING ((public.tenant_ctx() = ''::text)) WITH CHECK ((public.tenant_ctx() = ''::text));
+
+
+--
+-- Name: intake_submissions intake_submissions_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY intake_submissions_tenant_isolation ON public.intake_submissions USING ((tenant_id = public.tenant_ctx_uuid())) WITH CHECK ((tenant_id = public.tenant_ctx_uuid()));
+
+
+--
 -- Name: job_inquiries; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6002,5 +6132,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rlArObfFeBVtr1lPyUZ93ZK59KuaQtNYyIUf4Hpfl5OBfGG47eY2ObIqDkyunJi
+\unrestrict moMGp7wZ5bqMFhMRv9HQhPIEomiGoG6U5Pe2sTDCOtpFmFSKNXTdMRSwlD7ezR7
 

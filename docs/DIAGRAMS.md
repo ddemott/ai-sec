@@ -2,7 +2,7 @@
 
 Companion to `ARCHITECTURE.md`. Every diagram is a Mermaid block — renders natively on GitHub and on claude.ai (paste into chat, or upload this file and ask for an artifact).
 
-**Last synced to architecture doc:** 2026-07-27
+**Last synced to architecture doc:** 2026-08-11
 
 ## Contents
 
@@ -47,10 +47,10 @@ flowchart TB
 
   LiveKit -->|WebSocket| Agent
 
-  Fastify["Fastify Backend<br/>29 route modules<br/>secretary-hq-production.up.railway.app<br/>(Railway + Nixpacks, Node 20)"]
+  Fastify["Fastify Backend<br/>29 route modules<br/>secretary-hq-production.up.railway.app<br/>(Railway + Nixpacks, Node 22)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
-  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>154 migrations")]
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>180 migrations")]
   Stripe["Stripe"]
   Integrations["Google / Outlook calendars<br/>+ Square CRM"]
   Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
@@ -219,7 +219,7 @@ erDiagram
 
 ## 3. Voice Call Flow — Current (LiveKit Agent)
 
-Post-migration (`661d21d`, 2026-04-27). Tool calls hit Fastify `/agent-tools/*` directly. TTS is OpenAI (fully since 2026-06-25 Grok removal; see FRAMEWORK_MIGRATIONS.md).
+Post-migration (`661d21d`, 2026-04-27). Tool calls hit Fastify `/agent-tools/*` directly. Current voice stack: Telnyx → LiveKit Cloud → Deepgram Nova-3 STT → OpenAI GPT-4.1-mini → Deepgram Aura TTS. Live call sequencing is question trees (see `QUESTION_TREE_ARCHITECTURE.md`).
 
 ```mermaid
 sequenceDiagram
@@ -234,7 +234,7 @@ sequenceDiagram
   participant API as Fastify<br/>/agent-tools/*
   participant DB as Postgres
 
-  Caller->>Telnyx: Dial +1 (630) 937-9478 (historical; current live +1 630-822-9086)
+  Caller->>Telnyx: Dial +1 (630) 822-9086
   Telnyx->>LK: SIP INVITE → inbound trunk
   LK->>LK: dispatch rule SDR_WEL49AwBB4NW<br/>→ create room, metadata = { tenant_id }
   LK->>Agent: room.created event (WebSocket)
@@ -518,7 +518,7 @@ sequenceDiagram
 
 ## 9. Billing State Machine
 
-Stripe Lite. Three webhook events drive transitions. `subscriptionGateMiddleware` returns 402 on tenant-scoped routes whenever `subscription_status` is outside `{active, trialing}`.
+Intended Stripe flow in code. The route handles three webhook events once wired, but **no Stripe webhook endpoint is registered yet**, and final public pricing is still provisional. `subscriptionGateMiddleware` returns 402 on tenant-scoped routes whenever `subscription_status` is outside `{active, trialing}`.
 
 ```mermaid
 stateDiagram-v2
@@ -538,9 +538,9 @@ stateDiagram-v2
 
   state Active {
     [*] --> Solo
-    Solo: Solo — $129/mo
-    Growth: Growth — $279/mo
-    Professional: Professional — $449/mo<br/>(defined, not gated)
+    Solo: Solo label in code<br/>(pricing provisional)
+    Growth: Growth label in code<br/>(pricing provisional)
+    Professional: Professional label<br/>(not yet launched)
     Solo --> Growth: plan switch
     Growth --> Solo: plan switch
     Solo --> Professional

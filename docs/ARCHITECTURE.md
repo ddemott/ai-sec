@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-07-08 (29 route modules, 154 migrations, 23 agent tools — synced via mechanical doc consistency + this pass (stale labels, dedup, counts); confirmed by `npm run verify:claude-md` drift detector)
+**Last verified:** 2026-08-11 (29 route modules, 180 migrations, 26 defined agent tools, 38 Playwright spec files, and the latest verified test counts 2,675 / 1,031 / 1,498)
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
@@ -44,9 +44,9 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 **Layering:**
 
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`secretary-hq-agent`: Deepgram Nova-3 STT, OpenAI GPT-4.1-mini LLM, **Deepgram Aura TTS**; no XAI key). Call sequencing = question trees (§6.3).
-- **Tools**: 26 voice tools defined in `agent/src/tools.ts` against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`. **12 of them are actually offered to the model** under question trees (§7).
+- **Tools**: 26 voice tools defined in `agent/src/tools.ts` against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`. The live question-tree path offers a subset of them (12 base tools, plus 3 identity tools on goal-bearing calls) — see §7.
 - **API**: Fastify (29 route modules) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 154 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
+- **DB**: Postgres + pgvector on Supabase, 180 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
 - **UI**: Next.js 14 (App Router) + Tailwind — deployed on Railway (production dashboard service)
 
 ---
@@ -66,11 +66,11 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── components/               ~80 feature components + ui/ primitives
 │   │   └── ui/                   Badge, Button, Card, ConfirmModal, FolderTabs, Input, Modal, Select, Toast, TimeInput, PhoneInput, CoverageBar
 │   ├── lib/                      api.ts, SessionContext, ThemeContext, VocabularyContext, hooks, types
-│   ├── e2e/                      35 Playwright spec files
+│   ├── e2e/                      38 Playwright spec files
 │   ├── server.js                 Custom HTTPS server (dev) + Railway deploy entry (prod)
 │   └── 92 *.test.tsx files       Vitest + React Testing Library
 ├── supabase/
-│   ├── migrations/               154 SQL migrations
+│   ├── migrations/               180 SQL migrations
 │   └── seed.sql                  Platform admin + Bella's Hair Studio demo tenant
 ├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `secretary-hq-agent`
 │   └── src/                      index.ts (entry), prompt.ts, toolsClient.ts, sessionContext.ts, tools.ts
@@ -122,7 +122,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
                                 ▼
                     ┌─────────────────────┐
                     │  Fastify Backend    │  secretary-hq-production.up.railway.app
-                    │  29 route modules   │  Railway (Nixpacks, Node 20)
+                    │  29 route modules   │  Railway (Nixpacks, Node 22)
                     └──────────┬──────────┘
                                │
           ┌────────────────────┼─────────────────────┐
@@ -149,7 +149,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 | Dashboard          | Railway                                | `dashboard-production-cee3.up.railway.app`                                                                       | Next.js build via `dashboard/server.js`                                                                                |
 | Telephony          | Telnyx                                 | `+1 (630) 822-9086` (live; `937-9478` + `866-1960` decommissioned)                                               | SIP Connection `livekit-outbound` (ID `2945038451784812111`); provisioned per tenant via `POST /provisioning/activate` |
 | Voice orchestrator | LiveKit Cloud                          | `ai-secretary-nmlkkmgf.sip.livekit.cloud:5060` (SIP); WebSocket for agent                                        | Dispatch rule `SDR_WEL49AwBB4NW` routes to agent name `secretary-hq-agent`                                             |
-| Stripe             | Hosted                                 | Webhook: `/billing/webhook` on Railway                                                                           | Products + price IDs in Stripe dashboard                                                                               |
+| Stripe             | Hosted                                 | Route exists at `/billing/webhook` on Railway                                                                    | Stripe endpoint registration and final price IDs are still pending                                                      |
 
 **Graceful shutdown:** Backend handles `SIGTERM`/`SIGINT` (Railway sends these during deploys) — closes Fastify and drains the DB pool.
 
@@ -333,15 +333,16 @@ Super-admin operations (cross-tenant queries, tenant listing, user registration)
 
 `agent/src/tools.ts` defines **26** real tools, implemented as POST routes under `src/routes/agentTools/` (a DIRECTORY since 2026-07-11 — split from a single 2,517-line file).
 
-**But defining a tool does not put it in front of the model.** Under question trees, `selectedTools()` (`agent/src/checklist/checklistTools.ts`) rebuilds the toolset from the currently selected trees, and presents **12**:
+**But defining a tool does not put it in front of the model.** Under question trees, `selectedTools()` (`agent/src/checklist/checklistTools.ts`) rebuilds the toolset from the currently selected trees, and presents **12 base tools**, plus **3 identity tools whenever the `identity` tree is selected** (which is true on goal-bearing calls, so most real calls see 15):
 
 | Group | Tools |
 |---|---|
 | Base (always) | `set_purpose`, `record_answer`, `finish_call`, `answer_question` (wraps `get_company_policy_answer` — RAG under another name) |
 | Action nodes (per selected tree) | `book_with_scheduling`, `take_message`, `capture_job_inquiry`, `cancel_appointment`, `reschedule_appointment` |
 | Passthrough (per selected tree) | `get_available_slots`, `get_service_catalog`, `get_my_appointments` |
+| Identity add-ons (when `identity` is selected) | `get_customer_context`, `send_verification_code`, `verify_phone_code` |
 
-The other 14 are **never offered on a live call.** Some are dead by design: `start_booking` / `manage_appointment` were ladder-era ROUTERS, `book_appointment` / `check_availability` / `get_scheduling_options` are superseded, and `record_sms_consent` / `send_self_service_link` are gated off with SMS anyway. **The rest are capability the product believes it has and does not** (verified 2026-07-27 by diffing `tools.ts` against `selectedTools()`): `transfer_call` — *so there is no human handoff on a live call* — plus `page_owner_via_sms`, `attach_meeting_notes`, `save_customer_preference`, `identify_caller`, `get_customer_context`, `get_detailed_customer_history`, `find_caller_by_name`, `send_verification_code`, `verify_phone_code`.
+The other 11 are **never offered on a live call.** Some are dead by design: `start_booking` / `manage_appointment` were ladder-era ROUTERS, `book_appointment` / `check_availability` / `get_scheduling_options` are superseded, and `record_sms_consent` / `send_self_service_link` are gated off with SMS anyway. **The rest are capability the product still does not expose on the live question-tree path**: `transfer_call` — *so there is still no live human handoff on a production call* — plus `page_owner_via_sms`, `attach_meeting_notes`, `save_customer_preference`, `identify_caller`, `get_detailed_customer_history`, and `find_caller_by_name`.
 
 To make a tool reachable it must be an `action` node in a tree, a `TREE_PASSTHROUGH_TOOLS` entry, or a base tool.
 
@@ -366,7 +367,7 @@ Every route returns HTTP 200 with one of:
 
 ### 7.3 Core agent-tools routes (booking/knowledge subset)
 
-> The table below is the original 10 Fastify `/agent-tools/*` routes. The agent exposes **23 voice tools** total as of 2026-06 (capability-composed in `agent/src/tools.ts`); the later additions — `identify_caller`, `find_caller_by_name`, `save_customer_preference`, `transfer_call`, `take_message`, `get_my_appointments`, `cancel_appointment`, `reschedule_appointment`, `capture_job_inquiry` — are catalogued in `CLAUDE.md` and `docs/VOICE_AGENT_PLAYBOOK.md`.
+> The table below is the original 10 Fastify `/agent-tools/*` routes. The agent defines **26 real tools** today in `agent/src/tools.ts`; this table documents the original booking/knowledge subset, not the full live catalog. For the current reachability split, see §7 above and `docs/VOICE_AGENT_PLAYBOOK.md`.
 
 | Route                                      | Input (Zod)                                                                                                                  | Return shape                                                                                                                                                                | Backing logic                                                                                                              |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -681,12 +682,12 @@ Fires from the 4 appointment mutation points (create, update, delete, cancel). C
 
 ### 15.1 Plans
 
-| Plan         | Price   | Capabilities                  |
-| ------------ | ------- | ----------------------------- |
-| Solo         | $129/mo | 1 employee, core features     |
-| Growth       | $279/mo | Multi-employee, calendar sync |
-| Professional | $449/mo | (defined, not yet gated)      |
-| Enterprise   | Custom  | Not implemented               |
+| Plan label in code | Current state | Notes |
+| ------------------ | ------------- | ----- |
+| Solo               | Checkout path exists | Price not finalized; old dollar figures were placeholders |
+| Growth             | Checkout path exists | Price not finalized; old dollar figures were placeholders |
+| Professional       | Backlog / partial wiring | Not yet a launched plan |
+| Enterprise         | Not implemented | Placeholder only |
 
 ### 15.2 Checkout flow
 
@@ -705,7 +706,7 @@ Client → redirects to checkout_url
 
 ### 15.3 Webhook (`POST /billing/webhook`)
 
-Stripe-signed via `STRIPE_WEBHOOK_SECRET`. Handles three events:
+The route exists and verifies Stripe signatures via `STRIPE_WEBHOOK_SECRET`, but **no Stripe webhook endpoint is registered yet**, so production has not received these events. When wired, it handles three events:
 
 | Event                           | Action                                                                                                         |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -773,7 +774,7 @@ Every component consumes CSS custom properties (`--bg`, `--fg`, `--accent`, `--b
 
 ### 16.7 Test harness
 
-Vitest + React Testing Library (jsdom). 92 test files, 1,012 tests. Contexts are provided by a shared `renderWithProviders()` helper. Happy + sad paths with 5W diagnostic comments (Who / What / When / Where / Why) — failure messages are self-debugging.
+Vitest + React Testing Library (jsdom). Latest verified dashboard run: **1,031 passing tests**. Contexts are provided by a shared `renderWithProviders()` helper. Happy + sad paths with 5W diagnostic comments (Who / What / When / Where / Why) — failure messages are self-debugging.
 
 ### 16.8 Dev server
 
@@ -811,21 +812,21 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
             ╱────────────╲
 ```
 
-### 18.2 Backend (`npm test` — 2,328 tests, 183 files)
+### 18.2 Backend (`npm test` — 2,675 passing in the latest verified run)
 
 Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, calendar sync, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: Bella's Hair Studio caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
 
-### 18.3 Dashboard (`cd dashboard && npm test` — 1,012 tests, 92 files)
+### 18.3 Dashboard (`cd dashboard && npm test` — 1,031 passing in the latest verified run)
 
 Vitest + React Testing Library (jsdom). Renders components with all 4 providers (Session, Theme, Vocabulary, AppointmentDetail). Tests interactions (click, keyboard, form submission), accessibility (role/tabIndex/aria attributes), and error states.
 
-### 18.4 Agent (`cd agent && npm test` — 496 tests, 36 files)
+### 18.4 Agent (`cd agent && npm test` — 1,498 passing in the latest verified run)
 
-Vitest. Covers the LiveKit Agents worker: prompt assembly, the 23 tool schemas, `toolsClient`, transcript recording, call-outcome tracking, the bounded post-call summary, and the TTS dead-air fallback.
+Vitest. Covers the LiveKit Agents worker: prompt assembly, the 26 defined tool schemas, `toolsClient`, transcript recording, call-outcome tracking, the bounded post-call summary, and the TTS dead-air fallback.
 
 _(The former Supabase edge-function suite — `deno task test --no-check` — was removed with `supabase/functions/` itself when the backend moved to Fastify. See `docs/FRAMEWORK_MIGRATIONS.md`.)_
 
-### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 35 spec files)
+### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 38 spec files)
 
 Full-stack browser coverage: regression gates (toast, validation, unsaved-changes warning, NaN guards), functional audit journeys (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav), auth/role gating, calendar sync, knowledge-base import, wizard flows, and self-service. Runs as a required CI job on every PR.
 

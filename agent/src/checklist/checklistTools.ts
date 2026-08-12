@@ -171,6 +171,8 @@ const shape = (t: llm.ToolContext[string]): RealToolShape => t as unknown as Rea
 export interface ChecklistToolDeps {
   tracker: ChecklistTracker;
   library: QuestionTreeDef[];
+  /** Tree ids this tenant is allowed to select right now. Defaults to all library tree ids. */
+  selectableTreeIds?: string[];
   /** The full ToolContext from buildTools() — real tools, untouched. */
   realTools: llm.ToolContext;
   /** Carrier-attested caller number (null on forwarded lines) — auto-fills the
@@ -225,7 +227,8 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   const { tracker, realTools } = deps;
   const maxRounds = deps.maxPurposeRounds ?? DEFAULT_MAX_PURPOSE_ROUNDS;
   const actionSites = collectActions(deps.library);
-  const treeIds = deps.library.map((t) => t.tree_id);
+  const treeIds = deps.selectableTreeIds ?? deps.library.map((t) => t.tree_id);
+  const selectableTreeSet = new Set(treeIds);
 
   let purposeRounds = 0;
   // What identify_caller was last told, so a CORRECTION can be re-sent. It used
@@ -418,6 +421,10 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         );
       }
       for (const id of args.wrong_trees ?? []) tracker.deselect(id);
+      const unavailable = args.trees.filter((id) => !selectableTreeSet.has(id));
+      if (unavailable.length > 0) {
+        return `No tree called "${unavailable[0]}". Available: ${treeIds.join(', ')}.`;
+      }
       try {
         tracker.select(args.trees);
       } catch (err) {
