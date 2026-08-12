@@ -1,50 +1,52 @@
 # HANDOFF
 
-Read this first after model switch.
+Read this first after session reset.
 
 ## Current state
 
 - Repo: `/home/dale/projects/secretary-hq`
-- Branch work already done this session:
-  - `src/routes/appointments.ts`: `POST /appointments/:id/send-self-service-links` now checks SMS consent before sending cancel/reschedule links.
-  - `tests/routes/appointments.test.ts`: added consented happy path and no-consent sad path; fixtures use real normalized numbers.
-  - `docs/TODO.md`: removed stale open item for raw self-service SMS consent gap.
-  - `docs/RESOLVED.md`: added resolution entry for the consent-gate fix.
-- Verified:
-  - `npx vitest run tests/routes/appointments.test.ts --reporter=dot` → 44 passed
-  - `npm run test` → 210 files passed, 1701 tests passed, 9 failures only in `tests/regression/rlsIsolation.test.ts`
+- Branch: `main`
+- Latest merged checkpoint: PR #329 — `feat: add preset compiler and generic intake capture`
+- Merge commit: `0236179c4a4ecc7ea58f806878932b9fc35f85eb`
 
-## Active blocker
+## What just landed
 
-- Full suite fails in RLS env, not in this patch.
-- Error seen:
-  - `Error: Cannot reach the database as app_user (postgres://***@localhost:5433/postgres). Apply supabase/migrations/20260724000100_app_user_role.sql first.`
+Code + schema
 
-## Next live work
+- checklist preset/runtime foundation under `agent/src/checklist/`
+- generic intake envelope + RLS via `supabase/migrations/20260811160000_intake_submissions.sql`
+- `capture-job-inquiry` now writes `intake_submissions` before `job_inquiries`
 
-Best remaining no-user-input work:
+Docs
 
-1. reminder worker shutdown / drain / atomic-claim race
-2. reminder-worker hang protection + SMS metric chokepoint
-3. any remaining send-path silence bugs if metrics still want one chokepoint
+- roadmap + architecture/spec docs for the vertical preset/block runtime
+- repo-wide factual count sync for migrations, test totals, and backend route-module count
 
-## Hermes model note
+## Verified facts
 
-- This session discovered a larger-context option:
-  - `grok-4.20-0309-reasoning` on `xai-oauth`
-  - reported context: 2,000,000 tokens
-- Safe launch command from the delegated check:
-  - `hermes -m grok-4.20-0309-reasoning --provider xai-oauth`
-- Model switch is not in-place for this live chat. Start a new Hermes invocation, then read this file first.
+- PR #329 merged successfully
+- local branch `feat/vertical-preset-runtime-intake` deleted
+- remote branch `feat/vertical-preset-runtime-intake` deleted
+- current branch tracks `origin/main`
+- backend route modules under `src/routes/`: 29 (plus the `agentTools/` module dir wired from `src/index.ts`)
+- SQL migrations on disk: 180
+- Playwright spec files under `dashboard/e2e/`: 38
+- defined agent tools in `agent/src/tools.ts`: 26
+- latest verified suite totals still documented from 2026-08-11:
+  - backend: 2,675 passing
+  - dashboard: 1,031 passing
+  - agent: 1,498 passing
 
-## Useful recap
+## Working tree expectation
 
-- `find-customer-by-name` leak already fixed earlier in `src/routes/agentTools/identity.ts`.
-- OTP carry-forward is already in code.
-- Reminder retry / no-consent logic is already present in live reminder code; the stale backlog item was removed from TODO.
-- Docs changed only in `docs/TODO.md` and `docs/RESOLVED.md`.
+Clean, unless a later session edited docs or code after this handoff.
 
-## Continue from here
+## Good next checks
 
-- If you need the latest repo state, trust the files above, then inspect the reminder worker paths next.
-- Keep verdict in current style: terse, exact, verified.
+1. `git status --short --branch`
+2. if docs are in question, verify route/migration/spec counts from filesystem before editing
+3. if production state is in question, verify live deploy after merge instead of assuming Railway shipped it
+
+## Style reminder
+
+Stay terse. Verify with tools. Don’t trust stale markdown when the filesystem can answer it exactly.

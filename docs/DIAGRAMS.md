@@ -47,7 +47,7 @@ flowchart TB
 
   LiveKit -->|WebSocket| Agent
 
-  Fastify["Fastify Backend<br/>29 route modules<br/>secretary-hq-production.up.railway.app<br/>(Railway + Nixpacks, Node 22)"]
+  Fastify["Fastify Backend<br/>29 route modules + agentTools dir<br/>secretary-hq-production.up.railway.app<br/>(Railway + Nixpacks, Node 22)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
   Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>180 migrations")]

@@ -12,7 +12,7 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 
 - **SMS is OFF (`ENABLE_SMS`, default false)** until 10DLC registration lands. Not one text this product has sent has ever reached a handset — the number is not registered, the carriers drop everything, and Telnyx reports success anyway (error 40010). Meanwhile the agent was PROMISING texts on real calls ("you'll receive a confirmation shortly"). With SMS off it has no `record_sms_consent` or `send_self_service_link` tools (the latter refiled from `scheduling` to `sms` 2026-07-17 — mis-filed, it escaped the gate and could truthfully relay Telnyx's false "sent" for a link text that died at the carrier) and the prompt tells it plainly that it cannot text: **it cannot promise what it has no means to do.** (Known residual of the same class: `page_owner_via_sms`'s urgent-text promise — the message row persists but no text arrives until 10DLC.) Each tenant needs their OWN 10DLC brand + campaign + number (the perceived SENDER must be the registered brand — CTIA; a shared platform brand gets the traffic blocked), so onboarding must collect legal name/EIN/address/website and provision per-tenant. ~$12-13/tenant/month, 1-3 business days.
 - **Voice**: Telnyx → LiveKit Cloud → LiveKit Agent (Node) → Deepgram (STT) + OpenAI (LLM) + **Deepgram Aura (TTS, native WebSocket streaming — switched from OpenAI TTS 2026-07-14 because the OpenAI plugin is NON-STREAMING: it buffers the whole reply before emitting any audio, so every turn was silence-then-a-burst. Chopping the input into sentences with StreamAdapter only traded one gap for a gap between every sentence. You cannot make a non-streaming engine stream by chopping its input finer)** → Fastify `/agent-tools/*`
-- **Backend**: Fastify (28 flat route modules under `src/routes/` + the `agentTools/` module dir) → Postgres (Railway)
+- **Backend**: Fastify (29 top-level route modules under `src/routes/` + the `agentTools/` module dir, registered from `src/index.ts`) → Postgres (Railway)
 - **Agent worker**: `agent/` package on Railway as `secretary-hq-agent`. Single worker per tenant; tenant_id flows in via SIP dispatch metadata.
 - **Dashboard**: Next.js 14 (App Router) + Tailwind + TS
 - **Database**: Postgres + pgvector, RLS multi-tenancy, atomic booking RPCs
@@ -32,7 +32,7 @@ Completed phases live in `docs/RESOLVED.md`. Current tasks in `docs/TODO.md`. Th
 
 Items below capture hidden context — things you can't grep for. Everything else (flat service files, type definitions, doc tree) is derivable from the filesystem.
 
-- `/src` — Fastify backend (slim `index.ts` + 28 flat route modules + `routes/agentTools/`)
+- `/src` — Fastify backend (slim `index.ts` + 29 top-level route modules + `routes/agentTools/`)
 - `/src/routes/routeHelpers.ts` — `sendValidationError`, `sendNotFound`, `sendSuccess`, `sendConflict`, `assertRowAffected`, `requireValidUUID`, `parseDateRange`, `parsePagination`
 - `/src/routes/agentTools/` — the 27 `/agent-tools/*` routes the voice agent calls, split by concern 2026-07-11 (was a single 2,517-line `agentTools.ts`). `index.ts` owns ONLY the shared `x-agent-secret` auth hook + registration order; `schemas.ts` (Zod) and `helpers.ts` (`ok`/`fail`/`toolRoute`/`pgErrorFields`/interval math + the `AgentToolDeps` plumbing interface every module destructures) are shared. Route modules: `session` (tenant-config + voice-session lifecycle), `identity` (identify/lookup/history, preferences, consent, OTP verification), `scheduling` (service-catalog, availability, both booking RPCs, cancel/reschedule), `knowledge` (RAG policy-answer — the only module touching embeddings), `messaging` (take-message, page-owner, job inquiry, self-service link — the only module touching ConsentService/SMSService), `aiCost`, `_testRoutes` (SYNC_TEST_RECORDER readout). Grouped by what a route is ABOUT, not the mechanism it uses — so the OTP pair lives in `identity` (it establishes who the caller is) and `send-self-service-link` in `messaging` (an outbound contact), not with their transport. Importers use the directory path (`./routes/agentTools`), which resolves to `index.ts`. Note `tests/routes/available-slots.test.ts` reads the route file OFF DISK to assert the route exists — it points at `scheduling.ts`; a future split must update it.
 - `/src/services/communications/` — CommunicationService + email/sms/appointment services + Handlebars templates + ProviderRegistry (Telnyx + Mock). Consent-gated.
@@ -143,7 +143,7 @@ Durable rules-of-engagement that override "build for the future":
 
 **Backend**
 
-- Slim `index.ts` registers 28 flat route modules + `routes/agentTools/` (a directory since 2026-07-11). Tenant-scoped routes use `withTenantClient()` for RLS.
+- Slim `index.ts` wires 29 top-level route modules + `routes/agentTools/` (a directory since 2026-07-11). Tenant-scoped routes use `withTenantClient()` for RLS.
 - All mutations: Zod-validated, response shape `{ success, error?, details? }`, `assertRowAffected()` returns 404 on zero-row UPDATE/DELETE (never silent success).
 - Production env validation: refuses to start without `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`.
 - Graceful shutdown on SIGTERM/SIGINT (closes Fastify + drains pool — required for Railway).
@@ -172,7 +172,7 @@ Durable rules-of-engagement that override "build for the future":
 
 ## Project Status
 
-**Phase 13 (Production Readiness) in progress.** 2,675 backend + 1,031 dashboard + 1,498 agent tests passing (latest verified 2026-08-11 against real test_db / vitest). 28 flat route modules under `src/routes/` (+ the `agentTools/` module dir). 38 Playwright e2e spec files run on every PR. 180 SQL migrations on disk. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + observability setup in `docs/DEPLOYMENT.md`. Per-session shipped history lives in `docs/RESOLVED.md`.
+**Phase 13 (Production Readiness) in progress.** 2,675 backend + 1,031 dashboard + 1,498 agent tests passing (latest verified 2026-08-11 against real test_db / vitest). 29 top-level route modules under `src/routes/` (+ the `agentTools/` module dir). 38 Playwright e2e spec files run on every PR. 180 SQL migrations on disk. Zero TS errors across backend / agent / dashboard. Coverage breakdown in `docs/TEST_COVERAGE.md`; security posture in `docs/SECURITY.md`; Railway + observability setup in `docs/DEPLOYMENT.md`. Per-session shipped history lives in `docs/RESOLVED.md`.
 
 **Legal-hold — do NOT merge/enable without owner + legal sign-off:** PR #68 (`POST /customers/:id/purge`, single-customer GDPR/CCPA erasure, kill-switch `ENABLE_CUSTOMER_PURGE`) and PR #69 (automated data-retention worker, `ENABLE_RETENTION_WORKER` + explicit `RETENTION_DAYS`). Both erase PII irreversibly and are inert until enabled. Branches deleted 2026-06-23; restorable from the PR pages. See `docs/TODO.md` → Legal-hold.
 
