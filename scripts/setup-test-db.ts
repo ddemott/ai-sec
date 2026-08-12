@@ -7,7 +7,7 @@
  *
  * - Creates 'test_db' if it does not exist (using superuser on the postgres DB).
  * - Runs ALL migrations from supabase/migrations/ *lexically* up to and
- *   including 20260724000100_app_user_role.sql as the superuser.
+ *   including 20260812000100_tenant_checklist_preset_id.sql as the superuser.
  * - Ensures the app_user role exists with NOBYPASSRLS (the migration does this;
  *   we re-assert it for safety).
  * - Verifies the role cannot bypass RLS.
@@ -31,7 +31,7 @@ import { Client } from 'pg';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const TARGET_MIGRATION = '20260724000100_app_user_role.sql';
+const TARGET_MIGRATION = '20260812000100_tenant_checklist_preset_id.sql';
 const ROOT_DIR = path.resolve(__dirname, '..');
 const MIGRATIONS_DIR = path.join(ROOT_DIR, 'supabase/migrations');
 
@@ -222,7 +222,7 @@ async function main() {
 
     console.log('\n[setup-test-db] SUCCESS: test_db is ready for RLS tests.');
     console.log('  - test_db exists');
-    console.log('  - migrations up to app_user_role.sql applied');
+    console.log('  - migrations up to tenant_checklist_preset_id.sql applied');
     console.log('  - app_user role with NOBYPASSRLS ready');
     console.log('  - rlsIsolation.test.ts should now pass without role error.');
   } finally {

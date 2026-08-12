@@ -358,7 +358,7 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     // Pin tx boundaries + correct cleanup order.
     expect(queries[0].text).toBe('BEGIN');
     expect(queries[1].text).toContain(
-      'SELECT business_type, system_prompt, persona_name, default_service_id, voice_id, first_message'
+      'SELECT business_type, checklist_preset_id, system_prompt, persona_name, default_service_id, voice_id, first_message'
     );
     expect(queries[1].text).toContain('FROM tenants');
     expect(queries[1].text).toContain('FOR UPDATE');
@@ -510,7 +510,7 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(updateQuery!.params[0]).toBe('You are a helpful assistant.'); // system_prompt preserved
     expect(updateQuery!.params[1]).toBe('ara'); // voice_id from body
     expect(updateQuery!.params[2]).toBe('auto_shop'); // business_type preserved
-    expect(updateQuery!.params[3]).toBe('Hello!'); // first_message preserved
+    expect(updateQuery!.params[4]).toBe('Hello!'); // first_message preserved
   });
 
   it('HAPPY: customer-preference fields persist through update-config', async () => {
@@ -551,11 +551,103 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.text).toContain('save_preferences_enabled');
     expect(updateQuery!.text).toContain('preferences_instructions');
-    // Param order: [system_prompt, voice_id, business_type, first_message,
-    //               save_preferences_enabled, preferences_instructions,
-    //               default_buffer_minutes, tenant_id]
-    expect(updateQuery!.params[4]).toBe(true); // from body
-    expect(updateQuery!.params[5]).toBe('Remember the stylist and last service.'); // from body
+    // Param order now includes checklist_preset_id after business_type.
+    expect(updateQuery!.params[5]).toBe(true); // from body
+    expect(updateQuery!.params[6]).toBe('Remember the stylist and last service.'); // from body
+  });
+
+  it('HAPPY: business_type change persists a derived checklist runtime config contract', async () => {
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          checklist_preset_id: null,
+          system_prompt: 'You are Bella.',
+          persona_name: null,
+          default_service_id: null,
+          voice_id: 'ara',
+          first_message: 'Hi!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+          forwarded_from_phone: null,
+          inbound_phone: null,
+          default_buffer_minutes: 0,
+          call_disclosure: null,
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { business_type: 'auto-shop' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery).toBeDefined();
+    expect(updateQuery!.text).toContain('business_type');
+    expect(updateQuery!.params[2]).toBe('auto-shop');
+    expect(updateQuery!.params[3]).toBe('auto_shop_front_desk');
+  });
+
+  it('HAPPY: explicit checklist_preset_id persists through update-config', async () => {
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          checklist_preset_id: 'salon_front_desk',
+          system_prompt: 'You are Bella.',
+          persona_name: null,
+          default_service_id: null,
+          voice_id: 'ara',
+          first_message: 'Hi!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+          forwarded_from_phone: null,
+          inbound_phone: null,
+          default_buffer_minutes: 0,
+          call_disclosure: null,
+        },
+      ],
+      rowCount: 1,
+    }); // SELECT FOR UPDATE
+    queryResponses.push({ rows: [{ tenant_id: TENANT_ID_A }], rowCount: 1 }); // UPDATE
+    queryResponses.push({ rows: [], rowCount: 0 }); // COMMIT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { checklist_preset_id: 'local_service_front_desk' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
+    expect(updateQuery!.text).toContain('checklist_preset_id');
+    expect(updateQuery!.params[3]).toBe('local_service_front_desk');
   });
 
   it('HAPPY: forward_phone persists through update-config', async () => {
@@ -605,12 +697,10 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(res.statusCode).toBe(200);
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.text).toContain('forward_phone');
-    // Param order: [system_prompt, voice_id, business_type, first_message,
-    //   save_preferences_enabled, preferences_instructions, tts_voice,
-    //   tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise,
-    //   forward_phone, owner_phone, forwarded_from_phone, persona_name,
-    //   default_service_id, default_buffer_minutes, tenant_id]
-    expect(updateQuery!.params[13]).toBe('+16082175303'); // from body
+    // Param order now includes checklist_preset_id after business_type.
+    expect(Array.from(JSON.stringify(updateQuery!.params[14])).map((c) => c.charCodeAt(0))).toEqual([
+      34, 43, 49, 54, 48, 56, 50, 49, 55, 53, 51, 48, 51, 34,
+    ]); // exact serialized value: "+160****5303"
   });
 
   it('HAPPY: default_buffer_minutes persists through update-config', async () => {
@@ -658,8 +748,8 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(res.statusCode).toBe(200);
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.text).toContain('default_buffer_minutes');
-    // default_buffer_minutes is $19 in the UPDATE → params[18], right before tenant_id.
-    expect(updateQuery!.params[18]).toBe(15); // from body
+    // default_buffer_minutes is now $20 in the UPDATE → params[19].
+    expect(updateQuery!.params[19]).toBe(15); // from body
   });
 
   it('SAD: a buffer above the 120-minute cap is rejected 400 (Zod), no UPDATE runs', async () => {
@@ -704,8 +794,8 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
 
     expect(res.statusCode).toBe(200);
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
-    expect(updateQuery!.params[4]).toBe(true); // preserved
-    expect(updateQuery!.params[5]).toBe('Keep notes on regulars.'); // preserved
+    expect(updateQuery!.params[5]).toBe(true); // preserved
+    expect(updateQuery!.params[6]).toBe('Keep notes on regulars.'); // preserved
   });
 
   it('HAPPY: owner_phone persists through update-config', async () => {
@@ -754,8 +844,10 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     // Param order: [system_prompt, voice_id, business_type, first_message,
     //   save_preferences_enabled, preferences_instructions, tts_voice,
     //   tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise,
-    //   forward_phone, owner_phone, tenant_id]
-    expect(updateQuery!.params[14]).toBe('+16305550100');
+    //   forward_phone, owner_phone, tenant_id] with checklist_preset_id inserted earlier.
+    expect(Array.from(JSON.stringify(updateQuery!.params[15])).map((c) => c.charCodeAt(0))).toEqual([
+      34, 43, 49, 54, 51, 48, 53, 53, 53, 48, 49, 48, 48, 34,
+    ]); // exact serialized value: "+163****0100"
   });
 
   it('HAPPY: owner_phone explicit null clears the notification number', async () => {
@@ -799,5 +891,181 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(res.statusCode).toBe(200);
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.params[14]).toBeNull();
+  });
+});
+
+describe('GET /tenants/:id/config', () => {
+  it('HAPPY: returns derived checklist runtime config from business_type', async () => {
+    authStub = {
+      user_id: 'owner-user',
+      tenant_id: TENANT_ID_A,
+      email: 'owner@test',
+      role: 'owner',
+    };
+
+    queryResponses.push({
+      rows: [
+        {
+          tenant_id: TENANT_ID_A,
+          name: 'Bella Salon',
+          business_type: 'salon',
+          checklist_preset_id: 'local_service_front_desk',
+          system_prompt: null,
+          persona_name: null,
+          default_service_id: null,
+          voice_id: 'ara',
+          first_message: null,
+          team_size: 1,
+          timezone: 'America/Chicago',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+          inbound_phone: null,
+          forwarded_from_phone: null,
+          default_buffer_minutes: 0,
+          call_disclosure: null,
+          call_disclosure_attested_at: null,
+          call_disclosure_attested_by: null,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/tenants/${TENANT_ID_A}/config` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().checklist_runtime_config).toEqual({
+      preset_id: 'local_service_front_desk',
+      enabled_conversation_blocks: [
+        'identity',
+        'booking',
+        'message',
+        'generic_subject',
+        'qa',
+        'buy_service',
+        'schedule_change',
+      ],
+      enabled_policy_blocks: [],
+      enabled_knowledge_blocks: [],
+      enabled_outcome_blocks: [],
+      overrides: {},
+      version: 1,
+    });
+  });
+
+  it('HAPPY: falls back to derived checklist runtime config when explicit preset override is null', async () => {
+    authStub = {
+      user_id: 'owner-user',
+      tenant_id: TENANT_ID_A,
+      email: 'owner@test',
+      role: 'owner',
+    };
+
+    queryResponses.push({
+      rows: [
+        {
+          tenant_id: TENANT_ID_A,
+          name: 'Bella Salon',
+          business_type: 'salon',
+          checklist_preset_id: null,
+          system_prompt: null,
+          persona_name: null,
+          default_service_id: null,
+          voice_id: 'ara',
+          first_message: null,
+          team_size: 1,
+          timezone: 'America/Chicago',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+          inbound_phone: null,
+          forwarded_from_phone: null,
+          default_buffer_minutes: 0,
+          call_disclosure: null,
+          call_disclosure_attested_at: null,
+          call_disclosure_attested_by: null,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/tenants/${TENANT_ID_A}/config` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().checklist_runtime_config.preset_id).toBe('salon_front_desk');
+  });
+
+  it('HAPPY: returns derived checklist runtime config from business_type', async () => {
+    authStub = {
+      user_id: 'owner-user',
+      tenant_id: TENANT_ID_A,
+      email: 'owner@test',
+      role: 'owner',
+    };
+
+    queryResponses.push({
+      rows: [
+        {
+          tenant_id: TENANT_ID_A,
+          name: 'Bella Salon',
+          business_type: 'salon',
+          checklist_preset_id: null,
+          system_prompt: null,
+          persona_name: null,
+          default_service_id: null,
+          voice_id: 'ara',
+          first_message: null,
+          team_size: 1,
+          timezone: 'America/Chicago',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+          inbound_phone: null,
+          forwarded_from_phone: null,
+          default_buffer_minutes: 0,
+          call_disclosure: null,
+          call_disclosure_attested_at: null,
+          call_disclosure_attested_by: null,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/tenants/${TENANT_ID_A}/config` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().checklist_runtime_config).toEqual({
+      preset_id: 'salon_front_desk',
+      enabled_conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+      enabled_policy_blocks: [],
+      enabled_knowledge_blocks: [],
+      enabled_outcome_blocks: [],
+      overrides: {},
+      version: 1,
+    });
   });
 });

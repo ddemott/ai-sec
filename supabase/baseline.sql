@@ -3604,6 +3604,7 @@ CREATE TABLE public.tenants (
     job_inquiry_email text,
     forwarded_from_phone text,
     default_service_id uuid,
+    checklist_preset_id text,
     persona_name text,
     call_disclosure text,
     call_disclosure_attested_at timestamp with time zone,
@@ -3666,6 +3667,13 @@ COMMENT ON COLUMN public.tenants.preferences_instructions IS 'Owner-authored gui
 --
 
 COMMENT ON COLUMN public.tenants.default_buffer_minutes IS 'Minutes of gap the AI must leave between back-to-back bookings (applied symmetrically around each existing appointment at every availability + booking surface). Default 0 = no buffer (current behavior). AI/customer-facing bookings only; owner manual dashboard bookings are unrestricted.';
+
+
+--
+-- Name: COLUMN tenants.checklist_preset_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.checklist_preset_id IS 'Optional explicit checklist preset override. NULL = derive from business_type.';
 
 
 --

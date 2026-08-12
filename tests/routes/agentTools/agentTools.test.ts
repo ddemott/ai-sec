@@ -393,6 +393,23 @@ describe('agentTools /tenant-config', () => {
       // default; the alternative is the model inventing an answer, and it
       // invented "call Dale on this same number" on a real call.
       booking_mechanics: null,
+      checklist_runtime_config: {
+        preset_id: 'local_service_front_desk',
+        enabled_conversation_blocks: [
+          'identity',
+          'booking',
+          'message',
+          'generic_subject',
+          'qa',
+          'buy_service',
+          'schedule_change',
+        ],
+        enabled_policy_blocks: [],
+        enabled_knowledge_blocks: [],
+        enabled_outcome_blocks: [],
+        overrides: {},
+        version: 1,
+      },
       // The roster the agent checks a caller-named person against. The mock
       // pool returns no employee rows, so the list is empty — and an empty
       // roster must render NO roster line rather than an empty one.
@@ -419,6 +436,60 @@ describe('agentTools /tenant-config', () => {
     });
     const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
     expect(res.json().result.system_prompt).toBe(customText);
+  });
+
+  it('HAPPY: derives checklist preset runtime config from business_type for the agent', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              name: 'Bella Salon',
+              timezone: 'America/Chicago',
+              business_type: 'salon',
+              checklist_preset_id: null,
+              system_prompt: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.checklist_runtime_config).toEqual({
+      preset_id: 'salon_front_desk',
+      enabled_conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+      enabled_policy_blocks: [],
+      enabled_knowledge_blocks: [],
+      enabled_outcome_blocks: [],
+      overrides: {},
+      version: 1,
+    });
+  });
+
+  it('HAPPY: explicit checklist preset override beats business_type derivation for the agent', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            {
+              name: 'Bella Salon',
+              timezone: 'America/Chicago',
+              business_type: 'salon',
+              checklist_preset_id: 'local_service_front_desk',
+              system_prompt: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    const res = await post(app, '/agent-tools/tenant-config', { tenant_id: TENANT_ID });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.checklist_runtime_config.preset_id).toBe('local_service_front_desk');
   });
 
   it('HAPPY: null timezone falls back to America/Chicago', async () => {
@@ -469,6 +540,23 @@ describe('agentTools /tenant-config', () => {
       business_hours: null,
       bookable_through: null,
       booking_mechanics: null,
+      checklist_runtime_config: {
+        preset_id: 'local_service_front_desk',
+        enabled_conversation_blocks: [
+          'identity',
+          'booking',
+          'message',
+          'generic_subject',
+          'qa',
+          'buy_service',
+          'schedule_change',
+        ],
+        enabled_policy_blocks: [],
+        enabled_knowledge_blocks: [],
+        enabled_outcome_blocks: [],
+        overrides: {},
+        version: 1,
+      },
       staff_first_names: [],
     });
   });

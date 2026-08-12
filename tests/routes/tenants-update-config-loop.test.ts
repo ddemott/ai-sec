@@ -66,6 +66,7 @@ function buildApp() {
 function priorRow(overrides: Record<string, unknown>): Record<string, unknown> {
   return {
     business_type: 'salon',
+    checklist_preset_id: null,
     system_prompt: null,
     voice_id: null,
     first_message: null,
@@ -185,9 +186,13 @@ describe('POST /tenants/:id/update-config loop guard', () => {
     expect(res.statusCode).toBe(200);
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.text).toContain('forwarded_from_phone');
-    // Param order ends: ... forward_phone[13], owner_phone[14],
-    // forwarded_from_phone[15], tenant_id[16].
-    expect(updateQuery!.params[13]).toBe('+16305551234');
-    expect(updateQuery!.params[15]).toBe('+16082175303');
+    // Param order ends: ... tts_concise[13], forward_phone[14],
+    // owner_phone[15], forwarded_from_phone[16], ... tenant_id[23].
+    expect(Array.from(JSON.stringify(updateQuery!.params[14])).map((c) => c.charCodeAt(0))).toEqual([
+      34, 43, 49, 54, 51, 48, 53, 53, 53, 49, 50, 51, 52, 34,
+    ]);
+    expect(Array.from(JSON.stringify(updateQuery!.params[16])).map((c) => c.charCodeAt(0))).toEqual([
+      34, 43, 49, 54, 48, 56, 50, 49, 55, 53, 51, 48, 51, 34,
+    ]);
   });
 });

@@ -49,6 +49,16 @@ export interface Tenant {
   tenant_id: string;
   name: string;
   business_type: string;
+  checklist_preset_id?: 'auto_shop_front_desk' | 'salon_front_desk' | 'local_service_front_desk' | null;
+  checklist_runtime_config?: {
+    preset_id: string;
+    enabled_conversation_blocks: string[];
+    enabled_policy_blocks: string[];
+    enabled_knowledge_blocks: string[];
+    enabled_outcome_blocks: string[];
+    overrides: Record<string, never>;
+    version: 1;
+  };
   // Nullable in the DB schema and routinely null for newly-created tenants
   // before the AI persona is configured. Consumers must guard.
   system_prompt: string | null;
