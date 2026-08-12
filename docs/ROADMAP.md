@@ -1,6 +1,6 @@
 # ROADMAP
 
-**Status:** active execution. Initial block/compiler + generic-intake checkpoint, first `job_inquiry` projector split, and second reusable intake path proof are implemented; rollout steps beyond that remain open. **Date:** 2026-08-12. **Owner:** Dale.
+**Status:** active execution. Initial block/compiler + generic-intake checkpoint, first `job_inquiry` projector split, second reusable intake path proof, and first real preset-catalog slice are implemented; rollout steps beyond that remain open. **Date:** 2026-08-12. **Owner:** Dale.
 
 This roadmap turns the vertical-preset/block architecture into an execution sequence. It is intentionally ordered by risk: prove the architecture against the current live runtime before widening scope.
 
@@ -39,10 +39,12 @@ Implemented and verified in this checkpoint:
 - Step 4 generic intake envelope: `supabase/migrations/20260811160000_intake_submissions.sql` created `intake_submissions`, and `capture-job-inquiry` now writes that envelope before the specialized `job_inquiries` row
 - Step 5 first projector split: `src/services/jobInquiryCapture.ts` now owns generic capture + `job_inquiry` projection persistence while `src/routes/agentTools/messaging.ts` keeps validation / spoken reply / email side effects; route, route-unit, and real-DB tests pass against the split path
 - Step 6 second reusable path proof: `src/services/meetingNotesCapture.ts` now lands `attach-meeting-notes` into the same generic `intake_submissions` envelope with `submission_type='meeting_notes'` before projecting to appointment description, and route + service tests pass against that split path
+- Step 7 first preset-catalog slice: `agent/src/checklist/presets.ts` now defines `auto_shop_front_desk`, `salon_front_desk`, and `local_service_front_desk`; `agent/src/checklist/blockLibrary.ts` now exposes the additional live conversation-block wrappers those presets need; `agent/src/checklist/presetCatalog.test.ts` proves schema validation, lookup, runtime materialization, and compile-to-live-tree behavior for all three presets
 
 Still open after this checkpoint:
 
-- real business-type preset definitions and onboarding wiring
+- preset-specific call-path coverage beyond compile/runtime tests
+- onboarding wiring for preset selection
 - tenant-safe override UI and activation controls
 
 ---
@@ -228,6 +230,10 @@ Result:
 
 ### Step 7 — Define first three vertical presets
 
+Status:
+
+- first implementation slice shipped and verified on 2026-08-12
+
 Goal:
 
 - turn primitives into product-ready starting points
@@ -252,6 +258,20 @@ Exit criteria:
 - each preset validates
 - each preset has one example tenant runtime config
 - each preset has at least one call-path test
+
+What shipped in the first slice:
+
+- `agent/src/checklist/presets.ts` defines:
+  - `auto_shop_front_desk`
+  - `salon_front_desk`
+  - `local_service_front_desk`
+- `agent/src/checklist/blockLibrary.ts` now exposes reusable wrappers for additional already-live trees used by those presets (`generic_subject`, `qa`, `buy_service`, `schedule_change`, `fix_computer`)
+- `agent/src/checklist/presetCatalog.test.ts` verifies preset catalog shape, lookup, runtime materialization, and compile-to-live-tree ids
+
+Still open inside Step 7:
+
+- richer per-vertical blocks beyond current live-tree wrappers
+- preset-specific call-path tests proving user journeys, not just compile/runtime selection
 
 ---
 
@@ -431,10 +451,10 @@ Why this phase exists:
 
 Remaining immediate order from the current checkpoint:
 
-1. onboard a second reusable path through the same compiler/runtime shape
-2. define the first three real vertical presets
-3. wire preset selection into setup/onboarding
-4. add tenant-safe overrides and preview/activation guardrails
+1. add preset-specific call-path tests for auto shop, salon, and local-service behavior
+2. wire preset selection into setup/onboarding
+3. add tenant-safe overrides and preview/activation guardrails
+4. widen block depth where current presets still rely on generic live-tree wrappers
 
 ---
 

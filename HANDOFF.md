@@ -6,8 +6,8 @@ Read this first after session reset.
 
 - Repo: `/home/dale/projects/secretary-hq`
 - Branch: `main`
-- Latest merged checkpoint: PR #329 — `feat: add preset compiler and generic intake capture`
-- Merge commit: `0236179c4a4ecc7ea58f806878932b9fc35f85eb`
+- Latest merged checkpoint: PR #331 — `feat: prove second reusable intake path`
+- Merge commit: `b5403fbe2406cc186a73c1dbb3d037ebde65b2a7`
 
 ## What just landed
 
@@ -15,18 +15,19 @@ Code + schema
 
 - checklist preset/runtime foundation under `agent/src/checklist/`
 - generic intake envelope + RLS via `supabase/migrations/20260811160000_intake_submissions.sql`
-- `capture-job-inquiry` now writes `intake_submissions` before `job_inquiries`
+- `src/services/jobInquiryCapture.ts` now owns generic capture plus `job_inquiry` projection persistence
+- `src/services/meetingNotesCapture.ts` proves a second reusable intake path by writing `submission_type='meeting_notes'` into `intake_submissions` before projecting to the appointment description
 
 Docs
 
-- roadmap + architecture/spec docs for the vertical preset/block runtime
-- repo-wide factual count sync for migrations, test totals, and backend route-module count
+- roadmap + architecture/spec docs for the vertical preset/block runtime now reflect Steps 1–6 through the second-path proof
+- repo-wide factual count sync for migrations, test totals, and backend route-module count remains in place from the prior doc sweep
 
 ## Verified facts
 
-- PR #329 merged successfully
-- local branch `feat/vertical-preset-runtime-intake` deleted
-- remote branch `feat/vertical-preset-runtime-intake` deleted
+- PR #331 merged successfully on 2026-08-12
+- there are currently no open PRs
+- current remotes/branches present now: `main`, `origin/main`, `origin/feat/second-intake-path-proof`
 - current branch tracks `origin/main`
 - backend route modules under `src/routes/`: 29 (plus the `agentTools/` module dir wired from `src/index.ts`)
 - SQL migrations on disk: 180

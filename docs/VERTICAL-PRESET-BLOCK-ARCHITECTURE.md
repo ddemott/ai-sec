@@ -1,6 +1,6 @@
 # VERTICAL-PRESET-BLOCK-ARCHITECTURE
 
-**Status:** phases 1-4 checkpoint implemented and verified; wider preset rollout still in progress. **Date:** 2026-08-12. **Owner:** Dale.
+**Status:** phases 1-4 checkpoint, second reusable-path proof, and first preset-catalog slice are implemented and verified; wider preset rollout still in progress. **Date:** 2026-08-12. **Owner:** Dale.
 
 **The ask:** turn the current one-off call flows into configurable, reusable building blocks that can be pre-packaged by business type. An auto shop should start with an auto-shop-ready set of blocks; a salon should start with salon-ready blocks; both should still be built from the same reusable primitives so the platform does not decay into twenty bespoke scripts.
 
@@ -31,8 +31,11 @@ The first real slice is now in the repo and verified:
 - `src/services/jobInquiryCapture.ts` now owns the generic capture + `job_inquiry` projection write while `src/routes/agentTools/messaging.ts` stays the route shell
 - `src/services/meetingNotesCapture.ts` now proves a second reusable path by writing `submission_type='meeting_notes'` into `intake_submissions` before projecting to the appointment description
 - `supabase/migrations/20260811160000_intake_submissions.sql` adds the generic table with FORCE RLS and repo-standard tenant/admin policies
+- `agent/src/checklist/presets.ts` now defines the first three real preset bundles: `auto_shop_front_desk`, `salon_front_desk`, and `local_service_front_desk`
+- `agent/src/checklist/blockLibrary.ts` now exposes the additional already-live conversation-block wrappers those presets compile through (`generic_subject`, `qa`, `buy_service`, `schedule_change`, `fix_computer`)
+- `agent/src/checklist/presetCatalog.test.ts` now proves preset validation, lookup, runtime materialization, and compile-to-live-tree behavior for all three presets
 
-What is **not** done yet: real business-type preset definitions, setup/onboarding preset selection, and tenant-safe preset editing.
+What is **not** done yet: preset-specific call-path coverage beyond compile/runtime tests, setup/onboarding preset selection, and tenant-safe preset editing.
 
 ---
 
