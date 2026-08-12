@@ -170,10 +170,10 @@ describe('the work-direction gate — declared axis checked against the selectio
   // The gate turns that prompt hope into a deterministic host-side bounce.
   it('SAD: job + buy_service together is refused outright', async () => {
     const { toolkit, tracker } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_pays_us',
       trees: ['job', 'buy_service'],
-    })) as string;
+    });
     expect(out).toMatch(/REFUSED/);
     expect(out).toMatch(/looking to hire him|which it is/i); // names the next step
     expect(tracker.selectedTrees()).toEqual([]); // nothing selected on a bounce
@@ -181,10 +181,10 @@ describe('the work-direction gate — declared axis checked against the selectio
 
   it('SAD: caller_pays_us + job contradicts and bounces', async () => {
     const { toolkit, tracker } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_pays_us',
       trees: ['identity', 'job'],
-    })) as string;
+    });
     expect(out).toMatch(/REFUSED/);
     expect(out).toMatch(/buy_service/); // points at the likely-right tree
     expect(tracker.selectedTrees()).toEqual([]);
@@ -192,10 +192,10 @@ describe('the work-direction gate — declared axis checked against the selectio
 
   it('SAD: caller_offers_owner_work + buy_service contradicts and bounces', async () => {
     const { toolkit, tracker } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_offers_owner_work',
       trees: ['buy_service'],
-    })) as string;
+    });
     expect(out).toMatch(/REFUSED/);
     expect(out).toMatch(/select job/);
     expect(tracker.selectedTrees()).toEqual([]);
@@ -203,10 +203,10 @@ describe('the work-direction gate — declared axis checked against the selectio
 
   it('SAD: unclear direction may not pick either confusable tree — ask first', async () => {
     const { toolkit, tracker } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'neither_or_unclear',
       trees: ['job'],
-    })) as string;
+    });
     expect(out).toMatch(/REFUSED/);
     expect(out).toMatch(/clarifying question/i);
     expect(tracker.selectedTrees()).toEqual([]);
@@ -216,20 +216,20 @@ describe('the work-direction gate — declared axis checked against the selectio
     // A message or a question has no work-direction stakes — unclear must not
     // paralyze the whole selection, only the confusable pair.
     const { toolkit, tracker } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'neither_or_unclear',
       trees: ['identity', 'message'],
-    })) as string;
+    });
     expect(out).not.toMatch(/REFUSED/);
     expect(tracker.selectedTrees()).toContain('message');
   });
 
   it('HAPPY: a consistent declaration passes straight through', async () => {
     const { toolkit, tracker } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_pays_us',
       trees: ['identity', 'buy_service', 'booking'],
-    })) as string;
+    });
     expect(out).not.toMatch(/REFUSED/);
     expect(tracker.selectedTrees()).toContain('buy_service');
   });
@@ -247,30 +247,30 @@ describe('the work-direction gate — declared axis checked against the selectio
     //      role behind it. The gate blocks contradictions; this nudge covers the
     //      omission, in the tool result the model actually re-reads.
     const { toolkit } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_offers_owner_work',
       trees: ['identity', 'booking'],
-    })) as string;
+    });
     expect(out).toMatch(/job tree is not selected/i);
     expect(out).toMatch(/ADD job/);
   });
 
   it('HAPPY: the nudge is silent once job IS selected', async () => {
     const { toolkit } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_offers_owner_work',
       trees: ['identity', 'job', 'booking'],
-    })) as string;
+    });
     expect(out).not.toMatch(/job tree is not selected/i);
   });
 
   it('HAPPY: the nudge never fires on the other directions', async () => {
     // A buyer or a message-leaver without job selected is CORRECT, not an omission.
     const { toolkit } = makeKit();
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_pays_us',
       trees: ['identity', 'buy_service'],
-    })) as string;
+    });
     expect(out).not.toMatch(/job tree is not selected/i);
   });
 
@@ -284,10 +284,10 @@ describe('the work-direction gate — declared axis checked against the selectio
         trees: ['job'],
       });
     }
-    const out = (await call(toolkit.selectedTools(), 'set_purpose', {
+    const out = await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_pays_us',
       trees: ['identity', 'buy_service'],
-    })) as string;
+    });
     expect(out).not.toMatch(/purpose has changed enough/i);
     expect(tracker.selectedTrees()).toContain('buy_service');
   });

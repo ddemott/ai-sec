@@ -221,7 +221,7 @@ export function attachOutputWatchdog(
     if (session.agentState === 'speaking') {
       if (fillerHandle && !fillerDone) {
         try {
-          fillerHandle.interrupt();
+          void fillerHandle.interrupt();
         } catch {
           /* not interruptible — let it play, it's short */
         }
@@ -498,7 +498,7 @@ export function attachCallerSilenceWatch(
       { event: 'caller_silence_give_up' },
       'caller stayed silent after the check-in — closing the call rather than holding an empty line'
     );
-    opts.onGiveUp();
+    void opts.onGiveUp();
   };
 
   const checkIn = () => {
@@ -507,7 +507,7 @@ export function attachCallerSilenceWatch(
     try {
       // addToChatCtx:false for the same reason the hold lines are: this is the
       // RUNTIME speaking, not a turn the model should reason about later.
-      session.say(opts.checkInText, { allowInterruptions: true, addToChatCtx: false });
+      void session.say(opts.checkInText, { allowInterruptions: true, addToChatCtx: false });
       opts.onSpoken?.(opts.checkInText);
       opts.log.info(
         { event: 'caller_silence_check_in' },

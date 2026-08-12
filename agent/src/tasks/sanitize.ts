@@ -13,8 +13,11 @@ export function sanitizeVolunteered(
   maxLen: number
 ): string | undefined {
   if (!value) return undefined;
-  const flat = value
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+  const withoutControls = Array.from(value, (ch) => {
+    const code = ch.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f ? ' ' : ch;
+  }).join('');
+  const flat = withoutControls
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, maxLen)
