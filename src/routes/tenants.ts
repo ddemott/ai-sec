@@ -315,11 +315,15 @@ export function registerTenantRoutes(
             body.voice_id !== undefined ? body.voice_id : (prior?.voice_id ?? null);
           const finalBusinessType =
             body.business_type !== undefined ? body.business_type : priorBusinessType;
+          const priorPresetWasDerived =
+            priorChecklistPresetId === defaultChecklistPresetIdForBusinessType(priorBusinessType);
           const finalChecklistPresetId =
             body.checklist_preset_id !== undefined
               ? body.checklist_preset_id
               : body.business_type !== undefined && body.business_type !== priorBusinessType
-                ? defaultChecklistPresetIdForBusinessType(body.business_type)
+                ? priorChecklistPresetId === null || priorPresetWasDerived
+                  ? defaultChecklistPresetIdForBusinessType(body.business_type)
+                  : priorChecklistPresetId
                 : priorChecklistPresetId;
           const finalFirstMessage =
             body.first_message !== undefined ? body.first_message : (prior?.first_message ?? null);

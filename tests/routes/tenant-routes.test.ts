@@ -895,7 +895,7 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
 });
 
 describe('GET /tenants/:id/config', () => {
-  it('HAPPY: returns derived checklist runtime config from business_type', async () => {
+  it('HAPPY: returns explicit checklist runtime override when checklist_preset_id is set', async () => {
     authStub = {
       user_id: 'owner-user',
       tenant_id: TENANT_ID_A,
@@ -907,8 +907,8 @@ describe('GET /tenants/:id/config', () => {
       rows: [
         {
           tenant_id: TENANT_ID_A,
-          name: 'Bella Salon',
-          business_type: 'salon',
+          name: 'Dynatire',
+          business_type: 'auto-shop',
           checklist_preset_id: 'local_service_front_desk',
           system_prompt: null,
           persona_name: null,
@@ -1011,7 +1011,7 @@ describe('GET /tenants/:id/config', () => {
     expect(res.json().checklist_runtime_config.preset_id).toBe('salon_front_desk');
   });
 
-  it('HAPPY: returns derived checklist runtime config from business_type', async () => {
+  it('HAPPY: derives checklist runtime config from business_type when preset override is null', async () => {
     authStub = {
       user_id: 'owner-user',
       tenant_id: TENANT_ID_A,
