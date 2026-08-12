@@ -1407,10 +1407,15 @@ describe('agentTools /attach-meeting-notes', () => {
 
   it("HAPPY: appends the caller's note to the appointment description", async () => {
     // WHO: the meeting-goals rung's one wrap-up question, answered.
-    // WHAT: UPDATE appends "Caller notes: …" to description and returns the id, which is
-    //        the rung's completion signal (idExtractor on appointment_id).
+    // WHAT: first checks for an existing meeting_notes envelope for this appointment/note,
+    //        then INSERTs when absent, then appends "Caller notes: …" to description.
     const { app, queries } = buildApp({
-      queryResponses: [{ rows: [{ appointment_id: APPT }] }],
+      queryResponses: [
+        { rows: [{ appointment_id: APPT, description: '' }] },
+        { rows: [] },
+        { rows: [{ submission_id: 'sub-note-1' }] },
+        { rows: [{ appointment_id: APPT }], rowCount: 1 },
+      ],
     });
     const res = await post(app, '/agent-tools/attach-meeting-notes', {
       tenant_id: TENANT_ID,
@@ -1422,9 +1427,12 @@ describe('agentTools /attach-meeting-notes', () => {
       success: true,
       result: { appointment_id: APPT },
     });
-    expect(queries[0].text).toContain('UPDATE appointments');
-    expect(queries[0].text).toContain('description');
-    expect(queries[0].params[2]).toBe('Caller notes: bring the contract paperwork');
+    expect(queries[1].text).toContain('SELECT submission_id FROM intake_submissions');
+    expect(queries[2].text).toContain('INSERT INTO intake_submissions');
+    expect(queries[2].params[2]).toBe('meeting_notes');
+    expect(queries[3].text).toContain('UPDATE appointments');
+    expect(queries[3].text).toContain('description');
+    expect(queries[3].params[2]).toBe('Caller notes: bring the contract paperwork');
   });
 
   it('HAPPY: a multi-line note is flattened to one line before stamping', async () => {
@@ -1433,7 +1441,11 @@ describe('agentTools /attach-meeting-notes', () => {
     //        line-by-line, so a newline inside the note would spill the remainder into
     //        the service headline (and the edit panel's service field).
     const { app, queries } = buildApp({
-      queryResponses: [{ rows: [{ appointment_id: APPT }] }],
+      queryResponses: [
+        { rows: [{ appointment_id: APPT }] },
+        { rows: [{ submission_id: 'sub-note-2' }] },
+        { rows: [{ appointment_id: APPT }], rowCount: 1 },
+      ],
     });
     const res = await post(app, '/agent-tools/attach-meeting-notes', {
       tenant_id: TENANT_ID,
@@ -1442,14 +1454,13 @@ describe('agentTools /attach-meeting-notes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
-    expect(queries[0].params[2]).toBe(
+    expect(queries[2].params[2]).toBe(
       'Caller notes: bring the contract paperwork and the rate sheet'
     );
   });
 
   it('SAD: unknown or deleted appointment → honest refusal, nothing reported saved', async () => {
-    // assertRowAffected-style honesty: a zero-row UPDATE must never read as success —
-    // the agent would tell the caller a note was saved that was not.
+    // assertRowAffected-style honesty: no live appointment means nothing lands.
     const { app } = buildApp({ queryResponses: [{ rows: [] }] });
     const res = await post(app, '/agent-tools/attach-meeting-notes', {
       tenant_id: TENANT_ID,
@@ -1459,6 +1470,25 @@ describe('agentTools /attach-meeting-notes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(false);
     expect(res.json().error).toMatch(/nothing was saved/i);
+  });
+
+  it('SAD: if the appointment vanishes after the intake save, the failure stays honest', async () => {
+    const { app } = buildApp({
+      queryResponses: [
+        { rows: [{ appointment_id: APPT, description: '' }] },
+        { rows: [{ submission_id: 'sub-note-race' }] },
+        { rows: [], rowCount: 0 },
+      ],
+    });
+    const res = await post(app, '/agent-tools/attach-meeting-notes', {
+      tenant_id: TENANT_ID,
+      appointment_id: APPT,
+      notes: 'bring the contract paperwork',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(false);
+    expect(res.json().error).toMatch(/saved the note for the owner/i);
+    expect(res.json().error).toMatch(/couldn't attach it to that meeting/i);
   });
 
   it('SAD: blank notes are rejected before any DB write', async () => {
@@ -2670,7 +2700,10 @@ describe('agentTools /book-with-scheduling', () => {
     const fallbackSlotsQuery = queries.find(
       (q) => q.text.includes('WITH grid_start AS') && q.params[2] === '45'
     );
-    expect(fallbackSlotsQuery, 'fallback availability search must keep 45-minute duration').toBeTruthy();
+    expect(
+      fallbackSlotsQuery,
+      'fallback availability search must keep 45-minute duration'
+    ).toBeTruthy();
   });
 
   it('SAD: missing RPC row falls back to NO_AVAILABILITY', async () => {
@@ -2851,7 +2884,7 @@ describe('agentTools pure-inquiry abandonment attribution', () => {
 });
 
 describe('agentTools /available-slots', () => {
-  it('THE LIVE BUG: the caller\'s OWN 2:30 is named as the reason, not invented as one', async () => {
+  it("THE LIVE BUG: the caller's OWN 2:30 is named as the reason, not invented as one", async () => {
     // WHO: Jaya, SCL_VcKTTgo4kS2v (2026-07-27, CALL_IMPROVEMENTS.md #8).
     // WHAT: she asked for 2:30; her own appointment occupied it; the model was
     //        handed a list with a hole and said "we can only book on the quarter
@@ -4062,7 +4095,7 @@ describe('agentTools customer persistence on booking failure', () => {
 });
 
 describe('agentTools /voice-session-start + /voice-session-end (call logging)', () => {
-  it('a SILENT call\'s anonymous phonebook entry is pruned at hang-up', async () => {
+  it("a SILENT call's anonymous phonebook entry is pruned at hang-up", async () => {
     // WHO: the robocall / wrong number that leaves a customer named literally
     //       "Caller" (CALL_IMPROVEMENTS.md #3).
     // WHAT: voice-session-end soft-deletes that row — but ONLY when the caller
@@ -4114,7 +4147,7 @@ describe('agentTools /voice-session-start + /voice-session-end (call logging)', 
     expect(counterValue('silent_hangups_total', { bucket: 'under_20s' })).toBe(before + 1);
   });
 
-  it('the runtime\'s OWN check-in and goodbye do not stop it counting', async () => {
+  it("the runtime's OWN check-in and goodbye do not stop it counting", async () => {
     // Batch F made the silence watchdog speak into the transcript, so a call
     // where nobody spoke now holds three assistant lines. The metric asks "did
     // the CALLER ever speak", and must not be fooled by our own voice.

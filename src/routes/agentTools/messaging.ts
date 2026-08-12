@@ -17,7 +17,6 @@ import {
   TakeMessageSchema,
 } from './schemas';
 import { ok, fail, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
-import { JOB_DETAILS_PREFIX, toStampText } from '../../../shared/callContext';
 import { normalizePhone, isValidPhone } from '../../services/phoneUtils';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal } from '../../services/metrics';
@@ -34,6 +33,9 @@ import {
   buildCancelLink,
   buildRescheduleLink,
 } from '../../services/communications/appointmentService';
+import { persistJobInquiryCapture, resolveJobCompanies } from '../../services/jobInquiryCapture';
+
+export { resolveJobCompanies } from '../../services/jobInquiryCapture';
 
 /**
  * Consent-gated SMS path for send-self-service-link. Same construction as
@@ -64,136 +66,6 @@ function buildSmsStack(pool: Pool) {
  * agency call): trust the model's flag, and if it says in-house, fill the missing name from
  * the one we have so neither column is NULL.
  */
-export function resolveJobCompanies(input: {
-  client_company?: string | null;
-  caller_company?: string | null;
-  represents_company?: boolean | null;
-}): {
-  clientCompany: string | null;
-  callerCompany: string | null;
-  representsCompany: boolean | null;
-} {
-  const clean = (s?: string | null): string | null =>
-    typeof s === 'string' && s.trim() !== '' ? s.trim() : null;
-  const cc = clean(input.client_company);
-  const ac = clean(input.caller_company);
-
-  // Both named → derive from equality (ignore the model's possibly-flipped boolean).
-  if (cc && ac) {
-    return {
-      clientCompany: cc,
-      callerCompany: ac,
-      representsCompany: cc.toLowerCase() === ac.toLowerCase(),
-    };
-  }
-
-  // In-house said once → both columns get the single company we have.
-  if (input.represents_company === true) {
-    const one = cc ?? ac;
-    return { clientCompany: one, callerCompany: one, representsCompany: true };
-  }
-
-  // Otherwise keep what we have; represents stays whatever the model reported (or null).
-  return {
-    clientCompany: cc,
-    callerCompany: ac,
-    representsCompany: input.represents_company ?? null,
-  };
-}
-
-/**
- * The one-line job summary stamped into the linked appointment's description, so the
- * owner opens the calendar entry and sees what the meeting is ABOUT without hunting
- * down the inquiry row. Skips whatever the caller never gave — a partial line beats a
- * row of blanks read as facts.
- */
-export function jobSummaryLine(
-  companies: {
-    clientCompany: string | null;
-    callerCompany: string | null;
-    representsCompany: boolean | null;
-  },
-  args: {
-    employment_type?: string;
-    role_description?: string;
-    rate_range?: string;
-    duration?: string;
-    location_type?: string;
-    address?: string;
-    timezone?: string;
-  }
-): string {
-  const bits: string[] = [];
-  // The role leads — it is WHAT the meeting is about; everything else qualifies it.
-  if (args.role_description) bits.push(args.role_description);
-  if (args.employment_type)
-    bits.push(
-      args.employment_type === 'contract'
-        ? 'contract'
-        : args.employment_type === 'contract_to_hire'
-          ? 'contract to hire'
-          : 'full time'
-    );
-  if (args.rate_range) bits.push(args.rate_range);
-  if (args.duration) bits.push(args.duration);
-  if (args.location_type) {
-    bits.push(
-      args.location_type === 'remote'
-        ? `remote${args.timezone ? ` (${args.timezone})` : ''}`
-        : `${args.location_type}${args.address ? ` at ${args.address}` : ''}`
-    );
-  }
-  // The two companies, kept apart exactly as the intake keeps them: where the work is,
-  // and who rang about it.
-  const company =
-    companies.representsCompany === false && companies.clientCompany
-      ? `work at ${companies.clientCompany}${companies.callerCompany ? ` via ${companies.callerCompany}` : ''}`
-      : companies.callerCompany
-        ? `with ${companies.callerCompany}`
-        : '';
-  const detail = [bits.join(', '), company].filter(Boolean).join(' — ');
-  return `${JOB_DETAILS_PREFIX}${toStampText(detail) || 'see the job inquiry record'}.`;
-}
-
-function buildJobIntakePayload(
-  companies: {
-    clientCompany: string | null;
-    callerCompany: string | null;
-    representsCompany: boolean | null;
-  },
-  args: {
-    caller_name: string;
-    callback_phone?: string;
-    employment_type?: string;
-    role_description?: string;
-    rate_range?: string;
-    duration?: string;
-    location_type?: string;
-    address?: string;
-    timezone?: string;
-    call_id?: string;
-    appointment_id?: string;
-  }
-): string {
-  return JSON.stringify({
-    schema_version: 1,
-    submission_type: 'job_inquiry',
-    caller_name: args.caller_name,
-    callback_phone: args.callback_phone ?? null,
-    caller_company: companies.callerCompany,
-    client_company: companies.clientCompany,
-    represents_company: companies.representsCompany,
-    employment_type: args.employment_type ?? null,
-    role_description: args.role_description ?? null,
-    rate_range: args.rate_range ?? null,
-    duration: args.duration ?? null,
-    location_type: args.location_type ?? null,
-    address: args.address ?? null,
-    timezone: args.timezone ?? null,
-    call_id: args.call_id ?? null,
-    appointment_id: args.appointment_id ?? null,
-  });
-}
 
 async function resolveJobInquiryRecipient(
   client: {
@@ -551,209 +423,35 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
       // out here so both the INSERT and the owner email use the same resolved values.
       const companies = resolveJobCompanies(args);
 
-      const row = await withTenantClient(args.tenant_id, async (client) => {
-        // Link to an existing customer if the callback number matches one. Non-fatal.
-        // IDEMPOTENT PER CALL. The job-intake rung retries this tool until it
-        // sees a job_inquiry_id — that is the rung contract (the completion IS
-        // the write). So a slow response is indistinguishable from a failed one
-        // to the agent, and on 2026-07-17 a hung owner-email held the response
-        // past the agent's 8s tool timeout: the rung retried four times and
-        // this route dutifully wrote FOUR identical inquiries and stamped the
-        // appointment four times. An ACTION-rung tool MUST be safe to retry:
-        // same call already captured an inquiry → hand back the existing id
-        // and do nothing else. The retry then completes the rung instead of
-        // duplicating the lead.
-        if (args.call_id) {
-          const existing = await client.query<{ job_inquiry_id: string }>(
-            `SELECT job_inquiry_id FROM job_inquiries
-              WHERE tenant_id = $1 AND call_id = $2
-              ORDER BY created_at ASC LIMIT 1`,
-            [args.tenant_id, args.call_id]
-          );
-          if (existing.rows[0]) {
-            const recipDup = await resolveJobInquiryRecipient(client, args.tenant_id);
-            return {
-              job_inquiry_id: existing.rows[0].job_inquiry_id,
-              recipient: recipDup.recipient,
-              ownerName: recipDup.ownerName,
-              duplicate: true,
-            };
-          }
-        }
-
-        // Same get-or-create as take-message. A job inquiry IS a lead — the row
-        // the owner calls back. Ashutosh (2026-07-22) reached the phonebook only
-        // because he also booked; an inquiry without a booking left nothing.
-        let customerId: string | null = null;
-        if (callbackPhone && isValidPhone(callbackPhone)) {
-          customerId = await getOrCreateCustomerByPhoneOnClient(
-            client,
-            args.tenant_id,
-            callbackPhone,
-            args.caller_name
-          );
-        }
-
-        // The meeting this inquiry was booked around. The id arrives from the agent
-        // RUNTIME (call-outcome tracker), never the model — so a miss here is a bug,
-        // not caller input. On a miss, save the inquiry UNLINKED rather than lose it:
-        // the row is the lead, the link is just context.
-        let appointmentId: string | null = null;
-        if (args.appointment_id) {
-          const appt = await client.query<{ appointment_id: string }>(
-            `SELECT appointment_id FROM appointments
-              WHERE tenant_id = $1 AND appointment_id = $2 AND is_deleted = false`,
-            [args.tenant_id, args.appointment_id]
-          );
-          appointmentId = appt.rows[0]?.appointment_id ?? null;
-          if (!appointmentId) {
-            errorsTotal.inc({ event: 'job_inquiry_appointment_link_miss' });
-            app.log.warn(
-              { tenantId: args.tenant_id, appointmentId: args.appointment_id },
-              'capture_job_inquiry: appointment_id does not match a live appointment for this tenant — inquiry saved unlinked'
-            );
-          }
-        }
-
-        // GENERIC ENVELOPE FIRST, SPECIALIZED PROJECTION SECOND.
-        //
-        // The architecture split is deliberate: every intake becomes a durable,
-        // type-tagged submission row before any domain-specific table claims it.
-        // job_inquiries remains the projection the owner reads today; the generic
-        // envelope is what lets later verticals reuse the same intake path without
-        // inventing a new table per flow. Per-call idempotency matches the domain
-        // row: retries update their own envelope instead of appending duplicates.
-        const intakePayload = buildJobIntakePayload(companies, {
-          caller_name: args.caller_name,
-          callback_phone: callbackPhone ?? undefined,
-          employment_type: args.employment_type,
-          role_description: args.role_description,
-          rate_range: args.rate_range,
-          duration: args.duration,
-          location_type: args.location_type,
-          address: args.address,
-          timezone: args.timezone,
-          call_id: args.call_id,
-          appointment_id: appointmentId ?? undefined,
-        });
-        await client.query<{ submission_id: string }>(
-          `INSERT INTO intake_submissions
-             (tenant_id, customer_id, submission_type, call_id, appointment_id,
-              caller_name, callback_phone, payload_json)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
-           ON CONFLICT (tenant_id, submission_type, call_id)
-             WHERE call_id IS NOT NULL
-           DO UPDATE SET
-             customer_id    = COALESCE(EXCLUDED.customer_id, intake_submissions.customer_id),
-             appointment_id = COALESCE(EXCLUDED.appointment_id, intake_submissions.appointment_id),
-             caller_name    = EXCLUDED.caller_name,
-             callback_phone = EXCLUDED.callback_phone,
-             payload_json   = EXCLUDED.payload_json
-           RETURNING submission_id`,
-          [
-            args.tenant_id,
-            customerId,
-            'job_inquiry',
-            args.call_id ?? null,
-            appointmentId,
-            args.caller_name,
-            callbackPhone,
-            intakePayload,
-          ]
-        );
-
-        // ON CONFLICT DO NOTHING against the job_inquiries_one_per_call partial
-        // unique index (migration 20260717230000). The fast-path SELECT above
-        // catches a retry that arrives AFTER the first insert committed — but
-        // on the live call the retries were IN FLIGHT TOGETHER (each request
-        // sat 60-120s behind the hung email), so two could pass the SELECT
-        // before either INSERT landed. The index is the layer that cannot
-        // race; losing it returns zero rows and the winner is looked up below.
-        const res = await client.query<{ job_inquiry_id: string }>(
-          `INSERT INTO job_inquiries
-             (tenant_id, customer_id, client_company, caller_company, represents_company,
-              employment_type, role_description, rate_range, duration, location_type,
-              address, timezone, caller_name, callback_phone, call_id, appointment_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-           ON CONFLICT (tenant_id, call_id) WHERE call_id IS NOT NULL DO NOTHING
-           RETURNING job_inquiry_id`,
-          [
-            args.tenant_id,
-            customerId,
-            companies.clientCompany,
-            companies.callerCompany,
-            companies.representsCompany,
-            args.employment_type ?? null,
-            args.role_description ?? null,
-            args.rate_range ?? null,
-            args.duration ?? null,
-            args.location_type ?? null,
-            args.address ?? null,
-            args.timezone ?? null,
-            args.caller_name,
-            callbackPhone,
-            args.call_id ?? null,
-            appointmentId,
-          ]
-        );
-        const inserted = Boolean(res.rows[0]);
-        let jobInquiryId = res.rows[0]?.job_inquiry_id ?? null;
-        if (!inserted && args.call_id) {
-          // Lost a concurrent-retry race — the winner's row IS this call's
-          // inquiry. Hand its id back so the rung completes.
-          const winner = await client.query<{ job_inquiry_id: string }>(
-            `SELECT job_inquiry_id FROM job_inquiries
-              WHERE tenant_id = $1 AND call_id = $2
-              ORDER BY created_at ASC LIMIT 1`,
-            [args.tenant_id, args.call_id]
-          );
-          jobInquiryId = winner.rows[0]?.job_inquiry_id ?? null;
-        }
-
-        // Stamp a readable summary onto the meeting itself, so the calendar entry is
-        // self-contained: the owner sees WHAT the meeting is about, not just who and
-        // when. Appended, never overwritten — the description may already carry the
-        // service name or the caller's notes. Only the INSERT WINNER stamps —
-        // a race-losing retry stamping too is how one appointment got the same
-        // summary four times.
-        if (appointmentId && inserted) {
-          const stamped = await client.query(
-            `UPDATE appointments
-                SET description = COALESCE(NULLIF(description, '') || E'\n\n', '') || $3,
-                    updated_at = now()
-              WHERE tenant_id = $1 AND appointment_id = $2 AND is_deleted = false`,
-            [args.tenant_id, appointmentId, jobSummaryLine(companies, args)]
-          );
-          // The SELECT above proved the appointment live, but nothing holds that true
-          // until here — a zero-row UPDATE means it vanished in between. The inquiry
-          // row (the lead) is already saved; only the calendar stamp was lost, and
-          // that must be observable, not silent.
-          if (stamped.rowCount === 0) {
-            errorsTotal.inc({ event: 'job_inquiry_appointment_stamp_miss' });
-            app.log.warn(
-              { tenantId: args.tenant_id, appointmentId },
-              'capture_job_inquiry: appointment disappeared before the job summary stamp — inquiry saved, calendar entry not stamped'
-            );
-          }
-        }
-
-        // Resolve the notification recipient: the dedicated job_inquiry_email,
-        // else the tenant owner's user email. The owner's NAME comes back too — the
-        // spoken reply used to say "Dale" as a hardcoded string, in a route shared by
-        // every tenant on the platform, so a salon's assistant would tell its caller
-        // it had passed the details to Dale.
-        const recip = await resolveJobInquiryRecipient(client, args.tenant_id);
-
-        return {
-          job_inquiry_id: jobInquiryId,
-          recipient: recip.recipient,
-          ownerName: recip.ownerName,
-          // A race-losing concurrent retry is a duplicate too: the winner's
-          // request emails the owner and stamps the meeting; this one only
-          // hands back the id.
-          duplicate: !inserted,
-        };
+      const row = await persistJobInquiryCapture({
+        args,
+        callbackPhone,
+        companies,
+        withTenantClient,
+        getOrCreateCustomerByPhoneOnClient: (client, tenantId, phone, name) =>
+          getOrCreateCustomerByPhoneOnClient(
+            client as Parameters<typeof getOrCreateCustomerByPhoneOnClient>[0],
+            tenantId,
+            phone,
+            name
+          ),
+        resolveRecipient: resolveJobInquiryRecipient,
       });
+
+      if (row.appointmentLinkMiss) {
+        errorsTotal.inc({ event: 'job_inquiry_appointment_link_miss' });
+        app.log.warn(
+          { tenantId: args.tenant_id, appointmentId: args.appointment_id },
+          'capture_job_inquiry: appointment_id does not match a live appointment for this tenant — inquiry saved unlinked'
+        );
+      }
+      if (row.appointmentStampMiss) {
+        errorsTotal.inc({ event: 'job_inquiry_appointment_stamp_miss' });
+        app.log.warn(
+          { tenantId: args.tenant_id, appointmentId: args.appointment_id },
+          'capture_job_inquiry: appointment disappeared before the job summary stamp — inquiry saved, calendar entry not stamped'
+        );
+      }
 
       // Email the owner — FIRE-AND-FORGET, and that is load-bearing, not style.
       // "Best-effort" was always the contract (the row is persisted; a mail

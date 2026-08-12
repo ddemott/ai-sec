@@ -35,7 +35,6 @@ import {
 } from './helpers';
 import type { PoolClient } from 'pg';
 import { applyTimezone, toLocalWallClock } from '../../services/timezoneUtils';
-import { CALLER_NOTES_PREFIX, toStampText } from '../../../shared/callContext';
 import {
   validateAppointmentTimeRange,
   isFifteenMinuteIncrement,
@@ -74,6 +73,7 @@ import {
   rescheduleRemindersForAppointment,
   saveReminderLeadPreference,
 } from '../../services/reminders/scheduleForAppointment';
+import { persistMeetingNotesCapture } from '../../services/meetingNotesCapture';
 
 /**
  * Speak a list of open slots the way a receptionist would: "Monday the 13th at
@@ -1557,27 +1557,31 @@ export function registerSchedulingRoutes({
     '/agent-tools/attach-meeting-notes',
     AttachMeetingNotesSchema,
     async (args, reply) => {
-      const updated = await withTenantClient(args.tenant_id, async (client) => {
-        const res = await client.query<{ appointment_id: string }>(
-          `UPDATE appointments
-              SET description = COALESCE(NULLIF(description, '') || E'\n\n', '') || $3,
-                  updated_at = now()
-            WHERE tenant_id = $1 AND appointment_id = $2 AND is_deleted = false
-            RETURNING appointment_id`,
-          [args.tenant_id, args.appointment_id, `${CALLER_NOTES_PREFIX}${toStampText(args.notes)}`]
-        );
-        return res.rows[0]?.appointment_id ?? null;
+      const result = await persistMeetingNotesCapture({
+        args: {
+          ...args,
+          caller_name: 'Meeting caller',
+          callback_phone: undefined,
+        },
+        withTenantClient,
       });
 
-      if (!updated) {
+      if (result.appointmentLinkMiss) {
         return fail(
           reply,
           "I couldn't find that meeting to attach the note to — nothing was saved. Offer to pass it along as a message for the owner instead."
         );
       }
 
+      if (result.appointmentStampMiss || !result.appointment_id) {
+        return fail(
+          reply,
+          "I saved the note for the owner, but I couldn't attach it to that meeting. Offer to pass it along as a message too if they want extra certainty."
+        );
+      }
+
       return ok(reply, {
-        appointment_id: updated,
+        appointment_id: result.appointment_id,
         message: "Noted — I've added that to the meeting.",
       });
     },

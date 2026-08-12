@@ -1,6 +1,6 @@
 # Vertical preset / block architecture — implementation spec
 
-**Status:** initial implementation checkpoint completed; broader preset rollout still in progress. **Date:** 2026-08-11. **Owner:** Dale.
+**Status:** initial implementation checkpoint plus Step 5/6 proof completed; broader preset rollout still in progress. **Date:** 2026-08-12. **Owner:** Dale.
 
 Related docs:
 - `docs/VERTICAL-PRESET-BLOCK-ARCHITECTURE.md`
@@ -27,10 +27,11 @@ Verified behavior for this checkpoint:
 - enabled conversation blocks compile into selectable live tree ids
 - full live tree library remains available for tracker invariants
 - `capture-job-inquiry` writes `intake_submissions` before the existing `job_inquiries` projection
+- `src/services/jobInquiryCapture.ts` now splits generic capture + `job_inquiry` projection out of the route shell
+- `attach-meeting-notes` now writes `submission_type='meeting_notes'` into `intake_submissions` before projecting to the appointment description
 - `intake_submissions` ships with FORCE RLS and repo-standard tenant/admin policies
 
 Still pending relative to the full spec:
-- second reusable path proof
 - real preset catalog/code definitions
 - setup/onboarding preset selection
 - tenant-safe override surface
@@ -91,10 +92,11 @@ Completed in this slice:
 - extraction of the current live `job` path into defs
 - generic `intake_submissions` capture
 - route-level preservation of current `job_inquiries` behavior after the generic envelope write
+- service extraction for the live `job_inquiry` projector path
+- second-path proof via `attach-meeting-notes` on the `buy_service` meeting-context path
 
 Not completed in this slice:
-- second-path proof (`buy_service` preferred)
-- dedicated projector/service extraction beyond the current route implementation
+- preset catalog/code definitions
 
 Still out of scope:
 - dashboard UI for preset editing
@@ -132,7 +134,6 @@ Backend/persistence side:
 
 Still pending after this checkpoint:
 - `agent/src/checklist/presets.ts`
-- dedicated intake service / projector extraction files
 - second-path preset/runtime work
 
 Docs/tests:
@@ -420,15 +421,14 @@ Verification:
 - RLS isolation mirrors current tenant tables
 - duplicate-call path tested
 
-### Task 7 — Split job inquiry into projector pattern *(partially completed)*
+### Task 7 — Split job inquiry into projector pattern *(completed)*
 Objective:
 - preserve current inquiry behavior while making it a reusable outcome adapter
 
 Files:
-- Create: `src/services/intake/projectors/jobInquiryProjector.ts`
+- Create: `src/services/jobInquiryCapture.ts`
 - Modify: `src/routes/agentTools/messaging.ts`
-- Modify: `src/routes/agentTools/schemas.ts` only if contract extraction is needed
-- Test: existing capture-job-inquiry tests + new projector tests
+- Test: existing capture-job-inquiry route tests + new service tests
 
 Verification:
 - generic row + projected inquiry row both created
@@ -436,21 +436,22 @@ Verification:
 - appointment stamping still exact-once
 - same retry does not duplicate either row
 
-### Task 8 — Prove second path through same architecture *(pending)*
+### Task 8 — Prove second path through same architecture *(completed)*
 Objective:
 - validate reuse before preset rollout
 
-Preferred target:
-- `buy_service`
+Chosen target:
+- `buy_service` via `attach-meeting-notes`
 
 Files:
-- Modify/create block library entries
-- add second preset definition
-- tests for compile + behavior
+- Create: `src/services/meetingNotesCapture.ts`
+- Modify: `src/routes/agentTools/scheduling.ts`
+- Test: `tests/services/meetingNotesCapture.test.ts`
+- Test: `tests/routes/agentTools/agentTools.test.ts`
 
 Verification:
 - second path works without bespoke compiler branch
-- no one-off persistence hack is needed if it remains message/booking-only initially
+- no one-off persistence hack is needed; the generic envelope now feeds a non-`job_inquiry` projection
 
 ### Task 9 — Define first three presets in code *(pending)*
 Objective:
