@@ -13,7 +13,11 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { llm } from '@livekit/agents';
+import type { VerticalPresetDef } from './blockTypes.js';
 import { createChecklistTools, type ChecklistToolDeps } from './checklistTools.js';
+import { resolveSelectableTreeIds } from './checklistAgent.js';
+import { AUTO_SHOP_PRESET, LOCAL_SERVICE_PRESET, SALON_PRESET } from './presets.js';
+import { materializeRuntimeConfig } from './runtimeConfig.js';
 import { ChecklistTracker } from './tracker.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
 
@@ -74,6 +78,17 @@ function makeKit(overrides: Partial<ChecklistToolDeps> = {}) {
       bookResult = r;
     },
   };
+}
+
+function makePresetKit(
+  preset: VerticalPresetDef,
+  overrides: Partial<ChecklistToolDeps> = {}
+) {
+  const runtimeConfig = materializeRuntimeConfig(preset);
+  return makeKit({
+    selectableTreeIds: resolveSelectableTreeIds({ runtimeConfig }),
+    ...overrides,
+  });
 }
 
 describe('the toolset composition', () => {
@@ -159,6 +174,53 @@ describe('the toolset composition', () => {
     const names = Object.keys(toolkit.selectedTools());
     expect(names).not.toContain('book_with_scheduling');
     expect(names).not.toContain('take_message');
+    expect(names).not.toContain('capture_job_inquiry');
+  });
+
+  it('auto shop preset exposes booking reads/writes while blocking job and buy_service tools', async () => {
+    const { toolkit } = makePresetKit(AUTO_SHOP_PRESET);
+    const refusedJob = await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] });
+    const refusedBuyService = await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['buy_service'],
+    });
+    expect(refusedJob).toContain('No tree called "job"');
+    expect(refusedBuyService).toContain('No tree called "buy_service"');
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'booking'] });
+    const names = Object.keys(toolkit.selectedTools());
+    expect(names).toContain('book_with_scheduling');
+    expect(names).toContain('get_available_slots');
+    expect(names).toContain('get_service_catalog');
+    expect(names).not.toContain('capture_job_inquiry');
+    expect(names).not.toContain('attach_meeting_notes');
+  });
+
+  it('salon preset exposes booking reads/writes while blocking job and buy_service tools', async () => {
+    const { toolkit } = makePresetKit(SALON_PRESET);
+    const refusedJob = await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] });
+    const refusedBuyService = await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['buy_service'],
+    });
+    expect(refusedJob).toContain('No tree called "job"');
+    expect(refusedBuyService).toContain('No tree called "buy_service"');
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'booking'] });
+    const names = Object.keys(toolkit.selectedTools());
+    expect(names).toContain('book_with_scheduling');
+    expect(names).toContain('get_available_slots');
+    expect(names).toContain('get_service_catalog');
+    expect(names).not.toContain('capture_job_inquiry');
+    expect(names).not.toContain('attach_meeting_notes');
+  });
+
+  it('local service preset exposes buy_service meeting-note path while still blocking job capture', async () => {
+    const { toolkit } = makePresetKit(LOCAL_SERVICE_PRESET);
+    const refusedJob = await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] });
+    expect(refusedJob).toContain('No tree called "job"');
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['identity', 'buy_service', 'booking'],
+    });
+    const names = Object.keys(toolkit.selectedTools());
+    expect(names).toContain('book_with_scheduling');
+    expect(names).toContain('attach_meeting_notes');
     expect(names).not.toContain('capture_job_inquiry');
   });
 });
