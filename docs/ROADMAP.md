@@ -41,10 +41,24 @@ Implemented and verified in this checkpoint:
 - Step 6 second reusable path proof: `src/services/meetingNotesCapture.ts` now lands `attach-meeting-notes` into the same generic `intake_submissions` envelope with `submission_type='meeting_notes'` before projecting to appointment description, and route + service tests pass against that split path
 - Step 7 first three presets + journeys: `auto_shop_front_desk`, `salon_front_desk`, and `local_service_front_desk` validate, materialize a runtime config, declare `forbidden_trees` + required defaults, and each has a host-tool journey (`presetJourneys.test.ts`). Auto shop and salon share the same front-desk trees on purpose — unique per-vertical trees are not invented until a real tenant needs them.
 
-Still open after this checkpoint:
+Still open after this checkpoint (closed 2026-08-13 by #338 / #339 — see below):
 
-- onboarding wiring for preset selection (business-type picker exists; no preset picker UI)
-- tenant-safe override UI and activation controls
+- ~~onboarding wiring for preset selection~~ Business Settings → Call checklist + setup picker
+- ~~tenant-safe override UI and activation controls~~ disable / policy / optional / required shipped; wording + dry-run remain
+
+## Checkpoint completed on 2026-08-13
+
+Shipped on `main` and live in prod (`4610d10`, `/health` `started_at` 2026-08-13T14:00:35Z):
+
+- Step 8: `tenants.checklist_preset_id`, `deriveChecklistRuntimeConfig`, live `ChecklistAgent({ runtimeConfig })`, Business Settings preset picker (#338)
+- Step 9 slices 1–3: `tenants.checklist_overrides` — disable blocks (not identity), `booking_mode` / `message_mode`, `optional_node_ids` (listen-only), `required_node_ids` (decline does not resolve) (#338 + #339)
+- write-time 400 on invalid overrides; bad stored row ignored on tenant-config read
+
+Still open:
+
+- Step 9 remainder: approved wording tweaks (deferred), preview/dry-run
+- Step 10: recruiter / auto-shop / salon / details-only / missing-phone E2E journeys
+- unique salon-vs-auto-shop trees only when a real tenant needs a block the shared front-desk set lacks
 
 ---
 
@@ -290,9 +304,10 @@ Already shipped:
 - Business Settings → Call checklist: derived vs explicit override + preview of enabled conversation blocks
 - Setup business-type picker names the derived checklist for the current type
 
-Still open (Step 9):
+Still open (Step 9 remainder):
 
-- per-block enable/disable, wording, required/optional, activation dry-run
+- approved wording tweaks (deferred)
+- preview/dry-run beyond the live chips + policy selectors
 
 Goal:
 
@@ -364,6 +379,10 @@ Exit criteria:
 ---
 
 ### Step 10 — Build coverage before expansion
+
+Status:
+
+- not started. Host-tool journeys (`presetJourneys.test.ts`) exist; live E2E journeys do not.
 
 Goal:
 
@@ -478,9 +497,9 @@ Includes:
 
 Deliverables:
 
-- setup integration
-- tenant-safe overrides
-- minimum E2E confidence for rollout
+- setup integration — shipped #338
+- tenant-safe overrides — disable / policy / optional / required shipped #338–#339; wording + dry-run open
+- minimum E2E confidence for rollout — Step 10, not started
 
 Why this phase exists:
 

@@ -5,48 +5,45 @@ Read this first after session reset.
 ## Current state
 
 - Repo: `/home/dale/projects/secretary-hq`
-- Branch: `main`
-- Latest merged checkpoint: PR #331 — `feat: prove second reusable intake path`
-- Merge commit: `b5403fbe2406cc186a73c1dbb3d037ebde65b2a7`
+- Branch: `main` (tracks `origin/main`)
+- Latest merge: PR #339 — `feat(runtime): enforce required checklist fields`
+- Merge commit: `4610d10446c3f6f8b2ba7ad1abb0654b296155dd`
+- Prod: all 3 Railway services on `4610d10`. Backend `/health` `started_at` = `2026-08-13T14:00:35.968Z`
 
 ## What just landed
 
-Code + schema
+- **#337** agent lint/type cleanup (`4c69219`)
+- **#338** live checklist presets + safe overrides (disable, booking/message policy, optional-as-listen)
+- **#339** required-field enforcement (decline does not resolve)
 
-- checklist preset/runtime foundation under `agent/src/checklist/`
-- generic intake envelope + RLS via `supabase/migrations/20260811160000_intake_submissions.sql`
-- `src/services/jobInquiryCapture.ts` now owns generic capture plus `job_inquiry` projection persistence
-- `src/services/meetingNotesCapture.ts` proves a second reusable intake path by writing `submission_type='meeting_notes'` into `intake_submissions` before projecting to the appointment description
+Live path: `tenants.checklist_preset_id` + `checklist_overrides` → `deriveChecklistRuntimeConfig` → `/agent-tools/tenant-config` → `ChecklistAgent({ runtimeConfig })`.
 
-Docs
+Owners edit this on Business Settings → Call checklist.
 
-- roadmap + architecture/spec docs for the vertical preset/block runtime now reflect Steps 1–6 through the second-path proof
-- repo-wide factual count sync for migrations, test totals, and backend route-module count remains in place from the prior doc sweep
+## ROADMAP (`docs/ROADMAP.md`)
+
+- Steps 1–8 closed
+- Step 9 slices 1–3 shipped (disable / policy / optional / required)
+- Still open: wording editor (deferred), preview/dry-run, **Step 10 E2E journeys**
 
 ## Verified facts
 
-- PR #331 merged successfully on 2026-08-12
-- there are currently no open PRs
-- current remotes/branches present now: `main`, `origin/main`, `origin/feat/second-intake-path-proof`
-- current branch tracks `origin/main`
-- backend route modules under `src/routes/`: 29 (plus the `agentTools/` module dir wired from `src/index.ts`)
-- SQL migrations on disk: 180
+- no leftover `feat/required-field-enforcement` or `feat/finish-step-7-presets` branches
+- backend route modules under `src/routes/`: 29 (plus `agentTools/`)
+- SQL migrations on disk: 182
 - Playwright spec files under `dashboard/e2e/`: 38
 - defined agent tools in `agent/src/tools.ts`: 26
-- latest verified suite totals still documented from 2026-08-11:
-  - backend: 2,675 passing
-  - dashboard: 1,031 passing
-  - agent: 1,498 passing
+- suite totals last written in `CLAUDE.md` (2026-08-12): backend 2,689 / dashboard 1,031 / agent 1,536 — recount before bumping
 
 ## Working tree expectation
 
-Clean, unless a later session edited docs or code after this handoff.
+Clean after the #339 merge unless a later session edited docs.
 
 ## Good next checks
 
 1. `git status --short --branch`
-2. if docs are in question, verify route/migration/spec counts from filesystem before editing
-3. if production state is in question, verify live deploy after merge instead of assuming Railway shipped it
+2. `curl -sS https://secretary-hq-production.up.railway.app/health` — `started_at` must be ≥ 2026-08-13T14:00:35Z
+3. remaining product work: Step 9 wording/dry-run, or Step 10 E2E
 
 ## Style reminder
 

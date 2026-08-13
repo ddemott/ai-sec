@@ -37,7 +37,7 @@ The first real slice is now in the repo and verified:
 - `agent/src/checklist/presetJourneys.test.ts` walks one host-tool journey per preset (auto-shop book, salon message, local-service buyer demo)
 - each preset now declares `forbidden_trees` and required `defaults`
 
-What is **not** done yet: tenant-safe per-block overrides (Step 9) and unique salon-vs-auto-shop trees. Live `ChecklistAgent` receives `runtimeConfig` from tenant-config. Owners pick/see the preset under Business Settings → Call checklist.
+What is **not** done yet: approved wording tweaks, preview/dry-run, Step 10 E2E journeys, and unique salon-vs-auto-shop trees. Live `ChecklistAgent` receives `runtimeConfig` from tenant-config. Owners pick the preset and toggle disable / booking / message / optional / required under Business Settings → Call checklist (#338, #339).
 
 ---
 

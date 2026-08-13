@@ -4,6 +4,15 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-13 — Live checklist presets + required-field overrides (#338, #339)
+
+Closed ROADMAP Steps 8 and 9 slices 1–3. Prod is on `4610d10` (`/health` `started_at` 2026-08-13T14:00:35Z).
+
+- **#338** `feat(runtime): ship live checklist presets and safe overrides` — three presets (`auto_shop_front_desk`, `salon_front_desk`, `local_service_front_desk`), `tenants.checklist_preset_id` + `checklist_overrides`, live `ChecklistAgent({ runtimeConfig })`, Business Settings → Call checklist. First `main` deploy SKIPPED (E2E npm-install flake); forced `serviceInstanceDeployV2` of `2a0894a`.
+- **#339** `feat(runtime): enforce required checklist fields` — `required_node_ids` allowlist; `record_answer` refuses `declined:true`; `finish_call` stays shut; cannot mark the same field required and optional. Main CI green; Railway deployed all 3 services.
+
+Still open on that roadmap: wording editor (deferred), preview/dry-run, Step 10 E2E journeys.
+
 ## 2026-08-03 — Project rename `ai-sec` → `secretary-hq` (repo, Railway, LiveKit, Telnyx, local Docker)
 
 The GitHub repo was `ddemott/ai-sec` while the working directory, product, and domain were all `secretary-hq`. Renamed end-to-end. **Every layer below was renamed in lockstep with the system that owns the name — a repo-only rename would have left the docs describing a service that no longer answers to that name.**
