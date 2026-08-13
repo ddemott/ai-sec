@@ -54,6 +54,7 @@ export const verticalPresetSchema = z.object({
   policy_blocks: stringList,
   knowledge_blocks: stringList,
   outcome_blocks: stringList,
+  forbidden_trees: stringList,
   defaults: looseRecord,
 });
 

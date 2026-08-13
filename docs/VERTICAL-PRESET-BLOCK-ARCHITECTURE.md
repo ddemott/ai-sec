@@ -1,6 +1,6 @@
 # VERTICAL-PRESET-BLOCK-ARCHITECTURE
 
-**Status:** phases 1-4 checkpoint, second reusable-path proof, and first preset-catalog slice are implemented and verified; wider preset rollout still in progress. **Date:** 2026-08-12. **Owner:** Dale.
+**Status:** phases 1-4, second reusable path, first three presets, Step 7 journeys, and live `runtimeConfig` plumbing are implemented. Setup preset UI and tenant-safe overrides remain. **Date:** 2026-08-13. **Owner:** Dale.
 
 **The ask:** turn the current one-off call flows into configurable, reusable building blocks that can be pre-packaged by business type. An auto shop should start with an auto-shop-ready set of blocks; a salon should start with salon-ready blocks; both should still be built from the same reusable primitives so the platform does not decay into twenty bespoke scripts.
 
@@ -33,9 +33,11 @@ The first real slice is now in the repo and verified:
 - `supabase/migrations/20260811160000_intake_submissions.sql` adds the generic table with FORCE RLS and repo-standard tenant/admin policies
 - `agent/src/checklist/presets.ts` now defines the first three real preset bundles: `auto_shop_front_desk`, `salon_front_desk`, and `local_service_front_desk`
 - `agent/src/checklist/blockLibrary.ts` now exposes the additional already-live conversation-block wrappers those presets compile through (`generic_subject`, `qa`, `buy_service`, `schedule_change`, `fix_computer`)
-- `agent/src/checklist/presetCatalog.test.ts` now proves preset validation, lookup, runtime materialization, and compile-to-live-tree behavior for all three presets
+- `agent/src/checklist/presetCatalog.test.ts` proves preset validation, lookup, runtime materialization, and compile-to-live-tree behavior
+- `agent/src/checklist/presetJourneys.test.ts` walks one host-tool journey per preset (auto-shop book, salon message, local-service buyer demo)
+- each preset now declares `forbidden_trees` and required `defaults`
 
-What is **not** done yet: preset-specific call-path coverage beyond compile/runtime tests, setup/onboarding preset selection, and tenant-safe preset editing.
+What is **not** done yet: tenant-safe per-block overrides (Step 9) and unique salon-vs-auto-shop trees. Live `ChecklistAgent` receives `runtimeConfig` from tenant-config. Owners pick/see the preset under Business Settings → Call checklist.
 
 ---
 
@@ -44,6 +46,7 @@ What is **not** done yet: preset-specific call-path coverage beyond compile/runt
 The current system already contains most of the pieces, just not yet in a first-class configurable form.
 
 ### Live question-tree runtime
+
 - `agent/src/checklist/trees.ts`
   - current platform tree library
   - includes live `JOB_TREE`, `BOOKING_TREE`, `MESSAGE_TREE`, `BUY_SERVICE_TREE`, etc.
@@ -55,6 +58,7 @@ The current system already contains most of the pieces, just not yet in a first-
   - runtime tools like `set_purpose`, `record_answer`, `finish_call`
 
 ### Existing job-intake persistence path
+
 - `src/routes/agentTools/schemas.ts`
   - `CaptureJobInquirySchema`
 - `src/routes/agentTools/messaging.ts`
@@ -62,6 +66,7 @@ The current system already contains most of the pieces, just not yet in a first-
   - durable write path, duplicate-call idempotency, owner notification, appointment stamping
 
 ### Superseded but still informative script-era intake
+
 - `src/services/scripts/blocks.ts`
   - older rung/prompt-ladder wording for booking, offering a meeting, and job intake
   - useful as evidence/history, but not the live runtime
@@ -77,6 +82,7 @@ Important constraint: this should compile into the **existing question-tree runt
 > **Business type must select a preset composition. It must not own runtime behavior directly.**
 
 That means:
+
 - `autoshop` is not a giant special-case code path
 - `salon` is not a giant special-case code path
 - a vertical preset is a **bundle of reusable pieces**
@@ -85,6 +91,7 @@ That means:
 This is the expensive-to-reverse decision. Make it now.
 
 Why:
+
 - two businesses in the same vertical will still differ
 - blocks can be reused across verticals
 - new presets become composition work instead of custom engineering
@@ -97,9 +104,11 @@ Why:
 Earlier thinking treated "blocks" a little too broadly. The cleaner model is four separate classes.
 
 ### 4.1 Conversation blocks
+
 These collect or confirm information from the caller.
 
 Examples:
+
 - identity
 - booking
 - message
@@ -113,9 +122,11 @@ Examples:
 These are the closest descendants of the current question trees.
 
 ### 4.2 Policy blocks
+
 These change behavior and constraints, not the questions themselves.
 
 Examples:
+
 - cancellation window
 - no walk-ins
 - drop-off only
@@ -126,9 +137,11 @@ Examples:
 These should not be buried as ad hoc prose in conversation blocks if they are really platform/business rules.
 
 ### 4.3 Knowledge blocks
+
 These define categories of business facts the AI can answer.
 
 Examples:
+
 - hours
 - services
 - pricing guidance
@@ -139,9 +152,11 @@ Examples:
 This is separate from intake. Otherwise the system ends up shoving facts, rules, and questions into one structure and the call flow gets brittle.
 
 ### 4.4 Outcome blocks
+
 These define what gets saved, triggered, or sent once the interaction completes.
 
 Examples:
+
 - save message
 - create booking
 - create estimate request
@@ -157,9 +172,11 @@ This is where generic submissions can be projected into specialized records.
 ## 5. Product shape
 
 ### 5.1 Block library
+
 A typed reusable library of primitives.
 
 Each block definition should capture:
+
 - `block_id`
 - `kind` (`conversation`, `policy`, `knowledge`, `outcome`)
 - purpose / description
@@ -172,11 +189,13 @@ Each block definition should capture:
 - compatibility rules (`pairs_with`, `requires`, `conflicts_with`)
 
 ### 5.2 Vertical presets
+
 A vertical preset is an ordered, opinionated bundle of blocks plus defaults.
 
 Examples:
 
 #### Auto shop preset
+
 - identity
 - booking
 - service selection
@@ -187,6 +206,7 @@ Examples:
 - FAQ / business info
 
 #### Salon preset
+
 - identity
 - booking
 - service selection
@@ -197,6 +217,7 @@ Examples:
 - FAQ / business info
 
 #### Generic local service / home services preset
+
 - identity
 - booking
 - service selection
@@ -206,9 +227,11 @@ Examples:
 - FAQ / business info
 
 ### 5.3 Tenant runtime config
+
 Each tenant should select a preset and then own a concrete runtime configuration derived from it.
 
 Tenant-level config should be able to:
+
 - enable/disable blocks from the preset
 - add a small number of extra compatible blocks
 - tweak wording safely
@@ -226,6 +249,7 @@ The tenant runtime config is what the live call uses. The preset is only the sta
 A giant per-vertical script sounds simpler until the second real customer arrives.
 
 Problems with giant scripts:
+
 - every vertical becomes a custom engineering branch
 - shared improvements do not propagate cleanly
 - duplicated wording and logic drift apart
@@ -233,6 +257,7 @@ Problems with giant scripts:
 - setup UX becomes all-or-nothing instead of composable
 
 Benefits of reusable blocks + presets:
+
 - one tested primitive can power multiple verticals
 - one platform fix can improve many tenants at once
 - setup becomes guided rather than blank-canvas
@@ -248,6 +273,7 @@ Benefits of reusable blocks + presets:
 Use typed declarative config.
 
 That means:
+
 - JSON/TS/DB-backed schemas
 - validated fields and branches
 - known block kinds
@@ -256,6 +282,7 @@ That means:
 - no freeform logic runtime that needs a sandbox
 
 Why:
+
 - validation
 - versioning
 - safe editing in UI later
@@ -272,6 +299,7 @@ If "script" really means executable behavior, the platform inherits a debugger, 
 The exact table names can move, but the shape should be roughly this.
 
 ### 8.1 Reusable definitions
+
 - `block_definitions`
   - reusable block specs
   - typed and versioned
@@ -283,6 +311,7 @@ The exact table names can move, but the shape should be roughly this.
   - default wording and policies
 
 ### 8.2 Tenant runtime config
+
 - `tenant_block_configs`
   - tenant id
   - active preset
@@ -291,6 +320,7 @@ The exact table names can move, but the shape should be roughly this.
   - version / rollout metadata
 
 ### 8.3 Generic capture layer
+
 - `intake_submissions`
   - tenant id
   - call id
@@ -303,12 +333,14 @@ The exact table names can move, but the shape should be roughly this.
   - status / timestamps
 
 ### 8.4 Optional specialized projections
+
 - `job_inquiries`
-- `estimate_requests` *(example future table / projection)*
-- `vehicle_visits` *(example future table / projection)*
-- `lead_requests` *(example future table / projection)*
+- `estimate_requests` _(example future table / projection)_
+- `vehicle_visits` _(example future table / projection)_
+- `lead_requests` _(example future table / projection)_
 
 Pattern:
+
 - write one generic envelope first
 - project to specialized rows second when needed
 
@@ -319,7 +351,9 @@ That preserves analytics and future flexibility while avoiding a new bespoke tab
 ## 9. How current code maps to this model
 
 ### Current live reusable primitives already hiding in trees
+
 From `agent/src/checklist/trees.ts`:
+
 - `identity`
 - `booking`
 - `message`
@@ -333,7 +367,9 @@ From `agent/src/checklist/trees.ts`:
 That exact list matters. The point is not that the repo has a vague idea of blocks; it already has a small typed library of reusable call-purpose units. The architecture here is a way to formalize and package them.
 
 ### Current job inquiry is the best first extraction target
+
 Why `JOB_TREE` should go first:
+
 - real production path
 - has branching
 - has wording already paid for by live-call failures
@@ -342,7 +378,9 @@ Why `JOB_TREE` should go first:
 - has a downstream specialized record (`job_inquiries`)
 
 ### Existing persistence logic worth preserving
+
 From `src/routes/agentTools/messaging.ts`:
+
 - name/phone enforcement
 - duplicate-call idempotency
 - owner notification
@@ -356,15 +394,18 @@ That route should become an outcome/projector layer, not remain a one-off domain
 ## 10. Example preset compositions
 
 ### 10.1 Auto shop
+
 Goal: answer common service questions, book visits, capture vehicle/service details, and support estimate-oriented calls.
 
 Preset composition:
+
 - conversation: identity, service selection, booking, vehicle intake, estimate request, message
 - policy: drop-off only, late arrival rule, cancellation window, reminder consent
 - knowledge: hours, services offered, pricing guidance, warranty/policy notes, location
 - outcomes: create booking, save estimate request, send owner notification, save message
 
 Likely service-specific fields:
+
 - make / model / year
 - issue summary
 - drivable or not
@@ -372,30 +413,36 @@ Likely service-specific fields:
 - prior diagnosis / estimate
 
 ### 10.2 Salon
+
 Goal: answer service questions, book appointments, capture preference notes, and support stylist-aware scheduling.
 
 Preset composition:
+
 - conversation: identity, service selection, booking, stylist preference, treatment notes, message
 - policy: cancellation window, no-show / late policy, reminder consent
 - knowledge: hours, services, pricing guidance, staff specialties, location
 - outcomes: create booking, save note, send owner notification, save message
 
 Likely service-specific fields:
+
 - requested stylist
 - color / cut / treatment notes
 - new vs returning client
 - special prep requests
 
 ### 10.3 Generic local service / home services
+
 Goal: quickly sort requests, book visits or estimates, and capture site details.
 
 Preset composition:
+
 - conversation: identity, service selection, booking, address intake, estimate request, message
 - policy: service area restriction, emergency escalation, cancellation window, reminder consent
 - knowledge: service list, hours, service area, pricing guidance, emergency limitations
 - outcomes: create booking, create estimate request, send owner notification, save message
 
 Likely service-specific fields:
+
 - service address
 - issue description
 - urgency
@@ -413,6 +460,7 @@ This document is adjacent to, but not the same as, `docs/superpowers/specs/2026-
 They should fit together.
 
 Recommended relationship:
+
 - a business blueprint can choose a default vertical preset
 - the vertical preset seeds the tenant runtime call config
 - the setup graph / services / staff / resources remain a separate concern
@@ -424,6 +472,7 @@ In other words: blueprints help a tenant start with the right business configura
 ## 11. What not to build yet
 
 Do not start with:
+
 - a full visual flow builder
 - arbitrary loops and mini-programming language features
 - tenant-authored code hooks
@@ -438,35 +487,45 @@ Build the smallest real system that proves the model.
 ## 12. Recommended rollout
 
 ### Phase 1 — extract current job flow into block architecture without changing behavior
+
 **Checkpoint status:** completed in the 2026-08-11 implementation slice.
 
 Verified exit criteria:
+
 - current `JOB_TREE` parity path reproduced through the new internal block-definition/compiler layer
 - current wording and skip behavior preserved by compiling selectable tree ids back into the live checklist runtime
 - no regression in duplicate protection or persistence path behavior
 
 ### Phase 2 — add generic intake envelope
+
 **Checkpoint status:** completed in the 2026-08-11 implementation slice.
 
 Verified exit criteria:
+
 - completed job intake writes a generic `intake_submissions` row
 - existing `job_inquiries` projection still works
 - appointment stamping and owner notification still work
 
 ### Phase 3 — prove reuse with a second block/preset
+
 Exit criteria:
+
 - one more preset-backed path uses the same architecture cleanly
 - recommended candidate: `buy_service` or an estimate/service-intake flow
 - no new bespoke persistence architecture required
 
 ### Phase 4 — introduce business-type presets
+
 Exit criteria:
+
 - tenants can choose a preset during setup
 - each preset maps to reusable blocks + policies + outcomes
 - generated tenant runtime config is inspectable and versioned
 
 ### Phase 5 — safe tenant overrides
+
 Exit criteria:
+
 - owners/admins can safely enable/disable supported blocks and tweak allowed settings
 - invalid configurations are rejected before activation
 - preview / dry-run exists before a live rollout
@@ -478,6 +537,7 @@ Exit criteria:
 This architecture will lie convincingly if only happy paths are tested. Coverage has to be specific.
 
 ### Unit coverage
+
 - malformed block definitions rejected
 - invalid preset compositions rejected
 - branch resolution works
@@ -489,6 +549,7 @@ This architecture will lie convincingly if only happy paths are tested. Coverage
 - retry/idempotency behavior holds
 
 ### Regression coverage
+
 - recruiter asks availability question → job path selected
 - caller says "just pass it along" → meeting is not re-offered
 - remote role asks plain wording: "What time zone is the job in?"
@@ -497,6 +558,7 @@ This architecture will lie convincingly if only happy paths are tested. Coverage
 - caller-provided info already in state is not re-asked
 
 ### E2E coverage
+
 - recruiter flow with booking
 - recruiter flow details-only
 - missing callback number forces recovery before completion
@@ -511,11 +573,13 @@ The bar is behavior, not percentages.
 ## 14. Initial preset recommendation
 
 Start with three presets only:
+
 - auto shop
 - salon
 - generic local service / home services
 
 Why these three:
+
 - they match the current product shape better than abstract professional-services flows
 - they pressure-test booking, service selection, and structured intake in different ways
 - they are varied enough to reveal whether the primitive set is actually reusable
@@ -527,17 +591,22 @@ If these three cannot share primitives cleanly, the architecture is wrong and ne
 ## 15. Naming recommendations
 
 ### This document
+
 Recommended filename:
+
 - `VERTICAL-PRESET-BLOCK-ARCHITECTURE.md`
 
 Why this name:
+
 - `VERTICAL` = business-type presets are central to the idea
 - `PRESET` = they are templates/compositions, not hardcoded monoliths
 - `BLOCK` = reusable primitives underneath
 - `ARCHITECTURE` = this is system shape, not just UX copy or a feature stub
 
 ### Runtime concepts
+
 Recommended terms:
+
 - `block definitions` = reusable primitives
 - `vertical presets` = predefined business-type bundles
 - `tenant runtime config` = actual active per-tenant configuration
@@ -551,6 +620,7 @@ These names are plain and stable. That matters.
 ## 16. Final recommendation
 
 Build this as:
+
 - reusable typed block library
 - four block classes: conversation, policy, knowledge, outcome
 - vertical presets composed from those blocks
@@ -558,6 +628,7 @@ Build this as:
 - generic intake submission layer with optional specialized projection
 
 Do not build it as:
+
 - giant per-vertical scripts
 - tenant-authored executable code
 - a visual builder first

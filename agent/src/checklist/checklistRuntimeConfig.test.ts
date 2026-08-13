@@ -269,4 +269,25 @@ describe('ChecklistAgent runtimeConfig path', () => {
     });
     expect(String(refused)).toContain('No tree called "job"');
   });
+
+  it('writes booking/message policy into the live prompt', () => {
+    const prompt = buildChecklistPrompt({
+      persona: 'You are Piper.',
+      runtime,
+      library: PLATFORM_TREE_LIBRARY,
+      selectableTreeIds: ['identity', 'message'],
+      runtimeConfig: {
+        preset_id: 'salon_front_desk',
+        enabled_conversation_blocks: ['identity', 'message'],
+        enabled_policy_blocks: [],
+        enabled_knowledge_blocks: [],
+        enabled_outcome_blocks: [],
+        overrides: { booking_mode: 'never', message_mode: 'fallback_only' },
+        version: 1,
+      },
+    });
+    expect(prompt).toContain('# Call policy');
+    expect(prompt).toContain('Do NOT offer or book a time');
+    expect(prompt).toContain('only when nothing else fits');
+  });
 });

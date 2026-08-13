@@ -1,5 +1,5 @@
 import type { ConversationBlockDef, TenantRuntimeConfig } from './blockTypes.js';
-import type { QuestionTreeDef } from './types.js';
+import type { QuestionNodeDef, QuestionTreeDef } from './types.js';
 import { BLOCK_LIBRARY } from './blockLibrary.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
 
@@ -38,4 +38,35 @@ export function compileRuntimeConfig(
   }
 
   return compiled;
+}
+
+function markOptional(node: QuestionNodeDef, optional: Set<string>): QuestionNodeDef {
+  if (node.type === 'text' && optional.has(node.node_id)) {
+    return { ...node, listen: true };
+  }
+  if (node.type === 'choice') {
+    return {
+      ...node,
+      options: Object.fromEntries(
+        Object.entries(node.options).map(([key, kids]) => [
+          key,
+          kids.map((child) => markOptional(child, optional)),
+        ])
+      ),
+    };
+  }
+  return node;
+}
+
+/** Flip allow-listed text nodes to listen-only so they never hold the goodbye gate. */
+export function applyOptionalNodes(
+  trees: QuestionTreeDef[],
+  optionalNodeIds: readonly string[] | undefined
+): QuestionTreeDef[] {
+  if (!optionalNodeIds || optionalNodeIds.length === 0) return trees;
+  const optional = new Set(optionalNodeIds);
+  return trees.map((tree) => ({
+    ...tree,
+    nodes: tree.nodes.map((node) => markOptional(node, optional)),
+  }));
 }

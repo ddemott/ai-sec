@@ -5,6 +5,7 @@ import { Settings, ArrowRight } from 'lucide-react';
 import { Api } from '../lib/api';
 import { CRMIntegrationCard } from './CRMIntegrationCard';
 import BusinessTypeSection from './BusinessTypeSection';
+import ChecklistPresetSection from './ChecklistPresetSection';
 import { useStaticData } from '../lib/hooks';
 import { useActiveTenantId } from '../lib/SessionContext';
 import { useVocabulary, useVocabularyRefresh } from '@/lib/VocabularyContext';
@@ -25,6 +26,7 @@ export default function BusinessSettingsView() {
   const [personaName, setPersonaName] = useState('');
   const [savedPersonaName, setSavedPersonaName] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [presetRefreshToken, setPresetRefreshToken] = useState(0);
 
   const [shifts, setShifts] = useState<EffectiveShift[]>([]);
   const [shiftsLoading, setShiftsLoading] = useState(false);
@@ -150,7 +152,15 @@ export default function BusinessSettingsView() {
         {/* ─── BUSINESS TYPE ─── Set once during the wizard; rarely revisited.
             Lives here (not on AI Persona) so prompt-tuning doesn't scroll past
             24 industry cards on every visit. */}
-        <BusinessTypeSection tenantId={tenantId} onChanged={refreshVocabulary} />
+        <BusinessTypeSection
+          tenantId={tenantId}
+          onChanged={() => {
+            refreshVocabulary();
+            setPresetRefreshToken((n) => n + 1);
+          }}
+        />
+
+        <ChecklistPresetSection tenantId={tenantId} refreshToken={presetRefreshToken} />
 
         {/* ─── SERVICES pointer (solo mode) ─── */}
         {isSolo && (

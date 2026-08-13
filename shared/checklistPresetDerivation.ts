@@ -1,10 +1,18 @@
+import { applyChecklistOverrides } from './checklistOverrides';
+
+/**
+ * Tenant-facing runtime snapshot derived from business_type / checklist_preset_id.
+ * Block lists must stay aligned with `agent/src/checklist/presets.ts` — that file
+ * is the product catalog (descriptions, forbidden_trees, defaults). This module
+ * only materializes the wire shape the backend already ships.
+ */
 export interface DerivedChecklistRuntimeConfig {
   preset_id: string;
   enabled_conversation_blocks: string[];
   enabled_policy_blocks: string[];
   enabled_knowledge_blocks: string[];
   enabled_outcome_blocks: string[];
-  overrides: Record<string, never>;
+  overrides: Record<string, unknown>;
   version: 1;
 }
 
@@ -86,11 +94,16 @@ export function resolveChecklistPresetId(
 
 export function deriveChecklistRuntimeConfig(
   businessType: string | null | undefined,
-  presetId?: string | null
+  presetId?: string | null,
+  overrides?: { disabled_conversation_blocks?: string[] } | null
 ): DerivedChecklistRuntimeConfig {
   const resolvedPresetId = resolveChecklistPresetId(businessType, presetId);
-
-  if (resolvedPresetId === 'salon_front_desk') return SALON_RUNTIME;
-  if (resolvedPresetId === 'auto_shop_front_desk') return AUTO_SHOP_RUNTIME;
-  return LOCAL_SERVICE_RUNTIME;
+  const base =
+    resolvedPresetId === 'salon_front_desk'
+      ? SALON_RUNTIME
+      : resolvedPresetId === 'auto_shop_front_desk'
+        ? AUTO_SHOP_RUNTIME
+        : LOCAL_SERVICE_RUNTIME;
+  const applied = applyChecklistOverrides(base, overrides);
+  return applied.ok ? applied.config : { ...base };
 }

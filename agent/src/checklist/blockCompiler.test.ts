@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationBlockDef } from './blockTypes.js';
-import { compileRuntimeConfig } from './blockCompiler.js';
+import { applyOptionalNodes, compileRuntimeConfig } from './blockCompiler.js';
 import { BLOCK_LIBRARY } from './blockLibrary.js';
 import { BOOKING_TREE, IDENTITY_TREE, JOB_TREE, MESSAGE_TREE } from './trees.js';
 
@@ -86,5 +86,23 @@ describe('compileRuntimeConfig', () => {
         brokenBlockLibrary
       )
     ).toThrow(/not found in platform tree library/i);
+  });
+});
+
+describe('applyOptionalNodes', () => {
+  it('marks an allow-listed text node listen-only without rewriting the rest', () => {
+    const [qa] = applyOptionalNodes(
+      [
+        {
+          tree_id: 'qa',
+          description: 'questions',
+          nodes: [{ node_id: 'qa_summary', type: 'text', ask: 'what they asked' }],
+        },
+      ],
+      ['qa_summary']
+    );
+    const node = qa.nodes[0];
+    expect(node.type).toBe('text');
+    if (node.type === 'text') expect(node.listen).toBe(true);
   });
 });

@@ -1403,6 +1403,13 @@ export default defineAgent({
               // The roster a caller-named person is checked against before the
               // agent repeats it back ("Jane" → "Do you mean Dale?").
               staffFirstNames: tenantConfig.staffFirstNames,
+              // Preset catalog is theater until this lands: tenant-config already
+              // derives checklist_runtime_config; dropping it here ran every call
+              // against the full PLATFORM_TREE_LIBRARY. Absent/invalid → omit
+              // and keep the historical full-library fallback.
+              ...(tenantConfig.checklistRuntimeConfig
+                ? { runtimeConfig: tenantConfig.checklistRuntimeConfig }
+                : {}),
             })
           : config.ENABLE_TASK_GROUP
             ? new CallRootAgent({

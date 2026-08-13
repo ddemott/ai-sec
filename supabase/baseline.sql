@@ -3605,6 +3605,7 @@ CREATE TABLE public.tenants (
     forwarded_from_phone text,
     default_service_id uuid,
     checklist_preset_id text,
+    checklist_overrides jsonb DEFAULT '{}'::jsonb NOT NULL,
     persona_name text,
     call_disclosure text,
     call_disclosure_attested_at timestamp with time zone,
@@ -3674,6 +3675,13 @@ COMMENT ON COLUMN public.tenants.default_buffer_minutes IS 'Minutes of gap the A
 --
 
 COMMENT ON COLUMN public.tenants.checklist_preset_id IS 'Optional explicit checklist preset override. NULL = derive from business_type.';
+
+
+--
+-- Name: COLUMN tenants.checklist_overrides; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.checklist_overrides IS 'Safe checklist tweaks. Shape: { disabled_conversation_blocks: string[] }. Invalid entries are ignored on read and rejected on write.';
 
 
 --
