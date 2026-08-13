@@ -69,13 +69,18 @@ export class ChecklistTracker {
   #values = new Map<NodeId, string>();
   #declined = new Set<NodeId>();
   #actionDone = new Map<NodeId, string>();
+  /** Tenant-marked required nodes. Decline does not resolve them. */
+  #required = new Set<NodeId>();
   /** Bumped on every state change (select/deselect/record/completeAction). The
    *  stall detector compares this across caller turns: a turn that moves the
    *  checklist nowhere is a stalled turn, whatever was said (bot-mirror calls,
    *  callers repeating themselves). */
   #mutations = 0;
 
-  constructor(library: QuestionTreeDef[]) {
+  constructor(library: QuestionTreeDef[], opts?: { requiredNodeIds?: readonly string[] }) {
+    for (const id of opts?.requiredNodeIds ?? []) {
+      if (id.trim()) this.#required.add(id);
+    }
     for (const tree of library) {
       if (this.#library.has(tree.tree_id)) {
         throw new TreeDefinitionError(`Duplicate tree_id "${tree.tree_id}" in library.`);
@@ -352,6 +357,11 @@ export class ChecklistTracker {
     }
 
     if (input.declined) {
+      if (this.#required.has(nodeId)) {
+        throw new RecordError(
+          `"${nodeId}" is required. declined:true does not complete it. Ask again and record what the caller actually said.`
+        );
+      }
       this.#values.delete(nodeId);
       this.#declined.add(nodeId);
       this.#mutations++;
@@ -495,7 +505,11 @@ export class ChecklistTracker {
           lines.push(`[ASK] ${nodeId} — ${(def as { ask: string }).ask}`);
           break;
         case 'declined':
-          lines.push(`[—] ${nodeId}: caller declined / could not say (resolved — do not re-ask)`);
+          lines.push(
+            this.#required.has(nodeId)
+              ? `[ASK] ${nodeId} — ${(def as { ask: string }).ask} (required — a decline does not count)`
+              : `[—] ${nodeId}: caller declined / could not say (resolved — do not re-ask)`
+          );
           break;
         case 'latent':
           lines.push(
@@ -555,6 +569,17 @@ export class ChecklistTracker {
     if (!this.hasSelection()) return false;
     return this.#selectedWalk().every((nodeId) => {
       const status = this.status(nodeId);
+      // Required nodes stay open until answered. Decline is recorded only when
+      // the field is not required — record() refuses declined:true here, and
+      // this check is the backstop if state is ever forced.
+      if (this.#required.has(nodeId) && status !== 'answered' && status !== 'not_applicable') {
+        const def = this.#entries.get(nodeId)?.def;
+        if (status === 'latent' && def?.type === 'text' && def.listen === true) {
+          return true;
+        }
+        if (status === 'done' || status === 'unselected') return true;
+        return false;
+      }
       if (RESOLVED_STATUSES.has(status)) return true;
       // A LISTEN-ONLY node never holds the door shut. It was never asked, so a
       // caller cannot answer it, so waiting on it would mean waiting forever —

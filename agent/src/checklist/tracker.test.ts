@@ -383,6 +383,38 @@ describe('declined', () => {
   });
 });
 
+describe('required fields (decline does not resolve)', () => {
+  const makeRequired = (): ChecklistTracker =>
+    new ChecklistTracker(LIBRARY, { requiredNodeIds: ['caller_phone'] });
+
+  it('refuses declined:true on a required node — status stays open', () => {
+    const t = makeRequired();
+    t.select(['identity']);
+    t.record('caller_name', { value: 'Mike' });
+    expect(() => t.record('caller_phone', { declined: true })).toThrow(RecordError);
+    expect(() => t.record('caller_phone', { declined: true })).toThrow(/required/);
+    expect(t.status('caller_phone')).toBe('open');
+    expect(t.isResolved()).toBe(false);
+  });
+
+  it('an answer still resolves a required node', () => {
+    const t = makeRequired();
+    t.select(['identity']);
+    t.record('caller_name', { value: 'Mike' });
+    t.record('caller_phone', { value: '2624979039' });
+    expect(t.status('caller_phone')).toBe('answered');
+    expect(t.isResolved()).toBe(true);
+  });
+
+  it('nodes not marked required can still decline-close the call', () => {
+    const t = makeRequired();
+    t.select(['identity']);
+    t.record('caller_name', { declined: true });
+    t.record('caller_phone', { value: '2624979039' });
+    expect(t.isResolved()).toBe(true);
+  });
+});
+
 // ── Action nodes (real-tool completion only) ─────────────────────────────────
 
 describe('action nodes', () => {

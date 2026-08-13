@@ -18,17 +18,27 @@ export const OPTIONAL_NODE_ALLOWLIST = [
   'demo_offer',
 ] as const;
 
+/** Text nodes a tenant may mark required. Decline does not resolve these. */
+export const REQUIRED_NODE_ALLOWLIST = [
+  'caller_name',
+  'caller_phone',
+  ...OPTIONAL_NODE_ALLOWLIST,
+] as const;
+
 export type OptionalNodeId = (typeof OPTIONAL_NODE_ALLOWLIST)[number];
+export type RequiredNodeId = (typeof REQUIRED_NODE_ALLOWLIST)[number];
 
 export interface ChecklistOverrides {
   disabled_conversation_blocks?: string[];
   booking_mode?: BookingMode;
   message_mode?: MessageMode;
   optional_node_ids?: string[];
+  required_node_ids?: string[];
 }
 
 const PROTECTED_BLOCKS = new Set(['identity']);
 const OPTIONAL_NODE_SET = new Set<string>(OPTIONAL_NODE_ALLOWLIST);
+const REQUIRED_NODE_SET = new Set<string>(REQUIRED_NODE_ALLOWLIST);
 const BOOKING_MODE_SET = new Set<string>(BOOKING_MODES);
 const MESSAGE_MODE_SET = new Set<string>(MESSAGE_MODES);
 
@@ -45,6 +55,7 @@ export function normalizeChecklistOverrides(raw?: ChecklistOverrides | null): Ch
     booking_mode: raw?.booking_mode,
     message_mode: raw?.message_mode,
     optional_node_ids: asStringList(raw?.optional_node_ids),
+    required_node_ids: asStringList(raw?.required_node_ids),
   };
 }
 
@@ -55,6 +66,7 @@ export function applyChecklistOverrides(
   const next = normalizeChecklistOverrides(overrides);
   const disabled = next.disabled_conversation_blocks ?? [];
   const optional = next.optional_node_ids ?? [];
+  const required = next.required_node_ids ?? [];
 
   if (next.booking_mode !== undefined && !BOOKING_MODE_SET.has(next.booking_mode)) {
     return { ok: false, error: `Unknown booking_mode '${next.booking_mode}'.` };
@@ -82,6 +94,23 @@ export function applyChecklistOverrides(
     }
   }
 
+  for (const id of required) {
+    if (!REQUIRED_NODE_SET.has(id)) {
+      return {
+        ok: false,
+        error: `Cannot mark '${id}' required — only supported intake fields can stick.`,
+      };
+    }
+  }
+
+  const both = optional.filter((id) => required.includes(id));
+  if (both.length > 0) {
+    return {
+      ok: false,
+      error: `Cannot mark '${both[0]}' required and optional — listen-only would never resolve.`,
+    };
+  }
+
   if (next.booking_mode === 'never') {
     disabled.push('booking');
   }
@@ -99,6 +128,7 @@ export function applyChecklistOverrides(
   if (next.booking_mode) stored.booking_mode = next.booking_mode;
   if (next.message_mode) stored.message_mode = next.message_mode;
   if (optional.length > 0) stored.optional_node_ids = optional;
+  if (required.length > 0) stored.required_node_ids = required;
 
   return {
     ok: true,

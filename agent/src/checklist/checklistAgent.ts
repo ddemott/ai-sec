@@ -96,7 +96,8 @@ export function resolveSelectableTreeIds(opts: {
   if (opts.library && opts.runtimeConfig) {
     throw new Error('Pass either library or runtimeConfig, not both.');
   }
-  if (opts.runtimeConfig) return compileRuntimeConfig(opts.runtimeConfig).map((tree) => tree.tree_id);
+  if (opts.runtimeConfig)
+    return compileRuntimeConfig(opts.runtimeConfig).map((tree) => tree.tree_id);
   return (opts.library ?? PLATFORM_TREE_LIBRARY).map((tree) => tree.tree_id);
 }
 
@@ -577,7 +578,11 @@ export class ChecklistAgent extends voice.Agent {
   constructor(opts: ChecklistAgentOptions) {
     const library = resolveChecklistLibrary(opts);
     const selectableTreeIds = resolveSelectableTreeIds(opts);
-    const tracker = new ChecklistTracker(library);
+    const requiredRaw = opts.runtimeConfig?.overrides?.required_node_ids;
+    const requiredNodeIds = Array.isArray(requiredRaw)
+      ? requiredRaw.filter((id): id is string => typeof id === 'string')
+      : [];
+    const tracker = new ChecklistTracker(library, { requiredNodeIds });
 
     // The toolkit's effect callbacks capture `this` lazily (arrow bodies run at
     // tool-call/callback time, long after super()) — the rung.ts pattern.

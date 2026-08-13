@@ -1,6 +1,6 @@
 # ROADMAP
 
-**Status:** active execution. Steps 1–7 closed (presets + journey tests). Step 8 is half-built in the backend and not live on the phone. **Date:** 2026-08-13. **Owner:** Dale.
+**Status:** active execution. Steps 1–8 closed. Step 9 first three slices shipped (disable, policy modes, required/optional). Remaining: wording + dry-run. Step 10 E2E not started. **Date:** 2026-08-13. **Owner:** Dale.
 
 This roadmap turns the vertical-preset/block architecture into an execution sequence. It is intentionally ordered by risk: prove the architecture against the current live runtime before widening scope.
 
@@ -317,7 +317,8 @@ Exit criteria:
 Status:
 
 - first slice: disable conversation blocks
-- second slice: booking/message policy modes + optional-field allowlist (wording still later)
+- second slice: booking/message policy modes + optional-field allowlist
+- third slice: required-field enforcement (decline does not resolve)
 
 Already shipped:
 
@@ -328,11 +329,13 @@ Already shipped:
 - `booking_mode` (`offer_once` / `prefer` / `never`) and `message_mode` (`always` / `fallback_only`) persist and land in the live prompt
 - `never` also drops the booking block from the compiled set
 - `optional_node_ids` from a fixed allowlist flip those text nodes to listen-only (goodbye gate cannot stick on them)
+- `required_node_ids` from a fixed allowlist: `record_answer` refuses `declined:true`, node stays open, `finish_call` stays shut
+- a field cannot be both required and optional (listen-only + must-answer is a deadlock)
+- Business Settings chips for required fields; picking required clears optional and vice versa
 
 Still open:
 
 - approved wording tweaks (deferred)
-- required-field enforcement (decline does not resolve) — optional-as-listen is the supported flip
 - preview/dry-run beyond the live chip + policy selectors
 
 Goal:
@@ -490,8 +493,9 @@ Why this phase exists:
 Remaining immediate order from the current checkpoint:
 
 1. approved wording tweaks (explicitly deferred)
-2. widen block depth only when a real tenant needs a tree the shared front-desk set does not have
+2. preview/dry-run of the next call's ask/skip/require set
 3. Step 10 E2E journeys once a live tenant exercises the wired presets
+4. widen block depth only when a real tenant needs a tree the shared front-desk set does not have
 
 ---
 

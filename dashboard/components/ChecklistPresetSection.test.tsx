@@ -107,6 +107,7 @@ describe('ChecklistPresetSection', () => {
           booking_mode: 'offer_once',
           message_mode: 'always',
           optional_node_ids: [],
+          required_node_ids: [],
         },
       });
     });
@@ -128,5 +129,22 @@ describe('ChecklistPresetSection', () => {
       expect(mockToast).toHaveBeenCalledWith('Forbidden', 'error');
     });
     expect(screen.getByLabelText('Preset')).toHaveValue('auto_shop_front_desk');
+  });
+
+  test('HAPPY: marking callback number required posts required_node_ids', async () => {
+    render(<ChecklistPresetSection tenantId="t1" />);
+    await screen.findByText('Salon front desk');
+    fireEvent.click(screen.getByRole('button', { name: 'Callback number' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save checklist' }));
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({
+          checklist_overrides: expect.objectContaining({
+            required_node_ids: ['caller_phone'],
+          }),
+        })
+      );
+    });
   });
 });
