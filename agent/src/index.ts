@@ -438,8 +438,49 @@ export default defineAgent({
     // Accumulates per-model AI usage (LLM tokens, STT audio, TTS chars) from
     // LiveKit's SessionUsageUpdated events. Updated during the call; read once
     // at shutdown to POST costs to /agent-tools/record-ai-cost.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let sessionModelUsage: any[] = [];
+    // Shape matches RecordAiCostSchema.model_usage — LiveKit's Partial<ModelUsage>
+    // is wider (cached/audio token splits) so we snapshot only what the ledger stores.
+    type CostUsageItem = {
+      type: 'llm_usage' | 'tts_usage' | 'stt_usage' | 'interruption_usage';
+      provider: string;
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+      charactersCount: number;
+      audioDurationMs: number;
+    };
+    const COST_USAGE_TYPES = new Set<CostUsageItem['type']>([
+      'llm_usage',
+      'tts_usage',
+      'stt_usage',
+      'interruption_usage',
+    ]);
+    function snapshotCostUsage(raw: {
+      type?: string;
+      provider?: string;
+      model?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+      charactersCount?: number;
+      audioDurationMs?: number;
+    }): CostUsageItem | null {
+      const type = raw.type;
+      if (typeof type !== 'string' || !COST_USAGE_TYPES.has(type as CostUsageItem['type'])) {
+        return null;
+      }
+      const num = (v: number | undefined): number =>
+        typeof v === 'number' && Number.isFinite(v) ? v : 0;
+      return {
+        type: type as CostUsageItem['type'],
+        provider: raw.provider ?? '',
+        model: raw.model ?? '',
+        inputTokens: num(raw.inputTokens),
+        outputTokens: num(raw.outputTokens),
+        charactersCount: num(raw.charactersCount),
+        audioDurationMs: num(raw.audioDurationMs),
+      };
+    }
+    let sessionModelUsage: CostUsageItem[] = [];
     try {
       client = new ToolsClient({
         backendUrl: config.BACKEND_URL,
@@ -1469,7 +1510,9 @@ export default defineAgent({
         // SessionUsageUpdated fires after each LLM/STT/TTS turn and carries
         // the running totals — keeping the last snapshot is sufficient.
         session.on(voice.AgentSessionEventTypes.SessionUsageUpdated, (ev) => {
-          sessionModelUsage = ev.usage.modelUsage;
+          sessionModelUsage = ev.usage.modelUsage
+            .map((u) => snapshotCostUsage(u))
+            .filter((u): u is CostUsageItem => u !== null);
         });
 
         // ── Turn-state instrumentation (5W) ──────────────────────────────
