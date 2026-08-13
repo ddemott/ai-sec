@@ -5,6 +5,7 @@ import { ListChecks } from 'lucide-react';
 import { Api } from '../lib/api';
 import type { Tenant } from '@/lib/types';
 import { deriveChecklistRuntimeConfig } from '../../shared/checklistPresetDerivation';
+import { MAX_WORDING_LENGTH } from '../../shared/checklistOverrides';
 import { PREVIEW_FIELD_DEFAULT_ASK, previewChecklistCall } from '../../shared/checklistPreview';
 import {
   CHECKLIST_PRESET_IDS,
@@ -102,10 +103,14 @@ export default function ChecklistPresetSection({
     overrides: draftOverrides,
   });
   const wordingKey = (map: Record<string, string>) =>
-    Object.keys(map)
-      .sort()
-      .map((id) => `${id}=${map[id]}`)
-      .join('|');
+    JSON.stringify(
+      Object.keys(map)
+        .sort()
+        .reduce<Record<string, string>>((acc, id) => {
+          acc[id] = map[id];
+          return acc;
+        }, {})
+    );
   const dirty =
     draft !== (config?.checklist_preset_id ?? 'derived') ||
     bookingMode !== (config?.checklist_overrides?.booking_mode ?? 'offer_once') ||
@@ -352,7 +357,7 @@ export default function ChecklistPresetSection({
               value={wording[nodeId] ?? ''}
               placeholder={PREVIEW_FIELD_DEFAULT_ASK[nodeId]}
               disabled={loading}
-              maxLength={240}
+              maxLength={MAX_WORDING_LENGTH}
               onChange={(e) => {
                 const value = e.target.value;
                 setWording((current) => {
@@ -376,8 +381,9 @@ export default function ChecklistPresetSection({
           Next-call preview
         </p>
         <p className="text-xs mt-1 mb-3" style={{ color: 'var(--text-muted)' }}>
-          What the live receptionist will be allowed to open, ask, skip, or require. Not saved until
-          you click Save.
+          Draft of which blocks are on, which fields are ASK / LISTEN / REQUIRED, and any wording
+          tweak you typed. Identity ask text on the phone stays the platform wording. Not saved
+          until you click Save.
         </p>
         <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
           Booking: {preview.booking_mode.replace('_', ' ')} · Messages:{' '}
