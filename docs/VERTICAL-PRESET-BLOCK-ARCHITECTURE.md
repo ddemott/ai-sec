@@ -1,6 +1,6 @@
 # VERTICAL-PRESET-BLOCK-ARCHITECTURE
 
-**Status:** phases 1-4, presets, live `runtimeConfig`, setup UI, and Step 9 tenant-safe overrides (disable / policy / optional / required / wording / dry-run) are implemented. Step 10 E2E remains. **Date:** 2026-08-13. **Owner:** Dale.
+**Status:** phases 1-4, presets, live `runtimeConfig`, setup UI, Step 9 overrides, and Step 10 CI journeys are implemented. **Date:** 2026-08-13. **Owner:** Dale.
 
 **The ask:** turn the current one-off call flows into configurable, reusable building blocks that can be pre-packaged by business type. An auto shop should start with an auto-shop-ready set of blocks; a salon should start with salon-ready blocks; both should still be built from the same reusable primitives so the platform does not decay into twenty bespoke scripts.
 
@@ -37,7 +37,7 @@ The first real slice is now in the repo and verified:
 - `agent/src/checklist/presetJourneys.test.ts` walks one host-tool journey per preset (auto-shop book, salon message, local-service buyer demo)
 - each preset now declares `forbidden_trees` and required `defaults`
 
-What is **not** done yet: Step 10 E2E journeys, and unique salon-vs-auto-shop trees. Live `ChecklistAgent` receives `runtimeConfig` from tenant-config. Owners pick the preset and toggle disable / booking / message / optional / required / wording, and see a next-call dry-run, under Business Settings → Call checklist (#338–#339 plus wording/dry-run).
+What is **not** done yet: unique salon-vs-auto-shop trees. Step 10 CI journeys live in `agent/src/checklist/step10Journeys.test.ts`. Live `ChecklistAgent` receives `runtimeConfig` from tenant-config. Owners pick the preset and toggle disable / booking / message / optional / required / wording, and see a next-call dry-run, under Business Settings → Call checklist.
 
 ---
 
