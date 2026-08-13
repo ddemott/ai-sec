@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationBlockDef } from './blockTypes.js';
-import { applyOptionalNodes, compileRuntimeConfig } from './blockCompiler.js';
+import { applyNodeWording, applyOptionalNodes, compileRuntimeConfig } from './blockCompiler.js';
 import { BLOCK_LIBRARY } from './blockLibrary.js';
 import { BOOKING_TREE, IDENTITY_TREE, JOB_TREE, MESSAGE_TREE } from './trees.js';
 
@@ -104,5 +104,29 @@ describe('applyOptionalNodes', () => {
     const node = qa.nodes[0];
     expect(node.type).toBe('text');
     if (node.type === 'text') expect(node.listen).toBe(true);
+  });
+});
+
+describe('applyNodeWording', () => {
+  it('rewrites an approved ask and leaves other nodes alone', () => {
+    const [qa] = applyNodeWording(
+      [
+        {
+          tree_id: 'qa',
+          description: 'questions',
+          nodes: [
+            { node_id: 'qa_summary', type: 'text', ask: 'what they asked' },
+            { node_id: 'other', type: 'text', ask: 'leave me' },
+          ],
+        },
+      ],
+      { qa_summary: 'one line about what they needed' }
+    );
+    const rewritten = qa.nodes[0];
+    const other = qa.nodes[1];
+    expect(rewritten.type).toBe('text');
+    if (rewritten.type === 'text') expect(rewritten.ask).toBe('one line about what they needed');
+    expect(other.type).toBe('text');
+    if (other.type === 'text') expect(other.ask).toBe('leave me');
   });
 });

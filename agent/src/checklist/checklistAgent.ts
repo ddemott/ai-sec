@@ -19,7 +19,7 @@ import { sanitizeStream } from '../speechSanitizer.js';
 import type { KnownCustomer } from '../customerContext.js';
 import { runtimePreamble, type CallRuntime } from '../tasks/callPlan.js';
 import { ChecklistTracker } from './tracker.js';
-import { applyOptionalNodes, compileRuntimeConfig } from './blockCompiler.js';
+import { applyNodeWording, applyOptionalNodes, compileRuntimeConfig } from './blockCompiler.js';
 import type { TenantRuntimeConfig } from './blockTypes.js';
 import { createChecklistTools, type ChecklistToolkit } from './checklistTools.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
@@ -86,7 +86,19 @@ export function resolveChecklistLibrary(opts: {
   }
   const base = opts.library ?? PLATFORM_TREE_LIBRARY;
   const optional = opts.runtimeConfig?.overrides?.optional_node_ids;
-  return Array.isArray(optional) ? applyOptionalNodes(base, optional.map(String)) : base;
+  const withOptional = Array.isArray(optional)
+    ? applyOptionalNodes(base, optional.map(String))
+    : base;
+  const wordingRaw = opts.runtimeConfig?.overrides?.wording;
+  const wording =
+    wordingRaw && typeof wordingRaw === 'object' && !Array.isArray(wordingRaw)
+      ? Object.fromEntries(
+          Object.entries(wordingRaw as Record<string, unknown>).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string'
+          )
+        )
+      : undefined;
+  return applyNodeWording(withOptional, wording);
 }
 
 export function resolveSelectableTreeIds(opts: {

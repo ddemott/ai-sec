@@ -67,6 +67,7 @@ const UpdateConfigSchema = z.object({
       message_mode: z.enum(['always', 'fallback_only']).optional(),
       optional_node_ids: z.array(z.string().min(1)).optional(),
       required_node_ids: z.array(z.string().min(1)).optional(),
+      wording: z.record(z.string(), z.string()).optional(),
     })
     .optional()
     .nullable(),

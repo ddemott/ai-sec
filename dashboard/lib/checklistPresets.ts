@@ -2,7 +2,11 @@ import {
   deriveChecklistRuntimeConfig,
   type ChecklistPresetId,
 } from '../../shared/checklistPresetDerivation';
-import { OPTIONAL_NODE_ALLOWLIST, REQUIRED_NODE_ALLOWLIST } from '../../shared/checklistOverrides';
+import {
+  OPTIONAL_NODE_ALLOWLIST,
+  REQUIRED_NODE_ALLOWLIST,
+  WORDING_NODE_ALLOWLIST,
+} from '../../shared/checklistOverrides';
 
 export const CHECKLIST_PRESET_IDS = [
   'auto_shop_front_desk',
@@ -46,6 +50,7 @@ export const OPTIONAL_NODE_LABELS: Record<string, string> = {
 
 export const OPTIONAL_NODE_IDS = OPTIONAL_NODE_ALLOWLIST;
 export const REQUIRED_NODE_IDS = REQUIRED_NODE_ALLOWLIST;
+export const WORDING_NODE_IDS = WORDING_NODE_ALLOWLIST;
 
 export const REQUIRED_NODE_LABELS: Record<string, string> = {
   caller_name: 'Caller name',

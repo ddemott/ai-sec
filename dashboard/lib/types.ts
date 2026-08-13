@@ -60,6 +60,7 @@ export interface Tenant {
     message_mode?: 'always' | 'fallback_only';
     optional_node_ids?: string[];
     required_node_ids?: string[];
+    wording?: Record<string, string>;
   } | null;
   checklist_runtime_config?: {
     preset_id: string;

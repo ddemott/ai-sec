@@ -77,6 +77,22 @@ describe('applyChecklistOverrides', () => {
     expect(result.error).toMatch(/required/);
   });
 
+  it('keeps approved wording and rejects an unknown node rewrite', () => {
+    const ok = applyChecklistOverrides(salon, {
+      wording: { qa_summary: 'what they wanted to know' },
+    });
+    expect(ok.ok).toBe(true);
+    if (!ok.ok) return;
+    expect(ok.config.overrides).toEqual({ wording: { qa_summary: 'what they wanted to know' } });
+
+    const bad = applyChecklistOverrides(salon, {
+      wording: { caller_phone: 'give me your digits' },
+    });
+    expect(bad.ok).toBe(false);
+    if (bad.ok) return;
+    expect(bad.error).toMatch(/caller_phone/);
+  });
+
   it('rejects the same node as required and optional', () => {
     const result = applyChecklistOverrides(salon, {
       optional_node_ids: ['qa_summary'],

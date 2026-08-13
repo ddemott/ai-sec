@@ -14,18 +14,18 @@ This folder contains the project's technical and operational documentation.
 
 ## Core Documentation
 
-| File                               | Purpose                                                                  |
-| ---------------------------------- | ------------------------------------------------------------------------ |
-| [README.md](../README.md)          | Main project overview (start here)                                       |
-| [CLAUDE.md](../CLAUDE.md)          | Current-state reference for agents & humans (points to docs/ for depth)  |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Technical architecture and stack                                         |
+| File                                                           | Purpose                                                                                                              |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [README.md](../README.md)                                      | Main project overview (start here)                                                                                   |
+| [CLAUDE.md](../CLAUDE.md)                                      | Current-state reference for agents & humans (points to docs/ for depth)                                              |
+| [ARCHITECTURE.md](ARCHITECTURE.md)                             | Technical architecture and stack                                                                                     |
 | [QUESTION_TREE_ARCHITECTURE.md](QUESTION_TREE_ARCHITECTURE.md) | **How a call actually works — the LIVE call flow** (`agent/src/checklist/`). Read before changing any call behaviour |
-| [DIAGRAMS.md](DIAGRAMS.md)         | Mermaid diagrams (deployment, voice flow, call sequencing, booking, OAuth, etc.) |
-| [VOICE_AGENT_PLAYBOOK.md](VOICE_AGENT_PLAYBOOK.md) | Voice pipeline rules — STT/LLM/TTS, latency, turn-taking |
-| [DEPLOYMENT.md](DEPLOYMENT.md)     | How to run, deploy, and configure the system                             |
-| [SECURITY.md](SECURITY.md)         | Security model, RLS, auth, and hardening                                 |
-| [RUNBOOK.md](RUNBOOK.md)           | Production incident + telephony recovery playbook                        |
-| [ALERTS.md](ALERTS.md)             | Alerting rules (optional; paid observability decided against 2026-07-02) |
+| [DIAGRAMS.md](DIAGRAMS.md)                                     | Mermaid diagrams (deployment, voice flow, call sequencing, booking, OAuth, etc.)                                     |
+| [VOICE_AGENT_PLAYBOOK.md](VOICE_AGENT_PLAYBOOK.md)             | Voice pipeline rules — STT/LLM/TTS, latency, turn-taking                                                             |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                                 | How to run, deploy, and configure the system                                                                         |
+| [SECURITY.md](SECURITY.md)                                     | Security model, RLS, auth, and hardening                                                                             |
+| [RUNBOOK.md](RUNBOOK.md)                                       | Production incident + telephony recovery playbook                                                                    |
+| [ALERTS.md](ALERTS.md)                                         | Alerting rules (optional; paid observability decided against 2026-07-02)                                             |
 
 ## Planning, Tasks & Status
 
@@ -33,18 +33,18 @@ This folder contains the project's technical and operational documentation.
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | [TODO.md](TODO.md)                   | **The one backlog** — all open work, prioritized (GAPS + ideas + go-live folded in 2026-07-05) |
 | [RESOLVED.md](RESOLVED.md)           | Completed phases + historical bug tracker + session archive (incl. the folded-doc snapshots)   |
-| [ROADMAP.md](ROADMAP.md)             | Vertical-preset execution roadmap (steps 1–8 closed; step 9 leftover + step 10 E2E open)        |
+| [ROADMAP.md](ROADMAP.md)             | Vertical-preset execution roadmap (steps 1–9 closed; step 10 E2E open)                         |
 | [TEST_COVERAGE.md](TEST_COVERAGE.md) | Test coverage status and gaps                                                                  |
 | [TEST_DB_AUDIT.md](TEST_DB_AUDIT.md) | Mocked-DB vs real-SQL coverage map                                                             |
 
 ## Voice AI
 
-| File                                                           | Purpose                                                           |
-| -------------------------------------------------------------- | ----------------------------------------------------------------- |
-| [VOICE_AGENT_PLAYBOOK.md](VOICE_AGENT_PLAYBOOK.md)             | Authoritative rulebook for building customer voice scripts        |
-| [VOICE_DEADAIR_RESEARCH.md](VOICE_DEADAIR_RESEARCH.md)         | Dead-air / latency research findings (mostly shipped)             |
-| [AIASSISTANT_PERSONA_DRAFT.md](AIASSISTANT_PERSONA_DRAFT.md)   | Thinking Hammer persona + call-flow draft                         |
-| [aiassistant-knowledge-base.md](aiassistant-knowledge-base.md) | Source content for the Thinking Hammer AI assistant KB            |
+| File                                                           | Purpose                                                                         |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [VOICE_AGENT_PLAYBOOK.md](VOICE_AGENT_PLAYBOOK.md)             | Authoritative rulebook for building customer voice scripts                      |
+| [VOICE_DEADAIR_RESEARCH.md](VOICE_DEADAIR_RESEARCH.md)         | Dead-air / latency research findings (mostly shipped)                           |
+| [AIASSISTANT_PERSONA_DRAFT.md](AIASSISTANT_PERSONA_DRAFT.md)   | Thinking Hammer persona + call-flow draft                                       |
+| [aiassistant-knowledge-base.md](aiassistant-knowledge-base.md) | Source content for the Thinking Hammer AI assistant KB                          |
 | [FRAMEWORK_MIGRATIONS.md](FRAMEWORK_MIGRATIONS.md)             | Voice-stack migration history (Vapi → LiveKit, Grok/OpenAI TTS → Deepgram Aura) |
 
 ## Onboarding & Operations
@@ -57,12 +57,12 @@ This folder contains the project's technical and operational documentation.
 
 ## Product & Strategy
 
-| File                                                 | Purpose                                         |
-| ---------------------------------------------------- | ----------------------------------------------- |
-| [MISSION_STATEMENT.md](MISSION_STATEMENT.md)         | Product mission and goals                       |
-| [STRATEGY.md](STRATEGY.md)                           | Product + competitive strategy (positioning)    |
-| [COMPETITOR_WEAKPOINTS.md](COMPETITOR_WEAKPOINTS.md) | Competitor attack map                           |
-| [SECRETARYHQ_FEATURES.md](SECRETARYHQ_FEATURES.md)   | Organized capability outline with status legend |
+| File                                                                           | Purpose                                                                             |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| [MISSION_STATEMENT.md](MISSION_STATEMENT.md)                                   | Product mission and goals                                                           |
+| [STRATEGY.md](STRATEGY.md)                                                     | Product + competitive strategy (positioning)                                        |
+| [COMPETITOR_WEAKPOINTS.md](COMPETITOR_WEAKPOINTS.md)                           | Competitor attack map                                                               |
+| [SECRETARYHQ_FEATURES.md](SECRETARYHQ_FEATURES.md)                             | Organized capability outline with status legend                                     |
 | [VERTICAL-PRESET-BLOCK-ARCHITECTURE.md](VERTICAL-PRESET-BLOCK-ARCHITECTURE.md) | Design for reusable block classes, business-type presets, and tenant-safe overrides |
 
 ## Design
@@ -104,12 +104,12 @@ carries a banner saying so. They are retained because the **bugs** they catalogu
 and the current design's guards exist because of them — read them for evidence, not for
 behaviour.
 
-| File | Describes | Status |
-| ---- | --------- | ------ |
-| [BUILDING_SCRIPT_NOTES.md](BUILDING_SCRIPT_NOTES.md) | TaskGroup "rungs" (`agent/src/tasks/`) | Superseded 2026-07-21 · fallback behind `ENABLE_TASK_GROUP` |
-| [CALL_LADDER.md](CALL_LADDER.md) | The prompt ladder — generated from `src/services/scripts/blocks.ts` | Superseded · fallback when both flags are off. Editing a rung changes nothing about a live call |
-| [VOICE_DEADAIR_RESEARCH.md](VOICE_DEADAIR_RESEARCH.md) | Working around non-streaming OpenAI TTS | Core premise moot — TTS is Deepgram Aura (streaming) since 2026-07-14 |
-| [AIASSISTANT_PERSONA_DRAFT.md](AIASSISTANT_PERSONA_DRAFT.md) | 2026-06-10 persona + call-flow brief | Stale; persona is `Piper`, flow is question trees |
+| File                                                         | Describes                                                           | Status                                                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| [BUILDING_SCRIPT_NOTES.md](BUILDING_SCRIPT_NOTES.md)         | TaskGroup "rungs" (`agent/src/tasks/`)                              | Superseded 2026-07-21 · fallback behind `ENABLE_TASK_GROUP`                                     |
+| [CALL_LADDER.md](CALL_LADDER.md)                             | The prompt ladder — generated from `src/services/scripts/blocks.ts` | Superseded · fallback when both flags are off. Editing a rung changes nothing about a live call |
+| [VOICE_DEADAIR_RESEARCH.md](VOICE_DEADAIR_RESEARCH.md)       | Working around non-streaming OpenAI TTS                             | Core premise moot — TTS is Deepgram Aura (streaming) since 2026-07-14                           |
+| [AIASSISTANT_PERSONA_DRAFT.md](AIASSISTANT_PERSONA_DRAFT.md) | 2026-06-10 persona + call-flow brief                                | Stale; persona is `Piper`, flow is question trees                                               |
 
 **The live architecture is [QUESTION_TREE_ARCHITECTURE.md](QUESTION_TREE_ARCHITECTURE.md).**
 
