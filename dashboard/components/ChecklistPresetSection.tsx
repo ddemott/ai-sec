@@ -10,6 +10,8 @@ import {
   CHECKLIST_PRESET_LABELS,
   OPTIONAL_NODE_IDS,
   OPTIONAL_NODE_LABELS,
+  REQUIRED_NODE_IDS,
+  REQUIRED_NODE_LABELS,
   checklistPresetLabel,
   conversationBlockLabel,
   runtimeForTenant,
@@ -36,6 +38,7 @@ export default function ChecklistPresetSection({
   const [bookingMode, setBookingMode] = useState<string>('offer_once');
   const [messageMode, setMessageMode] = useState<string>('always');
   const [optionalNodes, setOptionalNodes] = useState<string[]>([]);
+  const [requiredNodes, setRequiredNodes] = useState<string[]>([]);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -51,6 +54,7 @@ export default function ChecklistPresetSection({
         setBookingMode(cfg.checklist_overrides?.booking_mode ?? 'offer_once');
         setMessageMode(cfg.checklist_overrides?.message_mode ?? 'always');
         setOptionalNodes(cfg.checklist_overrides?.optional_node_ids ?? []);
+        setRequiredNodes(cfg.checklist_overrides?.required_node_ids ?? []);
       })
       .catch(() => {
         if (active) setConfig(null);
@@ -77,12 +81,14 @@ export default function ChecklistPresetSection({
   ).enabled_conversation_blocks;
   const savedDisabled = config?.checklist_overrides?.disabled_conversation_blocks ?? [];
   const savedOptional = config?.checklist_overrides?.optional_node_ids ?? [];
+  const savedRequired = config?.checklist_overrides?.required_node_ids ?? [];
   const dirty =
     draft !== (config?.checklist_preset_id ?? 'derived') ||
     bookingMode !== (config?.checklist_overrides?.booking_mode ?? 'offer_once') ||
     messageMode !== (config?.checklist_overrides?.message_mode ?? 'always') ||
     [...disabledBlocks].sort().join(',') !== [...savedDisabled].sort().join(',') ||
-    [...optionalNodes].sort().join(',') !== [...savedOptional].sort().join(',');
+    [...optionalNodes].sort().join(',') !== [...savedOptional].sort().join(',') ||
+    [...requiredNodes].sort().join(',') !== [...savedRequired].sort().join(',');
 
   async function save() {
     if (!tenantId) return;
@@ -95,6 +101,7 @@ export default function ChecklistPresetSection({
           booking_mode: bookingMode as 'offer_once' | 'prefer' | 'never',
           message_mode: messageMode as 'always' | 'fallback_only',
           optional_node_ids: optionalNodes,
+          required_node_ids: requiredNodes,
         },
       });
       if (!res.success) {
@@ -108,6 +115,7 @@ export default function ChecklistPresetSection({
       setBookingMode(next.checklist_overrides?.booking_mode ?? 'offer_once');
       setMessageMode(next.checklist_overrides?.message_mode ?? 'always');
       setOptionalNodes(next.checklist_overrides?.optional_node_ids ?? []);
+      setRequiredNodes(next.checklist_overrides?.required_node_ids ?? []);
       showToast(
         draft === 'derived'
           ? 'Call checklist follows business type again.'
@@ -241,13 +249,14 @@ export default function ChecklistPresetSection({
                 key={nodeId}
                 type="button"
                 disabled={loading}
-                onClick={() =>
+                onClick={() => {
                   setOptionalNodes((current) =>
                     current.includes(nodeId)
                       ? current.filter((id) => id !== nodeId)
                       : [...current, nodeId]
-                  )
-                }
+                  );
+                  setRequiredNodes((current) => current.filter((id) => id !== nodeId));
+                }}
                 className="text-xs font-medium px-2 py-1 rounded-lg"
                 style={{
                   backgroundColor: on ? 'var(--accent-muted)' : 'transparent',
@@ -256,6 +265,43 @@ export default function ChecklistPresetSection({
                 }}
               >
                 {OPTIONAL_NODE_LABELS[nodeId] ?? nodeId}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <p
+          className="block text-xs font-bold uppercase mb-2"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          Required fields (decline does not finish the call)
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {REQUIRED_NODE_IDS.map((nodeId) => {
+            const on = requiredNodes.includes(nodeId);
+            return (
+              <button
+                key={nodeId}
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setRequiredNodes((current) =>
+                    current.includes(nodeId)
+                      ? current.filter((id) => id !== nodeId)
+                      : [...current, nodeId]
+                  );
+                  setOptionalNodes((current) => current.filter((id) => id !== nodeId));
+                }}
+                className="text-xs font-medium px-2 py-1 rounded-lg"
+                style={{
+                  backgroundColor: on ? 'var(--accent-muted)' : 'transparent',
+                  color: on ? 'var(--accent-soft)' : 'var(--text-secondary)',
+                  border: `1px solid ${on ? 'transparent' : 'var(--border-soft)'}`,
+                }}
+              >
+                {REQUIRED_NODE_LABELS[nodeId] ?? nodeId}
               </button>
             );
           })}

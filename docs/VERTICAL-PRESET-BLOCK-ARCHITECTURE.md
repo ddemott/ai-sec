@@ -1,6 +1,6 @@
 # VERTICAL-PRESET-BLOCK-ARCHITECTURE
 
-**Status:** phases 1-4, second reusable path, first three presets, Step 7 journeys, and live `runtimeConfig` plumbing are implemented. Setup preset UI and tenant-safe overrides remain. **Date:** 2026-08-13. **Owner:** Dale.
+**Status:** phases 1-4, presets, live `runtimeConfig`, setup UI, and tenant-safe overrides (disable / policy / optional / required) are implemented. Wording editor and dry-run remain. **Date:** 2026-08-13. **Owner:** Dale.
 
 **The ask:** turn the current one-off call flows into configurable, reusable building blocks that can be pre-packaged by business type. An auto shop should start with an auto-shop-ready set of blocks; a salon should start with salon-ready blocks; both should still be built from the same reusable primitives so the platform does not decay into twenty bespoke scripts.
 

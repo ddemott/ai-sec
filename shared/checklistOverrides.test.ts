@@ -58,6 +58,34 @@ describe('applyChecklistOverrides', () => {
     if (!result.ok) return;
     expect(result.config.overrides).toEqual({ optional_node_ids: ['qa_summary'] });
   });
+
+  it('keeps a supported required node on the override payload', () => {
+    const result = applyChecklistOverrides(salon, {
+      required_node_ids: ['caller_phone'],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.overrides).toEqual({ required_node_ids: ['caller_phone'] });
+  });
+
+  it('rejects an unknown required node', () => {
+    const result = applyChecklistOverrides(salon, {
+      required_node_ids: ['book'],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/required/);
+  });
+
+  it('rejects the same node as required and optional', () => {
+    const result = applyChecklistOverrides(salon, {
+      optional_node_ids: ['qa_summary'],
+      required_node_ids: ['qa_summary'],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/qa_summary/);
+  });
 });
 
 describe('deriveChecklistRuntimeConfig with overrides', () => {

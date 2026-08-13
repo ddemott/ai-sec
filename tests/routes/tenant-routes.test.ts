@@ -695,6 +695,61 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     expect(queries.some((q) => q.text.includes('UPDATE tenants SET'))).toBe(false);
   });
 
+  it('SAD: the same field cannot be required and optional', async () => {
+    // WHO: owner toggling Call checklist chips
+    // WHAT: one node marked both required and optional
+    // WHEN: POST /tenants/:id/update-config
+    // WHERE: applyChecklistOverrides write-time validation
+    // WHY: listen-only + must-answer is a deadlock — the call could never finish
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          checklist_preset_id: 'salon_front_desk',
+          checklist_overrides: {},
+          system_prompt: 'You are Bella.',
+          persona_name: null,
+          default_service_id: null,
+          voice_id: 'ara',
+          first_message: 'Hi!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+          forwarded_from_phone: null,
+          inbound_phone: null,
+          default_buffer_minutes: 0,
+          call_disclosure: null,
+        },
+      ],
+      rowCount: 1,
+    });
+    queryResponses.push({ rows: [], rowCount: 0 }); // ROLLBACK
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: {
+        checklist_overrides: {
+          optional_node_ids: ['qa_summary'],
+          required_node_ids: ['qa_summary'],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/qa_summary/);
+    expect(queries.some((q) => q.text.includes('UPDATE tenants SET'))).toBe(false);
+  });
+
   it('HAPPY: forward_phone persists through update-config', async () => {
     // WHO: owner setting the "forward calls to my cell" number on the AI config
     //      page, then saving.
@@ -743,9 +798,9 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.text).toContain('forward_phone');
     // Param order now includes checklist_preset_id after business_type.
-    expect(Array.from(JSON.stringify(updateQuery!.params[14])).map((c) => c.charCodeAt(0))).toEqual([
-      34, 43, 49, 54, 48, 56, 50, 49, 55, 53, 51, 48, 51, 34,
-    ]); // exact serialized value: "+160****5303"
+    expect(Array.from(JSON.stringify(updateQuery!.params[14])).map((c) => c.charCodeAt(0))).toEqual(
+      [34, 43, 49, 54, 48, 56, 50, 49, 55, 53, 51, 48, 51, 34]
+    ); // exact serialized value: "+160****5303"
   });
 
   it('HAPPY: default_buffer_minutes persists through update-config', async () => {
@@ -890,9 +945,9 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     //   save_preferences_enabled, preferences_instructions, tts_voice,
     //   tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise,
     //   forward_phone, owner_phone, tenant_id] with checklist_preset_id inserted earlier.
-    expect(Array.from(JSON.stringify(updateQuery!.params[15])).map((c) => c.charCodeAt(0))).toEqual([
-      34, 43, 49, 54, 51, 48, 53, 53, 53, 48, 49, 48, 48, 34,
-    ]); // exact serialized value: "+163****0100"
+    expect(Array.from(JSON.stringify(updateQuery!.params[15])).map((c) => c.charCodeAt(0))).toEqual(
+      [34, 43, 49, 54, 51, 48, 53, 53, 53, 48, 49, 48, 48, 34]
+    ); // exact serialized value: "+163****0100"
   });
 
   it('HAPPY: owner_phone explicit null clears the notification number', async () => {

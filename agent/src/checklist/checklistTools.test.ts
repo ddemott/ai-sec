@@ -80,10 +80,7 @@ function makeKit(overrides: Partial<ChecklistToolDeps> = {}) {
   };
 }
 
-function makePresetKit(
-  preset: VerticalPresetDef,
-  overrides: Partial<ChecklistToolDeps> = {}
-) {
+function makePresetKit(preset: VerticalPresetDef, overrides: Partial<ChecklistToolDeps> = {}) {
   const runtimeConfig = materializeRuntimeConfig(preset);
   return makeKit({
     selectableTreeIds: resolveSelectableTreeIds({ runtimeConfig }),
@@ -839,6 +836,39 @@ describe('finish_call (the goodbye gate)', () => {
     const res = await call(toolkit.selectedTools(), 'finish_call', {});
     expect(closeCall).toHaveBeenCalledOnce();
     expect(res).toBe('Call complete.');
+  });
+
+  it('SAD: declining a required callback number does not open the goodbye gate', async () => {
+    const tracker = new ChecklistTracker(PLATFORM_TREE_LIBRARY, {
+      requiredNodeIds: ['caller_phone'],
+    });
+    const closeCall = vi.fn(async () => {});
+    const toolkit = createChecklistTools({
+      tracker,
+      library: PLATFORM_TREE_LIBRARY,
+      realTools: {
+        take_message: fakeTool(ok({ message_id: 'msg_1' })),
+      } as unknown as llm.ToolContext,
+      onSelectionChanged: vi.fn(),
+      closeCall,
+    });
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Sue',
+    });
+    const declined = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      declined: true,
+    });
+    expect(declined).toMatch(/required/);
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'message_body',
+      value: 'call me back',
+    });
+    const res = await call(toolkit.selectedTools(), 'finish_call', {});
+    expect(res).toContain('not complete');
+    expect(closeCall).not.toHaveBeenCalled();
   });
 });
 

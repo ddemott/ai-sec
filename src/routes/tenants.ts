@@ -66,6 +66,7 @@ const UpdateConfigSchema = z.object({
       booking_mode: z.enum(['offer_once', 'prefer', 'never']).optional(),
       message_mode: z.enum(['always', 'fallback_only']).optional(),
       optional_node_ids: z.array(z.string().min(1)).optional(),
+      required_node_ids: z.array(z.string().min(1)).optional(),
     })
     .optional()
     .nullable(),

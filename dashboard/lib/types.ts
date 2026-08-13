@@ -49,12 +49,17 @@ export interface Tenant {
   tenant_id: string;
   name: string;
   business_type: string;
-  checklist_preset_id?: 'auto_shop_front_desk' | 'salon_front_desk' | 'local_service_front_desk' | null;
+  checklist_preset_id?:
+    | 'auto_shop_front_desk'
+    | 'salon_front_desk'
+    | 'local_service_front_desk'
+    | null;
   checklist_overrides?: {
     disabled_conversation_blocks?: string[];
     booking_mode?: 'offer_once' | 'prefer' | 'never';
     message_mode?: 'always' | 'fallback_only';
     optional_node_ids?: string[];
+    required_node_ids?: string[];
   } | null;
   checklist_runtime_config?: {
     preset_id: string;
