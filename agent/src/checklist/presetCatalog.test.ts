@@ -82,4 +82,25 @@ describe('preset catalog', () => {
       'schedule_change',
     ]);
   });
+
+  it('never enables a tree the preset itself forbids', () => {
+    for (const preset of PRESET_LIBRARY) {
+      const enabled = new Set(preset.conversation_blocks);
+      for (const forbidden of preset.forbidden_trees) {
+        expect(enabled.has(forbidden)).toBe(false);
+      }
+    }
+  });
+
+  it('auto shop and salon share the same front-desk trees (unique vertical trees not invented)', () => {
+    expect(AUTO_SHOP_PRESET.conversation_blocks).toEqual(SALON_PRESET.conversation_blocks);
+    expect(AUTO_SHOP_PRESET.forbidden_trees).toEqual(SALON_PRESET.forbidden_trees);
+  });
+
+  it('ships required defaults for booking mode and primary intake', () => {
+    for (const preset of PRESET_LIBRARY) {
+      expect(preset.defaults.booking_mode).toBe('offer_once');
+      expect(typeof preset.defaults.primary_intake).toBe('string');
+    }
+  });
 });

@@ -72,6 +72,7 @@ describe('vertical preset block schemas', () => {
       policy_blocks: ['booking_mode'],
       knowledge_blocks: ['hours'],
       outcome_blocks: ['create_booking'],
+      forbidden_trees: ['job'],
       defaults: { booking_mode: 'offer_once' },
     });
     expect(parsed.preset_id).toBe('autoshop_default');
@@ -85,6 +86,7 @@ describe('vertical preset block schemas', () => {
       policy_blocks: [],
       knowledge_blocks: [],
       outcome_blocks: [],
+      forbidden_trees: [],
       defaults: {},
     });
     expect(result.success).toBe(false);

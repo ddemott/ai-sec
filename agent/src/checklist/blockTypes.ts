@@ -32,11 +32,7 @@ export interface OutcomeBlockDef extends BaseBlockDef {
   settings: Record<string, unknown>;
 }
 
-export type BlockDef =
-  | ConversationBlockDef
-  | PolicyBlockDef
-  | KnowledgeBlockDef
-  | OutcomeBlockDef;
+export type BlockDef = ConversationBlockDef | PolicyBlockDef | KnowledgeBlockDef | OutcomeBlockDef;
 
 export interface VerticalPresetDef {
   preset_id: string;
@@ -46,6 +42,9 @@ export interface VerticalPresetDef {
   policy_blocks: string[];
   knowledge_blocks: string[];
   outcome_blocks: string[];
+  /** Trees this preset must never select, even if a caller asks. */
+  forbidden_trees: string[];
+  /** Required starting overrides (booking mode, primary intake, …). */
   defaults: Record<string, unknown>;
 }
 

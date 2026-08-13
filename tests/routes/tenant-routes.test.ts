@@ -358,7 +358,7 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     // Pin tx boundaries + correct cleanup order.
     expect(queries[0].text).toBe('BEGIN');
     expect(queries[1].text).toContain(
-      'SELECT business_type, checklist_preset_id, system_prompt, persona_name, default_service_id, voice_id, first_message'
+      'SELECT business_type, checklist_preset_id, checklist_overrides, system_prompt, persona_name, default_service_id, voice_id, first_message'
     );
     expect(queries[1].text).toContain('FROM tenants');
     expect(queries[1].text).toContain('FOR UPDATE');
@@ -648,6 +648,51 @@ describe('POST /tenants/:id/update-config — business_type change cleanup', () 
     const updateQuery = queries.find((q) => q.text.includes('UPDATE tenants SET'));
     expect(updateQuery!.text).toContain('checklist_preset_id');
     expect(updateQuery!.params[3]).toBe('local_service_front_desk');
+  });
+
+  it('SAD: disabling identity via checklist_overrides is rejected 400', async () => {
+    queryResponses.push({ rows: [], rowCount: 0 }); // BEGIN
+    queryResponses.push({
+      rows: [
+        {
+          business_type: 'salon',
+          checklist_preset_id: 'salon_front_desk',
+          checklist_overrides: {},
+          system_prompt: 'You are Bella.',
+          persona_name: null,
+          default_service_id: null,
+          voice_id: 'ara',
+          first_message: 'Hi!',
+          save_preferences_enabled: false,
+          preferences_instructions: null,
+          tts_voice: null,
+          tts_speed: null,
+          tts_soft: null,
+          tts_cheerful: null,
+          tts_formal: null,
+          tts_warm: null,
+          tts_concise: null,
+          forward_phone: null,
+          owner_phone: null,
+          forwarded_from_phone: null,
+          inbound_phone: null,
+          default_buffer_minutes: 0,
+          call_disclosure: null,
+        },
+      ],
+      rowCount: 1,
+    });
+    queryResponses.push({ rows: [], rowCount: 0 }); // ROLLBACK
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/tenants/${TENANT_ID_A}/update-config`,
+      payload: { checklist_overrides: { disabled_conversation_blocks: ['identity'] } },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/identity/);
+    expect(queries.some((q) => q.text.includes('UPDATE tenants SET'))).toBe(false);
   });
 
   it('HAPPY: forward_phone persists through update-config', async () => {

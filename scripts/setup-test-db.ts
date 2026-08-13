@@ -7,7 +7,7 @@
  *
  * - Creates 'test_db' if it does not exist (using superuser on the postgres DB).
  * - Runs ALL migrations from supabase/migrations/ *lexically* up to and
- *   including 20260812000100_tenant_checklist_preset_id.sql as the superuser.
+ *   including 20260813000000_tenant_checklist_overrides.sql as the superuser.
  * - Ensures the app_user role exists with NOBYPASSRLS (the migration does this;
  *   we re-assert it for safety).
  * - Verifies the role cannot bypass RLS.
@@ -31,7 +31,7 @@ import { Client } from 'pg';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const TARGET_MIGRATION = '20260812000100_tenant_checklist_preset_id.sql';
+const TARGET_MIGRATION = '20260813000000_tenant_checklist_overrides.sql';
 const ROOT_DIR = path.resolve(__dirname, '..');
 const MIGRATIONS_DIR = path.join(ROOT_DIR, 'supabase/migrations');
 

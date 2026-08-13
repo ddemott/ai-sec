@@ -78,7 +78,60 @@ describe('fetchTenantConfig', () => {
       // renders this list, and "you can ask for undefined" is not a sentence a
       // receptionist says. 2026-07-31.
       staffFirstNames: [],
+      checklistRuntimeConfig: null,
     });
+  });
+
+  it('HAPPY: surfaces checklist_runtime_config so the live agent can compile the preset', async () => {
+    // WHO: a salon tenant whose backend already derives the front-desk preset.
+    // WHAT: snake_case checklist_runtime_config lands as a typed TenantRuntimeConfig.
+    // WHEN: every connect, after tenant-config returns.
+    // WHERE: fetchTenantConfig → ChecklistAgent({ runtimeConfig }).
+    // WHY: until this field was plumbed, presets existed and the phone ignored them.
+    const runtime = {
+      preset_id: 'salon_front_desk',
+      enabled_conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+      enabled_policy_blocks: [],
+      enabled_knowledge_blocks: [],
+      enabled_outcome_blocks: [],
+      overrides: {},
+      version: 1,
+    };
+    const client = clientWith({
+      status: 200,
+      body: {
+        success: true,
+        result: {
+          name: 'Bella Hair',
+          timezone: 'America/Chicago',
+          system_prompt: null,
+          checklist_runtime_config: runtime,
+        },
+      },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg.checklistRuntimeConfig).toEqual(runtime);
+  });
+
+  it('SAD: a malformed checklist_runtime_config is dropped, not a crashed greeting', async () => {
+    // WHO: an older or broken backend that sends a half-built preset object.
+    // WHAT: parse fails closed to null; the rest of tenant config still applies.
+    // WHY: a bad preset must never take the call down — full-library fallback is honest.
+    const client = clientWith({
+      status: 200,
+      body: {
+        success: true,
+        result: {
+          name: 'Bella Hair',
+          timezone: 'America/Chicago',
+          system_prompt: null,
+          checklist_runtime_config: { preset_id: 'salon_front_desk' },
+        },
+      },
+    });
+    const cfg = await fetchTenantConfig(client, TENANT_ID);
+    expect(cfg.name).toBe('Bella Hair');
+    expect(cfg.checklistRuntimeConfig).toBeNull();
   });
 
   it('parses the staff roster, and drops blanks a stale backend might send', async () => {

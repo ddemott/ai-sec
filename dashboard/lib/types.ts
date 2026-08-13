@@ -50,13 +50,19 @@ export interface Tenant {
   name: string;
   business_type: string;
   checklist_preset_id?: 'auto_shop_front_desk' | 'salon_front_desk' | 'local_service_front_desk' | null;
+  checklist_overrides?: {
+    disabled_conversation_blocks?: string[];
+    booking_mode?: 'offer_once' | 'prefer' | 'never';
+    message_mode?: 'always' | 'fallback_only';
+    optional_node_ids?: string[];
+  } | null;
   checklist_runtime_config?: {
     preset_id: string;
     enabled_conversation_blocks: string[];
     enabled_policy_blocks: string[];
     enabled_knowledge_blocks: string[];
     enabled_outcome_blocks: string[];
-    overrides: Record<string, never>;
+    overrides: Record<string, unknown>;
     version: 1;
   };
   // Nullable in the DB schema and routinely null for newly-created tenants

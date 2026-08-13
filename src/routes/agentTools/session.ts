@@ -68,6 +68,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           timezone: string | null;
           business_type: string | null;
           checklist_preset_id: string | null;
+          checklist_overrides: { disabled_conversation_blocks?: string[] } | null;
           system_prompt: string | null;
           persona_name: string | null;
           first_message: string | null;
@@ -88,7 +89,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           greeting_closer: string | null;
           booking_mechanics: string | null;
         }>(
-          `SELECT name, timezone, business_type, checklist_preset_id, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, inbound_phone, call_disclosure, greeting_menu, greeting_closer, booking_mechanics FROM tenants WHERE tenant_id = $1`,
+          `SELECT name, timezone, business_type, checklist_preset_id, checklist_overrides, system_prompt, persona_name, first_message, save_preferences_enabled, preferences_instructions, tts_voice, tts_speed, tts_soft, tts_cheerful, tts_formal, tts_warm, tts_concise, forward_phone, forwarded_from_phone, inbound_phone, call_disclosure, greeting_menu, greeting_closer, booking_mechanics FROM tenants WHERE tenant_id = $1`,
           [args.tenant_id]
         );
         if (!res.rows[0]) return null;
@@ -207,7 +208,8 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         booking_mechanics: row.booking_mechanics ?? null,
         checklist_runtime_config: deriveChecklistRuntimeConfig(
           row.business_type,
-          row.checklist_preset_id
+          row.checklist_preset_id,
+          row.checklist_overrides
         ),
         // Active staff first names — the roster the agent checks a caller-named
         // person against before repeating it back as fact ("Jane" → "You mean

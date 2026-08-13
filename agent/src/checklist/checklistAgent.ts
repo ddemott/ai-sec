@@ -19,7 +19,7 @@ import { sanitizeStream } from '../speechSanitizer.js';
 import type { KnownCustomer } from '../customerContext.js';
 import { runtimePreamble, type CallRuntime } from '../tasks/callPlan.js';
 import { ChecklistTracker } from './tracker.js';
-import { compileRuntimeConfig } from './blockCompiler.js';
+import { applyOptionalNodes, compileRuntimeConfig } from './blockCompiler.js';
 import type { TenantRuntimeConfig } from './blockTypes.js';
 import { createChecklistTools, type ChecklistToolkit } from './checklistTools.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
@@ -84,7 +84,9 @@ export function resolveChecklistLibrary(opts: {
   if (opts.library && opts.runtimeConfig) {
     throw new Error('Pass either library or runtimeConfig, not both.');
   }
-  return opts.library ?? PLATFORM_TREE_LIBRARY;
+  const base = opts.library ?? PLATFORM_TREE_LIBRARY;
+  const optional = opts.runtimeConfig?.overrides?.optional_node_ids;
+  return Array.isArray(optional) ? applyOptionalNodes(base, optional.map(String)) : base;
 }
 
 export function resolveSelectableTreeIds(opts: {
@@ -141,6 +143,21 @@ function renderKnownCaller(known: KnownCustomer | null, timezone: string): strin
   return `\n# Known caller\n${lines.join('\n')}\n`;
 }
 
+function renderCallPolicy(config?: TenantRuntimeConfig): string {
+  const overrides = config?.overrides ?? {};
+  const booking =
+    overrides.booking_mode === 'never'
+      ? 'Do NOT offer or book a time. If they ask for an appointment, take a message for the owner.'
+      : overrides.booking_mode === 'prefer'
+        ? 'Prefer booking a real time whenever the caller has a goal that could use one. Offer the nearest open slots; do not wait to be asked.'
+        : 'Offer a time once when it fits. If they pass, take a message instead of pushing another slot.';
+  const message =
+    overrides.message_mode === 'fallback_only'
+      ? 'Do not open with a message. Take a message only when nothing else fits or they refuse a time.'
+      : 'A message is always available if they want the owner to call back.';
+  return `\n# Call policy\n- Booking: ${booking}\n- Messages: ${message}\n`;
+}
+
 /** The system prompt — persona, runtime facts, the tree menu, and the ported
  *  conversation rules. Exported for tests and the toolselect-style evals. */
 export function buildChecklistPrompt(opts: {
@@ -153,6 +170,7 @@ export function buildChecklistPrompt(opts: {
   staffFirstNames?: string[];
   businessName?: string | null;
   businessBlurb?: string | null;
+  runtimeConfig?: TenantRuntimeConfig;
 }): string {
   const selectable = new Set(opts.selectableTreeIds ?? opts.library.map((tree) => tree.tree_id));
   const menu = opts.library
@@ -222,7 +240,7 @@ export function buildChecklistPrompt(opts: {
   return `${opts.persona}
 
 ${runtimePreamble(opts.runtime)}
-${businessSection}${knownSection}
+${businessSection}${knownSection}${renderCallPolicy(opts.runtimeConfig)}
 # How this call works
 There is ONE conversation and a CHECKLIST the system keeps for you — you never track
 progress yourself. Your three jobs:
@@ -609,6 +627,7 @@ export class ChecklistAgent extends voice.Agent {
         staffFirstNames: opts.staffFirstNames,
         businessName: opts.businessName,
         businessBlurb: opts.businessBlurb,
+        runtimeConfig: opts.runtimeConfig,
       }),
       tools: toolkit.selectedTools(),
     });

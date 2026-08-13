@@ -9,6 +9,9 @@ export const AUTO_SHOP_PRESET: VerticalPresetDef = {
   policy_blocks: [],
   knowledge_blocks: [],
   outcome_blocks: [],
+  // job = recruiter intake (wrong vertical). buy_service = selling THIS product
+  // (not a shop service). Unique shop trees wait for a real tenant that needs them.
+  forbidden_trees: ['job', 'buy_service'],
   defaults: {
     booking_mode: 'offer_once',
     primary_intake: 'booking',
@@ -24,6 +27,9 @@ export const SALON_PRESET: VerticalPresetDef = {
   policy_blocks: [],
   knowledge_blocks: [],
   outcome_blocks: [],
+  // Same front-desk set as auto shop on purpose: both book / message / answer /
+  // move appointments. Salon-only intake is not invented until a salon asks.
+  forbidden_trees: ['job', 'buy_service'],
   defaults: {
     booking_mode: 'offer_once',
     primary_intake: 'booking',
@@ -47,6 +53,7 @@ export const LOCAL_SERVICE_PRESET: VerticalPresetDef = {
   policy_blocks: [],
   knowledge_blocks: [],
   outcome_blocks: [],
+  forbidden_trees: ['job'],
   defaults: {
     booking_mode: 'offer_once',
     primary_intake: 'mixed',

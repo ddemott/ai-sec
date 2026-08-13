@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Wand2, Search, ChevronRight } from 'lucide-react';
 import { Api } from '../../lib/api';
 import type { BusinessTemplate } from '../../lib/types';
+import { checklistPresetLabel, runtimeForTenant } from '../../lib/checklistPresets';
 
 interface BusinessTypePickerProps {
   onSelect: (businessType: string) => void;
@@ -175,6 +176,15 @@ export function BusinessTypePicker({
                 );
               })}
             </div>
+          )}
+          {currentType && (
+            <p className="text-xs px-3 pt-3" style={{ color: 'var(--text-muted)' }}>
+              Current type uses the{' '}
+              <span className="font-semibold">
+                {checklistPresetLabel(runtimeForTenant({ business_type: currentType }).preset_id)}
+              </span>{' '}
+              call checklist. Change it later under Business Settings.
+            </p>
           )}
         </div>
 

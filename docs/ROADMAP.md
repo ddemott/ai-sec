@@ -1,6 +1,6 @@
 # ROADMAP
 
-**Status:** active execution. Initial block/compiler + generic-intake checkpoint, first `job_inquiry` projector split, second reusable intake path proof, and first real preset-catalog slice are implemented; rollout steps beyond that remain open. **Date:** 2026-08-12. **Owner:** Dale.
+**Status:** active execution. Steps 1–7 closed (presets + journey tests). Step 8 is half-built in the backend and not live on the phone. **Date:** 2026-08-13. **Owner:** Dale.
 
 This roadmap turns the vertical-preset/block architecture into an execution sequence. It is intentionally ordered by risk: prove the architecture against the current live runtime before widening scope.
 
@@ -39,12 +39,11 @@ Implemented and verified in this checkpoint:
 - Step 4 generic intake envelope: `supabase/migrations/20260811160000_intake_submissions.sql` created `intake_submissions`, and `capture-job-inquiry` now writes that envelope before the specialized `job_inquiries` row
 - Step 5 first projector split: `src/services/jobInquiryCapture.ts` now owns generic capture + `job_inquiry` projection persistence while `src/routes/agentTools/messaging.ts` keeps validation / spoken reply / email side effects; route, route-unit, and real-DB tests pass against the split path
 - Step 6 second reusable path proof: `src/services/meetingNotesCapture.ts` now lands `attach-meeting-notes` into the same generic `intake_submissions` envelope with `submission_type='meeting_notes'` before projecting to appointment description, and route + service tests pass against that split path
-- Step 7 first preset-catalog slice: `agent/src/checklist/presets.ts` now defines `auto_shop_front_desk`, `salon_front_desk`, and `local_service_front_desk`; `agent/src/checklist/blockLibrary.ts` now exposes the additional live conversation-block wrappers those presets need; `agent/src/checklist/presetCatalog.test.ts` proves schema validation, lookup, runtime materialization, and compile-to-live-tree behavior for all three presets
+- Step 7 first three presets + journeys: `auto_shop_front_desk`, `salon_front_desk`, and `local_service_front_desk` validate, materialize a runtime config, declare `forbidden_trees` + required defaults, and each has a host-tool journey (`presetJourneys.test.ts`). Auto shop and salon share the same front-desk trees on purpose — unique per-vertical trees are not invented until a real tenant needs them.
 
 Still open after this checkpoint:
 
-- preset-specific call-path coverage beyond compile/runtime tests
-- onboarding wiring for preset selection
+- onboarding wiring for preset selection (business-type picker exists; no preset picker UI)
 - tenant-safe override UI and activation controls
 
 ---
@@ -232,7 +231,7 @@ Result:
 
 Status:
 
-- first implementation slice shipped and verified on 2026-08-12
+- closed 2026-08-13
 
 Goal:
 
@@ -259,23 +258,41 @@ Exit criteria:
 - each preset has one example tenant runtime config
 - each preset has at least one call-path test
 
-What shipped in the first slice:
+What shipped:
 
 - `agent/src/checklist/presets.ts` defines:
   - `auto_shop_front_desk`
   - `salon_front_desk`
   - `local_service_front_desk`
-- `agent/src/checklist/blockLibrary.ts` now exposes reusable wrappers for additional already-live trees used by those presets (`generic_subject`, `qa`, `buy_service`, `schedule_change`, `fix_computer`)
-- `agent/src/checklist/presetCatalog.test.ts` verifies preset catalog shape, lookup, runtime materialization, and compile-to-live-tree ids
+- each preset lists `forbidden_trees` (all three forbid `job`; auto shop + salon also forbid `buy_service`) and required `defaults` (`booking_mode`, `primary_intake`)
+- policy / knowledge / outcome arrays stay empty — those block kinds exist as types, not live runtime yet
+- `agent/src/checklist/blockLibrary.ts` wraps the live trees those presets compile through
+- `presetCatalog.test.ts` + `checklistRuntimeConfig.test.ts` + `#336` tool-exposure tests + `presetJourneys.test.ts` (book / message / buyer-demo)
 
-Still open inside Step 7:
+Explicitly not in this step:
 
-- richer per-vertical blocks beyond current live-tree wrappers
-- preset-specific call-path tests proving user journeys, not just compile/runtime selection
+- unique salon-vs-auto-shop trees. They share the front-desk set until a real tenant needs a block the other should not have. Inventing them now would be a second script, not a preset.
 
 ---
 
 ### Step 8 — Wire preset selection into setup/onboarding
+
+Status:
+
+- closed 2026-08-13 except policy-block preview (those blocks are not live yet)
+
+Already shipped:
+
+- `tenants.checklist_preset_id` + `deriveChecklistRuntimeConfig(business_type, preset_id)`
+- `/agent-tools/tenant-config` and tenant GET return `checklist_runtime_config`
+- fallback `local_service_front_desk`; explicit preset wins over business_type
+- live `ChecklistAgent` receives `runtimeConfig` when the wire body validates (`fetchTenantConfig`)
+- Business Settings → Call checklist: derived vs explicit override + preview of enabled conversation blocks
+- Setup business-type picker names the derived checklist for the current type
+
+Still open (Step 9):
+
+- per-block enable/disable, wording, required/optional, activation dry-run
 
 Goal:
 
@@ -296,6 +313,27 @@ Exit criteria:
 ---
 
 ### Step 9 — Add safe tenant overrides
+
+Status:
+
+- first slice: disable conversation blocks
+- second slice: booking/message policy modes + optional-field allowlist (wording still later)
+
+Already shipped:
+
+- `tenants.checklist_overrides` jsonb + write-time validation
+- cannot disable `identity`, cannot disable a block the preset does not have
+- invalid overrides 400 on write; ignored on read so a bad row cannot take tenant-config down
+- Business Settings chips toggle optional blocks; identity is locked
+- `booking_mode` (`offer_once` / `prefer` / `never`) and `message_mode` (`always` / `fallback_only`) persist and land in the live prompt
+- `never` also drops the booking block from the compiled set
+- `optional_node_ids` from a fixed allowlist flip those text nodes to listen-only (goodbye gate cannot stick on them)
+
+Still open:
+
+- approved wording tweaks (deferred)
+- required-field enforcement (decline does not resolve) — optional-as-listen is the supported flip
+- preview/dry-run beyond the live chip + policy selectors
 
 Goal:
 
@@ -419,7 +457,7 @@ Deliverables:
 
 - second reusable flow
 - first three presets
-- preset validation and scenario coverage
+- preset validation, tool-exposure, and host-tool journey coverage
 
 Why this phase exists:
 
@@ -451,10 +489,9 @@ Why this phase exists:
 
 Remaining immediate order from the current checkpoint:
 
-1. add preset-specific call-path tests for auto shop, salon, and local-service behavior
-2. wire preset selection into setup/onboarding
-3. add tenant-safe overrides and preview/activation guardrails
-4. widen block depth where current presets still rely on generic live-tree wrappers
+1. approved wording tweaks (explicitly deferred)
+2. widen block depth only when a real tenant needs a tree the shared front-desk set does not have
+3. Step 10 E2E journeys once a live tenant exercises the wired presets
 
 ---
 

@@ -8,6 +8,8 @@
  * the call fail. Going silent on a caller is worse than greeting them
  * with "this business" in the default zone.
  */
+import { tenantRuntimeConfigSchema } from './checklist/blockSchemas.js';
+import type { TenantRuntimeConfig } from './checklist/blockTypes.js';
 import type { ToolsClient } from './toolsClient.js';
 
 export interface TenantDisplayConfig {
@@ -130,6 +132,12 @@ export interface TenantDisplayConfig {
    * Empty when the tenant has no employees configured.
    */
   staffFirstNames: string[];
+  /**
+   * Compiled preset for this tenant. NULL when the backend omitted it or the
+   * body failed schema (fail-soft: live ChecklistAgent then uses the full
+   * platform library, which is the pre-preset behavior).
+   */
+  checklistRuntimeConfig: TenantRuntimeConfig | null;
 }
 
 export const TENANT_FALLBACK: TenantDisplayConfig = {
@@ -156,7 +164,14 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   businessHours: null,
   bookableThrough: null,
   staffFirstNames: [],
+  checklistRuntimeConfig: null,
 };
+
+/** Narrow the tenant-config wire field. Bad/missing → null, never throw. */
+export function parseChecklistRuntimeConfig(raw: unknown): TenantRuntimeConfig | null {
+  const parsed = tenantRuntimeConfigSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
 
 export async function fetchTenantConfig(
   client: ToolsClient,
@@ -188,6 +203,7 @@ export async function fetchTenantConfig(
     business_hours?: string | null;
     bookable_through?: string | null;
     staff_first_names?: string[] | null;
+    checklist_runtime_config?: unknown;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {
@@ -224,6 +240,7 @@ export async function fetchTenantConfig(
             (n): n is string => typeof n === 'string' && n.trim().length > 0
           )
         : [],
+      checklistRuntimeConfig: parseChecklistRuntimeConfig(res.result.checklist_runtime_config),
     };
   }
   return TENANT_FALLBACK;
