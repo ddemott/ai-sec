@@ -1,6 +1,6 @@
 # Branch / PR Merge Inventory
 
-**Snapshot: 2026-08-12.** Current branch/PR inventory for a fresh session after PR #331 merged.
+**Snapshot: 2026-08-13.** After #339 merged and prod deployed `4610d10`.
 
 Regenerate the raw data with:
 
@@ -8,32 +8,22 @@ Regenerate the raw data with:
 git fetch --prune
 git branch -a --format='%(refname:short)' | sort
 gh pr list --state open --json number,title,headRefName,baseRefName,url
-gh pr view 331 --json number,title,state,mergedAt,headRefName,baseRefName,url,mergeCommit
+gh pr view 339 --json number,title,state,mergedAt,headRefName,baseRefName,url,mergeCommit
 ```
 
 ## Current state
 
-- Open PRs: none (`gh pr list --state open` returned `[]`)
-- Branch refs currently present:
-  - `main`
-  - `origin/main`
-  - `origin/feat/second-intake-path-proof`
-- Latest merged PR relevant to the preset/intake rollout:
-  - PR #331 — `feat: prove second reusable intake path`
-  - merged into `main` at `2026-08-12T10:01:08Z`
-  - merge commit: `b5403fbe2406cc186a73c1dbb3d037ebde65b2a7`
-  - head branch: `feat/second-intake-path-proof`
+- Open PRs: none
+- Branch refs expected: `main` / `origin/main` (feature branches for #337–#339 purged)
+- Latest merged PRs on the preset/override rollout:
+  - #337 `fix(agent): type OpenAI and cost-usage seams` — `4c69219`
+  - #338 `feat(runtime): ship live checklist presets and safe overrides` — `2a0894a`
+  - #339 `feat(runtime): enforce required checklist fields` — `4610d10` (merged 2026-08-13T13:52:31Z)
 
-## What changed since the old inventory
+## Prod
 
-The previous 2026-08-06 snapshot is stale.
+All 3 Railway services on `4610d10`. Backend `/health` `started_at` = `2026-08-13T14:00:35.968Z`.
 
-- it described an in-progress branch/PR landscape that no longer exists
-- it referred to `docs/business-blueprints-spec` as "this PR", which is no longer a live inventory fact
-- it did not include PR #331, which is now the latest merged checkpoint for the vertical preset/generic-intake rollout
+## Why this file is short
 
-## Why this file is short now
-
-Today this file only answers the branch/PR question it is supposed to answer: what is currently open, and what just merged.
-
-The older long-form merge archaeology was a point-in-time cleanup log, not a durable current-state inventory. If that history still matters, recover it from git history instead of treating it as the current branch/PR picture.
+This file only answers: what is open, and what just merged. Longer archaeology lives in `docs/RESOLVED.md` and git history.

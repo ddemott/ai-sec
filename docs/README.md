@@ -33,7 +33,7 @@ This folder contains the project's technical and operational documentation.
 | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | [TODO.md](TODO.md)                   | **The one backlog** — all open work, prioritized (GAPS + ideas + go-live folded in 2026-07-05) |
 | [RESOLVED.md](RESOLVED.md)           | Completed phases + historical bug tracker + session archive (incl. the folded-doc snapshots)   |
-| [ROADMAP.md](ROADMAP.md)             | Ordered execution roadmap for the vertical preset/block architecture                            |
+| [ROADMAP.md](ROADMAP.md)             | Vertical-preset execution roadmap (steps 1–8 closed; step 9 leftover + step 10 E2E open)        |
 | [TEST_COVERAGE.md](TEST_COVERAGE.md) | Test coverage status and gaps                                                                  |
 | [TEST_DB_AUDIT.md](TEST_DB_AUDIT.md) | Mocked-DB vs real-SQL coverage map                                                             |
 
