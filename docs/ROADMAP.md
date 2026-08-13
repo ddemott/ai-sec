@@ -1,6 +1,6 @@
 # ROADMAP
 
-**Status:** active execution. Steps 1–8 closed. Step 9 first three slices shipped (disable, policy modes, required/optional). Remaining: wording + dry-run. Step 10 E2E not started. **Date:** 2026-08-13. **Owner:** Dale.
+**Status:** active execution. Steps 1–9 closed. Step 10 E2E not started. **Date:** 2026-08-13. **Owner:** Dale.
 
 This roadmap turns the vertical-preset/block architecture into an execution sequence. It is intentionally ordered by risk: prove the architecture against the current live runtime before widening scope.
 
@@ -56,7 +56,6 @@ Shipped on `main` and live in prod (`4610d10`, `/health` `started_at` 2026-08-13
 
 Still open:
 
-- Step 9 remainder: approved wording tweaks (deferred), preview/dry-run
 - Step 10: recruiter / auto-shop / salon / details-only / missing-phone E2E journeys
 - unique salon-vs-auto-shop trees only when a real tenant needs a block the shared front-desk set lacks
 
@@ -334,6 +333,7 @@ Status:
 - first slice: disable conversation blocks
 - second slice: booking/message policy modes + optional-field allowlist
 - third slice: required-field enforcement (decline does not resolve)
+- fourth slice: approved wording + next-call dry-run (closes the step)
 
 Already shipped:
 
@@ -347,11 +347,13 @@ Already shipped:
 - `required_node_ids` from a fixed allowlist: `record_answer` refuses `declined:true`, node stays open, `finish_call` stays shut
 - a field cannot be both required and optional (listen-only + must-answer is a deadlock)
 - Business Settings chips for required fields; picking required clears optional and vice versa
+- `wording` map on approved product questions only (`WORDING_NODE_ALLOWLIST` = optional-field list). Identity `ask` text stays platform-owned (caller_phone format-lecture lesson)
+- next-call dry-run on the Call checklist card: enabled/disabled blocks, booking/message policy, each previewable field as ASK / LISTEN / REQUIRED plus the ask the model will see
+- empty wording reverts to the default ask; unknown wording keys 400
 
 Still open:
 
-- approved wording tweaks (deferred)
-- preview/dry-run beyond the live chip + policy selectors
+- none. Step 9 exit criteria are met.
 
 Goal:
 
@@ -375,6 +377,8 @@ Exit criteria:
 - override validation exists
 - invalid configs are blocked before activation
 - preview/dry-run exists
+
+All three met.
 
 ---
 
@@ -498,7 +502,7 @@ Includes:
 Deliverables:
 
 - setup integration — shipped #338
-- tenant-safe overrides — disable / policy / optional / required shipped #338–#339; wording + dry-run open
+- tenant-safe overrides — shipped #338–#339 plus wording + dry-run
 - minimum E2E confidence for rollout — Step 10, not started
 
 Why this phase exists:
@@ -511,10 +515,8 @@ Why this phase exists:
 
 Remaining immediate order from the current checkpoint:
 
-1. approved wording tweaks (explicitly deferred)
-2. preview/dry-run of the next call's ask/skip/require set
-3. Step 10 E2E journeys once a live tenant exercises the wired presets
-4. widen block depth only when a real tenant needs a tree the shared front-desk set does not have
+1. Step 10 E2E journeys once a live tenant exercises the wired presets
+2. widen block depth only when a real tenant needs a tree the shared front-desk set does not have
 
 ---
 

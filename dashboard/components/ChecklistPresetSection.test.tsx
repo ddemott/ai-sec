@@ -108,6 +108,7 @@ describe('ChecklistPresetSection', () => {
           message_mode: 'always',
           optional_node_ids: [],
           required_node_ids: [],
+          wording: {},
         },
       });
     });
@@ -129,6 +130,16 @@ describe('ChecklistPresetSection', () => {
       expect(mockToast).toHaveBeenCalledWith('Forbidden', 'error');
     });
     expect(screen.getByLabelText('Preset')).toHaveValue('auto_shop_front_desk');
+  });
+
+  test('HAPPY: dry-run preview flips a required field before save', async () => {
+    render(<ChecklistPresetSection tenantId="t1" />);
+    await screen.findByTestId('checklist-dry-run');
+    fireEvent.click(screen.getByRole('button', { name: 'Callback number' }));
+    expect(screen.getByTestId('checklist-preview-caller_phone')).toHaveAttribute(
+      'data-role',
+      'required'
+    );
   });
 
   test('HAPPY: marking callback number required posts required_node_ids', async () => {

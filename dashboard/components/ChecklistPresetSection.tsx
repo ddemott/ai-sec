@@ -5,6 +5,7 @@ import { ListChecks } from 'lucide-react';
 import { Api } from '../lib/api';
 import type { Tenant } from '@/lib/types';
 import { deriveChecklistRuntimeConfig } from '../../shared/checklistPresetDerivation';
+import { PREVIEW_FIELD_DEFAULT_ASK, previewChecklistCall } from '../../shared/checklistPreview';
 import {
   CHECKLIST_PRESET_IDS,
   CHECKLIST_PRESET_LABELS,
@@ -12,12 +13,14 @@ import {
   OPTIONAL_NODE_LABELS,
   REQUIRED_NODE_IDS,
   REQUIRED_NODE_LABELS,
+  WORDING_NODE_IDS,
   checklistPresetLabel,
   conversationBlockLabel,
   runtimeForTenant,
 } from '../lib/checklistPresets';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
+import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { showToast } from './ui/Toast';
 
@@ -39,6 +42,7 @@ export default function ChecklistPresetSection({
   const [messageMode, setMessageMode] = useState<string>('always');
   const [optionalNodes, setOptionalNodes] = useState<string[]>([]);
   const [requiredNodes, setRequiredNodes] = useState<string[]>([]);
+  const [wording, setWording] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!tenantId) return;
@@ -55,6 +59,7 @@ export default function ChecklistPresetSection({
         setMessageMode(cfg.checklist_overrides?.message_mode ?? 'always');
         setOptionalNodes(cfg.checklist_overrides?.optional_node_ids ?? []);
         setRequiredNodes(cfg.checklist_overrides?.required_node_ids ?? []);
+        setWording(cfg.checklist_overrides?.wording ?? {});
       })
       .catch(() => {
         if (active) setConfig(null);
@@ -82,13 +87,33 @@ export default function ChecklistPresetSection({
   const savedDisabled = config?.checklist_overrides?.disabled_conversation_blocks ?? [];
   const savedOptional = config?.checklist_overrides?.optional_node_ids ?? [];
   const savedRequired = config?.checklist_overrides?.required_node_ids ?? [];
+  const savedWording = config?.checklist_overrides?.wording ?? {};
+  const draftOverrides = {
+    disabled_conversation_blocks: disabledBlocks,
+    booking_mode: bookingMode as 'offer_once' | 'prefer' | 'never',
+    message_mode: messageMode as 'always' | 'fallback_only',
+    optional_node_ids: optionalNodes,
+    required_node_ids: requiredNodes,
+    wording,
+  };
+  const preview = previewChecklistCall({
+    businessType: config?.business_type,
+    presetId: draft === 'derived' ? null : draft,
+    overrides: draftOverrides,
+  });
+  const wordingKey = (map: Record<string, string>) =>
+    Object.keys(map)
+      .sort()
+      .map((id) => `${id}=${map[id]}`)
+      .join('|');
   const dirty =
     draft !== (config?.checklist_preset_id ?? 'derived') ||
     bookingMode !== (config?.checklist_overrides?.booking_mode ?? 'offer_once') ||
     messageMode !== (config?.checklist_overrides?.message_mode ?? 'always') ||
     [...disabledBlocks].sort().join(',') !== [...savedDisabled].sort().join(',') ||
     [...optionalNodes].sort().join(',') !== [...savedOptional].sort().join(',') ||
-    [...requiredNodes].sort().join(',') !== [...savedRequired].sort().join(',');
+    [...requiredNodes].sort().join(',') !== [...savedRequired].sort().join(',') ||
+    wordingKey(wording) !== wordingKey(savedWording);
 
   async function save() {
     if (!tenantId) return;
@@ -102,6 +127,7 @@ export default function ChecklistPresetSection({
           message_mode: messageMode as 'always' | 'fallback_only',
           optional_node_ids: optionalNodes,
           required_node_ids: requiredNodes,
+          wording,
         },
       });
       if (!res.success) {
@@ -116,6 +142,7 @@ export default function ChecklistPresetSection({
       setMessageMode(next.checklist_overrides?.message_mode ?? 'always');
       setOptionalNodes(next.checklist_overrides?.optional_node_ids ?? []);
       setRequiredNodes(next.checklist_overrides?.required_node_ids ?? []);
+      setWording(next.checklist_overrides?.wording ?? {});
       showToast(
         draft === 'derived'
           ? 'Call checklist follows business type again.'
@@ -306,6 +333,81 @@ export default function ChecklistPresetSection({
             );
           })}
         </div>
+      </div>
+
+      <div className="mt-4">
+        <p
+          className="block text-xs font-bold uppercase mb-2"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          Approved wording (product questions only)
+        </p>
+        <div className="grid gap-3">
+          {WORDING_NODE_IDS.filter((nodeId) =>
+            preview.fields.some((field) => field.node_id === nodeId)
+          ).map((nodeId) => (
+            <Input
+              key={nodeId}
+              label={OPTIONAL_NODE_LABELS[nodeId] ?? nodeId}
+              value={wording[nodeId] ?? ''}
+              placeholder={PREVIEW_FIELD_DEFAULT_ASK[nodeId]}
+              disabled={loading}
+              maxLength={240}
+              onChange={(e) => {
+                const value = e.target.value;
+                setWording((current) => {
+                  const next = { ...current };
+                  if (value.trim()) next[nodeId] = value;
+                  else delete next[nodeId];
+                  return next;
+                });
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div
+        className="mt-4 rounded-xl p-4"
+        data-testid="checklist-dry-run"
+        style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)' }}
+      >
+        <p className="text-xs font-bold uppercase" style={{ color: 'var(--text-secondary)' }}>
+          Next-call preview
+        </p>
+        <p className="text-xs mt-1 mb-3" style={{ color: 'var(--text-muted)' }}>
+          What the live receptionist will be allowed to open, ask, skip, or require. Not saved until
+          you click Save.
+        </p>
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          Booking: {preview.booking_mode.replace('_', ' ')} · Messages:{' '}
+          {preview.message_mode.replace('_', ' ')}
+        </p>
+        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+          Open: {preview.enabled_blocks.map((id) => conversationBlockLabel(id)).join(', ')}
+        </p>
+        {preview.disabled_blocks.length > 0 && (
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+            Off: {preview.disabled_blocks.map((id) => conversationBlockLabel(id)).join(', ')}
+          </p>
+        )}
+        <ul className="mt-3 space-y-1">
+          {preview.fields.map((field) => (
+            <li
+              key={field.node_id}
+              className="text-xs"
+              data-testid={`checklist-preview-${field.node_id}`}
+              data-role={field.role}
+              style={{ color: 'var(--text-primary)' }}
+            >
+              <span className="font-bold uppercase">{field.role}</span>
+              {' — '}
+              {REQUIRED_NODE_LABELS[field.node_id] ?? field.node_id}
+              {': '}
+              {field.ask}
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="mt-4 flex justify-end">

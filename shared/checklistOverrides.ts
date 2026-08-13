@@ -28,19 +28,38 @@ export const REQUIRED_NODE_ALLOWLIST = [
 export type OptionalNodeId = (typeof OPTIONAL_NODE_ALLOWLIST)[number];
 export type RequiredNodeId = (typeof REQUIRED_NODE_ALLOWLIST)[number];
 
+/** Product-question `ask` text a tenant may rewrite. Identity stays platform-owned. */
+export const WORDING_NODE_ALLOWLIST = OPTIONAL_NODE_ALLOWLIST;
+export type WordingNodeId = (typeof WORDING_NODE_ALLOWLIST)[number];
+
+export const MAX_WORDING_LENGTH = 240;
+
 export interface ChecklistOverrides {
   disabled_conversation_blocks?: string[];
   booking_mode?: BookingMode;
   message_mode?: MessageMode;
   optional_node_ids?: string[];
   required_node_ids?: string[];
+  wording?: Record<string, string>;
 }
 
 const PROTECTED_BLOCKS = new Set(['identity']);
 const OPTIONAL_NODE_SET = new Set<string>(OPTIONAL_NODE_ALLOWLIST);
 const REQUIRED_NODE_SET = new Set<string>(REQUIRED_NODE_ALLOWLIST);
+const WORDING_NODE_SET = new Set<string>(WORDING_NODE_ALLOWLIST);
 const BOOKING_MODE_SET = new Set<string>(BOOKING_MODES);
 const MESSAGE_MODE_SET = new Set<string>(MESSAGE_MODES);
+
+function asWordingMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw !== 'string') continue;
+    const text = raw.trim().slice(0, MAX_WORDING_LENGTH);
+    if (text) out[key] = text;
+  }
+  return out;
+}
 
 function asStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -56,6 +75,7 @@ export function normalizeChecklistOverrides(raw?: ChecklistOverrides | null): Ch
     message_mode: raw?.message_mode,
     optional_node_ids: asStringList(raw?.optional_node_ids),
     required_node_ids: asStringList(raw?.required_node_ids),
+    wording: asWordingMap(raw?.wording),
   };
 }
 
@@ -67,6 +87,7 @@ export function applyChecklistOverrides(
   const disabled = next.disabled_conversation_blocks ?? [];
   const optional = next.optional_node_ids ?? [];
   const required = next.required_node_ids ?? [];
+  const wording = next.wording ?? {};
 
   if (next.booking_mode !== undefined && !BOOKING_MODE_SET.has(next.booking_mode)) {
     return { ok: false, error: `Unknown booking_mode '${next.booking_mode}'.` };
@@ -103,6 +124,15 @@ export function applyChecklistOverrides(
     }
   }
 
+  for (const id of Object.keys(wording)) {
+    if (!WORDING_NODE_SET.has(id)) {
+      return {
+        ok: false,
+        error: `Cannot rewrite '${id}' — only approved product questions have wording tweaks.`,
+      };
+    }
+  }
+
   const both = optional.filter((id) => required.includes(id));
   if (both.length > 0) {
     return {
@@ -129,6 +159,7 @@ export function applyChecklistOverrides(
   if (next.message_mode) stored.message_mode = next.message_mode;
   if (optional.length > 0) stored.optional_node_ids = optional;
   if (required.length > 0) stored.required_node_ids = required;
+  if (Object.keys(wording).length > 0) stored.wording = wording;
 
   return {
     ok: true,

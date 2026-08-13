@@ -58,6 +58,48 @@ function markOptional(node: QuestionNodeDef, optional: Set<string>): QuestionNod
   return node;
 }
 
+function rewriteAsk(node: QuestionNodeDef, wording: Record<string, string>): QuestionNodeDef {
+  if ((node.type === 'text' || node.type === 'choice') && wording[node.node_id]) {
+    const next = { ...node, ask: wording[node.node_id] };
+    if (next.type === 'choice') {
+      return {
+        ...next,
+        options: Object.fromEntries(
+          Object.entries(next.options).map(([key, kids]) => [
+            key,
+            kids.map((child) => rewriteAsk(child, wording)),
+          ])
+        ),
+      };
+    }
+    return next;
+  }
+  if (node.type === 'choice') {
+    return {
+      ...node,
+      options: Object.fromEntries(
+        Object.entries(node.options).map(([key, kids]) => [
+          key,
+          kids.map((child) => rewriteAsk(child, wording)),
+        ])
+      ),
+    };
+  }
+  return node;
+}
+
+/** Replace approved product-question `ask` text. Identity asks stay platform-owned. */
+export function applyNodeWording(
+  trees: QuestionTreeDef[],
+  wording: Record<string, string> | undefined
+): QuestionTreeDef[] {
+  if (!wording || Object.keys(wording).length === 0) return trees;
+  return trees.map((tree) => ({
+    ...tree,
+    nodes: tree.nodes.map((node) => rewriteAsk(node, wording)),
+  }));
+}
+
 /** Flip allow-listed text nodes to listen-only so they never hold the goodbye gate. */
 export function applyOptionalNodes(
   trees: QuestionTreeDef[],
