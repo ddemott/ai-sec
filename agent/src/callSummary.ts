@@ -10,6 +10,7 @@
  * working call-logging write.
  */
 
+import { parseChatCompletion } from './openaiChatCompletion.js';
 import { renderedHasCallerTurn } from './transcript.js';
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
@@ -51,17 +52,10 @@ export async function summarizeCall(
       signal: controller.signal,
     });
     if (!res.ok) return { summary: null };
-    const data: any = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    const summary = typeof content === 'string' ? content.trim() : '';
-    const usage = data.usage
-      ? {
-          inputTokens: data.usage.prompt_tokens || 0,
-          outputTokens: data.usage.completion_tokens || 0,
-        }
-      : undefined;
+    const parsed = parseChatCompletion(await res.json());
+    const summary = parsed.content?.trim() ?? '';
     const s = summary.length > 0 ? summary.slice(0, 2000) : null;
-    return { summary: s, usage };
+    return { summary: s, usage: parsed.usage };
   } catch {
     // Aborted, network error, bad JSON — all degrade to "no summary".
     return { summary: null };

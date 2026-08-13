@@ -2,7 +2,7 @@
   "name": "secretary-hq-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "LiveKit voice agent worker for SecretaryHQ \u2014 replaces Vapi as the orchestrator between Telnyx (SIP) and Deepgram/OpenAI (TTS fully OpenAI since 2026-06-25).",
+  "description": "LiveKit voice agent worker for SecretaryHQ — replaces Vapi as the orchestrator between Telnyx (SIP) and Deepgram/OpenAI (TTS fully OpenAI since 2026-06-25).",
   "main": "dist/index.js",
   "type": "module",
   "engines": {
@@ -15,7 +15,7 @@
     "download-files": "node dist/index.js download-files",
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run",
-    "lint": "eslint . --max-warnings 999",
+    "lint": "eslint . --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,json,md}\" \"*.{json,md}\" --config ../.prettierrc.json --ignore-path ../.prettierignore",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,json,md}\" \"*.{json,md}\" --config ../.prettierrc.json --ignore-path ../.prettierignore",
     "verify:tts": "node scripts/verify-tts.mjs"

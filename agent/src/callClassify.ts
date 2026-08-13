@@ -15,6 +15,7 @@
 const CATEGORIES = ['no_availability', 'wrong_service', 'price', 'message', 'info'] as const;
 const ALLOWED = new Set<string>(CATEGORIES);
 
+import { parseChatCompletion } from './openaiChatCompletion.js';
 import { renderedHasCallerTurn } from './transcript.js';
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
@@ -61,22 +62,15 @@ export async function classifyCallOutcome(
       signal: controller.signal,
     });
     if (!res.ok) return { outcome: null };
-    const data: any = await res.json();
-    const raw = data.choices?.[0]?.message?.content;
-    if (typeof raw !== 'string') return { outcome: null };
+    const parsed = parseChatCompletion(await res.json());
+    if (parsed.content === null) return { outcome: null };
     // Sanitize: lowercase, strip non-letters/underscores, keep only an allowed category.
-    const word = raw
+    const word = parsed.content
       .trim()
       .toLowerCase()
       .replace(/[^a-z_]/g, '');
     const outcome = ALLOWED.has(word) ? word : null;
-    const usage = data.usage
-      ? {
-          inputTokens: data.usage.prompt_tokens || 0,
-          outputTokens: data.usage.completion_tokens || 0,
-        }
-      : undefined;
-    return { outcome, usage };
+    return { outcome, usage: parsed.usage };
   } catch {
     return { outcome: null };
   } finally {
