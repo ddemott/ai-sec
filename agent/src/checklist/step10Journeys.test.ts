@@ -166,7 +166,7 @@ describe('Step 10 required journeys', () => {
       'No tree called "job"'
     );
     await call(toolkit.selectedTools(), 'set_purpose', {
-      work_direction: 'caller_wants_something_from_business',
+      work_direction: 'caller_pays_us',
       trees: ['identity', 'booking'],
     });
     await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Sam' });
@@ -193,7 +193,7 @@ describe('Step 10 required journeys', () => {
       await call(toolkit.selectedTools(), 'set_purpose', { trees: ['buy_service'] })
     ).toContain('No tree called "buy_service"');
     await call(toolkit.selectedTools(), 'set_purpose', {
-      work_direction: 'caller_wants_something_from_business',
+      work_direction: 'caller_pays_us',
       trees: ['identity', 'booking'],
     });
     await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Maya' });
@@ -214,7 +214,7 @@ describe('Step 10 required journeys', () => {
   it('missing-phone recovery: book stays blocked until a number is recorded', async () => {
     const { toolkit, tracker, closeCall } = makeKit();
     await call(toolkit.selectedTools(), 'set_purpose', {
-      work_direction: 'caller_wants_something_from_business',
+      work_direction: 'caller_pays_us',
       trees: ['identity', 'booking'],
     });
     await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Sam' });
@@ -289,7 +289,7 @@ describe('Step 10 must-have behaviors', () => {
       ],
     });
     await call(toolkit.selectedTools(), 'set_purpose', {
-      work_direction: 'caller_wants_something_from_business',
+      work_direction: 'caller_pays_us',
       trees: ['identity', 'booking'],
     });
     await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Sam' });
@@ -311,10 +311,17 @@ describe('Step 10 must-have behaviors', () => {
   });
 
   it('booking_mode=never drops the booking tree on an auto-shop preset', async () => {
-    const runtime = materializeRuntimeConfig(AUTO_SHOP_PRESET, { booking_mode: 'never' });
-    runtime.enabled_conversation_blocks = runtime.enabled_conversation_blocks.filter(
-      (id) => id !== 'booking'
-    );
+    const runtime: TenantRuntimeConfig = {
+      preset_id: AUTO_SHOP_PRESET.preset_id,
+      enabled_conversation_blocks: AUTO_SHOP_PRESET.conversation_blocks.filter(
+        (id) => id !== 'booking'
+      ),
+      enabled_policy_blocks: [],
+      enabled_knowledge_blocks: [],
+      enabled_outcome_blocks: [],
+      overrides: { booking_mode: 'never' },
+      version: 1,
+    };
     const { toolkit } = makeKit({ runtimeConfig: runtime });
     expect(await call(toolkit.selectedTools(), 'set_purpose', { trees: ['booking'] })).toContain(
       'No tree called "booking"'
