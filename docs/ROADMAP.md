@@ -1,6 +1,6 @@
 # ROADMAP
 
-**Status:** active execution. Steps 1–9 closed. Step 10 E2E not started. **Date:** 2026-08-13. **Owner:** Dale.
+**Status:** active execution. Steps 1–10 closed in CI (host-tool journeys). **Date:** 2026-08-13. **Owner:** Dale.
 
 This roadmap turns the vertical-preset/block architecture into an execution sequence. It is intentionally ordered by risk: prove the architecture against the current live runtime before widening scope.
 
@@ -56,8 +56,8 @@ Shipped on `main` and live in prod (`4610d10`, `/health` `started_at` 2026-08-13
 
 Still open:
 
-- Step 10: recruiter / auto-shop / salon / details-only / missing-phone E2E journeys
 - unique salon-vs-auto-shop trees only when a real tenant needs a block the shared front-desk set lacks
+- live PSTN / Playwright voice replay of the same five paths (optional; host-tool journeys are the CI bar)
 
 ---
 
@@ -386,7 +386,10 @@ All three met.
 
 Status:
 
-- not started. Host-tool journeys (`presetJourneys.test.ts`) exist; live E2E journeys do not.
+- closed 2026-08-13 in CI via `agent/src/checklist/step10Journeys.test.ts`
+- five required paths + policy / unavailable / no-reask / no-double-write
+- recruiter uses the full platform library (job is forbidden on the three front-desk presets)
+- not a Playwright mic call — same host-tool layer a live call actually runs
 
 Goal:
 
@@ -411,6 +414,11 @@ Required E2E before claiming done:
 - one missing-phone recovery path
 
 The bar is behavior, not percentages.
+
+What shipped:
+
+- recruiter + book, recruiter details-only, auto-shop alignment, salon stylist/color, missing-phone recovery
+- already-answered fields leave `[ASK]`, duplicate `take_message` is `ALREADY DONE`, `NO_AVAILABILITY` keeps book `ready` and names `next_available`, `booking_mode=never` drops the booking tree
 
 ---
 
@@ -503,7 +511,7 @@ Deliverables:
 
 - setup integration — shipped #338
 - tenant-safe overrides — shipped #338–#339 plus wording + dry-run
-- minimum E2E confidence for rollout — Step 10, not started
+- minimum E2E confidence for rollout — Step 10 host-tool journeys shipped
 
 Why this phase exists:
 
@@ -515,8 +523,8 @@ Why this phase exists:
 
 Remaining immediate order from the current checkpoint:
 
-1. Step 10 E2E journeys once a live tenant exercises the wired presets
-2. widen block depth only when a real tenant needs a tree the shared front-desk set does not have
+1. widen block depth only when a real tenant needs a tree the shared front-desk set does not have
+2. optional: PSTN / Playwright replay of the five Step 10 paths on a live tenant
 
 ---
 
