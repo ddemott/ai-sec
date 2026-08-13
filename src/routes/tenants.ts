@@ -349,6 +349,7 @@ export function registerTenantRoutes(
             await client.query('ROLLBACK');
             return { invalidOverrides: overrideCheck.error };
           }
+          const persistedOverrides = overrideCheck.config.overrides;
           const finalFirstMessage =
             body.first_message !== undefined ? body.first_message : (prior?.first_message ?? null);
           const finalSavePreferences =
@@ -460,7 +461,7 @@ export function registerTenantRoutes(
               attestMode,
               attestMode === 'stamp' ? attestingUserId : null,
               id,
-              JSON.stringify(finalChecklistOverrides),
+              JSON.stringify(persistedOverrides),
             ]
           );
 

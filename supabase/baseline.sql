@@ -3681,7 +3681,7 @@ COMMENT ON COLUMN public.tenants.checklist_preset_id IS 'Optional explicit check
 -- Name: COLUMN tenants.checklist_overrides; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.tenants.checklist_overrides IS 'Safe checklist tweaks. Shape: { disabled_conversation_blocks: string[] }. Invalid entries are ignored on read and rejected on write.';
+COMMENT ON COLUMN public.tenants.checklist_overrides IS 'Safe checklist tweaks. Shape: { disabled_conversation_blocks?: string[], booking_mode?: offer_once|prefer|never, message_mode?: always|fallback_only, optional_node_ids?: string[] }. Invalid entries are ignored on read and rejected on write.';
 
 
 --

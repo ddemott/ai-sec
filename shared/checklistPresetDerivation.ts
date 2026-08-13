@@ -1,4 +1,4 @@
-import { applyChecklistOverrides } from './checklistOverrides';
+import { applyChecklistOverrides, type ChecklistOverrides } from './checklistOverrides';
 
 /**
  * Tenant-facing runtime snapshot derived from business_type / checklist_preset_id.
@@ -95,7 +95,7 @@ export function resolveChecklistPresetId(
 export function deriveChecklistRuntimeConfig(
   businessType: string | null | undefined,
   presetId?: string | null,
-  overrides?: { disabled_conversation_blocks?: string[] } | null
+  overrides?: ChecklistOverrides | null
 ): DerivedChecklistRuntimeConfig {
   const resolvedPresetId = resolveChecklistPresetId(businessType, presetId);
   const base =

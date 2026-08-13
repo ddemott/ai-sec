@@ -6,4 +6,4 @@ ALTER TABLE tenants
   ADD COLUMN IF NOT EXISTS checklist_overrides jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 COMMENT ON COLUMN tenants.checklist_overrides IS
-  'Safe checklist tweaks. Shape: { disabled_conversation_blocks: string[] }. Invalid entries are ignored on read and rejected on write.';
+  'Safe checklist tweaks. Shape: { disabled_conversation_blocks?: string[], booking_mode?: offer_once|prefer|never, message_mode?: always|fallback_only, optional_node_ids?: string[] }. Invalid entries are ignored on read and rejected on write.';
