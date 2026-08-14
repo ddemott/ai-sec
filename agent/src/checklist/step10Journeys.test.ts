@@ -163,7 +163,7 @@ describe('Step 10 required journeys', () => {
       runtimeConfig: materializeRuntimeConfig(AUTO_SHOP_PRESET),
     });
     expect(await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] })).toContain(
-      'No tree called "job"'
+      'The "job" intake is not enabled'
     );
     await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_pays_us',
@@ -179,7 +179,14 @@ describe('Step 10 required journeys', () => {
       value: 'four-wheel alignment on a F-150',
     });
     expect(await call(toolkit.selectedTools(), 'get_available_slots', {})).toContain('3:00 PM');
-    expect(await call(toolkit.selectedTools(), 'book_with_scheduling', {})).toContain('appt_1');
+    // Times are on the table now, so the write must name the one the caller
+    // picked — booking with bare args here is what nearly booked a caller
+    // mid-question on 2026-08-13 (see the unconfirmed-booking guard below).
+    expect(
+      await call(toolkit.selectedTools(), 'book_with_scheduling', {
+        requested_start: '2026-08-17T15:00:00',
+      })
+    ).toContain('appt_1');
     expect(fakes.book_with_scheduling.execute).toHaveBeenCalledOnce();
     expect(await call(toolkit.selectedTools(), 'finish_call', {})).toBe('Call complete.');
     expect(closeCall).toHaveBeenCalledOnce();
@@ -191,7 +198,7 @@ describe('Step 10 required journeys', () => {
     });
     expect(
       await call(toolkit.selectedTools(), 'set_purpose', { trees: ['buy_service'] })
-    ).toContain('No tree called "buy_service"');
+    ).toContain('The "buy_service" intake is not enabled');
     await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'caller_pays_us',
       trees: ['identity', 'booking'],
@@ -324,7 +331,7 @@ describe('Step 10 must-have behaviors', () => {
     };
     const { toolkit } = makeKit({ runtimeConfig: runtime });
     expect(await call(toolkit.selectedTools(), 'set_purpose', { trees: ['booking'] })).toContain(
-      'No tree called "booking"'
+      'The "booking" intake is not enabled'
     );
     await call(toolkit.selectedTools(), 'set_purpose', {
       work_direction: 'neither_or_unclear',
@@ -341,5 +348,239 @@ describe('Step 10 must-have behaviors', () => {
     });
     expect(await call(toolkit.selectedTools(), 'take_message', {})).toContain('msg_1');
     expect(Object.keys(toolkit.selectedTools())).not.toContain('book_with_scheduling');
+  });
+});
+
+describe('hire-intake selector journeys (2026-08-13 position/contract/meeting)', () => {
+  it('last-call miss: position-as-message nudges ADD job, still can take_message and hang up', async () => {
+    // WHO: Jack Smith, browser call, "a position I had for him that's in Chicago"
+    // WHAT: model picked identity+message + caller_offers_owner_work
+    // WHY: host must NUDGE job (not refuse) — a callback-only recruiter is legal —
+    //      and the message write must still complete so the owner is not empty-handed.
+    const { toolkit, fakes, closeCall, tracker } = makeKit();
+    const purpose = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'message'],
+      caller_name: 'Jack Smith',
+    });
+    expect(purpose).toMatch(/job tree is not selected/i);
+    expect(purpose).toMatch(/ADD job/);
+    expect(tracker.selectedTrees()).not.toContain('job');
+    expect(tracker.selectedTrees()).not.toContain('booking');
+    expect(Object.keys(toolkit.selectedTools())).not.toContain('capture_job_inquiry');
+
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '6301112222',
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'message_body',
+      value: 'I have a position for him that is in Chicago.',
+    });
+    expect(await call(toolkit.selectedTools(), 'take_message', {})).toContain('msg_1');
+    expect(fakes.take_message.execute).toHaveBeenCalledOnce();
+    expect(fakes.capture_job_inquiry.execute).not.toHaveBeenCalled();
+    expect(await call(toolkit.selectedTools(), 'finish_call', {})).toBe('Call complete.');
+    expect(closeCall).toHaveBeenCalledOnce();
+  });
+
+  it('talk-to about a position: identity+job+booking captures, books, hangs up once', async () => {
+    // WHO: same opener if the selector obeyed "talk to … about a position"
+    // WHAT: two goals — hire intake AND a meeting
+    const { toolkit, fakes, closeCall, tracker } = makeKit();
+    const purpose = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job', 'booking'],
+      caller_name: 'Jack Smith',
+    });
+    expect(purpose).not.toMatch(/job tree is not selected/i);
+    expect(tracker.selectedTrees()).toEqual(expect.arrayContaining(['identity', 'job', 'booking']));
+
+    for (const [node_id, value] of [
+      ['caller_phone', '6301112222'],
+      ['callers_company', 'Northgate'],
+      ['hiring_for', 'own_company'],
+      ['role_description', 'a position I had for him that is in Chicago'],
+      ['employment_type', 'contract'],
+      ['rate_range', '80 an hour'],
+      ['contract_length', '6 months'],
+      ['work_mode', 'remote'],
+      ['team_timezone', 'Central'],
+      ['meeting_offer', 'wants_meeting'],
+      ['meeting_topic', 'a position in Chicago'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    expect(await call(toolkit.selectedTools(), 'capture_job_inquiry', {})).toContain('ji_1');
+    expect(await call(toolkit.selectedTools(), 'book_with_scheduling', {})).toContain('appt_1');
+    expect(fakes.capture_job_inquiry.execute).toHaveBeenCalledOnce();
+    expect(fakes.book_with_scheduling.execute).toHaveBeenCalledOnce();
+    expect(await call(toolkit.selectedTools(), 'finish_call', {})).toBe('Call complete.');
+    expect(closeCall).toHaveBeenCalledOnce();
+  });
+
+  it('contract opener without booking: meeting_offer yes host-adds booking', async () => {
+    // WHO: "I have a contract for him" then yes to the meeting offer
+    // WHAT: start job-only; wants_meeting must select booking in HOST code
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job'],
+    });
+    expect(tracker.selectedTrees()).not.toContain('booking');
+    for (const [node_id, value] of [
+      ['caller_name', 'Rita'],
+      ['caller_phone', '5551112233'],
+      ['callers_company', 'Apex'],
+      ['hiring_for', 'own_company'],
+      ['role_description', 'contract React role'],
+      ['employment_type', 'contract'],
+      ['rate_range', '90'],
+      ['contract_length', '3 months'],
+      ['work_mode', 'remote'],
+      ['team_timezone', 'Eastern'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    const offer = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_offer',
+      value: 'wants_meeting',
+    });
+    expect(offer).toMatch(/booking is now ON YOUR CHECKLIST/i);
+    expect(tracker.selectedTrees()).toContain('booking');
+    expect(Object.keys(toolkit.selectedTools())).toContain('book_with_scheduling');
+  });
+
+  it('SAD: auto-shop preset cannot start hire intake even with owner-gets-paid direction', async () => {
+    const { toolkit } = makeKit({
+      runtimeConfig: materializeRuntimeConfig(AUTO_SHOP_PRESET),
+    });
+    expect(
+      await call(toolkit.selectedTools(), 'set_purpose', {
+        work_direction: 'caller_offers_owner_work',
+        trees: ['job'],
+      })
+    ).toContain('The "job" intake is not enabled');
+  });
+
+  it('SAD: finish_call stays shut while a talk-to meeting is selected but unbooked', async () => {
+    const { toolkit, closeCall } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job', 'booking'],
+    });
+    for (const [node_id, value] of [
+      ['caller_name', 'Jack'],
+      ['caller_phone', '6301112222'],
+      ['callers_company', 'Northgate'],
+      ['hiring_for', 'own_company'],
+      ['role_description', 'position in Chicago'],
+      ['employment_type', 'full_time'],
+      ['salary_range', '160k'],
+      ['work_mode', 'remote'],
+      ['team_timezone', 'Central'],
+      ['meeting_offer', 'wants_meeting'],
+      ['meeting_topic', 'a position in Chicago'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    await call(toolkit.selectedTools(), 'capture_job_inquiry', {});
+    const hung = await call(toolkit.selectedTools(), 'finish_call', {});
+    expect(hung).toMatch(/not complete/i);
+    expect(closeCall).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * THE UNCONFIRMED-BOOKING GUARD (2026-08-13, call SCL_KLvqZ2JkaQFU).
+ *
+ * WHO: Camille, asking "What's his availability next week?"
+ * WHAT: the agent read out Monday 1:00 / 1:15 / 1:30 and asked which worked —
+ *       then called book_with_scheduling 1.9 SECONDS later, 30 seconds before
+ *       she said another word, with a five-day window and no requested_start.
+ * WHEN: t=41.6s (slots) → t=43.5s (book attempt) → t=1:13 (caller's next word).
+ * WHERE: wrapAction, ahead of the real tool.
+ * WHY: book_with_scheduling takes the EARLIEST slot at or after window_from, so
+ *      it was one parse away from booking her into 1:00 PM while she was still
+ *      listening to the question. It missed only because the model wrote
+ *      `2026-08-17T01:00:00` — 1 AM — for the 1 PM slot it had just offered.
+ *      A write the caller never agreed to must not depend on a typo.
+ */
+describe('unconfirmed-booking guard', () => {
+  const setUpOffer = async (): Promise<ReturnType<typeof makeKit>> => {
+    const kit = makeKit();
+    await call(kit.toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'booking'],
+    });
+    for (const [node_id, value] of [
+      ['caller_name', 'Camille'],
+      ['caller_phone', '2624979039'],
+      ['meeting_topic', 'a position'],
+    ] as const) {
+      await call(kit.toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    await call(kit.toolkit.selectedTools(), 'get_available_slots', {});
+    return kit;
+  };
+
+  it('refuses to book while offered times are unanswered', async () => {
+    const { toolkit, fakes } = await setUpOffer();
+    const refused = await call(toolkit.selectedTools(), 'book_with_scheduling', {
+      window_from: '2026-08-17T01:00:00',
+      window_to: '2026-08-21T17:00:00',
+    });
+    expect(refused).toContain('has not picked one');
+    expect(refused).toContain('requested_start');
+    // The real tool must never have been reached — the caller is not booked.
+    expect(fakes.book_with_scheduling.execute).not.toHaveBeenCalled();
+  });
+
+  it('books once the caller names the time', async () => {
+    const { toolkit, fakes } = await setUpOffer();
+    await call(toolkit.selectedTools(), 'book_with_scheduling', {
+      window_from: '2026-08-17T01:00:00',
+      window_to: '2026-08-21T17:00:00',
+    });
+    expect(
+      await call(toolkit.selectedTools(), 'book_with_scheduling', {
+        requested_start: '2026-08-31T15:00:00',
+      })
+    ).toContain('appt_1');
+    expect(fakes.book_with_scheduling.execute).toHaveBeenCalledOnce();
+  });
+
+  it('accepts a zero-width window as a chosen time (the shape CALL2 booked with)', async () => {
+    const { toolkit, fakes } = await setUpOffer();
+    expect(
+      await call(toolkit.selectedTools(), 'book_with_scheduling', {
+        window_from: '2026-08-31T15:00:00',
+        window_to: '2026-08-31T15:00:00',
+      })
+    ).toContain('appt_1');
+    expect(fakes.book_with_scheduling.execute).toHaveBeenCalledOnce();
+  });
+
+  it('SAD: never blocks a booking when no times were offered', async () => {
+    // "Book me the next available" — nothing was put in front of the caller, so
+    // there is no choice outstanding and a window-only booking is honest.
+    const kit = makeKit();
+    await call(kit.toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'booking'],
+    });
+    for (const [node_id, value] of [
+      ['caller_name', 'Camille'],
+      ['caller_phone', '2624979039'],
+      ['meeting_topic', 'a position'],
+    ] as const) {
+      await call(kit.toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    expect(
+      await call(kit.toolkit.selectedTools(), 'book_with_scheduling', {
+        window_from: '2026-08-17T13:00:00',
+        window_to: '2026-08-21T17:00:00',
+      })
+    ).toContain('appt_1');
   });
 });

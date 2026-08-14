@@ -801,3 +801,41 @@ describe('stall detector — re-arm after recovery (plan companion)', () => {
     expect(ctx.items.filter((it) => it.type === 'message' && it.role === 'system')).toHaveLength(0);
   });
 });
+
+describe('buildChecklistPrompt — hire / meeting purpose examples', () => {
+  // WHO: 2026-08-13 sim-call — "position in Chicago" + "talk to y'all".
+  // WHAT: the side-by-side examples and talk-to rule the model reads at
+  //       set_purpose time. Not an LLM test — if the phrases drop, the next
+  //       recruiter opener files as a message again.
+  const hirePrompt = buildChecklistPrompt({
+    persona: 'You are Piper, the receptionist for Thinking Hammer.',
+    runtime: {
+      currentDate: 'Thursday, August 13, 2026',
+      timezone: 'America/Chicago',
+      businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
+      bookableThrough: 'Friday, August 28, 2026',
+    },
+    library: PLATFORM_TREE_LIBRARY,
+  });
+
+  it('HAPPY: "I have a position" and "I have a contract" map to the job tree', () => {
+    expect(hirePrompt).toMatch(/I have a position for \[the owner\].*→.*job/s);
+    expect(hirePrompt).toMatch(/I have a contract for \[the owner\].*→.*job/s);
+    expect(hirePrompt).toMatch(/OFFERING THE OWNER PAID WORK \(a role, a\s+position, a\s+contract/s);
+  });
+
+  it('HAPPY: talk-to / meet about X is always booking plus the tree for X', () => {
+    expect(hirePrompt).toMatch(/TALK TO \/ speak with \/ meet \[someone\] about X/i);
+    expect(hirePrompt).toMatch(/ALWAYS\s+booking \+ the tree for X/i);
+  });
+
+  it('SAD: a vague opener still must ask, not guess job vs buy', () => {
+    expect(hirePrompt).toMatch(/If a vague opener could be either, do not guess/i);
+    expect(hirePrompt).toMatch(/Are you looking to hire him/i);
+  });
+
+  it('SAD: a service request that uses the word "job" is not the job tree', () => {
+    expect(hirePrompt).toMatch(/SERVICE REQUEST/i);
+    expect(hirePrompt).toMatch(/can someone fix my computer/i);
+  });
+});

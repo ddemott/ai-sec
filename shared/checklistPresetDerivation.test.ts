@@ -88,3 +88,60 @@ describe('resolveChecklistPresetId', () => {
     expect(resolveChecklistPresetId('salon', null)).toBe('salon_front_desk');
   });
 });
+
+/**
+ * THE 2026-08-13 REGRESSION (calls SCL_3a8SkDKzxN4B + SCL_KLvqZ2JkaQFU).
+ *
+ * Thinking Hammer runs business_type 'answering-service' with checklist_preset_id
+ * NULL. That fell through to local_service_front_desk, whose block list has no
+ * `job` — and since ChecklistOverrides can only SUBTRACT blocks, no setting could
+ * put it back. Two recruiter calls to a line whose greeting says "Dale is
+ * available for hire" wrote zero job_inquiries rows. On the first, the model
+ * asked for the tree by name and the host answered `No tree called "job"`.
+ *
+ * WHO: any owner-for-hire tenant. WHAT: the job tree must be in the derived
+ * block list. WHEN: every call, from tenant-config. WHERE:
+ * deriveChecklistRuntimeConfig, the single thing the agent compiles its tree set
+ * from. WHY: a tree the model cannot select is a capability the product believes
+ * it has and does not.
+ */
+describe('owner-for-hire vertical (2026-08-13 job-tree regression)', () => {
+  it('routes answering-service tenants with no explicit preset to owner_for_hire', () => {
+    expect(defaultChecklistPresetIdForBusinessType('answering-service')).toBe(
+      'owner_for_hire_front_desk'
+    );
+    expect(deriveChecklistRuntimeConfig('answering-service', null).preset_id).toBe(
+      'owner_for_hire_front_desk'
+    );
+  });
+
+  it('gives that tenant a selectable job tree', () => {
+    const config = deriveChecklistRuntimeConfig('answering-service', null);
+    expect(config.enabled_conversation_blocks).toContain('job');
+  });
+
+  it('accepts owner_for_hire_front_desk as an explicit preset id', () => {
+    expect(resolveChecklistPresetId('salon', 'owner_for_hire_front_desk')).toBe(
+      'owner_for_hire_front_desk'
+    );
+  });
+
+  it('keeps job out of the shop and salon front desks (wrong vertical, unchanged)', () => {
+    expect(deriveChecklistRuntimeConfig('salon', null).enabled_conversation_blocks).not.toContain(
+      'job'
+    );
+    expect(
+      deriveChecklistRuntimeConfig('auto-shop', null).enabled_conversation_blocks
+    ).not.toContain('job');
+  });
+
+  it('SAD: overrides still cannot ADD a tree the preset withholds', () => {
+    // The shape of the original bug: disabling is expressible, enabling is not.
+    // If this ever starts passing, the override contract changed and the preset
+    // is no longer the authority on what a tenant can select.
+    const config = deriveChecklistRuntimeConfig('salon', null, {
+      enabled_conversation_blocks: ['job'],
+    } as never);
+    expect(config.enabled_conversation_blocks).not.toContain('job');
+  });
+});

@@ -13,12 +13,8 @@
  * Computes estimated_cost_usd using known published rates; TTS (historical xAI rows may exist)
  * pricing is not public so that row gets 0 (chars stored for later).
  */
-import {
-  COST_PER_INPUT_TOKEN,
-  COST_PER_OUTPUT_TOKEN,
-  DEEPGRAM_COST_PER_MS,
-  RecordAiCostSchema,
-} from './schemas';
+import { RecordAiCostSchema } from './schemas';
+import { estimateCost } from '../../services/aiCost';
 import { ok, toolRoute, type AgentToolDeps } from './helpers';
 
 export function registerAiCostRoutes({ app, withTenantClient }: AgentToolDeps): void {
@@ -35,10 +31,27 @@ export function registerAiCostRoutes({ app, withTenantClient }: AgentToolDeps): 
       let idx = 1;
 
       for (const u of rows) {
-        const inputCost = (COST_PER_INPUT_TOKEN[u.model] ?? 0) * u.inputTokens;
-        const outputCost = (COST_PER_OUTPUT_TOKEN[u.model] ?? 0) * u.outputTokens;
-        const audioCost = u.type === 'stt_usage' ? DEEPGRAM_COST_PER_MS * u.audioDurationMs : 0;
-        const estimatedCost = inputCost + outputCost + audioCost;
+        // ONE pricing table (src/services/aiCost.ts). It keys the audio branches
+        // off the MODEL name, so Aura's char-priced TTS is costed too — the old
+        // `type === 'stt_usage'` check meant every TTS row recorded $0 no matter
+        // how many characters it synthesised.
+        const estimatedCost = estimateCost(u);
+        // A model with no price recorded $0 for a month and the ledger looked
+        // maintained. Usage with no cost is now a WARNING with the model named,
+        // so the next unpriced model is visible the day it ships rather than at
+        // the next postmortem. (CI also fails on it — see aiCost.test.ts.)
+        if (estimatedCost === 0 && (u.inputTokens > 0 || u.charactersCount > 0)) {
+          reply.request.log.warn(
+            {
+              event: 'ai_cost_model_unpriced',
+              model: u.model,
+              provider: u.provider,
+              input_tokens: u.inputTokens,
+              characters_count: u.charactersCount,
+            },
+            'ai_cost_model_unpriced'
+          );
+        }
 
         placeholders.push(
           `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`

@@ -14,7 +14,12 @@ import type { llm } from '@livekit/agents';
 import type { VerticalPresetDef } from './blockTypes.js';
 import { resolveSelectableTreeIds } from './checklistAgent.js';
 import { createChecklistTools } from './checklistTools.js';
-import { AUTO_SHOP_PRESET, LOCAL_SERVICE_PRESET, SALON_PRESET } from './presets.js';
+import {
+  AUTO_SHOP_PRESET,
+  LOCAL_SERVICE_PRESET,
+  OWNER_FOR_HIRE_PRESET,
+  SALON_PRESET,
+} from './presets.js';
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 import { ChecklistTracker } from './tracker.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
@@ -136,11 +141,11 @@ describe('preset journeys', () => {
     const { toolkit, fakes, closeCall } = makePresetKit(AUTO_SHOP_PRESET);
 
     expect(await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] })).toContain(
-      'No tree called "job"'
+      'The "job" intake is not enabled'
     );
     expect(
       await call(toolkit.selectedTools(), 'set_purpose', { trees: ['buy_service'] })
-    ).toContain('No tree called "buy_service"');
+    ).toContain('The "buy_service" intake is not enabled');
 
     await bookThrough(toolkit, 'four-wheel alignment');
     const blocked = await call(toolkit.selectedTools(), 'finish_call', {});
@@ -187,7 +192,7 @@ describe('preset journeys', () => {
     const { toolkit, fakes, closeCall } = makePresetKit(LOCAL_SERVICE_PRESET);
 
     expect(await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] })).toContain(
-      'No tree called "job"'
+      'The "job" intake is not enabled'
     );
 
     await call(toolkit.selectedTools(), 'set_purpose', {
@@ -214,5 +219,96 @@ describe('preset journeys', () => {
     expect(Object.keys(toolkit.selectedTools())).not.toContain('capture_job_inquiry');
     expect(await call(toolkit.selectedTools(), 'finish_call', {})).toBe('Call complete.');
     expect(closeCall).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * THE 2026-08-13 CALLS, replayed against a preset that can actually reach `job`.
+ *
+ * WHO: Camille (+1 262-497-9039) on Thinking Hammer's live line, twice.
+ * WHAT: call SCL_3a8SkDKzxN4B — "is he interested in position in downtown
+ *       Seattle" — model set work_direction 'caller_offers_owner_work', took a
+ *       message, then re-issued set_purpose 16ms later to ADD the job tree.
+ * WHEN: 19:46 CT; the goodbye followed 14 seconds after.
+ * WHERE: runSetPurpose's selectableTreeSet check (checklistTools.ts).
+ * WHY it mattered: `job` was in forbidden_trees on all three presets, so the
+ *      host answered `No tree called "job"`, tracker.select never ran, the
+ *      goodbye gate never saw the tree, finish_call closed clean, and
+ *      job_inquiries took zero rows on a call that was entirely about a job.
+ *
+ * The pre-existing job journeys (step10Journeys.test.ts) all pass because they
+ * build a toolkit over the WHOLE tree library — a tree set no tenant has ever
+ * had. These run through a real preset, which is the layer that was broken.
+ */
+describe('owner-for-hire journeys (2026-08-13 regression)', () => {
+  it('accepts the job tree the live call was refused', async () => {
+    const { toolkit } = makePresetKit(OWNER_FOR_HIRE_PRESET);
+    const reply = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'message', 'job'],
+      caller_name: 'Camille DeMott',
+    });
+    expect(reply).not.toContain('No tree called');
+  });
+
+  it('CALL1 replay: adding job mid-call holds the goodbye open for the capture', async () => {
+    const { toolkit, tracker, fakes, closeCall } = makePresetKit(OWNER_FOR_HIRE_PRESET);
+
+    // t=31.8s — the opener, read as a work offer.
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'message'],
+      caller_name: 'Camille DeMott',
+      caller_phone: '2624979039',
+    });
+    // t=48.1s — the message body, then the model's own correction.
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'message_body',
+      value: 'A programming position in downtown Seattle.',
+    });
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'message', 'job'],
+    });
+    expect(tracker.selectedTrees()).toContain('job');
+
+    // t=49.1s — take_message lands, exactly as it did in production.
+    expect(await call(toolkit.selectedTools(), 'take_message', {})).toContain('msg_1');
+    // capture_job_inquiry is now in front of the model — in prod it never was.
+    expect(Object.keys(toolkit.selectedTools())).toContain('capture_job_inquiry');
+
+    // t=62.9s — THE LINE THAT SHIPPED A BROKEN CALL. In production this returned
+    // the goodbye and closed. The job intake is open, so it must refuse.
+    expect(await call(toolkit.selectedTools(), 'finish_call', {})).toContain('not complete');
+    expect(closeCall).not.toHaveBeenCalled();
+
+    // Finish the intake the caller rang about, and only then may the call end.
+    for (const [node_id, value] of [
+      ['callers_company', 'Northgate Staffing'],
+      ['hiring_for', 'own_company'],
+      ['role_description', 'programming position in downtown Seattle'],
+      ['employment_type', 'contract'],
+      ['rate_range', '90 to 110'],
+      ['contract_length', 'six months'],
+      ['work_mode', 'onsite'],
+      ['position_address', 'downtown Seattle'],
+      ['meeting_offer', 'details_only'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    expect(await call(toolkit.selectedTools(), 'capture_job_inquiry', {})).toContain('ji_1');
+    expect(fakes.capture_job_inquiry.execute).toHaveBeenCalledOnce();
+    expect(await call(toolkit.selectedTools(), 'finish_call', {})).toBe('Call complete.');
+    expect(closeCall).toHaveBeenCalledOnce();
+  });
+
+  it('SAD: fix_computer stays parked on this preset (no call has asked for it)', async () => {
+    const { toolkit } = makePresetKit(OWNER_FOR_HIRE_PRESET);
+    expect(
+      await call(toolkit.selectedTools(), 'set_purpose', {
+        work_direction: 'neither_or_unclear',
+        trees: ['identity', 'fix_computer'],
+      })
+    ).toContain('The "fix_computer" intake is not enabled');
   });
 });

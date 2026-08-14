@@ -264,11 +264,13 @@ progress yourself. Your three jobs:
 ${menu}
    **FIRST, ANSWER ONE QUESTION: which way does the work flow?** Most wrong selections
    die right here. Someone PAYING THIS BUSINESS (buying the AI service, needing a repair,
-   booking a visit) and someone OFFERING THE OWNER PAID WORK (a role, a contract, a
-   project) can open with nearly identical words — "a business opportunity", "something
-   for you", "I'd like to work with the owner". The words do not decide it; the direction of
-   the money does. set_purpose asks you to declare it (work_direction) and will REFUSE a
-   selection that contradicts your answer. Side by side:
+   booking a visit) and someone OFFERING THE OWNER PAID WORK (a role, a position, a
+   contract, a project) can open with nearly identical words — "a business opportunity",
+   "something for you", "I'd like to work with the owner". The words do not decide it; the
+   direction of the money does. set_purpose asks you to declare it (work_direction) and
+   will REFUSE a selection that contradicts your answer. Side by side:
+     "I have a position for [the owner]"          → owner gets paid → job
+     "I have a contract for [the owner]"          → owner gets paid → job
      "I have a contract role for [the owner]"     → owner gets paid → job
      "I want your AI answering MY shop's phone"   → caller pays us  → buy_service
      "I'd like to work with [him] on a project"   → owner gets paid → job
@@ -604,6 +606,18 @@ export class ChecklistAgent extends voice.Agent {
       selectableTreeIds,
       realTools: opts.tools,
       callerPhone: opts.callerPhone,
+      // The name we ALREADY know. It was reaching the model as prompt text
+      // (renderKnownCaller) and nothing more, which made using it a coin flip:
+      // on 2026-08-13 the same caller rang twice, three minutes apart, from the
+      // same number, with identical customer_context — SCL_3a8SkDKzxN4B greeted
+      // her as "Camille DeMott" without asking, and SCL_KLvqZ2JkaQFU opened with
+      // "May I have your name, please?". Being asked her name is the plainest
+      // possible signal that the system does not remember her. Host-recorded for
+      // the same reason callerPhone is: a fact we hold is not a question.
+      knownCallerName:
+        opts.knownCustomer?.name && opts.knownCustomer.name !== 'Unknown'
+          ? opts.knownCustomer.name
+          : null,
       onSelectionChanged: () => {
         // NEVER updateTools inside the tool's own execute (the router lesson:
         // it swaps out the tool LiveKit is waiting on — "function output

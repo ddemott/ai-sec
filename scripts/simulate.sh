@@ -374,6 +374,7 @@ cmd_call() {
   load_livekit_env || exit 1
   LIVEKIT_URL="$LK_URL" LIVEKIT_API_KEY="$LK_KEY" LIVEKIT_API_SECRET="$LK_SECRET" \
     SIM_TENANT="${TENANT:-}" \
+    SIM_CALL_JOIN_FIRST=1 \
     node "$ROOT_DIR/agent/scripts/sim-call.mjs"
 }
 

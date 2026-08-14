@@ -59,14 +59,19 @@ export const RATE_LIMIT_PER_PHONE_PER_HOUR = 3;
 export const RATE_LIMIT_PER_TENANT_PER_DAY = 100;
 
 // ── AI cost pricing constants ─────────────────────────────────────────
-export const COST_PER_INPUT_TOKEN: Record<string, number> = {
-  'gpt-4o-mini': 0.15e-6,
-  'text-embedding-3-small': 0.02e-6,
-};
-export const COST_PER_OUTPUT_TOKEN: Record<string, number> = {
-  'gpt-4o-mini': 0.6e-6,
-};
-export const DEEPGRAM_COST_PER_MS = 0.0043 / 60000; // $0.0043/min
+// AI pricing lived HERE and ALSO in src/services/aiCost.ts, and every voice call
+// was costed by this copy — the stale one. It knew only gpt-4o-mini and
+// text-embedding-3-small, so the production voice LLM (gpt-4.1-mini since
+// 2026-07-20) and Aura TTS both recorded $0.00 on every call. The 2026-07-21 fix
+// that added gpt-4.1-mini landed in the OTHER file, which this route never
+// imported, so the ledger stayed wrong and looked maintained.
+//
+// Measured on the 2026-08-13 calls: SCL_KLvqZ2JkaQFU recorded $0.0019 against a
+// real cost near $0.068 — 2.8%. Tier pricing (docs/TODO.md P0 §2) is being
+// decided against that number.
+//
+// There is now ONE table: PRICING in src/services/aiCost.ts. Two tables is the
+// defect — one of them is always going to be the stale one.
 
 // ── Zod schemas (ported from supabase/functions/vapi-tools/index.ts) ──
 

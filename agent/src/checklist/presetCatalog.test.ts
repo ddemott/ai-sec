@@ -5,19 +5,45 @@ import { verticalPresetSchema } from './blockSchemas.js';
 import {
   AUTO_SHOP_PRESET,
   LOCAL_SERVICE_PRESET,
+  OWNER_FOR_HIRE_PRESET,
   PRESET_LIBRARY,
   SALON_PRESET,
   getPresetById,
 } from './presets.js';
+import { PLATFORM_TREE_LIBRARY } from './trees.js';
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 
 describe('preset catalog', () => {
-  it('contains the first three real vertical presets', () => {
+  it('contains the four real vertical presets', () => {
     expect(PRESET_LIBRARY.map((preset) => preset.preset_id)).toEqual([
       'auto_shop_front_desk',
       'salon_front_desk',
       'local_service_front_desk',
+      'owner_for_hire_front_desk',
     ]);
+  });
+
+  // THE GUARD THAT WOULD HAVE CAUGHT 2026-08-13. `job` sat in forbidden_trees on
+  // every preset while overrides could only SUBTRACT blocks, so the tree existed
+  // in the library and no tenant on earth could select it. Two recruiter calls
+  // produced zero job_inquiries rows and the failure was invisible until a
+  // postmortem replayed the config by hand. A tree the product ships and no
+  // preset can reach is dead code that still costs a live call — either a preset
+  // offers it, or it is deliberately parked and named here.
+  it('every platform tree is reachable from at least one preset', () => {
+    const reachable = new Set(PRESET_LIBRARY.flatMap((preset) => preset.conversation_blocks));
+    // Parked on purpose — no call has asked for it yet ("test it or delete it").
+    // Moving a tree into this list is a decision someone must type.
+    const deliberatelyUnreachable = new Set(['fix_computer']);
+    const orphans = PLATFORM_TREE_LIBRARY.map((tree) => tree.tree_id).filter(
+      (id) => !reachable.has(id) && !deliberatelyUnreachable.has(id)
+    );
+    expect(orphans).toEqual([]);
+  });
+
+  it('offers the job tree to the vertical whose primary traffic is job calls', () => {
+    expect(OWNER_FOR_HIRE_PRESET.conversation_blocks).toContain('job');
+    expect(OWNER_FOR_HIRE_PRESET.forbidden_trees).not.toContain('job');
   });
 
   it('validates each shipped preset against the canonical schema', () => {

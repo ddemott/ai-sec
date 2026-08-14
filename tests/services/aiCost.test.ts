@@ -60,4 +60,20 @@ describe('estimateCost — every model the app invokes has a nonzero rate', () =
   it('an unknown model still returns 0 (no crash) — but that is the gap to watch', () => {
     expect(estimateCost({ provider: 'openai', model: 'gpt-9-imaginary', inputTokens: 1000 })).toBe(0);
   });
+
+  // EVERY Aura voice the picker can map to (AURA_BY_OPENAI_VOICE in
+  // agent/src/index.ts) must be priced. `aura-asteria-en` is the default and the
+  // one both 2026-08-13 calls used; it recorded $0.00 in production for 356 and
+  // 681 characters because the ROUTE never costed TTS at all. A per-tenant voice
+  // switch must never silently move a call back to free.
+  it.each([
+    'aura-asteria-en', // shimmer — the default, and what both 2026-08-13 calls used
+    'aura-luna-en', // nova
+    'aura-stella-en', // alloy
+    'aura-athena-en', // echo
+    'aura-orion-en', // onyx
+    'aura-arcas-en', // fable
+  ])('%s is priced by characters', (model) => {
+    expect(estimateCost({ provider: 'Deepgram', model, charactersCount: 1000 })).toBeGreaterThan(0);
+  });
 });

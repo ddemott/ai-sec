@@ -224,6 +224,17 @@ export default defineAgent({
   },
 
   entry: async (ctx: JobContext) => {
+    // GREETING-LATENCY REFERENCE POINTS. Both 2026-08-13 calls show the greeting
+    // at [0:17] on the transcript clock — consistent enough to be structural,
+    // and never actually measured, because the transcript clock is not the
+    // caller's clock. What the caller experiences is answer → first audio, and
+    // the two reference points that bracket it are entry (the job starts) and
+    // the participant joining (the leg is up). MEASURE before fixing: the last
+    // voice "freeze" turned out to be TTS, not any of the things that were
+    // guessed at, and a whole afternoon went into the guesses.
+    const entryAtMs = Date.now();
+    let participantAtMs: number | null = null;
+
     await ctx.connect();
 
     const log = getLogger();
@@ -285,6 +296,7 @@ export default defineAgent({
       ]);
       if (sipParticipant) {
         sawParticipant = true;
+        participantAtMs = Date.now();
         participantAttributes = sipParticipant.attributes;
         // Identity is the handle the SIP transfer (cold REFER) targets — capture
         // it now so transfer_call can hand the live leg off to a human.
@@ -1848,11 +1860,19 @@ export default defineAgent({
                     audio: frameStream(greetingFrame),
                   })
                 : session.say(greeting, { allowInterruptions: false });
+              const greetingAtMs = Date.now();
+              // ms_since_participant is THE number — the silence the caller
+              // actually sits through. ms_since_entry brackets it from the other
+              // side (dispatch/config/prefetch before the leg is even up), so a
+              // slow greeting can be attributed instead of guessed at.
               callLog.info(
                 {
                   event: 'greeting_spoken',
                   pregenerated: Boolean(greetingFrame),
                   chars: greeting.length,
+                  ms_since_entry: greetingAtMs - entryAtMs,
+                  ms_since_participant:
+                    participantAtMs === null ? null : greetingAtMs - participantAtMs,
                 },
                 greetingFrame
                   ? 'greeting played from cache — no TTS latency'

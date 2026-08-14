@@ -1,16 +1,20 @@
 // sim-call.mjs — talk to the voice agent from a browser, NO phone needed.
-// Driven by scripts/simulate.sh `call`.
+// Driven by scripts/simulate.sh `call` and the dashboard browser-call launcher.
 //
-// Dispatches the agent into a fresh LiveKit room and mints a join token for a
-// human "caller", then prints a one-click LiveKit Meet URL. Open it, allow the
-// mic, and you're talking to the real agent: Deepgram STT -> GPT LLM -> Grok
-// TTS -> /agent-tools booking. This exercises the entire voice path EXCEPT the
-// Telnyx PSTN leg (which only a real carrier call can prove).
+// DEFAULT (dashboard): create room, mint token, print join URL + room/tenant/agent,
+// dispatch immediately, EXIT. Backend `startBrowserCallerSession` waits ≤15s for
+// this process to finish and parse stdout — it cannot wait for a human.
+//
+// SIM_CALL_JOIN_FIRST=1 (CLI `simulate.sh call`): print the same banner first,
+// wait until the human joins, THEN dispatch. Prod agent leaves after 20s with
+// no participant (ghost-dispatch guard) — dispatch-first loses that race when
+// a person still has to open Meet and grant mic.
 //
 // Reads LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET + SIM_TENANT from env
 // (bash wrapper exports them from the repo .env).
 
-import { AccessToken, AgentDispatchClient } from 'livekit-server-sdk';
+import { AccessToken, AgentDispatchClient, RoomServiceClient } from 'livekit-server-sdk';
+import { formatSimCallBanner } from './sim-call-format.mjs';
 
 const url = process.env.LIVEKIT_URL;
 const key = process.env.LIVEKIT_API_KEY;
@@ -23,6 +27,7 @@ const tenant = process.env.SIM_TENANT || 'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0';
 // the same name and your local build races the Railway one for it. You would not
 // be able to tell which code answered.
 const AGENT_NAME = process.env.AGENT_NAME ?? 'secretary-hq-agent';
+const JOIN_FIRST = process.env.SIM_CALL_JOIN_FIRST === '1';
 
 if (!url || !key || !secret) {
   console.error('sim-call: missing LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET');
@@ -32,32 +37,99 @@ if (!url || !key || !secret) {
 const httpUrl = url.replace(/^ws/, 'http');
 const room = `sim-call-${Date.now()}`;
 const identity = `sim-caller-${Date.now()}`;
-
-// Mint a 30-min join token for the human caller.
-const at = new AccessToken(key, secret, { identity, ttl: '30m' });
-at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true });
-const token = await at.toJwt();
-
-// Dispatch the agent into that room (so it's waiting when you join).
+const rooms = new RoomServiceClient(httpUrl, key, secret);
 const dispatch = new AgentDispatchClient(httpUrl, key, secret);
-try {
-  await dispatch.createDispatch(room, AGENT_NAME, {
-    metadata: JSON.stringify({ tenant_id: tenant }),
-  });
-} catch (e) {
-  console.error('sim-call: dispatch failed:', e?.message ?? e);
-  process.exit(1);
-}
+
+// Hold an empty room long enough for a human to open the URL (join-first) or
+// for Meet to connect after a dispatch-first print (dashboard).
+await rooms.createRoom({
+  name: room,
+  emptyTimeout: 300,
+  departureTimeout: 20,
+  maxParticipants: 4,
+  metadata: JSON.stringify({ tenant_id: tenant }),
+});
+
+const at = new AccessToken(key, secret, { identity, ttl: '30m' });
+// JOIN only — the room is created above, with the tenant_id metadata the agent
+// reads. roomCreate here would widen what a leaked 30-minute URL can do, and
+// would also let a lapsed room be silently re-created WITHOUT that metadata;
+// failing to join is the better outcome than joining a room the agent can't
+// resolve a tenant for.
+at.addGrant({
+  roomJoin: true,
+  room,
+  canPublish: true,
+  canSubscribe: true,
+});
+const token = await at.toJwt();
 
 const joinUrl = `https://meet.livekit.io/custom?liveKitUrl=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}`;
 
+// Banner is COMPLETE before any wait — dashboard parser needs room/tenant/agent
+// on the first (and only) stdout it sees when this process exits.
+console.log(
+  formatSimCallBanner({
+    joinUrl,
+    room,
+    tenant,
+    agent: AGENT_NAME,
+    joinFirst: JOIN_FIRST,
+  })
+);
+
+async function dispatchAgent() {
+  try {
+    await dispatch.createDispatch(room, AGENT_NAME, {
+      metadata: JSON.stringify({ tenant_id: tenant }),
+    });
+  } catch (e) {
+    console.error('sim-call: dispatch failed:', e?.message ?? e);
+    process.exit(1);
+  }
+}
+
+if (!JOIN_FIRST) {
+  await dispatchAgent();
+  process.exit(0);
+}
+
+console.log('  Waiting up to 3 minutes for you to join...');
 console.log('');
-console.log('  Agent dispatched. Open this URL, allow the mic, and talk to the agent:');
-console.log('');
-console.log('  ' + joinUrl);
-console.log('');
-console.log(`  room:    ${room}`);
-console.log(`  tenant:  ${tenant}`);
-console.log(`  agent:   ${AGENT_NAME}`);
-console.log('  (real STT/LLM/TTS/booking — no phone. Token valid 30 min.)');
+
+const humanDeadline = Date.now() + 180_000;
+let human = null;
+while (Date.now() < humanDeadline) {
+  const participants = await rooms.listParticipants(room).catch(() => []);
+  human = participants.find((p) => p.identity === identity) ?? null;
+  if (human) break;
+  await new Promise((r) => setTimeout(r, 500));
+}
+
+if (!human) {
+  console.error('  Nobody joined in 3 minutes. Room closed. Ask for a new URL.');
+  await rooms.deleteRoom(room).catch(() => {});
+  process.exit(1);
+}
+
+console.log(`  You joined as ${human.identity}. Dispatching agent...`);
+await dispatchAgent();
+
+const agentDeadline = Date.now() + 15_000;
+let agentHere = false;
+while (Date.now() < agentDeadline) {
+  const participants = await rooms.listParticipants(room).catch(() => []);
+  if (participants.some((p) => p.identity !== identity)) {
+    agentHere = true;
+    break;
+  }
+  await new Promise((r) => setTimeout(r, 400));
+}
+
+if (!agentHere) {
+  console.error('  Agent did not join the room. Worker may be restarting.');
+  process.exit(1);
+}
+
+console.log('  Agent is in the room. Talk now.');
 console.log('');

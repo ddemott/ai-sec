@@ -47,6 +47,31 @@ describe('library integrity', () => {
     expect(FIX_COMPUTER_TREE.description).toMatch(/never the job tree/i);
   });
 
+  it('hire-intake selector copy names position and contract as job, not a plain message', () => {
+    // WHO: 2026-08-13 browser call — "a position I had for him that's in Chicago"
+    //      selected identity+message. Owner got a one-line note, zero job row.
+    // WHAT: the purpose selector reads these descriptions, not the code comments.
+    // WHY: "position" and "contract" must be first-class peers of job/role, or
+    //      the model files a recruiter opener as take_message again.
+    expect(JOB_TREE.description).toMatch(/job, role, position, contract/i);
+    expect(JOB_TREE.description).toMatch(/\bposition\b/i);
+    expect(JOB_TREE.description).toMatch(/\bcontract\b/i);
+    expect(JOB_TREE.description).toMatch(/I have a position/i);
+    expect(MESSAGE_TREE.description).toMatch(/role, position/i);
+    expect(MESSAGE_TREE.description).toMatch(/\bcontract\b/i);
+    expect(MESSAGE_TREE.description).toMatch(/I have a position \/ contract for him/i);
+  });
+
+  it('talk-to / meeting about a job is two goals: job AND booking', () => {
+    // WHO: same call said "talk to y'all about a position" — no booking tree.
+    // WHAT: job tree + booking tree descriptions the selector reads.
+    // WHY: "meeting" / "talk to" must trip a real calendar write, not a message.
+    expect(JOB_TREE.description).toMatch(/TALK TO \/ speak with \/ meet/i);
+    expect(JOB_TREE.description).toMatch(/job AND\s+booking|select job AND booking/i);
+    expect(BOOKING_TREE.description).toMatch(/meeting/i);
+    expect(BOOKING_TREE.description).toMatch(/even mentioned in passing/i);
+  });
+
   it('identity ask text carries the 2026-07-21 phone rules (ask plainly; record first, read back once)', () => {
     // The read-back protocol moved host-side that same day (the double-read-back
     // fix): the NODE now forbids the pre-read and defers to the recording
