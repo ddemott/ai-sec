@@ -56,8 +56,15 @@ const UpdateConfigSchema = z.object({
   default_service_id: z.string().uuid().optional().nullable(),
   voice_id: z.string().max(100).optional().nullable(),
   business_type: z.string().max(50).optional(),
+  // Keep in step with ChecklistPresetId — an id missing here is rejected 400 on
+  // save, so the dashboard picker would offer a preset the API refuses.
   checklist_preset_id: z
-    .enum(['auto_shop_front_desk', 'salon_front_desk', 'local_service_front_desk'])
+    .enum([
+      'auto_shop_front_desk',
+      'salon_front_desk',
+      'local_service_front_desk',
+      'owner_for_hire_front_desk',
+    ])
     .optional()
     .nullable(),
   checklist_overrides: z

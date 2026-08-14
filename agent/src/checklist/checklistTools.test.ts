@@ -180,8 +180,8 @@ describe('the toolset composition', () => {
     const refusedBuyService = await call(toolkit.selectedTools(), 'set_purpose', {
       trees: ['buy_service'],
     });
-    expect(refusedJob).toContain('No tree called "job"');
-    expect(refusedBuyService).toContain('No tree called "buy_service"');
+    expect(refusedJob).toContain('The "job" intake is not enabled');
+    expect(refusedBuyService).toContain('The "buy_service" intake is not enabled');
     await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'booking'] });
     const names = Object.keys(toolkit.selectedTools());
     expect(names).toContain('book_with_scheduling');
@@ -197,8 +197,8 @@ describe('the toolset composition', () => {
     const refusedBuyService = await call(toolkit.selectedTools(), 'set_purpose', {
       trees: ['buy_service'],
     });
-    expect(refusedJob).toContain('No tree called "job"');
-    expect(refusedBuyService).toContain('No tree called "buy_service"');
+    expect(refusedJob).toContain('The "job" intake is not enabled');
+    expect(refusedBuyService).toContain('The "buy_service" intake is not enabled');
     await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'booking'] });
     const names = Object.keys(toolkit.selectedTools());
     expect(names).toContain('book_with_scheduling');
@@ -211,7 +211,7 @@ describe('the toolset composition', () => {
   it('local service preset exposes buy_service meeting-note path while still blocking job capture', async () => {
     const { toolkit } = makePresetKit(LOCAL_SERVICE_PRESET);
     const refusedJob = await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] });
-    expect(refusedJob).toContain('No tree called "job"');
+    expect(refusedJob).toContain('The "job" intake is not enabled');
     await call(toolkit.selectedTools(), 'set_purpose', {
       trees: ['identity', 'buy_service', 'booking'],
     });
@@ -299,6 +299,19 @@ describe('the work-direction gate — declared axis checked against the selectio
     expect(tracker.selectedTrees()).toContain('job');
   });
 
+  it('work_direction copy lists position and contract as owner-gets-paid work', () => {
+    // WHO: purpose selector | WHAT: the enum description on set_purpose
+    // WHY: last call said "position"; the schema the model reads must name it.
+    const { toolkit } = makeKit();
+    const tool = toolkit.selectedTools().set_purpose as {
+      parameters?: { properties?: { work_direction?: { description?: string } } };
+    };
+    const desc = tool.parameters?.properties?.work_direction?.description ?? '';
+    expect(desc.length, 'set_purpose.work_direction must expose its description').toBeGreaterThan(20);
+    expect(desc).toMatch(/\bposition\b/);
+    expect(desc).toMatch(/\bcontract\b/);
+  });
+
   it('SAD: owner-gets-paid direction with no job tree gets the under-selection nudge', async () => {
     // WHY (2026-07-27 live call, 17:57 UTC): "talk with Jane about the job
     //      opportunities" selected booking ONLY — the meeting was booked, zero
@@ -365,6 +378,37 @@ describe('set_purpose', () => {
     const { toolkit } = makeKit();
     const res = await call(toolkit.selectedTools(), 'set_purpose', { trees: ['wedding'] });
     expect(res).toContain('No tree called "wedding"');
+  });
+
+  /**
+   * WHO: any tenant whose preset withholds a tree the platform ships.
+   * WHAT: a tree that EXISTS but is not enabled must not be refused with the
+   *       same sentence as a name the model invented.
+   * WHEN: 2026-08-13, call SCL_3a8SkDKzxN4B.
+   * WHERE: runSetPurpose's selectableTreeSet branch.
+   * WHY: the model read the caller correctly and asked for `job`; the host said
+   *      `No tree called "job"`, which reads as "you made that up." It had not.
+   *      The tree was real and the CONFIG withheld it — a different problem with
+   *      a different fix, and the conflation is why it took a postmortem to find.
+   */
+  it('tells a withheld tree apart from an invented one, and says so out loud', async () => {
+    const { toolkit } = makeKit({ selectableTreeIds: ['identity', 'message'] });
+    const withheld = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job'],
+    });
+    const invented = await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['identity', 'wedding'],
+    });
+
+    expect(withheld).toContain('The "job" intake is not enabled');
+    expect(withheld).not.toContain('No tree called');
+    // And it must point at the lane that still serves the caller, rather than
+    // inviting the model to guess another tree name.
+    expect(withheld).toContain('COMPLETE message');
+
+    expect(invented).toContain('No tree called "wedding"');
+    expect(invented).not.toContain('is not enabled');
   });
 
   it('caller-ID seeds the phone node — the question never exists on attested lines', async () => {
@@ -1076,5 +1120,192 @@ describe('corrections reach what was already written (batch D — the "Jamil" ro
     });
     await flush();
     expect(fakes.book_with_scheduling.execute).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * WHO: Dale, opening his calendar on the day of a booked meeting.
+ * WHAT: the appointment must say what the meeting is about.
+ * WHEN: 2026-08-13, call SCL_KLvqZ2JkaQFU.
+ * WHERE: ACTION_ARG_BACKFILL['book_with_scheduling'].description.
+ * WHY: meeting_topic ("a position") was recorded in the tracker at t=40.8s and
+ *      the caller volunteered "In the Sahara Desert" at 0:42. The booked
+ *      appointment's description reads "Booking via SecretaryHQ" — the RPC
+ *      fallback. The model passed the location on the FAILED attempt and dropped
+ *      it from the successful one, and backfill could not rescue it because it
+ *      had never been recorded as an answer. Both facts were host-owned state
+ *      the write ignored.
+ */
+describe('the appointment carries the meeting in the caller words', () => {
+  const bookArgsFrom = async (
+    answers: Array<[string, string]>,
+    args: Record<string, unknown> = {}
+  ): Promise<Record<string, unknown>> => {
+    const { toolkit, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'booking'],
+    });
+    for (const [node_id, value] of answers) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    await call(toolkit.selectedTools(), 'book_with_scheduling', args);
+    return (fakes.book_with_scheduling.execute.mock.calls[0]?.[0] ?? {}) as Record<string, unknown>;
+  };
+
+  it('sends the topic as the appointment description', async () => {
+    const sent = await bookArgsFrom([
+      ['caller_name', 'Camille'],
+      ['caller_phone', '2624979039'],
+      ['meeting_topic', 'a position'],
+    ]);
+    expect(sent.description).toBe('About: a position');
+  });
+
+  it('folds in volunteered meeting context — the detail CALL2 dropped on retry', async () => {
+    const sent = await bookArgsFrom([
+      ['caller_name', 'Camille'],
+      ['caller_phone', '2624979039'],
+      ['meeting_topic', 'a position'],
+      ['meeting_context', 'In the Sahara Desert'],
+    ]);
+    expect(sent.description).toBe('About: a position — In the Sahara Desert');
+  });
+
+  it('survives the retry that lost it in production', async () => {
+    // The model dropped `description` from its second attempt. Host-owned state
+    // must not depend on the model retyping it.
+    const sent = await bookArgsFrom(
+      [
+        ['caller_name', 'Camille'],
+        ['caller_phone', '2624979039'],
+        ['meeting_topic', 'a position'],
+        ['meeting_context', 'In the Sahara Desert'],
+      ],
+      { requested_start: '2026-08-31T15:00:00' }
+    );
+    expect(sent.description).toBe('About: a position — In the Sahara Desert');
+  });
+
+  it("model-provided description still wins — it heard something we didn't", async () => {
+    const sent = await bookArgsFrom(
+      [
+        ['caller_name', 'Camille'],
+        ['caller_phone', '2624979039'],
+        ['meeting_topic', 'a position'],
+      ],
+      { description: 'Second interview, panel of three' }
+    );
+    expect(sent.description).toBe('Second interview, panel of three');
+  });
+
+  it('SAD: no topic, no context → no description, not an empty label', async () => {
+    const sent = await bookArgsFrom([
+      ['caller_name', 'Camille'],
+      ['caller_phone', '2624979039'],
+    ]);
+    expect(sent.description).toBeUndefined();
+  });
+});
+
+/**
+ * WHO: the under-selection nudge, on a tenant with no job intake.
+ * WHAT: it must not tell the model to add a tree the tenant cannot select.
+ * WHEN: 2026-08-13, SCL_3a8SkDKzxN4B.
+ * WHERE: runSetPurpose's jobNudge.
+ * WHY: the model TOOK the nudge — it called set_purpose again to add `job` —
+ *      and got `No tree called "job"`, because every preset forbade it. Advice
+ *      the model cannot act on burns a purpose round and leaves the caller
+ *      served by a fragment ("It's for programming."). When the tree is
+ *      genuinely unavailable, the message is the only place the role can land.
+ */
+describe('the under-selection nudge adapts to what the tenant can actually select', () => {
+  it('says ADD job when the tenant has the job tree', async () => {
+    const { toolkit } = makeKit();
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'message'],
+    });
+    expect(res).toContain('ADD job');
+  });
+
+  it('says put it in the MESSAGE when the tenant has no job tree', async () => {
+    const { toolkit } = makeKit({ selectableTreeIds: ['identity', 'message', 'booking', 'qa'] });
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'message'],
+    });
+    expect(res).toContain('does not run a job intake');
+    expect(res).toContain('do NOT try to select one');
+    expect(res).not.toContain('ADD job');
+  });
+
+  it('stays silent when the job tree IS selected — no nudge to ignore', async () => {
+    const { toolkit } = makeKit();
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job'],
+    });
+    expect(res).not.toContain('OFFERING THE OWNER WORK, but');
+    expect(res).not.toContain('does not run a job intake');
+  });
+});
+
+/**
+ * WHO: Camille, a known customer, calling twice in three minutes.
+ * WHAT: a caller we have already recognized must not be asked her name.
+ * WHEN: 2026-08-13 — SCL_3a8SkDKzxN4B greeted her as "Camille DeMott" without
+ *       asking; SCL_KLvqZ2JkaQFU, three minutes later, opened with "May I have
+ *       your name, please?". Same number, same customer_id, identical
+ *       customer_context on both.
+ * WHERE: runSetPurpose's seeding, beside the caller-ID seed.
+ * WHY: the looked-up name reached the model as PROMPT TEXT and nothing more, so
+ *      whether it got used was a coin flip. Being asked her name is the plainest
+ *      signal that the system does not remember her. A fact we hold is not a
+ *      question — the same rule caller-ID seeding already follows for the phone.
+ */
+describe('a recognized caller is never asked who she is', () => {
+  it('seeds the name from the prefetched customer and says not to ask', async () => {
+    const { toolkit, tracker } = makeKit({ knownCallerName: 'Camille DeMott' });
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'booking'],
+    });
+    expect(tracker.status('caller_name')).toBe('answered');
+    expect(tracker.value('caller_name')).toBe('Camille DeMott');
+    expect(res).toContain('Do NOT ask who is calling');
+  });
+
+  it('a name spoken THIS call still wins — she may be calling for someone else', async () => {
+    const { toolkit, tracker } = makeKit({ knownCallerName: 'Camille DeMott' });
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'booking'],
+      caller_name: 'Priya Raman',
+    });
+    expect(tracker.value('caller_name')).toBe('Priya Raman');
+  });
+
+  it('a correction after seeding still lands', async () => {
+    const { toolkit, tracker } = makeKit({ knownCallerName: 'Jamil' });
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'message'],
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Camille',
+    });
+    expect(tracker.value('caller_name')).toBe('Camille');
+  });
+
+  it('SAD: an unknown caller is still asked, and nothing is invented', async () => {
+    const { toolkit, tracker } = makeKit();
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'booking'],
+    });
+    expect(tracker.status('caller_name')).toBe('open');
+    expect(res).not.toContain('Do NOT ask who is calling');
   });
 });

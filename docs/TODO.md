@@ -30,6 +30,66 @@ recurring failure classes: `docs/CALL_FIX_PLAN.md`.
 
 ---
 
+## 📞 Live-call fix series (2026-08-13) — see `CALL1.md` / `CALL2.md`
+
+Two real calls from the same caller (`+1 262-497-9039`, Camille), three minutes apart,
+on tenant Thinking Hammer: `SCL_3a8SkDKzxN4B` (19:46 CT, message) and
+`SCL_KLvqZ2JkaQFU` (19:49 CT, booked). Both were recruiting calls. Both wrote **zero**
+`job_inquiries` rows. Full transcripts, persisted tool traces, and per-finding evidence
+in `CALL1.md` / `CALL2.md` at repo root.
+
+**Root cause, one line:** `job` sat in `forbidden_trees` on all three presets while
+`ChecklistOverrides` could only SUBTRACT blocks — so **no configuration of any tenant
+could select the job tree.** On CALL1 the model read the caller correctly, declared
+`work_direction: caller_offers_owner_work`, and re-issued `set_purpose` to add `job`
+16 ms later; the host answered `No tree called "job"`. `capture_job_inquiry` never
+entered the toolset, the goodbye gate never saw the tree, and the call closed clean.
+
+**Shipped on `fix/job-tree-unreachable`** (all green: agent 1622, backend, dashboard):
+
+- [x] **A** — `owner_for_hire_front_desk` preset + derivation + dashboard picker + the
+      `/tenants` Zod enum; `presetCatalog.test.ts` now **fails CI on any platform tree
+      no preset can reach** (`fix_computer` is the one declared exception).
+      `scripts/pin-owner-for-hire-preset.sql` pins the tenant explicitly — **Dale runs
+      it, AFTER the agent deploys** (an unrecognized preset id falls back to today's
+      broken state, so running it early is a silent no-op).
+- [x] **B** — an unselectable-tree refusal is no longer silent, and no longer wears the
+      same sentence as an invented tree name; `ToolCallLog` now persists a redacted
+      tool RESULT, not just args and a did-not-throw flag.
+- [x] **C** — host-side refusal of a booking the caller has not confirmed; a failed
+      booking can no longer be relayed as "the owner is not available".
+- [x] **D** — the two AI cost tables collapsed into one. The route was costing every
+      call with a copy that knew only `gpt-4o-mini`, so the production voice LLM and
+      all TTS recorded **$0.00**; the ledger reported 2.8–4.3% of the real bill.
+- [x] **E** — the appointment now carries the meeting subject + volunteered context;
+      `message_body` must stand alone.
+- [x] **F** — the under-selection nudge no longer tells the model to add a tree the
+      tenant cannot select; a recognized caller is never asked her name; greeting
+      latency is now instrumented (`ms_since_participant` on `greeting_spoken`).
+
+**Still open from these calls:**
+
+- [ ] **(Dale)** Run `scripts/pin-owner-for-hire-preset.sql` against prod after deploy,
+      then place a test call and confirm a `job_inquiries` row lands.
+- [ ] **(Dale)** Read the first `greeting_spoken` `ms_since_participant` values off
+      prod. Both calls showed the greeting at `[0:17]` on the transcript clock, which is
+      NOT the caller's clock — nothing is worth optimizing until the real number is in.
+      **MEASURE before fixing.**
+- [ ] **Re-price the tiers** once the cost ledger has a few honest calls in it. P0 §2
+      below is being decided against numbers that were ~35× too low. CALL2 really cost
+      about **$0.068** for 96 seconds, dominated by **137,971 input tokens** —
+      ~17k/turn, the checklist state block plus tool schemas resent every turn. That
+      per-turn context is the product's whole cost curve and is now visible for the
+      first time.
+- [ ] **Do NOT "fix" the service semantic match by prefixing the query.** Measured and
+      rejected 2026-08-13 (`scripts/probe-service-match.mjs`): `"a meeting about …"`
+      lifts every score by roughly a constant, so `"four-wheel alignment"` (0.1739 →
+      0.3571) clears the 0.35 threshold onto Programming Consultation. It defeats the
+      threshold instead of improving discrimination — a confident wrong booking in place
+      of a safe fallback. Recorded here because it looks like an obvious win.
+
+---
+
 ## 🔴 P0 — Launch blockers (clear before the first paying customer)
 
 Ordered: the product must answer + transfer + book on a real call, then take money,

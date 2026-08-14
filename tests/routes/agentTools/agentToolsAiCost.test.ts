@@ -227,3 +227,121 @@ describe('POST /agent-tools/record-ai-cost', () => {
     expect(queries).toHaveLength(0);
   });
 });
+
+/**
+ * WHO:   the ROUTE that costs every voice call.
+ * WHAT:  the real usage rows from 2026-08-13 calls SCL_3a8SkDKzxN4B and
+ *        SCL_KLvqZ2JkaQFU, replayed against the pricing the route now uses.
+ * WHEN:  prod recorded $0.00121 and $0.00191 for calls that really cost about
+ *        $0.028 and $0.068 — 4.3% and 2.8% of actual.
+ * WHERE: registerAiCostRoutes → estimateCost (src/services/aiCost.ts).
+ * WHY:   pricing lived in TWO tables. tests/services/aiCost.test.ts pinned
+ *        gpt-4.1-mini and Aura and passed the whole time, because it tested the
+ *        table the route did NOT import. The route read a copy in schemas.ts
+ *        that knew only gpt-4o-mini, so the production voice LLM and all TTS
+ *        recorded $0. Testing the priced module proved nothing about the priced
+ *        PATH — these go through the route.
+ */
+describe('record-ai-cost prices what the calls actually used (2026-08-13)', () => {
+  const costsFor = async (
+    usage: Array<Record<string, unknown>>
+  ): Promise<number[]> => {
+    const { app, queries } = buildApp({ queryResponses: [{ rows: [], rowCount: usage.length }] });
+    const res = await post(app, '/agent-tools/record-ai-cost', {
+      tenant_id: TENANT_ID,
+      call_id: CALL_ID,
+      source: 'voice_call',
+      model_usage: usage,
+    });
+    expect(res.statusCode).toBe(200);
+    // estimated_cost_usd is the 10th column of each row.
+    const params = queries[0].params;
+    return usage.map((_, i) => Number(params[i * 10 + 9]));
+  };
+
+  const row = (over: Record<string, unknown>) => ({
+    inputTokens: 0,
+    outputTokens: 0,
+    charactersCount: 0,
+    audioDurationMs: 0,
+    ...over,
+  });
+
+  it('prices the production voice LLM — 137,971 input tokens is not free', async () => {
+    const [cost] = await costsFor([
+      row({
+        type: 'llm_usage',
+        provider: 'api.openai.com',
+        model: 'gpt-4.1-mini',
+        inputTokens: 137_971,
+        outputTokens: 444,
+      }),
+    ]);
+    expect(cost).toBeGreaterThan(0.05);
+    expect(cost).toBeLessThan(0.06);
+  });
+
+  it('prices Aura TTS by characters — the tts_usage branch used to record $0', async () => {
+    const [cost] = await costsFor([
+      row({
+        type: 'tts_usage',
+        provider: 'Deepgram',
+        model: 'aura-asteria-en',
+        charactersCount: 681,
+        audioDurationMs: 38_347,
+      }),
+    ]);
+    expect(cost).toBeCloseTo(681 * (0.015 / 1000), 8);
+  });
+
+  it("CALL2's whole ledger lands near the real bill, not 2.8% of it", async () => {
+    const costs = await costsFor([
+      row({
+        type: 'llm_usage',
+        provider: 'api.openai.com',
+        model: 'gpt-4.1-mini',
+        inputTokens: 137_971,
+        outputTokens: 444,
+      }),
+      row({
+        type: 'tts_usage',
+        provider: 'Deepgram',
+        model: 'aura-asteria-en',
+        charactersCount: 681,
+        audioDurationMs: 38_347,
+      }),
+      row({
+        type: 'stt_usage',
+        provider: 'Deepgram',
+        model: 'nova-3',
+        audioDurationMs: 25_400,
+      }),
+      row({
+        type: 'llm_usage',
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        inputTokens: 472,
+        outputTokens: 29,
+      }),
+    ]);
+    const total = costs.reduce((sum, c) => sum + c, 0);
+    // Prod recorded $0.00191 for this call. Anything near that is the bug back.
+    expect(total).toBeGreaterThan(0.06);
+    expect(total).toBeLessThan(0.08);
+    expect(costs.every((c) => c > 0)).toBe(true);
+  });
+
+  it('SAD: an unpriced model still records, at zero — and CI pins the model list', async () => {
+    // Never throw on a live call for a pricing gap; the route logs a warning and
+    // tests/services/aiCost.test.ts is where a new model must be added.
+    const [cost] = await costsFor([
+      row({
+        type: 'llm_usage',
+        provider: 'openai',
+        model: 'gpt-9-imaginary',
+        inputTokens: 1000,
+      }),
+    ]);
+    expect(cost).toBe(0);
+  });
+});

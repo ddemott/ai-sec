@@ -103,6 +103,29 @@ export const BOOKING_TREE: QuestionTreeDef = {
         'loud, and book only the converted time they agree to',
     },
     {
+      // LISTEN-ONLY, same reasoning as caller_timezone: a booking does not need
+      // a "where" question (most callers come here, and asking it on every call
+      // is noise), but when a caller volunteers WHERE or any other detail about
+      // the meeting, that detail is the only thing that makes the calendar entry
+      // mean something to the owner.
+      //
+      // 2026-08-13, SCL_KLvqZ2JkaQFU: the caller said "In the Sahara Desert"
+      // unprompted at 0:42. The model passed it as a raw `description` arg on a
+      // booking attempt that FAILED, and omitted it from the one that succeeded.
+      // ACTION_ARG_BACKFILL can only restore values the TRACKER owns, so a value
+      // that was never an answer could not survive the retry — the appointment
+      // reads "Booking via SecretaryHQ" and the owner has no idea where he is
+      // meant to be. Recording it makes the existing backfill machinery cover it.
+      node_id: 'meeting_context',
+      type: 'text',
+      listen: true,
+      ask:
+        'anything the caller volunteers ABOUT the meeting itself beyond its topic — where it ' +
+        'should happen, who else is joining, what they want to bring or cover. Never ask for ' +
+        'it; record their own words when they offer them, so the owner opens the calendar and ' +
+        'knows what he is walking into',
+    },
+    {
       node_id: 'book',
       type: 'action',
       tool: 'book_with_scheduling',
@@ -128,15 +151,25 @@ export const MESSAGE_TREE: QuestionTreeDef = {
   description:
     'The caller wants to leave a message, have the owner call back, or pass something along ' +
     'that a booking or a role does not cover. Leaving a message stays a message even when ' +
-    'it MENTIONS a job in passing — but a call whose SUBJECT is a role, position, or ' +
-    'opening to fill is the job tree, no matter how it is phrased ("run it past him", ' +
-    '"let him know about a role" included).',
+    'it MENTIONS a job in passing — but a call whose SUBJECT is a role, position, ' +
+    'contract, or opening to fill is the job tree, no matter how it is phrased ("run it ' +
+    'past him", "let him know about a role", "I have a position / contract for him" ' +
+    'included).',
   nodes: [
     callerNameNode,
     {
       node_id: 'message_body',
       type: 'text',
-      ask: 'the message itself, in their words — what they want the owner to know or do',
+      ask:
+        'the WHOLE message, in their words — what they want the owner to know or do. It must ' +
+        'stand alone: the owner reads this and nothing else, so it has to make sense to ' +
+        'someone who did not hear the call. Include the reason they gave when they FIRST said ' +
+        'why they were calling, not just the last detail they added. When a follow-up answer ' +
+        'adds to it, record the COMBINED message, not the fragment — a reply like "it\'s for ' +
+        'programming" is an answer to your question, not a message (2026-08-13, live call: ' +
+        'the caller opened with "is he interested in a position in downtown Seattle", then ' +
+        'added "it\'s for programming", and the row the owner received said only ' +
+        '"It\'s for programming." — no city, no role, no indication anyone was hiring)',
     },
     {
       node_id: 'take_message_action',
@@ -319,7 +352,7 @@ export const QA_TREE: QuestionTreeDef = {
 export const JOB_TREE: QuestionTreeDef = {
   tree_id: 'job',
   description:
-    'The caller is BRINGING a job, role, contract position, or hiring opportunity TO the ' +
+    'The caller is BRINGING a job, role, position, contract, or hiring opportunity TO the ' +
     'owner — a recruiter, staffing agency, or someone pitching work for the owner to take. ' +
     'NOT a caller asking the business to do work for THEM ("can someone fix my computer" is ' +
     'a service request → booking/fix_computer, even if they call it "a job"). ' +

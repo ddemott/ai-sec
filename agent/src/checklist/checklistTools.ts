@@ -97,7 +97,18 @@ const TREE_PASSTHROUGH_TOOLS: Record<string, string[]> = {
  * answer for the mapped node(s); the model's own args win when present
  * (it may legitimately normalize phrasing). Declined/empty answers never fill.
  */
-type ArgFill = { arg: string; from: readonly string[]; map?: (v: string) => unknown };
+type ArgFill = {
+  arg: string;
+  from: readonly string[];
+  map?: (v: string) => unknown;
+  /**
+   * Take EVERY recorded node in `from` and fold them into one value, instead of
+   * the default "first non-empty wins". An appointment description is the case
+   * that needs it: the topic and whatever the caller volunteered about the
+   * meeting are both true at once, and picking one would drop the other.
+   */
+  combine?: (values: string[]) => unknown;
+};
 // Exported for the capture-completeness test: every collected tree node must map
 // to a tool param here (or be an explicitly-declared control node) — the guard
 // that turns a silently-dropped field (role_description, found 2026-07-30) into
@@ -132,7 +143,26 @@ export const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
     { arg: 'address', from: ['position_address'] },
     { arg: 'timezone', from: ['team_timezone'] },
   ],
-  book_with_scheduling: [{ arg: 'phone', from: ['caller_phone'] }],
+  // The appointment's OWN words. 2026-08-13, SCL_KLvqZ2JkaQFU: meeting_topic
+  // was recorded ("a position") at t=40.8s, the caller volunteered a location at
+  // 0:42, and the booked appointment's description reads "Booking via
+  // SecretaryHQ" — the RPC's fallback. Dale opens Aug 31 and sees a name, 15
+  // minutes, and a template string. Both facts were in the tracker the whole
+  // time; nothing carried them to the write.
+  book_with_scheduling: [
+    { arg: 'phone', from: ['caller_phone'] },
+    {
+      arg: 'description',
+      from: ['meeting_topic', 'meeting_context'],
+      combine: (values) => {
+        const [topic, context] = values;
+        const parts: string[] = [];
+        if (topic) parts.push(`About: ${topic}`);
+        if (context) parts.push(context);
+        return parts.length > 0 ? parts.join(' — ') : undefined;
+      },
+    },
+  ],
   // take_message had NO backfill at all: every value came from the model
   // retyping it, which is the same state-theater exposure that lost
   // location_type and role_description on other tools — and it is what made a
@@ -160,6 +190,49 @@ const DEFAULT_MAX_PURPOSE_ROUNDS = 5;
 /** After this many consecutive failures an action is told to stop retrying. */
 const ACTION_FAILURE_LIMIT = 2;
 
+/**
+ * Result fields a slot reader uses to hand the model a list of open times.
+ * Counting them is how the host knows an OFFER is outstanding.
+ */
+const OFFERED_SLOT_FIELDS = ['open_times', 'slots', 'available_times', 'times'] as const;
+
+/** Args that name ONE instant, i.e. a time the caller actually chose. */
+function namesOneInstant(args: unknown): boolean {
+  if (!args || typeof args !== 'object') return false;
+  const a = args as Record<string, unknown>;
+  if (typeof a.requested_start === 'string' && a.requested_start.trim()) return true;
+  // The successful CALL2 attempt used a zero-width window instead — same claim,
+  // different spelling, and refusing it would block a booking that IS confirmed.
+  return (
+    typeof a.window_from === 'string' &&
+    typeof a.window_to === 'string' &&
+    a.window_from.trim() !== '' &&
+    a.window_from === a.window_to
+  );
+}
+
+/** How many open times a slot reader just put in front of the caller. */
+export function countOfferedSlots(raw: unknown): number {
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return 0;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return 0;
+  const obj = parsed as Record<string, unknown>;
+  const nested = obj.result;
+  const source =
+    nested && typeof nested === 'object' ? (nested as Record<string, unknown>) : obj;
+  for (const field of OFFERED_SLOT_FIELDS) {
+    const value = source[field];
+    if (Array.isArray(value)) return value.length;
+  }
+  return 0;
+}
+
 /** The uniform way to reach a real tool's internals (rung.ts precedent). */
 interface RealToolShape {
   description: string;
@@ -178,6 +251,9 @@ export interface ChecklistToolDeps {
   /** Carrier-attested caller number (null on forwarded lines) — auto-fills the
    *  caller_phone node on selection so the question never exists on that call. */
   callerPhone?: string | null;
+  /** Name of an already-recognized returning caller (null when unknown) —
+   *  auto-fills the caller_name node for the same reason callerPhone does. */
+  knownCallerName?: string | null;
   maxPurposeRounds?: number;
   /** The agent reschedules its toolset (macrotask-deferred updateTools). */
   onSelectionChanged: () => void;
@@ -229,8 +305,30 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   const actionSites = collectActions(deps.library);
   const treeIds = deps.selectableTreeIds ?? deps.library.map((t) => t.tree_id);
   const selectableTreeSet = new Set(treeIds);
+  // Every tree the PLATFORM ships, regardless of this tenant's preset. The gap
+  // between this and selectableTreeSet is a configuration decision, and telling
+  // the two apart is the whole point — see the refusal branch in runSetPurpose.
+  const libraryTreeSet = new Set(deps.library.map((t) => t.tree_id));
 
   let purposeRounds = 0;
+  /**
+   * SLOTS OFFERED BUT NOT YET CHOSEN — the unconfirmed-booking guard.
+   *
+   * 2026-08-13, SCL_KLvqZ2JkaQFU: get_available_slots returned Monday 1:00 /
+   * 1:15 / 1:30 at t=41.6s, the agent read all three aloud and asked which
+   * worked — and at t=43.5s, 1.9 seconds later and 30 seconds before the caller
+   * said another word, it called book_with_scheduling with a five-day window and
+   * no requested_start. The tool books the EARLIEST slot at or after
+   * window_from, so it was one parse away from booking her into 1:00 PM while
+   * she was still listening to the question. What saved it was a typo: the model
+   * wrote `2026-08-17T01:00:00` — 1 AM — for the 1 PM slot it had just offered.
+   *
+   * A write the caller never agreed to is the worst failure available on this
+   * path, and nothing but luck prevented it. So the host holds the offer open
+   * until an arg names ONE instant. This is not a prompt rule for the same
+   * reason the work-direction gate is not: the model already had one.
+   */
+  let slotsAwaitingChoice = 0;
   // What identify_caller was last told, so a CORRECTION can be re-sent. It used
   // to be a plain "sent once" latch, which meant the first (name, phone) pair
   // the call produced was the only one the phone book ever heard: "Jamil" was
@@ -324,8 +422,8 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
           description:
             'WHICH WAY THE WORK FLOWS — answer this BEFORE picking trees. caller_pays_us: ' +
             'they want to BUY something from this business (the AI service, a repair, a ' +
-            'visit). caller_offers_owner_work: they bring a job, role, contract, or project ' +
-            'the OWNER would be paid for. neither_or_unclear: a message, a question, a ' +
+            'visit). caller_offers_owner_work: they bring a job, role, position, contract, ' +
+            'or project the OWNER would be paid for. neither_or_unclear: a message, a question, a ' +
             'schedule change — or you genuinely cannot tell yet.',
         },
         trees: {
@@ -423,7 +521,42 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       for (const id of args.wrong_trees ?? []) tracker.deselect(id);
       const unavailable = args.trees.filter((id) => !selectableTreeSet.has(id));
       if (unavailable.length > 0) {
-        return `No tree called "${unavailable[0]}". Available: ${treeIds.join(', ')}.`;
+        const blocked = unavailable[0];
+        // TWO DIFFERENT FAILURES WORE THE SAME SENTENCE (2026-08-13,
+        // SCL_3a8SkDKzxN4B). `No tree called "job"` was returned for a tree that
+        // very much exists — the model had read the caller correctly, declared
+        // work_direction 'caller_offers_owner_work', and re-issued set_purpose to
+        // add `job` 16ms after taking the message. `job` was simply not enabled
+        // on that tenant's preset, and no override could enable it. The refusal
+        // went back as an ordinary tool result nobody logged, capture_job_inquiry
+        // never entered the toolset, and the call closed with zero job_inquiries
+        // rows. A correct model request denied by CONFIGURATION must not look
+        // like a model typo, and must not be silent.
+        if (libraryTreeSet.has(blocked)) {
+          getLogger().warn(
+            {
+              event: 'checklist_tree_not_enabled',
+              tree_id: blocked,
+              requested: args.trees,
+              enabled: treeIds,
+            },
+            `set_purpose asked for the "${blocked}" tree, which exists but is not enabled for this business`
+          );
+          // Tell the model the truth: the tree is real, this business does not
+          // run it, and here is the lane that still serves the caller. The old
+          // wording invited it to re-pick a name, which is not the problem.
+          return (
+            `The "${blocked}" intake is not enabled for this business, so its questions are ` +
+            `not available on this call. Do NOT ask for it again. Serve the caller through ` +
+            `what IS enabled — take a COMPLETE message in their own words covering what ` +
+            `they wanted, so nothing is lost. Enabled: ${treeIds.join(', ')}.`
+          );
+        }
+        getLogger().warn(
+          { event: 'checklist_tree_unknown', tree_id: blocked, enabled: treeIds },
+          `set_purpose asked for "${blocked}", which is not a tree in the platform library`
+        );
+        return `No tree called "${blocked}". Available: ${treeIds.join(', ')}.`;
       }
       try {
         tracker.select(args.trees);
@@ -452,6 +585,17 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
           " The caller's number is on file from caller ID — never ask for it and never " +
           'recite it back at them. ';
       }
+      // Known-caller seeding, same principle: we already looked her up. Runs
+      // AFTER the model's own caller_name arg (recordIfOpen above), so a name
+      // the caller actually spoke this call still wins — she may be calling on
+      // someone else's behalf, or correcting what we have on file.
+      const knownName = sanitizeVolunteered(deps.knownCallerName ?? undefined, 80);
+      if (knownName && tracker.status(CALLER_NAME) === 'open') {
+        tracker.record(CALLER_NAME, { value: knownName });
+        callerIdNote +=
+          ` This is a returning caller: their name is ${knownName} and it is already on the ` +
+          'checklist. Do NOT ask who is calling — greet them by first name. ';
+      }
       maybeIdentify();
       deps.onSelectionChanged();
       // THE UNDER-SELECTION NUDGE (2026-07-27 live call, 17:57 UTC): the caller
@@ -463,14 +607,29 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       // NUDGE, not a refusal — a recruiter returning the owner's call about an
       // existing arrangement legitimately selects message without job — carried
       // in the tool result, the one channel the model reliably re-reads.
+      //
+      // Two shapes, because "ADD job" is unfollowable advice on a tenant that
+      // does not run the job tree — and that is not hypothetical. On 2026-08-13
+      // (SCL_3a8SkDKzxN4B) the model took this nudge, called set_purpose again
+      // to add `job`, and was told `No tree called "job"` because every preset
+      // forbade it. Advice the model cannot act on is worse than none: it burns
+      // a purpose round and leaves the caller served by a fragment. When the
+      // tree is genuinely unavailable, the honest instruction is to put the role
+      // details in the MESSAGE, since that is the only place they can land.
       const jobNudge =
         dir === 'caller_offers_owner_work' && !tracker.selectedTrees().includes('job')
-          ? '\n\nNOTE: you declared the caller is OFFERING THE OWNER WORK, but the job ' +
-            'tree is not selected — so nothing on this checklist will collect the role. ' +
-            'If there is a role, position, or contract to record, call set_purpose again ' +
-            'and ADD job: the role questions are what actually reaches the owner. Skip ' +
-            'this only if they are not describing a role (e.g. returning his call about ' +
-            'an existing arrangement).'
+          ? selectableTreeSet.has('job')
+            ? '\n\nNOTE: you declared the caller is OFFERING THE OWNER WORK, but the job ' +
+              'tree is not selected — so nothing on this checklist will collect the role. ' +
+              'If there is a role, position, or contract to record, call set_purpose again ' +
+              'and ADD job: the role questions are what actually reaches the owner. Skip ' +
+              'this only if they are not describing a role (e.g. returning his call about ' +
+              'an existing arrangement).'
+            : '\n\nNOTE: you declared the caller is OFFERING THE OWNER WORK, and this ' +
+              'business does not run a job intake — there is no role questionnaire to add, ' +
+              'so do NOT try to select one. The MESSAGE has to carry it instead: record what ' +
+              'the work is, who it is with, and how to reach them, in the caller\'s own ' +
+              'words. A message that says only "it\'s for programming" tells the owner nothing.'
           : '';
       // A number VOLUNTEERED through this door still needs its read-back — only
       // if it actually landed as this node's value (not blocked by caller ID).
@@ -706,6 +865,13 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       const cur = provided[f.arg];
       if (cur !== undefined && cur !== null && cur !== '') continue;
       delete provided[f.arg];
+      if (f.combine) {
+        // Positional: values[i] is f.from[i]'s answer, '' when unrecorded, so a
+        // combiner can tell "no topic" from "no context" and phrase accordingly.
+        const combined = f.combine(f.from.map((nodeId) => tracker.value(nodeId)?.trim() ?? ''));
+        if (combined !== undefined) provided[f.arg] = combined;
+        continue;
+      }
       for (const nodeId of f.from) {
         const v = tracker.value(nodeId);
         if (v === undefined || v === '') continue;
@@ -788,6 +954,21 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         if (status === 'not_applicable' || status === 'latent' || status === 'unselected') {
           return `That action is not applicable right now. ${stateBlock()}`;
         }
+        // THE UNCONFIRMED-BOOKING GUARD — see slotsAwaitingChoice. Times were
+        // just offered and nothing in these args names which one, so this write
+        // would be guessing on the caller's behalf.
+        if (def.tool === 'book_with_scheduling' && slotsAwaitingChoice > 0 && !namesOneInstant(args)) {
+          getLogger().warn(
+            { event: 'booking_before_caller_chose', offered: slotsAwaitingChoice },
+            'refused book_with_scheduling — slots were offered and no time was chosen yet'
+          );
+          return (
+            `Not yet — you offered ${String(slotsAwaitingChoice)} time(s) and the caller has not ` +
+            `picked one. Booking now would choose FOR them. Wait for their answer, then call this ` +
+            `again with requested_start set to exactly the time they said (if they said "the ` +
+            `earliest" or "whichever", use the first time you offered). ${stateBlock()}`
+          );
+        }
         // Backfill omitted args from the tracker's recorded answers (see
         // ACTION_ARG_BACKFILL) — model-provided values always win.
         const provided = buildActionArgs(def.tool, args);
@@ -797,6 +978,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         if (id) {
           tracker.completeAction(def.node_id, id);
           failCounts.delete(def.node_id);
+          slotsAwaitingChoice = 0;
           return `${rawText}\n\n${stateBlock()}`;
         }
         // A miss stays open (safe direction) — but a hard-down backend must not
@@ -814,6 +996,18 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     });
   };
 
+  /** Transparent passthrough that records how many times were just offered. */
+  const wrapSlotReader = (real: llm.ToolContext[string]): llm.ToolContext[string] =>
+    llm.tool({
+      description: shape(real).description,
+      parameters: shape(real).parameters,
+      execute: async (args: unknown, toolCtx: unknown): Promise<unknown> => {
+        const raw = await shape(real).execute(args, toolCtx);
+        slotsAwaitingChoice = countOfferedSlots(raw);
+        return raw;
+      },
+    });
+
   const selectedTools = (): llm.ToolContext => {
     const tools: llm.ToolContext = { ...baseTools };
     for (const treeId of tracker.selectedTrees()) {
@@ -823,7 +1017,12 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         }
       }
       for (const name of TREE_PASSTHROUGH_TOOLS[treeId] ?? []) {
-        if (realTools[name] && !tools[name]) tools[name] = realTools[name];
+        if (!realTools[name] || tools[name]) continue;
+        // get_available_slots is still a plain read — the wrapper changes NOTHING
+        // the model sees. It only lets the host notice that an offer is now
+        // outstanding, which is what the unconfirmed-booking guard reads.
+        tools[name] =
+          name === 'get_available_slots' ? wrapSlotReader(realTools[name]) : realTools[name];
       }
     }
     return tools;

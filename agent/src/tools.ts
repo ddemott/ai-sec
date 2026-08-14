@@ -206,7 +206,28 @@ function bookedTimeDiffers(requested: string, booked: string): boolean {
  * response shape (fail-safe: worst case the LLM still sees the raw result JSON).
  */
 function formatBookingResponse(res: ToolResponse, requestedStart?: string): string {
-  if (!res.ok || typeof res.result !== 'object' || res.result === null) {
+  // A FAILED BOOKING IS NOT A STATEMENT ABOUT THE CALENDAR (2026-08-13,
+  // SCL_KLvqZ2JkaQFU). The agent read out Monday 1:00 / 1:15 / 1:30, its next
+  // booking attempt came back empty, and ten seconds later it told the caller
+  // "It seems Dale is not available next week" — while Dale was scheduled 1-5 PM
+  // every weekday that week and the agent itself had just recited three of those
+  // slots. It relayed a WRITE failure as a READ fact and contradicted its own
+  // correct answer; the caller nearly hung up. The raw error alone left that
+  // reading open, so the payload now names the distinction and says what to do,
+  // the same way OFF_GRID_TIME already does for an off-grid time.
+  if (!res.ok) {
+    return JSON.stringify({
+      success: false,
+      error: res.error,
+      ...(res.errorCode ? { error_code: res.errorCode } : {}),
+      instruction:
+        'The BOOKING did not go through. This says nothing about whether the owner is free — ' +
+        'do NOT tell the caller he is unavailable, and do not contradict open times you already ' +
+        'read out. If you offered times, offer those SAME times again and book the one they ' +
+        'pick. Otherwise call get_available_slots and offer what it returns.',
+    });
+  }
+  if (typeof res.result !== 'object' || res.result === null) {
     return formatResponse(res);
   }
   const r = res.result as {

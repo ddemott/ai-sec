@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_TOOL_LOG_ENTRIES, ToolCallLog } from './toolCallLog.js';
+import { MAX_RESULT_CHARS, MAX_TOOL_LOG_ENTRIES, ToolCallLog } from './toolCallLog.js';
 
 // WHO: the FunctionToolsExecuted listener (index.ts) feeding executed batches;
 //      drained once by finalizeCall into voice_sessions.metadata.tool_calls.
@@ -82,5 +82,110 @@ describe('ToolCallLog', () => {
 
   it('empty log ships NOTHING — absence in metadata means no tool ever fired', () => {
     expect(new ToolCallLog().toPayload()).toBeNull();
+  });
+});
+
+/**
+ * WHO: anyone reading voice_sessions.metadata.tool_calls after a bad call.
+ * WHAT: the tool's REPLY, not just the request and a did-not-throw flag.
+ * WHEN: 2026-08-13, calls SCL_3a8SkDKzxN4B and SCL_KLvqZ2JkaQFU.
+ * WHERE: recordBatch, pairing FunctionCallOutput.output with its call.
+ * WHY: both postmortems stalled on the same hole. `set_purpose` adding the job
+ *      tree logged ok:true while the host was refusing it, and a
+ *      book_with_scheduling that booked nothing also logged ok:true — leaving
+ *      two candidate causes and no evidence to choose between them. `ok` means
+ *      "did not throw", which is not the same as "worked".
+ */
+describe('tool result capture (2026-08-13 blind spot)', () => {
+  const at = (
+    tool: string,
+    output: string
+  ): [
+    Array<{ callId: string; name: string; args: string; createdAt: number }>,
+    Array<{ callId: string; isError: boolean; createdAt: number; output: string }>,
+  ] => [
+    [{ callId: 'c1', name: tool, args: '{}', createdAt: 1000 }],
+    [{ callId: 'c1', isError: false, createdAt: 1010, output }],
+  ];
+
+  it('records a host refusal that came back as a successful tool result', () => {
+    const log = new ToolCallLog(0);
+    log.recordBatch(
+      ...at(
+        'set_purpose',
+        'The "job" intake is not enabled for this business, so its questions are not available.'
+      )
+    );
+    const [entry] = log.toPayload()!.entries;
+    expect(entry.ok).toBe(true); // unchanged — the tool genuinely did not throw
+    expect(entry.result).toContain('"job" intake is not enabled');
+  });
+
+  it('keeps the decision fields of a failed write, not the whole payload', () => {
+    const log = new ToolCallLog(0);
+    log.recordBatch(
+      ...at(
+        'book_with_scheduling',
+        JSON.stringify({
+          success: false,
+          error: 'No open slot in that window.',
+          error_code: 'NO_AVAILABILITY',
+          next_available: [],
+        })
+      )
+    );
+    const [entry] = log.toPayload()!.entries;
+    expect(entry.result).toContain('success=false');
+    expect(entry.result).toContain('error_code=NO_AVAILABILITY');
+  });
+
+  it('keeps the row id a successful write produced, for joining the record', () => {
+    const log = new ToolCallLog(0);
+    log.recordBatch(
+      ...at('take_message', JSON.stringify({ success: true, message_id: 'msg_42' }))
+    );
+    expect(log.toPayload()!.entries[0].result).toContain('message_id=msg_42');
+  });
+
+  it('SAD: never copies caller data out of a reply that carries it', () => {
+    const log = new ToolCallLog(0);
+    log.recordBatch(
+      ...at(
+        'get_customer_context',
+        JSON.stringify({
+          success: true,
+          customer: { name: 'Camille DeMott', phone: '+12624979039', address: '331 Ridley St.' },
+        })
+      )
+    );
+    const result = log.toPayload()!.entries[0].result ?? '';
+    expect(result).not.toContain('Camille');
+    expect(result).not.toContain('2624979039');
+    expect(result).not.toContain('Ridley');
+  });
+
+  it('SAD: cuts a prose refusal before the CHECKLIST STATE block of caller answers', () => {
+    const log = new ToolCallLog(0);
+    log.recordBatch(
+      ...at(
+        'finish_call',
+        'Not yet — the checklist is not complete. Finish these first.\nCHECKLIST STATE\ncaller_name [✓] Camille DeMott'
+      )
+    );
+    const result = log.toPayload()!.entries[0].result ?? '';
+    expect(result).toContain('checklist is not complete');
+    expect(result).not.toContain('Camille');
+  });
+
+  it('SAD: caps a runaway result so one entry cannot bloat the jsonb', () => {
+    const log = new ToolCallLog(0);
+    log.recordBatch(...at('answer_question', 'x'.repeat(50_000)));
+    expect((log.toPayload()!.entries[0].result ?? '').length).toBe(MAX_RESULT_CHARS);
+  });
+
+  it('omits result entirely when no output arrived (absence means absence)', () => {
+    const log = new ToolCallLog(0);
+    log.recordBatch([{ callId: 'c1', name: 'set_purpose', args: '{}', createdAt: 1000 }], []);
+    expect(log.toPayload()!.entries[0]).not.toHaveProperty('result');
   });
 });

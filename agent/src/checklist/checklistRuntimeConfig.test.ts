@@ -134,7 +134,7 @@ describe('ChecklistAgent runtimeConfig path', () => {
       work_direction: 'neither_or_unclear',
       trees: ['qa'],
     });
-    expect(String(refused)).toContain('No tree called "qa"');
+    expect(String(refused)).toContain('The "qa" intake is not enabled');
   });
 
   it('auto shop preset keeps booking/message/qa/schedule-change available but blocks buy_service and job', async () => {
@@ -178,7 +178,7 @@ describe('ChecklistAgent runtimeConfig path', () => {
       work_direction: 'caller_pays_us',
       trees: ['buy_service'],
     });
-    expect(String(refused)).toContain('No tree called "buy_service"');
+    expect(String(refused)).toContain('The "buy_service" intake is not enabled');
   });
 
   it('salon preset keeps booking/message/qa/schedule-change available but blocks buy_service and job', async () => {
@@ -222,7 +222,7 @@ describe('ChecklistAgent runtimeConfig path', () => {
       work_direction: 'caller_pays_us',
       trees: ['buy_service'],
     });
-    expect(String(refused)).toContain('No tree called "buy_service"');
+    expect(String(refused)).toContain('The "buy_service" intake is not enabled');
   });
 
   it('local service preset exposes buy_service and generic_subject while still blocking job', async () => {
@@ -267,7 +267,7 @@ describe('ChecklistAgent runtimeConfig path', () => {
       work_direction: 'caller_offers_owner_work',
       trees: ['job'],
     });
-    expect(String(refused)).toContain('No tree called "job"');
+    expect(String(refused)).toContain('The "job" intake is not enabled');
   });
 
   it('writes booking/message policy into the live prompt', () => {

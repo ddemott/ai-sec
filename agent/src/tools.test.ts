@@ -1712,3 +1712,56 @@ describe('REGRESSION: a blank string is ABSENT, not a value', () => {
     expect(ctx.spokenPhone).toBeUndefined(); // nothing blank was remembered
   });
 });
+
+/**
+ * WHO: Camille, call SCL_KLvqZ2JkaQFU, 2026-08-13 19:49 CT.
+ * WHAT: a failed book_with_scheduling must not be relayable as "the owner is
+ *       not available".
+ * WHEN: the agent had recited Monday 1:00 / 1:15 / 1:30 ten seconds earlier and
+ *       Dale was scheduled 1-5 PM every weekday that week.
+ * WHERE: formatBookingResponse's failure branch.
+ * WHY: it said "It seems Dale is not available next week", contradicting its own
+ *      correct answer and nearly losing the caller. The raw error left that
+ *      reading available; the payload now closes it.
+ */
+describe('book_with_scheduling — a failed write is not an availability fact', () => {
+  it('tells the model the BOOKING failed and to re-offer the times it already read out', async () => {
+    const { client } = makeClient([
+      { ok: false as const, error: 'No open slot in that window.', errorCode: 'NO_AVAILABILITY' },
+    ]);
+    const tools = buildTools(makeCtx(), client);
+    const out = await exec(tools.book_with_scheduling, {
+      service_type: 'a position',
+      window_from: '2026-08-17T01:00:00',
+      window_to: '2026-08-21T17:00:00',
+      phone: '+12624979039',
+    });
+    const parsed = JSON.parse(out) as Record<string, unknown>;
+    expect(parsed.success).toBe(false);
+    expect(parsed.error_code).toBe('NO_AVAILABILITY');
+    const instruction = String(parsed.instruction);
+    expect(instruction).toContain('BOOKING did not go through');
+    expect(instruction).toContain('do NOT tell the caller he is unavailable');
+    expect(instruction).toContain('offer those SAME times again');
+  });
+
+  it('keeps the backend error text so a specific cause still reaches the caller', async () => {
+    const { client } = makeClient([
+      {
+        ok: false as const,
+        error: 'We book on the quarter hour — times ending in :00, :15, :30, or :45.',
+        errorCode: 'OFF_GRID_TIME',
+      },
+    ]);
+    const tools = buildTools(makeCtx(), client);
+    const out = await exec(tools.book_with_scheduling, {
+      service_type: 'a position',
+      window_from: '2026-08-31T15:07:00',
+      window_to: '2026-08-31T15:07:00',
+      phone: '+12624979039',
+    });
+    const parsed = JSON.parse(out) as Record<string, unknown>;
+    expect(String(parsed.error)).toContain('quarter hour');
+    expect(parsed.error_code).toBe('OFF_GRID_TIME');
+  });
+});

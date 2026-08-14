@@ -12,12 +12,14 @@ export const CHECKLIST_PRESET_IDS = [
   'auto_shop_front_desk',
   'salon_front_desk',
   'local_service_front_desk',
+  'owner_for_hire_front_desk',
 ] as const satisfies readonly ChecklistPresetId[];
 
 export const CHECKLIST_PRESET_LABELS: Record<ChecklistPresetId, string> = {
   auto_shop_front_desk: 'Auto shop front desk',
   salon_front_desk: 'Salon front desk',
   local_service_front_desk: 'Local service front desk',
+  owner_for_hire_front_desk: 'Owner for hire (takes work offers)',
 };
 
 export const CONVERSATION_BLOCK_LABELS: Record<string, string> = {
