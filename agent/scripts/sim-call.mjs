@@ -51,9 +51,13 @@ await rooms.createRoom({
 });
 
 const at = new AccessToken(key, secret, { identity, ttl: '30m' });
+// JOIN only — the room is created above, with the tenant_id metadata the agent
+// reads. roomCreate here would widen what a leaked 30-minute URL can do, and
+// would also let a lapsed room be silently re-created WITHOUT that metadata;
+// failing to join is the better outcome than joining a room the agent can't
+// resolve a tenant for.
 at.addGrant({
   roomJoin: true,
-  roomCreate: true,
   room,
   canPublish: true,
   canSubscribe: true,

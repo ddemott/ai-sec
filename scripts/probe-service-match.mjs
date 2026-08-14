@@ -57,7 +57,14 @@ if (queries.length === 0) {
 }
 
 const key = openaiKey();
-const pool = new pg.Pool({ connectionString: pgUrl, ssl: { rejectUnauthorized: false } });
+// SSL only for remote targets. Forcing it broke local non-SSL Postgres, and
+// rejectUnauthorized:false on every URL disables cert validation everywhere to
+// satisfy the one managed host that needs it.
+const isLocal = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(pgUrl);
+const pool = new pg.Pool({
+  connectionString: pgUrl,
+  ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
+});
 
 for (const query of queries) {
   const res = await fetch('https://api.openai.com/v1/embeddings', {

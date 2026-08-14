@@ -15,7 +15,6 @@
  */
 import { RecordAiCostSchema } from './schemas';
 import { estimateCost } from '../../services/aiCost';
-import { logWarning, type AppRequest } from '../../middleware';
 import { ok, toolRoute, type AgentToolDeps } from './helpers';
 
 export function registerAiCostRoutes({ app, withTenantClient }: AgentToolDeps): void {
@@ -42,12 +41,16 @@ export function registerAiCostRoutes({ app, withTenantClient }: AgentToolDeps): 
         // so the next unpriced model is visible the day it ships rather than at
         // the next postmortem. (CI also fails on it — see aiCost.test.ts.)
         if (estimatedCost === 0 && (u.inputTokens > 0 || u.charactersCount > 0)) {
-          logWarning(reply.request as unknown as AppRequest, 'ai_cost_model_unpriced', {
-            model: u.model,
-            provider: u.provider,
-            input_tokens: u.inputTokens,
-            characters_count: u.charactersCount,
-          });
+          reply.request.log.warn(
+            {
+              event: 'ai_cost_model_unpriced',
+              model: u.model,
+              provider: u.provider,
+              input_tokens: u.inputTokens,
+              characters_count: u.charactersCount,
+            },
+            'ai_cost_model_unpriced'
+          );
         }
 
         placeholders.push(
