@@ -9,6 +9,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     exclude: ['e2e/**', 'node_modules/**'],
+    // CI on Node 20 hit repeated fork-worker startup failures inside jsdom/undici
+    // (`webidl.util.markAsUncloneable is not a function`). Thread workers avoid the
+    // child-process clone path and match the green local runs.
+    pool: 'threads',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
