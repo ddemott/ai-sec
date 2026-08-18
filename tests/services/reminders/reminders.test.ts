@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/unbound-method */
 /**
  * Reminders Service Tests
  * Tests reminder scheduling, processing, and cancellation with happy + sad paths.

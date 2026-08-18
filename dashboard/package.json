@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node server.js",
     "test": "vitest run",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write \"app/**/*.{ts,tsx,js,jsx,json,md}\" \"components/**/*.{ts,tsx,js,jsx,json,md}\" \"lib/**/*.{ts,tsx,js,jsx,json}\" \"e2e/**/*.{ts,tsx,js,jsx,json}\" \"*.{json,md}\" --config ../.prettierrc.json --ignore-path ../.prettierignore",

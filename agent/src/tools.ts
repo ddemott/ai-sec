@@ -25,6 +25,8 @@ import { wrapToolExecute } from './tools/wrapTool.js';
 import { getLogger } from './logger.js';
 import type { CallPhase } from './toolPhases.js';
 
+export type ToolMap = Record<string, ReturnType<typeof llm.tool>>;
+
 /**
  * Capability groups. Every tool belongs to exactly one; a customer agent can
  * compose a subset via `buildTools(..., { capabilities: [...] })` (e.g. a
@@ -285,7 +287,7 @@ export function buildTools(
      */
     onPhaseChange?: (phase: CallPhase) => void | Promise<void>;
   }
-): llm.ToolContext {
+): ToolMap {
   // Only offer a live transfer in the no-caller-ID fallbacks when one can
   // actually happen: the 'transfer' capability is active for this session, a
   // destination number is configured (forwardPhone), AND this call has transfer
@@ -380,7 +382,7 @@ export function buildTools(
     return Promise.resolve(JSON.stringify({ ok: true, next: reply }));
   };
 
-  const allTools: llm.ToolContext = {
+  const allTools: ToolMap = {
     start_booking: llm.tool({
       description:
         "The caller wants to make a NEW appointment. Call this FIRST, before asking them for a day or a time — it is what gives you the scheduling tools, and you have NO way to see the calendar until you do. You do not need their service, day, time, name or number first; call it as soon as you know they want to book, then gather the rest. Do NOT tell the caller you are 'checking' or 'looking something up' — just call this. NOT for canceling, moving, or checking an appointment they ALREADY have — that is manage_appointment.",
@@ -1767,7 +1769,7 @@ export function buildTools(
   // tool a customer adds is non-freezing BY CONSTRUCTION — it can't stall the
   // turn or hand the model an empty result.
   const wanted = opts?.capabilities;
-  const result: llm.ToolContext = {};
+  const result: ToolMap = {};
   for (const [name, ft] of Object.entries(allTools)) {
     const cap = CAPABILITY_OF[name];
     if (wanted && (cap === undefined || !wanted.includes(cap))) continue;

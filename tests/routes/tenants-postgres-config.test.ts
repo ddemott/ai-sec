@@ -41,7 +41,7 @@ describe('PostgresTenantConfigService against real schema', () => {
       service = new PostgresTenantConfigService(pool);
     } catch (err) {
       dbAvailable = false;
-      // eslint-disable-next-line no-console
+       
       console.warn('[tenants-postgres-config.test] Skipping DB tests - connection failed', err);
     }
   });

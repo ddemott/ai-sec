@@ -238,7 +238,7 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[analyticsUtilization.realdb.test] DB not available, skipping', err);
   }
 });

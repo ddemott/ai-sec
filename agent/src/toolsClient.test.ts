@@ -14,7 +14,9 @@ function mockFetch(responses: Array<{ status: number; body: unknown }>) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const queue = [...responses];
   const fetchImpl: typeof fetch = async (url, init) => {
-    calls.push({ url: String(url), init: init ?? {} });
+    const normalizedUrl =
+      typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+    calls.push({ url: normalizedUrl, init: init ?? {} });
     const next = queue.shift();
     if (!next) throw new Error('mockFetch: no more responses queued');
     return new Response(JSON.stringify(next.body), { status: next.status });

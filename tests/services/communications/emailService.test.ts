@@ -20,7 +20,7 @@ const mockConfigService = new InMemoryTenantConfigService();
 // first-construction behavior independently.
 function resetSimulationFlag() {
   // Access the static field via the class — TypeScript allows this.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   (EmailService as any).simulationNoticeLogged = false;
 }
 

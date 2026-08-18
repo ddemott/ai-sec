@@ -15,8 +15,7 @@
  */
 
 export type ToolResponse<T = unknown> =
-  | { ok: true; result: T }
-  | { ok: false; error: string; errorCode?: string; status?: number };
+  { ok: true; result: T } | { ok: false; error: string; errorCode?: string; status?: number };
 
 export interface ToolsClientConfig {
   backendUrl: string;

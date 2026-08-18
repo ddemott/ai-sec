@@ -27,7 +27,7 @@ describe('TDD: Schema and Atomic Booking (Refactored)', () => {
       customerId = setup.customerId;
     } catch (err) {
       dbAvailable = false;
-      // eslint-disable-next-line no-console
+       
       console.warn('[schema.test] Skipping DB tests - connection failed', err);
     }
   });

@@ -40,11 +40,12 @@ import type { BookMeetingResult } from './bookMeetingTask.js';
 import type { JobIntakeResult } from './jobIntakeTask.js';
 import type { TakeMessageResult } from './takeMessageTask.js';
 import type { ScheduleChangeResult } from './schedulingTask.js';
+import type { ToolMap } from '../tools.js';
 
 export interface CallRootOptions {
   ctx: SessionContext;
   /** The full ToolContext from buildTools() — the rungs take the slices they need. */
-  tools: llm.ToolContext;
+  tools: ToolMap;
   /** The tenant's persona line, so the greeting/identity sound like the business. */
   persona: string;
   /** Date + hours the rungs must not guess. */

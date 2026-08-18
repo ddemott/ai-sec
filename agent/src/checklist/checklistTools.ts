@@ -35,6 +35,7 @@ import {
 import type { ActionNodeDef, NodeId, QuestionTreeDef } from './types.js';
 import { CALLER_NAME, CALLER_PHONE } from './trees.js';
 import { BLOCK_LIBRARY } from './blockLibrary.js';
+import type { ToolMap } from '../tools.js';
 
 /**
  * TREE-LEVEL CONFLICTS, COMPILED FROM THE BLOCK CONTRACT.
@@ -648,7 +649,7 @@ interface RealToolShape {
   parameters: Record<string, unknown>;
   execute: (args: unknown, toolCtx: unknown) => Promise<unknown>;
 }
-const shape = (t: llm.ToolContext[string]): RealToolShape => t as unknown as RealToolShape;
+const shape = (t: ToolMap[string]): RealToolShape => t as unknown as RealToolShape;
 
 export interface ChecklistToolDeps {
   tracker: ChecklistTracker;
@@ -656,7 +657,7 @@ export interface ChecklistToolDeps {
   /** Tree ids this tenant is allowed to select right now. Defaults to all library tree ids. */
   selectableTreeIds?: string[];
   /** The full ToolContext from buildTools() — real tools, untouched. */
-  realTools: llm.ToolContext;
+  realTools: ToolMap;
   /** Carrier-attested caller number (null on forwarded lines) — auto-fills the
    *  caller_phone node on selection so the question never exists on that call. */
   callerPhone?: string | null;
@@ -672,7 +673,7 @@ export interface ChecklistToolDeps {
 
 export interface ChecklistToolkit {
   /** Base + wrapped actions + read passthroughs for the CURRENT selection. */
-  selectedTools: () => llm.ToolContext;
+  selectedTools: () => ToolMap;
 }
 
 interface ActionSite {
@@ -1310,7 +1311,12 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       for (const [nodeId, value] of Object.entries(BOOKING_CLOSES_OFFER)) {
         console.error('DEBUG recordIfOpen', nodeId, value, tracker.status(nodeId));
         recordIfOpen(nodeId, value);
-        console.error('DEBUG after recordIfOpen', nodeId, tracker.status(nodeId), tracker.value(nodeId));
+        console.error(
+          'DEBUG after recordIfOpen',
+          nodeId,
+          tracker.status(nodeId),
+          tracker.value(nodeId)
+        );
       }
     }
     // If this answer CORRECTS something a completed write already consumed,
@@ -1477,7 +1483,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     },
   });
 
-  const baseTools: llm.ToolContext = { set_purpose, record_answer, finish_call };
+  const baseTools: ToolMap = { set_purpose, record_answer, finish_call };
 
   // get_my_appointments — in the toolset EVERY turn, not just when
   // schedule_change is selected (2026-07-30, CALL_IMPROVEMENTS.md #8): a caller
@@ -1652,7 +1658,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     }
   };
 
-  const wrapAction = (site: ActionSite): llm.ToolContext[string] => {
+  const wrapAction = (site: ActionSite): ToolMap[string] => {
     const { def } = site;
     const real = realTools[def.tool];
     const idField = ACTION_ID_FIELDS[def.tool] ?? 'id';
@@ -1792,7 +1798,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   };
 
   /** Transparent passthrough that records how many times were just offered. */
-  const wrapSlotReader = (real: llm.ToolContext[string]): llm.ToolContext[string] =>
+  const wrapSlotReader = (real: ToolMap[string]): ToolMap[string] =>
     llm.tool({
       description: shape(real).description,
       parameters: shape(real).parameters,
@@ -1808,8 +1814,8 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       },
     });
 
-  const selectedTools = (): llm.ToolContext => {
-    const tools: llm.ToolContext = { ...baseTools };
+  const selectedTools = (): ToolMap => {
+    const tools: ToolMap = { ...baseTools };
     for (const treeId of tracker.selectedTrees()) {
       for (const site of actionSites.values()) {
         if (site.treeId === treeId && realTools[site.def.tool] && !tools[site.def.tool]) {

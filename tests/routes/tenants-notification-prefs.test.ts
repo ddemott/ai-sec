@@ -32,7 +32,7 @@ describe('tenants notification preferences columns', () => {
       root = await getRootClient();
     } catch (err) {
       dbAvailable = false;
-      // eslint-disable-next-line no-console
+       
       console.warn('[tenants-notification-prefs.test] Skipping DB tests - connection failed', err);
     }
   });

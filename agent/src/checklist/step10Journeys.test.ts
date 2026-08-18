@@ -12,7 +12,6 @@
  *      recover, or refuse for the right reason.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { llm } from '@livekit/agents';
 import type { TenantRuntimeConfig } from './blockTypes.js';
 import { resolveSelectableTreeIds } from './checklistAgent.js';
 import { createChecklistTools } from './checklistTools.js';
@@ -20,9 +19,10 @@ import { AUTO_SHOP_PRESET, SALON_PRESET } from './presets.js';
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 import { ChecklistTracker } from './tracker.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
+import type { ToolMap } from '../tools.js';
 
 type Exec = (args: unknown, ctx: unknown) => Promise<unknown>;
-const call = async (tools: llm.ToolContext, name: string, args: unknown = {}): Promise<string> =>
+const call = async (tools: ToolMap, name: string, args: unknown = {}): Promise<string> =>
   (await (tools[name] as unknown as { execute: Exec }).execute(args, undefined)) as string;
 
 const ok = (fields: Record<string, unknown>): string =>
@@ -103,7 +103,7 @@ function makeKit(opts?: { runtimeConfig?: TenantRuntimeConfig; bookResults?: str
     tracker,
     library: PLATFORM_TREE_LIBRARY,
     selectableTreeIds,
-    realTools: fakes as unknown as llm.ToolContext,
+    realTools: fakes as unknown as ToolMap,
     onSelectionChanged: vi.fn(),
     closeCall,
   });

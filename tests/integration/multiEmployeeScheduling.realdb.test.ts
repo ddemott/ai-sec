@@ -199,7 +199,7 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[multiEmployeeScheduling.realdb.test] DB not available, skipping', err);
   }
 });

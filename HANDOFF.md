@@ -2,6 +2,70 @@
 
 Read this first after session reset.
 
+_Updated 2026-08-18 after full verification rerun. Read the 2026-08-18 section first; it is the current blocker state._
+
+## 2026-08-18 — reset-safe handoff: functional green, agent typecheck red
+
+Verdict: the repo is now safe to reset **with this handoff**, but it is **not** in a
+fully clean/merge-ready state yet. App behavior is largely verified; the remaining
+blocker is agent package typecheck/build.
+
+### Verified this session
+
+- Root/backend tests: `225 passed (225)` · `2747 passed (2747)`
+- Dashboard unit tests: `97 passed (97)` · `1044 passed (1044)`
+- Agent tests: `56 passed (56)` · `943 passed (943)`
+- Full Playwright: `162 passed`, `15 skipped`, exit `0`
+- Backend build: `cd /home/dale/projects/secretary-hq && npm run build` → exit `0`
+- Dashboard production build: `cd /home/dale/projects/secretary-hq/dashboard && npx next build --webpack` → exit `0`
+
+### Still red — this is the blocker
+
+- Agent build/typecheck: `cd /home/dale/projects/secretary-hq/agent && npm run build` → exit `2`
+- Failure class: widespread `ToolContext<unknown>` typing drift after LiveKit tool API
+  shape changes. Runtime/tests are mostly behaving; TypeScript still rejects the old
+  map-vs-wrapper typing pattern across `agent/src/checklist/*.ts`, `agent/src/tasks/*.ts`,
+  `agent/src/tools.ts`, `agent/src/index.ts`, and related tests.
+
+### Important corrected facts
+
+- Earlier session work got functional behavior green enough to trust again:
+  - caller pickup E2E fixed
+  - voice styles E2E fixed
+  - stale backend path assertions after `src/middleware.ts` rename fixed
+  - dashboard async test races fixed
+- But that does **NOT** mean the branch is clean. The exact remaining gate is the agent
+  package build above. Do not claim "ready" or merge-ready until that command exits `0`.
+
+### Working tree / branch at handoff time
+
+- Branch: `fix/e2e-sweep-voice-coverage`
+- Working tree still dirty. At the time of this handoff `git status --short` showed
+  modified files across `agent/`, `dashboard/`, `public/`, root `tests/`, plus new
+  `agent/src/tasks/testToolCtx.ts` and `src/middleware/`.
+
+### Highest-value next move
+
+Fix the agent `ToolContext` typing drift cleanly instead of papering it over with blind
+casts. LiveKit's current typing expects plain tool maps / `ToolContextLike` init where
+parts of this code still type those objects as `ToolContext` wrapper instances.
+
+### Resume commands
+
+1. `cd /home/dale/projects/secretary-hq && git status --short --branch`
+2. `cd /home/dale/projects/secretary-hq/agent && npm run build`
+3. Fix the `ToolContext<unknown>` typing errors
+4. Re-run, in this order:
+   - `cd /home/dale/projects/secretary-hq/agent && npm run build`
+   - `cd /home/dale/projects/secretary-hq/agent && npm test`
+   - `cd /home/dale/projects/secretary-hq && npm test`
+   - `cd /home/dale/projects/secretary-hq/dashboard && npx playwright test`
+
+### If resetting now
+
+This handoff is the truth: behavior mostly verified, agent build still red. Resume from
+the agent typecheck blocker, not from old markdown counts or older "all green" claims.
+
 _Written 2026-08-14. Updated 2026-08-15 (local-call session) and 2026-08-15/16 (E2E
 observation sweep — read that section first; it is the most recent work)._
 

@@ -36,7 +36,7 @@ vi.hoisted(() => {
 });
 
 import Fastify, { type FastifyInstance } from 'fastify';
-import { type Client, type PoolClient, Pool } from 'pg';
+import {type Client, type  Pool} from 'pg';
 import jwt from 'jsonwebtoken';
 import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from '../utils';
 import { createWithTenantClient } from '../../src/database';
@@ -107,7 +107,7 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[users.revokeSessions.realdb.test] DB not available, skipping', err);
   }
 });

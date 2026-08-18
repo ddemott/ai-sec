@@ -20,7 +20,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { type Client, Pool } from 'pg';
-import type { PoolClient } from 'pg';
+import type {} from 'pg';
 import {
   API_DB_URL,
   getRootClient,
@@ -144,7 +144,7 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[voice.realdb.test] DB not available, skipping', err);
   }
 });

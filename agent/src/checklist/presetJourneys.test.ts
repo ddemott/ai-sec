@@ -10,7 +10,6 @@
  *      keys exist. Neither proves a caller can complete a goal and hang up.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { llm } from '@livekit/agents';
 import type { VerticalPresetDef } from './blockTypes.js';
 import { resolveSelectableTreeIds } from './checklistAgent.js';
 import { createChecklistTools } from './checklistTools.js';
@@ -23,9 +22,10 @@ import {
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 import { ChecklistTracker } from './tracker.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
+import type { ToolMap } from '../tools.js';
 
 type Exec = (args: unknown, ctx: unknown) => Promise<unknown>;
-const call = async (tools: llm.ToolContext, name: string, args: unknown = {}): Promise<string> =>
+const call = async (tools: ToolMap, name: string, args: unknown = {}): Promise<string> =>
   (await (tools[name] as unknown as { execute: Exec }).execute(args, undefined)) as string;
 
 const ok = (fields: Record<string, unknown>): string =>
@@ -112,7 +112,7 @@ function makePresetKit(preset: VerticalPresetDef) {
     selectableTreeIds: resolveSelectableTreeIds({
       runtimeConfig: materializeRuntimeConfig(preset),
     }),
-    realTools: fakes as unknown as llm.ToolContext,
+    realTools: fakes as unknown as ToolMap,
     onSelectionChanged: vi.fn(),
     closeCall,
   });

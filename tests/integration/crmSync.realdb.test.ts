@@ -64,7 +64,7 @@ beforeAll(async () => {
     await seedIntegration();
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[crmSync.realdb.test] DB not available, skipping', err);
   }
 });

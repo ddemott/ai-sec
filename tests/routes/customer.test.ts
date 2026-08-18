@@ -24,7 +24,7 @@ describe('Customer Management', () => {
       tenantId = setup.tenantId;
     } catch (err) {
       dbAvailable = false;
-      // eslint-disable-next-line no-console
+       
       console.warn('[customer.test] Skipping DB tests - connection failed', err);
     }
   });

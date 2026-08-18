@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type { ReactNode, ReactElement } from 'react';
 
 export const LEGAL_EFFECTIVE = 'August 14, 2026';
 export const LEGAL_PROVIDER = 'Thinking Hammer LLC';
@@ -12,7 +12,7 @@ export function LegalDocLayout(props: {
   title: string;
   subtitle: string;
   children: ReactNode;
-}): JSX.Element {
+}): ReactElement {
   return (
     <div className="legal-doc min-h-screen" style={{ background: '#090E1A', color: '#E8F0FF' }}>
       <header className="border-b border-white/10">
@@ -52,7 +52,7 @@ export function LegalDocLayout(props: {
   );
 }
 
-export function LegalNotice(): JSX.Element {
+export function LegalNotice(): ReactElement {
   return (
     <aside className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
       These pages implement published, lawyer-committee templates (Bonterms Standard

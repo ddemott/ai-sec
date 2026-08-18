@@ -15,6 +15,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { llm, initializeLogger, type voice } from '@livekit/agents';
 import { CallRootAgent } from './callRootAgent.js';
 import type { SessionContext } from '../sessionContext.js';
+import { getAgentTool } from './testToolCtx.js';
 
 beforeAll(() => {
   initializeLogger({ pretty: false, level: 'silent' });
@@ -53,9 +54,7 @@ function beginCallSchema(agent: voice.Agent): {
     required?: string[];
   };
 } {
-  return (agent.toolCtx as Record<string, unknown>)['begin_call'] as ReturnType<
-    typeof beginCallSchema
-  >;
+  return getAgentTool(agent, 'begin_call') as ReturnType<typeof beginCallSchema>;
 }
 
 describe('has_job_inquiry draws the boundary: a role TO the owner, never work FROM the business', () => {

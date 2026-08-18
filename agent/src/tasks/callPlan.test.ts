@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { llm, initializeLogger } from '@livekit/agents';
 import { planCallTasks, buildCallTaskGroup, type CallDeps, type CallerGoals } from './callPlan.js';
+import { getTaskToolNames } from './testToolCtx.js';
 import type { SessionContext } from '../sessionContext.js';
 
 beforeAll(() => {
@@ -127,7 +128,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     // never returns). None of them may reach this task.
     const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: false }, makeDeps());
     const book = specs.find((s) => s.id === 'book_meeting')!;
-    const names = Object.keys(book.factory().toolCtx);
+    const names = getTaskToolNames(book.factory());
     expect(names).toContain('get_available_slots');
     expect(names).toContain('book_with_scheduling');
     expect(names).not.toContain('get_scheduling_options'); // the messy times
@@ -152,7 +153,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
   it('SAD: the job template gets only its LOAD-BEARING tools — nothing to wander into', () => {
     const specs = planCallTasks({ wantsMeeting: false, hasJobInquiry: true }, makeDeps());
     const intake = specs.find((s) => s.id === 'meeting_context')!;
-    const names = Object.keys(intake.factory().toolCtx);
+    const names = getTaskToolNames(intake.factory());
     expect(names).toContain('capture_job_inquiry');
     // take_message joined 2026-07-18 as a COMPLETION (the mid-intake "just take a
     // message instead" fallback, mirroring the booking rung's) — load-bearing, so
@@ -170,7 +171,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
     const specs = planCallTasks({ wantsMeeting: true, hasJobInquiry: false }, deps);
     deps.state.appointmentId = 'appt-1'; // the booking rung's onBooked wrote this
     const notes = specs.find((s) => s.id === 'meeting_context')!;
-    const names = Object.keys(notes.factory().toolCtx).sort();
+    const names = getTaskToolNames(notes.factory());
     expect(names).toContain('attach_meeting_notes'); // the write
     expect(names).toContain('no_notes'); // the honest "nothing to add" exit
     expect(names).toContain('take_message'); // the fallback when attach cannot happen
@@ -228,7 +229,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
       makeDeps()
     );
     const manage = specs.find((s) => s.id === 'schedule_change')!;
-    const names = Object.keys(manage.factory().toolCtx).sort();
+    const names = getTaskToolNames(manage.factory());
     expect(names).toContain('get_my_appointments');
     expect(names).toContain('get_available_slots');
     expect(names).toContain('cancel_appointment');
@@ -272,7 +273,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
       makeDeps()
     );
     const msg = specs.find((s) => s.id === 'take_message')!;
-    const names = Object.keys(msg.factory().toolCtx);
+    const names = getTaskToolNames(msg.factory());
     expect(names).toContain('take_message');
     expect(names).not.toContain('book_with_scheduling');
     expect(names).not.toContain('capture_job_inquiry');
@@ -319,7 +320,7 @@ describe('planCallTasks — the checklist the loop enforces', () => {
       makeDeps()
     );
     const qa = specs.find((s) => s.id === 'policy_qa')!;
-    const names = Object.keys(qa.factory().toolCtx).sort();
+    const names = getTaskToolNames(qa.factory());
     expect(names).toEqual(['get_company_policy_answer', 'questions_answered', 'take_message']);
   });
 

@@ -78,7 +78,7 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[poolExhaustion.test] DB not available, skipping', err);
   }
 });

@@ -339,7 +339,7 @@ describe('send-FAILURE path records a failed row (drill-down data source)', () =
     //      vanish into a returned {success:false}
     const emailService = new EmailService(buildConfigService(), undefined);
     // Override the stub transporter so the send throws into the catch block.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (emailService as any).transporter = {
       sendMail: vi.fn().mockRejectedValue(new Error('SMTP 550 mailbox unavailable')),
     };

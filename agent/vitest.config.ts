@@ -8,5 +8,6 @@ export default defineConfig({
     // the dangling rejection is an internal artifact that doesn't reflect
     // a real failure. Tests still assert on the error event itself.
     dangerouslyIgnoreUnhandledErrors: true,
+    exclude: ['dist/**', 'node_modules/**'],
   },
 });

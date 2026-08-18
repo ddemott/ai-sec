@@ -13,6 +13,8 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { llm, initializeLogger } from '@livekit/agents';
 import { makeSchedulingRung, SCHEDULING_INSTRUCTIONS } from './schedulingTask.js';
+import { getTaskTool, getTaskToolNames } from './testToolCtx.js';
+import type { ToolMap } from '../tools.js';
 
 beforeAll(() => {
   initializeLogger({ pretty: false, level: 'silent' });
@@ -27,9 +29,7 @@ function fakeTool(returns: unknown) {
   });
 }
 
-function manageTools(
-  overrides: Partial<Record<string, llm.ToolContext[string]>> = {}
-): llm.ToolContext {
+function manageTools(overrides: Partial<Record<string, ToolMap[string]>> = {}): ToolMap {
   return {
     get_my_appointments: fakeTool(JSON.stringify({ appointments: [] })),
     cancel_appointment: fakeTool(JSON.stringify({ cancelled: true, appointment_id: 'appt-1' })),
@@ -46,11 +46,9 @@ async function callTool(
   name: string,
   args: unknown = {}
 ): Promise<unknown> {
-  const tool = (task.toolCtx as Record<string, unknown>)[name] as {
-    execute: (a: unknown, c: unknown) => Promise<unknown>;
-  };
+  const tool = getTaskTool(task, name);
   expect(tool, `the rung must expose ${name}`).toBeDefined();
-  return tool.execute(args, { ctx: {}, toolCallId: 'tc' });
+  return tool!.execute(args, { ctx: {}, toolCallId: 'tc' });
 }
 
 describe('SchedulingTask — the mutation IS the transition, and it has three endings', () => {
@@ -104,7 +102,7 @@ describe('SchedulingTask — the mutation IS the transition, and it has three en
 
   it('SAD: the rung gets the read + slot finder + both mutations + the escape hatch, nothing else', () => {
     const task = makeSchedulingRung({ manageTools: manageTools() });
-    expect(Object.keys(task.toolCtx).sort()).toEqual([
+    expect(getTaskToolNames(task)).toEqual([
       'cancel_appointment',
       'get_available_slots',
       'get_my_appointments',

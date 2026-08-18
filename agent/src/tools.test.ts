@@ -8,7 +8,6 @@
  * context, every tool call 400s at runtime. Critical coverage.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { llm } from '@livekit/agents';
 import { buildTools } from './tools.js';
 import { CallOutcomeTracker } from './callOutcome.js';
 import type { ToolsClient, ToolResponse } from './toolsClient.js';
@@ -148,14 +147,19 @@ describe('buildTools', () => {
     expect(tools).toHaveProperty('send_self_service_link');
   });
 
-  it('HAPPY: every tool has a non-empty description and is recognized as a FunctionTool', () => {
+  it('HAPPY: every tool has a non-empty description and is callable as a function tool', () => {
     // WHY: Empty descriptions ship tools the LLM won't know when to use.
-    //       isFunctionTool guards against accidentally returning a
-    //       non-tool value from buildTools (e.g., a plain object).
+    //       The runtime contract we rely on is structural: a tool must expose
+    //       a description, parameters, and an execute() function.
     const tools = buildTools(makeCtx(), makeClient([]).client);
     for (const [name, tool] of Object.entries(tools)) {
-      expect(llm.isFunctionTool(tool), `${name} must be a FunctionTool`).toBe(true);
-      const t = tool as unknown as { description: string };
+      const t = tool as unknown as {
+        description: string;
+        parameters: Record<string, unknown>;
+        execute: (args: unknown, ctx: unknown) => Promise<unknown>;
+      };
+      expect(typeof t.execute, `${name} must expose execute()`).toBe('function');
+      expect(typeof t.parameters, `${name} must expose parameters`).toBe('object');
       expect(t.description.length, `${name} description empty`).toBeGreaterThan(20);
     }
   });

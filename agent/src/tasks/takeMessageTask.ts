@@ -20,8 +20,9 @@
  * this rung never re-asks for a number the caller already gave — the pivot that burned us
  * on 2026-07-13. The rung's only job is to draw out the message itself and record it.
  */
-import { type llm, type voice } from '@livekit/agents';
+import { type voice } from '@livekit/agents';
 import { makeRung, idExtractor } from './rung.js';
+import type { ToolMap } from '../tools.js';
 
 export interface TakeMessageResult {
   messageId: string;
@@ -30,7 +31,7 @@ export interface TakeMessageResult {
 
 export interface TakeMessageTaskOptions {
   /** The messaging tools from buildTools() — must include take_message. */
-  messagingTools: llm.ToolContext;
+  messagingTools: ToolMap;
   /** The caller identity from the identity rung — the message is attributed to them and
    *  take_message reuses their confirmed number, so we never re-ask. */
   knownCaller?: string;

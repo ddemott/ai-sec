@@ -149,10 +149,7 @@ export function withIpv4ConnectOptions(args: unknown[], lookup: NetLookup = ipv4
  */
 export function patchConnect(target: ConnectModule, lookup: NetLookup = ipv4Lookup): () => void {
   const original = target.connect;
-  target.connect = ((...args: unknown[]) =>
-    (original as (...a: unknown[]) => unknown)(
-      ...withIpv4ConnectOptions(args, lookup)
-    )) as ConnectModule['connect'];
+  target.connect = (...args: unknown[]) => original(...withIpv4ConnectOptions(args, lookup));
   return () => {
     target.connect = original;
   };
@@ -168,7 +165,7 @@ export function installIpv4OnlyLookup(
   // public property at runtime and is exactly what createConnection reads.
   targets: readonly AgentLookupTarget[] = [
     http.globalAgent as unknown as AgentLookupTarget,
-    https.globalAgent as unknown as AgentLookupTarget,
+    https.globalAgent,
   ],
   connectTargets: readonly ConnectModule[] = [
     tls as unknown as ConnectModule,

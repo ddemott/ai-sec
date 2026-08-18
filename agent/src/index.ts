@@ -1522,8 +1522,7 @@ export default defineAgent({
                 instructions,
                 tools: intakeTools,
               });
-        if (!config.ENABLE_TASK_GROUP && !config.ENABLE_QUESTION_TREE)
-          phaseAgent = agent as InstanceType<typeof SpeakingAgent>;
+        if (!config.ENABLE_TASK_GROUP && !config.ENABLE_QUESTION_TREE) phaseAgent = agent;
 
         // Late-bind the turn detector's pending-question accessor to the live
         // checklist (the session — and thus the detector — was built first).

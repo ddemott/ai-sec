@@ -333,6 +333,8 @@
     const agentEl = document.getElementById('agent');
 
     let latestJoinUrl = '';
+    let latestLivekitUrl = '';
+    let latestAccessToken = '';
     let room = null;
 
     function setStatus(message, kind) {
@@ -493,8 +495,10 @@
         }
 
         latestJoinUrl = body.join_url;
+        latestLivekitUrl = body.livekit_url;
+        latestAccessToken = body.access_token;
         openBtn.href = latestJoinUrl;
-        openBtn.textContent = latestJoinUrl;
+        openBtn.textContent = 'Open voice call';
         openBtn.style.display = 'inline-flex';
         copyBtn.style.display = 'inline-flex';
         joinUrlEl.textContent = latestJoinUrl;
@@ -520,6 +524,25 @@
         setStatus('Clipboard blocked. Copy from screen like it is 2009.', 'error');
       }
     }
+
+    openBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      if (!latestLivekitUrl || !latestAccessToken) {
+        setStatus('Call session is missing LiveKit credentials. Start a new session.', 'error');
+        return;
+      }
+      openBtn.style.display = 'none';
+      startBtn.disabled = true;
+      setStatus('Joining voice call. Mic hot.', 'info');
+      try {
+        await connectInPage(latestLivekitUrl, latestAccessToken);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to join voice call';
+        setStatus(message, 'error');
+        startBtn.disabled = false;
+        openBtn.style.display = 'inline-flex';
+      }
+    });
 
     startBtn.addEventListener('click', startSession);
     copyBtn.addEventListener('click', copyJoinUrl);

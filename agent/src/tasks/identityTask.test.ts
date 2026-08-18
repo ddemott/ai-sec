@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { llm, initializeLogger } from '@livekit/agents';
 import { makeIdentityRung, IDENTITY_INSTRUCTIONS } from './identityTask.js';
 import type { SessionContext } from '../sessionContext.js';
+import { getTaskTool, getTaskToolNames } from './testToolCtx.js';
 
 // LiveKit's Agent base class logs on construction, and refuses to exist without a
 // logger. Not a bug — an AgentTask is a real agent, which is the entire point.
@@ -49,11 +50,9 @@ async function callTool(
   name: string,
   args: unknown
 ): Promise<unknown> {
-  const tool = (task.toolCtx as Record<string, unknown>)[name] as {
-    execute: (a: unknown, o: unknown) => Promise<unknown>;
-  };
+  const tool = getTaskTool(task, name);
   expect(tool, `the task must expose a ${name} tool`).toBeDefined();
-  return tool.execute(args, { ctx: {}, toolCallId: 'tc-1' });
+  return tool!.execute(args, { ctx: {}, toolCallId: 'tc-1' });
 }
 
 describe('IdentityTask — the rung is code now, not a paragraph', () => {
@@ -104,7 +103,7 @@ describe('IdentityTask — the rung is code now, not a paragraph', () => {
     //      (E.164 at the boundary, the placeholder-name bug, the first/last split). The
     //      task receives it. It does not build a second one.
     const task = makeIdentityRung({ ctx: makeCtx(), identifyCaller: fakeIdentifyCaller });
-    expect(Object.keys(task.toolCtx).sort()).toEqual(['confirm_identity', 'identify_caller']);
+    expect(getTaskToolNames(task)).toEqual(['confirm_identity', 'identify_caller']);
   });
 
   it('HAPPY: confirming identity SAVES the caller to the phone book — host code, not model choice', async () => {

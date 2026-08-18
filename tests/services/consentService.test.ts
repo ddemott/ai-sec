@@ -3,8 +3,6 @@
  * Migrated from ai-secretary - provides GDPR/TCPA-compliant consent management.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { DatabaseService } from '../../src/database/index.js';
-
 describe('ConsentService', () => {
   // Mock database service
   const createMockDb = () => ({

@@ -378,6 +378,7 @@ describe('BusinessSettingsView', () => {
 
       await waitFor(() => {
         expect(screen.getByText('My Availability')).toBeInTheDocument();
+        expect(screen.getByText('18')).toBeInTheDocument();
       });
 
       // Day name must be one of the known short labels — not "NaN" or "undefined".
@@ -386,8 +387,7 @@ describe('BusinessSettingsView', () => {
       expect(dayNameEl).toBeTruthy();
 
       // Day number must be a parseable integer — not NaN.
-      const dayNumEl = screen.queryByText('18');
-      expect(dayNumEl).toBeInTheDocument();
+      expect(screen.getByText('18')).toBeInTheDocument();
     });
 
     test('shows My Calendar in solo mode', async () => {

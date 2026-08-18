@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { Pool, PoolClient } from 'pg';
+import type {Pool} from 'pg';
 import { createMockClient, createMockPool, createMockWithTenantClient } from '../mock';
 
 // --- Mock squareClient and squareSync modules before importing routes ---

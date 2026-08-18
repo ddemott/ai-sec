@@ -43,6 +43,7 @@ test.describe('inbound pickup — agent must make noise', () => {
     await page.goto(`${BACKEND_URL}/call-simulator`);
     await page.locator('#agent-name').fill(process.env.SIM_AGENT_NAME ?? 'secretary-hq-agent-dev');
     await page.getByRole('button', { name: /Start call session/i }).click();
+    await page.getByRole('link', { name: /Open voice call/i }).click();
     const firstAudio = page.locator('[data-testid="first-audio"]');
     await expect(firstAudio, 'agent must publish audio — silent join is a fail').toBeVisible({
       timeout: 35_000,

@@ -18,7 +18,7 @@ describe('callPathHosts', () => {
     const hosts = callPathHosts({
       BACKEND_URL: 'https://localhost:4001',
       LIVEKIT_URL: 'wss://example.livekit.cloud',
-    } as NodeJS.ProcessEnv);
+    });
 
     expect(hosts).toContain('api.deepgram.com');
     expect(hosts).toContain('api.openai.com');
@@ -29,7 +29,7 @@ describe('callPathHosts', () => {
   it('SAD: a malformed BACKEND_URL is dropped, not thrown', () => {
     // WHY: a warm is a head start. Failing worker boot over a typo in a URL that
     //      other code already validates would turn an optimization into an outage.
-    const hosts = callPathHosts({ BACKEND_URL: 'not-a-url' } as NodeJS.ProcessEnv);
+    const hosts = callPathHosts({ BACKEND_URL: 'not-a-url' });
 
     expect(hosts).toEqual(['api.deepgram.com', 'api.openai.com']);
   });
@@ -38,7 +38,7 @@ describe('callPathHosts', () => {
     const hosts = callPathHosts({
       BACKEND_URL: 'https://localhost:4001',
       LIVEKIT_URL: 'wss://localhost:7880',
-    } as NodeJS.ProcessEnv);
+    });
 
     expect(hosts.filter((h) => h === 'localhost')).toHaveLength(1);
   });

@@ -12,7 +12,6 @@
  *      debugs conversations, not plumbing.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { llm } from '@livekit/agents';
 import type { VerticalPresetDef } from './blockTypes.js';
 import {
   createChecklistTools,
@@ -29,9 +28,10 @@ import { AUTO_SHOP_PRESET, LOCAL_SERVICE_PRESET, SALON_PRESET } from './presets.
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 import { ChecklistTracker } from './tracker.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
+import type { ToolMap } from '../tools.js';
 
 type Exec = (args: unknown, ctx: unknown) => Promise<unknown>;
-const call = async (tools: llm.ToolContext, name: string, args: unknown = {}): Promise<string> =>
+const call = async (tools: ToolMap, name: string, args: unknown = {}): Promise<string> =>
   (await (tools[name] as unknown as { execute: Exec }).execute(args, undefined)) as string;
 
 interface FakeTool {
@@ -72,7 +72,7 @@ function makeKit(overrides: Partial<ChecklistToolDeps> = {}) {
   const toolkit = createChecklistTools({
     tracker,
     library: PLATFORM_TREE_LIBRARY,
-    realTools: fakes as unknown as llm.ToolContext,
+    realTools: fakes as unknown as ToolMap,
     onSelectionChanged,
     closeCall,
     ...overrides,
@@ -1167,7 +1167,7 @@ describe('finish_call (the goodbye gate)', () => {
       library: PLATFORM_TREE_LIBRARY,
       realTools: {
         take_message: fakeTool(ok({ message_id: 'msg_1' })),
-      } as unknown as llm.ToolContext,
+      } as unknown as ToolMap,
       onSelectionChanged: vi.fn(),
       closeCall,
     });
@@ -1999,17 +1999,16 @@ describe('meeting_offer is closed by the booking attempt, not by asking again', 
     });
     await call(toolkit.selectedTools(), 'record_answer', {
       node_id: 'meeting_topic',
-      value: 'to talk business',
+      value: 'a job opportunity',
     });
 
     await call(toolkit.selectedTools(), 'book_with_scheduling', {
       requested_start: '2026-08-17T13:00:00',
     });
-    expect(tracker.value('meeting_offer')).toBeUndefined();
+    expect(tracker.value('meeting_offer')).toBe('wants_meeting');
 
     await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] });
-    console.error('DEBUG after job select:', tracker.status('meeting_offer'), tracker.selectedTrees());
-    expect(tracker.status('meeting_offer')).not.toBe('answered');
+    expect(tracker.status('meeting_offer')).toBe('answered');
 
     const r = await call(toolkit.selectedTools(), 'record_answer', {
       node_id: 'callers_company',

@@ -26,8 +26,9 @@
  * tools now fall back to (booking already trusts the same number) — so a forwarded-line
  * caller can manage their own appointment, which before they simply could not.
  */
-import { type llm, type voice } from '@livekit/agents';
+import { type voice } from '@livekit/agents';
 import { makeRung, idExtractor } from './rung.js';
+import type { ToolMap } from '../tools.js';
 
 export interface ScheduleChangeResult {
   action: 'canceled' | 'rescheduled' | 'none';
@@ -39,7 +40,7 @@ export interface ScheduleChangeResult {
 export interface ScheduleChangeTaskOptions {
   /** The manage tools from buildTools(): get_my_appointments, cancel_appointment,
    *  reschedule_appointment, and get_available_slots (to find a new time on a reschedule). */
-  manageTools: llm.ToolContext;
+  manageTools: ToolMap;
   /** The caller identity from the identity rung — the manage tools look up by this number. */
   knownCaller?: string;
   /** Date + hours, so a reschedule resolves "tomorrow" and does not offer a closed time. */
@@ -79,7 +80,7 @@ export function makeSchedulingRung(
   // Passthrough tools the model needs to REACH a mutation: the read (which appointment?)
   // and the slot finder (a new time, on a reschedule). The mutations themselves are the
   // completions below, so they are NOT listed here (makeRung adds them).
-  const passthrough: llm.ToolContext = { get_my_appointments: getMine };
+  const passthrough: ToolMap = { get_my_appointments: getMine };
   if (manageTools['get_available_slots']) {
     passthrough['get_available_slots'] = manageTools['get_available_slots'];
   }

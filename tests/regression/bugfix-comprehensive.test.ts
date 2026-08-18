@@ -966,10 +966,10 @@ describe('Source code correctness checks', () => {
     // WHO: external services (Google, Outlook, Square) calling back
     // WHAT: all OAuth callback and webhook routes must be in PUBLIC_ROUTES (skip JWT auth)
     // WHEN: OAuth redirect after user authorizes, or CRM sends webhook event
-    // WHERE: src/middleware.ts PUBLIC_ROUTES array (in registerJwtAuthHook).
-    //        Moved from src/index.ts during historical major refactor (see RESOLVED.md; originally tracked as NEEDS-REFACTORING #11).
+    // WHERE: src/middleware/fastify-middleware.ts PUBLIC_ROUTES array (in registerJwtAuthHook).
+    //        Moved from src/index.ts during historical major refactor, then renamed from src/middleware.ts to avoid Next/Turbopack misdetecting it as app middleware.
     // WHY: OAuth callbacks and webhooks come from external services without JWT — blocking them breaks all integrations
-    const src = fs.readFileSync('src/middleware.ts', 'utf8');
+    const src = fs.readFileSync('src/middleware/fastify-middleware.ts', 'utf8');
     for (const route of [
       '/calendar/auth/google/callback',
       '/calendar/auth/outlook/callback',

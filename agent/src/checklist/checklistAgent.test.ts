@@ -68,7 +68,7 @@ describe('the stall detector (SCL_nRKo3KEVw8Yh — five minutes of bot-mirror)',
   //      see that the conversation is going nowhere.
   function makeAgent() {
     return new ChecklistAgent({
-      tools: {} as llm.ToolContext,
+      tools: {},
       persona: 'You are Piper, the receptionist for Thinking Hammer.',
       runtime: {
         currentDate: 'Thursday, July 30, 2026',
@@ -835,7 +835,7 @@ describe('stall detector — re-arm after recovery (plan companion)', () => {
 
   function makeAgent() {
     return new ChecklistAgent({
-      tools: {} as llm.ToolContext,
+      tools: {},
       persona: 'You are Piper.',
       runtime: {
         currentDate: 'Monday, August 10, 2026',

@@ -75,7 +75,7 @@ beforeAll(async () => {
     // DELIBERATELY NO RESOURCE ROW. That absence is the whole test.
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[availabilityResourceless.realdb] DB not available, skipping', err);
   }
 });

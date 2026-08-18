@@ -27,8 +27,9 @@
  * gathers name + number itself and passes them explicitly — take_message's backend
  * gate refuses a message the owner cannot answer, same belt-and-braces as job intake.
  */
-import { type llm, type voice } from '@livekit/agents';
+import { type voice } from '@livekit/agents';
 import { makeRung, idExtractor, type RungCompletion } from './rung.js';
+import type { ToolMap } from '../tools.js';
 
 export interface PolicyQaResult {
   outcome: 'answered' | 'message';
@@ -39,10 +40,10 @@ export interface PolicyQaResult {
 
 export interface PolicyQaTaskOptions {
   /** The knowledge tools from buildTools() — must include get_company_policy_answer. */
-  knowledgeTools: llm.ToolContext;
+  knowledgeTools: ToolMap;
   /** The take_message tool — the fallback ending for questions the KB cannot answer.
    *  Omit → the rung's only exit is questions_answered. */
-  takeMessage?: llm.ToolContext[string];
+  takeMessage?: ToolMap[string];
   /** Injected when identity DID run first (mixed-goal calls) so the rung never re-asks. */
   knownCaller?: string;
   /** TRUE when a booking rung is queued right after this one. The rung is an ISLAND

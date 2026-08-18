@@ -23,10 +23,10 @@ describe('forceIpv4Enabled', () => {
     // WHY: forcing IPv4 process-wide is a workaround for a broken resolver, not
     //      an improvement — on an IPv6-only network it turns a working lookup
     //      into ENOTFOUND. Production must keep choosing for itself.
-    expect(forceIpv4Enabled({} as NodeJS.ProcessEnv)).toBe(false);
-    expect(forceIpv4Enabled({ DNS_FORCE_IPV4: '1' } as NodeJS.ProcessEnv)).toBe(false);
-    expect(forceIpv4Enabled({ DNS_FORCE_IPV4: 'TRUE' } as NodeJS.ProcessEnv)).toBe(false);
-    expect(forceIpv4Enabled({ DNS_FORCE_IPV4: 'true' } as NodeJS.ProcessEnv)).toBe(true);
+    expect(forceIpv4Enabled({})).toBe(false);
+    expect(forceIpv4Enabled({ DNS_FORCE_IPV4: '1' })).toBe(false);
+    expect(forceIpv4Enabled({ DNS_FORCE_IPV4: 'TRUE' })).toBe(false);
+    expect(forceIpv4Enabled({ DNS_FORCE_IPV4: 'true' })).toBe(true);
   });
 });
 
@@ -72,7 +72,7 @@ describe('makeIpv4Lookup', () => {
     const lookup = makeIpv4Lookup(resolver as unknown as typeof dns.lookup);
     const cb = vi.fn();
 
-    lookup('api.deepgram.com', { hints: 1024 } as never, cb as never);
+    lookup('api.deepgram.com', { hints: 1024 }, cb as never);
 
     expect(resolver).toHaveBeenCalledWith('api.deepgram.com', { hints: 1024, family: 4 }, cb);
   });

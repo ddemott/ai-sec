@@ -37,8 +37,14 @@ export function csvEscape(value: unknown): string {
     str = value.toISOString();
   } else if (typeof value === 'object') {
     str = JSON.stringify(value);
-  } else {
+  } else if (typeof value === 'string') {
+    str = value;
+  } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
     str = String(value);
+  } else if (typeof value === 'symbol') {
+    str = value.description ?? '';
+  } else {
+    str = JSON.stringify(value);
   }
   // Neutralize spreadsheet formulas BEFORE quoting so the guard is part of
   // the cell content (and survives the quote-wrapping below).

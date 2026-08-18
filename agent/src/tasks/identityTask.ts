@@ -33,10 +33,11 @@
  * exists and already works — the task just receives it, plus one small completion tool.
  * The whole spike is about moving the LADDER down a layer, not rebuilding the rungs.
  */
-import { type llm, type voice } from '@livekit/agents';
+import { type voice } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
 import { makeRung } from './rung.js';
 import { sanitizeVolunteered } from './sanitize.js';
+import type { ToolMap } from '../tools.js';
 
 export interface IdentityResult {
   name: string;
@@ -49,7 +50,7 @@ export interface IdentityResult {
 export interface IdentityTaskOptions {
   ctx: SessionContext;
   /** The real identify_caller tool from buildTools() — not a new one. */
-  identifyCaller: llm.ToolContext[string];
+  identifyCaller: ToolMap[string];
   /** What the caller ALREADY said they want (from the intent step). Injected so identity
    *  does not re-ask "how can I help?" after confirming — it knows, and the next rung
    *  handles it. */
@@ -149,8 +150,8 @@ export function makeIdentityRung(opts: IdentityTaskOptions): voice.AgentTask<Ide
         required: ['name', 'phone'],
       },
       build: (args): IdentityResult => ({
-        name: String(args.name ?? '').trim(),
-        phone: String(args.phone ?? '').trim(),
+        name: (typeof args.name === 'string' ? args.name : '').trim(),
+        phone: (typeof args.phone === 'string' ? args.phone : '').trim(),
         confirmedAloud: !known,
       }),
       onDone: async (result) => {

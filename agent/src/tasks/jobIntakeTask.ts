@@ -19,8 +19,9 @@
  * callPlan), that should already be in hand — but the belt-and-braces is real: a lead the
  * owner cannot answer never gets recorded as "done".
  */
-import { type llm, type voice } from '@livekit/agents';
+import { type voice } from '@livekit/agents';
 import { makeRung, idExtractor } from './rung.js';
+import type { ToolMap } from '../tools.js';
 
 export interface JobIntakeResult {
   /** 'captured' when a real job_inquiries row landed; 'not_a_job' when the
@@ -38,7 +39,7 @@ export interface JobIntakeResult {
 
 export interface JobIntakeTaskOptions {
   /** The messaging tools from buildTools() — must include capture_job_inquiry. */
-  messagingTools: llm.ToolContext;
+  messagingTools: ToolMap;
   /** The caller identity from the identity rung — capture_job_inquiry refuses without a
    *  name and number, and both were already collected. */
   knownCaller?: string;
@@ -49,7 +50,7 @@ export interface JobIntakeTaskOptions {
    *  just to leave a message instead?"). A caller who would rather leave a
    *  message than answer the role questions gets a REAL write, not a refusal —
    *  the same honest fallback the booking and notes rungs already carry. */
-  takeMessage?: llm.ToolContext[string];
+  takeMessage?: ToolMap[string];
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
   onMessageTaken?: (r: { messageId: string; raw: unknown }) => Promise<void> | void;
 }

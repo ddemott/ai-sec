@@ -28,7 +28,17 @@ export class MockAdapter implements TelephonyProvider {
       .join(' ');
 
     const openingTag = attrString ? `${action} ${attrString}` : action;
-    const content = String(options.text ?? options.say ?? '');
+    const rawContent = options.text ?? options.say ?? '';
+    const content =
+      typeof rawContent === 'string'
+        ? rawContent
+        : typeof rawContent === 'number' ||
+            typeof rawContent === 'boolean' ||
+            typeof rawContent === 'bigint'
+          ? String(rawContent)
+          : rawContent === null || rawContent === undefined
+            ? ''
+            : JSON.stringify(rawContent);
 
     if (content) {
       return `<${openingTag}>${content}</${action}>`;

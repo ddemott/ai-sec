@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { llm } from '@livekit/agents';
 import {
   buildChecklistPrompt,
   ChecklistAgent,
@@ -153,7 +152,7 @@ describe('ChecklistAgent runtimeConfig path', () => {
     expect(prompt).not.toContain('- buy_service:');
 
     const agent = new ChecklistAgent({
-      tools: {} as llm.ToolContext,
+      tools: {},
       persona: 'You are Piper.',
       runtime,
       runtimeConfig: {
@@ -206,7 +205,7 @@ describe('ChecklistAgent runtimeConfig path', () => {
     expect(prompt).not.toContain('- job:');
 
     const agent = new ChecklistAgent({
-      tools: {} as llm.ToolContext,
+      tools: {},
       persona: 'You are Piper.',
       runtime,
       runtimeConfig,
@@ -250,7 +249,7 @@ describe('ChecklistAgent runtimeConfig path', () => {
     expect(prompt).not.toContain('- job:');
 
     const agent = new ChecklistAgent({
-      tools: {} as llm.ToolContext,
+      tools: {},
       persona: 'You are Piper.',
       runtime,
       runtimeConfig,
@@ -295,7 +294,7 @@ describe('ChecklistAgent runtimeConfig path', () => {
     expect(prompt).not.toContain('- job:');
 
     const agent = new ChecklistAgent({
-      tools: {} as llm.ToolContext,
+      tools: {},
       persona: 'You are Piper.',
       runtime,
       runtimeConfig,

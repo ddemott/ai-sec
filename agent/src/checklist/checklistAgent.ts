@@ -24,10 +24,11 @@ import type { TenantRuntimeConfig } from './blockTypes.js';
 import { createChecklistTools, type ChecklistToolkit } from './checklistTools.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
 import type { QuestionTreeDef } from './types.js';
+import type { ToolMap } from '../tools.js';
 
 export interface ChecklistAgentOptions {
   /** The full ToolContext from buildTools() — real tools, untouched. */
-  tools: llm.ToolContext;
+  tools: ToolMap;
   /** One identity line — NEVER a full script (the 10.5k-char persona lesson). */
   persona: string;
   /** Date + hours the model must not guess (the October-booking lesson). */
@@ -705,7 +706,7 @@ export class ChecklistAgent extends voice.Agent {
   }
 
   /** Exposed for tests and diagnostics. */
-  currentTools(): llm.ToolContext {
+  currentTools(): ToolMap {
     return this.#toolkit.selectedTools();
   }
 
