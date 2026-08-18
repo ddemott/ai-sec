@@ -44,10 +44,7 @@ export function isFifteenMinuteIncrement(value: string | null | undefined): bool
  * can branch without string-matching messages.
  */
 export type AppointmentValidationCode =
-  | 'INVALID_PARAMS'
-  | 'INVALID_RANGE'
-  | 'INVALID_DURATION'
-  | 'INVALID_INCREMENT';
+  'INVALID_PARAMS' | 'INVALID_RANGE' | 'INVALID_DURATION' | 'INVALID_INCREMENT';
 
 export interface AppointmentValidationError {
   error: string;

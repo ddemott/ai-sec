@@ -79,6 +79,10 @@ describe('fetchTenantConfig', () => {
       // receptionist says. 2026-07-31.
       staffFirstNames: [],
       checklistRuntimeConfig: null,
+      // Absent from the response ⇒ null, meaning "this tenant has no per-tenant
+      // question trees, use the platform library" — the pre-2026-08-14
+      // behaviour, and the safe default for every tenant not yet converted.
+      questionTrees: null,
     });
   });
 

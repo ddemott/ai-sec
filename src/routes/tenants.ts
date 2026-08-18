@@ -14,7 +14,7 @@ import {
   requireAuth,
   requireSuperAdmin,
   type AppRequest,
-} from '../middleware';
+} from '../middleware/fastify-middleware';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import { assertRowAffected } from './routeHelpers';
 import { createTenantWithOwner } from '../services/tenants/bootstrap';

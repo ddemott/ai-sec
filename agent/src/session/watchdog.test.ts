@@ -239,20 +239,44 @@ describe('attachOutputWatchdog', () => {
     expect(f.sayCalls.map((c) => c.text)).toEqual(['Just a moment.', RECOVERY]);
   });
 
-  it('SAD, live 2: reply already QUEUED at deadline 1 → no filler, no recovery — audio is imminent', async () => {
+  it('SAD, live 2: reply already QUEUED at deadline 1 and it SPEAKS → no filler, no recovery', async () => {
     // WHO: the 2026-07-21 second stomp call. The reply's SpeechHandle joins the
     // queue ~300ms before its audio starts; the filler fired inside that window,
     // queued BEHIND the reply, and the caller heard question + "Just a moment."
     // + recovery run together ("you're running all these sentences together").
-    // WHAT: with a speech scheduled or playing, the filler is clutter — skip it
-    // and the escalation entirely.
+    // WHAT: with a speech scheduled or playing, the filler is clutter — skip it.
+    // The escalation stays armed but the 'speaking' transition disarms it, so a
+    // reply that actually arrives is never talked over.
     _resetToolActivityForTest();
     const f = makeFakeSession();
     attach(f);
     f.setActivity({ currentSpeech: {}, speechQueue: { size: () => 0 } });
     f.emit('thinking');
-    await vi.advanceTimersByTimeAsync(2500 + 4000);
+    await vi.advanceTimersByTimeAsync(2500);
+    f.emit('speaking'); // the queued reply's audio starts
+    await vi.advanceTimersByTimeAsync(4000);
     expect(f.sayCalls).toHaveLength(0);
+  });
+
+  it('SAD, live 2 silent: reply QUEUED but it never makes a sound → recovery covers the dead air', async () => {
+    // WHO: sim-call-1786817155950, 2026-08-15, twice in one call.
+    // WHAT: TTS accepted the turn, produced ZERO audio frames, and the framework
+    //       only gave up at its own `ttsReadIdleTimeout` — 10.00s, measured.
+    // WHEN: deadline1 saw a queued speech and (before this) stood down entirely.
+    // WHERE: fireFiller's `reply_already_queued` branch.
+    // WHY: the caller sat through ten seconds of nothing and said "Hello? Are
+    //      you there?" — then, after the second one, "I said it already. Didn't
+    //      you hear it?". A queued reply is a PROMISE of audio, not audio; when
+    //      it breaks that promise something must still be watching.
+    _resetToolActivityForTest();
+    const f = makeFakeSession();
+    attach(f);
+    f.setActivity({ currentSpeech: {}, speechQueue: { size: () => 0 } });
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500); // deadline1: hold line correctly skipped
+    expect(f.sayCalls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(4000); // deadline2: still no audio
+    expect(f.sayCalls.map((c) => c.text)).toEqual([RECOVERY]);
   });
 
   it('SAD, live 2 race: reply slips in AFTER the filler → recovery skipped, stray filler cancelled', async () => {

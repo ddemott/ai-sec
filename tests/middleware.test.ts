@@ -30,7 +30,7 @@ import {
   logError,
   AppError,
   type AppRequest,
-} from '../src/middleware';
+} from '../src/middleware/fastify-middleware';
 import { errorsTotal } from '../src/services/metrics';
 
 /** Read the current errors_total value for a given event label (0 if unseen). */
@@ -63,7 +63,7 @@ function createMockReply(): FastifyReply {
       return reply;
     },
   } satisfies MockReply;
-  return reply as unknown as FastifyReply;
+  return reply;
 }
 
 function createMockRequest(

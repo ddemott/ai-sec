@@ -383,6 +383,68 @@ export const CaptureJobInquirySchema = z.object({
   appointment_id: z.string().uuid().optional(),
 });
 
+/**
+ * capture-case-inquiry — a prospective client's legal matter, captured for an
+ * attorney's take-or-decline review.
+ *
+ * EVERY CASE FIELD IS OPTIONAL EXCEPT THE TWO THAT MAKE IT ANSWERABLE. This is
+ * the same rule capture_job_inquiry learned on 2026-07-14 (a perfect six-month
+ * contract lead saved under caller_name "Caller" with no phone number), and it
+ * bites harder here: a matter with a filing deadline and no callback number is
+ * not a slow lead, it is a person the firm cannot warn.
+ *
+ * The generous text caps are deliberate. Callers describing an accident or a
+ * denial dictate paragraphs, and the paragraph is the single most useful thing
+ * the reviewing attorney reads — truncating it to a tidy 200 chars would throw
+ * away the actual work product of the call.
+ *
+ * NOTE ON `matter_type`: a free string, not an enum. capture_job_inquiry's
+ * `employment_type` enum bounced a whole live capture when a caller said
+ * "contract to hire" and the tree accepted a value the schema did not. A legal
+ * matter has far more shapes than a job does, and a bounced capture mid-call
+ * costs a prospective client. The tree constrains the vocabulary; the schema
+ * refuses to make that constraint fatal.
+ */
+export const CaptureCaseInquirySchema = z.object({
+  tenant_id: z.string().uuid(),
+  caller_name: z.string().min(1).max(200),
+  callback_phone: z.string().max(50).optional(),
+  matter_type: z.string().max(100).optional(),
+  // THE FOUR THAT DECIDE TAKE-OR-DECLINE. A matter can be compelling and still
+  // be untouchable: out of time, out of jurisdiction, already represented, or
+  // conflicted out. See CASE_INTAKE_TREE in agent/src/checklist/trees.ts.
+  incident_date: z.string().max(200).optional(),
+  incident_state: z.string().max(120).optional(),
+  has_existing_counsel: z.boolean().optional(),
+  opposing_parties: z.string().max(1000).optional(),
+  // The narrative. Whichever branch ran, the caller's own account lands here.
+  matter_description: z.string().max(4000).optional(),
+  // Insurance-branch facts.
+  insurer_name: z.string().max(300).optional(),
+  policy_type: z.string().max(200).optional(),
+  claim_outcome: z.string().max(100).optional(),
+  stated_reason: z.string().max(2000).optional(),
+  amount_in_dispute: z.string().max(200).optional(),
+  appeal_status: z.string().max(1000).optional(),
+  // Injury-branch facts.
+  injuries_sustained: z.string().max(2000).optional(),
+  medical_treatment: z.string().max(2000).optional(),
+  at_fault_party: z.string().max(500).optional(),
+  gave_recorded_statement: z.string().max(50).optional(),
+  lost_income: z.string().max(1000).optional(),
+  police_report: z.string().max(500).optional(),
+  // Cross-cutting.
+  deadline_pressure: z.string().max(1000).optional(),
+  documents_available: z.string().max(1000).optional(),
+  desired_outcome: z.string().max(1000).optional(),
+  counsel_situation: z.string().max(1000).optional(),
+  call_id: z.string().min(1).optional(),
+  // The consultation this intake was booked around, when the call produced one.
+  // Injected by the AGENT RUNTIME from the call-outcome tracker — the model
+  // never holds a UUID.
+  appointment_id: z.string().uuid().optional(),
+});
+
 // attach-meeting-notes — append the caller's own context to a booked appointment. The
 // meeting-goals rung asks one light wrap-up question ("anything you'd like the owner to
 // know before the meeting?"); this is where the answer lands. appointment_id is injected

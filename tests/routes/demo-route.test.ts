@@ -18,7 +18,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 
 import { registerDemoRoutes, resetDemoRateLimitForTesting } from '../../src/routes/demo';
-import { generateToken as realGenerateToken } from '../../src/middleware';
+import { generateToken as realGenerateToken } from '../../src/middleware/fastify-middleware';
 import jwt from 'jsonwebtoken';
 import { jsonContentTypeParser } from '../../src/jsonContentTypeParser';
 

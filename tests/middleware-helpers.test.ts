@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { type Client } from 'pg';
 import type { FastifyReply } from 'fastify';
-import type { AppRequest } from '../src/middleware';
+import type { AppRequest } from '../src/middleware/fastify-middleware';
 import {
   getRootClient,
   clearDB,
@@ -46,7 +46,7 @@ describe('Middleware Helpers', () => {
     it('executes query and releases connection', async () => {
       if (!dbAvailable) return;
       const { Pool } = await import('pg');
-      const { withPoolClient } = await import('../src/middleware');
+      const { withPoolClient } = await import('../src/middleware/fastify-middleware');
 
       const pool = new Pool({
         user: 'postgres',
@@ -69,7 +69,7 @@ describe('Middleware Helpers', () => {
     it('releases connection even on error', async () => {
       if (!dbAvailable) return;
       const { Pool } = await import('pg');
-      const { withPoolClient } = await import('../src/middleware');
+      const { withPoolClient } = await import('../src/middleware/fastify-middleware');
 
       const pool = new Pool({
         user: 'postgres',
@@ -99,7 +99,7 @@ describe('Middleware Helpers', () => {
 
   describe('requireTenantId', () => {
     it('returns tenantId from req.tenantId', async () => {
-      const { requireTenantId } = await import('../src/middleware');
+      const { requireTenantId } = await import('../src/middleware/fastify-middleware');
 
       const req = { tenantId: 'abc-123' } as unknown as AppRequest;
       const reply = { status: () => ({ send: () => {} }) } as unknown as FastifyReply;
@@ -115,7 +115,7 @@ describe('Middleware Helpers', () => {
       // anonymous-tenant hole. requireTenantId must trust ONLY req.tenantId.
       // auth is present here so we isolate the "body ignored" behavior from
       // the unauthenticated-401 branch.
-      const { requireTenantId } = await import('../src/middleware');
+      const { requireTenantId } = await import('../src/middleware/fastify-middleware');
 
       const req = {
         auth: { tenant_id: 'def-456', user_id: 'u', email: 'e' },
@@ -135,7 +135,7 @@ describe('Middleware Helpers', () => {
     });
 
     it('prefers req.tenantId over body', async () => {
-      const { requireTenantId } = await import('../src/middleware');
+      const { requireTenantId } = await import('../src/middleware/fastify-middleware');
 
       const req = {
         tenantId: 'from-query',
@@ -151,7 +151,7 @@ describe('Middleware Helpers', () => {
       // 2026-05-21: with no authenticated session the real failure is
       // authentication, not a missing field — say 401, not the misleading
       // 400 the route used to return.
-      const { requireTenantId } = await import('../src/middleware');
+      const { requireTenantId } = await import('../src/middleware/fastify-middleware');
 
       let sentStatus = 0;
       let sentBody: { error: string } | null = null;
@@ -177,7 +177,7 @@ describe('Middleware Helpers', () => {
       // The 400 path still exists — but only for an authenticated caller
       // whose request somehow carries no validated tenant. That is a genuine
       // bad-request, distinct from the unauthenticated 401 above.
-      const { requireTenantId } = await import('../src/middleware');
+      const { requireTenantId } = await import('../src/middleware/fastify-middleware');
 
       let sentStatus = 0;
       let sentBody: { error: string } | null = null;
@@ -205,7 +205,7 @@ describe('Middleware Helpers', () => {
 
   describe('requireTenantId — error message quality', () => {
     it('error response includes actionable message', async () => {
-      const { requireTenantId } = await import('../src/middleware');
+      const { requireTenantId } = await import('../src/middleware/fastify-middleware');
 
       let sentBody: { error: string } | null = null;
       // Authed-but-no-tenant so we exercise the 400 message branch (the
@@ -228,7 +228,7 @@ describe('Middleware Helpers', () => {
     });
 
     it('handles undefined body gracefully (no crash; 401 unauthenticated)', async () => {
-      const { requireTenantId } = await import('../src/middleware');
+      const { requireTenantId } = await import('../src/middleware/fastify-middleware');
 
       let sentStatus = 0;
       const req = { body: undefined } as unknown as AppRequest;
@@ -249,7 +249,7 @@ describe('Middleware Helpers', () => {
     it('propagates database query errors with original message', async () => {
       if (!dbAvailable) return;
       const { Pool } = await import('pg');
-      const { withPoolClient } = await import('../src/middleware');
+      const { withPoolClient } = await import('../src/middleware/fastify-middleware');
 
       const pool = new Pool({
         user: 'postgres',
@@ -273,7 +273,7 @@ describe('Middleware Helpers', () => {
     it('pool remains usable after query error', async () => {
       if (!dbAvailable) return;
       const { Pool } = await import('pg');
-      const { withPoolClient } = await import('../src/middleware');
+      const { withPoolClient } = await import('../src/middleware/fastify-middleware');
 
       const pool = new Pool({
         user: 'postgres',

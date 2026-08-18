@@ -217,7 +217,7 @@ describe('send path writes history (provider mocked, real DB)', () => {
         reminderHours: [],
         contactInfo: { phone: '+15551234567' },
       }),
-    }) as unknown as TenantConfigService;
+    });
 
   it('HAPPY: SMSService.sendSMS records an sms history row', async () => {
     // WHO: SMSService.sendSMS on the success path (consent omitted → allowed)
@@ -292,7 +292,7 @@ describe('send-FAILURE path records a failed row (drill-down data source)', () =
         reminderHours: [],
         contactInfo: { phone: '+15551234567' },
       }),
-    }) as unknown as TenantConfigService;
+    });
 
   afterEach(() => {
     vi.restoreAllMocks();

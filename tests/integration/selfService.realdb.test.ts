@@ -78,7 +78,7 @@ beforeAll(async () => {
     const withTenantClient = createWithTenantClient(pool);
     registerSelfServiceRoutes(
       app,
-      withTenantClient as <T>(id: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+      withTenantClient
     );
     await app.ready();
 

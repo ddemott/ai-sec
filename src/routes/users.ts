@@ -15,7 +15,7 @@ import {
   requireTenantId,
   type AppRequest,
   type UserRole,
-} from '../middleware';
+} from '../middleware/fastify-middleware';
 import { sendUserInviteEmail } from '../services/communications/systemEmail';
 import { errorsTotal } from '../services/metrics';
 import { assertRowAffected } from './routeHelpers';

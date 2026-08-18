@@ -81,10 +81,7 @@ export function createTransferExecutor(
       // of its own, so a carrier that never answers would hang the turn forever.
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error('transfer_timeout')),
-          TRANSFER_TIMEOUT_MS
-        );
+        timer = setTimeout(() => reject(new Error('transfer_timeout')), TRANSFER_TIMEOUT_MS);
       });
       try {
         await Promise.race([

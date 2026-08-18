@@ -181,7 +181,10 @@ describe('MeetingContextTask — template dispatch', () => {
     const tool = (task.toolCtx as Record<string, unknown>).take_message as {
       execute: (a: unknown, c: unknown) => Promise<unknown>;
     };
-    await tool.execute({ message: 'have Dale call me about the role' }, { ctx: {}, toolCallId: 'tc' });
+    await tool.execute(
+      { message: 'have Dale call me about the role' },
+      { ctx: {}, toolCallId: 'tc' }
+    );
     expect(task.done, 'a real message_id ends the rung').toBe(true);
     expect(onMessageTaken).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'msg-77' }));
     expect(captureCalled, 'no job row when the caller bailed to a message').not.toHaveBeenCalled();

@@ -55,7 +55,7 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 26 expected tool names', () => {
+  it('HAPPY: exposes exactly the 27 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
@@ -74,6 +74,9 @@ describe('buildTools', () => {
         'book_with_scheduling',
         'cancel_appointment',
         'capture_job_inquiry',
+        // Law-firm vertical: a prospective client's matter, captured for an
+        // attorney's take-or-decline review (case_intake tree).
+        'capture_case_inquiry',
         'check_availability',
         'find_caller_by_name',
         'get_available_slots',
@@ -111,6 +114,7 @@ describe('buildTools', () => {
     expect(Object.keys(tools).sort()).toEqual(
       [
         'capture_job_inquiry',
+        'capture_case_inquiry',
         'get_company_policy_answer',
         'page_owner_via_sms',
         'take_message',

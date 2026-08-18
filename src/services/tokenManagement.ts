@@ -177,12 +177,7 @@ export async function getIntegrationTokens(
  * These values are stored in record_versions.change_source
  */
 export type ChangeSource =
-  | 'local'
-  | 'square'
-  | 'voice_call'
-  | 'system'
-  | 'google_calendar'
-  | 'outlook_calendar';
+  'local' | 'square' | 'voice_call' | 'system' | 'google_calendar' | 'outlook_calendar';
 
 /**
  * Sets PostgreSQL session variables for version tracking.

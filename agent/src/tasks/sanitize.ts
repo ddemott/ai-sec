@@ -8,19 +8,12 @@
  * Leaf module on purpose: both callPlan (state write) and identityTask (interpolation
  * site) use it, and those two already import each other's neighbors.
  */
-export function sanitizeVolunteered(
-  value: string | undefined,
-  maxLen: number
-): string | undefined {
+export function sanitizeVolunteered(value: string | undefined, maxLen: number): string | undefined {
   if (!value) return undefined;
   const withoutControls = Array.from(value, (ch) => {
     const code = ch.charCodeAt(0);
     return code <= 0x1f || code === 0x7f ? ' ' : ch;
   }).join('');
-  const flat = withoutControls
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, maxLen)
-    .trim();
+  const flat = withoutControls.replace(/\s+/g, ' ').trim().slice(0, maxLen).trim();
   return flat.length > 0 ? flat : undefined;
 }

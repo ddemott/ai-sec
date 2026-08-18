@@ -69,7 +69,7 @@ export const TOOL_FALLBACK_LINE =
  * nothing to grab. It promises no transfer, since there is none.
  */
 export const CALLER_CHECK_IN_LINE =
-  "Are you still there? I can take a message or set up a time — whichever is easier.";
+  'Are you still there? I can take a message or set up a time — whichever is easier.';
 
 /** Spoken as the call ends after the caller never answered the check-in. */
 export const CALLER_SILENCE_GOODBYE =

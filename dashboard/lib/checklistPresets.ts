@@ -13,6 +13,7 @@ export const CHECKLIST_PRESET_IDS = [
   'salon_front_desk',
   'local_service_front_desk',
   'owner_for_hire_front_desk',
+  'law_firm_front_desk',
 ] as const satisfies readonly ChecklistPresetId[];
 
 export const CHECKLIST_PRESET_LABELS: Record<ChecklistPresetId, string> = {
@@ -20,6 +21,7 @@ export const CHECKLIST_PRESET_LABELS: Record<ChecklistPresetId, string> = {
   salon_front_desk: 'Salon front desk',
   local_service_front_desk: 'Local service front desk',
   owner_for_hire_front_desk: 'Owner for hire (takes work offers)',
+  law_firm_front_desk: 'Law firm front desk (case intake)',
 };
 
 export const CONVERSATION_BLOCK_LABELS: Record<string, string> = {
@@ -32,6 +34,7 @@ export const CONVERSATION_BLOCK_LABELS: Record<string, string> = {
   buy_service: 'Qualify a buyer / demo',
   job: 'Job inquiry',
   fix_computer: 'Computer repair intake',
+  case_intake: 'Legal case intake',
 };
 
 export function checklistPresetLabel(presetId: string | null | undefined): string {

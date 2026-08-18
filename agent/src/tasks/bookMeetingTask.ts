@@ -123,8 +123,7 @@ export function makeBookMeetingRung(
       try {
         const parsed = JSON.parse(text) as { success?: boolean; error?: unknown };
         failed =
-          parsed.success === false ||
-          (typeof parsed.error === 'string' && parsed.success !== true);
+          parsed.success === false || (typeof parsed.error === 'string' && parsed.success !== true);
       } catch {
         failed = false;
       }

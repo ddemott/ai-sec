@@ -92,7 +92,13 @@ export async function startBrowserCallerSession(
 ): Promise<BrowserCallerSession> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   if (args.tenantId) env.SIM_TENANT = args.tenantId;
-  if (args.agentName) env.AGENT_NAME = args.agentName;
+  // sim-call.mjs defaults AGENT_NAME to 'secretary-hq-agent' — the SAME name
+  // Railway's prod worker registers under. Leaving this unset here dispatches
+  // a "local" test call onto the real prod agent/backend/DB with no local
+  // worker involved at all (found 2026-08-16: zero local voice_sessions rows
+  // after a call that worked end-to-end, because it never touched local
+  // infra). Default to the dev worker name so a blank field means local.
+  env.AGENT_NAME = args.agentName || 'secretary-hq-agent-dev';
 
   const { stdout } = await runner(resolveSimCallScriptPath(), env);
   return parseSimCallOutput(stdout);

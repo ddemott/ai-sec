@@ -8,7 +8,13 @@ import type { Pool } from 'pg';
 import type { FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../types/fastify';
 import Stripe from 'stripe';
-import { withHandler, logEvent, logError, requireTenantId, type AppRequest } from '../middleware';
+import {
+  withHandler,
+  logEvent,
+  logError,
+  requireTenantId,
+  type AppRequest,
+} from '../middleware/fastify-middleware';
 import { computeUsageStatements } from '../services/billingUsage';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
@@ -140,7 +146,7 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
           throw new Error('Raw body not available — ensure Fastify rawBody is configured');
         }
         const bodyStr = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
-        event = stripe.webhooks.constructEvent(bodyStr, sig as string, STRIPE_WEBHOOK_SECRET);
+        event = stripe.webhooks.constructEvent(bodyStr, sig, STRIPE_WEBHOOK_SECRET);
       } catch (err) {
         logError(req, 'stripe_webhook_signature_failed', err);
         return reply.status(400).send({ success: false, error: 'Invalid webhook signature' });

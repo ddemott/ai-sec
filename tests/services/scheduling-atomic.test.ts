@@ -14,6 +14,21 @@ import {
   skipIfDbDown,
 } from '../utils';
 
+/**
+ * The tuning target for `book_with_scheduling_atomic` on a quiet local DB.
+ * Asserted ONLY under `PERF_ASSERT=1` — see the comment at its use site. Run
+ * `PERF_ASSERT=1 npx vitest run tests/services/scheduling-atomic.test.ts` when
+ * you are actually working on the RPC's speed.
+ */
+const PERF_BUDGET_MS = 50;
+
+/**
+ * The always-on ceiling. Loose by design: it exists to catch a pathological
+ * regression (a dropped index, an accidental N+1, a lock wait), not to measure
+ * how busy the machine is. Anything under this is "not broken", not "fast".
+ */
+const PERF_SANITY_CEILING_MS = 2000;
+
 let root: Client;
 let dbAvailable = false;
 beforeEach((ctx) => skipIfDbDown(ctx, () => dbAvailable));
@@ -408,9 +423,23 @@ describe('book_with_scheduling_atomic()', () => {
       );
       console.log(`     Times: [${times.map((t) => t.toFixed(1) + 'ms').join(', ')}]`);
 
-      // Should complete in under 50ms on local DB
-      // Remote Supabase will be slower (network) but still under 100ms
-      expect(avg).toBeLessThan(50);
+      // A BENCHMARK, NOT A CORRECTNESS TEST — see PERF_BUDGET_MS.
+      //
+      // This asserted `avg < 50` unconditionally, which is a statement about
+      // the MACHINE, not the code: on 2026-08-15 this file was the one red file
+      // in an otherwise green backend suite, purely because the box was busy
+      // running the call sims at the same time. It passed on the next quiet
+      // run. A shared CI runner will do that whenever something else is
+      // building, and a suite that goes red for reasons unrelated to the change
+      // teaches people to re-run instead of read.
+      //
+      // The measurement above is genuinely useful and still always prints. The
+      // tight budget is now opt-in (PERF_ASSERT=1) for when someone is actually
+      // tuning the RPC; the always-on ceiling is deliberately loose and exists
+      // only to catch a pathological regression — a missing index, a lost
+      // prepared statement, an accidental N+1 — not a slow afternoon.
+      if (process.env.PERF_ASSERT === '1') expect(avg).toBeLessThan(PERF_BUDGET_MS);
+      expect(avg).toBeLessThan(PERF_SANITY_CEILING_MS);
     });
 
     it('compare: old 4-query approach timing', async () => {
@@ -497,9 +526,20 @@ describe('book_with_scheduling_atomic()', () => {
       );
       console.log(`  ⏱  Speedup: ${(oldAvg / newAvg).toFixed(1)}x faster`);
 
-      // Atomic should be faster (fewer round trips)
-      // On local DB the difference is small; on remote DB it's dramatic
-      expect(newAvg).toBeLessThan(100);
+      // THE TEST IS CALLED "compare" AND NEVER COMPARED. It asserted an
+      // absolute `newAvg < 100`, which says nothing about the claim in its own
+      // comment ("atomic should be faster") and everything about how busy the
+      // machine is — it was one of the two failures in the 2026-08-15 loaded
+      // run. Now it asserts the actual claim, as a RATIO, which is what
+      // survives a slow box: both halves slow down together.
+      //
+      // The bound is generous on purpose. On a local DB the two approaches are
+      // genuinely close (the win is round trips, and localhost round trips are
+      // nearly free), so the honest guard is "the atomic path must not become
+      // dramatically WORSE", not "it must always win by X".
+      expect(newAvg).toBeLessThan(oldAvg * 2);
+      if (process.env.PERF_ASSERT === '1') expect(newAvg).toBeLessThan(oldAvg);
+      expect(newAvg).toBeLessThan(PERF_SANITY_CEILING_MS);
     });
   });
 

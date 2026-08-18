@@ -195,7 +195,8 @@ export const CLOSER_WITH_TRANSFER =
  *  effect (default or a tenant's custom `greetingCloser`) when a transfer number
  *  is configured. Kept separate so a custom closer still gets the representative
  *  option. */
-const TRANSFER_PREFIX = 'If you\'d rather speak with a person, just say "representative." Otherwise, ';
+const TRANSFER_PREFIX =
+  'If you\'d rather speak with a person, just say "representative." Otherwise, ';
 
 /**
  * Build the tenant-controlled opener.

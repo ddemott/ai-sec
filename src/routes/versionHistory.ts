@@ -17,7 +17,12 @@
 
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import {
+  withHandler,
+  logEvent,
+  requireTenantId,
+  type AppRequest,
+} from '../middleware/fastify-middleware';
 import type {
   RecordVersion,
   RecordHistoryResponse,
@@ -494,7 +499,7 @@ export function registerVersionHistoryRoutes(
         return {
           records: result.rows,
           total,
-        } as DeletedRecordsResponse;
+        };
       });
 
       return reply.send(response);
@@ -651,7 +656,7 @@ export function registerVersionHistoryRoutes(
         return {
           changes: result.rows,
           total,
-        } as RecentChangesResponse;
+        };
       });
 
       return reply.send(response);

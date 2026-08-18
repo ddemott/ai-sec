@@ -14,7 +14,7 @@ import {
   requireTenantId,
   withPoolClient,
   type AppRequest,
-} from '../middleware';
+} from '../middleware/fastify-middleware';
 import { syncAppointmentToAll, syncCustomerToAll } from '../services/syncOrchestrator';
 import { assertRowAffected } from './routeHelpers';
 import { parseCsv, CsvParseError } from '../services/csv';

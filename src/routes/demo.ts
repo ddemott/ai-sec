@@ -16,8 +16,8 @@
 
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool } from 'pg';
-import type { UserRole } from '../middleware';
-import { withHandler } from '../middleware';
+import type { UserRole } from '../middleware/fastify-middleware';
+import { withHandler } from '../middleware/fastify-middleware';
 import { seedDemoTenant } from '../services/demoSeed';
 
 // Per-IP burst limit for demo provisioning.
@@ -152,7 +152,7 @@ export function registerDemoRoutes(
           tenant_id: tenantId,
           user_id: userId,
           email: 'demo@quicklubedemo.invalid',
-          role: 'owner' as UserRole,
+          role: 'owner',
         },
         ttlSeconds
       );

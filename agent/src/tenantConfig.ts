@@ -8,8 +8,9 @@
  * the call fail. Going silent on a caller is worse than greeting them
  * with "this business" in the default zone.
  */
-import { tenantRuntimeConfigSchema } from './checklist/blockSchemas.js';
+import { questionTreeLibrarySchema, tenantRuntimeConfigSchema } from './checklist/blockSchemas.js';
 import type { TenantRuntimeConfig } from './checklist/blockTypes.js';
+import type { QuestionTreeDef } from './checklist/types.js';
 import type { ToolsClient } from './toolsClient.js';
 
 export interface TenantDisplayConfig {
@@ -138,6 +139,21 @@ export interface TenantDisplayConfig {
    * platform library, which is the pre-preset behavior).
    */
   checklistRuntimeConfig: TenantRuntimeConfig | null;
+  /**
+   * THIS TENANT'S OWN QUESTION TREES, read from the database.
+   *
+   * NULL when the backend sent none — an older backend, or a tenant that has
+   * not been provisioned with a copy yet. Null means "use the platform
+   * TypeScript library", which is what every call did before per-tenant trees
+   * existed, so a tenant without rows behaves exactly as it always has.
+   *
+   * Validated structurally before it is trusted: this arrives over HTTP and is
+   * handed straight to the tracker, so a malformed tree would be a mid-call
+   * crash rather than a config problem. Anything that fails validation is
+   * discarded WHOLE — a half-accepted library would be worse than the fallback,
+   * because the missing half would be invisible.
+   */
+  questionTrees: QuestionTreeDef[] | null;
 }
 
 export const TENANT_FALLBACK: TenantDisplayConfig = {
@@ -165,12 +181,31 @@ export const TENANT_FALLBACK: TenantDisplayConfig = {
   bookableThrough: null,
   staffFirstNames: [],
   checklistRuntimeConfig: null,
+  // Fallback tenant: no rows, so the platform library governs — the same
+  // behaviour as before per-tenant trees existed.
+  questionTrees: null,
 };
 
 /** Narrow the tenant-config wire field. Bad/missing → null, never throw. */
 export function parseChecklistRuntimeConfig(raw: unknown): TenantRuntimeConfig | null {
   const parsed = tenantRuntimeConfigSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
+}
+
+/**
+ * The tenant's own question trees, or null to fall back to the platform library.
+ *
+ * ALL-OR-NOTHING ON PURPOSE. A partially-valid library is the dangerous case:
+ * the call would run with some of the tenant's questions silently missing, the
+ * checklist would look complete, and the goodbye gate would happily close a call
+ * that never asked what it was supposed to ask. Falling back to the platform
+ * library is a KNOWN state; a half-library is an unknown one. An empty array is
+ * likewise treated as "no rows yet", not "a business that asks nothing".
+ */
+export function parseQuestionTrees(raw: unknown): QuestionTreeDef[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const parsed = questionTreeLibrarySchema.safeParse(raw);
+  return parsed.success ? (parsed.data as QuestionTreeDef[]) : null;
 }
 
 export async function fetchTenantConfig(
@@ -204,6 +239,7 @@ export async function fetchTenantConfig(
     bookable_through?: string | null;
     staff_first_names?: string[] | null;
     checklist_runtime_config?: unknown;
+    question_trees?: unknown;
   }>('/agent-tools/tenant-config', { tenant_id: tenantId });
   if (res.ok && res.result?.name && res.result?.timezone) {
     return {
@@ -241,6 +277,7 @@ export async function fetchTenantConfig(
           )
         : [],
       checklistRuntimeConfig: parseChecklistRuntimeConfig(res.result.checklist_runtime_config),
+      questionTrees: parseQuestionTrees(res.result.question_trees),
     };
   }
   return TENANT_FALLBACK;

@@ -147,3 +147,19 @@ describe('LandingPage auth redirect', () => {
     expect(document.getElementById('billing-annual')).toBeNull();
   });
 });
+
+describe('LandingPage legal footer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    document.body.innerHTML = '';
+  });
+
+  it('points Privacy, Terms, and DPA at public routes — not login', async () => {
+    await renderLanding();
+    expect(document.querySelector('footer a[href="/privacy"]')).toBeTruthy();
+    expect(document.querySelector('footer a[href="/terms"]')).toBeTruthy();
+    expect(document.querySelector('footer a[href="/dpa"]')).toBeTruthy();
+  });
+});
+

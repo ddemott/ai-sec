@@ -20,7 +20,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
-import { registerJwtAuthHook } from '../../src/middleware';
+import { registerJwtAuthHook } from '../../src/middleware/fastify-middleware';
 import { skipIfDbDown } from '../utils';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;

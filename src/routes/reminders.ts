@@ -18,7 +18,7 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
+import { withHandler, requireTenantId, type AppRequest } from '../middleware/fastify-middleware';
 import { createDatabaseService } from '../database/index.js';
 import { ReminderService } from '../services/reminders/index.js';
 import { createTenantConfigService } from '../services/tenants/index.js';

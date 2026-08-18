@@ -50,7 +50,7 @@ flowchart TB
   Fastify["Fastify Backend<br/>29 route modules + agentTools dir<br/>secretary-hq-production.up.railway.app<br/>(Railway + Nixpacks, Node 22)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
-  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>180 migrations")]
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>182 migrations")]
   Stripe["Stripe"]
   Integrations["Google / Outlook calendars<br/>+ Square CRM"]
   Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
@@ -703,7 +703,7 @@ flowchart TB
 
 | Idea | Where | Why |
 |---|---|---|
-| Questions are DATA, not prose | `checklist/trees.ts` | 8 trees; a call's checklist is the MERGE of the trees its purpose selects |
+| Questions are DATA, not prose | `checklist/trees.ts` | 9 trees; a call's checklist is the MERGE of the trees its purpose selects, and the tenant's PRESET decides which trees are selectable at all |
 | Host code owns state | `checklist/tracker.ts` | the model is never trusted to remember what is done |
 | Actions complete on a real id | `wrapAction` | "booked" cannot be said into existence |
 | The goodbye gate | `tracker.isResolved()` | replaced book-first sequencing — a stated goal can't be forgotten because the call can't END on it |

@@ -392,7 +392,7 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
             args.tenant_id,
             normalized,
             args.name ?? null,
-            PLACEHOLDER_NAMES as unknown as string[],
+            PLACEHOLDER_NAMES,
             args.is_correction === true && Boolean(args.name),
           ]
         );

@@ -94,10 +94,17 @@ if (!JOIN_FIRST) {
   process.exit(0);
 }
 
-console.log('  Waiting up to 3 minutes for you to join...');
+// How long to hold the room open for a human to click Join. Default 3 minutes;
+// override with SIM_CALL_JOIN_WAIT_MS. Made configurable 2026-08-15 after two
+// test sessions were lost to it — the tester was still reading the instructions
+// when the window closed, and a lapsed room reads like a broken agent.
+const JOIN_WAIT_MS = Number(process.env.SIM_CALL_JOIN_WAIT_MS) || 180_000;
+const JOIN_WAIT_LABEL = `${Math.round(JOIN_WAIT_MS / 60_000)} minute(s)`;
+
+console.log(`  Waiting up to ${JOIN_WAIT_LABEL} for you to join...`);
 console.log('');
 
-const humanDeadline = Date.now() + 180_000;
+const humanDeadline = Date.now() + JOIN_WAIT_MS;
 let human = null;
 while (Date.now() < humanDeadline) {
   const participants = await rooms.listParticipants(room).catch(() => []);
@@ -107,7 +114,7 @@ while (Date.now() < humanDeadline) {
 }
 
 if (!human) {
-  console.error('  Nobody joined in 3 minutes. Room closed. Ask for a new URL.');
+  console.error(`  Nobody joined in ${JOIN_WAIT_LABEL}. Room closed. Ask for a new URL.`);
   await rooms.deleteRoom(room).catch(() => {});
   process.exit(1);
 }

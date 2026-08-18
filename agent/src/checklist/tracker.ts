@@ -376,9 +376,27 @@ export class ChecklistTracker {
       );
     }
     if (def.type === 'choice' && !(value in def.options)) {
+      // THIS MESSAGE TAUGHT THE MODEL TO SAY "answering_service" OUT LOUD.
+      //
+      // 2026-08-15 sim (BUY THE SERVICE): the caller said "calls go to an
+      // answering service", the model recorded "answering service", this
+      // refusal listed the raw tokens — and its very next spoken sentence was
+      // "Just to be sure, would you say your calls go to an answering_service?"
+      // Underscore and all. That is precisely the 2026-07-21 live-call defect
+      // the prompt has forbidden ever since ("record them exactly, but NEVER
+      // speak them"), reproduced here by the host handing the model a list of
+      // internal tokens at the exact moment it was composing a question.
+      //
+      // The tokens still have to appear — they are what must be recorded — so
+      // the fix is to say plainly, in the same breath, that they are not words
+      // for a caller, and to show the spoken form next to each one.
+      const spoken = Object.keys(def.options)
+        .map((key) => `${key} (say "${key.replace(/_/g, ' ')}")`)
+        .join(', ');
       throw new RecordError(
-        `"${value}" is not an option for "${nodeId}". The options are exactly: ` +
-          `${Object.keys(def.options).join(', ')}. Ask a clarifying question, then record one of those.`
+        `"${value}" is not an option for "${nodeId}". The options are exactly: ${spoken}. ` +
+          `Those ids are INTERNAL — record one of them verbatim, but NEVER say one to the ` +
+          `caller: ask in ordinary words and map their answer yourself.`
       );
     }
 
@@ -567,28 +585,40 @@ export class ChecklistTracker {
    */
   isResolved(): boolean {
     if (!this.hasSelection()) return false;
-    return this.#selectedWalk().every((nodeId) => {
-      const status = this.status(nodeId);
-      // Required nodes stay open until answered. Decline is recorded only when
-      // the field is not required — record() refuses declined:true here, and
-      // this check is the backstop if state is ever forced.
-      if (this.#required.has(nodeId) && status !== 'answered' && status !== 'not_applicable') {
-        const def = this.#entries.get(nodeId)?.def;
-        if (status === 'latent' && def?.type === 'text' && def.listen === true) {
-          return true;
-        }
-        if (status === 'done' || status === 'unselected') return true;
-        return false;
-      }
-      if (RESOLVED_STATUSES.has(status)) return true;
-      // A LISTEN-ONLY node never holds the door shut. It was never asked, so a
-      // caller cannot answer it, so waiting on it would mean waiting forever —
-      // exactly the shape of the wrong-tree deadlock that stranded a caller on
-      // dead air (2026-07-22). Latent-under-a-choice nodes still gate normally:
-      // their parent choice is the real open question.
+    return this.unresolvedNodeIds().length === 0;
+  }
+
+  /**
+   * The nodes `isResolved()` is currently waiting on — the gate's own reason,
+   * in a form a log can carry. Exists so a released or stuck goodbye can be
+   * diagnosed from prod logs without reconstructing the walk by hand.
+   */
+  unresolvedNodeIds(): NodeId[] {
+    if (!this.hasSelection()) return [];
+    return this.#selectedWalk().filter((nodeId) => !this.#isNodeResolved(nodeId));
+  }
+
+  #isNodeResolved(nodeId: NodeId): boolean {
+    const status = this.status(nodeId);
+    // Required nodes stay open until answered. Decline is recorded only when
+    // the field is not required — record() refuses declined:true here, and
+    // this check is the backstop if state is ever forced.
+    if (this.#required.has(nodeId) && status !== 'answered' && status !== 'not_applicable') {
       const def = this.#entries.get(nodeId)?.def;
-      return status === 'latent' && def?.type === 'text' && def.listen === true;
-    });
+      if (status === 'latent' && def?.type === 'text' && def.listen === true) {
+        return true;
+      }
+      if (status === 'done' || status === 'unselected') return true;
+      return false;
+    }
+    if (RESOLVED_STATUSES.has(status)) return true;
+    // A LISTEN-ONLY node never holds the door shut. It was never asked, so a
+    // caller cannot answer it, so waiting on it would mean waiting forever —
+    // exactly the shape of the wrong-tree deadlock that stranded a caller on
+    // dead air (2026-07-22). Latent-under-a-choice nodes still gate normally:
+    // their parent choice is the real open question.
+    const def = this.#entries.get(nodeId)?.def;
+    return status === 'latent' && def?.type === 'text' && def.listen === true;
   }
 
   /** Full node → state view, for tests, logs, and the eventual dashboard view. */

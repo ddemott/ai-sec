@@ -38,6 +38,7 @@ export default function RegisterPage() {
   const [templates, setTemplates] = useState<BusinessTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agreedToLegal, setAgreedToLegal] = useState(false);
 
   // Populate the business-type picker from the public templates endpoint —
   // same source TenantCreateForm uses, so the values match what the backend
@@ -339,9 +340,36 @@ export default function RegisterPage() {
               </p>
             </div>
 
+            <label className="flex items-start gap-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <input
+                id="reg-agree"
+                type="checkbox"
+                required
+                checked={agreedToLegal}
+                onChange={(e) => setAgreedToLegal(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                I am authorized to set up Secretary HQ for this business. I agree to the{' '}
+                <a href="/terms" className="underline" style={{ color: 'var(--accent-soft)' }}>
+                  Terms of Service
+                </a>
+                ,{' '}
+                <a href="/privacy" className="underline" style={{ color: 'var(--accent-soft)' }}>
+                  Privacy Policy
+                </a>
+                , and{' '}
+                <a href="/dpa" className="underline" style={{ color: 'var(--accent-soft)' }}>
+                  Data Protection Addendum
+                </a>
+                . I understand an AI assistant answers calls on my behalf and I am responsible for
+                informing my callers as required by law.
+              </span>
+            </label>
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !agreedToLegal}
               className="w-full py-4 text-white rounded-xl font-bold text-sm shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center"
               style={{ backgroundColor: 'var(--accent)' }}
             >

@@ -43,7 +43,7 @@ function buildApp() {
   mockClient = created.mockClient;
   queryResponses = created.queryResponses;
 
-  mockPool = createMockPool(mockClient) as unknown as Pool;
+  mockPool = createMockPool(mockClient);
   const mockWithTenantClient = createMockWithTenantClient(mockClient);
 
   const fastify = Fastify({ logger: false });
@@ -77,10 +77,7 @@ function buildApp() {
   registerSquareRoutes(
     fastify,
     mockPool,
-    mockWithTenantClient as unknown as <T>(
-      tenantId: string,
-      fn: (client: PoolClient) => Promise<T>
-    ) => Promise<T>
+    mockWithTenantClient
   );
 
   return fastify;

@@ -174,9 +174,9 @@ describe('renderedHasCallerTurn — the string-level twin used by the enrichers'
       false
     );
     expect(renderedHasCallerTurn(`Assistant [0:00]: ${GREETING}`)).toBe(false);
-    expect(
-      renderedHasCallerTurn(`Assistant [0:00]: ${GREETING}\nCaller [0:09]: Hi there.`)
-    ).toBe(true);
+    expect(renderedHasCallerTurn(`Assistant [0:00]: ${GREETING}\nCaller [0:09]: Hi there.`)).toBe(
+      true
+    );
   });
 
   it('still matches the PRE-timestamp format — historical rows run through this too', () => {
@@ -189,5 +189,61 @@ describe('renderedHasCallerTurn — the string-level twin used by the enrichers'
   it('null / empty is not a caller turn', () => {
     expect(renderedHasCallerTurn(null)).toBe(false);
     expect(renderedHasCallerTurn('')).toBe(false);
+  });
+});
+
+describe('markLastAssistantUnheard', () => {
+  it('HAPPY: marks the last assistant line and renders the warning in its label', () => {
+    // WHO: a caller on sim-call-1786817155950, 2026-08-15.
+    // WHAT: TTS accepted the turn and emitted zero audio frames, so the text
+    //       reached the transcript and never reached the caller.
+    // WHEN: the silent-turn recovery fires.
+    // WHERE: agent/src/transcript.ts, called from index.ts.
+    // WHY: the record said the agent read the phone number back; the caller's
+    //      next words were "You just didn't say anything." A call record that
+    //      shows speech nobody heard sends the owner looking for the wrong bug.
+    const t = new TranscriptRecorder(Date.now());
+    t.add('assistant', 'What is the best number to reach you at?');
+    t.add('user', '608 111 8652');
+    t.add('assistant', "That's 6 0 8, 1 1 1, 8 6 5 2, correct?");
+
+    expect(t.markLastAssistantUnheard()).toBe(true);
+
+    const rendered = t.render() ?? '';
+    expect(rendered).toContain('Assistant (NOT HEARD — no audio reached the caller)');
+    expect(rendered).toContain("That's 6 0 8, 1 1 1, 8 6 5 2, correct?");
+    // The EARLIER assistant line was heard and must stay unmarked.
+    expect(rendered).toContain('Assistant [0:00]: What is the best number');
+  });
+
+  it('walks back past the caller’s turns — they were real, the agent’s was not', () => {
+    // The caller usually speaks into the silence ("Hello? Are you there?")
+    // before the recovery fires, so the LAST line is often theirs.
+    const t = new TranscriptRecorder(Date.now());
+    t.add('assistant', 'Thanks, Bob.');
+    t.add('user', 'Hello? Are you there?');
+
+    expect(t.markLastAssistantUnheard()).toBe(true);
+
+    const rendered = t.render() ?? '';
+    expect(rendered).toContain('Assistant (NOT HEARD');
+    expect(rendered).toContain('Caller [0:00]: Hello? Are you there?');
+    expect(rendered).not.toContain('Caller (NOT HEARD');
+  });
+
+  it('SAD: returns false when there is no assistant turn to mark, and when already marked', () => {
+    // WHY: "marked it" and "there was nothing to mark" are different facts, and
+    //      a caller that cannot tell them apart will log the wrong one.
+    const empty = new TranscriptRecorder(Date.now());
+    expect(empty.markLastAssistantUnheard()).toBe(false);
+
+    const callerOnly = new TranscriptRecorder(Date.now());
+    callerOnly.add('user', 'Hello?');
+    expect(callerOnly.markLastAssistantUnheard()).toBe(false);
+
+    const once = new TranscriptRecorder(Date.now());
+    once.add('assistant', 'Thanks, Bob.');
+    expect(once.markLastAssistantUnheard()).toBe(true);
+    expect(once.markLastAssistantUnheard()).toBe(false);
   });
 });

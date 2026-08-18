@@ -14,7 +14,7 @@ import {
   requireTenantId,
   withPoolClient,
   type AppRequest,
-} from '../middleware';
+} from '../middleware/fastify-middleware';
 import { syncAppointmentToAll } from '../services/syncOrchestrator';
 import {
   scheduleRemindersForAppointment,

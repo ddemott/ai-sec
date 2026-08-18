@@ -10,7 +10,12 @@
  */
 import { describe, it, expect } from 'vitest';
 import { llm } from '@livekit/agents';
-import { buildChecklistPrompt, ChecklistAgent, STALL_TURN_LIMIT } from './checklistAgent.js';
+import {
+  buildChecklistPrompt,
+  ChecklistAgent,
+  STALL_TURN_LIMIT,
+  GOODBYE_STALL_LIMIT,
+} from './checklistAgent.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
 
 const prompt = buildChecklistPrompt({
@@ -103,6 +108,89 @@ describe('the stall detector (SCL_nRKo3KEVw8Yh — five minutes of bot-mirror)',
       await agent.onUserTurnCompleted(ctx, fakeMsg);
     }
     expect(ctx.items.filter((it) => it.type === 'message' && it.role === 'system')).toHaveLength(0);
+  });
+
+  /**
+   * WHO: Dana Whitfield on the 2026-08-15 `sim-questiontree` BUY THE SERVICE run.
+   * WHAT: the checklist was COMPLETE — demo booked, every field answered — and
+   *       the model then traded farewells for twenty turns ("Goodbye!" /
+   *       "Goodbye!" / "Goodbye! If you need anything else…") without ever
+   *       calling finish_call. The run ended on the harness's round cap.
+   * WHERE: onUserTurnCompleted, the resolved branch.
+   * WHY: the ordinary stall nudge fires ONCE and says "wrap up the call", which
+   *      the model can satisfy with a sentence — and did, repeatedly. A phone
+   *      line has no round cap: nothing was going to end that call but the
+   *      caller hanging up. So this branch repeats, and names the actual gap:
+   *      only finish_call ends a call.
+   */
+  /**
+   * WHO: Neil Ashford on the 2026-08-15 sim (BUY vs JOB).
+   * WHAT: the call ended with `book` still 'ready' for a caller who had said
+   *       plainly he wanted a MESSAGE, not a meeting. finish_call was refused
+   *       (correctly — the checklist was open), the model made one malformed
+   *       booking attempt, then STOPPED CALLING TOOLS ENTIRELY and traded
+   *       farewells for seven turns.
+   * WHERE: onUserTurnCompleted's unresolved-stall branch, which latched on
+   *        `#stallNudged` and therefore said its piece once, three turns in,
+   *        and never again.
+   * WHY: neither escape hatch could reach this. The resolved-branch nudge needs
+   *      a COMPLETE checklist; FINISH_REFUSAL_LIMIT needs finish_call to keep
+   *      being called. "Not done, and no longer trying" is its own failure mode.
+   *      The repeat also names the exit the model never finds on its own —
+   *      dropping the tree the caller no longer wants.
+   */
+  it('an UNRESOLVED stall re-fires, names the blocker, and offers the drop-the-tree exit', async () => {
+    const agent = makeAgent();
+    const ctx = llm.ChatContext.empty();
+    const fakeMsg = {} as llm.ChatMessage;
+    const tools = agent.currentTools();
+    const exec = (name: string, args: unknown) =>
+      (tools[name] as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }).execute(
+        args,
+        undefined
+      );
+    // booking selected and unanswered = an open checklist that cannot resolve.
+    await exec('set_purpose', { work_direction: 'caller_pays_us', trees: ['identity', 'booking'] });
+
+    // +1 because the turn right after set_purpose sees the mutation and resets
+    // the counter — the stall only starts once the checklist stops moving.
+    for (let i = 0; i < STALL_TURN_LIMIT * 2 + 1; i++) {
+      await agent.onUserTurnCompleted(ctx, fakeMsg);
+    }
+    const notes = ctx.items.filter((it) => it.type === 'message' && it.role === 'system');
+    expect(notes.length).toBeGreaterThan(1);
+
+    const first = JSON.stringify(notes[0]);
+    const repeat = JSON.stringify(notes[notes.length - 1]);
+    expect(first).toContain('summarize what you already have');
+    expect(repeat).toContain('STILL STUCK');
+    expect(repeat).toContain('wrong_trees');
+    // It must say WHICH node is holding the call open, not just that one is.
+    expect(repeat).toContain('caller_name');
+  });
+
+  it('a COMPLETE checklist that stops moving is told that a farewell is not an ending', async () => {
+    const agent = makeAgent();
+    const ctx = llm.ChatContext.empty();
+    const fakeMsg = {} as llm.ChatMessage;
+    const tools = agent.currentTools();
+    const exec = (name: string, args: unknown) =>
+      (tools[name] as unknown as { execute: (a: unknown, c: unknown) => Promise<unknown> }).execute(
+        args,
+        undefined
+      );
+    // qa's single node closed = a RESOLVED checklist, which is the state the
+    // goodbye loop happens in: nothing left to do, and the model still talking.
+    await exec('set_purpose', { work_direction: 'neither_or_unclear', trees: ['qa'] });
+    await exec('record_answer', { node_id: 'qa_summary', value: 'asked about hours' });
+    for (let i = 0; i < GOODBYE_STALL_LIMIT + 2; i++) {
+      await agent.onUserTurnCompleted(ctx, fakeMsg);
+    }
+    const notes = ctx.items.filter((it) => it.type === 'message' && it.role === 'system');
+    // REPEATS, unlike the one-shot stall nudge — the failure it catches is a loop.
+    expect(notes.length).toBeGreaterThan(1);
+    expect(JSON.stringify(notes[0])).toContain('finish_call');
+    expect(JSON.stringify(notes[0])).toContain('saying goodbye does NOT end the call');
   });
 });
 
@@ -673,18 +761,15 @@ describe('plan 08-10-2026 — capability menu + filler/interrupt (matrix)', () =
       expect(p).toMatch(/a short "yeah" is not consent and not an answer/);
     });
 
-    it.each([
-      'what?',
-      'can you repeat that',
-      "wait I\ndon't get it",
-      "I'm confused",
-      'hold on',
-    ])('HAPPY: real clarification cue is present: %j', (cue) => {
-      // Prompt may wrap lines — normalize whitespace for multi-word cues.
-      const compact = p.replace(/\s+/g, ' ');
-      const needle = cue.replace(/\s+/g, ' ');
-      expect(compact).toContain(needle);
-    });
+    it.each(['what?', 'can you repeat that', "wait I\ndon't get it", "I'm confused", 'hold on'])(
+      'HAPPY: real clarification cue is present: %j',
+      (cue) => {
+        // Prompt may wrap lines — normalize whitespace for multi-word cues.
+        const compact = p.replace(/\s+/g, ' ');
+        const needle = cue.replace(/\s+/g, ' ');
+        expect(compact).toContain(needle);
+      }
+    );
 
     it('HAPPY: real interrupt → intelligent recovery, not a fixed script', () => {
       expect(p).toMatch(/REAL clarification request/);
@@ -821,7 +906,9 @@ describe('buildChecklistPrompt — hire / meeting purpose examples', () => {
   it('HAPPY: "I have a position" and "I have a contract" map to the job tree', () => {
     expect(hirePrompt).toMatch(/I have a position for \[the owner\].*→.*job/s);
     expect(hirePrompt).toMatch(/I have a contract for \[the owner\].*→.*job/s);
-    expect(hirePrompt).toMatch(/OFFERING THE OWNER PAID WORK \(a role, a\s+position, a\s+contract/s);
+    expect(hirePrompt).toMatch(
+      /OFFERING THE OWNER PAID WORK \(a role, a\s+position, a\s+contract/s
+    );
   });
 
   it('HAPPY: talk-to / meet about X is always booking plus the tree for X', () => {

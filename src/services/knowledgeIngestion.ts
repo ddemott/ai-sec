@@ -58,8 +58,7 @@ export async function extractFileContent(buffer: Buffer, filename: string): Prom
 // ── Chunk splitting ───────────────────────────────────────────────────────────
 
 export type ChunkResult =
-  | { success: true; chunks: string[] }
-  | { success: false; error: string; chunkCount: number };
+  { success: true; chunks: string[] } | { success: false; error: string; chunkCount: number };
 
 /**
  * Split document text into chunks on double-newlines, filtering blanks.

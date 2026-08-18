@@ -30,7 +30,12 @@
 
 import type { Pool, PoolClient } from 'pg';
 import type { AppFastifyInstance } from '../types/fastify';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import {
+  withHandler,
+  logEvent,
+  requireTenantId,
+  type AppRequest,
+} from '../middleware/fastify-middleware';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 import { getCrmSyncStatus } from '../services/crmSyncStatus';
 import { disconnectCrmIntegration, type CrmProvider } from '../services/crmDisconnect';

@@ -11,6 +11,7 @@
  */
 import type { Pool } from 'pg';
 import {
+  CaptureCaseInquirySchema,
   CaptureJobInquirySchema,
   PageOwnerSchema,
   SendSelfServiceLinkSchema,
@@ -555,6 +556,143 @@ export function registerMessagingRoutes({ app, pool, withTenantClient }: AgentTo
       });
     },
     'Failed to capture job inquiry'
+  );
+
+  // capture-case-inquiry — persist a prospective client's legal matter for an
+  // attorney's take-or-decline review.
+  //
+  // WRITES TO `intake_submissions`, NOT A NEW TABLE. That envelope was built
+  // (migration 20260811160000) for exactly this: "the next vertical's structured
+  // capture does not need a brand-new top-level table." A case inquiry is a
+  // type-tagged payload, and the row is durable the moment it lands. A
+  // specialized projection can be forked out later from payload_json without
+  // re-capturing anything, because the envelope preserves the whole payload.
+  toolRoute(
+    app,
+    '/agent-tools/capture-case-inquiry',
+    CaptureCaseInquirySchema,
+    async (args, reply) => {
+      const callbackPhone = args.callback_phone ? normalizePhone(args.callback_phone) : null;
+
+      // THE SAME REFUSAL capture_job_inquiry LEARNED, AND IT MATTERS MORE HERE.
+      //
+      // A job lead the owner cannot answer is a lost opportunity. A LEGAL matter
+      // the firm cannot answer can be a lost claim: the caller believes they have
+      // handed their case to someone, they stop looking for a lawyer, and the
+      // limitation period keeps running. A hollow row that reports success is the
+      // worst possible outcome on this route, so it fails loudly and tells the
+      // agent exactly what to go and collect.
+      if (isPlaceholderName(args.caller_name)) {
+        return fail(
+          reply,
+          "I still need the caller's name before I can pass this to the attorney. Ask them for their name, then call this again."
+        );
+      }
+      if (!callbackPhone || !isValidPhone(callbackPhone)) {
+        return fail(
+          reply,
+          'I still need a callback number before I can pass this to the attorney — there is no way to reach them about the matter without one. Ask for the best number to reach them, confirm it, then call this again.'
+        );
+      }
+
+      const payload = {
+        matter_type: args.matter_type ?? null,
+        incident_date: args.incident_date ?? null,
+        incident_state: args.incident_state ?? null,
+        has_existing_counsel: args.has_existing_counsel ?? null,
+        counsel_situation: args.counsel_situation ?? null,
+        opposing_parties: args.opposing_parties ?? null,
+        matter_description: args.matter_description ?? null,
+        insurer_name: args.insurer_name ?? null,
+        policy_type: args.policy_type ?? null,
+        claim_outcome: args.claim_outcome ?? null,
+        stated_reason: args.stated_reason ?? null,
+        amount_in_dispute: args.amount_in_dispute ?? null,
+        appeal_status: args.appeal_status ?? null,
+        injuries_sustained: args.injuries_sustained ?? null,
+        medical_treatment: args.medical_treatment ?? null,
+        at_fault_party: args.at_fault_party ?? null,
+        gave_recorded_statement: args.gave_recorded_statement ?? null,
+        lost_income: args.lost_income ?? null,
+        police_report: args.police_report ?? null,
+        deadline_pressure: args.deadline_pressure ?? null,
+        documents_available: args.documents_available ?? null,
+        desired_outcome: args.desired_outcome ?? null,
+      };
+
+      const result = await withTenantClient(args.tenant_id, async (client) => {
+        const customerId = await getOrCreateCustomerByPhoneOnClient(
+          client,
+          args.tenant_id,
+          callbackPhone,
+          args.caller_name
+        );
+
+        // ONE ROW PER CALL. An action tool is retried until it returns its
+        // success id, so concurrent retries of a single call must converge on
+        // one row — the lesson that cost four identical job_inquiries behind a
+        // hung SMTP send on 2026-07-17. The partial unique index on
+        // (tenant_id, submission_type, call_id) makes the DB the arbiter; the
+        // winner lookup below returns the row that actually landed.
+        const inserted = await client.query(
+          `INSERT INTO intake_submissions
+             (tenant_id, customer_id, appointment_id, submission_type, call_id,
+              caller_name, callback_phone, payload_json)
+           VALUES ($1, $2, $3, 'case_inquiry', $4, $5, $6, $7::jsonb)
+           ON CONFLICT (tenant_id, submission_type, call_id) WHERE call_id IS NOT NULL
+             DO NOTHING
+           RETURNING submission_id`,
+          [
+            args.tenant_id,
+            customerId ?? null,
+            args.appointment_id ?? null,
+            args.call_id ?? null,
+            args.caller_name,
+            callbackPhone,
+            JSON.stringify(payload),
+          ]
+        );
+
+        if (inserted.rows[0]?.submission_id) {
+          return { submission_id: inserted.rows[0].submission_id as string, duplicate: false };
+        }
+
+        // DO NOTHING fired — a retry of a call that already captured. Return the
+        // existing row rather than a failure: the action node completes on a real
+        // id, and the id of the row that IS there is the honest one.
+        const existing = await client.query(
+          `SELECT submission_id FROM intake_submissions
+            WHERE tenant_id = $1 AND submission_type = 'case_inquiry' AND call_id = $2
+            LIMIT 1`,
+          [args.tenant_id, args.call_id ?? null]
+        );
+        return {
+          submission_id: (existing.rows[0]?.submission_id as string | undefined) ?? null,
+          duplicate: true,
+        };
+      });
+
+      if (!result.submission_id) {
+        return fail(reply, 'Could not save the case details. Please take a message instead.');
+      }
+
+      // WHAT THE CALLER HEARS, and the two things it must never say.
+      //
+      // It must not say the firm will take the case — intake is not acceptance,
+      // and no attorney-client relationship is formed on a reception call. It
+      // must not estimate when someone will call, because this route does not
+      // know the firm's review cadence and a guessed "within 24 hours" is a
+      // promise the firm never made.
+      return ok(reply, {
+        saved: true,
+        submission_id: result.submission_id,
+        message:
+          "Thank you — I've recorded the details of your matter and passed them to the attorney for review. They'll be in touch about whether it's something the firm can take on.",
+        next_step:
+          'The case details are recorded. This is NOT the end of the call, and it is NOT an acceptance of the case. If the caller ALSO asked to speak with or meet an attorney, do that NOW before saying goodbye. Never tell the caller the firm will take their case, never estimate what it is worth, and never say whether a deadline has passed — the attorney decides all three.',
+      });
+    },
+    'Failed to capture case inquiry'
   );
 
   // send-self-service-link — text the caller a secure cancel/reschedule link

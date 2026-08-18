@@ -21,6 +21,9 @@ secretary-hq/
 ├── shared/                        ✓ cross-runtime TypeScript (no Node/Next deps)
 ├── src/                           backend (Fastify)
 ├── tests/                         backend tests  ○(item 2)
+├── public/                        ✓ static assets the backend serves — caller-simulator.html
+├── supabase/                      ✓ migrations/ + seed.sql + generated baseline.sql
+├── portable-workflow-kit/         ✓ extractable copy of the dev workflow (npm run generate-kit)
 ├── agent/                         LiveKit voice worker
 └── dashboard/                     Next.js 14 frontend
 ```
@@ -38,8 +41,20 @@ shared/
 ├── questionBank.ts    ✓ POLICY_QUESTIONS, resolveQuestions
 ├── getEmbedding.ts    ✓ OpenAI embedding wrapper
 ├── normalizeForEmbedding.ts  ✓
+├── expandQueryForEmbedding.ts ✓ RAG query expansion
+├── callContext.ts     ✓ call-context shape shared by agent + backend
+├── dateTime.ts        ✓
+├── markerQuestions.ts ✓
+├── versionHistoryFields.ts ✓ field lists behind the version-history RPCs
+├── checklistPresetDerivation.ts ✓ preset id + business_type → checklist runtime config
+├── checklistOverrides.ts ✓ the SUBTRACT-only override validator (no ADD verb, by design)
+├── checklistPreview.ts   ✓ Business Settings next-call dry-run (ASK / LISTEN / REQUIRED)
 └── voiceCrm.ts        ✓
 ```
+
+The last three are here for one reason: the dashboard's preview of the next call
+and the agent's actual runtime must never disagree about what the call will ask.
+One implementation, two consumers.
 
 ---
 
@@ -436,10 +451,16 @@ agent/src/
 │
 ├── checklist/            ✓ existing — THE LIVE CALL ARCHITECTURE (question trees)
 │   ├── types.ts          node shapes (text / choice / action) + the 10 NodeStatus values
-│   ├── trees.ts          PLATFORM_TREE_LIBRARY — the 8 trees a purpose can select
+│   ├── trees.ts          PLATFORM_TREE_LIBRARY — the 9 trees a purpose can select
 │   ├── tracker.ts        ChecklistTracker: all call state + isResolved() (the goodbye gate)
 │   ├── checklistAgent.ts ONE agent for the whole call + buildChecklistPrompt()
-│   └── checklistTools.ts set_purpose / record_answer / finish_call / answer_question + wrapAction
+│   ├── checklistTools.ts set_purpose / record_answer / finish_call / answer_question + wrapAction
+│   ├── presets.ts        the 4 shipped presets — WHICH TREES A TENANT CAN REACH
+│   ├── runtimeConfig.ts  the per-tenant compiled config ChecklistAgent receives
+│   ├── blockTypes.ts     conversation-block shapes
+│   ├── blockSchemas.ts   Zod validation for blocks
+│   ├── blockLibrary.ts   the platform block catalog
+│   └── blockCompiler.ts  blocks → trees, the compile step presets go through
 │
 ├── tasks/                ✓ existing — TaskGroup "rungs", FALLBACK only (ENABLE_TASK_GROUP)
 │   ├── rung.ts           makeRung() generic core        superseded 2026-07-21
@@ -495,11 +516,19 @@ agent/src/
 ```
 dashboard/
 ├── app/                  ✓ Next.js App Router pages
+│   ├── page.tsx          ✓ public landing (footer links the legal pages)
+│   ├── register/         ✓ signup — REQUIRED legal-consent checkbox
+│   ├── privacy/          ✓ public Privacy Policy
+│   ├── terms/            ✓ public Terms (Bonterms Cloud Terms v1.0 by reference)
+│   └── dpa/              ✓ public DPA (Bonterms DPA v2.0 cover + subprocessors)
 ├── lib/                  ✓ API client, types, hooks, utilities
 ├── types/                ✓
+├── e2e/                  ✓ 39 committed Playwright spec files
 │
 └── components/
     ├── ui/               ✓ primitives (Button, Card, Modal, Toast, …)
+    ├── legal/            ✓ LegalDocLayout — shared chrome + the single source of
+    │                       the legal constants (effective date, entity, contacts)
     ├── SetupWizard/      ✓ existing — well organized
     ├── admin/            ✓ existing
     │

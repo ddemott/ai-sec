@@ -10,7 +10,9 @@ import { MAX_RESULT_CHARS, MAX_TOOL_LOG_ENTRIES, ToolCallLog } from './toolCallL
 //      ("no booked time on file", said to a caller WITH a booking) ended at
 //      three undecidable candidate causes. This log makes it one SQL query.
 describe('ToolCallLog', () => {
-  const call = (over: Partial<{ callId: string; name: string; args: string; createdAt: number }>) => ({
+  const call = (
+    over: Partial<{ callId: string; name: string; args: string; createdAt: number }>
+  ) => ({
     callId: 'c1',
     name: 'get_available_slots',
     args: '{"date":"2026-07-30"}',
@@ -53,10 +55,7 @@ describe('ToolCallLog', () => {
     // The payload is written to the DB and shown in postmortems; redactToolArgs
     // is applied at RECORD time so no raw-PII window exists in memory either.
     const log = new ToolCallLog(0);
-    log.recordBatch(
-      [call({ args: '{"phone":"2624979039","note":"call 262-497-9039 back"}' })],
-      []
-    );
+    log.recordBatch([call({ args: '{"phone":"2624979039","note":"call 262-497-9039 back"}' })], []);
     const args = log.toPayload()!.entries[0].args as { phone: string; note: string };
     expect(args.phone).not.toContain('2624979039');
     expect(args.note).not.toContain('262-497-9039');
@@ -141,9 +140,7 @@ describe('tool result capture (2026-08-13 blind spot)', () => {
 
   it('keeps the row id a successful write produced, for joining the record', () => {
     const log = new ToolCallLog(0);
-    log.recordBatch(
-      ...at('take_message', JSON.stringify({ success: true, message_id: 'msg_42' }))
-    );
+    log.recordBatch(...at('take_message', JSON.stringify({ success: true, message_id: 'msg_42' })));
     expect(log.toPayload()!.entries[0].result).toContain('message_id=msg_42');
   });
 

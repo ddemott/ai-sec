@@ -2,7 +2,7 @@
 
 > Organized outline of SecretaryHQ's capabilities. Status legend:
 > **✅ built** (works today) · **🔨 in progress** · **💡 planned** (captured in
-> `docs/STRATEGY.md`, demand-gated). Last updated 2026-08-11.
+> `docs/STRATEGY.md`, demand-gated). Last updated 2026-08-14.
 >
 > One line: **an AI receptionist that answers the phone, books the work,
 > remembers the customer — and gives the owner just enough of a back office to
@@ -23,6 +23,7 @@
 - ✅ Per-tenant persona — custom voice, greeting, style flags, and system prompt (set on the AI Persona page; `tts_speed` is currently inert under Aura)
 - ✅ Graceful error recovery — never speaks raw errors; recovers in-character
 - ✅ Customer-led booking — asks the caller's preferred time, widens the window if none fit, never imposes a slot
+- ✅ **Owner-chosen call checklist (2026-08-13)** — a per-tenant preset decides what the assistant can handle: `auto_shop_front_desk`, `salon_front_desk`, `local_service_front_desk`, or `owner_for_hire_front_desk` (the last adds job/role intake for solo professionals whose line takes work offers). Editable on Business Settings → Call checklist, with a next-call dry-run showing what will be ASKED, listened for, and required. Owners can turn parts off, make a field optional or required, and change the wording of approved questions — but the preset is the ceiling: what it does not include, no setting can add.
 
 ## 2. Scheduling & Booking Engine
 
@@ -86,6 +87,8 @@
 - ✅ JWT auth (auto-logout), bcrypt, role gating
 - ✅ Super-admin platform management across tenants
 - ✅ Hardened tenant isolation (no anonymous cross-tenant access)
+- ✅ RLS is genuinely enforced, not decorative — production connects as a non-superuser role that cannot bypass policies (since 2026-07-27); `GET /ready` reports it from the running process
+- ✅ **Public legal pages (2026-08-14)** — `/privacy`, `/terms`, `/dpa`, linked from the landing footer and from a required consent checkbox at signup in which the signer attests they are authorized for the business and that informing callers about the AI is their legal duty. Terms adopt Bonterms Standard Online Cloud Terms v1.0 by reference; the DPA is the Bonterms DPA v2.0 cover plus a named subprocessor list. _Not lawyer-reviewed — the Bonterms base is lawyer-drafted, our Provider-Specific Terms are not._
 
 ## 10. Billing (our SaaS revenue)
 

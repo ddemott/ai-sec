@@ -3,7 +3,7 @@ import { getRootClient, clearDB, createTenant, hashPassword, skipIfDbDown } from
 import { type Client } from 'pg';
 import type { FastifyReply } from 'fastify';
 import bcrypt from 'bcrypt';
-import type { AppRequest } from '../../src/middleware';
+import type { AppRequest } from '../../src/middleware/fastify-middleware';
 
 // Mock the email sender so route tests don't try to send real mail
 vi.mock('../../src/services/communications/systemEmail', () => ({

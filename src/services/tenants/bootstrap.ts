@@ -26,6 +26,7 @@
  */
 
 import type { Pool } from 'pg';
+import { verticalForBusinessType } from '../../../shared/checklistPresetDerivation';
 
 export interface CreateTenantWithOwnerParams {
   tenantName: string;
@@ -48,8 +49,7 @@ export interface CreateTenantWithOwnerParams {
 }
 
 export type CreateTenantWithOwnerResult =
-  | { ok: true; tenantId: string; userId: string }
-  | { ok: false; conflictMessage: string };
+  { ok: true; tenantId: string; userId: string } | { ok: false; conflictMessage: string };
 
 export async function createTenantWithOwner(
   pool: Pool,
@@ -107,6 +107,35 @@ export async function createTenantWithOwner(
       ]
     );
     const userId = userRes.rows[0].user_id;
+
+    // GIVE THE NEW BUSINESS ITS OWN COPY OF THE VERTICAL'S QUESTIONS.
+    //
+    // The generic template for their vertical is copied into their own rows
+    // here, inside the same transaction that creates the business — so a tenant
+    // never exists in a state where it has a business_type but no questions.
+    // From this moment their intake is theirs: editing it changes their calls
+    // and nobody else's, and a later platform template edit cannot reach back
+    // and silently alter what their callers are asked.
+    //
+    // Best-effort by design: a business that fails to get its template copy is
+    // still a valid business — the agent falls back to the platform TS library,
+    // which is exactly today's behaviour. Failing tenant creation over a
+    // template copy would trade a working signup for a cosmetic one.
+    try {
+      await client.query('SELECT copy_question_tree_templates_to_tenant($1, $2)', [
+        tenantId,
+        [verticalForBusinessType(params.businessType)],
+      ]);
+    } catch (err) {
+      // Not fatal, but never silent: a tenant on the fallback library cannot be
+      // configured per-client until someone notices and copies the templates in.
+      console.warn(
+        `[bootstrap] question-tree template copy failed for tenant ${tenantId} ` +
+          `(business_type=${params.businessType}); tenant will run the platform ` +
+          `fallback library until templates are copied:`,
+        err
+      );
+    }
 
     await client.query('COMMIT');
     return { ok: true, tenantId, userId };

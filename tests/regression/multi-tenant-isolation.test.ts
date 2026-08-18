@@ -44,7 +44,7 @@ import {
   createUser,
   skipIfDbDown,
 } from '../utils';
-import { registerJwtAuthHook, tenantMiddleware, generateToken } from '../../src/middleware';
+import { registerJwtAuthHook, tenantMiddleware, generateToken } from '../../src/middleware/fastify-middleware';
 import { createWithTenantClient } from '../../src/database';
 import { registerCustomerRoutes } from '../../src/routes/customers';
 import { registerEmployeeRoutes } from '../../src/routes/employees';

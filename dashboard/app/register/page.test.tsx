@@ -51,9 +51,27 @@ function fillForm() {
   fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Dale Demott' } });
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'dale@dynatire.com' } });
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'hunter2' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: /I am authorized to set up Secretary HQ/i }));
 }
 
 describe('RegisterPage — self-serve signup', () => {
+  test('Start free trial stays disabled until the legal checkbox is ticked', async () => {
+    render(<RegisterPage />);
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Salon' })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Business name'), { target: { value: 'DynaTire' } });
+    fireEvent.change(screen.getByLabelText('Business type'), { target: { value: 'salon' } });
+    fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Dale Demott' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'dale@dynatire.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'hunter2' } });
+    expect(screen.getByRole('button', { name: /start free trial/i })).toBeDisabled();
+    expect(screen.getByRole('link', { name: /Terms of Service/i })).toHaveAttribute('href', '/terms');
+    expect(screen.getByRole('link', { name: /Privacy Policy/i })).toHaveAttribute('href', '/privacy');
+    expect(screen.getByRole('link', { name: /Data Protection Addendum/i })).toHaveAttribute(
+      'href',
+      '/dpa'
+    );
+  });
+
   test('loads business types from the public templates endpoint into the picker', async () => {
     // WHO: a prospect opening signup | WHAT: the business-type <select> is populated from /templates | WHEN: page mounts | WHERE: RegisterPage useEffect → Api.templates.list | WHY: the values must match what the backend stores, so the picker is sourced from the same public endpoint TenantCreateForm uses — a hardcoded list would drift from the templates table
     render(<RegisterPage />);

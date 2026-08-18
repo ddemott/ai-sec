@@ -12,7 +12,12 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import {
+  withHandler,
+  logEvent,
+  requireTenantId,
+  type AppRequest,
+} from '../middleware/fastify-middleware';
 import { assertRowAffected, requireValidUUID } from './routeHelpers';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 import type { CustomerContext, VoiceSession, VoiceSessionDisplay } from '../types/voiceCrm';

@@ -1,13 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AppFastifyInstance } from '../types/fastify';
-import { withHandler } from '../middleware';
+import { withHandler } from '../middleware/fastify-middleware';
 import {
   startBrowserCallerSession,
   type BrowserCallerSession,
 } from '../services/browserCallerSession';
-
-let callerSimulatorHtmlCache: string | null = null;
 
 function resolvePublicDir(): string {
   const candidates = [
@@ -22,13 +20,9 @@ function resolvePublicDir(): string {
 }
 
 function getCallerSimulatorHtml(): string {
-  if (callerSimulatorHtmlCache === null) {
-    callerSimulatorHtmlCache = fs.readFileSync(
-      path.join(resolvePublicDir(), 'caller-simulator.html'),
-      'utf-8'
-    );
-  }
-  return callerSimulatorHtmlCache;
+  // Read every request. A cached copy hid the in-page join harness from
+  // Playwright after the HTML changed and the backend process stayed up.
+  return fs.readFileSync(path.join(resolvePublicDir(), 'caller-simulator.html'), 'utf-8');
 }
 
 function readOptionalString(value: unknown): string | undefined {

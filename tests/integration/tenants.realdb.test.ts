@@ -64,9 +64,9 @@ beforeAll(async () => {
     });
     const withTenantClient = createWithTenantClient(pool);
     registerTenantRoutes(
-      app as unknown as AppFastifyInstance,
+      app,
       pool,
-      withTenantClient as <T>(id: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+      withTenantClient
     );
     await app.ready();
     dbAvailable = true;

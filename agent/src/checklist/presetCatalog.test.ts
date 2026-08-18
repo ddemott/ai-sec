@@ -4,6 +4,7 @@ import { compileRuntimeConfig } from './blockCompiler.js';
 import { verticalPresetSchema } from './blockSchemas.js';
 import {
   AUTO_SHOP_PRESET,
+  LAW_FIRM_PRESET,
   LOCAL_SERVICE_PRESET,
   OWNER_FOR_HIRE_PRESET,
   PRESET_LIBRARY,
@@ -14,12 +15,13 @@ import { PLATFORM_TREE_LIBRARY } from './trees.js';
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 
 describe('preset catalog', () => {
-  it('contains the four real vertical presets', () => {
+  it('contains the five real vertical presets', () => {
     expect(PRESET_LIBRARY.map((preset) => preset.preset_id)).toEqual([
       'auto_shop_front_desk',
       'salon_front_desk',
       'local_service_front_desk',
       'owner_for_hire_front_desk',
+      'law_firm_front_desk',
     ]);
   });
 
@@ -44,6 +46,35 @@ describe('preset catalog', () => {
   it('offers the job tree to the vertical whose primary traffic is job calls', () => {
     expect(OWNER_FOR_HIRE_PRESET.conversation_blocks).toContain('job');
     expect(OWNER_FOR_HIRE_PRESET.forbidden_trees).not.toContain('job');
+  });
+
+  // Same guarantee as the job assertion above, for the same reason. A law firm
+  // whose preset omits case_intake cannot capture a matter at all: overrides can
+  // only SUBTRACT, so the tree would be unreachable and every prospective client
+  // would land as a plain message with none of the facts (statute date,
+  // jurisdiction, existing counsel, opposing names) that decide take-or-decline.
+  it('offers the case-intake tree to the law-firm vertical', () => {
+    expect(LAW_FIRM_PRESET.conversation_blocks).toContain('case_intake');
+    expect(LAW_FIRM_PRESET.forbidden_trees).not.toContain('case_intake');
+  });
+
+  // A law firm's line does not field recruiters and does not sell this product.
+  it('keeps the law-firm preset off the trees that belong to other verticals', () => {
+    expect(LAW_FIRM_PRESET.conversation_blocks).not.toContain('job');
+    expect(LAW_FIRM_PRESET.conversation_blocks).not.toContain('buy_service');
+  });
+
+  it('compiles the law firm preset into case intake, booking, message, qa, and schedule change', () => {
+    const runtime = materializeRuntimeConfig(LAW_FIRM_PRESET);
+    expect(compileRuntimeConfig(runtime).map((tree) => tree.tree_id)).toEqual([
+      'identity',
+      'booking',
+      'message',
+      'generic_subject',
+      'qa',
+      'case_intake',
+      'schedule_change',
+    ]);
   });
 
   it('validates each shipped preset against the canonical schema', () => {

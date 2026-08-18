@@ -69,6 +69,10 @@ describe('compileRuntimeConfig', () => {
         kind: 'conversation',
         description: 'Intentional bad fixture for compiler failure tests.',
         tree_refs: ['missing_live_tree'],
+        // The fixture is broken in exactly one way on purpose — a dangling
+        // tree ref. A valid sink keeps the compiler's failure attributable to
+        // that, not to a second defect.
+        sink: 'none',
       },
     };
 

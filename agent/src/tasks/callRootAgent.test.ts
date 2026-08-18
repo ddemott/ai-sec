@@ -110,7 +110,7 @@ describe('has_job_inquiry draws the boundary: a role TO the owner, never work FR
     expect(instr).toMatch(/pass them along exactly as spoken/);
   });
 
-  it('SAD: has_job_inquiry stays REQUIRED in the schema — sim-begincall\'s strict check depends on it', () => {
+  it("SAD: has_job_inquiry stays REQUIRED in the schema — sim-begincall's strict check depends on it", () => {
     // The eval fails a case when a required flag is omitted (review on #288: a
     // missing flag must not read as an explicit false). That strictness is only
     // sound while the flag is required; if someone relaxes the schema, the eval

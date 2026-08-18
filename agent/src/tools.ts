@@ -53,6 +53,7 @@ const CAPABILITY_OF: Record<string, Capability> = {
   get_company_policy_answer: 'knowledge',
   take_message: 'messaging',
   capture_job_inquiry: 'messaging',
+  capture_case_inquiry: 'messaging',
   page_owner_via_sms: 'messaging',
   get_customer_context: 'identity',
   get_detailed_customer_history: 'identity',
@@ -1133,7 +1134,7 @@ export function buildTools(
           is_urgent: {
             type: 'boolean',
             description:
-              "Set true ONLY when the caller says it cannot wait — \"urgent\", \"emergency\", \"as soon as possible\", \"right away\". Their words, not your judgement: a message about money or a deadline is not urgent because of its topic. It flags the message at the top of the owner's inbox; it does NOT reach anyone mid-call, so never tell the caller you are putting them through or that someone will pick up.",
+              'Set true ONLY when the caller says it cannot wait — "urgent", "emergency", "as soon as possible", "right away". Their words, not your judgement: a message about money or a deadline is not urgent because of its topic. It flags the message at the top of the owner\'s inbox; it does NOT reach anyone mid-call, so never tell the caller you are putting them through or that someone will pick up.',
           },
           message: {
             type: 'string',
@@ -1304,6 +1305,177 @@ export function buildTools(
         // the call 'message'. Messages inbox: empty. The row, the summary, and the
         // dashboard all repeated a promise no tool had executed.
         if (res.ok) outcome?.recordJobInquiry();
+        return formatResponse(res);
+      },
+    }),
+
+    capture_case_inquiry: llm.tool({
+      description:
+        "Record a prospective client's legal matter and send it to the attorney for review. Use AFTER you have walked through the case intake questions.\n\nYOU ARE NOT A LAWYER AND THIS TOOL IS NOT AN ACCEPTANCE. Recording a matter does not mean the firm is taking the case — an attorney decides that after reading it. Never tell the caller they have a case, what it might be worth, or whether a deadline has passed, even if they ask you directly and even if it seems obvious. The only honest answer to all three is that the attorney will review the details and get back to them.\n\nFOUR FACTS DECIDE WHETHER THE FIRM CAN ACT AT ALL, and a matter missing them cannot be assessed: when it happened (`incident_date` — the filing clock runs from it), which state (`incident_state` — the firm is only licensed in some), whether another lawyer already represents them (`has_existing_counsel` — an ethics wall, ask it early), and the names on the other side (`opposing_parties` — the firm runs a conflict check on names). Collect these before calling this tool.\n\nREQUIRES the caller's real name AND a callback number — it will REFUSE without them, and it is right to: a matter the firm cannot answer is a person who thinks a lawyer has their case and stops looking for one. If it refuses, ask for what's missing and call it again. Other fields you did not get may be omitted.",
+      parameters: {
+        type: 'object',
+        properties: {
+          caller_name: { type: 'string', description: "The caller's name as they gave it." },
+          callback_phone: {
+            type: 'string',
+            description: 'Phone number the firm should call back.',
+          },
+          matter_type: {
+            type: 'string',
+            description:
+              'The kind of matter in the caller\'s terms: "insurance_claim", "injury", or "other_matter".',
+          },
+          incident_date: {
+            type: 'string',
+            description:
+              'When it happened, exactly as the caller said it ("March 2024", "about two years ago"). Do not convert or interpret it — record their words.',
+          },
+          incident_state: {
+            type: 'string',
+            description: 'The US state the incident or policy is in.',
+          },
+          has_existing_counsel: {
+            type: 'boolean',
+            description: 'True if another lawyer already represents them on this matter.',
+          },
+          counsel_situation: {
+            type: 'string',
+            description:
+              'If they already have a lawyer: what they want anyway (second opinion, switching firms, their lawyer withdrew).',
+          },
+          opposing_parties: {
+            type: 'string',
+            description:
+              'Names on the other side — person, business, insurer, plus any adjuster or opposing lawyer. Names, for the conflict check.',
+          },
+          matter_description: {
+            type: 'string',
+            description:
+              "The caller's own account of what happened, at length. This paragraph is the most useful thing the attorney will read — capture what they actually said, do not summarize it into a sentence.",
+          },
+          insurer_name: { type: 'string', description: 'The insurance company involved.' },
+          policy_type: {
+            type: 'string',
+            description: 'Kind of policy or coverage (auto, homeowners, health, disability, life).',
+          },
+          claim_outcome: {
+            type: 'string',
+            description: 'What the insurer did: "denied", "underpaid", or "delayed".',
+          },
+          stated_reason: {
+            type: 'string',
+            description:
+              "The reason the INSURER gave, in the insurer's words as the caller heard them.",
+          },
+          amount_in_dispute: {
+            type: 'string',
+            description: 'Roughly how much is in dispute. An estimate is fine.',
+          },
+          appeal_status: {
+            type: 'string',
+            description: 'Whether they already appealed or asked the insurer to reconsider.',
+          },
+          injuries_sustained: {
+            type: 'string',
+            description: 'The injuries, as they describe them.',
+          },
+          medical_treatment: {
+            type: 'string',
+            description: 'Whether and where they have been treated. Record only — never advise.',
+          },
+          at_fault_party: {
+            type: 'string',
+            description: 'Who the caller says is responsible.',
+          },
+          gave_recorded_statement: {
+            type: 'string',
+            description:
+              'Whether they gave the other side\'s insurer a recorded statement or signed anything: "gave_statement", "no_statement", or "unsure".',
+          },
+          lost_income: { type: 'string', description: 'Missed work or lost income, if mentioned.' },
+          police_report: {
+            type: 'string',
+            description: 'Whether a police or incident report exists, and its number if given.',
+          },
+          deadline_pressure: {
+            type: 'string',
+            description:
+              'Any date already hanging over them — court date, hearing, appeal window, a dated letter. Record verbatim.',
+          },
+          documents_available: {
+            type: 'string',
+            description: 'Paperwork they already have (policy, denial letter, records, photos).',
+          },
+          desired_outcome: {
+            type: 'string',
+            description: 'What they want out of it, if they said.',
+          },
+        },
+        required: ['caller_name'],
+        additionalProperties: false,
+      },
+      execute: async (args: {
+        caller_name: string;
+        callback_phone?: string;
+        matter_type?: string;
+        incident_date?: string;
+        incident_state?: string;
+        has_existing_counsel?: boolean;
+        counsel_situation?: string;
+        opposing_parties?: string;
+        matter_description?: string;
+        insurer_name?: string;
+        policy_type?: string;
+        claim_outcome?: string;
+        stated_reason?: string;
+        amount_in_dispute?: string;
+        appeal_status?: string;
+        injuries_sustained?: string;
+        medical_treatment?: string;
+        at_fault_party?: string;
+        gave_recorded_statement?: string;
+        lost_income?: string;
+        police_report?: string;
+        deadline_pressure?: string;
+        documents_available?: string;
+        desired_outcome?: string;
+      }) => {
+        speakFiller?.('One moment while I record those details...');
+        const res = await client.call('/agent-tools/capture-case-inquiry', {
+          tenant_id: ctx.tenantId,
+          caller_name: args.caller_name,
+          // firstPhone, never `??` — see capture_job_inquiry: a model sending
+          // callback_phone:"" would otherwise send the empty string AND block
+          // every fallback, and on a forwarded line ctx.spokenPhone is the only
+          // number that exists.
+          callback_phone: firstPhone(args.callback_phone, ctx.callerPhone, ctx.spokenPhone),
+          matter_type: args.matter_type,
+          incident_date: args.incident_date,
+          incident_state: args.incident_state,
+          has_existing_counsel: args.has_existing_counsel,
+          counsel_situation: args.counsel_situation,
+          opposing_parties: args.opposing_parties,
+          matter_description: args.matter_description,
+          insurer_name: args.insurer_name,
+          policy_type: args.policy_type,
+          claim_outcome: args.claim_outcome,
+          stated_reason: args.stated_reason,
+          amount_in_dispute: args.amount_in_dispute,
+          appeal_status: args.appeal_status,
+          injuries_sustained: args.injuries_sustained,
+          medical_treatment: args.medical_treatment,
+          at_fault_party: args.at_fault_party,
+          gave_recorded_statement: args.gave_recorded_statement,
+          lost_income: args.lost_income,
+          police_report: args.police_report,
+          deadline_pressure: args.deadline_pressure,
+          documents_available: args.documents_available,
+          desired_outcome: args.desired_outcome,
+          call_id: ctx.callId || undefined,
+          // The consultation this intake was booked around, if the call produced
+          // one. The system holds the UUID; the model never sees it.
+          appointment_id: outcome?.result().appointmentId ?? undefined,
+        });
         return formatResponse(res);
       },
     }),

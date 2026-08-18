@@ -61,7 +61,11 @@ import { startScheduleExtender, stopScheduleExtender } from './workers/scheduleE
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { createQueryExpander } from '../shared/expandQueryForEmbedding';
-import { tenantMiddleware, generateToken, registerJwtAuthHook } from './middleware';
+import {
+  tenantMiddleware,
+  generateToken,
+  registerJwtAuthHook,
+} from './middleware/fastify-middleware';
 import { collectFeatureReadiness } from './services/featureReadiness';
 
 // --- Environment Validation ---

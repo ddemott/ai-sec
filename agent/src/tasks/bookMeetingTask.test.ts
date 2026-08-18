@@ -249,11 +249,12 @@ describe('HARD-DOWN gate: persistent booking failure redirects to take_message v
     });
   }
   async function callBook(task: unknown, n: number): Promise<string[]> {
-    const tool = ((task as { toolCtx: Record<string, unknown> }).toolCtx)['book_with_scheduling'] as {
+    const tool = (task as { toolCtx: Record<string, unknown> }).toolCtx['book_with_scheduling'] as {
       execute: (a: unknown, o: unknown) => Promise<unknown>;
     };
     const out: string[] = [];
-    for (let k = 0; k < n; k++) out.push(String(await tool.execute({}, { ctx: {}, toolCallId: 't' + k })));
+    for (let k = 0; k < n; k++)
+      out.push(String(await tool.execute({}, { ctx: {}, toolCallId: 't' + k })));
     return out;
   }
 

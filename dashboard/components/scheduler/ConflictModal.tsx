@@ -28,8 +28,10 @@ export interface AvailableAlternative {
   end_time: string;
   employee_id: string;
   employee_name: string;
-  resource_id: string;
-  resource_name: string;
+  /** Null when the business owns no resources and the service needs none —
+   *  a consultancy whose only "resource" is the owner's own time. */
+  resource_id: string | null;
+  resource_name: string | null;
   skill_count: number;
 }
 
@@ -207,10 +209,17 @@ export function ConflictModal({
                       ·
                     </span>
                     <span>{slot.employee_name}</span>
-                    <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>
-                      ·
-                    </span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{slot.resource_name}</span>
+                    {/* A resourceless business has nothing to name here, and a
+                        dangling "·" reads as a missing value rather than an
+                        absent one. */}
+                    {slot.resource_name && (
+                      <>
+                        <span className="mx-1.5" style={{ color: 'var(--text-secondary)' }}>
+                          ·
+                        </span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{slot.resource_name}</span>
+                      </>
+                    )}
                   </button>
                 </li>
               ))}

@@ -95,6 +95,58 @@ export const projectorResultSchema = z.object({
 export type ConversationBlockInput = z.infer<typeof conversationBlockSchema>;
 export type PolicyBlockInput = z.infer<typeof policyBlockSchema>;
 export type KnowledgeBlockInput = z.infer<typeof knowledgeBlockSchema>;
+/**
+ * A question tree arriving from the DATABASE over tenant-config.
+ *
+ * Everything else in this file validates config the platform authored. This one
+ * validates the questions themselves, which now come from per-tenant rows an
+ * owner can edit — so a malformed tree is no longer a code bug caught in CI, it
+ * is a data condition that reaches a live call. The tracker builds its whole
+ * state model from these nodes; handed a choice node with no options, or an
+ * action node with no tool, it would throw mid-call and the caller would hear
+ * the line die.
+ *
+ * Recursive via z.lazy because choice branches nest their follow-ups.
+ */
+const questionNodeSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.discriminatedUnion('type', [
+    z.object({
+      node_id: nonEmptyString,
+      type: z.literal('text'),
+      ask: nonEmptyString,
+      listen: z.boolean().optional(),
+    }),
+    z.object({
+      node_id: nonEmptyString,
+      type: z.literal('choice'),
+      ask: nonEmptyString,
+      // At least one option: a choice the caller cannot answer would hold the
+      // goodbye gate open forever — the wrong-tree deadlock, by another route.
+      options: z
+        .record(nonEmptyString, z.array(questionNodeSchema))
+        .refine((opts) => Object.keys(opts).length > 0, 'a choice node needs at least one option'),
+    }),
+    z.object({
+      node_id: nonEmptyString,
+      type: z.literal('action'),
+      // An action completes ONLY on a real tool's success id. No tool, no
+      // completion, and the call could never end.
+      tool: nonEmptyString,
+      description: nonEmptyString,
+      requires: stringList.optional(),
+      await_tree: z.boolean().optional(),
+    }),
+  ])
+);
+
+export const questionTreeSchema = z.object({
+  tree_id: nonEmptyString,
+  description: nonEmptyString,
+  nodes: z.array(questionNodeSchema).min(1),
+});
+
+export const questionTreeLibrarySchema = z.array(questionTreeSchema);
+
 export type OutcomeBlockInput = z.infer<typeof outcomeBlockSchema>;
 export type VerticalPresetInput = z.infer<typeof verticalPresetSchema>;
 export type TenantRuntimeConfigInput = z.infer<typeof tenantRuntimeConfigSchema>;

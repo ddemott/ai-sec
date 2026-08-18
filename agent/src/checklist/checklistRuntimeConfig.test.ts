@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { llm } from '@livekit/agents';
-import { buildChecklistPrompt, ChecklistAgent, resolveChecklistLibrary, resolveSelectableTreeIds } from './checklistAgent.js';
+import {
+  buildChecklistPrompt,
+  ChecklistAgent,
+  resolveChecklistLibrary,
+  resolveSelectableTreeIds,
+} from './checklistAgent.js';
 import { AUTO_SHOP_PRESET, LOCAL_SERVICE_PRESET, SALON_PRESET } from './presets.js';
 import { materializeRuntimeConfig } from './runtimeConfig.js';
-import { BOOKING_TREE, IDENTITY_TREE, JOB_TREE, MESSAGE_TREE, PLATFORM_TREE_LIBRARY } from './trees.js';
+import {
+  BOOKING_TREE,
+  IDENTITY_TREE,
+  JOB_TREE,
+  MESSAGE_TREE,
+  PLATFORM_TREE_LIBRARY,
+} from './trees.js';
 
 describe('resolveChecklistLibrary', () => {
   it('keeps the full live library available for tracker invariants', () => {
@@ -35,24 +46,63 @@ describe('resolveChecklistLibrary', () => {
       },
     });
 
-    expect(ids).toEqual([IDENTITY_TREE, JOB_TREE, BOOKING_TREE, MESSAGE_TREE].map((tree) => tree.tree_id));
+    expect(ids).toEqual(
+      [IDENTITY_TREE, JOB_TREE, BOOKING_TREE, MESSAGE_TREE].map((tree) => tree.tree_id)
+    );
   });
 
-  it('refuses ambiguous inputs when both a raw library and runtimeConfig are supplied', () => {
-    expect(() =>
-      resolveChecklistLibrary({
-        library: [IDENTITY_TREE],
-        runtimeConfig: {
-          preset_id: 'job_default',
-          enabled_conversation_blocks: ['identity'],
-          enabled_policy_blocks: [],
-          enabled_knowledge_blocks: [],
-          enabled_outcome_blocks: [],
-          overrides: {},
-          version: 1,
-        },
-      })
-    ).toThrow(/either library or runtimeConfig/i);
+  /**
+   * REPLACES a test that asserted passing both library and runtimeConfig THREW.
+   *
+   * That refusal was correct while `library` was a test-only override and
+   * runtimeConfig was the production path — passing both meant confusion about
+   * which governed. Per-tenant question trees (2026-08-14) make the pair the
+   * normal production case: the tenant's DB-copied trees are the library, and
+   * their overrides still ride on top. The two answer different questions, so
+   * the combination now has a defined precedence instead of an exception.
+   */
+  it('uses the supplied library as the base and still applies runtimeConfig overrides', () => {
+    const library = resolveChecklistLibrary({
+      library: [IDENTITY_TREE],
+      runtimeConfig: {
+        preset_id: 'job_default',
+        enabled_conversation_blocks: ['identity'],
+        enabled_policy_blocks: [],
+        enabled_knowledge_blocks: [],
+        enabled_outcome_blocks: [],
+        overrides: { optional_node_ids: ['caller_phone'] },
+        version: 1,
+      },
+    });
+
+    expect(library.map((tree) => tree.tree_id)).toEqual(['identity']);
+    const phone = library[0].nodes.find((n) => n.node_id === 'caller_phone');
+    expect(phone?.type).toBe('text');
+    // The override still landed: optional_node_ids makes it listen-only.
+    expect(phone && 'listen' in phone ? phone.listen : undefined).toBe(true);
+  });
+
+  /**
+   * The tenant's own trees are the CEILING, but an override must keep its power
+   * to subtract — otherwise moving a tenant's questions into the database would
+   * silently switch back on a block they had turned off.
+   */
+  it('intersects the library with the runtime config, so a disabled block stays disabled', () => {
+    const ids = resolveSelectableTreeIds({
+      library: [IDENTITY_TREE, JOB_TREE],
+      runtimeConfig: {
+        preset_id: 'job_default',
+        // The tenant disabled `job`; only identity remains enabled.
+        enabled_conversation_blocks: ['identity'],
+        enabled_policy_blocks: [],
+        enabled_knowledge_blocks: [],
+        enabled_outcome_blocks: [],
+        overrides: {},
+        version: 1,
+      },
+    });
+
+    expect(ids).toEqual(['identity']);
   });
 });
 

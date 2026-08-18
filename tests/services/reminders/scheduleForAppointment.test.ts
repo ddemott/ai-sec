@@ -419,7 +419,7 @@ describe('rescheduleRemindersForAppointment', () => {
       buildWithTenantClient(client),
       TENANT_ID,
       APPOINTMENT_ID,
-      logger as unknown as FastifyBaseLogger
+      logger
     );
 
     expect(updateCalled).toBe(true);

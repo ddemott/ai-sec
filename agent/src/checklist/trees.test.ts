@@ -162,7 +162,9 @@ describe('the job call (identity + job on the real trees)', () => {
   });
 
   it('uses plain job and calendar wording instead of team timezone / diary wording', () => {
-    const workMode = JOB_TREE.nodes.find((n) => n.node_id === 'work_mode') as ChoiceNodeDef | undefined;
+    const workMode = JOB_TREE.nodes.find((n) => n.node_id === 'work_mode') as
+      | ChoiceNodeDef
+      | undefined;
     const timezone = workMode?.options.remote.find((n) => n.node_id === 'team_timezone');
     const offer = JOB_TREE.nodes.find((n) => n.node_id === 'meeting_offer');
     const timezoneAsk = timezone && 'ask' in timezone ? timezone.ask : '';

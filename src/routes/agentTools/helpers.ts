@@ -20,7 +20,7 @@ import type { FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { type z } from 'zod';
-import { withHandler, type AppRequest } from '../../middleware';
+import { withHandler, type AppRequest } from '../../middleware/fastify-middleware';
 import { toolCallsTotal } from '../../services/metrics';
 
 // ── Shared route-module dependencies ──────────────────────────────────

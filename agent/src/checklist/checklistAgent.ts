@@ -77,13 +77,30 @@ function formatAppointmentTime(iso: string, timezone: string): string {
   }).format(d);
 }
 
+/**
+ * WHY PASSING BOTH IS NOW LEGAL (2026-08-14).
+ *
+ * This pair used to throw on `library && runtimeConfig`, and that was right at
+ * the time: `library` was a test-only override and `runtimeConfig` was the
+ * production path, so passing both meant somebody was confused about which one
+ * governed.
+ *
+ * Per-tenant question trees make the combination the NORMAL production case.
+ * The tenant's own rows (copied at provisioning, edited by them since) are the
+ * base LIBRARY — the questions their calls ask. `runtimeConfig` still carries
+ * their overrides, which have always been subtract-only: disabled blocks,
+ * optional/required node ids, approved wording. Those two answer different
+ * questions — "which questions exist" versus "which of them are switched off or
+ * reworded" — so the precedence is defined rather than forbidden:
+ *
+ *   library present  → it is the base tree set (the tenant's own copy)
+ *   library absent   → the platform TypeScript library (today's behaviour)
+ *   runtimeConfig    → always applied on top, whichever base was used
+ */
 export function resolveChecklistLibrary(opts: {
   library?: QuestionTreeDef[];
   runtimeConfig?: TenantRuntimeConfig;
 }): QuestionTreeDef[] {
-  if (opts.library && opts.runtimeConfig) {
-    throw new Error('Pass either library or runtimeConfig, not both.');
-  }
   const base = opts.library ?? PLATFORM_TREE_LIBRARY;
   const optional = opts.runtimeConfig?.overrides?.optional_node_ids;
   const withOptional = Array.isArray(optional)
@@ -105,12 +122,21 @@ export function resolveSelectableTreeIds(opts: {
   library?: QuestionTreeDef[];
   runtimeConfig?: TenantRuntimeConfig;
 }): string[] {
-  if (opts.library && opts.runtimeConfig) {
-    throw new Error('Pass either library or runtimeConfig, not both.');
+  const libraryIds = opts.library?.map((tree) => tree.tree_id);
+
+  if (libraryIds && opts.runtimeConfig) {
+    // INTERSECTION, and the direction matters. The tenant's copied trees are
+    // already scoped to their vertical, so the library is the ceiling — but
+    // overrides must keep their power to SUBTRACT, or a tenant who switched a
+    // block off would find it switched back on the moment their trees moved
+    // into the database. A tree must be in both to be selectable.
+    const enabled = new Set(compileRuntimeConfig(opts.runtimeConfig).map((tree) => tree.tree_id));
+    return libraryIds.filter((id) => enabled.has(id));
   }
+
   if (opts.runtimeConfig)
     return compileRuntimeConfig(opts.runtimeConfig).map((tree) => tree.tree_id);
-  return (opts.library ?? PLATFORM_TREE_LIBRARY).map((tree) => tree.tree_id);
+  return libraryIds ?? PLATFORM_TREE_LIBRARY.map((tree) => tree.tree_id);
 }
 
 /** The `# Known caller` prompt section — CRM facts the model must not
@@ -576,11 +602,23 @@ ${rosterLine ? `${rosterLine}\n` : ''}- A booking tool that returns \`what_happe
   up). A
   name heard once and never used again reads as a form, not a person. Not every
   sentence, though — that reads as salesy.
-- No filler openers ("Absolutely!", "Great!") — just talk like a good receptionist.`;
+- No filler openers ("Absolutely!", "Great!") — just talk like a good receptionist.
+- And do not swap one filler for another: NEVER open two turns in a row with the same
+  words. On 2026-08-15 four of seven intake turns began "Thanks for that." — the same
+  three syllables before every question, which is a form being read aloud, not a person
+  listening. If an acknowledgement adds nothing, skip it and ask the question.`;
 }
 
 /** Consecutive checklist-stationary caller turns before the stall directive fires. */
 export const STALL_TURN_LIMIT = 3;
+
+/**
+ * Stalled turns on a COMPLETE checklist before the model is reminded that a
+ * farewell is not an ending. Lower than STALL_TURN_LIMIT because there is
+ * nothing left to collect — the only remaining move is to close — and unlike
+ * the stall nudge this one repeats, because the failure it catches is a loop.
+ */
+export const GOODBYE_STALL_LIMIT = 2;
 
 export class ChecklistAgent extends voice.Agent {
   #toolkit: ChecklistToolkit;
@@ -715,17 +753,69 @@ export class ChecklistAgent extends voice.Agent {
       return Promise.resolve();
     }
     this.#stallTurns++;
-    if (this.#stallTurns < STALL_TURN_LIMIT || this.#stallNudged) return Promise.resolve();
+    // SAYING GOODBYE IS NOT ENDING THE CALL. 2026-08-15 sim (BUY THE SERVICE):
+    // the checklist was fully resolved — demo booked, every field answered —
+    // and the model then traded farewells with the caller for twenty turns
+    // ("Goodbye!" / "Goodbye!" / "Goodbye! If you need anything else…"), never
+    // calling finish_call, until the harness's round cap stopped it. On a phone
+    // line there is no round cap; the line stays open until the caller hangs up.
+    //
+    // Deliberately CONDITIONAL and repeated rather than forced: a caller may
+    // still ask something after the checklist completes, and answering that is
+    // right. What the model is missing is not permission to close, it is the
+    // fact that another farewell does not close anything.
+    if (this.#tracker.isResolved() && this.#stallTurns >= GOODBYE_STALL_LIMIT) {
+      chatCtx.addMessage({
+        role: 'system',
+        content:
+          'The checklist is COMPLETE and the last turns added nothing. If the caller has ' +
+          'nothing further, call finish_call NOW — saying goodbye does NOT end the call, ' +
+          'only finish_call does, and repeating a farewell leaves them on an open line. ' +
+          'If they are still asking for something, answer that instead.',
+      });
+      return Promise.resolve();
+    }
+    if (this.#stallTurns < STALL_TURN_LIMIT) return Promise.resolve();
+    // FIRES AGAIN EVERY STALL_TURN_LIMIT TURNS, not once. It used to latch on
+    // `#stallNudged`, and the fourth livelock of 2026-08-15 walked straight
+    // through the gap that left: BUY vs JOB ended with `book` still 'ready' for
+    // a caller who had said plainly he wanted a MESSAGE, not a meeting. The
+    // goodbye gate refused finish_call (correctly — the checklist was open),
+    // the model made one malformed booking attempt, and then simply STOPPED
+    // CALLING TOOLS and traded farewells for seven turns. Neither escape hatch
+    // could fire: the resolved-branch nudge above needs a COMPLETE checklist,
+    // and FINISH_REFUSAL_LIMIT needs finish_call to keep being called.
+    //
+    // "Not done, and no longer trying" is its own failure mode, and a one-shot
+    // note three turns before the end of the world does not address it. The
+    // re-fire is spaced rather than every turn so it prods without burying the
+    // context — the original concern that made it one-shot.
+    const nudgedBefore = this.#stallNudged;
+    if (nudgedBefore && this.#stallTurns % STALL_TURN_LIMIT !== 0) return Promise.resolve();
     this.#stallNudged = true;
+    // The FIRST note says "wrap up". Repeats name the blocker and the two exits
+    // that actually exist, because by then the model has demonstrably failed to
+    // find them: finish the action, or — the one it never remembers — DROP the
+    // tree if the caller has stopped wanting it. Without that second exit a
+    // caller who changed their mind can hold the call open forever.
+    const blocking = this.#tracker.unresolvedNodeIds();
     chatCtx.addMessage({
       role: 'system',
-      content:
-        `The last ${this.#stallTurns} caller turns added NOTHING new to the checklist — ` +
-        'the caller is repeating themselves, deflecting, or may be an automated system. ' +
-        'Stop re-asking. In ONE sentence, summarize what you already have and move to ' +
-        'close: if an action on the checklist is ready, do it now with what you have; if ' +
-        'a required item is still missing, ask for that single item ONCE and accept a ' +
-        'decline; then wrap up the call.',
+      content: nudgedBefore
+        ? `STILL STUCK after ${this.#stallTurns} turns with nothing new. The checklist is ` +
+          `waiting on: ${blocking.join(', ') || '(nothing — call finish_call)'}. There are ` +
+          'exactly two ways out and you must take one NOW. (1) If the caller still wants ' +
+          'it, complete that action with what you already have. (2) If they have said they ' +
+          'do NOT want it — a message instead of a meeting, changed their mind, never asked ' +
+          'for it — call set_purpose with wrong_trees naming that tree; its questions are ' +
+          'then dropped and finish_call will close. Do not answer this with another ' +
+          'farewell: only finish_call ends the call.'
+        : `The last ${this.#stallTurns} caller turns added NOTHING new to the checklist — ` +
+          'the caller is repeating themselves, deflecting, or may be an automated system. ' +
+          'Stop re-asking. In ONE sentence, summarize what you already have and move to ' +
+          'close: if an action on the checklist is ready, do it now with what you have; if ' +
+          'a required item is still missing, ask for that single item ONCE and accept a ' +
+          'decline; then wrap up the call.',
     });
     return Promise.resolve();
   }

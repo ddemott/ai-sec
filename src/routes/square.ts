@@ -69,8 +69,7 @@ export function registerSquareRoutes(
     void reply.status(200).send({ success: true, message: 'Webhook received' });
 
     const event = req.body as
-      | { type?: string; merchant_id?: string; data?: { id?: string } }
-      | undefined;
+      { type?: string; merchant_id?: string; data?: { id?: string } } | undefined;
     const eventType = event?.type;
     const merchantId = event?.merchant_id;
 

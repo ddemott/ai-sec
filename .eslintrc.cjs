@@ -93,6 +93,7 @@ module.exports = {
     // `require()` in .cjs config files is normal; turn off the rule
     // entirely rather than try to scope it per-file.
     '@typescript-eslint/no-var-requires': 'off',
+    '@typescript-eslint/no-require-imports': 'off',
     // Catches passing a class/interface method as a value without binding
     // `this` (a real runtime-crash bug class). The codebase is clean of it, so
     // this is enforced as an error to keep it that way. (The historical

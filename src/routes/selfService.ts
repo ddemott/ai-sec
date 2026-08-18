@@ -18,7 +18,7 @@
 
 import type { PoolClient } from 'pg';
 import type { AppFastifyInstance } from '../types/fastify.js';
-import { withHandler, logEvent } from '../middleware.js';
+import { withHandler, logEvent } from '../middleware/fastify-middleware';
 import { verifySelfServiceToken } from '../services/selfServiceToken.js';
 import { sendSms } from '../services/telnyxSms.js';
 import { normalizePhone, isValidPhone } from '../services/phoneUtils.js';

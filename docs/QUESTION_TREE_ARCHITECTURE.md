@@ -5,10 +5,24 @@
 > Not a plan any more. `ENABLE_QUESTION_TREE` is `(v) => v !== 'false'` in
 > `agent/src/configSchema.ts` — **ON unless explicitly disabled** — so
 > `agent/src/index.ts` builds a `ChecklistAgent` for every call. The code is in
-> `agent/src/checklist/`: `types.ts` (node shapes), `trees.ts` (the 8-tree platform
+> `agent/src/checklist/`: `types.ts` (node shapes), `trees.ts` (the 10-tree platform
 > library), `tracker.ts` (state + the goodbye gate), `checklistAgent.ts` (the prompt
 > and the one agent), `checklistTools.ts` (`set_purpose` / `record_answer` /
 > `finish_call` / `answer_question` + the action wrappers).
+>
+> **Since this design was written, a per-tenant configuration layer was added on top
+> (2026-08-12/13, ROADMAP Steps 7–9) and it changes what "the model picks a tree"
+> means.** `tenants.checklist_preset_id` + `tenants.checklist_overrides` compile
+> through `shared/checklistPresetDerivation.ts` into the `checklist_runtime_config`
+> the agent receives, and the **preset decides which trees are selectable at all**.
+> Overrides can only SUBTRACT — there is no ADD verb — so **a tree missing from the
+> tenant's preset is unreachable no matter what the model asks for.** The five
+> presets are `auto_shop_front_desk`, `salon_front_desk`, `local_service_front_desk`,
+> `owner_for_hire_front_desk`, and `law_firm_front_desk`. This is not a hypothetical
+> failure mode: `job` was
+> in `forbidden_trees` on all three original presets, so no tenant could reach it,
+> and two recruiter calls on 2026-08-13 produced zero `job_inquiries` rows while the
+> model correctly asked for the tree by name (`CALL1.md` / `CALL2.md`).
 >
 > Both older flows survive as fallbacks behind flags and are NOT what a live call
 > runs: the rung/TaskGroup flow (`agent/src/tasks/`, `ENABLE_TASK_GROUP`) and the

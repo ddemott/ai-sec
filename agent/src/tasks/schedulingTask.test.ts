@@ -27,7 +27,9 @@ function fakeTool(returns: unknown) {
   });
 }
 
-function manageTools(overrides: Partial<Record<string, llm.ToolContext[string]>> = {}): llm.ToolContext {
+function manageTools(
+  overrides: Partial<Record<string, llm.ToolContext[string]>> = {}
+): llm.ToolContext {
   return {
     get_my_appointments: fakeTool(JSON.stringify({ appointments: [] })),
     cancel_appointment: fakeTool(JSON.stringify({ cancelled: true, appointment_id: 'appt-1' })),

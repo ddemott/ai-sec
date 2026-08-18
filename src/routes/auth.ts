@@ -14,7 +14,7 @@ import {
   logWarning,
   type AppRequest,
   type UserRole,
-} from '../middleware';
+} from '../middleware/fastify-middleware';
 import { sendPasswordResetEmail } from '../services/communications/systemEmail';
 import { errorsTotal } from '../services/metrics';
 import { createTenantWithOwner } from '../services/tenants/bootstrap';

@@ -58,12 +58,7 @@ export const MAX_RESULT_CHARS = 200;
 
 /** Row ids worth keeping verbatim — they join a postmortem to the record the
  *  call produced. Internal identifiers, not caller data. */
-const RESULT_ID_FIELDS = [
-  'appointment_id',
-  'message_id',
-  'job_inquiry_id',
-  'customer_id',
-] as const;
+const RESULT_ID_FIELDS = ['appointment_id', 'message_id', 'job_inquiry_id', 'customer_id'] as const;
 
 /**
  * Reduce a tool's reply to the part that explains a decision, dropping the part
@@ -126,10 +121,13 @@ export class ToolCallLog {
    * inside a live-call event handler and must never throw.
    */
   recordBatch(
-    calls: Array<{ callId?: string; name?: string; args?: string; createdAt?: number
-    } | null | undefined>,
+    calls: Array<
+      { callId?: string; name?: string; args?: string; createdAt?: number } | null | undefined
+    >,
     outputs: Array<
-      { callId?: string; isError?: boolean; createdAt?: number; output?: unknown } | null | undefined
+      | { callId?: string; isError?: boolean; createdAt?: number; output?: unknown }
+      | null
+      | undefined
     >
   ): void {
     const outByCallId = new Map<

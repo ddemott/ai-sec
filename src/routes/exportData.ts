@@ -32,7 +32,12 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { FastifyReply } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import {
+  withHandler,
+  logEvent,
+  requireTenantId,
+  type AppRequest,
+} from '../middleware/fastify-middleware';
 import { toCsv } from '../services/csv';
 
 const SUPER_ADMIN_TENANT_ID = '00000000-0000-0000-0000-000000000000';

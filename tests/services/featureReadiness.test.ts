@@ -52,7 +52,7 @@ function fullCtx(
       TELNYX_PUBLIC_KEY: '9xjFfLcMgNjd22BM2J0J2wsHmWFsLMfGSBlGviIarp8=',
       SENTRY_DSN: 'https://fake@sentry.io/12345',
       ...(overrides.env ?? {}),
-    } as NodeJS.ProcessEnv,
+    },
     TELNYX_API_KEY: overrides.TELNYX_API_KEY ?? 'KEY01fake',
     TELNYX_SIP_CONNECTION_ID: overrides.TELNYX_SIP_CONNECTION_ID ?? '12345',
   };

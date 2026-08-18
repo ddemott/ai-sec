@@ -151,7 +151,13 @@ INSERT INTO business_templates (
   ('photography',       'Photography Studio',             'Professional Services',   5, 'Studio',         'Studios',         'Photographer',   'Photographers',   'Session',      '21m00Tcm4llvDq8ikWAM', 'Studio 1',         'Main photography studio',              '{}', '{}', '', ''),
   ('real-estate',       'Real Estate Showings',           'Professional Services',   5, 'Office',         'Offices',         'Agent',          'Agents',          'Showing',      '21m00Tcm4llvDq8ikWAM', 'Office 1',         'Main showing office',                  '{}', '{}', '', ''),
   ('tax-prep',          'Tax Preparation',                'Professional Services',   5, 'Office',         'Offices',         'Preparer',       'Preparers',       'Appointment',  'ErXwSzhRj4IW3zYCt9a2', 'Office 1',         'Tax preparation office',               '{}', '{}', '', ''),
-  ('tutoring',          'Tutoring Service',               'Professional Services',   5, 'Room',           'Rooms',           'Tutor',          'Tutors',          'Session',      '21m00Tcm4llvDq8ikWAM', 'Room 1',            'Tutoring room',                       '{}', '{}', '', '')
+  ('tutoring',          'Tutoring Service',               'Professional Services',   5, 'Room',           'Rooms',           'Tutor',          'Tutors',          'Session',      '21m00Tcm4llvDq8ikWAM', 'Room 1',            'Tutoring room',                       '{}', '{}', '', ''),
+  -- Routes to the law_firm_front_desk checklist preset (case_intake tree) via
+  -- defaultChecklistPresetIdForBusinessType. 'Matter' is the booking label
+  -- because a law firm books a CONSULTATION about a matter, not an appointment
+  -- for a service — the vocabulary the dashboard shows an attorney should be
+  -- the one they already use.
+  ('law-firm',          'Law Firm',                       'Professional Services',   5, 'Office',         'Offices',         'Attorney',       'Attorneys',       'Consultation', 'ErXwSzhRj4IW3zYCt9a2', 'Office 1',          'Consultation office',                  '{}', '{}', '', '')
 ON CONFLICT (business_type) DO UPDATE SET
   display_name             = EXCLUDED.display_name,
   category                 = EXCLUDED.category,

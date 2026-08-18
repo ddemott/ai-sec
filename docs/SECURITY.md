@@ -1,6 +1,8 @@
 # Security Posture
 
-**Last reviewed:** 2026-05-09 (security review pass 1 + pass 2 — webhook signature verification, RLS coverage, JWT/refresh, AGENT_SECRET rotation)
+**Last full review:** 2026-05-09 (security review pass 1 + pass 2 — webhook signature verification, RLS coverage, JWT/refresh, AGENT_SECRET rotation)
+
+**Since then, verified separately and folded in below:** the anonymous `?tenant_id=` read/write/delete hole (2026-05-21), the 2026-07-13→08-02 RLS-is-decorative finding and its closure — production now connects as `app_user`, which cannot bypass policies, probed directly on 2026-08-02 (38/38 tables, 52 policies) and re-probed in CI by `tests/regression/rlsIsolation.test.ts`.
 
 This is a baseline of the production-surface security posture so future audits start from a known shape rather than re-deriving it. Each section names the threat, the current control, where it lives, and any gaps left open with a rationale.
 
