@@ -93,7 +93,7 @@ export async function startBrowserCallerSession(
 ): Promise<BrowserCallerSession> {
   if (process.env.BROWSER_CALLER_E2E_STUB === '1') {
     const tenant = args.tenantId || 'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0';
-    const agent = args.agentName || 'secretary-hq-agent';
+    const agent = args.agentName || process.env.AGENT_NAME || 'secretary-hq-agent';
     const room = `sim-call-e2e-${Date.now()}`;
     return {
       join_url: `https://example.invalid/call-simulator-stub?room=${encodeURIComponent(room)}`,
@@ -109,11 +109,11 @@ export async function startBrowserCallerSession(
 
   const env: NodeJS.ProcessEnv = { ...process.env };
   if (args.tenantId) env.SIM_TENANT = args.tenantId;
-  // Blank means "use the real worker default" so production launcher calls hit
-  // the worker name the script and Railway service already agree on.
-  // Local branch testing must opt in explicitly via ?agent=secretary-hq-agent-dev
-  // (or by typing that value into the field) so there is no silent prod routing.
-  env.AGENT_NAME = args.agentName || 'secretary-hq-agent';
+  // Order matters: explicit request override first, configured worker default
+  // second, hardcoded production fallback last. That keeps local / multi-env
+  // safety while still giving prod launcher a real default when AGENT_NAME is
+  // unset on the backend service.
+  env.AGENT_NAME = args.agentName || env.AGENT_NAME || 'secretary-hq-agent';
 
   const { stdout } = await runner(resolveSimCallScriptPath(), env);
   return parseSimCallOutput(stdout);

@@ -70,22 +70,29 @@ describe('browserCallerSession', () => {
     expect(() => parseSimCallOutput(incomplete)).toThrow('sim-call output missing agent');
   });
 
-  it('defaults blank launcher agent to the production worker name', async () => {
-    const runner = vi.fn(async (_scriptPath: string, env: NodeJS.ProcessEnv) => ({
-      stdout: `
-        https://meet.livekit.io/custom?liveKitUrl=wss%3A%2F%2Fexample.livekit.cloud&token=abc123
-        room:    sim-call-1750000000000
-        tenant:  ${env.SIM_TENANT ?? 'tenant-default'}
-        agent:   ${env.AGENT_NAME ?? 'secretary-hq-agent'}
-      `,
-      stderr: '',
-    }));
+  it('defaults blank launcher agent to configured AGENT_NAME before falling back to production worker name', async () => {
+    const prev = process.env.AGENT_NAME;
+    process.env.AGENT_NAME = 'configured-worker';
+    try {
+      const runner = vi.fn(async (_scriptPath: string, env: NodeJS.ProcessEnv) => ({
+        stdout: `
+          https://meet.livekit.io/custom?liveKitUrl=wss%3A%2F%2Fexample.livekit.cloud&token=abc123
+          room:    sim-call-1750000000000
+          tenant:  ${env.SIM_TENANT ?? 'tenant-default'}
+          agent:   ${env.AGENT_NAME ?? 'secretary-hq-agent'}
+        `,
+        stderr: '',
+      }));
 
-    const session = await startBrowserCallerSession({}, runner);
+      const session = await startBrowserCallerSession({}, runner);
 
-    expect(runner).toHaveBeenCalledTimes(1);
-    expect(runner.mock.calls[0]?.[1]?.AGENT_NAME).toBe('secretary-hq-agent');
-    expect(session.agent).toBe('secretary-hq-agent');
+      expect(runner).toHaveBeenCalledTimes(1);
+      expect(runner.mock.calls[0]?.[1]?.AGENT_NAME).toBe('configured-worker');
+      expect(session.agent).toBe('configured-worker');
+    } finally {
+      if (prev === undefined) delete process.env.AGENT_NAME;
+      else process.env.AGENT_NAME = prev;
+    }
   });
 
   it('passes tenant and agent overrides into sim-call env', async () => {
