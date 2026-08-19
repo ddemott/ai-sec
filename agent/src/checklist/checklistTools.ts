@@ -301,10 +301,12 @@ export const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
 };
 
 /** How many times set_purpose may fire before the call is told to wrap up. */
-/** Subject trees whose co-selection with booking ANSWERS the meeting-topic
- *  question — the caller who asked to "talk to Dale about a job" has already
- *  said what the meeting is about. generic_subject is absent on purpose: its
- *  subject is whatever the caller says it is, and only they can say it. */
+/** Subject trees whose co-selection with `booking` ANSWERS the meeting-topic
+ *  question, and whose co-selection with `generic_subject` ANSWERS its
+ *  subject_details question — the caller who asked to "talk to Dale about a
+ *  job" has already said what the meeting/call is about. generic_subject
+ *  itself is absent from this map: it is THE ELSE, so it has no canned topic
+ *  of its own — only the trees below can supply one for it. */
 const TREE_TOPIC: Record<string, string> = {
   job: 'a job opportunity',
   fix_computer: 'a computer repair',
@@ -1025,6 +1027,21 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       if (tracker.selectedTrees().includes('booking')) {
         for (const [treeId, topic] of Object.entries(TREE_TOPIC)) {
           if (tracker.selectedTrees().includes(treeId)) recordIfOpen('meeting_topic', topic);
+        }
+      }
+      // generic_subject is THE ELSE — "a topic no specific tree covers." A
+      // TREE_TOPIC tree selected alongside it is proof the topic was NOT the
+      // else case: the caller already said what the call concerns (a job, a
+      // repair), so generic_subject's one question ("what does this concern?")
+      // is asking for the second time what job/fix_computer already answered.
+      // Live test call, 2026-08-19: model picked job + generic_subject
+      // together and asked the caller what the call was about after the job
+      // intake had already recorded it. Same backfill shape as meeting_topic
+      // above, not a selection guard — generic_subject alone (no topic-tree
+      // riding along) still needs the caller's own words, unchanged.
+      if (tracker.selectedTrees().includes('generic_subject')) {
+        for (const [treeId, topic] of Object.entries(TREE_TOPIC)) {
+          if (tracker.selectedTrees().includes(treeId)) recordIfOpen('subject_details', topic);
         }
       }
       // Caller-ID seeding: on an attested line the phone question never exists.

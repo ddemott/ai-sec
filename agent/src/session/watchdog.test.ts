@@ -173,6 +173,62 @@ describe('attachOutputWatchdog', () => {
     expect(f.sayCalls).toHaveLength(0);
   });
 
+  it('measures turn latency: fast turn logs turn_latency_ms at info, no WARN', async () => {
+    const logs: Array<{ level: 'info' | 'warn'; obj: Record<string, unknown> }> = [];
+    const log = {
+      info: (obj: Record<string, unknown>) => logs.push({ level: 'info', obj }),
+      warn: (obj: Record<string, unknown>) => logs.push({ level: 'warn', obj }),
+    };
+    const f = makeFakeSession();
+    attachOutputWatchdog(f.session, {
+      voice: 'eve',
+      thinkingText: 'Just a moment.',
+      fillerText: FILLER,
+      recoveryText: RECOVERY,
+      log,
+    });
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(400);
+    f.emit('speaking'); // real reply, well under the filler deadline
+    const latencyLogs = logs.filter((l) => l.obj.event === 'turn_latency_ms');
+    expect(latencyLogs).toHaveLength(1);
+    expect(latencyLogs[0].level).toBe('info');
+    expect(latencyLogs[0].obj.latency_ms).toBe(400);
+    expect(latencyLogs[0].obj.hold_played).toBe(false);
+  });
+
+  it('measures turn latency: reply queued behind the filler (settle-beat path) logs turn_latency_ms at WARN', async () => {
+    // Same shape as "SAD, live: reply queued BEHIND the filler" above — the
+    // reply plays seamlessly inside one continuous 'speaking' span, so the
+    // settle-beat setTimeout (not a second explicit 'speaking' event) is what
+    // confirms real audio. Must log from there too, or this whole class of
+    // turn is invisible to the latency instrumentation.
+    _resetToolActivityForTest();
+    const logs: Array<{ level: 'info' | 'warn'; obj: Record<string, unknown> }> = [];
+    const log = {
+      info: (obj: Record<string, unknown>) => logs.push({ level: 'info', obj }),
+      warn: (obj: Record<string, unknown>) => logs.push({ level: 'warn', obj }),
+    };
+    const f = makeFakeSession();
+    attachOutputWatchdog(f.session, {
+      voice: 'eve',
+      thinkingText: 'Just a moment.',
+      fillerText: FILLER,
+      recoveryText: RECOVERY,
+      log,
+    });
+    f.emit('thinking');
+    await vi.advanceTimersByTimeAsync(2500); // fires the filler
+    f.emit('speaking'); // the filler's own audio — one transition, never another
+    f.handles[0].fireDone(); // filler playout completes; agent STILL 'speaking' = the real reply
+    await vi.advanceTimersByTimeAsync(300); // the settle beat → disarm + latency log
+    const latencyLogs = logs.filter((l) => l.obj.event === 'turn_latency_ms');
+    expect(latencyLogs).toHaveLength(1);
+    expect(latencyLogs[0].level).toBe('warn');
+    expect(latencyLogs[0].obj.latency_ms).toBe(2800);
+    expect(latencyLogs[0].obj.hold_played).toBe(true);
+  });
+
   it('SAD: still no audio past deadline 2 → escalates to the recovery line', async () => {
     // A tool IS running here — otherwise deadline 1 speaks the neutral line and this
     // test would be asserting the wrong first utterance.

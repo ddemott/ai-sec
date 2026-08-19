@@ -69,6 +69,12 @@ type LogFn = (obj: Record<string, unknown>, msg: string) => void;
 const DEFAULT_DEADLINE_1 = 2500;
 const DEFAULT_DEADLINE_2 = 4000;
 
+/** A turn this slow is a pause a caller notices, hold line or not — WARN so it's
+ *  greppable in Better Stack without scanning every turn_latency_ms line. Set
+ *  to the filler deadline: by definition a turn that reaches the filler is one
+ *  the caller was already sitting in silence for. */
+const SLOW_TURN_WARN_MS = DEFAULT_DEADLINE_1;
+
 /**
  * Attach the watchdog to a live AgentSession. Call once per session (index.ts
  * does); attaching twice would register duplicate listeners and double-fire.
@@ -83,6 +89,12 @@ export function attachOutputWatchdog(
 
   let timer1: ReturnType<typeof setTimeout> | undefined;
   let timer2: ReturnType<typeof setTimeout> | undefined;
+  // When THIS turn's 'thinking' began — the caller's own reference point for
+  // "how long did it take him to respond," independent of whether a hold line
+  // covered the gap. Measures the thing docs/TODO.md's open "voice naturalness
+  // (pauses)" item asks for, per the project's own "measure before fixing"
+  // rule: nobody had turn-latency numbers before guessing at a cause.
+  let turnThinkingStartedAt: number | undefined;
   // The filler we injected this turn, and whether its playout has finished.
   // Used to tell our OWN filler's 'speaking' event apart from the real reply's:
   // the speech queue is serialized, so the reply only starts speaking AFTER the
@@ -104,6 +116,24 @@ export function attachOutputWatchdog(
     clearTimers();
     fillerHandle = undefined;
     fillerDone = false;
+  };
+
+  // Real audio has started for THIS turn — log how long it took from the
+  // caller's turn ending to the first real sound, whether or not a hold line
+  // covered the gap. Two different code paths reach "real audio confirmed"
+  // (an explicit 'speaking' transition, and the filler-done settle-beat when
+  // the reply is queued seamlessly behind the filler with no transition of its
+  // own) — both call this exactly once per turn.
+  const logTurnLatency = (holdPlayed: boolean) => {
+    if (turnThinkingStartedAt == null) return;
+    const latencyMs = Date.now() - turnThinkingStartedAt;
+    turnThinkingStartedAt = undefined;
+    const fields = { event: 'turn_latency_ms', latency_ms: latencyMs, hold_played: holdPlayed };
+    if (latencyMs >= SLOW_TURN_WARN_MS) {
+      opts.log.warn(fields, `slow turn: ${latencyMs}ms from thinking to real audio`);
+    } else {
+      opts.log.info(fields, `turn latency: ${latencyMs}ms from thinking to real audio`);
+    }
   };
 
   // Speak a cached clip (zero-latency) if warmed, else fall back to live TTS via
@@ -221,7 +251,10 @@ export function attachOutputWatchdog(
       // and that branch disarms anyway — either way the recovery only survives
       // into genuine dead air.
       setTimeout(() => {
-        if (timer2 !== undefined && session.agentState === 'speaking') disarm();
+        if (timer2 !== undefined && session.agentState === 'speaking') {
+          logTurnLatency(true);
+          disarm();
+        }
       }, 300);
     });
     // Arm deadline 2 — if STILL no real audio, escalate to the recovery line.
@@ -263,6 +296,7 @@ export function attachOutputWatchdog(
       clearTimers();
       fillerHandle = undefined;
       fillerDone = false;
+      turnThinkingStartedAt = Date.now();
       timer1 = setTimeout(fireFiller, deadline1);
     } else if (ev.newState === 'speaking') {
       // Audio started. If our filler is still playing, this 'speaking' IS the
@@ -271,9 +305,13 @@ export function attachOutputWatchdog(
       // disarm. (The queue is serialized, so the reply can only speak after the
       // filler's playout completes.)
       const isFillerSpeaking = fillerHandle != null && !fillerDone;
-      if (!isFillerSpeaking) disarm();
+      if (!isFillerSpeaking) {
+        logTurnLatency(fillerHandle != null);
+        disarm();
+      }
     } else if (ev.newState === 'listening' || ev.newState === 'idle') {
       // Turn fully resolved — stand down.
+      turnThinkingStartedAt = undefined;
       disarm();
     }
   };
