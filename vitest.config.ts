@@ -18,6 +18,12 @@ export default defineConfig({
     // while other test files hold RowShareLocks in open transactions. Sequential execution
     // ensures each file completes its cleanup before the next starts.
     fileParallelism: false,
+    // CI runners are materially slower on real-DB suite setup/teardown than local.
+    // Several files do heavy beforeAll/beforeEach work (clearDB, migrations-shaped
+    // fixture setup, RLS client wiring) and were tripping Vitest's default 10s
+    // hook timeout despite green local/full runs. Raise HOOK timeout only; this
+    // is not a license for slower test bodies.
+    hookTimeout: 30000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
