@@ -580,6 +580,29 @@ describe('record_answer', () => {
     expect(tracker.status('meeting_topic')).toBe('open'); // nothing to infer from
   });
 
+  it('HOST TOPIC: a topic tree + generic_subject auto-answers subject_details — never re-ask "what is this about"', async () => {
+    // WHO: live browser-simulator call against prod, 2026-08-19 — the model
+    //      selected job + generic_subject together. job's own intake already
+    //      says what the call is about; generic_subject's subject_details node
+    //      stayed open and asked "what does this concern?" a second time.
+    // WHAT: same backfill shape as the meeting_topic fix above — a TREE_TOPIC
+    //      tree co-selected with generic_subject answers its one question too.
+    const { toolkit, tracker } = makeKit();
+    const res = await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job', 'generic_subject'],
+    });
+    expect(tracker.status('subject_details')).toBe('answered');
+    expect(tracker.value('subject_details')).toBe('a job opportunity');
+    expect(res).not.toContain('[ASK] subject_details'); // the question no longer exists
+  });
+
+  it('HOST TOPIC: generic_subject alone (no topic tree) still asks — it is THE ELSE, not a default', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'generic_subject'] });
+    expect(tracker.status('subject_details')).toBe('open'); // nothing to infer from
+  });
+
   /**
    * WHO: Jack Smith, 2026-08-14, room sim-call-1786693849702.
    * WHAT: answering "what is the meeting about?" with a ROLE must host-add job.

@@ -25,7 +25,7 @@ Voice/Telnyx go-live ops detail + incident recovery: `docs/RUNBOOK.md` §7.
 - [x] ~~Refresh V8 coverage (stale since 05-22, run with DB)~~ — **DONE 2026-08-19**: reran root and dashboard coverage; `docs/TEST_COVERAGE.md` refreshed with exact totals.
 - [x] ~~Setup test DB (fix 9 RLS failures)~~ — **DONE 2026-08-19**: `npm test` now passes at repo root (`2750 passed (2750)`), so the prior `app_user` / test_db RLS blocker is gone.
 - [x] ~~Sync docs (TEST_COVERAGE, DEPLOYMENT, HANDOFF with current code)~~ — **DONE 2026-08-19**: refreshed counts/coverage/handoff and corrected deployment env wording.
-- Test voice naturalness on simulator (inflections, pauses)
+- [x] ~~Test voice naturalness on simulator (inflections, pauses)~~ — **PARTIAL 2026-08-19**: a live browser-simulator call against prod surfaced two real defects. (1) Fixed: `agent/src/checklist/checklistTools.ts` — `job`/`fix_computer` co-selected with `generic_subject` left `generic_subject`'s own "what does this concern?" node open even after the topic was already known, so the caller got asked a second time; now backfilled from `TREE_TOPIC` same as `meeting_topic`. (2) Instrumented, not fixed: no engine-level inflection/pacing control exists (Aura's WS path rejects `?speed=`) and nobody had turn-latency numbers to diagnose "long pauses" from — `agent/src/session/watchdog.ts` now logs `turn_latency_ms` (INFO, WARN at ≥2500ms) on every turn, both the plain-transition and reply-queued-behind-filler paths. Next: pull `turn_latency_ms` from a real prod call (Better Stack) to find where the time actually goes before attempting a fix.
 - Fill real TELNYX_PUBLIC_KEY in .env
 
 ## 📞 Live-call fix series (2026-07-30) — see `docs/CALL_FIX_PLAN.md`

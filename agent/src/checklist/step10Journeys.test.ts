@@ -134,6 +134,51 @@ async function fillJobIntake(
   }
 }
 
+describe('generic_subject dedup (2026-08-19 live browser-simulator call)', () => {
+  it('recruiter path with generic_subject also selected: subject_details never asked, call still completes once', async () => {
+    // WHO: real prod test call, browser call-simulator, 2026-08-19 — the model
+    //      picked job + generic_subject together. job's intake already says
+    //      what the call is about; the caller was still asked "what does this
+    //      call concern?" after giving the role.
+    // WHAT: same recruiter journey as the test below, but with generic_subject
+    //      riding along on set_purpose — the exact shape of the live defect.
+    const { toolkit, fakes, closeCall, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job', 'generic_subject'],
+    });
+    // generic_subject's only question is answered before the caller is ever
+    // asked anything — this is the assertion that would have failed before
+    // the fix (the state block below would still list [ASK] subject_details).
+    expect(tracker.status('subject_details')).toBe('answered');
+    const stateAfterPurpose = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Priya',
+    });
+    expect(stateAfterPurpose).not.toContain('[ASK] subject_details');
+    for (const [node_id, value] of [
+      ['caller_phone', '2624979039'],
+      ['callers_company', 'Northgate'],
+      ['hiring_for', 'own_company'],
+      ['role_description', 'contract React role'],
+      ['employment_type', 'full_time'],
+      ['salary_range', '160k'],
+      ['work_mode', 'remote'],
+      ['team_timezone', 'Eastern'],
+      ['meeting_offer', 'wants_meeting'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    expect(tracker.selectedTrees()).toContain('booking');
+    expect(await call(toolkit.selectedTools(), 'capture_job_inquiry', {})).toContain('ji_1');
+    expect(fakes.capture_job_inquiry.execute).toHaveBeenCalledOnce();
+    expect(await call(toolkit.selectedTools(), 'book_with_scheduling', {})).toContain('appt_1');
+    expect(fakes.book_with_scheduling.execute).toHaveBeenCalledOnce();
+    expect(await call(toolkit.selectedTools(), 'finish_call', {})).toBe('Call complete.');
+    expect(closeCall).toHaveBeenCalledOnce();
+  });
+});
+
 describe('Step 10 required journeys', () => {
   it('recruiter path: capture the role, book the meeting, hang up once', async () => {
     const { toolkit, fakes, closeCall, tracker } = makeKit();
