@@ -1776,6 +1776,11 @@ export default defineAgent({
           voice: ttsVoiceKey,
           recoveryText: RECOVERY_LINE,
           log: callLog,
+          // When the output watchdog is ALSO attached (ENABLE_OUTPUT_WATCHDOG
+          // on), IT owns turn_latency_ms — it can tell a filler's 'speaking'
+          // apart from the real reply's; this function cannot. See the option's
+          // doc comment in watchdog.ts for what goes wrong without this.
+          outputWatchdogActive: config.ENABLE_OUTPUT_WATCHDOG,
           onSpoken: (text) => transcript.add('assistant', text),
           // The turn made no sound, but its text is already in the transcript —
           // the framework records assistant turns off the token stream, not off

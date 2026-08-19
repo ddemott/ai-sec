@@ -401,6 +401,92 @@ describe('attachSilentTurnRecovery', () => {
     expect(f.sayCalls).toHaveLength(0);
   });
 
+  it('turn_latency_ms logs on every real turn — the UNCONDITIONAL copy of the instrument', () => {
+    // WHY THIS EXISTS: attachOutputWatchdog's copy lives behind
+    // ENABLE_OUTPUT_WATCHDOG, which prod runs OFF — confirmed live 2026-08-19
+    // (sim-call-1787158785189): a real call had 17s and 20s thinking→speaking
+    // gaps and ZERO turn_latency_ms lines anywhere in the deployed log. This
+    // function is the only one that actually runs on every prod call, so it
+    // is the only place this instrument can be trusted to fire.
+    const logs: Array<{ level: 'info' | 'warn'; obj: Record<string, unknown> }> = [];
+    const log = {
+      info: (obj: Record<string, unknown>) => logs.push({ level: 'info', obj }),
+      warn: (obj: Record<string, unknown>) => logs.push({ level: 'warn', obj }),
+    };
+    const f = makeFakeSession();
+    attachSilentTurnRecovery(f.session, { voice: 'eve', recoveryText: RECOVERY, log });
+    f.emit('thinking');
+    f.emit('speaking');
+    f.emit('listening');
+    const latencyLogs = logs.filter((l) => l.obj.event === 'turn_latency_ms');
+    expect(latencyLogs).toHaveLength(1);
+    expect(latencyLogs[0].obj.hold_played).toBe(false); // this path never has a filler
+    expect(typeof latencyLogs[0].obj.latency_ms).toBe('number');
+  });
+
+  it("a nudge's own reply logs its own fresh turn_latency_ms (thinkingAtMs resets on the retry's 'thinking')", () => {
+    const logs: Array<{ level: 'info' | 'warn'; obj: Record<string, unknown> }> = [];
+    const log = {
+      info: (obj: Record<string, unknown>) => logs.push({ level: 'info', obj }),
+      warn: (obj: Record<string, unknown>) => logs.push({ level: 'warn', obj }),
+    };
+    const f = makeFakeSession();
+    attachSilentTurnRecovery(f.session, { voice: 'eve', recoveryText: RECOVERY, log });
+    f.emit('thinking');
+    f.emit('listening'); // death #1 → nudge fires (generateReply)
+    f.emit('thinking'); // the nudge's own turn — resets thinkingAtMs fresh
+    f.emit('speaking'); // the nudge speaks
+    const latencyLogs = logs.filter((l) => l.obj.event === 'turn_latency_ms');
+    expect(latencyLogs).toHaveLength(1); // only the nudge's turn produced audio
+  });
+
+  it('the canned recovery line (second escalation) does NOT log a stale turn_latency_ms', () => {
+    // The canned line plays via a direct say() that never re-enters 'thinking'.
+    // Without the explicit null before it, a 'speaking' the fake test harness
+    // (or a real session) emits for that playback would compute latency
+    // against the ORIGINAL nudge's now-ancient thinking start.
+    const logs: Array<{ level: 'info' | 'warn'; obj: Record<string, unknown> }> = [];
+    const log = {
+      info: (obj: Record<string, unknown>) => logs.push({ level: 'info', obj }),
+      warn: (obj: Record<string, unknown>) => logs.push({ level: 'warn', obj }),
+    };
+    const f = makeFakeSession();
+    attachSilentTurnRecovery(f.session, { voice: 'eve', recoveryText: RECOVERY, log });
+    f.emit('thinking');
+    f.emit('listening'); // death #1 → nudge fires
+    f.emit('thinking'); // nudge's own turn
+    f.emit('listening'); // death #2 → nudge ALSO died silent → canned recovery plays
+    f.emit('speaking'); // the canned recovery line's own audio
+    const latencyLogs = logs.filter((l) => l.obj.event === 'turn_latency_ms');
+    expect(latencyLogs).toHaveLength(0);
+  });
+
+  it('outputWatchdogActive:true suppresses this copy of turn_latency_ms entirely', () => {
+    // Copilot review on PR #347: when attachOutputWatchdog is ALSO attached
+    // (ENABLE_OUTPUT_WATCHDOG on), it distinguishes a filler's own 'speaking'
+    // from the real reply's; this function cannot. Without this flag, a
+    // filler's 'speaking' would get logged here as the turn's latency (wrong
+    // — measures time-to-filler, not time-to-reply) and consume thinkingAtMs,
+    // silently dropping the real, correct measurement attachOutputWatchdog
+    // would otherwise log for the same turn.
+    const logs: Array<{ level: 'info' | 'warn'; obj: Record<string, unknown> }> = [];
+    const log = {
+      info: (obj: Record<string, unknown>) => logs.push({ level: 'info', obj }),
+      warn: (obj: Record<string, unknown>) => logs.push({ level: 'warn', obj }),
+    };
+    const f = makeFakeSession();
+    attachSilentTurnRecovery(f.session, {
+      voice: 'eve',
+      recoveryText: RECOVERY,
+      log,
+      outputWatchdogActive: true,
+    });
+    f.emit('thinking');
+    f.emit('speaking'); // would have logged if outputWatchdogActive were false/unset
+    f.emit('listening');
+    expect(logs.filter((l) => l.obj.event === 'turn_latency_ms')).toHaveLength(0);
+  });
+
   it('SAD but deferred: caller is mid-utterance when the turn dies → stays quiet (gotcha D)', () => {
     // WHO: a caller who barged in while the agent was thinking. WHAT: their own
     // new turn IS the recovery; speaking now would talk over them. WHY: gotcha D —

@@ -375,7 +375,23 @@ export class ChecklistTracker {
         `Recording "${nodeId}" needs a value (or declined:true). Record only what the caller actually said.`
       );
     }
-    if (def.type === 'choice' && !(value in def.options)) {
+    if (def.type === 'choice' && !Object.hasOwn(def.options, value)) {
+      // MODEL FUSES THE NODE_ID ONTO THE VALUE (2026-08-19 live call,
+      // sim-call-1787158785189): asked hiring_for, the caller answered
+      // plainly ("I'm hiring for my own company"), and the model recorded
+      // "hiring_for_own_company" instead of "own_company" — both are
+      // snake_case and sit right next to each other in the tool call, and it
+      // fused them. The rejection below is correct and stays for a genuinely
+      // wrong value, but a caller should never pay for this ONE shape of
+      // mistake: the model re-asked "just to be clear" instead of silently
+      // retrying with the key it already had, and the caller had to repeat
+      // an answer that was never in doubt. Strip the node_id prefix first —
+      // it can only ever match an option that a bare check would already
+      // have accepted, so this never masks a genuinely invalid value.
+      const prefixed = `${nodeId}_`;
+      if (value.startsWith(prefixed) && Object.hasOwn(def.options, value.slice(prefixed.length))) {
+        return this.record(nodeId, { value: value.slice(prefixed.length) });
+      }
       // THIS MESSAGE TAUGHT THE MODEL TO SAY "answering_service" OUT LOUD.
       //
       // 2026-08-15 sim (BUY THE SERVICE): the caller said "calls go to an

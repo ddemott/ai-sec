@@ -269,6 +269,36 @@ describe('choice branching', () => {
     );
   });
 
+  it('the model fusing node_id onto the option (2026-08-19 live call) is accepted, not rejected', () => {
+    // sim-call-1787158785189: the model recorded "hiring_for_own_company"
+    // instead of "own_company" for the hiring_for choice — a caller-answered
+    // question got asked TWICE because the host rejected a value the model
+    // had every right to think was fine. Same shape reproduced on job_type.
+    const t = make();
+    t.select(['job']);
+    expect(t.record('job_type', { value: 'job_type_contract' })).toBe('answered');
+    expect(t.value('job_type')).toBe('contract'); // stored as the real option, not the fused form
+  });
+
+  it('a value that merely LOOKS prefixed but is not a real option still throws', () => {
+    const t = make();
+    t.select(['job']);
+    expect(() => t.record('job_type', { value: 'job_type_freelance' })).toThrow(RecordError);
+  });
+
+  it('a value that shadows an Object.prototype key is rejected, not silently accepted', () => {
+    // Copilot review on PR #347: `value in def.options` walks the prototype
+    // chain, so "toString" in {} is true even though def.options never
+    // declared it — a caller/model value of "toString" would have passed the
+    // membership check and been stored as if it were a real, declared option.
+    // Object.hasOwn fixes both the primary check and the prefix-strip check.
+    const t = make();
+    t.select(['job']);
+    expect(() => t.record('job_type', { value: 'toString' })).toThrow(RecordError);
+    expect(() => t.record('job_type', { value: 'job_type_toString' })).toThrow(RecordError);
+    expect(() => t.record('job_type', { value: '__proto__' })).toThrow(RecordError);
+  });
+
   it('recording a ruled-out node names the choice that ruled it out', () => {
     const t = make();
     t.select(['job']);

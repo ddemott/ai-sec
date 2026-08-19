@@ -404,6 +404,21 @@ export function attachSilentTurnRecovery(
     /** Called when a turn is found to have made no sound, so the transcript can
      *  mark the assistant line the caller never heard. */
     onUnheardTurn?: () => void;
+    /**
+     * True when attachOutputWatchdog is ALSO attached to this session
+     * (ENABLE_OUTPUT_WATCHDOG on). That function distinguishes a filler's own
+     * 'speaking' from the real reply's; this one has no such signal — every
+     * 'speaking' looks the same to it. Left false (the default, matching
+     * prod today), THIS function is the only turn_latency_ms source and every
+     * 'speaking' really is real audio. Left true and NOT set here, a filler's
+     * 'speaking' would get logged as the turn's latency (wrong — measures
+     * time-to-filler, and falsely reports hold_played:false), then the real
+     * reply's later 'speaking' would find thinkingAtMs already consumed and
+     * log NOTHING — the correct number lost in favor of a wrong one. Set true
+     * to skip this function's copy entirely and let attachOutputWatchdog's
+     * filler-aware copy be the only source.
+     */
+    outputWatchdogActive?: boolean;
   }
 ): () => void {
   // True from the moment we fire a nudge until any agent audio plays. If a
@@ -421,6 +436,27 @@ export function attachSilentTurnRecovery(
   const onAgentState = (ev: voice.AgentStateChangedEvent) => {
     if (ev.newState === 'thinking') thinkingAtMs = Date.now();
     if (ev.newState === 'speaking') {
+      // turn_latency_ms belongs here, not only in attachOutputWatchdog — THIS
+      // function is UNCONDITIONAL (prod runs with ENABLE_OUTPUT_WATCHDOG
+      // off), so it is the only place that reliably observes every real turn.
+      // Confirmed live 2026-08-19 (sim-call-1787158785189): a 17s and a 20s
+      // gap between 'thinking' and real audio, and zero turn_latency_ms lines
+      // anywhere in the call's log — the watchdog's copy of this instrument
+      // never fires in prod because it lives behind the disabled flag.
+      if (thinkingAtMs != null && !opts.outputWatchdogActive) {
+        const latencyMs = Date.now() - thinkingAtMs;
+        const fields = { event: 'turn_latency_ms', latency_ms: latencyMs, hold_played: false };
+        if (latencyMs >= SLOW_TURN_WARN_MS) {
+          opts.log.warn(fields, `slow turn: ${latencyMs}ms from thinking to real audio`);
+        } else {
+          opts.log.info(fields, `turn latency: ${latencyMs}ms from thinking to real audio`);
+        }
+        // Null it out so a LATER 'speaking' event this same dead-air episode
+        // produces (the canned recovery line below, played via a direct say()
+        // that never re-enters 'thinking') cannot reuse this stale timestamp
+        // and log a second, misleading latency for the same turn.
+        thinkingAtMs = null;
+      }
       nudgeInFlight = false;
       return;
     }
@@ -455,6 +491,11 @@ export function attachSilentTurnRecovery(
         { event: 'silent_turn_recovery_escalated' },
         'forced reply also produced no audio — playing the recovery line'
       );
+      // This canned line plays via a direct say(), which never re-enters
+      // 'thinking' — null the stale nudge-era timestamp so the 'speaking' it
+      // produces cannot be logged as a fresh turn's latency (see the comment
+      // on turn_latency_ms above).
+      thinkingAtMs = null;
       const frame = getFillerFrame(opts.voice, opts.recoveryText);
       try {
         // SpeechHandle is a thenable — fire-and-forget, explicitly discarded.
