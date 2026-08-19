@@ -300,7 +300,6 @@ export const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
   ],
 };
 
-/** How many times set_purpose may fire before the call is told to wrap up. */
 /** Subject trees whose co-selection with `booking` ANSWERS the meeting-topic
  *  question, and whose co-selection with `generic_subject` ANSWERS its
  *  subject_details question — the caller who asked to "talk to Dale about a
@@ -358,6 +357,7 @@ export function meetingTopicNamesOwnerRole(raw: string): boolean {
   return false;
 }
 
+/** How many times set_purpose may fire before the call is told to wrap up. */
 const DEFAULT_MAX_PURPOSE_ROUNDS = 5;
 
 /** After this many consecutive failures an action is told to stop retrying. */
