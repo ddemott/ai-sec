@@ -1,10 +1,16 @@
 # Test Coverage
 
-**Latest audit rerun:** 2026-08-18. `cd dashboard && npm test` finished **1,046 passing**; `cd agent && npm test` finished **943 passing**; root `npm test` was **not green in this workspace** (**1,761 passing, 985 skipped, 9 failed**) because `tests/regression/rlsIsolation.test.ts` could not connect as `app_user` and explicitly requested `supabase/migrations/20260724000100_app_user_role.sql` be applied to `test_db` first. The **per-file V8 coverage %** + the e2e workflow tables below are still from the **2026-05-22** coverage run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
+**Latest verification rerun:** 2026-08-19. `npm test` at repo root finished **2,750 passing (226 files)**; `cd dashboard && npm test` finished **1,044 passing (97 files)**; `cd agent && npm test` finished **943 passing (56 files)**; `cd agent && npm run build` exited **0**. Production freshness also moved the same day: `GET https://secretary-hq-production.up.railway.app/health` returned `{"status":"ok","started_at":"2026-08-19T08:22:19.112Z"}` and `POST /demo/start` returned `{"success":true,...}`.
 
-**Last fully green headline snapshot kept for history:** 2026-08-14, by running all three suites against the real `test_db` — **2,706 backend + 1,044 dashboard + 1,629 agent = 5,379 passing, all green**. (Earlier the same day the backend was 2,705/1 fail: `tests/noHardcodedNames.test.ts` caught an owner's first name hardcoded in `meetingTopicNamesOwnerRole()`; the name is out and a name-agnostic pin test was added, which is the +1 on the agent suite.)
+**Latest V8 coverage rerun:** 2026-08-19. Root `npx vitest run --coverage` finished **2,805 passing (233 files)** with coverage **74.17% statements / 66.35% branches / 72.64% functions / 76.08% lines**. Dashboard `cd dashboard && npx vitest run --coverage` finished **1,044 passing (97 files)** with coverage **61.99% statements / 58.17% branches / 57.60% functions / 63.97% lines**.
 
-**Prior reconcile:** 2026-08-11 — 2,675 backend + 1,031 dashboard + 1,498 agent = 5,204 passing, tied to the vertical-preset/block + intake-submission checkpoint.
+**Warnings seen during the 2026-08-19 reruns, but both commands exited 0:**
+- Dashboard test/coverage emits `ReferenceError: closeMobileMenu is not defined` from a jsdom inline click handler.
+- Root coverage emitted `Failed to parse file:///home/dale/projects/secretary-hq/src/templates/auto_bays_v1.yaml. Excluding it from coverage.`
+
+**Prior fully green headline snapshot kept for history:** 2026-08-14 — **2,706 backend + 1,044 dashboard + 1,629 agent = 5,379 passing**.
+
+**Prior reconcile:** 2026-08-11 — **2,675 backend + 1,031 dashboard + 1,498 agent = 5,204 passing**, tied to the vertical-preset/block + intake-submission checkpoint.
 
 **Prior refresh:** 2026-05-22 — Walk-in customer create modal work. Replaced the single "Full name" field in CustomerCombobox with a proper `CustomerCreateModal` (split name, phone, email, address, timezone, internal notes). `name` is now derived from first+last on submit. Dashboard test count: 705 → 716.
 
@@ -23,23 +29,23 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 1,761 passing, 985 skipped, 9 failed | ❌ local audit rerun blocked by missing `app_user` role in `test_db` | 2026-08-18 audit rerun |
-| Dashboard (`cd dashboard && npm test`) | 1,046 passing (97 files) | ✅ | 2026-08-18 audit rerun |
-| Agent (`cd agent && npm test`) | 943 passing (56 files) | ✅ | 2026-08-18 audit rerun |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 40 committed spec files (exact pass/skip count: re-run to verify) | not re-run in this sweep | last known runtime ~175s |
+| Root/backend (`npm test`) | 2,750 passing (226 files) | ✅ | 2026-08-19 rerun |
+| Dashboard (`cd dashboard && npm test`) | 1,044 passing (97 files) | ✅ | 2026-08-19 rerun |
+| Agent (`cd agent && npm test`) | 943 passing (56 files) | ✅ | 2026-08-19 rerun |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 162 passed, 15 skipped | ✅ last verified, not re-run in this sweep | 2026-08-18 full verification |
 
-Current local audit rerun total: **2,989 passing** across the suites that completed, plus **985 skipped** and **9 backend failures** in the root suite. Historical full-green snapshot (2026-08-14): **5,379 passing**.
+Current verified total from the three suites re-run on 2026-08-19: **4,737 passing**. Last verified Playwright snapshot still stands at **162 passed, 15 skipped** from 2026-08-18.
 
-> **On skipped e2e tests**: `calendar-sync.spec.ts` tests skip without `SYNC_TEST_RECORDER=1` (set it + restart the backend to run them). One test in `full-functional-audit.spec.ts` (Voice Calls) is deferred until Telnyx PSTN clears. Re-run the suite to get current pass/skip counts.
+> **On skipped e2e tests**: `calendar-sync.spec.ts` tests skip without `SYNC_TEST_RECORDER=1` (set it + restart the backend to run them). One test in `full-functional-audit.spec.ts` (Voice Calls) is deferred until Telnyx PSTN clears. Re-run the suite to refresh pass/skip counts.
 
 ## Unit test coverage (V8)
 
 | Project | Statements | Branches | Functions | Lines |
 |---|---|---|---|---|
-| Backend (`src/`, `shared/`) | **64.06%** (3,394/5,298) | 56.56% (1,844/3,260) | 67.58% (544/805) | 66.05% (3,238/4,902) |
-| Dashboard (`components/`, `lib/`) | **49.01%** (2,505/5,111) | 46.19% (2,011/4,353) | 42.14% (628/1,490) | 51.26% (2,290/4,467) |
+| Root Vitest (`npx vitest run --coverage`) | **74.17%** (7,051/9,506) | 66.35% (4,503/6,786) | 72.64% (1,062/1,462) | 76.08% (6,620/8,701) |
+| Dashboard (`components/`, `lib/`) | **61.99%** (5,027/8,109) | 58.17% (3,891/6,689) | 57.60% (1,322/2,295) | 63.97% (4,682/7,319) |
 
-HTML reports: `coverage_data/index.html` (backend), `dashboard/coverage/index.html` (dashboard).
+HTML reports: `coverage_data/index.html` (root), `dashboard/coverage/index.html` (dashboard).
 
 ## E2E coverage — workflow-based, not percentage-based
 
@@ -107,33 +113,26 @@ the test still passes.
 
 ## Low-coverage hotspots worth attention
 
-### Backend
+### Root / backend
 | File | Statements | Notes |
 |---|---|---|
-| `src/services/tenants/index.ts` | 5.05% | `DatabaseTenantConfigService` — flagged as "delete by default" in CLAUDE.md |
-| (removed) | src/services/communications/ legacy adapter files | Full removal of legacy SMS provider fallback (2026-06) |
-| `src/workers/reminderScheduler.ts` | 17.74% | |
-| `src/services/reminders/reminderProcessor.ts` | 0% | |
-| `src/services/reminders/reminderRepository.ts` | 0% | |
+| `src/index.ts` | 0% | app bootstrap still uncovered by direct tests |
+| `src/routes/vocabulary.ts` | 0% | route file still unexercised |
+| `src/routes/calendar.ts` | 0.99% | calendar route remains mostly uncovered |
+| `src/services/reminders/reminderRepository.ts` | 0% | reminder persistence layer still untested |
+| `src/services/reminders/reminderScheduler.ts` | 0% | reminder scheduler still untested |
+| `src/workers/scheduleExtender.ts` | 0% | worker path still uncovered |
 
 ### Dashboard
 | File | Statements | Notes |
 |---|---|---|
-| `lib/policyQuestions.ts` | 0% | Pure re-export shim — no logic to test |
-| `lib/api.ts` | 39.47% | Many namespaced helpers unexercised |
-| `components/ui/TimeInput.tsx` | ~100% | Added 2026-07-07 (10 tests) |
-| `lib/logger.ts` | ~100% | Added 2026-07-07 (7 tests) |
-| `lib/ThemeContext.tsx` | ~90%+ | Added 2026-07-07 (10 tests) |
-| `lib/VocabularyContext.tsx` | ~90%+ | Added 2026-07-07 (8 tests) |
-| `components/ui/Toast.tsx` | ~90%+ | Added 2026-07-07 (13 tests total: 4 existing + 9 new) |
-| `components/ui/FeedbackButton.tsx` | ~90%+ | Added 2026-07-07 (11 tests) |
-| `lib/coverage.ts` | ~100% | Added 2026-07-07 (10 tests — critical 'closed'→'uncovered' branch) |
-| `components/VersionBadge.tsx` | ~90%+ | Added 2026-07-07 (5 tests — env-var gate, ISO-slice format) |
-| `components/SkillManagementView.tsx` | ~80%+ | Added 2026-07-07 (11 tests — create/delete/loading states) |
-| `components/BillingView.tsx` | ~75%+ | Added 2026-07-07 (14 tests — plan display/checkout/portal) |
-| `components/KnowledgeSuggestions.tsx` | ~85%+ | Added 2026-07-07 (12 tests — approve/reject/error paths) |
-| `components/voice/MessagesInbox.tsx` | ~80%+ | Added 2026-07-07 (14 tests — filter/select/mark-read/actioned) |
-| `components/CRMIntegrationCard.tsx` | ~80%+ | Added 2026-07-07 (15 tests — connect/disconnect/sync/status) |
+| `components/shifts/ShiftEditorModal.tsx` | 0% | whole shift editor path still dark |
+| `components/shifts/ShiftTimeline.tsx` | 0% | whole shift timeline path still dark |
+| `components/shifts/ShiftScheduleView.tsx` | 0% | whole shift schedule view still dark |
+| `components/scheduler/SchedulerToolbar.tsx` | 0% | toolbar path still unexercised |
+| `lib/callerActions.ts` | 0% | helper remains untested |
+| `components/knowledge/KnowledgeDocumentsTab.tsx` | 11.76% | document-tab path still thin |
+| `lib/api.ts` | 33.42% | many API helpers still unexercised |
 
 ## Regenerating
 

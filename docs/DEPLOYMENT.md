@@ -341,7 +341,7 @@ After step 4, calls to the new number flow Telnyx → LiveKit → agent. No Teln
 The agent worker lives in `agent/` and runs as a separate Railway service (`secretary-hq-agent`). It registers with LiveKit Cloud on boot using the `LIVEKIT_*` env vars and stays connected. Required env vars on the agent service:
 
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — from 5.1
-- `OPENAI_API_KEY` — LLM + TTS used by the agent
+- `OPENAI_API_KEY` — LLM used by the agent (plus backend summaries/classify); TTS is Deepgram, not OpenAI
 - `DEEPGRAM_API_KEY` — STT (Nova-3) + TTS (Aura)
 - `BACKEND_URL` — base URL for the Fastify backend (e.g., `https://secretary-hq-production.up.railway.app`)
 - `AGENT_SECRET` — shared secret the agent presents on every `/agent-tools/*` call (must match the same env var on the backend service)

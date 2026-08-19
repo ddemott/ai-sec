@@ -70,6 +70,24 @@ describe('browserCallerSession', () => {
     expect(() => parseSimCallOutput(incomplete)).toThrow('sim-call output missing agent');
   });
 
+  it('defaults blank launcher agent to the production worker name', async () => {
+    const runner = vi.fn(async (_scriptPath: string, env: NodeJS.ProcessEnv) => ({
+      stdout: `
+        https://meet.livekit.io/custom?liveKitUrl=wss%3A%2F%2Fexample.livekit.cloud&token=abc123
+        room:    sim-call-1750000000000
+        tenant:  ${env.SIM_TENANT ?? 'tenant-default'}
+        agent:   ${env.AGENT_NAME ?? 'secretary-hq-agent'}
+      `,
+      stderr: '',
+    }));
+
+    const session = await startBrowserCallerSession({}, runner);
+
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(runner.mock.calls[0]?.[1]?.AGENT_NAME).toBe('secretary-hq-agent');
+    expect(session.agent).toBe('secretary-hq-agent');
+  });
+
   it('passes tenant and agent overrides into sim-call env', async () => {
     const runner = vi.fn(async (_scriptPath: string, env: NodeJS.ProcessEnv) => ({
       stdout: `
@@ -130,6 +148,13 @@ describe('sim-call + simulate.sh contract (read off disk)', () => {
   // WHY: join-first wait in the DEFAULT path hangs the dashboard; CLI must opt in.
   const simCall = readFileSync(resolve(__dirname, '../../agent/scripts/sim-call.mjs'), 'utf8');
   const simulateSh = readFileSync(resolve(__dirname, '../../scripts/simulate.sh'), 'utf8');
+  const rootPackage = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf8')) as {
+    dependencies?: Record<string, string>;
+  };
+
+  it('root package declares livekit-server-sdk because backend executes sim-call.mjs in production', () => {
+    expect(rootPackage.dependencies?.['livekit-server-sdk']).toBeTruthy();
+  });
 
   it('default path dispatches and exits — wait is JOIN_FIRST only', () => {
     expect(simCall).toContain("process.env.SIM_CALL_JOIN_FIRST === '1'");
