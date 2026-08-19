@@ -404,6 +404,21 @@ export function attachSilentTurnRecovery(
     /** Called when a turn is found to have made no sound, so the transcript can
      *  mark the assistant line the caller never heard. */
     onUnheardTurn?: () => void;
+    /**
+     * True when attachOutputWatchdog is ALSO attached to this session
+     * (ENABLE_OUTPUT_WATCHDOG on). That function distinguishes a filler's own
+     * 'speaking' from the real reply's; this one has no such signal — every
+     * 'speaking' looks the same to it. Left false (the default, matching
+     * prod today), THIS function is the only turn_latency_ms source and every
+     * 'speaking' really is real audio. Left true and NOT set here, a filler's
+     * 'speaking' would get logged as the turn's latency (wrong — measures
+     * time-to-filler, and falsely reports hold_played:false), then the real
+     * reply's later 'speaking' would find thinkingAtMs already consumed and
+     * log NOTHING — the correct number lost in favor of a wrong one. Set true
+     * to skip this function's copy entirely and let attachOutputWatchdog's
+     * filler-aware copy be the only source.
+     */
+    outputWatchdogActive?: boolean;
   }
 ): () => void {
   // True from the moment we fire a nudge until any agent audio plays. If a
@@ -428,7 +443,7 @@ export function attachSilentTurnRecovery(
       // gap between 'thinking' and real audio, and zero turn_latency_ms lines
       // anywhere in the call's log — the watchdog's copy of this instrument
       // never fires in prod because it lives behind the disabled flag.
-      if (thinkingAtMs != null) {
+      if (thinkingAtMs != null && !opts.outputWatchdogActive) {
         const latencyMs = Date.now() - thinkingAtMs;
         const fields = { event: 'turn_latency_ms', latency_ms: latencyMs, hold_played: false };
         if (latencyMs >= SLOW_TURN_WARN_MS) {

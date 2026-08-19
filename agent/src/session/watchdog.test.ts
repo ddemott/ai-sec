@@ -461,6 +461,32 @@ describe('attachSilentTurnRecovery', () => {
     expect(latencyLogs).toHaveLength(0);
   });
 
+  it('outputWatchdogActive:true suppresses this copy of turn_latency_ms entirely', () => {
+    // Copilot review on PR #347: when attachOutputWatchdog is ALSO attached
+    // (ENABLE_OUTPUT_WATCHDOG on), it distinguishes a filler's own 'speaking'
+    // from the real reply's; this function cannot. Without this flag, a
+    // filler's 'speaking' would get logged here as the turn's latency (wrong
+    // — measures time-to-filler, not time-to-reply) and consume thinkingAtMs,
+    // silently dropping the real, correct measurement attachOutputWatchdog
+    // would otherwise log for the same turn.
+    const logs: Array<{ level: 'info' | 'warn'; obj: Record<string, unknown> }> = [];
+    const log = {
+      info: (obj: Record<string, unknown>) => logs.push({ level: 'info', obj }),
+      warn: (obj: Record<string, unknown>) => logs.push({ level: 'warn', obj }),
+    };
+    const f = makeFakeSession();
+    attachSilentTurnRecovery(f.session, {
+      voice: 'eve',
+      recoveryText: RECOVERY,
+      log,
+      outputWatchdogActive: true,
+    });
+    f.emit('thinking');
+    f.emit('speaking'); // would have logged if outputWatchdogActive were false/unset
+    f.emit('listening');
+    expect(logs.filter((l) => l.obj.event === 'turn_latency_ms')).toHaveLength(0);
+  });
+
   it('SAD but deferred: caller is mid-utterance when the turn dies → stays quiet (gotcha D)', () => {
     // WHO: a caller who barged in while the agent was thinking. WHAT: their own
     // new turn IS the recovery; speaking now would talk over them. WHY: gotcha D —

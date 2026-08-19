@@ -375,7 +375,7 @@ export class ChecklistTracker {
         `Recording "${nodeId}" needs a value (or declined:true). Record only what the caller actually said.`
       );
     }
-    if (def.type === 'choice' && !(value in def.options)) {
+    if (def.type === 'choice' && !Object.hasOwn(def.options, value)) {
       // MODEL FUSES THE NODE_ID ONTO THE VALUE (2026-08-19 live call,
       // sim-call-1787158785189): asked hiring_for, the caller answered
       // plainly ("I'm hiring for my own company"), and the model recorded
@@ -389,7 +389,7 @@ export class ChecklistTracker {
       // it can only ever match an option that a bare check would already
       // have accepted, so this never masks a genuinely invalid value.
       const prefixed = `${nodeId}_`;
-      if (value.startsWith(prefixed) && value.slice(prefixed.length) in def.options) {
+      if (value.startsWith(prefixed) && Object.hasOwn(def.options, value.slice(prefixed.length))) {
         return this.record(nodeId, { value: value.slice(prefixed.length) });
       }
       // THIS MESSAGE TAUGHT THE MODEL TO SAY "answering_service" OUT LOUD.
