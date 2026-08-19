@@ -23,8 +23,9 @@
  * inclusive 5:00 boundary). The task receives them. It wraps only the booking tool, and
  * only to notice success.
  */
-import { type llm, type voice } from '@livekit/agents';
+import { type voice } from '@livekit/agents';
 import { makeRung, idExtractor, type RungCompletion } from './rung.js';
+import type { ToolMap } from '../tools.js';
 
 export interface BookMeetingResult {
   /** 'booked' when a meeting went in the diary; 'message' when the caller could not be
@@ -44,7 +45,7 @@ export interface BookMeetingTaskOptions {
    * get_available_slots, get_scheduling_options, get_service_catalog, book_with_scheduling.
    * They are used exactly as they are on a live call.
    */
-  schedulingTools: llm.ToolContext;
+  schedulingTools: ToolMap;
   /** What the caller asked for, in THEIR words — passed to the service matcher. */
   requestedService: string;
   /** Date + hours the model must not guess (see callPlan.runtimePreamble). */
@@ -57,7 +58,7 @@ export interface BookMeetingTaskOptions {
    *  happen (no open times, or the caller would rather leave a message), calling it RECORDS
    *  the message and completes the rung. Without this the model offers to "pass something
    *  along" it has no way to save (the 2026-07-16 dead-end). Omit → no fallback. */
-  takeMessage?: llm.ToolContext[string];
+  takeMessage?: ToolMap[string];
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
   /** Called when the fallback message path completes instead of a booking. */
   onMessageTaken?: (r: { messageId: string; raw: unknown }) => Promise<void> | void;
@@ -123,8 +124,7 @@ export function makeBookMeetingRung(
       try {
         const parsed = JSON.parse(text) as { success?: boolean; error?: unknown };
         failed =
-          parsed.success === false ||
-          (typeof parsed.error === 'string' && parsed.success !== true);
+          parsed.success === false || (typeof parsed.error === 'string' && parsed.success !== true);
       } catch {
         failed = false;
       }
@@ -144,7 +144,7 @@ export function makeBookMeetingRung(
       }
       return res;
     },
-  } as llm.ToolContext[string];
+  } as ToolMap[string];
 
   // What the caller ALREADY told us they want. Injected so the rung opens by acting on it —
   // going straight to get_available_slots — instead of asking "what would you like to

@@ -46,7 +46,7 @@ describe('Schema invariant: every FK to tenants(tenant_id) has ON DELETE CASCADE
       root = await getRootClient();
     } catch (err) {
       dbAvailable = false;
-      // eslint-disable-next-line no-console
+       
       console.warn('[tenant-fk-cascade.test] Skipping DB tests - connection failed', err);
     }
   });

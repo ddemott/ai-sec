@@ -9,9 +9,12 @@ import type { PoolClient } from 'pg';
  * Algorithm — single SQL query that:
  *   1. Generates every 15-minute slot from `fromTime` forward through
  *      the search horizon (default 24 hours).
- *   2. For each slot, cross-joins resources × employees, filtering by
- *      shift coverage, required skills, required capabilities, and
- *      no-overlap with existing scheduled+not-deleted appointments.
+ *   2. For each slot, takes every employee and LATERAL-joins one free
+ *      resource, filtering by shift coverage, required skills, required
+ *      capabilities, and no-overlap with existing scheduled+not-deleted
+ *      appointments. A tenant that owns NO resources and a service that
+ *      needs no capability yield slots with a null resource rather than
+ *      no slots at all (2026-08-15 — see the SQL comment).
  *   3. Within each slot, ranks candidates by skill count ASC + random
  *      (mirrors book_with_scheduling_atomic's ORDER BY) and picks the
  *      lowest-skill qualified employee available at that time.
@@ -31,10 +34,12 @@ export interface AvailableSlot {
   employee_id: string;
   /** Display name of the assigned employee. */
   employee_name: string;
-  /** UUID of the resource paired with the assignment. */
-  resource_id: string;
-  /** Display name of the resource. */
-  resource_name: string;
+  /** UUID of the resource paired with the assignment, or null when the tenant
+   *  owns no resources and the service needs none (a consultancy whose only
+   *  "resource" is the owner's own time). Callers must not assume a resource. */
+  resource_id: string | null;
+  /** Display name of the resource, or null — see `resource_id`. */
+  resource_name: string | null;
   /** Number of skills the assigned employee has — for transparency in
    *  the UI ("Carlos, 3 skills" vs "Mike, 5 skills"). */
   skill_count: number;
@@ -128,8 +133,48 @@ export async function findNextAvailableSlots(
             random()
         ) AS rn
       FROM slot_starts ss
-      CROSS JOIN resources res
       CROSS JOIN employees emp
+      -- A RESOURCE IS REQUIRED ONLY BY A TENANT THAT HAS ONE (2026-08-15).
+      --
+      -- This was a plain CROSS JOIN on resources, so a tenant with zero resource
+      -- rows produced zero candidates — for every slot, on every day, forever.
+      -- Not theoretical: a business with an employee, three services and four
+      -- weeks of shifts was told "I'm not finding anything open in the next
+      -- week" by the SOONEST path while the DATE path listed 31 open times for
+      -- the same day (that one builds intervals in JS and never looks at
+      -- resources). Same tenant, same shifts, two answers — and the wrong one
+      -- is on the opener the agent leads with.
+      --
+      -- It survived because the tests seed a resource to make the join fire:
+      -- "A resource must EXIST for the availability cross-join to produce
+      -- slots — we never reference its id, only its presence." That comment is
+      -- the bug, written down and worked around.
+      --
+      -- LATERAL, not a plain LEFT JOIN, because the resource must be free AT
+      -- THIS SLOT: it picks one capability-matching resource with no
+      -- overlapping appointment. The tenant-level guard below then keeps the
+      -- old behaviour exactly where it was right — a tenant WITH resources
+      -- still needs a free one, so a fully-booked bay still blocks the slot.
+      -- Only the resourceless tenant falls open, the same shape as the
+      -- schedule-less fall-open in migration 20260718003000.
+      LEFT JOIN LATERAL (
+        SELECT r.resource_id, r.name
+          FROM resources r
+         WHERE r.tenant_id = $4
+           AND r.is_active = true
+           AND (r.is_deleted IS NULL OR r.is_deleted = false)
+           AND (array_length($6::text[], 1) IS NULL OR r.capabilities @> $6::text[])
+           AND NOT EXISTS (
+             SELECT 1 FROM appointments a
+              WHERE a.resource_id = r.resource_id
+                AND a.status = 'scheduled'
+                AND (a.is_deleted IS NULL OR a.is_deleted = false)
+                AND a.start_time < ss.s + ($3 || ' minutes')::interval + ($9 || ' minutes')::interval
+                AND a.end_time > ss.s - ($9 || ' minutes')::interval
+           )
+         ORDER BY r.name ASC
+         LIMIT 1
+      ) res ON true
       JOIN employee_schedule es
         ON es.employee_id = emp.employee_id
        AND es.tenant_id = $4
@@ -161,22 +206,31 @@ export async function findNextAvailableSlots(
                  = (ss.s AT TIME ZONE $5)::date
                AND es.end_time >= ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::time
            END
-      WHERE res.tenant_id = $4
-        AND res.is_active = true
-        AND (res.is_deleted IS NULL OR res.is_deleted = false)
-        AND emp.tenant_id = $4
+      WHERE emp.tenant_id = $4
         AND emp.is_active = true
         AND (emp.is_deleted IS NULL OR emp.is_deleted = false)
-        AND (array_length($6::text[], 1) IS NULL OR res.capabilities @> $6::text[])
-        AND (array_length($7::text[], 1) IS NULL OR emp.skills @> $7::text[])
-        AND NOT EXISTS (
-          SELECT 1 FROM appointments a
-           WHERE a.resource_id = res.resource_id
-             AND a.status = 'scheduled'
-             AND (a.is_deleted IS NULL OR a.is_deleted = false)
-             AND a.start_time < ss.s + ($3 || ' minutes')::interval + ($9 || ' minutes')::interval
-             AND a.end_time > ss.s - ($9 || ' minutes')::interval
+        -- The resource requirement, stated once, and it falls open in exactly
+        -- ONE case: the service asks for no capability AND the tenant owns no
+        -- active resource at all. Everything else still needs a free resource.
+        --
+        -- The capability clause is the part to be careful with. If the service
+        -- REQUIRES a capability and no resource has it, the LATERAL finds
+        -- nothing — and that must stay a refusal, not a fall-open, or the
+        -- agent offers a lift bay to a shop that does not own one. So the
+        -- escape hatch is gated on there being no capability demand at all.
+        AND (
+          res.resource_id IS NOT NULL
+          OR (
+            array_length($6::text[], 1) IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM resources r0
+               WHERE r0.tenant_id = $4
+                 AND r0.is_active = true
+                 AND (r0.is_deleted IS NULL OR r0.is_deleted = false)
+            )
+          )
         )
+        AND (array_length($7::text[], 1) IS NULL OR emp.skills @> $7::text[])
         AND NOT EXISTS (
           SELECT 1 FROM appointments a
            WHERE a.employee_id = emp.employee_id
@@ -214,8 +268,8 @@ export async function findNextAvailableSlots(
       slot_end: Date;
       employee_id: string;
       employee_name: string;
-      resource_id: string;
-      resource_name: string;
+      resource_id: string | null;
+      resource_name: string | null;
       skill_count: number;
     }) => ({
       start_time: r.slot_start.toISOString(),

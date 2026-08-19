@@ -63,6 +63,7 @@ describe('createTenantWithOwner — happy paths', () => {
       { rows: [] }, // SELECT user_id FROM users (none)
       { rows: [{ tenant_id: TENANT_ID }] }, // INSERT tenant RETURNING tenant_id
       { rows: [{ user_id: USER_ID }] }, // INSERT user RETURNING user_id
+      { rows: [] }, // copy_question_tree_templates_to_tenant
       { rows: [] }, // COMMIT
     ]);
 
@@ -81,10 +82,16 @@ describe('createTenantWithOwner — happy paths', () => {
       'SELECT user_id FROM users WHERE email = $1',
       'INSERT INTO tenants (name, business_type) VALUES ($1, $2) RETURNING tenant_id',
       expect.stringContaining('INSERT INTO users'),
+      // A new business gets its OWN copy of its vertical's questions, inside the
+      // same transaction that creates it — so a tenant never exists with a
+      // business_type and no questions. 2026-08-14.
+      expect.stringContaining('copy_question_tree_templates_to_tenant'),
       'COMMIT',
     ]);
     expect(queries[1].params).toEqual(['dale@test.com']);
     expect(queries[2].params).toEqual(['DynaTire', 'mobile-tire']);
+    // mobile-tire resolves to the local_service vertical (the fallback preset).
+    expect(queries[4].params).toEqual([TENANT_ID, ['local_service']]);
   });
 
   it('2. tenant_name policy: commits on no duplicate, persists first/last name', async () => {

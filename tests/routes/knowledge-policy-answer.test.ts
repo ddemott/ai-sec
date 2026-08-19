@@ -29,7 +29,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
 import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from '../utils';
-import { registerJwtAuthHook, tenantMiddleware, generateToken } from '../../src/middleware';
+import { registerJwtAuthHook, tenantMiddleware, generateToken } from '../../src/middleware/fastify-middleware';
 import { createWithTenantClient } from '../../src/database';
 import { registerKnowledgeRoutes } from '../../src/routes/knowledge';
 import { registerAgentToolRoutes } from '../../src/routes/agentTools';
@@ -101,7 +101,7 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[knowledge-policy-answer.test] DB not available, skipping', err);
   }
 });

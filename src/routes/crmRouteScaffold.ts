@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 /**
  * Shared route scaffold for CRM OAuth providers.
  *
@@ -30,7 +29,12 @@
 
 import type { Pool, PoolClient } from 'pg';
 import type { AppFastifyInstance } from '../types/fastify';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import {
+  withHandler,
+  logEvent,
+  requireTenantId,
+  type AppRequest,
+} from '../middleware/fastify-middleware';
 import { createOAuthCallbackHandler } from '../services/oauthCallbackFactory';
 import { getCrmSyncStatus } from '../services/crmSyncStatus';
 import { disconnectCrmIntegration, type CrmProvider } from '../services/crmDisconnect';

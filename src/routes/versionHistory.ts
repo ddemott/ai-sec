@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
@@ -17,14 +17,17 @@
 
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import {
+  withHandler,
+  logEvent,
+  requireTenantId,
+  type AppRequest,
+} from '../middleware/fastify-middleware';
 import type {
   RecordVersion,
   RecordHistoryResponse,
   DeletedRecord,
-  DeletedRecordsResponse,
   RecentChange,
-  RecentChangesResponse,
   VersionComparison,
   VersionedTable,
   ChangeSource,
@@ -494,7 +497,7 @@ export function registerVersionHistoryRoutes(
         return {
           records: result.rows,
           total,
-        } as DeletedRecordsResponse;
+        };
       });
 
       return reply.send(response);
@@ -651,7 +654,7 @@ export function registerVersionHistoryRoutes(
         return {
           changes: result.rows,
           total,
-        } as RecentChangesResponse;
+        };
       });
 
       return reply.send(response);

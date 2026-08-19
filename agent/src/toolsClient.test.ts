@@ -4,7 +4,7 @@
  *
  * Happy + sad paths with 5W diagnostics per test.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ToolsClient, type ToolResponse } from './toolsClient.js';
 
 const BACKEND = 'http://localhost:4001';
@@ -14,7 +14,9 @@ function mockFetch(responses: Array<{ status: number; body: unknown }>) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const queue = [...responses];
   const fetchImpl: typeof fetch = async (url, init) => {
-    calls.push({ url: String(url), init: init ?? {} });
+    const normalizedUrl =
+      typeof url === 'string' ? url : url instanceof URL ? url.toString() : url.url;
+    calls.push({ url: normalizedUrl, init: init ?? {} });
     const next = queue.shift();
     if (!next) throw new Error('mockFetch: no more responses queued');
     return new Response(JSON.stringify(next.body), { status: next.status });
@@ -155,17 +157,30 @@ describe('ToolsClient.call', () => {
       timeoutMs: 50,
     });
 
-    const start = Date.now();
-    const res = await client.call('/agent-tools/service-catalog', {});
-    const elapsed = Date.now() - start;
+    // FAKE TIMERS, not a stopwatch. This used to assert `elapsed < 500ms` as a
+    // "sanity check", and on 2026-08-15 it measured 770ms on a machine busy
+    // running the call sims — a red suite that said nothing about the code. A
+    // wall-clock threshold in a unit test is a CI flake waiting for a loaded
+    // runner. Driving the timer directly tests the real invariant, which is not
+    // "it was fast" but "the TIMER is what ended the call": fetchImpl never
+    // resolves, so nothing but the abort can return a value at all.
+    vi.useFakeTimers();
+    try {
+      const pending = client.call('/agent-tools/service-catalog', {});
+      // Nothing has fired yet — one tick short of the timeout must still hang.
+      await vi.advanceTimersByTimeAsync(49);
+      // Crossing timeoutMs is what produces the result.
+      await vi.advanceTimersByTimeAsync(1);
+      const res = await pending;
 
-    expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.error).toContain('timed out');
-      expect(res.error).toContain('50ms');
+      expect(res.ok).toBe(false);
+      if (!res.ok) {
+        expect(res.error).toContain('timed out');
+        expect(res.error).toContain('50ms');
+      }
+    } finally {
+      vi.useRealTimers();
     }
-    // Sanity: the abort fired quickly (give Node scheduler 500ms slack)
-    expect(elapsed).toBeLessThan(500);
   });
 
   it('SAD: unexpected response shape → structured error (never throws)', async () => {

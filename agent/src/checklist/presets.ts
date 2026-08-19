@@ -113,11 +113,64 @@ export const OWNER_FOR_HIRE_PRESET: VerticalPresetDef = {
   },
 };
 
+/**
+ * A small plaintiff-side law firm — one or two lawyers — whose inbound traffic
+ * is prospective clients describing a matter.
+ *
+ * WHY THE INTAKE TREE IS THE POINT. On every other preset the caller wants
+ * something the business can simply DO: book the bay, take the message, answer
+ * the price. Here the caller wants something the business must first DECIDE to
+ * take, and that decision happens after the call, by a human, on facts the call
+ * has to have collected completely — statute date, jurisdiction, existing
+ * counsel, opposing names. A missed field is not a worse record; it is an
+ * attorney making a take-or-decline call on a matter they cannot actually
+ * assess. That is why `case_intake` sets `await_tree` and why its capture is
+ * gated behind the four facts rather than a name and a number.
+ *
+ * `buy_service` and `job` are forbidden for the ordinary reason — a law firm's
+ * line is not selling this product and is not fielding recruiters — but note
+ * the 2026-08-13 lesson while reading that list: `forbidden_trees` is a CEILING
+ * and overrides can only SUBTRACT. Anything omitted here is unreachable by
+ * every tenant on this preset, no matter what the model asks for. `case_intake`
+ * is in `conversation_blocks` deliberately and must stay there; a law firm
+ * without it is a law firm that cannot take a case.
+ *
+ * `qa` stays enabled and carries real weight here: fees, contingency, free
+ * consultations, parking, what to bring. What it must never do is answer a
+ * question about the CALLER'S matter — that boundary lives in the case_intake
+ * tree description, because "do you take cases like mine?" arrives sounding
+ * exactly like a knowledge-base question and is not one.
+ */
+export const LAW_FIRM_PRESET: VerticalPresetDef = {
+  preset_id: 'law_firm_front_desk',
+  vertical: 'law_firm',
+  description:
+    'Preset for small law firms: take full case intake for attorney review, book consultations, answer questions about the firm, take messages, and handle schedule changes.',
+  conversation_blocks: [
+    'identity',
+    'booking',
+    'message',
+    'generic_subject',
+    'qa',
+    'case_intake',
+    'schedule_change',
+  ],
+  policy_blocks: [],
+  knowledge_blocks: [],
+  outcome_blocks: [],
+  forbidden_trees: ['job', 'buy_service', 'fix_computer'],
+  defaults: {
+    booking_mode: 'offer_once',
+    primary_intake: 'case_intake',
+  },
+};
+
 export const PRESET_LIBRARY: VerticalPresetDef[] = [
   AUTO_SHOP_PRESET,
   SALON_PRESET,
   LOCAL_SERVICE_PRESET,
   OWNER_FOR_HIRE_PRESET,
+  LAW_FIRM_PRESET,
 ];
 
 const PRESET_BY_ID = new Map(PRESET_LIBRARY.map((preset) => [preset.preset_id, preset]));

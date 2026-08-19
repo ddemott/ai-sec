@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
@@ -8,7 +8,12 @@ import type { FastifyReply } from 'fastify';
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { withHandler, logEvent, requireTenantId, type AppRequest } from '../middleware';
+import {
+  withHandler,
+  logEvent,
+  requireTenantId,
+  type AppRequest,
+} from '../middleware/fastify-middleware';
 import * as gcal from '../services/googleCalendar';
 import * as outlook from '../services/outlookCalendar';
 

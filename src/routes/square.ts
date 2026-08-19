@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
@@ -69,8 +69,7 @@ export function registerSquareRoutes(
     void reply.status(200).send({ success: true, message: 'Webhook received' });
 
     const event = req.body as
-      | { type?: string; merchant_id?: string; data?: { id?: string } }
-      | undefined;
+      { type?: string; merchant_id?: string; data?: { id?: string } } | undefined;
     const eventType = event?.type;
     const merchantId = event?.merchant_id;
 

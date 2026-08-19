@@ -30,7 +30,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
-import { registerJwtAuthHook, generateToken } from '../../src/middleware';
+import { registerJwtAuthHook, generateToken } from '../../src/middleware/fastify-middleware';
 import {
   generateSelfServiceToken,
   verifySelfServiceToken,

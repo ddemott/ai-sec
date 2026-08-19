@@ -12,7 +12,6 @@
  *      recover, or refuse for the right reason.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { llm } from '@livekit/agents';
 import type { TenantRuntimeConfig } from './blockTypes.js';
 import { resolveSelectableTreeIds } from './checklistAgent.js';
 import { createChecklistTools } from './checklistTools.js';
@@ -20,9 +19,10 @@ import { AUTO_SHOP_PRESET, SALON_PRESET } from './presets.js';
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 import { ChecklistTracker } from './tracker.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
+import type { ToolMap } from '../tools.js';
 
 type Exec = (args: unknown, ctx: unknown) => Promise<unknown>;
-const call = async (tools: llm.ToolContext, name: string, args: unknown = {}): Promise<string> =>
+const call = async (tools: ToolMap, name: string, args: unknown = {}): Promise<string> =>
   (await (tools[name] as unknown as { execute: Exec }).execute(args, undefined)) as string;
 
 const ok = (fields: Record<string, unknown>): string =>
@@ -103,7 +103,7 @@ function makeKit(opts?: { runtimeConfig?: TenantRuntimeConfig; bookResults?: str
     tracker,
     library: PLATFORM_TREE_LIBRARY,
     selectableTreeIds,
-    realTools: fakes as unknown as llm.ToolContext,
+    realTools: fakes as unknown as ToolMap,
     onSelectionChanged: vi.fn(),
     closeCall,
   });
@@ -488,6 +488,27 @@ describe('hire-intake selector journeys (2026-08-13 position/contract/meeting)',
     const hung = await call(toolkit.selectedTools(), 'finish_call', {});
     expect(hung).toMatch(/not complete/i);
     expect(closeCall).not.toHaveBeenCalled();
+
+    // From the SECOND refusal on it must stop being a bare "not yet" and say
+    // the thing the model kept getting wrong on the 2026-08-15 sim: nothing has
+    // landed, so nothing may be claimed. It answered the bare refusal there
+    // with "I'm still finalizing your meeting" — a meeting that did not exist.
+    const again = await call(toolkit.selectedTools(), 'finish_call', {});
+    expect(again).toContain('Nothing on this checklist has landed');
+    expect(again).toContain('take a message');
+    expect(closeCall).not.toHaveBeenCalled();
+
+    // WHO: a caller who has already said goodbye. WHAT: after FINISH_REFUSAL_LIMIT
+    // refusals the gate releases the call. WHEN: 2026-08-15 sim — the gate
+    // refused, the booking guard refused, and the two of them held a caller who
+    // had said goodbye twice on a call that could only end by hanging up.
+    // WHY: the gate protects a stated goal; once it has demonstrably failed to
+    // produce completion, holding the line protects nothing and costs the
+    // hang-up. The release is logged at WARN with the unmet nodes.
+    for (let i = 0; i < 2; i++) await call(toolkit.selectedTools(), 'finish_call', {});
+    expect(closeCall).not.toHaveBeenCalled();
+    expect(await call(toolkit.selectedTools(), 'finish_call', {})).toBe('Call complete.');
+    expect(closeCall).toHaveBeenCalledOnce();
   });
 });
 
@@ -530,10 +551,84 @@ describe('unconfirmed-booking guard', () => {
       window_from: '2026-08-17T01:00:00',
       window_to: '2026-08-21T17:00:00',
     });
-    expect(refused).toContain('has not picked one');
+    expect(refused).toContain('NOTHING in your arguments names which one');
     expect(refused).toContain('requested_start');
+    // It must name what is actually missing. The old refusal said only "the
+    // caller has not picked one", which on the 2026-08-15 sim was FALSE — the
+    // caller HAD picked 1:15 and the model had put it in `start_time`, a field
+    // this tool does not have. The model re-sent that same malformed call
+    // twelve times, because the refusal pointed it at the wrong problem.
+    expect(refused).toContain('"start_time" is not a parameter of this tool');
+    expect(refused).toContain('NOTHING IS BOOKED');
     // The real tool must never have been reached — the caller is not booked.
     expect(fakes.book_with_scheduling.execute).not.toHaveBeenCalled();
+  });
+
+  it('names the required arguments the model actually omitted', async () => {
+    const { toolkit } = await setUpOffer();
+    // No window at all. `service_type` and `phone` are NOT named here: both are
+    // backfilled from the tracker, so listing them would send the model chasing
+    // values the host already supplies. Only what it must provide is named.
+    const refused = await call(toolkit.selectedTools(), 'book_with_scheduling', {});
+    expect(refused).toContain('You also omitted required argument(s): window_from, window_to');
+    expect(refused).not.toContain('service_type,');
+  });
+
+  /**
+   * WHO: any caller who picks a time the model then cannot name in the tool's
+   * own parameters. WHAT: the guard stands down after two refusals instead of
+   * refusing forever. WHEN: 2026-08-15, `sim-questiontree` DALE'S CALL — the
+   * caller said "I'll take the 1:15 slot", the model sent
+   * `{"start_time":"Tuesday, July 22 at 1:15 PM"}`, and the guard refused it
+   * twelve times. WHERE: the unconfirmed-booking guard in checklistTools.
+   * WHY: `slotsAwaitingChoice` cleared ONLY on a successful booking, and a
+   * refusal returns before `failCounts`, so neither escape hatch could fire —
+   * the booking node stayed unresolved, the goodbye gate held the door shut,
+   * and the call could not end. Stopping the FIRST blind write is the guard's
+   * whole value; refusing the twelfth buys nothing and costs the call.
+   */
+  it('stands down after repeated refusals rather than deadlocking the call', async () => {
+    const { toolkit, fakes } = await setUpOffer();
+    const blind = { window_from: '2026-08-17T01:00:00', window_to: '2026-08-21T17:00:00' };
+
+    const first = await call(toolkit.selectedTools(), 'book_with_scheduling', blind);
+    expect(first).toContain('NOTHING in your arguments names which one');
+    expect(fakes.book_with_scheduling.execute).not.toHaveBeenCalled();
+
+    // Second identical attempt: the guard has made its point and gets out of
+    // the way, so the write actually happens and the checklist can resolve.
+    expect(await call(toolkit.selectedTools(), 'book_with_scheduling', blind)).toContain('appt_1');
+    expect(fakes.book_with_scheduling.execute).toHaveBeenCalledOnce();
+  });
+
+  it('SAD: a fresh offer restores the guard budget (stand-down is not permanent)', async () => {
+    // The booking backend is down, so the stand-down write FAILS and the node
+    // stays open — which is exactly the state in which a permanent stand-down
+    // would be dangerous.
+    const kit = makeKit({ bookResults: ['{"success":false,"error":"backend down"}'] });
+    await call(kit.toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'booking'],
+    });
+    for (const [node_id, value] of [
+      ['caller_name', 'Camille'],
+      ['caller_phone', '2624979039'],
+      ['meeting_topic', 'a position'],
+    ] as const) {
+      await call(kit.toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    await call(kit.toolkit.selectedTools(), 'get_available_slots', {});
+    const blind = { window_from: '2026-08-17T01:00:00', window_to: '2026-08-21T17:00:00' };
+    await call(kit.toolkit.selectedTools(), 'book_with_scheduling', blind); // refused
+    await call(kit.toolkit.selectedTools(), 'book_with_scheduling', blind); // stands down, fails
+
+    // New times put in front of the caller = a new choice outstanding. The very
+    // next blind write must be refused again, not waved through on the old
+    // exhausted budget.
+    await call(kit.toolkit.selectedTools(), 'get_available_slots', {});
+    expect(await call(kit.toolkit.selectedTools(), 'book_with_scheduling', blind)).toContain(
+      'NOTHING in your arguments names which one'
+    );
   });
 
   it('books once the caller names the time', async () => {

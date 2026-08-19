@@ -414,6 +414,11 @@ describe('agentTools /tenant-config', () => {
       // pool returns no employee rows, so the list is empty — and an empty
       // roster must render NO roster line rather than an empty one.
       staff_first_names: [],
+      // This tenant has no per-tenant question-tree rows, so the agent falls
+      // back to the platform TypeScript library — the behaviour every tenant
+      // had before per-tenant trees existed. An empty array here is the
+      // "not converted yet" signal, not a business that asks nothing.
+      question_trees: [],
     });
     expect(queries[0].text).toContain('FROM tenants');
     expect(queries[0].text).toContain('system_prompt');
@@ -558,6 +563,7 @@ describe('agentTools /tenant-config', () => {
         version: 1,
       },
       staff_first_names: [],
+      question_trees: [],
     });
   });
 

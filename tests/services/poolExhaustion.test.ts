@@ -33,7 +33,7 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { type Client, Pool, type PoolClient } from 'pg';
 import { ROOT_DB_URL, getRootClient, skipIfDbDown } from '../utils';
-import { withHandler, withPoolClient, type AppRequest } from '../../src/middleware';
+import { withHandler, withPoolClient, type AppRequest } from '../../src/middleware/fastify-middleware';
 import { errorsTotal } from '../../src/services/metrics';
 
 const CONNECTION_TIMEOUT_MS = 500;
@@ -78,7 +78,7 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[poolExhaustion.test] DB not available, skipping', err);
   }
 });

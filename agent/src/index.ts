@@ -42,6 +42,14 @@ import { CallRootAgent } from './tasks/callRootAgent.js';
 import { ChecklistAgent } from './checklist/checklistAgent.js';
 import { createChecklistTurnDetector } from './session/turnDetector.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
+import { callPathHosts, warmDns, slowOrFailed } from './session/dnsWarm.js';
+import { forceIpv4Enabled, installIpv4OnlyLookup, warmLookupFor } from './session/dnsIpv4.js';
+import { idleProcessOverride } from './session/workerTuning.js';
+import {
+  greetingSpeakPath,
+  canWarmGreetingBeforePickup,
+  auraTtsStreamingEnabled,
+} from './greetingPickup.js';
 import {
   HOLD_LINE,
   THINKING_LINE,
@@ -63,6 +71,15 @@ import { summarizeCall } from './callSummary.js';
 import { classifyCallOutcome } from './callClassify.js';
 import { createTransferExecutor } from './transferClient.js';
 import { buildSystemPrompt, formatDateForPrompt } from './prompt.js';
+
+// DNS_FORCE_IPV4=true patches dns.lookup to ask for A records only, for hosts
+// whose resolver stalls on AAAA. Installed at module load — before any plugin
+// opens a socket — and it must run in the JOB process too, which imports this
+// same file. Default off; see session/dnsIpv4.ts for the measurements and for
+// why the real fix is the host's resolver.
+if (forceIpv4Enabled()) {
+  installIpv4OnlyLookup();
+}
 
 /**
  * Per-turn tool-call cap (see gotcha I in docs/BUILDING_SCRIPT_NOTES.md for
@@ -218,6 +235,43 @@ export default defineAgent({
     const semanticTurn =
       process.env.ENABLE_QUESTION_TREE !== 'false' && process.env.ENABLE_SEMANTIC_TURN !== 'false';
     const minSilenceMs = Number(process.env.VAD_MIN_SILENCE_MS ?? (semanticTurn ? 600 : 1300));
+
+    // RESOLVE THE CALL PATH'S HOSTS WHILE NOBODY IS LISTENING.
+    //
+    // 2026-08-15, measured on a browser sim call: the greeting landed 11,765 ms
+    // after the caller joined with `pregenerated: true` — the frame was cached
+    // and the caller still heard ~12 seconds of nothing. The wait was one DNS
+    // lookup: `dns.lookup('api.deepgram.com')` took 11,069 ms on this host
+    // because getaddrinfo waits for the AAAA answer and the WSL resolver takes
+    // 11 s to give one (`dns.resolve4` alone: 24 ms; the same AAAA query against
+    // 1.1.1.1: 46 ms). Every FIRST outbound connection in a fresh job process
+    // pays it.
+    //
+    // Fire-and-forget on purpose. Awaiting it here would just move the same
+    // 11 s in front of the same caller whenever a process is spawned on demand
+    // (numIdleProcesses is 0 in dev mode). Unawaited, it runs concurrently with
+    // VAD load and finishes during the idle window when there IS one — which is
+    // the case in production, where the pool is pre-spawned. Failure is silent
+    // by design: the call path resolves DNS itself regardless.
+    void warmDns(callPathHosts(), { lookup: warmLookupFor() }).then((results) => {
+      const flagged = slowOrFailed(results);
+      const payload = {
+        event: 'dns_warm',
+        hosts: results.length,
+        slow_or_failed: flagged.map((r) => `${r.host}:${r.ok ? '' : 'FAIL:'}${r.ms}ms`),
+      };
+      if (flagged.length > 0) {
+        // A slow resolver here is the early warning for dead air at pickup —
+        // it belongs at warn level with the number attached, not buried.
+        getLogger().warn(
+          payload,
+          'DNS warm found a slow or failing host — a caller would wait this long at pickup'
+        );
+      } else {
+        getLogger().info(payload, 'DNS warm complete — call-path hosts resolved before pickup');
+      }
+    }, undefined);
+
     proc.userData.vad = await silero.VAD.load({
       minSilenceDuration: Number.isFinite(minSilenceMs) ? minSilenceMs : 900,
     });
@@ -270,7 +324,43 @@ export default defineAgent({
       return;
     }
 
-    // 2. Wait for the SIP participant (the caller) to join, to get caller-ID
+    // 2. Tenant config + greeting warm BEFORE pickup.
+    //    A receptionist does not answer and then wait 3–12s for TTS. Dispatch
+    //    already has tenant_id. Fetch config and start collect() while the
+    //    phone can still be ringing (or while join-first has not yet been
+    //    treated as answered). waitForParticipant is pickup.
+    const earlyClient = new ToolsClient({
+      backendUrl: config.BACKEND_URL,
+      agentSecret: config.AGENT_SECRET,
+    });
+    let warmedTenant: Awaited<ReturnType<typeof fetchTenantConfig>> | undefined;
+    let warmedVoice: DeepgramVoice | undefined;
+    let warmedGreeting: string | undefined;
+    let warmedGreetingP: Promise<unknown> = Promise.resolve();
+    if (canWarmGreetingBeforePickup(preliminaryCtx.tenantId)) {
+      warmedTenant = await fetchTenantConfig(earlyClient, preliminaryCtx.tenantId);
+      warmedVoice = toAuraVoice(warmedTenant.ttsVoice);
+      warmedGreeting = buildGreeting(warmedTenant);
+      {
+        const tts = new deepgram.TTS({
+          apiKey: config.DEEPGRAM_API_KEY,
+          model: warmedVoice,
+        }) as unknown as Parameters<typeof warmFillers>[0];
+        warmedGreetingP = warmFillers(tts, warmedVoice, [warmedGreeting]);
+        void warmedGreetingP
+          .then(() => warmFillers(tts, warmedVoice!, [...HOLD_LINES]))
+          .then(
+            ({ warmed, failed }) =>
+              log.info(
+                { event: 'pregen_warmed', warmed: warmed.length, failed: failed.length },
+                `pre-generated ${warmed.length} hold line(s); ${failed.length} failed (they fall back to live synthesis)`
+              ),
+            () => undefined
+          );
+      }
+    }
+
+    // 3. Wait for the SIP participant (the caller) to join, to get caller-ID
     //    phone + callID.
     //
     //    THE GHOST-DISPATCH GUARD (2026-07-23). A REAL inbound call — or a
@@ -409,10 +499,6 @@ export default defineAgent({
     // while the phone is still ringing. See the warm block below.
     let ttsVoiceKey: DeepgramVoice;
     let greeting: string;
-    // Resolves when the GREETING's audio is in the cache. Awaited (with a hard cap)
-    // right before we speak, so the opener actually USES the pre-generation instead
-    // of racing it and losing. See the warm block and the say() below.
-    let greetingWarm: Promise<unknown> = Promise.resolve();
     // Accumulates the spoken conversation (caller STT + agent replies) so the
     // shutdown callback can persist it as the call's transcript. Declared here
     // — above both the shutdown registration and the session listener — so both
@@ -494,10 +580,7 @@ export default defineAgent({
     }
     let sessionModelUsage: CostUsageItem[] = [];
     try {
-      client = new ToolsClient({
-        backendUrl: config.BACKEND_URL,
-        agentSecret: config.AGENT_SECRET,
-      });
+      client = earlyClient;
 
       // Call logging (2026-06-11): persist a voice_sessions row so the
       // dashboard Calls tab + customer call history populate. START is
@@ -765,70 +848,31 @@ export default defineAgent({
         ctx.addShutdownCallback(() => finalizeCall?.('shutdown') ?? Promise.resolve());
       }
 
-      // Fetch tenant config first — the transfer destination (forward_phone)
-      // and the prompt both depend on it.
-      tenantConfig = await fetchTenantConfig(client, sessionCtx.tenantId);
+      // Tenant + greeting warm already started before pickup. Reuse them.
+      // A second fetch here would push first audio even later.
+      tenantConfig = warmedTenant ?? (await fetchTenantConfig(client, sessionCtx.tenantId));
+      ttsVoiceKey = warmedVoice ?? toAuraVoice(tenantConfig.ttsVoice);
+      greeting = warmedGreeting ?? buildGreeting(tenantConfig);
       callLog.info(
         {
           event: 'tenant_config_fetched',
           tenant_name: tenantConfig.name,
           timezone: tenantConfig.timezone,
+          warmed_before_pickup: Boolean(warmedTenant),
+          // WHOSE QUESTIONS IS THIS CALL ABOUT TO ASK?
+          //
+          // A tenant with rows in tenant_question_trees runs ITS OWN copy — the
+          // one an owner can edit without a deploy. A tenant with none silently
+          // falls back to the platform library baked into this worker. Both
+          // answer the phone identically today, which is exactly why the
+          // difference has to be logged: after a per-tenant edit, "why didn't my
+          // change take effect" and "the copy never happened" look the same from
+          // the outside.
+          question_tree_source: tenantConfig.questionTrees ? 'tenant_db' : 'platform_fallback',
+          question_tree_count: tenantConfig.questionTrees?.length ?? 0,
         },
         'tenant config resolved'
       );
-
-      // ── WARM THE VOICE WHILE THE PHONE IS STILL RINGING ──────────────────────
-      //
-      // Dale's observation, and it is the right one: the work should start when the
-      // phone starts ringing, not when we pick it up.
-      //
-      // This warm used to sit ~700 lines further down, immediately before the
-      // greeting's say(). Fire-and-forget, racing a call it could not win: the say()
-      // fired microseconds later, the cache was empty, and the greeting synthesised
-      // LIVE on every cold worker — an audible pause at pickup, on the very first
-      // thing a customer ever hears. The log said so on this branch's first test
-      // call: greeting_spoken pregenerated=false "audible pause at pickup".
-      //
-      // Everything between here and session.start — building the prompt, the tools,
-      // the LLM/STT/TTS plugins, starting the session — is time the caller is already
-      // spending. The tenant (and therefore the voice, and therefore the greeting) is
-      // fully known RIGHT NOW. So spend that window synthesising instead of idling.
-      //
-      // Still fire-and-forget: a caller must never wait on OUR cache-fill. If the
-      // warm loses the race anyway, getFillerFrame returns null and the greeting
-      // synthesises live exactly as before — the old behaviour is the floor, not the
-      // failure mode.
-      ttsVoiceKey = toAuraVoice(tenantConfig.ttsVoice);
-      greeting = buildGreeting(tenantConfig);
-      {
-        const tts = new deepgram.TTS({
-          apiKey: config.DEEPGRAM_API_KEY,
-          model: ttsVoiceKey,
-        }) as unknown as Parameters<typeof warmFillers>[0];
-
-        // THE GREETING GETS ITS OWN PROMISE, and it is warmed FIRST and ALONE.
-        //
-        // Bundling it with the hold lines made it hostage to them: warmFillers
-        // resolves when ALL four clips are done, so the greeting — the one line we
-        // need in the next few hundred milliseconds — waited on three lines nobody
-        // needs until a tool goes slow. Warm what you are about to say, first.
-        greetingWarm = warmFillers(tts, ttsVoiceKey, [greeting]);
-
-        // The hold lines stay fire-and-forget. Nothing waits on them: the earliest
-        // they can possibly be needed is 2.5s into a slow tool, several turns away,
-        // and if they somehow miss, getFillerFrame returns null and the watchdog
-        // synthesises live. They must never delay the opener.
-        void greetingWarm
-          .then(() => warmFillers(tts, ttsVoiceKey, [...HOLD_LINES]))
-          .then(
-            ({ warmed, failed }) =>
-              callLog.info(
-                { event: 'pregen_warmed', warmed: warmed.length, failed: failed.length },
-                `pre-generated ${warmed.length} hold line(s); ${failed.length} failed (they fall back to live synthesis)`
-              ),
-            () => undefined
-          );
-      }
 
       // Forwarded-line guard (number match): when the SIP caller-ID equals the
       // tenant's forwarded-from line (the published number the carrier forwards
@@ -944,7 +988,18 @@ export default defineAgent({
           //
           // Verification gates DISCLOSURE, not CREATION. A booking reveals nothing — the
           // caller supplies every fact in it.
-          (c !== 'verification' || config.ENABLE_PHONE_VERIFICATION)
+          //
+          // AND IT REQUIRES SMS TO EXIST AT ALL. The paragraph above described the
+          // failure exactly and then left the remedy as an ops note ("set
+          // ENABLE_PHONE_VERIFICATION=false on Railway"), which nobody had set. On
+          // 2026-08-15 the model duly called send_verification_code and the tool
+          // answered "I'm sorry — I can't send a text from this line right now",
+          // which the caller heard, mid-booking, right after being asked for a
+          // number "to text or call". An OTP is a text; with texting off it is not
+          // a control that is merely disabled, it is a control that CANNOT RUN.
+          // Derive it instead of remembering it — the same reason the SMS tools
+          // are gated in code rather than trusted to a prompt line.
+          (c !== 'verification' || (config.ENABLE_PHONE_VERIFICATION && config.ENABLE_SMS))
       );
 
       // 3b. Prefetch the caller's CRM record so the prompt can carry their name,
@@ -1084,6 +1139,23 @@ export default defineAgent({
               // still hits the cap. Tunable without a deploy (MAX_TOOL_STEPS,
               // parsed + clamped at module scope).
               maxToolSteps: MAX_TOOL_STEPS,
+              // HOW LONG A SILENT TTS STREAM IS ALLOWED TO HOLD THE CALLER.
+              //
+              // The framework default is 10_000 ms (agent_session defaults,
+              // `ttsReadIdleTimeout`). On 2026-08-15 that default WAS the dead
+              // air: TTS accepted two turns, produced zero audio frames, and the
+              // caller waited the full ten seconds each time — "Hello? Are you
+              // there?", then "I said it already. Didn't you hear it?".
+              //
+              // Ten seconds is longer than any healthy synthesis and far longer
+              // than a caller's patience. Measured time-to-first-frame on this
+              // stack after the DNS fix: ~300 ms. 4 s leaves an order of
+              // magnitude of headroom and still converts a dead stream into a
+              // recovery line while the caller is merely puzzled rather than
+              // gone. Raise it with TTS_READ_IDLE_TIMEOUT_MS if a slower voice
+              // ever needs it — the same envMs guard as the silence timers, so a
+              // typo can never mean "give up instantly".
+              ttsReadIdleTimeout: envMs('TTS_READ_IDLE_TIMEOUT_MS', 4000),
               vad: ctx.proc.userData.vad as silero.VAD,
               stt: new deepgram.STT({ apiKey: config.DEEPGRAM_API_KEY, model: 'nova-3' }),
               // temperature: 0 — PICKING A TOOL IS NOT A CREATIVE ACT.
@@ -1148,22 +1220,11 @@ export default defineAgent({
               tts: new deepgram.TTS({
                 apiKey: config.DEEPGRAM_API_KEY,
                 model: ttsVoiceKey,
-                // NO `speed`. Aura's WebSocket REJECTS it — the plugin appends
-                // ?speed=… to the upgrade URL and Deepgram answers 400, so the socket
-                // never opens, so there is NO TTS AT ALL. That is not a degraded voice;
-                // it is a SILENT PHONE LINE. Measured:
-                //
-                //     WITHOUT speed  -> OPEN
-                //     WITH speed=1   -> Unexpected server response: 400
-                //
-                // The first version of this passed `speed: tenantConfig.ttsSpeed ?? 1.0`, so EVERY
-                // call sent speed=1 and every call was silent. The owner rang his own
-                // business, said "Hello… Hello…", heard nothing, and hung up.
-                //
-                // tenants.tts_speed is therefore INERT for Aura. It stays in the schema
-                // and the dashboard (it is meaningful again the moment we move to a
-                // TTS that honours it) but it is not passed here, and pretending
-                // otherwise is what caused the outage.
+                // WS speak from this host returned 0 bytes (2026-08-14). HTTP
+                // collect returns audio. AURA_TTS_STREAMING=false uses that path
+                // so the line is not silent. Prod keeps the default (stream).
+                // NO `speed` — Aura WS 400s on ?speed= and there is no TTS at all.
+                capabilities: { streaming: auraTtsStreamingEnabled() },
               }),
               turnHandling: {
                 interruption: {
@@ -1422,6 +1483,15 @@ export default defineAgent({
               ...(tenantConfig.checklistRuntimeConfig
                 ? { runtimeConfig: tenantConfig.checklistRuntimeConfig }
                 : {}),
+              // THE TENANT'S OWN QUESTIONS, when they have a copy in the
+              // database. Passed ALONGSIDE runtimeConfig, not instead of it:
+              // the library says which questions exist, the runtime config says
+              // which are switched off or reworded, and resolveSelectableTreeIds
+              // intersects them so an owner's disable still subtracts.
+              // Null (no rows, older backend, or a library that failed
+              // validation) omits the field and keeps the platform library —
+              // the behaviour every call has today.
+              ...(tenantConfig.questionTrees ? { library: tenantConfig.questionTrees } : {}),
             })
           : config.ENABLE_TASK_GROUP
             ? new CallRootAgent({
@@ -1452,8 +1522,7 @@ export default defineAgent({
                 instructions,
                 tools: intakeTools,
               });
-        if (!config.ENABLE_TASK_GROUP && !config.ENABLE_QUESTION_TREE)
-          phaseAgent = agent as InstanceType<typeof SpeakingAgent>;
+        if (!config.ENABLE_TASK_GROUP && !config.ENABLE_QUESTION_TREE) phaseAgent = agent;
 
         // Late-bind the turn detector's pending-question accessor to the live
         // checklist (the session — and thus the detector — was built first).
@@ -1708,6 +1777,19 @@ export default defineAgent({
           recoveryText: RECOVERY_LINE,
           log: callLog,
           onSpoken: (text) => transcript.add('assistant', text),
+          // The turn made no sound, but its text is already in the transcript —
+          // the framework records assistant turns off the token stream, not off
+          // playout. Mark it rather than let the call record claim the caller
+          // heard something they did not.
+          onUnheardTurn: () => {
+            const marked = transcript.markLastAssistantUnheard();
+            if (marked) {
+              callLog.info(
+                { event: 'transcript_marked_unheard' },
+                'the last assistant line was marked NOT HEARD — its audio never reached the caller'
+              );
+            }
+          },
         });
         session.on(voice.AgentSessionEventTypes.Close, detachTurnRecovery);
 
@@ -1847,19 +1929,20 @@ export default defineAgent({
               // On a real PSTN call this is nearly free — the phone is RINGING through
               // ctx.connect() and waitForParticipant(), and the warm started back when
               // the tenant resolved. By here it is usually already done.
-              const GREETING_WARM_CAP_MS = 1500;
-              await Promise.race([
-                greetingWarm.catch(() => undefined),
-                new Promise((r) => setTimeout(r, GREETING_WARM_CAP_MS)),
-              ]);
-
+              // Greeting audio MUST be HTTP-collected frames. Live WS say()
+              // from this host delivered 0 bytes — "no answer". The warm
+              // started before pickup; finish it, then play. Do not fall
+              // through to the silent stream just to avoid waiting.
+              await warmedGreetingP.catch(() => undefined);
               const greetingFrame = getFillerFrame(ttsVoiceKey, greeting);
-              const opener = greetingFrame
-                ? session.say(greeting, {
-                    allowInterruptions: false,
-                    audio: frameStream(greetingFrame),
-                  })
-                : session.say(greeting, { allowInterruptions: false });
+              const speak = greetingSpeakPath(Boolean(greetingFrame));
+              const opener =
+                speak === 'play_cache' && greetingFrame
+                  ? session.say(greeting, {
+                      allowInterruptions: false,
+                      audio: frameStream(greetingFrame),
+                    })
+                  : session.say(greeting, { allowInterruptions: false });
               const greetingAtMs = Date.now();
               // ms_since_participant is THE number — the silence the caller
               // actually sits through. ms_since_entry brackets it from the other
@@ -1972,5 +2055,17 @@ cli.runApp(
     // Set AGENT_NAME=secretary-hq-agent-dev on both the worker and the dispatcher
     // (scripts/sim-call.mjs reads the same var) and the job can ONLY land on yours.
     agentName: process.env.AGENT_NAME ?? 'secretary-hq-agent',
+    // WHO PAYS FOR PROCESS STARTUP.
+    //
+    // A job runs in its own process, and prewarm (Silero VAD load, DNS warm)
+    // runs inside it. With an idle process waiting, all of that is already done
+    // when the call arrives. With none, the caller waits through it.
+    //
+    // The SDK default is min(cpus, 4) in production and ZERO in dev mode — so a
+    // local `dev` worker spawns the process on demand and the developer testing
+    // the call hears every millisecond of startup, which is exactly the pause we
+    // were chasing on 2026-08-15. Undefined keeps the SDK default (do not hard-
+    // code a number here: forcing 1 would SHRINK the production pool from 4).
+    numIdleProcesses: idleProcessOverride(),
   })
 );

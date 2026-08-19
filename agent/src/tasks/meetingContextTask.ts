@@ -18,9 +18,10 @@
  * build-for-real-customers rule, templates are added when a real tenant names the need;
  * 'job' is the only vertical any real tenant uses (2026-07-16).
  */
-import { voice, type llm } from '@livekit/agents';
+import { voice } from '@livekit/agents';
 import { makeRung, idExtractor, type RungCompletion } from './rung.js';
 import { makeJobIntakeRung, type JobIntakeResult } from './jobIntakeTask.js';
+import type { ToolMap } from '../tools.js';
 
 export type MeetingContextTemplate = 'job' | 'default';
 
@@ -38,12 +39,12 @@ export interface MeetingNotesResult {
 export interface MeetingContextOptions {
   template: MeetingContextTemplate;
   /** Must include capture_job_inquiry when template is 'job'. */
-  messagingTools: llm.ToolContext;
+  messagingTools: ToolMap;
   /** attach_meeting_notes from buildTools() — the default template's write. */
-  notesTool?: llm.ToolContext[string];
+  notesTool?: ToolMap[string];
   /** take_message — the fallback when a note cannot be attached (mirrors the booking
    *  rung's fallback: an offer to "pass it along" must always have a write behind it). */
-  takeMessage?: llm.ToolContext[string];
+  takeMessage?: ToolMap[string];
   /** Whether a meeting ACTUALLY landed on this call — read from CallState at factory
    *  time (the factory runs after the booking rung), NOT from the caller's stated goal.
    *  A booking that fell back to a message books nothing, and the opener must not

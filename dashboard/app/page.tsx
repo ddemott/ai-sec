@@ -1155,6 +1155,7 @@ const LANDING_HTML = `
   <div class="footer-links">
     <a href="/privacy">Privacy</a>
     <a href="/terms">Terms</a>
+    <a href="/dpa">DPA</a>
     <a href="mailto:sales@secretaryhq.com">Contact</a>
   </div>
   <div class="footer-copy">© 2026 Secretary HQ. All rights reserved.</div>

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 /**
  * no-unsafe-* rules disabled: this file handles OAuth token refresh flows
  * with external providers. Responses from token endpoints and DB rows are
@@ -177,12 +177,7 @@ export async function getIntegrationTokens(
  * These values are stored in record_versions.change_source
  */
 export type ChangeSource =
-  | 'local'
-  | 'square'
-  | 'voice_call'
-  | 'system'
-  | 'google_calendar'
-  | 'outlook_calendar';
+  'local' | 'square' | 'voice_call' | 'system' | 'google_calendar' | 'outlook_calendar';
 
 /**
  * Sets PostgreSQL session variables for version tracking.

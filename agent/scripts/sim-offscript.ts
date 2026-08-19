@@ -39,6 +39,27 @@ if (!API_KEY) {
   process.exit(2);
 }
 
+const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
+const MAX_ATTEMPTS = 5;
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+async function postWithRetry(body: unknown): Promise<Response> {
+  let res!: Response;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
+      body: JSON.stringify(body),
+    });
+    if (res.ok || !RETRY_STATUSES.has(res.status) || attempt === MAX_ATTEMPTS) return res;
+    // Honour Retry-After when the API sends one; otherwise exponential.
+    const after = Number(res.headers.get('retry-after'));
+    await sleep(Number.isFinite(after) && after > 0 ? after * 1000 : 2000 * 2 ** (attempt - 1));
+  }
+  return res;
+}
+
 const BUSINESS = 'Thinking Hammer';
 const BLURB =
   "Dale is available for hire — you can leave him a message and tell me what it's about, " +
@@ -285,17 +306,22 @@ async function ask(
   const spoken: string[] = [];
   const called: string[] = [];
 
+  /**
+   * Retry the transient statuses. Without this, one shared TPM ceiling turned
+   * this eval into a lie: on 2026-08-15 nine of twelve cases came back 429 and
+   * the run printed "3/12 passed (25%) — threshold 80%", which reads as the
+   * model falling over when in fact it was never asked. `sim-questiontree`
+   * already retries five times; this one did not, and nothing distinguished an
+   * unanswered case from a failed one.
+   */
+
   for (let round = 0; round < 2; round++) {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` },
-      body: JSON.stringify({
-        model: MODEL,
-        ...(MODEL.startsWith('gpt-5') ? {} : { temperature: 0 }),
-        messages,
-        tools: TOOLS,
-        tool_choice: 'auto',
-      }),
+    const res = await postWithRetry({
+      model: MODEL,
+      ...(MODEL.startsWith('gpt-5') ? {} : { temperature: 0 }),
+      messages,
+      tools: TOOLS,
+      tool_choice: 'auto',
     });
     if (!res.ok) throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const json = (await res.json()) as {
@@ -329,12 +355,18 @@ async function main(): Promise<void> {
   );
 
   let passed = 0;
+  let errored = 0;
   for (const c of CASES) {
     let reply = '';
     let toolCalls: string[] = [];
     try {
       ({ reply, toolCalls } = await ask(c.utterance, c.priorTurns));
     } catch (err) {
+      // NOT a failure — the model never answered. Counted separately so it
+      // cannot be read as a behavioural regression, and it changes the exit
+      // code to 2 (infrastructure) rather than 1 (the model was graded and
+      // fell short).
+      errored++;
       console.log(`  ${C.r}[ERROR]${C.x} ${c.name} — ${err instanceof Error ? err.message : err}`);
       continue;
     }
@@ -362,11 +394,20 @@ async function main(): Promise<void> {
     console.log('');
   }
 
-  const rate = passed / CASES.length;
+  const graded = CASES.length - errored;
+  const rate = graded > 0 ? passed / graded : 0;
   const pct = (rate * 100).toFixed(0);
   console.log(
-    `${C.b}${passed}/${CASES.length} passed (${pct}%)${C.x} — threshold ${(THRESHOLD * 100).toFixed(0)}%`
+    `${C.b}${passed}/${graded} graded cases passed (${pct}%)${C.x} — threshold ${(THRESHOLD * 100).toFixed(0)}%`
   );
+  if (errored) {
+    console.log(
+      `${C.y}${errored} of ${CASES.length} case(s) never reached the model (API error after ` +
+        `${MAX_ATTEMPTS} attempts) — this run did NOT grade them. Re-run when the API is ` +
+        `available; the pass rate above covers only what was actually asked.${C.x}`
+    );
+    process.exit(2);
+  }
   process.exit(rate >= THRESHOLD ? 0 : 1);
 }
 

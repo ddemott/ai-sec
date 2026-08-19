@@ -13,6 +13,7 @@ import {
   TAKE_MESSAGE_INSTRUCTIONS,
   TAKE_MESSAGE_INTRO,
 } from './takeMessageTask.js';
+import { getTaskTool, getTaskToolNames } from './testToolCtx.js';
 
 beforeAll(() => {
   initializeLogger({ pretty: false, level: 'silent' });
@@ -35,11 +36,9 @@ async function callTool(
   name: string,
   args: unknown = {}
 ): Promise<unknown> {
-  const tool = (task.toolCtx as Record<string, unknown>)[name] as {
-    execute: (a: unknown, c: unknown) => Promise<unknown>;
-  };
+  const tool = getTaskTool(task, name);
   expect(tool, `the rung must expose ${name}`).toBeDefined();
-  return tool.execute(args, { ctx: {}, toolCallId: 'tc' });
+  return tool!.execute(args, { ctx: {}, toolCallId: 'tc' });
 }
 
 describe('TakeMessageTask — the write IS the transition', () => {
@@ -93,7 +92,7 @@ describe('TakeMessageTask — the write IS the transition', () => {
         capture_job_inquiry: fakeTool('{}'), // should be dropped as passthrough noise
       },
     });
-    expect(Object.keys(task.toolCtx)).toEqual(['take_message']);
+    expect(getTaskToolNames(task)).toEqual(['take_message']);
   });
 
   it('SAD: it refuses to build without take_message', () => {

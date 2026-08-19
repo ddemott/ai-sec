@@ -35,6 +35,7 @@
  */
 import { llm, voice } from '@livekit/agents';
 import { sanitizeStream } from '../speechSanitizer.js';
+import type { ToolMap } from '../tools.js';
 
 /** A rung that gathers + confirms facts; a synthetic tool marks it done. */
 export interface CollectCompletion<R> {
@@ -57,7 +58,7 @@ export interface ActionCompletion<R> {
   /** The real tool's name (kept, so the model sees the tool it expects). */
   toolName: string;
   /** The real tool from buildTools(), untouched. */
-  realTool: llm.ToolContext[string];
+  realTool: ToolMap[string];
   /** Return the typed result when the write succeeded, or null to stay open. */
   extract: (raw: unknown) => R | null;
   /** Merge known facts (phone/name) into the model's args before the real call, so a
@@ -73,7 +74,7 @@ export interface RungConfig<R> {
   instructions: string;
   /** The rung's passthrough tools, ALREADY narrowed with pick(). The completion tool(s) are
    *  added here automatically — do not include them. Give ONLY load-bearing tools (rule 8). */
-  tools: llm.ToolContext;
+  tools: ToolMap;
   /** How the rung ends. Usually ONE completion (book, capture, confirm_identity). A rung
    *  with more than one legitimate ending — e.g. scheduling, which ends on a cancel OR a
    *  reschedule OR "nothing to change" — passes several; the FIRST to succeed wins, and the
@@ -101,7 +102,7 @@ export function makeRung<R>(cfg: RungConfig<R>): voice.AgentTask<R> {
     }
 
     constructor() {
-      const completionTools: llm.ToolContext = {};
+      const completionTools: ToolMap = {};
       for (const c of completions) {
         completionTools[c.toolName] =
           c.kind === 'collect'

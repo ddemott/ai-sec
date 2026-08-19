@@ -52,7 +52,9 @@ describe('browserCallerSession', () => {
       joinFirst: true,
     });
     expect(output).toMatch(/Agent joins AFTER you appear/);
-    expect(output.indexOf('agent:')).toBeLessThan(output.indexOf('Waiting up to') === -1 ? output.length : output.indexOf('Waiting up to'));
+    expect(output.indexOf('agent:')).toBeLessThan(
+      output.indexOf('Waiting up to') === -1 ? output.length : output.indexOf('Waiting up to')
+    );
     expect(parseSimCallOutput(output).agent).toBe('secretary-hq-agent');
     expect(parseSimCallOutput(output).room).toBe('sim-call-1786639565348');
   });
@@ -92,6 +94,29 @@ describe('browserCallerSession', () => {
     expect(session.agent).toBe('secretary-hq-agent-dev');
   });
 
+  it('E2E STUB: returns deterministic browser-caller session without LiveKit env', async () => {
+    const prev = process.env.BROWSER_CALLER_E2E_STUB;
+    process.env.BROWSER_CALLER_E2E_STUB = '1';
+    try {
+      const runner = vi.fn();
+      const session = await startBrowserCallerSession(
+        { tenantId: 'tenant-override', agentName: 'secretary-hq-agent-dev' },
+        runner as never
+      );
+
+      expect(runner).not.toHaveBeenCalled();
+      expect(session).toMatchObject({
+        tenant: 'tenant-override',
+        agent: 'secretary-hq-agent-dev',
+        access_token: 'e2e-stub-token',
+        e2e_stub: true,
+      });
+    } finally {
+      if (prev === undefined) delete process.env.BROWSER_CALLER_E2E_STUB;
+      else process.env.BROWSER_CALLER_E2E_STUB = prev;
+    }
+  });
+
   it('fails loud when sim-call output is missing the join url', () => {
     expect(() => parseSimCallOutput('room: sim-call-1\ntenant: t\nagent: a')).toThrow(
       'sim-call output missing join URL'
@@ -110,20 +135,26 @@ describe('sim-call + simulate.sh contract (read off disk)', () => {
     expect(simCall).toContain("process.env.SIM_CALL_JOIN_FIRST === '1'");
     expect(simCall).toContain('if (!JOIN_FIRST)');
     expect(simCall).toContain('process.exit(0)');
-    expect(simCall).toMatch(/Waiting up to 3 minutes/);
+    // The wait exists and still defaults to three minutes. Pinned as the
+    // DEFAULT rather than as literal banner text: the duration became
+    // configurable (SIM_CALL_JOIN_WAIT_MS, 2026-08-15, after a tester was still
+    // reading the instructions when the room lapsed) and this assertion failed
+    // on the wording change while the behaviour it guards was intact.
+    expect(simCall).toMatch(/Waiting up to \$\{JOIN_WAIT_LABEL\}/);
+    expect(simCall).toMatch(/SIM_CALL_JOIN_WAIT_MS\) \|\| 180_000/);
   });
 
   it('prints the parseable banner before any wait or dispatch', () => {
     expect(simCall).toContain("from './sim-call-format.mjs'");
     expect(simCall).toContain('formatSimCallBanner');
     const bannerAt = simCall.indexOf('formatSimCallBanner');
-    const waitAt = simCall.indexOf('Waiting up to 3 minutes');
+    const waitAt = simCall.indexOf('Waiting up to');
     const dispatchFn = simCall.indexOf('async function dispatchAgent');
     expect(bannerAt).toBeGreaterThan(-1);
     expect(bannerAt).toBeLessThan(waitAt);
-    expect(simCall.indexOf('console.log(\n  formatSimCallBanner') >= 0 || bannerAt < dispatchFn).toBe(
-      true
-    );
+    expect(
+      simCall.indexOf('console.log(\n  formatSimCallBanner') >= 0 || bannerAt < dispatchFn
+    ).toBe(true);
   });
 
   it('CLI call command opts into join-first; dashboard runner does not', () => {

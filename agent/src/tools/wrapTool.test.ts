@@ -135,7 +135,7 @@ describe('wrapToolExecute — onCall observability', () => {
       onCall: ({ tool, ok }) => calls.push({ tool, ok }),
     });
 
-    await wrapped({} as never, {} as never);
+    await wrapped({}, {});
 
     expect(calls).toEqual([{ tool: 'identify_caller', ok: true }]);
   });
@@ -150,7 +150,7 @@ describe('wrapToolExecute — onCall observability', () => {
       { onCall: ({ tool, ok }) => calls.push({ tool, ok }) }
     );
 
-    const out = await wrapped({} as never, {} as never);
+    const out = await wrapped({}, {});
 
     expect(calls).toEqual([{ tool: 'send_verification_code', ok: false }]);
     expect(out).toContain(FALLBACK_MARK); // contract still holds
@@ -170,7 +170,7 @@ describe('wrapToolExecute — onCall observability', () => {
       },
     });
 
-    await wrapped({} as never, {} as never);
+    await wrapped({}, {});
 
     expect(preview).toContain('3:00 PM');
   });
@@ -200,7 +200,7 @@ describe('wrapToolExecute — onCall observability', () => {
       { onCall: (info) => void (preview = info.resultPreview) }
     );
 
-    await wrapped({} as never, {} as never);
+    await wrapped({}, {});
 
     // The values are gone.
     expect(preview).not.toContain('Camille Rousseau');
@@ -226,6 +226,6 @@ describe('wrapToolExecute — onCall observability', () => {
       },
     });
 
-    await expect(wrapped({} as never, {} as never)).resolves.toBe('Saved.');
+    await expect(wrapped({}, {})).resolves.toBe('Saved.');
   });
 });

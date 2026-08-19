@@ -26,7 +26,7 @@
 import type { AppFastifyInstance } from '../../types/fastify';
 import type { Pool } from 'pg';
 import { timingSafeEqual } from 'crypto';
-import type { AppRequest } from '../../middleware';
+import type { AppRequest } from '../../middleware/fastify-middleware';
 import type { AgentToolDeps, WithTenantClient } from './helpers';
 import { registerSessionRoutes } from './session';
 import { registerIdentityRoutes } from './identity';

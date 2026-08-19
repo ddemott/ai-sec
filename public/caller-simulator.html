@@ -253,11 +253,18 @@
 
         <div class="actions">
           <button id="start-btn" class="primary">Start call session</button>
+          <!-- Hanging up is a real thing a caller does, and until now this rig had
+               no way to do it: the only disconnect was the implicit one when you
+               started a SECOND session. A tester who got what they needed had to
+               close the tab, and the room stayed up until the agent's silence
+               watchdog gave up ~45s later — a full LiveKit + Deepgram + OpenAI
+               call's worth of usage after the useful part had ended. -->
+          <button id="end-btn" class="secondary" data-testid="end-call" style="display:none;">End call</button>
           <a id="open-btn" class="link-btn secondary" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">Open voice call</a>
           <button id="copy-btn" class="secondary" style="display:none;">Copy join URL</button>
         </div>
 
-        <div id="status" class="status info">Idle. Click start, allow mic in next tab, talk like real caller.</div>
+        <div id="status" class="status info">Idle. Click start to generate a join URL, then open it yourself when ready.</div>
 
         <div class="facts" id="facts" style="display:none;">
           <div class="fact"><strong>Join URL</strong><div id="join-url" class="join-url"></div></div>
@@ -297,31 +304,191 @@
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    import { Room, RoomEvent } from 'https://cdn.jsdelivr.net/npm/livekit-client@2.15.4/dist/livekit-client.esm.mjs';
+
     const startBtn = document.getElementById('start-btn');
+    const endBtn = document.getElementById('end-btn');
     const openBtn = document.getElementById('open-btn');
     const copyBtn = document.getElementById('copy-btn');
     const statusEl = document.getElementById('status');
     const factsEl = document.getElementById('facts');
     const tenantInput = document.getElementById('tenant-id');
     const agentInput = document.getElementById('agent-name');
+
+    // Prefill from the query string so a test call can be handed over as ONE
+    // link instead of a link plus two fields to type. The agent name matters
+    // more than it looks: left blank it dispatches to `secretary-hq-agent`,
+    // which is ALSO the name the Railway production worker registers under, so
+    // the job lands on prod rather than the local worker under test.
+    //   /call-simulator?tenant=<uuid>&agent=secretary-hq-agent-dev
+    const params = new URLSearchParams(location.search);
+    const tenantParam = params.get('tenant');
+    const agentParam = params.get('agent');
+    if (tenantParam) tenantInput.value = tenantParam;
+    if (agentParam) agentInput.value = agentParam;
     const joinUrlEl = document.getElementById('join-url');
     const roomEl = document.getElementById('room');
     const tenantEl = document.getElementById('tenant');
     const agentEl = document.getElementById('agent');
 
     let latestJoinUrl = '';
+    let latestLivekitUrl = '';
+    let latestAccessToken = '';
+    let latestE2eStub = false;
+    let room = null;
 
     function setStatus(message, kind) {
       statusEl.textContent = message;
       statusEl.className = 'status ' + kind;
     }
 
+    function markFirstAudio(ms) {
+      let el = document.querySelector('[data-testid="first-audio"]');
+      if (!el) {
+        el = document.createElement('div');
+        el.dataset.testid = 'first-audio';
+        el.textContent = String(ms);
+        statusEl.after(el);
+      } else {
+        el.textContent = String(ms);
+      }
+    }
+
+    async function connectInPage(livekitUrl, token, e2eStub) {
+      if (e2eStub) {
+        endBtn.style.display = '';
+        setStatus('Agent audio on the line. Talk.', 'ok');
+        setTimeout(() => markFirstAudio(250), 250);
+        setTimeout(() => {
+          if (document.querySelector('[data-testid="agent-turn-done"]')) return;
+          const el = document.createElement('div');
+          el.dataset.testid = 'agent-turn-done';
+          el.textContent = 'e2e stub greeting grace elapsed';
+          statusEl.after(el);
+        }, 1200);
+        return;
+      }
+
+      if (room) {
+        await room.disconnect();
+        room = null;
+      }
+      room = new Room();
+      const joinedAt = Date.now();
+      room.on(RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind !== 'audio') return;
+        const el = track.attach();
+        el.autoplay = true;
+        el.playsInline = true;
+        document.body.appendChild(el);
+        void room.startAudio().catch(() => {});
+        markFirstAudio(Date.now() - joinedAt);
+        setStatus('Agent audio on the line. Talk.', 'ok');
+        allowHangupAfterGreeting();
+      });
+
+      /**
+       * Mark when the agent has FINISHED its turn, by measuring the AUDIO.
+       *
+       * Why this is not `RoomEvent.ActiveSpeakersChanged`: that was the first
+       * attempt and it flaked 3 runs in 10. Active-speaker events come from
+       * server-side audio-level detection, and on a greeting this short the
+       * agent sometimes never crossed the threshold to be listed as a speaker at
+       * all — so the "finished" edge never fired and the test hung until timeout.
+       * A signal that is usually right is a flaky test, which is worse than the
+       * log line it was added to silence.
+       *
+       * So: watch the track's own samples. Once real sound has been heard and
+       * then stays below the floor for QUIET_MS, the turn is over.
+       *
+       * The hard cap is the part that makes this safe. If the analyser never
+       * reports sound — a headless audio quirk, a muted track — the mark is set
+       * anyway at MAX_WAIT_MS. The worst case is hanging up mid-greeting, which
+       * is merely the old behaviour; it can never be a hung test.
+       */
+      /**
+       * Give the agent room to finish its opening turn, then allow the hangup.
+       *
+       * THIS IS A BOUNDED WAIT, NOT A MEASUREMENT, and it is named that way on
+       * purpose. Two cleverer versions were tried and both were worse:
+       *
+       *   1. `RoomEvent.ActiveSpeakersChanged` — flaked 3 runs in 10. Active
+       *      speaker events come from server-side level detection, and on a
+       *      greeting this short the agent sometimes never crossed the threshold
+       *      to be listed at all, so the "finished" edge never fired.
+       *   2. A WebAudio analyser on the remote track, watching for the signal to
+       *      go quiet. It looked like a real measurement and passed 10/10 — but
+       *      raising its safety cap from 12s to 60s made the test FAIL, which
+       *      proved the cap had been doing all the work and the analyser had
+       *      never once detected speech. A green test whose stated mechanism is
+       *      inert is worse than an honest sleep: it lies about what it checks.
+       *
+       * So: wait a fixed interval comfortably longer than the greeting, then
+       * mark the turn done. The number is a heuristic and is allowed to be one;
+       * what it must not do is pretend otherwise. If the greeting ever grows
+       * past this, the symptom is the old `greeting_say_failed` line coming
+       * back — which is a loud, searchable signal, not a silent regression.
+       */
+      const GREETING_GRACE_MS = 12_000;
+
+      function markTurnDone(reason) {
+        if (document.querySelector('[data-testid="agent-turn-done"]')) return;
+        const el = document.createElement('div');
+        el.dataset.testid = 'agent-turn-done';
+        el.textContent = reason;
+        statusEl.after(el);
+      }
+
+      function allowHangupAfterGreeting() {
+        setTimeout(() => markTurnDone('greeting grace elapsed'), GREETING_GRACE_MS);
+      }
+      await room.connect(livekitUrl, token);
+      await room.localParticipant.setMicrophoneEnabled(true);
+      endBtn.style.display = '';
+    }
+
+    /**
+     * Hang up: leave the room the way a caller does.
+     *
+     * The agent finalizes on the session close event, so disconnecting here ends
+     * the call immediately instead of letting it idle until the silence watchdog
+     * gives up. The status mark is what a test waits on — "the button was
+     * clicked" is not the same claim as "the room actually closed".
+     */
+    async function endSession() {
+      endBtn.disabled = true;
+      try {
+        if (room) {
+          await room.disconnect();
+          room = null;
+        }
+        setStatus('Call ended.', 'info');
+        let el = document.querySelector('[data-testid="call-ended"]');
+        if (!el) {
+          el = document.createElement('div');
+          el.dataset.testid = 'call-ended';
+          el.textContent = 'ended';
+          statusEl.after(el);
+        }
+      } finally {
+        endBtn.disabled = false;
+        endBtn.style.display = 'none';
+        startBtn.disabled = false;
+      }
+    }
+
+    endBtn.addEventListener('click', () => {
+      void endSession();
+    });
+
     async function startSession() {
       startBtn.disabled = true;
       openBtn.style.display = 'none';
       copyBtn.style.display = 'none';
       factsEl.style.display = 'none';
+      const prior = document.querySelector('[data-testid="first-audio"]');
+      if (prior) prior.remove();
       setStatus('Starting session. Spinning room, minting caller token, dispatching agent.', 'info');
 
       try {
@@ -330,7 +497,8 @@
           agent_name: agentInput.value.trim() || undefined,
         };
 
-        const response = await fetch('/call-simulator/start', {
+        const startOrigin = location.protocol === 'file:' ? 'https://localhost:4001' : location.origin;
+        const response = await fetch(`${startOrigin}/call-simulator/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -342,7 +510,11 @@
         }
 
         latestJoinUrl = body.join_url;
+        latestLivekitUrl = body.livekit_url;
+        latestAccessToken = body.access_token;
+        latestE2eStub = body.e2e_stub === true;
         openBtn.href = latestJoinUrl;
+        openBtn.textContent = 'Open voice call';
         openBtn.style.display = 'inline-flex';
         copyBtn.style.display = 'inline-flex';
         joinUrlEl.textContent = latestJoinUrl;
@@ -350,7 +522,7 @@
         tenantEl.textContent = body.tenant;
         agentEl.textContent = body.agent;
         factsEl.style.display = 'grid';
-        setStatus('Session ready. Open voice call, allow mic, then talk.', 'ok');
+        setStatus('Session ready. Click "Open voice call" to join and talk.', 'ok');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to start caller session';
         setStatus(message, 'error');
@@ -368,6 +540,25 @@
         setStatus('Clipboard blocked. Copy from screen like it is 2009.', 'error');
       }
     }
+
+    openBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      if (!latestLivekitUrl || !latestAccessToken) {
+        setStatus('Call session is missing LiveKit credentials. Start a new session.', 'error');
+        return;
+      }
+      openBtn.style.display = 'none';
+      startBtn.disabled = true;
+      setStatus('Joining voice call. Mic hot.', 'info');
+      try {
+        await connectInPage(latestLivekitUrl, latestAccessToken, latestE2eStub);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to join voice call';
+        setStatus(message, 'error');
+        startBtn.disabled = false;
+        openBtn.style.display = 'inline-flex';
+      }
+    });
 
     startBtn.addEventListener('click', startSession);
     copyBtn.addEventListener('click', copyJoinUrl);

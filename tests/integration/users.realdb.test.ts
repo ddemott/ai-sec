@@ -25,7 +25,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { type Client, type PoolClient, Pool } from 'pg';
+import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from '../utils';
 import { createWithTenantClient } from '../../src/database';
 import { registerUserRoutes } from '../../src/routes/users';
@@ -71,13 +71,13 @@ beforeAll(async () => {
     registerUserRoutes(
       app,
       pool,
-      withTenantClient as <T>(id: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+      withTenantClient
     );
     await app.ready();
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[users.realdb.test] DB not available, skipping', err);
   }
 });

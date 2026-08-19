@@ -97,7 +97,7 @@ The sidebar bottom shows today's appointment count and staff count as a summary.
 ## Current Dashboard Architecture
 
 ### Tech Stack
-- **Framework**: Next.js 14 (App Router) + React 18
+- **Framework**: Next.js 16 (App Router) + React 19
 - **Styling**: Tailwind CSS 3.4
 - **Icons**: Lucide React
 - **Layout**: Outlook-inspired sidebar + content pane

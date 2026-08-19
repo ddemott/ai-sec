@@ -14,7 +14,7 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { withHandler, requireTenantId, type AppRequest } from '../middleware.js';
+import { withHandler, requireTenantId, type AppRequest } from '../middleware/fastify-middleware';
 import { CommunicationService } from '../services/communications/index.js';
 import { ConsentService } from '../services/consentService.js';
 import { createDatabaseService } from '../database/index.js';

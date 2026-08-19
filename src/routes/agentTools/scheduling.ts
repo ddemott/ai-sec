@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 /**
  * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
@@ -81,6 +81,54 @@ import { persistMeetingNotesCapture } from '../../services/meetingNotesCapture';
  * come back as UTC instants, and reading those aloud would offer a Chicago caller
  * a 6 PM appointment for a 1 PM shift.
  */
+/**
+ * "1:00 PM" from a local-naive ISO string, or null if there is no usable time.
+ *
+ * The agent sends wall-clock local times (`2026-08-17T13:00:00`), so this reads
+ * the hour and minute straight off the string rather than constructing a Date
+ * and re-deriving a timezone the caller never mentioned.
+ */
+export function spokenLocalTime(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const m = /T(\d{2}):(\d{2})/.exec(iso);
+  if (!m) return null;
+  const hour24 = Number(m[1]);
+  const minute = Number(m[2]);
+  if (!Number.isFinite(hour24) || hour24 > 23) return null;
+  if (!Number.isFinite(minute) || minute < 0 || minute > 59) return null;
+  const suffix = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${String(minute).padStart(2, '0')} ${suffix}`;
+}
+
+/**
+ * The refusal when we have no dialable number, WITH the time the caller asked
+ * for held in front of it.
+ *
+ * WHY THE TIME IS IN HERE (live call 2026-08-15, sim-call-1786818806598). The
+ * caller said "Can we do it after lunch? Like, maybe at one?". The model tried
+ * to book 1:00 PM, this gate refused it for a bad phone number, and the model
+ * relayed only the refusal — "The number I have seems not to work for
+ * confirming the appointment". The caller's actual request vanished; two
+ * minutes later he had to ask again, "I wanted to set up a meeting at one.
+ * Right? Didn't I say that?".
+ *
+ * A refusal that drops what the caller asked for reads as not listening. The
+ * time was in the request, so it belongs in the answer.
+ *
+ * AND IT NO LONGER OFFERS TO TEXT. It used to ask for "the best number to text
+ * or call" while SMS is off platform-wide — the same sentence that, on that
+ * call, was followed by the agent admitting it could not send a text.
+ */
+export function phoneGateMessage(requestedStart?: string | null): string {
+  const time = spokenLocalTime(requestedStart);
+  const hold = time ? `I can hold ${time} for you. ` : '';
+  return (
+    `${hold}Before I book, I'll need a good phone number so we can confirm your ` +
+    `appointment and reach you if anything changes. What's the best number to reach you on?`
+  );
+}
+
 function describeSlots(slots: AvailableSlot[], ianaTimezone: string, max = 2): string {
   return slots
     .slice(0, max)
@@ -234,10 +282,7 @@ export function registerSchedulingRoutes({
       // up with the caller. The agent's system prompt hears this message
       // and kicks into the /send-verification-code OTP flow to collect one.
       if (!isValidPhone(args.phone)) {
-        return fail(
-          reply,
-          "Before I book, I'll need a good phone number so we can confirm your appointment and reach you if anything changes. What's the best number to text or call?"
-        );
+        return fail(reply, phoneGateMessage(args.start_time));
       }
       const normalized = normalizePhone(args.phone)!;
       const timeValidationError = validateAppointmentTimeRange(args.start_time, args.end_time);
@@ -512,10 +557,7 @@ export function registerSchedulingRoutes({
       }
       // Gate: see book-appointment above — same rationale, same message.
       if (!isValidPhone(args.phone)) {
-        return fail(
-          reply,
-          "Before I book, I'll need a good phone number so we can confirm your appointment and reach you if anything changes. What's the best number to text or call?"
-        );
+        return fail(reply, phoneGateMessage(args.window.from));
       }
       const normalized = normalizePhone(args.phone)!;
 

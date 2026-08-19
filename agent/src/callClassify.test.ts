@@ -39,12 +39,16 @@ describe('classifyCallOutcome (failsafe WHY classifier)', () => {
 
   it('returns a valid category the model picks', async () => {
     mockReply('price');
-    expect((await classifyCallOutcome('Caller: too expensive, never mind.', KEY)).outcome).toBe('price');
+    expect((await classifyCallOutcome('Caller: too expensive, never mind.', KEY)).outcome).toBe(
+      'price'
+    );
   });
 
   it('sanitizes case + punctuation to the allowed category', async () => {
     mockReply('No_Availability.');
-    expect((await classifyCallOutcome('Caller: do you have Saturday?', KEY)).outcome).toBe('no_availability');
+    expect((await classifyCallOutcome('Caller: do you have Saturday?', KEY)).outcome).toBe(
+      'no_availability'
+    );
   });
 
   it('returns null for "unclear" (model declined to classify → stays abandoned)', async () => {

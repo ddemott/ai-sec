@@ -150,7 +150,7 @@ describe('Phone Provisioning', () => {
             ok: true,
             json: async () => ({ data: [] }),
           }) as Response
-      ) as unknown as typeof fetch;
+      );
       const client = new TelnyxNumbersClient('test-key');
       const result = await client.searchAvailable('999');
       expect(result).toBeNull();
@@ -191,7 +191,7 @@ describe('Phone Provisioning', () => {
             status: 422,
             text: async () => 'Phone number unavailable',
           }) as Response
-      ) as unknown as typeof fetch;
+      );
       const client = new TelnyxNumbersClient('test-key');
       await expect(client.orderNumber('+13125551234')).rejects.toThrow(
         /422.*Phone number unavailable/
@@ -232,7 +232,7 @@ describe('Phone Provisioning', () => {
       // WHY: bare 'fetch failed' is unactionable; the wrapper makes the call site clear in logs
       global.fetch = vi.fn(async () => {
         throw new Error('ENETUNREACH');
-      }) as unknown as typeof fetch;
+      });
       const client = new TelnyxNumbersClient('test-key');
       await expect(client.searchAvailable()).rejects.toThrow(/Telnyx GET.*ENETUNREACH/);
     });

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { Pool, PoolClient } from 'pg';
+import type {Pool} from 'pg';
 import { registerVoiceRoutes } from '../../src/routes/voice';
 import { createMockClient, createMockPool, createMockWithTenantClient } from '../mock';
 
@@ -29,7 +29,7 @@ function buildApp() {
   mockClient = created.mockClient;
   queryResponses = created.queryResponses;
 
-  mockPool = createMockPool(mockClient) as unknown as Pool;
+  mockPool = createMockPool(mockClient);
   const mockWithTenantClient = createMockWithTenantClient(mockClient);
 
   const fastify = Fastify({ logger: false });
@@ -59,10 +59,7 @@ function buildApp() {
   registerVoiceRoutes(
     fastify,
     mockPool,
-    mockWithTenantClient as unknown as <T>(
-      tenantId: string,
-      fn: (client: PoolClient) => Promise<T>
-    ) => Promise<T>
+    mockWithTenantClient
   );
 
   return fastify;

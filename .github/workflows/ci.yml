@@ -93,14 +93,17 @@ jobs:
             echo "==> docs/config-only change: skipping heavy steps (check still reports success)"
           fi
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            agent/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install root + agent dependencies
+        run: npm ci --no-audit --no-fund && (cd agent && npm ci --no-audit --no-fund --prefer-offline)
 
       - name: Apply migrations
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
@@ -116,6 +119,12 @@ jobs:
         # see an empty array and fail length > 0. Re-runnable thanks
         # to `ON CONFLICT DO NOTHING / DO UPDATE` inside seed.sql.
         run: bash scripts/seed-db.sh
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
+
+      - name: Seed question tree templates
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
+        run: npm run trees:seed
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
@@ -200,10 +209,10 @@ jobs:
             echo "==> docs/config-only change: skipping heavy steps (check still reports success)"
           fi
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: dashboard/package-lock.json
 
@@ -269,10 +278,10 @@ jobs:
             echo "==> docs/config-only change: skipping heavy steps (check still reports success)"
           fi
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: agent/package-lock.json
 
@@ -295,7 +304,7 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: ankane/pgvector:v0.5.1
@@ -360,12 +369,16 @@ jobs:
             echo "==> docs/config-only change: skipping heavy steps (check still reports success)"
           fi
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            dashboard/package-lock.json
+            agent/package-lock.json
 
       # Cache the downloaded browser binaries so `playwright install` is a no-op
       # on a hit (saves the ~30-60s Chromium download every run).
@@ -389,9 +402,9 @@ jobs:
           restore-keys: |
             nextbuild-${{ runner.os }}-${{ hashFiles('dashboard/package-lock.json') }}-
 
-      - name: Install root + dashboard dependencies
+      - name: Install root + dashboard + agent dependencies
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
-        run: npm ci --no-audit --no-fund && cd dashboard && npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund --prefer-offline && (cd dashboard && npm ci --no-audit --no-fund --prefer-offline) && (cd agent && npm ci --no-audit --no-fund --prefer-offline)
 
       - name: Apply migrations and seed
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
@@ -427,6 +440,11 @@ jobs:
           # /provisioning/activate "configured" (past the telnyx-null 503
           # guard) with zero real credentials.
           PROVISIONING_E2E_STUB: '1'
+          # Browser caller pickup spec exercises the page + backend route in CI,
+          # but runners do not have LiveKit credentials. This opt-in backend stub
+          # returns deterministic session metadata so the page can execute the
+          # observable call lifecycle without external voice infra.
+          BROWSER_CALLER_E2E_STUB: '1'
           # Serve plain HTTP — wait-on, the dashboard, and Playwright all hit
           # http://localhost:4001. Without this the backend boots HTTPS with a
           # self-signed cert and every probe/request fails the TLS handshake.
@@ -452,7 +470,11 @@ jobs:
 
       - name: Install Playwright browsers
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
-        run: cd dashboard && npx playwright install --with-deps chromium
+        # Browser binaries are cached above; `--with-deps` can spend the whole
+        # job budget re-running heavyweight apt setup on GitHub runners before a
+        # single spec executes. We need the browsers, not repeated OS package
+        # surgery.
+        run: cd dashboard && npx playwright install chromium
 
       - name: Run Playwright E2E
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
@@ -492,6 +514,7 @@ jobs:
           # (the test skip-guard reads this from the Playwright process) instead
           # of skipping.
           KNOWLEDGE_IMPORT_E2E_STUB: '1'
+          BROWSER_CALLER_E2E_STUB: '1'
 
       - name: Run simulate tools (agent-tools journey as regression guard)
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'

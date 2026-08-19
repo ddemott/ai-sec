@@ -282,7 +282,10 @@ function AppointmentViewInner({
             ...form,
             start_time: toLocalInputValue(slot.start_time),
             end_time: toLocalInputValue(slot.end_time),
-            resource_id: slot.resource_id,
+            // A resourceless business (a consultancy whose only "resource" is
+            // the owner's time) returns a null resource on an alternative slot.
+            // This form's convention for "none" is the empty string.
+            resource_id: slot.resource_id ?? '',
             employee_id: slot.employee_id,
           });
           setConflict(null);

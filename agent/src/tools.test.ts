@@ -8,7 +8,6 @@
  * context, every tool call 400s at runtime. Critical coverage.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { llm } from '@livekit/agents';
 import { buildTools } from './tools.js';
 import { CallOutcomeTracker } from './callOutcome.js';
 import type { ToolsClient, ToolResponse } from './toolsClient.js';
@@ -55,7 +54,7 @@ async function exec(tool: unknown, args: unknown): Promise<string> {
 }
 
 describe('buildTools', () => {
-  it('HAPPY: exposes exactly the 26 expected tool names', () => {
+  it('HAPPY: exposes exactly the 27 expected tool names', () => {
     // WHY: The system prompt in prompt.ts lists every tool by name. If
     //       these drift the LLM calls a name the router doesn't have
     //       and the call breaks. Pin the set.
@@ -74,6 +73,9 @@ describe('buildTools', () => {
         'book_with_scheduling',
         'cancel_appointment',
         'capture_job_inquiry',
+        // Law-firm vertical: a prospective client's matter, captured for an
+        // attorney's take-or-decline review (case_intake tree).
+        'capture_case_inquiry',
         'check_availability',
         'find_caller_by_name',
         'get_available_slots',
@@ -111,6 +113,7 @@ describe('buildTools', () => {
     expect(Object.keys(tools).sort()).toEqual(
       [
         'capture_job_inquiry',
+        'capture_case_inquiry',
         'get_company_policy_answer',
         'page_owner_via_sms',
         'take_message',
@@ -144,14 +147,19 @@ describe('buildTools', () => {
     expect(tools).toHaveProperty('send_self_service_link');
   });
 
-  it('HAPPY: every tool has a non-empty description and is recognized as a FunctionTool', () => {
+  it('HAPPY: every tool has a non-empty description and is callable as a function tool', () => {
     // WHY: Empty descriptions ship tools the LLM won't know when to use.
-    //       isFunctionTool guards against accidentally returning a
-    //       non-tool value from buildTools (e.g., a plain object).
+    //       The runtime contract we rely on is structural: a tool must expose
+    //       a description, parameters, and an execute() function.
     const tools = buildTools(makeCtx(), makeClient([]).client);
     for (const [name, tool] of Object.entries(tools)) {
-      expect(llm.isFunctionTool(tool), `${name} must be a FunctionTool`).toBe(true);
-      const t = tool as unknown as { description: string };
+      const t = tool as unknown as {
+        description: string;
+        parameters: Record<string, unknown>;
+        execute: (args: unknown, ctx: unknown) => Promise<unknown>;
+      };
+      expect(typeof t.execute, `${name} must expose execute()`).toBe('function');
+      expect(typeof t.parameters, `${name} must expose parameters`).toBe('object');
       expect(t.description.length, `${name} description empty`).toBeGreaterThan(20);
     }
   });

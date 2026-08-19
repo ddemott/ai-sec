@@ -80,10 +80,12 @@ export const BOOKING_TREE: QuestionTreeDef = {
         'job position") — the system matches their words to the right service, so record the ' +
         'words and let it choose. **WHO is not WHAT**: "I want to talk with [the owner]" names a ' +
         'person and carries NO topic — never record it here (2026-07-27 live call: it was, ' +
-        'the topic question was skipped, and a recruiter\'s meeting was booked with the role ' +
+        "the topic question was skipped, and a recruiter's meeting was booked with the role " +
         'never mentioned again). If all you know is who they want, ask what it is about — ' +
         'and when the answer names work for the owner, a purchase, or a repair, that answer ' +
-        'also picks the matching tree: call set_purpose again with it',
+        'also picks the matching tree. Recording a role topic (position, role, job ' +
+        'opportunity) ADDS the job tree in host code — do not skip those questions, and ' +
+        'do not re-declare purpose as unclear',
     },
     {
       // LISTEN-ONLY (never asked — a caller who says nothing about zones means
@@ -99,7 +101,7 @@ export const BOOKING_TREE: QuestionTreeDef = {
       listen: true,
       ask:
         'the timezone the caller named for themselves ("2:30 Eastern", "I am on the west ' +
-        "coast\"), in their words. Convert it to THIS business's zone, say both times out " +
+        'coast"), in their words. Convert it to THIS business\'s zone, say both times out ' +
         'loud, and book only the converted time they agree to',
     },
     {
@@ -246,7 +248,7 @@ export const BUY_SERVICE_TREE: QuestionTreeDef = {
       node_id: 'business_type',
       type: 'text',
       ask:
-        "what kind of business they run, in their own words — a salon and a tyre shop want " +
+        'what kind of business they run, in their own words — a salon and a tyre shop want ' +
         'very different things from a receptionist, and this is what the owner prepares against',
     },
     {
@@ -261,7 +263,7 @@ export const BUY_SERVICE_TREE: QuestionTreeDef = {
       type: 'choice',
       ask:
         'what they most want handled — booking appointments, taking messages, answering ' +
-        "questions about the business, or all of it. Ask it as a real question, not a menu " +
+        'questions about the business, or all of it. Ask it as a real question, not a menu ' +
         'read aloud; if they describe it in their own words, map it yourself',
       options: {
         // No follow-ups on any branch: this answer steers the DEMO, not more questions.
@@ -336,9 +338,19 @@ export const QA_TREE: QuestionTreeDef = {
     {
       node_id: 'qa_summary',
       type: 'text',
+      // NEVER A QUESTION TO THE CALLER. 2026-08-15 sim (THE ELSE): Rosa Delgado
+      // asked whether Dale would MC a wedding, the knowledge base had nothing,
+      // and the agent answered "Could you please summarize your question about
+      // Dale for me?" — it read the [ASK] marker and turned its own note-taking
+      // into an interrogation of the caller, then closed the call. She had said
+      // her name in the first sentence; nothing was kept, and nobody at the
+      // business will ever know she rang. The wording now says whose job it is.
       ask:
-        'record ONLY once their questions are answered and they confirm they have what they ' +
-        'need: a one-line summary of what they asked about (it becomes the call record)',
+        'YOU write this, silently — NEVER ask the caller to summarize their own question. ' +
+        'Once their questions are answered and they have what they need, record a one-line ' +
+        'summary IN YOUR OWN WORDS of what they asked about (it becomes the call record). ' +
+        'If the knowledge base could NOT answer them, that is not a call to close: offer to ' +
+        'take a message so the owner can follow up, and add the message tree with set_purpose.',
     },
   ],
 };
@@ -393,7 +405,7 @@ export const JOB_TREE: QuestionTreeDef = {
               "which company the work would ACTUALLY be for — different from the caller's. " +
               "NEVER fill this with the caller's own company: if they have not NAMED the " +
               'client, ask ("And which company would the work be for?"); if they don\'t ' +
-              'know or won\'t say, record declined — an honest blank beats the agency\'s ' +
+              "know or won't say, record declined — an honest blank beats the agency's " +
               'name in the client slot (2026-07-30 sim: eTeam landed here and the record ' +
               'claimed an in-house role that was actually a placement)',
           },
@@ -458,7 +470,7 @@ export const JOB_TREE: QuestionTreeDef = {
       type: 'choice',
       ask:
         'offer ONCE, in one line with both doors open: "Would you like me to schedule a ' +
-        'meeting on the owner\'s calendar so you can talk it through, or should I just ' +
+        "meeting on the owner's calendar so you can talk it through, or should I just " +
         'pass the details along?" A no is an answer — NEVER offer twice; a repeated ' +
         'offer is a sales pitch. If they already asked for a meeting themselves, record ' +
         'wants_meeting without asking; if they already said "just pass it along" or ' +
@@ -569,6 +581,286 @@ export const FIX_COMPUTER_TREE: QuestionTreeDef = {
   ],
 };
 
+/**
+ * A PROSPECTIVE CLIENT describing a legal matter, captured so an attorney can
+ * decide whether to TAKE the case. Built for a small plaintiff-side firm (one
+ * or two lawyers) whose inbound traffic is denied/underpaid insurance claims
+ * and personal injury.
+ *
+ * THIS TREE COLLECTS. IT NEVER ADVISES. The receptionist is not a lawyer and
+ * must not behave like one: no opinion on whether a claim is good, what it is
+ * worth, whether a deadline has passed, or what the caller should do next. Every
+ * such question has exactly one honest answer — "that's for the attorney to
+ * say, let me take the details so they can review it." Guessing here is the
+ * unauthorized practice of law, and a wrong reassurance ("sounds like you have
+ * a case") is worse than silence because the caller will act on it.
+ *
+ * THE FOUR ANSWERS THAT DECIDE TAKE-OR-DECLINE, and why each is asked rather
+ * than listened for. A firm can be handed a beautifully detailed matter and
+ * still be unable to touch it:
+ *   - `incident_date` — the statute of limitations runs from it. A matter
+ *     outside the window is not a case no matter how strong the facts, and a
+ *     matter NEAR the window has to jump the queue today.
+ *   - `incident_state` — the firm can only act where it is licensed.
+ *   - `existing_counsel` — a caller already represented by another lawyer
+ *     cannot simply be signed up; this is an ethics wall, not a preference,
+ *     and it has to be known before anything is promised.
+ *   - `opposing_parties` — the conflict check. A firm that already acts for the
+ *     other side, or the insurer, must decline. Names, not vibes.
+ *
+ * NEVER SAY THE FIRM WILL TAKE THE CASE. Intake is not acceptance, no
+ * attorney-client relationship is formed on this call, and the capture tool's
+ * own confirmation is the only promise available: the details reach the
+ * attorney, who decides.
+ */
+export const CASE_INTAKE_TREE: QuestionTreeDef = {
+  tree_id: 'case_intake',
+  description:
+    'A prospective client is describing a LEGAL MATTER they want the firm to look at — a ' +
+    'denied or underpaid insurance claim, an injury, or another dispute. Select for "my ' +
+    'insurance denied my claim", "I was in an accident", "they won\'t pay what they owe me", ' +
+    '"I want to sue", "do you handle cases like mine". ' +
+    '**"Do you take X kind of case?" IS this tree, not qa** — whether the firm takes a ' +
+    "matter is the ATTORNEY's decision made on the facts, so it is never read out of the " +
+    'knowledge base as a yes; the knowledge base can say what the firm GENERALLY handles, ' +
+    'and the honest reply to a specific matter is "let me take the details so an attorney ' +
+    'can review it" — this intake IS that answer. ' +
+    'An EXISTING client calling about a matter the firm already has is NOT this tree — that ' +
+    'is a message or a booking; this tree is for a NEW matter being brought in. ' +
+    'Fee and cost questions ("do you charge up front?", "what do you take?") are qa — they ' +
+    'are facts about the firm, not facts about the case. ' +
+    'Select case_intake AND booking together when the caller asks to SPEAK WITH or MEET a ' +
+    'lawyer about the matter: the consultation is what they rang for and the facts are the ' +
+    'preparation for it.',
+  nodes: [
+    callerNameNode,
+    callerPhoneNode,
+    {
+      // FIRST, and asked before any facts are collected. A represented caller is
+      // an ethics wall, not a preference: keeping them talking about the merits
+      // of a matter another lawyer already owns is the one intake mistake that
+      // can cost the firm rather than just cost it a client.
+      node_id: 'existing_counsel',
+      type: 'choice',
+      ask:
+        'whether another lawyer is ALREADY representing them on this matter. Ask it early ' +
+        'and plainly ("Is another attorney already representing you on this?"). If yes, do ' +
+        'NOT keep collecting the facts of the matter and do not discuss it — say the firm ' +
+        'generally cannot step into a matter another lawyer is handling, that you will pass ' +
+        'the message along, and let the attorney make that call',
+      options: {
+        no_counsel: [],
+        has_counsel: [
+          {
+            node_id: 'counsel_situation',
+            type: 'text',
+            ask:
+              'in one line, what they want given that they already have a lawyer — a second ' +
+              'opinion, changing firms, or their lawyer has withdrawn. Record it and stop ' +
+              'the case questions there; the attorney decides whether this can go further',
+          },
+        ],
+      },
+    },
+    {
+      node_id: 'matter_type',
+      type: 'choice',
+      ask:
+        'what KIND of matter this is, from how they describe it — do not read the list out ' +
+        'as a menu, just place what they said. "They denied my claim" / "the adjuster is ' +
+        'lowballing me" is insurance_claim. "I got hurt" / "car accident" / "I fell" is ' +
+        'injury. Anything else they are bringing to a lawyer is other_matter',
+      options: {
+        insurance_claim: [
+          {
+            node_id: 'insurer_name',
+            type: 'text',
+            ask: 'which insurance company denied, delayed, or underpaid — the company NAME',
+          },
+          {
+            node_id: 'policy_type',
+            type: 'text',
+            ask:
+              'what kind of policy or coverage it is (auto, homeowners, health, disability, ' +
+              'life, business). Their own words are fine',
+          },
+          {
+            node_id: 'claim_outcome',
+            type: 'choice',
+            ask:
+              'what the insurer actually DID — denied it outright, paid less than the claim, ' +
+              'or is sitting on it without deciding',
+            options: {
+              denied: [],
+              underpaid: [],
+              delayed: [],
+            },
+          },
+          {
+            node_id: 'stated_reason',
+            type: 'text',
+            ask:
+              "the reason the INSURER gave, in the insurer's words as the caller heard them " +
+              '("pre-existing", "not a covered peril", "late filing"). If they were given no ' +
+              'reason, record that — a refusal with no stated reason is itself the fact',
+          },
+          {
+            node_id: 'amount_in_dispute',
+            type: 'text',
+            ask:
+              'roughly how much money is in dispute — claimed versus paid. An estimate is ' +
+              'fine and "I don\'t know" is an answer; never push for precision on the phone',
+          },
+          {
+            node_id: 'appeal_status',
+            type: 'text',
+            listen: true,
+            ask:
+              'whether they have already appealed or asked the insurer to reconsider, and ' +
+              'what came of it. Worth catching, not worth an interrogation',
+          },
+        ],
+        injury: [
+          {
+            node_id: 'injury_circumstances',
+            type: 'text',
+            ask:
+              "what HAPPENED, in the caller's own words — let them tell it and record the " +
+              'account rather than breaking it into a form. This paragraph is the single ' +
+              'most useful thing the attorney will read',
+          },
+          {
+            node_id: 'injuries_sustained',
+            type: 'text',
+            ask: 'what injuries they suffered, as they describe them',
+          },
+          {
+            node_id: 'medical_treatment',
+            type: 'text',
+            ask:
+              'whether they have been treated and where — ER, urgent care, their own doctor, ' +
+              'or not yet. Do NOT advise them about treatment, only record it',
+          },
+          {
+            node_id: 'at_fault_party',
+            type: 'text',
+            ask:
+              'who they say is responsible — a driver, a business, a property owner, an ' +
+              'employer. Their view of it, not a judgement of it',
+          },
+          {
+            node_id: 'gave_statement',
+            type: 'choice',
+            ask:
+              'whether they have already given a recorded statement to, or signed anything ' +
+              "for, the other side's insurer. Record it flatly — do not comment on whether " +
+              'that was wise, and do not tell them what to do about it now',
+            options: {
+              gave_statement: [],
+              no_statement: [],
+              unsure: [],
+            },
+          },
+          {
+            node_id: 'lost_income',
+            type: 'text',
+            listen: true,
+            ask: 'whether they have missed work or lost income because of it, if they say so',
+          },
+          {
+            node_id: 'police_report',
+            type: 'text',
+            listen: true,
+            ask: 'whether a police or incident report exists, and the report number if they have it',
+          },
+        ],
+        other_matter: [
+          {
+            node_id: 'matter_description',
+            type: 'text',
+            // Deliberately does NOT ask what they want to happen: `desired_outcome`
+            // owns that, and asking both put the same question to the caller twice
+            // and wrote the same sentence into two fields of the capture.
+            ask:
+              "what the dispute is, in the caller's own words. Do not try to classify it " +
+              "into a legal category — that is the attorney's job",
+          },
+        ],
+      },
+    },
+    {
+      // THE deadline fact. Asked on every branch because every branch has a clock.
+      node_id: 'incident_date',
+      type: 'text',
+      ask:
+        "WHEN it happened — the date of the accident, the injury, or the insurer's denial. " +
+        'A month and year is enough if they cannot recall the day, and "about two years ago" ' +
+        'is a usable answer worth recording exactly as said. NEVER tell them whether a ' +
+        'deadline has passed or is close, even if they ask directly and even if it seems ' +
+        'obvious: the limitation period depends on facts you do not have, and a wrong ' +
+        'reassurance from a receptionist can cost someone their case',
+    },
+    {
+      node_id: 'incident_state',
+      type: 'text',
+      ask:
+        'which STATE the incident or the policy is in — the firm can only act where it is ' +
+        'licensed, so this decides whether the matter is reachable at all. Ask plainly ' +
+        '("Which state did this happen in?")',
+    },
+    {
+      // The conflict check. Names, because a conflict search runs on names.
+      node_id: 'opposing_parties',
+      type: 'text',
+      ask:
+        'the NAMES on the other side — the person, business, or insurance company the matter ' +
+        'is against, plus any lawyer or adjuster they have been dealing with. The firm has to ' +
+        'run a conflict check before it can act, and that check runs on names',
+    },
+    {
+      node_id: 'deadline_pressure',
+      type: 'text',
+      listen: true,
+      ask:
+        'any date already hanging over them — a court date, a hearing, an appeal window, a ' +
+        'letter with a deadline on it. Catch it if they mention it and record it verbatim; a ' +
+        'dated letter is the difference between a routine review and one that happens today',
+    },
+    {
+      node_id: 'documents_available',
+      type: 'text',
+      listen: true,
+      ask:
+        'what paperwork they already have — the policy, the denial letter, medical records, ' +
+        'photos, the police report. Never ask them to send anything yet; the attorney will ' +
+        'say what is needed',
+    },
+    {
+      node_id: 'desired_outcome',
+      type: 'text',
+      listen: true,
+      ask:
+        'what they want out of it, if they say — the claim paid, medical bills covered, or ' +
+        'simply to know where they stand. It tells the attorney whether the firm can offer ' +
+        'what this caller actually wants',
+    },
+    {
+      node_id: 'capture',
+      type: 'action',
+      tool: 'capture_case_inquiry',
+      description: 'send the matter to the attorney for a take-or-decline review',
+      // A name and a number, plus the two facts that decide whether the firm can
+      // act at all. Declined answers satisfy these — the tool's own refuse-gate
+      // stays authoritative, exactly as on capture_job_inquiry.
+      requires: [CALLER_NAME, CALLER_PHONE, 'matter_type', 'existing_counsel'],
+      // Finish the intake, THEN write. A half-captured matter reaching an
+      // attorney's desk is worse than a slow one: they will make a take/decline
+      // call on facts that merely LOOK complete.
+      await_tree: true,
+    },
+  ],
+};
+
 /** The library every call starts from, in canonical selection-render order. */
 export const PLATFORM_TREE_LIBRARY: QuestionTreeDef[] = [
   IDENTITY_TREE,
@@ -578,6 +870,7 @@ export const PLATFORM_TREE_LIBRARY: QuestionTreeDef[] = [
   QA_TREE,
   JOB_TREE,
   BUY_SERVICE_TREE,
+  CASE_INTAKE_TREE,
   SCHEDULE_CHANGE_TREE,
   FIX_COMPUTER_TREE,
 ];

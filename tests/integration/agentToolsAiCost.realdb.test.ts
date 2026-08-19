@@ -52,7 +52,7 @@ beforeAll(async () => {
     tenantsToClean.push(tenantId);
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[agentToolsAiCost.realdb.test] DB not available, skipping', err);
   }
 });

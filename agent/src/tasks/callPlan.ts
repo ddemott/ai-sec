@@ -19,7 +19,7 @@
  * not get to choose this order, exactly as with the composed script blocks, and for the
  * same reason: it is what the bad calls taught us, not a preference.
  */
-import { type llm, type voice, beta } from '@livekit/agents';
+import { type voice, beta } from '@livekit/agents';
 import type { SessionContext } from '../sessionContext.js';
 export { sanitizeVolunteered } from './sanitize.js';
 import { makeIdentityRung, type IdentityResult } from './identityTask.js';
@@ -29,6 +29,7 @@ import { makeMeetingContextRung, type MeetingContextTemplate } from './meetingCo
 import { makeTakeMessageRung, type TakeMessageResult } from './takeMessageTask.js';
 import { makePolicyQaRung, type PolicyQaResult } from './policyQaTask.js';
 import { makeSchedulingRung, type ScheduleChangeResult } from './schedulingTask.js';
+import type { ToolMap } from '../tools.js';
 
 /**
  * What the caller wants ACCOMPLISHED by the time they hang up — the output of the intent
@@ -119,7 +120,7 @@ export interface CallDeps {
   /** Written by the identity rung, read by every later rung. */
   state: CallState;
   /** The full ToolContext from buildTools() — tasks take the slices they need. */
-  tools: llm.ToolContext;
+  tools: ToolMap;
   onIdentified?: (r: IdentityResult) => Promise<void> | void;
   onBooked?: (r: BookMeetingResult) => Promise<void> | void;
   onCaptured?: (r: JobIntakeResult) => Promise<void> | void;
@@ -153,8 +154,8 @@ export interface TaskSpec {
  * "soonest-from-now" times like 1:41 PM that drift minute by minute and wander to
  * October). A tool the task does not have is a tool the model cannot misfire.
  */
-function pick(tools: llm.ToolContext, names: string[]): llm.ToolContext {
-  const out: llm.ToolContext = {};
+function pick(tools: ToolMap, names: string[]): ToolMap {
+  const out: ToolMap = {};
   for (const n of names) if (tools[n]) out[n] = tools[n];
   return out;
 }

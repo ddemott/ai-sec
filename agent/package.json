@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts dev",
+    "dev:local": "NODE_EXTRA_CA_CERTS=../certs/localhost-cert.pem AGENT_NAME=secretary-hq-agent-dev NUM_IDLE_PROCESSES=1 DNS_FORCE_IPV4=true BACKEND_URL=${BACKEND_URL:-https://localhost:4001} tsx watch src/index.ts dev",
     "build": "tsc -p .",
     "start": "node dist/index.js start",
     "download-files": "node dist/index.js download-files",
@@ -21,26 +22,28 @@
     "verify:tts": "node scripts/verify-tts.mjs"
   },
   "dependencies": {
-    "@livekit/agents": "^1.4.5",
-    "@livekit/agents-plugin-deepgram": "^1.4.5",
-    "@livekit/agents-plugin-openai": "^1.4.5",
-    "@livekit/agents-plugin-silero": "^1.4.5",
+    "@livekit/agents": "^1.6.4",
+    "@livekit/agents-plugin-deepgram": "^1.6.4",
+    "@livekit/agents-plugin-openai": "^1.6.4",
+    "@livekit/agents-plugin-silero": "^1.6.4",
     "@logtail/pino": "^0.5.8",
-    "@sentry/node": "^10.57.0",
+    "@sentry/node": "^10.70.0",
     "dotenv": "^17.4.2",
-    "livekit-server-sdk": "^2.15.4",
+    "livekit-server-sdk": "^2.17.0",
     "pino": "^10.3.1",
+    "@livekit/rtc-node": "^0.13.33",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^22.19.21",
-    "@vitest/coverage-v8": "^4.1.8",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.0",
-    "prettier": "^3.8.4",
-    "tsx": "^4.22.4",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.8"
+    "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "eslint": "^10.8.1",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.12",
+    "typescript-eslint-ts6": "npm:typescript@^6.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }

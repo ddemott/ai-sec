@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -10,7 +14,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
@@ -18,10 +22,15 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     },
     "target": "ES2017",
-    "types": ["vitest/globals", "@testing-library/jest-dom/vitest"]
+    "types": [
+      "vitest/globals",
+      "@testing-library/jest-dom/vitest"
+    ]
   },
   "include": [
     "next-env.d.ts",
@@ -30,5 +39,7 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

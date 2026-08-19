@@ -68,6 +68,30 @@ describe('caller simulator routes', () => {
     });
   });
 
+  it('passes through e2e_stub flag when backend uses the caller stub', async () => {
+    const startSession = vi.fn(async () => ({
+      join_url: 'https://example.invalid/call-simulator-stub?room=sim-call-e2e',
+      livekit_url: 'wss://example.invalid/livekit-stub',
+      access_token: 'e2e-stub-token',
+      room: 'sim-call-e2e',
+      tenant: 'tenant-123',
+      agent: 'secretary-hq-agent-dev',
+      expires_in_minutes: 30,
+      e2e_stub: true,
+    }));
+    const { app } = buildApp(startSession);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/call-simulator/start',
+      headers: { 'content-type': 'application/json' },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({ success: true, e2e_stub: true });
+  });
+
   it('rejects non-string overrides with 400', async () => {
     const { app, startSession } = buildApp();
 

@@ -36,11 +36,11 @@ vi.hoisted(() => {
 });
 
 import Fastify, { type FastifyInstance } from 'fastify';
-import { type Client, type PoolClient, Pool } from 'pg';
+import { type Client, Pool } from 'pg';
 import jwt from 'jsonwebtoken';
 import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from '../utils';
 import { createWithTenantClient } from '../../src/database';
-import { registerJwtAuthHook, tenantMiddleware } from '../../src/middleware';
+import { registerJwtAuthHook, tenantMiddleware } from '../../src/middleware/fastify-middleware';
 import { registerUserRoutes } from '../../src/routes/users';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
@@ -101,13 +101,13 @@ beforeAll(async () => {
     registerUserRoutes(
       app as Parameters<typeof registerUserRoutes>[0],
       pool,
-      withTenantClient as <T>(id: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+      withTenantClient
     );
     await app.ready();
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[users.revokeSessions.realdb.test] DB not available, skipping', err);
   }
 });

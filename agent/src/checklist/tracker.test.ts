@@ -258,8 +258,14 @@ describe('choice branching', () => {
   it('a rejected value lists the legal options — the clarify mechanism', () => {
     const t = make();
     t.select(['job']);
+    // Each id, each with its SPOKEN form. The bare-token list this used to
+    // assert is what taught the model to say "answering_service" to a caller
+    // on the 2026-08-15 sim, so the ids now travel with the words to use.
     expect(() => t.record('job_type', { value: 'kind of both' })).toThrow(
-      /contract, fulltime, contract_to_hire/
+      /contract \(say "contract"\).*fulltime.*contract_to_hire \(say "contract to hire"\)/
+    );
+    expect(() => t.record('job_type', { value: 'kind of both' })).toThrow(
+      /NEVER say one to the caller/
     );
   });
 

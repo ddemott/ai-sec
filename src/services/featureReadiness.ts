@@ -215,6 +215,7 @@ export function evaluateCapabilities(ctx: FeatureReadinessContext): CapabilityEv
   //   curl -H "Authorization: Bearer $TELNYX_API_KEY" https://api.telnyx.com/v2/public_key
   {
     const missing = !env.TELNYX_PUBLIC_KEY;
+    const oldPublicKeyPresent = !!env.PUBLIC_KEY;
     evaluations.push({
       feature: 'inbound_sms',
       status: missing ? 'missing_config' : 'ready',
@@ -227,6 +228,18 @@ export function evaluateCapabilities(ctx: FeatureReadinessContext): CapabilityEv
           ]
         : [],
     });
+
+    if (oldPublicKeyPresent) {
+      evaluations.push({
+        feature: 'env_deprecation',
+        status: 'missing_config',
+        detail:
+          'PUBLIC_KEY (old name) deprecated in favor of TELNYX_PUBLIC_KEY after 2026-07 purge',
+        warnings: [
+          'PUBLIC_KEY in .env is deprecated (was replaced by TELNYX_PUBLIC_KEY during webhook signature refactor). It is ignored. Update your .env and Railway vars — see DEPLOYMENT.md "Retrieving TELNYX_PUBLIC_KEY".',
+        ],
+      });
+    }
   }
 
   // ── outlook_calendar (readiness-only; no legacy startup warning) ─────

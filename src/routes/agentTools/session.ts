@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
 /**
  * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
@@ -28,6 +27,7 @@ import {
 // rather than the two raw numbers.
 import { canTransfer } from '../../../shared/phone';
 import { deriveChecklistRuntimeConfig } from '../../../shared/checklistPresetDerivation';
+import { loadTenantQuestionTrees } from '../../services/questionTrees';
 import { sendSms } from '../../services/telnyxSms';
 import { errorsTotal, silentHangupsTotal } from '../../services/metrics';
 
@@ -116,10 +116,19 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
             LIMIT 25`,
           [args.tenant_id]
         );
+        // THIS TENANT'S OWN QUESTIONS, when they have been provisioned with a
+        // copy. An EMPTY ARRAY is meaningful and is not a failure: it means the
+        // tenant predates per-tenant trees (or their copy failed), and the agent
+        // falls back to the platform TypeScript library — i.e. exactly the
+        // behaviour every existing tenant has today. Shipping this field can
+        // therefore not change any current call on its own; a call only changes
+        // once a tenant actually has rows.
+        const questionTrees = await loadTenantQuestionTrees(client, args.tenant_id);
         return {
           ...res.rows[0],
           hours,
           staff: staff.rows.map((r) => r.first).filter((n) => n && n.length > 0),
+          questionTrees,
         };
       });
       if (!row) {
@@ -211,6 +220,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
           row.checklist_preset_id,
           row.checklist_overrides
         ),
+        question_trees: row.questionTrees,
         // Active staff first names — the roster the agent checks a caller-named
         // person against before repeating it back as fact ("Jane" → "You mean
         // Dale?"). Empty array when a tenant has no employees configured.
@@ -363,7 +373,7 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
     app,
     '/agent-tools/report-dispatch-no-participant',
     ReportDispatchNoParticipantSchema,
-    // eslint-disable-next-line @typescript-eslint/require-await
+
     async (args, reply) => {
       errorsTotal.inc({ event: 'dispatch_no_participant' });
       app.log.warn(

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/unbound-method */
 /**
  * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
@@ -30,7 +30,7 @@ import {
   logError,
   AppError,
   type AppRequest,
-} from '../src/middleware';
+} from '../src/middleware/fastify-middleware';
 import { errorsTotal } from '../src/services/metrics';
 
 /** Read the current errors_total value for a given event label (0 if unseen). */
@@ -63,7 +63,7 @@ function createMockReply(): FastifyReply {
       return reply;
     },
   } satisfies MockReply;
-  return reply as unknown as FastifyReply;
+  return reply;
 }
 
 function createMockRequest(

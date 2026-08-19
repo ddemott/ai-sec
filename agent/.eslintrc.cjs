@@ -69,6 +69,7 @@ module.exports = {
       fixStyle: 'inline-type-imports',
     }],
     '@typescript-eslint/no-var-requires': 'off',
+    '@typescript-eslint/no-require-imports': 'off',
     // Enforced: passing an unbound class/interface method loses `this` (a real
     // runtime-crash bug class). Codebase is clean; keep it that way.
     '@typescript-eslint/unbound-method': 'error',

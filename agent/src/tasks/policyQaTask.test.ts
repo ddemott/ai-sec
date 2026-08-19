@@ -17,6 +17,7 @@ import {
   QA_KB_MISS_WITH_MESSAGE,
   QA_KB_MISS_NO_MESSAGE,
 } from './policyQaTask.js';
+import { getTaskTool, getTaskToolNames } from './testToolCtx.js';
 
 beforeAll(() => {
   initializeLogger({ pretty: false, level: 'silent' });
@@ -35,11 +36,9 @@ async function callTool(
   name: string,
   args: unknown = {}
 ): Promise<unknown> {
-  const tool = (task.toolCtx as Record<string, unknown>)[name] as {
-    execute: (a: unknown, c: unknown) => Promise<unknown>;
-  };
+  const tool = getTaskTool(task, name);
   expect(tool, `the rung must expose ${name}`).toBeDefined();
-  return tool.execute(args, { ctx: {}, toolCallId: 'tc' });
+  return tool!.execute(args, { ctx: {}, toolCallId: 'tc' });
 }
 
 describe('PolicyQaTask — answers come from retrieval, and the call ends properly', () => {
@@ -101,7 +100,7 @@ describe('PolicyQaTask — answers come from retrieval, and the call ends proper
       },
       takeMessage: fakeTool('{}'),
     });
-    expect(Object.keys(task.toolCtx).sort()).toEqual([
+    expect(getTaskToolNames(task)).toEqual([
       'get_company_policy_answer',
       'questions_answered',
       'take_message',

@@ -132,7 +132,7 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[scheduleForAppointment.realdb.test] DB not available, skipping', err);
   }
 });

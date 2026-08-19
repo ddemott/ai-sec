@@ -145,7 +145,7 @@ beforeAll(async () => {
     client.release();
   } catch (err) {
     dbAvailable = false;
-    // eslint-disable-next-line no-console
+     
     console.warn('[index.test] DB not available, skipping DB-backed route assertions', err);
   }
 });

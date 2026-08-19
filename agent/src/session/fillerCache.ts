@@ -18,12 +18,14 @@
  */
 import type { AudioFrame } from '@livekit/rtc-node';
 
+type CachedAudioFrame = AudioFrame;
+
 /** Minimal slice of the TTS plugin we depend on — keeps this unit-testable. */
 export interface FillerSynthesizer {
-  synthesize(text: string): { collect(): Promise<AudioFrame> };
+  synthesize(text: string): { collect(): Promise<CachedAudioFrame> };
 }
 
-const cache = new Map<string, AudioFrame>();
+const cache = new Map<string, CachedAudioFrame>();
 
 function key(voice: string, text: string): string {
   return `${voice}::${text}`;
@@ -64,7 +66,7 @@ export async function warmFillers(
 }
 
 /** Return the cached frame for a line, or undefined if not warmed (yet/failed). */
-export function getFillerFrame(voice: string, text: string): AudioFrame | undefined {
+export function getFillerFrame(voice: string, text: string): CachedAudioFrame | undefined {
   return cache.get(key(voice, text));
 }
 
@@ -73,7 +75,7 @@ export function getFillerFrame(voice: string, text: string): AudioFrame | undefi
  * `session.say(text, { audio: frameStream(...) })`. A ReadableStream is
  * consumed once, so this must be called fresh per playback.
  */
-export function frameStream(frame: AudioFrame): ReadableStream<AudioFrame> {
+export function frameStream(frame: CachedAudioFrame): ReadableStream<AudioFrame> {
   return new ReadableStream<AudioFrame>({
     start(controller) {
       controller.enqueue(frame);

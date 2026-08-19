@@ -13,12 +13,7 @@ export type ChangeType = 'create' | 'update' | 'delete' | 'restore' | 'sync' | '
 export type ChangeSource = 'local' | 'square' | 'voice_call' | 'system' | 'api';
 
 export type VersionedTable =
-  | 'customers'
-  | 'appointments'
-  | 'voice_sessions'
-  | 'employees'
-  | 'services'
-  | 'resources';
+  'customers' | 'appointments' | 'voice_sessions' | 'employees' | 'services' | 'resources';
 
 export interface RecordVersion {
   record_version_id: string;

@@ -26,7 +26,7 @@ vi.hoisted(() => {
 import Fastify, { type FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
-import { registerJwtAuthHook, generateToken } from '../../src/middleware';
+import { registerJwtAuthHook, generateToken } from '../../src/middleware/fastify-middleware';
 import { registerAuthRoutes } from '../../src/routes/auth';
 import { skipIfDbDown } from '../utils';
 

@@ -16,7 +16,7 @@
 import { vi, type Mock } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
-import type { UserRole } from '../src/middleware';
+import type { UserRole } from '../src/middleware/fastify-middleware';
 
 /** One captured query: SQL text + bound parameters in the order received. */
 export interface MockQuery {

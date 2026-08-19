@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any */
 /**
  * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
@@ -61,7 +61,11 @@ import { startScheduleExtender, stopScheduleExtender } from './workers/scheduleE
 import { createGetEmbedding } from '../shared/getEmbedding';
 import { createNormalizer } from '../shared/normalizeForEmbedding';
 import { createQueryExpander } from '../shared/expandQueryForEmbedding';
-import { tenantMiddleware, generateToken, registerJwtAuthHook } from './middleware';
+import {
+  tenantMiddleware,
+  generateToken,
+  registerJwtAuthHook,
+} from './middleware/fastify-middleware';
 import { collectFeatureReadiness } from './services/featureReadiness';
 
 // --- Environment Validation ---
@@ -108,7 +112,6 @@ const useHttps = process.env.NODE_ENV !== 'production' && process.env.USE_HTTPS 
 const certDir = path.resolve(__dirname, '..', '..', 'certs');
 const logger = buildLogger({ service: 'secretary-hq-backend' });
 const app = Fastify(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify options are a discriminated union (FastifyHttpsOptions | FastifyServerOptions); the ternary widens past it
   (useHttps
     ? {
         loggerInstance: logger,

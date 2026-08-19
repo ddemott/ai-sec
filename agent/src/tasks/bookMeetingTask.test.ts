@@ -15,6 +15,8 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { llm, initializeLogger } from '@livekit/agents';
 import { makeBookMeetingRung, BOOK_MEETING_INSTRUCTIONS } from './bookMeetingTask.js';
+import { getTaskTool, getTaskToolNames } from './testToolCtx.js';
+import type { ToolMap } from '../tools.js';
 
 beforeAll(() => {
   initializeLogger({ pretty: false, level: 'silent' });
@@ -29,7 +31,7 @@ function fakeBookingTool(returns: unknown) {
   });
 }
 
-function schedulingTools(booking: llm.ToolContext[string]): llm.ToolContext {
+function schedulingTools(booking: ToolMap[string]): ToolMap {
   return {
     get_available_slots: llm.tool({
       description: 'slots',
@@ -49,10 +51,8 @@ async function callBooking(
   task: ReturnType<typeof makeBookMeetingRung>,
   args: unknown = {}
 ): Promise<unknown> {
-  const tool = (task.toolCtx as Record<string, unknown>).book_with_scheduling as {
-    execute: (a: unknown, c: unknown) => Promise<unknown>;
-  };
-  return tool.execute(args, { ctx: {}, toolCallId: 'tc' });
+  const tool = getTaskTool(task, 'book_with_scheduling');
+  return tool!.execute(args, { ctx: {}, toolCallId: 'tc' });
 }
 
 describe('BookMeetingTask — the booking IS the transition', () => {
@@ -117,7 +117,7 @@ describe('BookMeetingTask — the booking IS the transition', () => {
       schedulingTools: schedulingTools(booking),
       requestedService: 'a meeting',
     });
-    const toolNames = Object.keys(task.toolCtx);
+    const toolNames = getTaskToolNames(task);
     expect(toolNames).toContain('book_with_scheduling');
     expect(toolNames).not.toContain('finish');
     expect(toolNames).not.toContain('confirm_booking');
@@ -138,12 +138,10 @@ describe('BookMeetingTask — the booking IS the transition', () => {
       takeMessage,
       onMessageTaken,
     });
-    expect(Object.keys(task.toolCtx)).toContain('take_message');
+    expect(getTaskToolNames(task)).toContain('take_message');
     expect(task.done).toBe(false);
-    const tool = (task.toolCtx as Record<string, unknown>).take_message as {
-      execute: (a: unknown, c: unknown) => Promise<unknown>;
-    };
-    await tool.execute({ message: 'have him call me back' }, { ctx: {}, toolCallId: 'tc' });
+    const tool = getTaskTool(task, 'take_message');
+    await tool!.execute({ message: 'have him call me back' }, { ctx: {}, toolCallId: 'tc' });
     expect(task.done, 'a real message_id ends the rung').toBe(true);
     expect(onMessageTaken).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'msg-9' }));
   });
@@ -154,7 +152,7 @@ describe('BookMeetingTask — the booking IS the transition', () => {
       schedulingTools: schedulingTools(booking),
       requestedService: 'a meeting',
     });
-    expect(Object.keys(task.toolCtx)).not.toContain('take_message');
+    expect(getTaskToolNames(task)).not.toContain('take_message');
   });
 
   it('SAD: the fallback is ACTION-FIRST — call take_message, do not just promise it', () => {
@@ -169,8 +167,8 @@ describe('BookMeetingTask — the booking IS the transition', () => {
       requestedService: 'a meeting',
     });
     // get_available_slots / get_service_catalog pass straight through, unwrapped.
-    expect(task.toolCtx).toHaveProperty('get_available_slots');
-    expect(task.toolCtx).toHaveProperty('get_service_catalog');
+    expect(getTaskToolNames(task)).toContain('get_available_slots');
+    expect(getTaskToolNames(task)).toContain('get_service_catalog');
   });
 
   it('SAD: the hard-won booking rules survive the move', async () => {
@@ -249,11 +247,12 @@ describe('HARD-DOWN gate: persistent booking failure redirects to take_message v
     });
   }
   async function callBook(task: unknown, n: number): Promise<string[]> {
-    const tool = ((task as { toolCtx: Record<string, unknown> }).toolCtx)['book_with_scheduling'] as {
+    const tool = getTaskTool(task as { toolCtx: unknown }, 'book_with_scheduling') as {
       execute: (a: unknown, o: unknown) => Promise<unknown>;
     };
     const out: string[] = [];
-    for (let k = 0; k < n; k++) out.push(String(await tool.execute({}, { ctx: {}, toolCallId: 't' + k })));
+    for (let k = 0; k < n; k++)
+      out.push(String(await tool.execute({}, { ctx: {}, toolCallId: 't' + k })));
     return out;
   }
 

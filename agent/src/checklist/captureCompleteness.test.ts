@@ -85,3 +85,60 @@ describe('job tree → capture_job_inquiry completeness', () => {
     expect(backfillSources.has('role_description')).toBe(true);
   });
 });
+
+/**
+ * THE SAME GUARANTEE FOR THE CASE-INTAKE TREE, which needs it more than any
+ * other tree in the library.
+ *
+ * A dropped field on a job lead costs the owner a negotiating detail. A dropped
+ * field here can cost a prospective client their claim: the four screening
+ * facts (incident_date, incident_state, existing_counsel, opposing_parties) are
+ * what an attorney uses to decide whether the firm can act at all, and a matter
+ * that reaches the desk missing one does not look incomplete — it looks
+ * assessable. That is the failure mode: not an empty record, a confident one.
+ */
+describe('case_intake tree → capture_case_inquiry completeness', () => {
+  const caseTree = PLATFORM_TREE_LIBRARY.find((t) => t.tree_id === 'case_intake');
+  const identityTree = PLATFORM_TREE_LIBRARY.find((t) => t.tree_id === 'identity');
+  if (!caseTree || !identityTree)
+    throw new Error('platform library is missing case_intake/identity');
+
+  const backfillSources = new Set(
+    (ACTION_ARG_BACKFILL['capture_case_inquiry'] ?? []).flatMap((f) => [...f.from])
+  );
+
+  it('every collected node maps to a capture param', () => {
+    const collected = new Set<string>();
+    collectNonActionNodes(caseTree.nodes, collected);
+    collectNonActionNodes(identityTree.nodes, collected);
+
+    const orphans = [...collected].filter((n) => !backfillSources.has(n));
+    expect(
+      orphans,
+      `These case-intake nodes are COLLECTED but reach no capture_case_inquiry ` +
+        `param — the caller answers, the checklist ticks, and the attorney never ` +
+        `sees it: ${orphans.join(', ')}`
+    ).toEqual([]);
+  });
+
+  it('PIN: the four take-or-decline facts reach the write', () => {
+    // Named individually rather than covered by the sweep above, because these
+    // four are the ones whose absence changes an attorney's answer rather than
+    // merely thinning the record.
+    for (const node of [
+      'incident_date',
+      'incident_state',
+      'existing_counsel',
+      'opposing_parties',
+    ]) {
+      expect(backfillSources.has(node), `${node} must reach capture_case_inquiry`).toBe(true);
+    }
+  });
+
+  it("PIN: the caller's own narrative survives on both branches", () => {
+    // An insurance caller fills matter_description; an injury caller fills
+    // injury_circumstances. Whichever branch ran, the paragraph must land.
+    expect(backfillSources.has('matter_description')).toBe(true);
+    expect(backfillSources.has('injury_circumstances')).toBe(true);
+  });
+});

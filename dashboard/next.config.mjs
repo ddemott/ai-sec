@@ -38,10 +38,6 @@ const nextConfig = {
   // See dashboard/railway.json for the full build + copy + start commands.
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../'),
-  eslint: {
-    // Test files have cosmetic `any` warnings — don't block production builds
-    ignoreDuringBuilds: true,
-  },
 };
 
 // withSentryConfig is a no-op at runtime when SENTRY_DSN is unset; the

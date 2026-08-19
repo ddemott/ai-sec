@@ -31,6 +31,17 @@ test.beforeAll(() => {
   pool = new Pool({ connectionString: PG_URL });
 });
 
+test.beforeEach(async () => {
+  await pool.query(
+    `UPDATE tenants SET
+       tts_formal   = NULL,
+       tts_warm     = NULL,
+       tts_concise  = NULL,
+       tts_soft     = NULL,
+       tts_cheerful = NULL`
+  );
+});
+
 test.afterAll(async () => {
   // Reset every tenant's voice-style config so this spec leaves no residue.
   await pool
@@ -152,16 +163,7 @@ test('HAPPY: multiple styles (Warm + Concise) save and reload correctly', async 
   //       flags not included in the save remain at their correct state
   await openAiPersona(page);
 
-  // Start from a clean state: uncheck all 3 and save.
-  for (const name of [/Formal/i, /Warm/i, /Concise/i]) {
-    const cb = page.getByRole('checkbox', { name });
-    if (await cb.isChecked()) await cb.uncheck();
-  }
-  await page.getByRole('button', { name: /Save Changes/i }).click();
-  await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
-  await openAiPersona(page);
-
-  // Check Warm and Concise only.
+  // Fresh DB baseline from beforeEach: all style flags start unchecked.
   await page.getByRole('checkbox', { name: /Warm/i }).check();
   await page.getByRole('checkbox', { name: /Concise/i }).check();
   await page.getByRole('button', { name: /Save Changes/i }).click();

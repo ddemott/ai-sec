@@ -46,7 +46,7 @@ vi.mock('stripe', () => ({
 // ── Import after mocks ────────────────────────────────────────────────────
 import { registerBillingRoutes, subscriptionGate } from '../../src/routes/billing';
 import { jsonContentTypeParser } from '../../src/jsonContentTypeParser';
-import type { AppRequest } from '../../src/middleware';
+import type { AppRequest } from '../../src/middleware/fastify-middleware';
 
 const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
 const STRIPE_CUSTOMER_ID = 'cus_test_12345';
@@ -415,7 +415,7 @@ describe('POST /billing/portal', () => {
 
 // ── subscriptionGate middleware ───────────────────────────────────────────
 
-describe('subscriptionGate middleware', () => {
+describe('subscriptionGate middleware/fastify-middleware', () => {
   function buildGatedApp(status: string | null) {
     // Create a minimal app with subscriptionGate + a probe route that returns 200
     const mockPool = {

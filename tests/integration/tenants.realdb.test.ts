@@ -23,11 +23,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { type Client, type PoolClient, Pool } from 'pg';
+import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, createTenant, skipIfDbDown } from '../utils';
 import { createWithTenantClient } from '../../src/database';
 import { registerTenantRoutes } from '../../src/routes/tenants';
-import type { AppFastifyInstance } from '../../src/types/fastify';
 
 type TenantRequest = FastifyRequest & {
   tenantId?: string;
@@ -64,14 +63,14 @@ beforeAll(async () => {
     });
     const withTenantClient = createWithTenantClient(pool);
     registerTenantRoutes(
-      app as unknown as AppFastifyInstance,
+      app,
       pool,
-      withTenantClient as <T>(id: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>
+      withTenantClient
     );
     await app.ready();
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[tenants.realdb.test] DB not available, skipping', err);
   }
 });

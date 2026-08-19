@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 /**
  * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
  * These are the remaining dynamic/any-heavy areas after previous tranches.
@@ -15,9 +15,9 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { AppFastifyInstance } from './types/fastify';
-import { errorsTotal } from './services/metrics';
-import { captureException } from './services/sentry';
+import type { AppFastifyInstance } from '../types/fastify';
+import { errorsTotal } from '../services/metrics';
+import { captureException } from '../services/sentry';
 
 // ── Types ────────────────────────────────────────────────────────────
 

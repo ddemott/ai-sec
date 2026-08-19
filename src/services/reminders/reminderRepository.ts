@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /**
  * no-unsafe-* rules disabled: this repository uses the dynamic DatabaseService
  * layer (which itself has disables) and performs raw query result access.

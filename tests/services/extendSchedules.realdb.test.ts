@@ -90,7 +90,7 @@ beforeAll(async () => {
     employeeId = emp.rows[0].employee_id;
     dbAvailable = true;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn('[extendSchedules.realdb] DB not available, skipping', err);
   }
 });

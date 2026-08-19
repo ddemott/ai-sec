@@ -1,6 +1,6 @@
 # SecretaryHQ SaaS — Architecture
 
-**Last verified:** 2026-08-11 (29 top-level route modules, 180 migrations, 26 defined agent tools, 38 Playwright spec files, and the latest verified test counts 2,675 / 1,031 / 1,498)
+**Last verified:** 2026-08-18 for filesystem/package facts (29 top-level route modules, 184 migrations, 26 defined agent tools in `tools.ts`, 40 committed Playwright spec files, dashboard on Next.js 16 / React 19, backend on Fastify 5). Test-pass counts below remain the 2026-08-14 full-suite snapshot until re-run.
 
 > **External CRM sync reduced to Square only (2026-06-12).** The Jobber, HubSpot, ServiceTitan, and GoHighLevel integrations (route files, sync services, OAuth, webhooks) were deleted from the codebase. **Square remains the one surviving, live external CRM sync provider** — bidirectional push/pull via `src/routes/square.ts` + `src/services/crm/squareClient.ts` + `squareSync.ts`, dispatched from `src/services/syncOrchestrator.ts`. Calendar sync (Google + Outlook, push-only) is unchanged.
 
@@ -46,8 +46,8 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 - **Edge**: Telnyx (PSTN + SIP) → LiveKit Cloud (orchestrator) → LiveKit agent worker on Railway (`secretary-hq-agent`: Deepgram Nova-3 STT, OpenAI GPT-4.1-mini LLM, **Deepgram Aura TTS**; no XAI key). Call sequencing = question trees (§6.3).
 - **Tools**: 26 voice tools defined in `agent/src/tools.ts` against the tenant's Postgres — Fastify (Node) at `/agent-tools/*`. The live question-tree path offers a subset of them (12 base tools, plus 3 identity tools on goal-bearing calls) — see §7.
 - **API**: Fastify (29 top-level route modules + `agentTools/` module dir) on Railway — serves the dashboard, handles webhooks, runs async work inline
-- **DB**: Postgres + pgvector on Supabase, 180 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
-- **UI**: Next.js 14 (App Router) + Tailwind — deployed on Railway (production dashboard service)
+- **DB**: Postgres + pgvector on Supabase, 184 migrations, RLS on every tenant-scoped table. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)
+- **UI**: Next.js 16 (App Router) + React 19 + Tailwind — deployed on Railway (production dashboard service)
 
 ---
 
@@ -61,16 +61,16 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
 │   ├── routes/                   29 route modules + routeHelpers.ts
 │   ├── services/                 flat files (calendar sync, OAuth, name/token/SMS utilities) + communications/ (Telnyx-only SMS + delivery webhooks), reminders/, tenants/, usage/ subdirs
 │   └── database/                 getPool() singleton + createWithTenantClient(pool) factory + DatabaseService adapter
-├── dashboard/                    Next.js 14 App Router
+├── dashboard/                    Next.js 16 App Router
 │   ├── app/                      page.tsx (landing), dashboard/page.tsx (app shell), layout.tsx, globals.css
 │   ├── components/               ~80 feature components + ui/ primitives
 │   │   └── ui/                   Badge, Button, Card, ConfirmModal, FolderTabs, Input, Modal, Select, Toast, TimeInput, PhoneInput, CoverageBar
 │   ├── lib/                      api.ts, SessionContext, ThemeContext, VocabularyContext, hooks, types
-│   ├── e2e/                      38 Playwright spec files
+│   ├── e2e/                      40 Playwright spec files
 │   ├── server.js                 Custom HTTPS server (dev) + Railway deploy entry (prod)
-│   └── 92 *.test.tsx files       Vitest + React Testing Library
+│   └── 92 Vitest test files      React Testing Library + utility tests
 ├── supabase/
-│   ├── migrations/               180 SQL migrations
+│   ├── migrations/               184 SQL migrations
 │   └── seed.sql                  Platform admin + Bella's Hair Studio demo tenant
 ├── agent/                        LiveKit agent worker (Node) — deployed as Railway service `secretary-hq-agent`
 │   └── src/                      index.ts (entry), prompt.ts, toolsClient.ts, sessionContext.ts, tools.ts
@@ -137,7 +137,7 @@ Multi-tenant AI receptionist SaaS for service businesses (tire shops, salons, au
           │
     ┌─────┴────────┐
     │  Dashboard   │  Railway (current production)
-    │  Next.js 14  │
+    │  Next.js 16  │
     └──────────────┘
 ```
 
@@ -320,12 +320,14 @@ Super-admin operations (cross-tenant queries, tenant listing, user registration)
 
 **How question trees work.** The model is NOT given a script to follow. Instead:
 
-- **Trees are data** (`checklist/trees.ts`). 8 in `PLATFORM_TREE_LIBRARY`: `identity`, `booking`, `message`, `generic_subject`, `qa`, `job`, `schedule_change`, `fix_computer`. Nodes are `text`, `choice` (if-branch: answering one option activates its children and marks siblings `not_applicable`), or `action` (completed ONLY by a real tool's success id).
+- **Trees are data** (`checklist/trees.ts`). 10 in `PLATFORM_TREE_LIBRARY`: `identity`, `booking`, `message`, `generic_subject`, `qa`, `job`, `buy_service`, `schedule_change`, `fix_computer`, `case_intake`. Nodes are `text`, `choice` (if-branch: answering one option activates its children and marks siblings `not_applicable`), or `action` (completed ONLY by a real tool's success id).
 - **Host code owns all state** (`checklist/tracker.ts`). 10 node statuses; it renders the live checklist into the model's context each turn (`[ASK]` / `[listen]` / `[ACTION NOW]` / `[✓]`), discards answers stranded on a branch the caller abandoned, and exposes `isResolved()`.
 - **`isResolved()` is the goodbye gate.** `finish_call` refuses to close the call while any selected node is unresolved. **This gate replaced book-first sequencing**: a stated goal cannot be forgotten because the call cannot END on it. Callers may answer out of order, in any order.
 - **The model has three jobs:** `set_purpose` (choose trees off a menu), `record_answer` (fill anything it hears), and call the action tool when the checklist says `[ACTION NOW]`. Plus `answer_question` (RAG) at any moment.
 
-**Consequence for anyone changing call behaviour:** a tenant's `system_prompt` is **never passed to the model** on a live call — `ChecklistAgent` receives a one-line persona. Editing `src/services/scripts/blocks.ts` or reinstalling a tenant script changes nothing. Behaviour changes go in `agent/src/checklist/trees.ts`. Full design: `docs/QUESTION_TREE_ARCHITECTURE.md`.
+**Presets decide what a call CAN do (added 2026-08-12/13, ROADMAP Steps 7–9).** `tenants.checklist_preset_id` + `tenants.checklist_overrides` → `deriveChecklistRuntimeConfig` → `/agent-tools/tenant-config` (`checklist_runtime_config`) → `ChecklistAgent({ runtimeConfig })`. Five presets: `auto_shop_front_desk`, `salon_front_desk`, `local_service_front_desk` (shared front-desk tree set), `owner_for_hire_front_desk`, which adds `job` for solo professionals whose line takes work offers, and `law_firm_front_desk` (2026-08-14), which adds `case_intake` — the only tree whose intake ends in a human take-or-decline decision rather than a booking. **`ChecklistOverrides` can only SUBTRACT** (`disabled_conversation_blocks`, `booking_mode`, `message_mode`, `optional_node_ids`, `required_node_ids`) — there is no ADD verb, so **a tree missing from the preset is unreachable by that tenant no matter what the model asks for.** That is not theoretical: `job` sat in `forbidden_trees` on all three original presets, and two recruiter calls on 2026-08-13 to a line advertising the owner for hire wrote zero `job_inquiries` rows (`CALL1.md` / `CALL2.md`). `presetCatalog.test.ts` now fails CI on any orphaned platform tree; `fix_computer` is the single declared exception.
+
+**Consequence for anyone changing call behaviour:** a tenant's `system_prompt` is **never passed to the model** on a live call — `ChecklistAgent` receives a one-line persona. Editing `src/services/scripts/blocks.ts` or reinstalling a tenant script changes nothing. Behaviour changes go in `agent/src/checklist/trees.ts`, and whether a tenant can reach them goes in the preset. Full design: `docs/QUESTION_TREE_ARCHITECTURE.md`.
 
 ---
 
@@ -728,7 +730,7 @@ Tenant-scoped routes behind `subscriptionGateMiddleware` check `tenants.subscrip
 
 ### 16.1 Routing
 
-Next.js 14 App Router:
+Next.js 16 App Router:
 
 - `/app/page.tsx` — Marketing landing page.
 - `/app/dashboard/page.tsx` — App shell (single route, view-switching internally via tab state + URL query params).
@@ -774,7 +776,7 @@ Every component consumes CSS custom properties (`--bg`, `--fg`, `--accent`, `--b
 
 ### 16.7 Test harness
 
-Vitest + React Testing Library (jsdom). Latest verified dashboard run: **1,031 passing tests**. Contexts are provided by a shared `renderWithProviders()` helper. Happy + sad paths with 5W diagnostic comments (Who / What / When / Where / Why) — failure messages are self-debugging.
+Vitest + React Testing Library (jsdom). Latest local audit rerun: **1,046 passing tests** (2026-08-18). Contexts are provided by a shared `renderWithProviders()` helper. Happy + sad paths with 5W diagnostic comments (Who / What / When / Where / Why) — failure messages are self-debugging.
 
 ### 16.8 Dev server
 
@@ -804,29 +806,29 @@ All async work is **best-effort**. If a sync fails, the user-facing operation st
 
 ```
                   ╱╲
-                 ╱33╲        Playwright e2e (full-stack, browser)
+                 ╱E2E╲        Playwright e2e (40 committed full-stack browser specs)
                 ╱────╲
-               ╱  ●    ╲      simulate.sh tools (on-demand agent-tools journey — real `/agent-tools/*` routes)
+               ╱ sim  ╲       `simulate.sh tools` (on-demand agent-tools journey — real `/agent-tools/*` routes)
               ╱────────╲
-             ╱  1,977   ╲    Vitest unit + integration (real DB, real RLS)
+             ╱ vitest  ╲      Vitest unit + integration (real DB, real RLS)
             ╱────────────╲
 ```
 
-### 18.2 Backend (`npm test` — 2,675 passing in the latest verified run)
+### 18.2 Backend (`npm test`)
 
-Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, calendar sync, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: Bella's Hair Studio caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`).
+Vitest with `--fileParallelism=false` (tests share `test_db` on port 5433). Covers routes (happy + sad), services, scheduling, RLS enforcement, calendar sync, OAuth flows, voice-AI fixes, schema constraints, migration regressions, billing webhook handling, provisioning flows. Every test has 5W diagnostic comments (`// WHO: Bella's Hair Studio caller | WHAT: ... | WHEN: ... | WHERE: ... | WHY: ...`). **Latest local audit rerun (2026-08-18): not green in this workspace — 1,761 passing, 985 skipped, 9 failed. The loudest blocker was `tests/regression/rlsIsolation.test.ts`, which could not connect as `app_user` and instructed applying `supabase/migrations/20260724000100_app_user_role.sql` to `test_db` first.**
 
-### 18.3 Dashboard (`cd dashboard && npm test` — 1,031 passing in the latest verified run)
+### 18.3 Dashboard (`cd dashboard && npm test` — 1,046 passing on 2026-08-18)
 
 Vitest + React Testing Library (jsdom). Renders components with all 4 providers (Session, Theme, Vocabulary, AppointmentDetail). Tests interactions (click, keyboard, form submission), accessibility (role/tabIndex/aria attributes), and error states.
 
-### 18.4 Agent (`cd agent && npm test` — 1,498 passing in the latest verified run)
+### 18.4 Agent (`cd agent && npm test` — 943 passing on 2026-08-18)
 
 Vitest. Covers the LiveKit Agents worker: prompt assembly, the 26 defined tool schemas, `toolsClient`, transcript recording, call-outcome tracking, the bounded post-call summary, and the TTS dead-air fallback.
 
 _(The former Supabase edge-function suite — `deno task test --no-check` — was removed with `supabase/functions/` itself when the backend moved to Fastify. See `docs/FRAMEWORK_MIGRATIONS.md`.)_
 
-### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 38 spec files)
+### 18.5 Playwright e2e (`cd dashboard && npx playwright test` — 40 committed spec files)
 
 Full-stack browser coverage: regression gates (toast, validation, unsaved-changes warning, NaN guards), functional audit journeys (login → home → scheduler → CRM → calls → services → staff → AI → theme → URL nav), auth/role gating, calendar sync, knowledge-base import, wizard flows, and self-service. Runs as a required CI job on every PR.
 

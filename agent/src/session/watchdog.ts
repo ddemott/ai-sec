@@ -170,13 +170,31 @@ export function attachOutputWatchdog(
     // now. Only hold the line if the agent is still thinking (no audio yet).
     if (session.agentState !== 'thinking') return;
     // …and if the reply is already queued (audio imminent), a filler is not
-    // cover, it's clutter — skip it AND the recovery escalation. If that queued
-    // reply somehow dies silent, the silent-turn recovery path owns that case.
+    // cover, it's clutter — skip the HOLD LINE. But keep the escalation armed.
+    //
+    // THIS RETURN USED TO STAND DOWN ENTIRELY, and its comment said the
+    // silent-turn recovery path owned the case where a queued reply dies
+    // silent. It does — but only after the FRAMEWORK's `ttsReadIdleTimeout`
+    // gives up, which defaults to 10 seconds. So a reply that was queued and
+    // then produced no audio left the caller in ten full seconds of nothing
+    // with no cover of any kind.
+    //
+    // Measured on a real call (2026-08-15, sim-call-1786817155950): twice, TTS
+    // produced zero frames, the framework timed out at exactly 10.00s, and the
+    // caller said "Hello? Are you there?" and then "I said it already. Didn't
+    // you hear it?". The hold line was correctly skipped both times — and
+    // nothing else was watching.
+    //
+    // Arming timer2 here costs nothing when the reply lands normally: the
+    // `speaking` transition disarms it, and fireRecovery re-checks the state
+    // and stands down if audio is rolling. What it buys is a spoken line at
+    // deadline2 instead of silence until the framework notices.
     if (speechScheduledOrPlaying()) {
       opts.log.info(
         { event: 'watchdog_hold_skipped', label: 'thinking', reason: 'reply_already_queued' },
         'watchdog hold skipped — reply already scheduled, audio imminent'
       );
+      timer2 = setTimeout(fireRecovery, deadline2);
       return;
     }
     fillerDone = false;
@@ -345,14 +363,25 @@ export function attachSilentTurnRecovery(
      *  (The generateReply nudge produces a normal ConversationItemAdded and
      *  needs no help.) */
     onSpoken?: (text: string) => void;
+    /** Called when a turn is found to have made no sound, so the transcript can
+     *  mark the assistant line the caller never heard. */
+    onUnheardTurn?: () => void;
   }
 ): () => void {
   // True from the moment we fire a nudge until any agent audio plays. If a
   // second silent death arrives while this is set, the nudge itself failed —
   // escalate to the canned line instead of nudging forever.
   let nudgeInFlight = false;
+  // When the turn started thinking. The gap to the silent death is the single
+  // most diagnostic number available here: ~10s means the framework's TTS idle
+  // timeout gave up, which is a stream that never produced a frame, not a model
+  // that ran out of tool steps.
+  let thinkingAtMs: number | null = null;
+  const msSinceThinking = (): number | null =>
+    thinkingAtMs === null ? null : Date.now() - thinkingAtMs;
 
   const onAgentState = (ev: voice.AgentStateChangedEvent) => {
+    if (ev.newState === 'thinking') thinkingAtMs = Date.now();
     if (ev.newState === 'speaking') {
       nudgeInFlight = false;
       return;
@@ -404,10 +433,23 @@ export function attachSilentTurnRecovery(
     }
 
     nudgeInFlight = true;
+    // THE MESSAGE USED TO NAME CAUSES NOBODY HAD MEASURED — "tool-step cap or
+    // empty generation". On 2026-08-15 it was neither, twice: the LLM produced
+    // complete text in 1.7s with one tool call against a cap of five, and the
+    // framework's TTS idle timeout expired at exactly 10.00s having received
+    // zero audio frames. A log line that guesses at a cause sends the next
+    // reader to the wrong file. State what is observed — the turn made no
+    // sound — and let the fields say the rest.
     opts.log.warn(
-      { event: 'silent_turn_recovered' },
-      'turn ended with no audio (tool-step cap or empty generation) — forcing a spoken, tool-free reply'
+      { event: 'silent_turn_recovered', ms_since_thinking: msSinceThinking() },
+      'turn ended with no audio — forcing a spoken, tool-free reply'
     );
+    // The last assistant line in the transcript belongs to THIS turn, and the
+    // caller never heard it: the framework records assistant text from the
+    // token stream, not from playout, so a stalled TTS still produces a
+    // ConversationItemAdded and a tidy transcript of a silence. Marking it is
+    // the difference between a record and a story.
+    opts.onUnheardTurn?.();
     try {
       // SpeechHandle thenable, fire-and-forget — playout is the framework's job.
       void session.generateReply({

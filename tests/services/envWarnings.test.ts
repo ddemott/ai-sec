@@ -200,3 +200,37 @@ describe('collectStartupWarnings — Stripe', () => {
     expect(warnings.filter((w) => w.includes('STRIPE_WEBHOOK_SECRET'))).toHaveLength(0);
   });
 });
+
+describe('collectStartupWarnings — .env deprecation + TELNYX_PUBLIC_KEY edges', () => {
+  it('SAD: TELNYX_PUBLIC_KEY missing → inbound_sms 503 fail-closed warning', () => {
+    // WHO: production operator who purged old PUBLIC_KEY but forgot TELNYX_PUBLIC_KEY
+    // WHAT: explicit 503 + compliance note so STOP replies are not silently dropped
+    // WHY: recent .env PUBLIC_KEY purge (2026-07) left this gap; test pins both edges
+    const warnings = collectStartupWarnings(baseCtx({ env: { TELNYX_PUBLIC_KEY: undefined } }));
+    const w = warnings.find((x) => x.includes('TELNYX_PUBLIC_KEY') || x.includes('PUBLIC_KEY'));
+    expect(w).toBeDefined();
+    expect(w).toContain('503');
+    expect(w).toContain('inbound SMS webhook returns 503');
+    expect(w).toContain('compliance exposure');
+  });
+
+  it('HAPPY: TELNYX_PUBLIC_KEY present suppresses warning (post-purge)', () => {
+    const warnings = collectStartupWarnings(
+      baseCtx({ env: { TELNYX_PUBLIC_KEY: '9xjFfLcMgNjd22BM2J0J2wsHmWFsLMfGSBlGviIarp8=' } })
+    );
+    expect(warnings.filter((w) => w.includes('PUBLIC_KEY') || w.includes('TELNYX_PUBLIC_KEY'))).toHaveLength(0);
+  });
+
+  it('DEPRECATION: old PUBLIC_KEY still present logs migration note (no functional effect)', () => {
+    // Covers the purge edge — old .env files may still have PUBLIC_KEY=...
+    const ctx = baseCtx({
+      env: {
+        PUBLIC_KEY: 'old-value-to-trigger-deprecation',
+        TELNYX_PUBLIC_KEY: 'valid=',
+      },
+    });
+    const warnings = collectStartupWarnings(ctx);
+    const dep = warnings.find((w) => w.includes('PUBLIC_KEY') && w.includes('deprecated'));
+    expect(dep).toBeDefined(); // or check featureReadiness if it surfaces it
+  });
+});

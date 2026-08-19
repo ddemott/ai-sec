@@ -34,12 +34,82 @@ import {
 } from './tracker.js';
 import type { ActionNodeDef, NodeId, QuestionTreeDef } from './types.js';
 import { CALLER_NAME, CALLER_PHONE } from './trees.js';
+import { BLOCK_LIBRARY } from './blockLibrary.js';
+import type { ToolMap } from '../tools.js';
+
+/**
+ * TREE-LEVEL CONFLICTS, COMPILED FROM THE BLOCK CONTRACT.
+ *
+ * `set_purpose` speaks in TREE ids; the contract is declared in BLOCK ids. This
+ * flattens one into the other once, at module load, so the gate below reads a
+ * declaration instead of naming a pair in code. Adding the next confusable pair
+ * is then one line in `blockLibrary.ts` and no change here — which matters
+ * because the pair we know about was found by a caller, not by review.
+ */
+const TREE_CONFLICTS: Map<string, Set<string>> = (() => {
+  const map = new Map<string, Set<string>>();
+  for (const block of Object.values(BLOCK_LIBRARY)) {
+    for (const treeId of block.tree_refs ?? []) {
+      const against = new Set<string>();
+      for (const otherId of block.conflicts_with ?? []) {
+        for (const otherTree of BLOCK_LIBRARY[otherId]?.tree_refs ?? []) against.add(otherTree);
+      }
+      if (against.size > 0) map.set(treeId, against);
+    }
+  }
+  return map;
+})();
+
+/**
+ * The clarifying QUESTION a conflict should produce, keyed by the sorted pair.
+ *
+ * A refusal that only says "these contradict" leaves the model to invent its
+ * own way out, and on a live call it invents badly. Every refusal in this file
+ * names the satisfiable next step; for a conflict, that step is one question
+ * put to the caller. Pairs without an entry get a generic form built from the
+ * two blocks' own descriptions — usable, but worth replacing with real wording
+ * the first time a call proves what the caller actually needs to be asked.
+ */
+const CONFLICT_CLARIFIERS: Record<string, string> = {
+  'buy_service|job':
+    'Ask which it is ("Are you looking to hire him, or interested in the AI receptionist for your ' +
+    'own business?"), then select ONE of them.',
+};
+
+/**
+ * The first declared conflict among a proposed tree selection, or null.
+ * Exported so the compile-from-declaration step is testable without standing up
+ * a session — the property worth guarding is that this reads BLOCK_LIBRARY and
+ * not a pair written into the gate.
+ */
+export function conflictingTreePair(trees: string[]): [string, string] | null {
+  for (const treeId of trees) {
+    const against = TREE_CONFLICTS.get(treeId);
+    if (!against) continue;
+    const clash = trees.find((other) => against.has(other));
+    if (clash) return [treeId, clash];
+  }
+  return null;
+}
+
+function conflictRefusal(a: string, b: string): string {
+  const pair = [a, b].sort();
+  const clarifier =
+    CONFLICT_CLARIFIERS[pair.join('|')] ??
+    `Ask the caller which one they are here for — ${BLOCK_LIBRARY[pair[0]]?.description ?? pair[0]} ` +
+      `versus ${BLOCK_LIBRARY[pair[1]]?.description ?? pair[1]} — then select ONE of them.`;
+  return (
+    `REFUSED: ${pair[0]} and ${pair[1]} contradict each other — one caller cannot be both on the ` +
+    `same call. ${clarifier}`
+  );
+}
 
 /** The JSON field whose presence in a tool's result proves the write LANDED. */
 const ACTION_ID_FIELDS: Record<string, string> = {
   book_with_scheduling: 'appointment_id',
   take_message: 'message_id',
   capture_job_inquiry: 'job_inquiry_id',
+  capture_case_inquiry: 'submission_id',
   cancel_appointment: 'appointment_id',
   reschedule_appointment: 'appointment_id',
 };
@@ -151,6 +221,15 @@ export const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
   // time; nothing carried them to the write.
   book_with_scheduling: [
     { arg: 'phone', from: ['caller_phone'] },
+    // The tool asks for the CALLER'S OWN WORDS for what they want, and that is
+    // exactly what `meeting_topic` holds — so requiring the model to retype it
+    // was pure state theater, and an omission was fatal rather than cosmetic:
+    // `service_type` is a REQUIRED param, so a model that forgets it (2026-08-15
+    // sim: it sent `{"start_time":"…"}` and nothing else) cannot book at all.
+    { arg: 'service_type', from: ['meeting_topic', 'message_body'] },
+    // Same reasoning for the name — an appointment with no name on it is the
+    // junk-"Caller"-row shape, and the checklist has known the name for minutes.
+    { arg: 'name', from: [CALLER_NAME] },
     {
       arg: 'description',
       from: ['meeting_topic', 'meeting_context'],
@@ -173,6 +252,52 @@ export const ACTION_ARG_BACKFILL: Record<string, readonly ArgFill[]> = {
     { arg: 'callback_phone', from: [CALLER_PHONE] },
     { arg: 'message', from: ['message_body'] },
   ],
+  // A case intake collects more fields than any other tree, which makes it the
+  // most exposed to the state-theater bug that ate location_type and then
+  // role_description: the caller answers, the checklist ticks, and the write
+  // never hears it. Every collected node is wired here, and
+  // captureCompleteness.test.ts fails CI if a future node is not.
+  capture_case_inquiry: [
+    { arg: 'caller_name', from: [CALLER_NAME] },
+    { arg: 'callback_phone', from: [CALLER_PHONE] },
+    { arg: 'matter_type', from: ['matter_type'] },
+    { arg: 'incident_date', from: ['incident_date'] },
+    { arg: 'incident_state', from: ['incident_state'] },
+    {
+      arg: 'has_existing_counsel',
+      from: ['existing_counsel'],
+      map: (v) => v === 'has_counsel',
+    },
+    { arg: 'counsel_situation', from: ['counsel_situation'] },
+    { arg: 'opposing_parties', from: ['opposing_parties'] },
+    // Whichever branch ran, the caller's own account is the narrative the
+    // attorney reads. Combined rather than first-wins: an injury call fills
+    // injury_circumstances and an insurance call fills matter_description, and
+    // a caller who describes both should lose neither.
+    {
+      arg: 'matter_description',
+      from: ['injury_circumstances', 'matter_description'],
+      combine: (values) => {
+        const joined = values.filter((v) => v && v.trim()).join('\n\n');
+        return joined || undefined;
+      },
+    },
+    { arg: 'insurer_name', from: ['insurer_name'] },
+    { arg: 'policy_type', from: ['policy_type'] },
+    { arg: 'claim_outcome', from: ['claim_outcome'] },
+    { arg: 'stated_reason', from: ['stated_reason'] },
+    { arg: 'amount_in_dispute', from: ['amount_in_dispute'] },
+    { arg: 'appeal_status', from: ['appeal_status'] },
+    { arg: 'injuries_sustained', from: ['injuries_sustained'] },
+    { arg: 'medical_treatment', from: ['medical_treatment'] },
+    { arg: 'at_fault_party', from: ['at_fault_party'] },
+    { arg: 'gave_recorded_statement', from: ['gave_statement'] },
+    { arg: 'lost_income', from: ['lost_income'] },
+    { arg: 'police_report', from: ['police_report'] },
+    { arg: 'deadline_pressure', from: ['deadline_pressure'] },
+    { arg: 'documents_available', from: ['documents_available'] },
+    { arg: 'desired_outcome', from: ['desired_outcome'] },
+  ],
 };
 
 /** How many times set_purpose may fire before the call is told to wrap up. */
@@ -185,16 +310,198 @@ const TREE_TOPIC: Record<string, string> = {
   fix_computer: 'a computer repair',
 };
 
+/**
+ * Does this meeting-topic utterance name a ROLE the owner would be paid for?
+ *
+ * 2026-08-14, sim-call-1786693849702: caller answered "What is the meeting
+ * about?" with "This is about a job position". The model recorded
+ * meeting_topic and booked 15 minutes. Zero job_inquiries row. Prompt text
+ * on the node said "call set_purpose again" — it did not.
+ *
+ * Bare "job" / "a job" is a SERVICE request in this product ("I have a job
+ * for you" = fix my computer). Do not match it. "position" / "role" /
+ * "job position" are the role words.
+ *
+ * NO REAL NAME BELONGS IN HERE (2026-08-14). The hire/hiring branch first
+ * shipped as `(him|her|them|<the owner's first name>|the owner)`, which
+ * `tests/noHardcodedNames.test.ts` correctly rejected: this function runs for
+ * EVERY tenant, so one business's owner name is dead weight in every other
+ * business's call and would need editing the moment a second tenant exists.
+ * There is no owner-name column on `tenants` to substitute either — only
+ * `persona_name`, which names the ASSISTANT, not the person being hired. So
+ * the branch matches pronouns and the role word only.
+ *
+ * Residual gap, stated rather than papered over: a caller who says exactly
+ * "hiring <Name>" and nothing else is no longer matched here. Widening this to
+ * "hire/hiring + any token" would swallow "hiring a plumber", which in this
+ * product is a SERVICE request — the same confusion bare "job" is excluded
+ * for. Those calls still reach the job tree through the role words above, or
+ * through the model's own set_purpose.
+ */
+export function meetingTopicNamesOwnerRole(raw: string): boolean {
+  const t = raw.trim().toLowerCase();
+  if (!t) return false;
+  // PLURALS COUNT. 2026-08-15 sim (JAYA REPLAY — a scenario literally named
+  // "talk with Dale about job opportunities"): the caller said "About the job
+  // opportunities — he shared the resume", and this matcher looked only for the
+  // SINGULAR "job opportunity". It missed, the job tree was never added, and a
+  // recruiter's entire role intake was lost behind a 15-minute meeting. Plural
+  // is the more natural phrasing of the two, and it was the one that failed.
+  if (/\b(positions?|roles?|recruiters?|recruiting|staffing)\b/.test(t)) return true;
+  if (/\bjobs?\s+(positions?|opportunit(?:y|ies)|offers?|openings?|inquir(?:y|ies))\b/.test(t)) {
+    return true;
+  }
+  if (/\b(contract[- ]to[- ]hire|contract\s+role)\b/.test(t)) return true;
+  if (/\bhir(?:e|ing)\s+(him|her|them|the owner)\b/.test(t)) return true;
+  return false;
+}
+
 const DEFAULT_MAX_PURPOSE_ROUNDS = 5;
 
 /** After this many consecutive failures an action is told to stop retrying. */
 const ACTION_FAILURE_LIMIT = 2;
 
 /**
+ * After this many consecutive REFUSALS the unconfirmed-booking guard stands
+ * down and lets the write through.
+ *
+ * A refusal is not a failure — it returns before the real tool runs — so it
+ * never touched `failCounts`, and `slotsAwaitingChoice` was cleared in exactly
+ * ONE place: a successful booking. A booking the guard itself refuses therefore
+ * could not clear the condition that refuses it, and the goodbye gate will not
+ * let the call end while the booking node is unresolved. Measured 2026-08-15 on
+ * the `sim-questiontree` DALE'S CALL scenario: 12 refused bookings, 4 refused
+ * finish_calls, the caller said goodbye twice, and the run ended only because
+ * the harness caps at 48 rounds. A phone line has no such cap.
+ *
+ * Two refusals is the whole value of the guard: it stops the FIRST blind write,
+ * which is the one that would have booked a time nobody chose. Refusing forever
+ * does not buy a better booking — it trades a possibly-wrong time for a
+ * certainly-dead call.
+ */
+const BOOKING_GUARD_REFUSAL_LIMIT = 2;
+
+/**
+ * After this many consecutive refusals the goodbye gate releases the call.
+ *
+ * The gate is the structural guarantee that a stated goal cannot be forgotten,
+ * and it stays exactly that for the first few attempts. But a caller who has
+ * said goodbye and is being answered with "one moment, I'm still finalizing"
+ * has already lost the thing the gate protects; holding the line adds nothing
+ * but tokens and a worse hang-up. The release is logged at WARN with the unmet
+ * nodes so it can never pass for a normal close.
+ */
+const FINISH_REFUSAL_LIMIT = 5;
+
+/** Params `book_with_scheduling` cannot run without, in the tool's own names. */
+const BOOKING_REQUIRED_ARGS = ['service_type', 'window_from', 'window_to', 'phone'] as const;
+
+/**
+ * Trees that can be served without knowing who called.
+ *
+ * Everything else produces a RECORD someone has to act on later — a message, a
+ * booking, a lead — and a record with no way to reach the caller is a record
+ * nobody can use. Selecting `identity` alongside them was a prompt rule
+ * ("include identity whenever a goal needs a contact") until 2026-08-15, when
+ * the `sim-questiontree` WEDDING MESSAGE scenario selected `message +
+ * generic_subject` without it: the caller said "I'd love for him to call me
+ * back", the message was taken, the call closed, and **no number was ever
+ * asked for**. The scenario PASSED — no grader asserts a callback number.
+ *
+ * `qa` is the deliberate exception in the other direction: someone asking what
+ * time you close must not be interrogated for their phone number to get an
+ * answer.
+ */
+const CONTACTLESS_TREES = new Set(['qa']);
+
+/** Nodes that name a BUSINESS — never a person. See the guard in record_answer. */
+const COMPANY_NODES = new Set(['callers_company', 'client_company']);
+
+/**
+ * "Do you want a meeting?" nodes, and the answer a BOOKING ATTEMPT gives them.
+ *
+ * Every tree that ends in a booking has one of these, and each is answered by
+ * an ACTION rather than an utterance — which is why they kept being left open
+ * and then asked, insultingly, of someone already booked. Keyed by node id so
+ * the next vertical's version is one line, not another postmortem.
+ */
+const BOOKING_CLOSES_OFFER: Record<string, string> = {
+  meeting_offer: 'wants_meeting',
+  demo_offer: 'wants_demo',
+};
+
+/**
+ * Words that sit exactly on the buy-vs-job axis and resolve to neither.
+ *
+ * Deliberately tiny. "Opportunity" is the word that produced the confusion in
+ * both directions (2026-07-28 sim, 2026-08-15 sim); "partnership" and "work
+ * together" are its neighbours. Anything more would fire on ordinary messages,
+ * and a nudge that fires on everything is noise the model learns to skip.
+ */
+const AMBIGUOUS_OPPORTUNITY =
+  /\b(business\s+opportunit(?:y|ies)|opportunit(?:y|ies)\s+for\s+(?:your|the)\s+business|partnership|work\s+together)\b/i;
+
+/** Action tools whose required `appointment_id` the host fills when unambiguous. */
+const APPOINTMENT_ID_TOOLS = new Set(['cancel_appointment', 'reschedule_appointment']);
+
+/** Result fields a caller's own appointment list can arrive under. */
+const APPOINTMENT_LIST_FIELDS = ['appointments', 'upcoming', 'results'] as const;
+
+/**
+ * The ONE appointment id in a lookup result, or null when there is any doubt.
+ *
+ * Null for zero (nothing to act on) and null for two or more (the caller must
+ * say which — the host guessing there is how you cancel the wrong booking).
+ */
+export function soleAppointmentIdIn(raw: unknown): string | null {
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const bag = parsed as Record<string, unknown>;
+  const source = (bag.result ?? bag) as Record<string, unknown>;
+  for (const field of APPOINTMENT_LIST_FIELDS) {
+    const list = source[field];
+    if (!Array.isArray(list) || list.length !== 1) continue;
+    const only = list[0] as Record<string, unknown> | null;
+    const id = only?.['appointment_id'];
+    if (typeof id === 'string' && id.trim()) return id;
+  }
+  return null;
+}
+
+/**
  * Result fields a slot reader uses to hand the model a list of open times.
  * Counting them is how the host knows an OFFER is outstanding.
  */
 const OFFERED_SLOT_FIELDS = ['open_times', 'slots', 'available_times', 'times'] as const;
+
+/**
+ * The distinctive opening of the backend's RAG no-answer line, verbatim from
+ * `policyFallback` in `src/routes/agentTools/knowledge.ts`.
+ *
+ * PINNED ON BOTH SIDES. `tests/routes/agentTools/policyFallbackContract.test.ts`
+ * asserts the route still returns exactly this, so a reword there is a red CI
+ * rather than a guarantee that silently stops firing. Matching prose is not
+ * lovely; the alternative was changing the route's result shape, which the
+ * ladder path and several tests also read.
+ */
+export const RAG_NO_ANSWER_MARKER = "I don't have specific information on that topic";
+
+/** True when the knowledge base returned its no-answer fallback. */
+export function ragCouldNotAnswer(text: string): boolean {
+  return text.includes(RAG_NO_ANSWER_MARKER);
+}
+
+/** A present, non-blank string argument — anything else counts as omitted. */
+function toNonEmptyString(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v : null;
+}
 
 /** Args that name ONE instant, i.e. a time the caller actually chose. */
 function namesOneInstant(args: unknown): boolean {
@@ -211,6 +518,110 @@ function namesOneInstant(args: unknown): boolean {
   );
 }
 
+/**
+ * Placeholders a model reaches for when it has no name — the generic noun for
+ * the person on the line, not anything they said. Matched whole, after
+ * stripping a leading article, so a real "Caller" surname is still impossible
+ * to distinguish and is deliberately treated as a placeholder: the cost of
+ * re-asking a genuine Mr. Caller is one polite question; the cost of accepting
+ * the placeholder is a permanent junk row that reads as a real customer.
+ */
+const PLACEHOLDER_NAMES = new Set([
+  'caller',
+  'customer',
+  'client',
+  'unknown',
+  'anonymous',
+  'user',
+  'guest',
+  'n/a',
+  'na',
+  'none',
+  'no name',
+  'not given',
+  'not provided',
+  'unnamed',
+]);
+
+/** Why a recorded caller name is unusable — or null when it is a real name. */
+export function placeholderNameReason(raw: string): string | null {
+  const cleaned = raw
+    .trim()
+    .toLowerCase()
+    .replace(/^(the|a)\s+/, '')
+    .replace(/[.,!?]+$/, '');
+  if (!PLACEHOLDER_NAMES.has(cleaned)) return null;
+  return (
+    `"${raw.trim()}" is not a name — it is the generic word for the person on the line, and ` +
+    `saving it puts a row called "${raw.trim()}" in the owner's phone book. NOT recorded. If ` +
+    `they have said their name, record THAT; if they have not, ask ("Who am I speaking with?"). ` +
+    `If they refuse to give one, record caller_name as declined instead of inventing a filler.`
+  );
+}
+
+/**
+ * A "topic" that names only WHO the caller wants, never WHAT about.
+ *
+ * The `meeting_topic` node's own text has said *"WHO is not WHAT: 'I want to
+ * talk with [the owner]' names a person and carries NO topic — never record it
+ * here"* since the 2026-07-27 postmortem, with the live call attached. It is
+ * still prompt text, and on the 2026-08-15 sim it was violated on roughly half
+ * of the JAYA REPLAY runs: "I want to talk with Dale" was recorded verbatim as
+ * the topic, so the topic never named a role, `meetingTopicNamesOwnerRole()`
+ * never fired, the job tree was never added — and a recruiter's call produced a
+ * fifteen-minute meeting the owner opens with no idea what it is about.
+ *
+ * Matched on SHAPE, not on a roster: the whole value is a verb of meeting plus
+ * a person, with no "about". That is decidable without knowing any names, and
+ * it is what makes it safe — "talk about the contract" keeps its "about" and
+ * passes, "speak with someone" is just as topicless as "talk with Dale".
+ */
+export function topicNamesOnlyAPerson(raw: string): boolean {
+  const t = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?]+$/, '');
+  if (/\babout\b|\bregarding\b|\bre:/.test(t)) return false;
+  return /^(?:to\s+|just\s+)*(?:talk|speak|meet|chat|connect)(?:ing|s)?(?:\s+(?:to|with))?\s+[\w'-]+(?:\s+[\w'-]+)?$/.test(
+    t
+  );
+}
+
+/** Digits in a dictated value, ignoring spaces, dashes, parens and words. */
+export function countPhoneDigits(raw: string): number {
+  return raw.replace(/\D/g, '').length;
+}
+
+/**
+ * Why a dictated number cannot be used — or null when it can.
+ *
+ * The return value IS what the model reads: the tool result is the one channel
+ * it reliably acts on, so the reason and the instruction travel together.
+ *
+ * US line, so a usable number is ten digits (or eleven with a leading 1). This
+ * is deliberately the same rule `identify_caller` and the booking gate enforce
+ * server-side — the point of checking here is that the caller is still ON THE
+ * LINE and can simply say it again, whereas the server's rejection lands
+ * whenever a write happens to be attempted, which on 2026-08-15 was half a
+ * minute later and in the middle of a different question.
+ */
+export function unusablePhoneReason(raw: string): string | null {
+  const digits = countPhoneDigits(raw);
+  if (digits === 10) return null;
+  if (digits === 11 && raw.replace(/\D/g, '').startsWith('1')) return null;
+  const heard =
+    digits === 0
+      ? 'no digits at all'
+      : `only ${digits} digit${digits === 1 ? '' : 's'} — a usable number has 10`;
+  return (
+    `NOT RECORDED: that number is not dialable — I heard ${heard}. ` +
+    `Say you did not catch the whole number and ask them to say it again, ` +
+    `slowly, one digit at a time. Do not read back or confirm what you have; ` +
+    `it is incomplete. Do not move on to another question, and do not attempt ` +
+    `to book — the booking will be refused for the same reason.`
+  );
+}
+
 /** How many open times a slot reader just put in front of the caller. */
 export function countOfferedSlots(raw: unknown): number {
   let parsed: unknown = raw;
@@ -224,8 +635,7 @@ export function countOfferedSlots(raw: unknown): number {
   if (!parsed || typeof parsed !== 'object') return 0;
   const obj = parsed as Record<string, unknown>;
   const nested = obj.result;
-  const source =
-    nested && typeof nested === 'object' ? (nested as Record<string, unknown>) : obj;
+  const source = nested && typeof nested === 'object' ? (nested as Record<string, unknown>) : obj;
   for (const field of OFFERED_SLOT_FIELDS) {
     const value = source[field];
     if (Array.isArray(value)) return value.length;
@@ -239,7 +649,7 @@ interface RealToolShape {
   parameters: Record<string, unknown>;
   execute: (args: unknown, toolCtx: unknown) => Promise<unknown>;
 }
-const shape = (t: llm.ToolContext[string]): RealToolShape => t as unknown as RealToolShape;
+const shape = (t: ToolMap[string]): RealToolShape => t as unknown as RealToolShape;
 
 export interface ChecklistToolDeps {
   tracker: ChecklistTracker;
@@ -247,7 +657,7 @@ export interface ChecklistToolDeps {
   /** Tree ids this tenant is allowed to select right now. Defaults to all library tree ids. */
   selectableTreeIds?: string[];
   /** The full ToolContext from buildTools() — real tools, untouched. */
-  realTools: llm.ToolContext;
+  realTools: ToolMap;
   /** Carrier-attested caller number (null on forwarded lines) — auto-fills the
    *  caller_phone node on selection so the question never exists on that call. */
   callerPhone?: string | null;
@@ -263,7 +673,7 @@ export interface ChecklistToolDeps {
 
 export interface ChecklistToolkit {
   /** Base + wrapped actions + read passthroughs for the CURRENT selection. */
-  selectedTools: () => llm.ToolContext;
+  selectedTools: () => ToolMap;
 }
 
 interface ActionSite {
@@ -337,6 +747,26 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   let identifiedAs: { name: string; phone: string } | null = null;
   let closing = false;
   const failCounts = new Map<string, number>();
+  // Refusals are counted separately from failures: a refusal returns BEFORE the
+  // real tool runs, so it can never reach `failCounts` and never trips
+  // ACTION_FAILURE_LIMIT. Both counters exist to bound a loop the model cannot
+  // get itself out of.
+  let bookingGuardRefusals = 0;
+  let finishRefusals = 0;
+  // Set once book_with_scheduling is attempted this call. BOOKING_CLOSES_OFFER
+  // is applied at that moment too, but recordIfOpen is a no-op against a node
+  // that is not yet 'open'/'latent' — e.g. meeting_offer sits at the END of the
+  // job tree, so when a caller opens with both booking AND job intent in one
+  // breath, booking lands first and meeting_offer is still gated behind
+  // employment_type/work_mode/etc. The one-shot close silently missed it, and
+  // the model asked "would you like a meeting?" of someone already booked
+  // (live call 2026-08-16, sim-call-1786921082547). Retrying on every
+  // record_answer call until the node opens makes the close self-healing
+  // instead of a single point-in-time guess.
+  let bookingMadeThisCall = false;
+  // The caller's own appointment id, when the lookup found exactly one. See
+  // soleAppointmentIdIn — this is what keeps a UUID out of the model's mouth.
+  let soleAppointmentId: string | null = null;
 
   // Every state block ends with an explicit NEXT pointer — the first frontier
   // item in walk order. Without it the model treats a ready [ACTION NOW] as
@@ -477,14 +907,12 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       const dir = args.work_direction;
       const picksJob = args.trees.includes('job');
       const picksBuy = args.trees.includes('buy_service');
-      if (picksJob && picksBuy) {
-        return (
-          'REFUSED: job and buy_service contradict each other — one caller cannot both ' +
-          'offer the owner work and buy the service in the same breath. Ask which it is ' +
-          '("Are you looking to hire him, or interested in the AI receptionist for your ' +
-          'own business?"), then select ONE of them.'
-        );
-      }
+      // Contract-driven, not pair-driven: any two blocks that declare each
+      // other in `conflicts_with` bounce here. `blockContract.test.ts` enforces
+      // that the declaration is symmetric, so it does not matter which of the
+      // two the model listed first.
+      const clash = conflictingTreePair(args.trees);
+      if (clash) return conflictRefusal(clash[0], clash[1]);
       if (dir === 'caller_pays_us' && picksJob) {
         return (
           'REFUSED: you said the caller is PAYING US, but selected the job tree — that ' +
@@ -564,7 +992,29 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         if (err instanceof UnknownTreeError) return err.message;
         throw err;
       }
-      recordIfOpen(CALLER_NAME, sanitizeVolunteered(args.caller_name, 80));
+      // See CONTACTLESS_TREES — a goal-bearing call gets identity whether the
+      // model remembered to ask for it or not. Host code, because the prompt
+      // rule alone lost a callback number on a message that asked for a callback.
+      const selected = tracker.selectedTrees();
+      if (
+        !selected.includes('identity') &&
+        selectableTreeSet.has('identity') &&
+        selected.some((id) => !CONTACTLESS_TREES.has(id))
+      ) {
+        tracker.select(['identity']);
+        getLogger().info(
+          { event: 'checklist_identity_auto_selected', requested: args.trees },
+          'identity added by the host — a goal-bearing call needs a way to reach the caller'
+        );
+      }
+      // Same placeholder guard as record_answer — this is the door "caller"
+      // actually came through on the 2026-08-15 sim, in set_purpose's own
+      // caller_name arg, before a single question had been asked.
+      const volunteeredName = sanitizeVolunteered(args.caller_name, 80);
+      recordIfOpen(
+        CALLER_NAME,
+        volunteeredName && placeholderNameReason(volunteeredName) ? undefined : volunteeredName
+      );
       recordIfOpen(CALLER_PHONE, sanitizeVolunteered(args.caller_phone, 30));
       // The subject tree IS the meeting topic (2026-07-21, the third re-ask on a
       // live call): when booking rides along with a known-subject tree, the
@@ -628,7 +1078,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
             : '\n\nNOTE: you declared the caller is OFFERING THE OWNER WORK, and this ' +
               'business does not run a job intake — there is no role questionnaire to add, ' +
               'so do NOT try to select one. The MESSAGE has to carry it instead: record what ' +
-              'the work is, who it is with, and how to reach them, in the caller\'s own ' +
+              "the work is, who it is with, and how to reach them, in the caller's own " +
               'words. A message that says only "it\'s for programming" tells the owner nothing.'
           : '';
       // A number VOLUNTEERED through this door still needs its read-back — only
@@ -662,14 +1112,50 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   // double when it had pre-read. The pre-read is forbidden at the node, so this
   // is the read-back's ONE source. Caller-ID numbers never pass through either
   // door and are never read back.
+  /**
+   * Numbers whose read-back directive has already been issued.
+   *
+   * WHY THE HOST OWNS THIS NOW (2026-08-15, sim call 1786783128149). The
+   * directive used to end with "only if you ALREADY read this exact number back
+   * and heard their yes, do not repeat it" — a rule the MODEL had to remember
+   * across turns. It did not. The number was re-recorded mid-intake, the
+   * directive fired a second time, and the caller heard the identical read-back
+   * twice:
+   *
+   *   1:16  "I heard six zero eight, two one seven, eight eight three five. Is
+   *          that right? And which company are you calling from?"
+   *   1:23  Caller: "You didn't let me confirm."
+   *   1:36  "...I heard six zero eight, two one seven, eight eight three five.
+   *          Is that right? Are you hiring for your own company...?"
+   *   1:44  Caller: "You already confirmed my phone number. You didn't have to
+   *          do it again."
+   *
+   * The caller complained twice in twenty seconds. This is the goodbye gate's
+   * lesson in miniature: anything the call must not do belongs in the host, not
+   * in a sentence addressed to the model.
+   *
+   * Keyed by the READ-BACK STRING, not the raw input, so "6082178835" and
+   * "(608) 217-8835" are correctly recognised as the same number — and a
+   * genuine CORRECTION produces a different string and is read back once, which
+   * is the behaviour the caller actually wants.
+   */
+  const readbacksIssued = new Set<string>();
+
   function readbackDirective(value: string | undefined): string {
     const readback = value ? phoneReadback(value) : null;
     if (!readback) return '';
+    // Already spoken for this number — say nothing rather than ask again. A
+    // second directive is not a harmless nudge: the model treats it as an
+    // instruction and repeats a question the caller has already answered.
+    if (readbacksIssued.has(readback)) return '';
+    readbacksIssued.add(readback);
     return (
-      `\n\nREAD THE NUMBER BACK NOW, digit by digit, before your next question — say ` +
-      `exactly: "${readback}" — and wait for a yes. One read-back, one yes: only if ` +
-      `you ALREADY read this exact number back and heard their yes, do not repeat it. ` +
-      `If they correct it, record_answer again with the corrected number.`
+      `\n\nREAD THE NUMBER BACK NOW, digit by digit, AS YOUR WHOLE TURN — say ` +
+      `exactly: "${readback}" — then STOP and wait for their yes. Do not add ` +
+      `another question to this turn: bundling the read-back with the next ` +
+      `question leaves the caller no room to confirm, and they will answer the ` +
+      `question instead. If they correct the number, record_answer again with ` +
+      `the corrected one.`
     );
   }
 
@@ -728,6 +1214,86 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     if (args.node_id === CALLER_NAME && args.value && !args.declined) {
       args = { ...args, value: cleanNameValue(args.value) };
     }
+    // A NUMBER NOBODY CAN DIAL IS NOT AN ANSWER.
+    //
+    // Live call 2026-08-15 (sim-call-1786818806598): the caller said his number,
+    // STT delivered NINE digits, record_answer stored it, and the checklist
+    // showed caller_phone ✓. `identify_caller` came straight back with "Invalid
+    // phone number — cannot create contact" and that result was swallowed. The
+    // caller then asked for a 1 PM meeting; the booking route refused for want
+    // of a usable number, and the model turned that into "The number I have
+    // seems not to work for confirming the appointment" — thirty seconds after
+    // the mistake, in place of an answer about the time he had just asked for.
+    //
+    // The tracker showing ✓ for a value the rest of the system rejects is the
+    // same state theater as an arg the write ignores. Refuse the record, say
+    // what was actually heard, and let the checklist ask again NOW — while the
+    // caller still has the number in mind.
+    // The same refusal for a name that is not a name. 2026-08-15
+    // `sim-questiontree`: the model recorded caller_name = **"caller"**, the
+    // checklist showed ✓, and the graded transcript shows it never once
+    // addressed him — because there was nothing to say. A row in the phone book
+    // called "caller" is the junk-"Caller"-row shape arriving through a working
+    // mechanism, and it is worse than a blank: a blank asks again.
+    if (args.node_id === CALLER_NAME && args.value && !args.declined) {
+      const problem = placeholderNameReason(args.value);
+      if (problem) {
+        getLogger().info(
+          { event: 'checklist_name_rejected', heard: args.value.slice(0, 40) },
+          'a placeholder was recorded as the caller name — not recorded, asking again'
+        );
+        return problem;
+      }
+    }
+    // WHO IS NOT WHAT — see topicNamesOnlyAPerson. Refused rather than stored,
+    // because a topic that names only a person is the input that silently costs
+    // the whole role intake, and the caller is right there to answer.
+    if (args.node_id === 'meeting_topic' && args.value && !args.declined) {
+      if (topicNamesOnlyAPerson(args.value)) {
+        getLogger().info(
+          { event: 'checklist_topic_names_only_a_person', heard: args.value.slice(0, 60) },
+          'a meeting topic named WHO, not WHAT — not recorded, asking again'
+        );
+        return (
+          `"${args.value.trim()}" names WHO they want, not WHAT the meeting is about — it is ` +
+          `not a topic, and it is NOT recorded. Ask what it is about ("Sure — what's it ` +
+          `regarding?") and record their answer. Their answer also picks the matching tree: ` +
+          `a role or position ADDS the job intake, a purchase ADDS buy_service.`
+        );
+      }
+    }
+    // A PERSON IS NOT A COMPANY. 2026-08-15 sim, DALE'S CALL: the caller said
+    // "I'm calling from Bell Labs" and `callers_company` was recorded as
+    // **"Marcus Webb"** — his own name, already sitting in caller_name. The
+    // owner then opens a lead whose employer is a person. The two company nodes
+    // carry a whole comment about not collapsing the caller's company into the
+    // client's; this is the same collapse one field further left, and it is
+    // decidable in host code: a company that is character-for-character the
+    // caller's name is never right.
+    if (COMPANY_NODES.has(args.node_id) && args.value && !args.declined) {
+      const known = tracker.value(CALLER_NAME)?.trim().toLowerCase();
+      if (known && known === args.value.trim().toLowerCase()) {
+        getLogger().info(
+          { event: 'checklist_company_is_caller_name', node_id: args.node_id },
+          'a company field was given the caller name — not recorded, asking again'
+        );
+        return (
+          `"${args.value.trim()}" is the CALLER'S NAME, already recorded as caller_name — it ` +
+          `cannot also be the company. NOT recorded. Ask which company they are calling from ` +
+          `("And which company are you with?") and record what they answer.`
+        );
+      }
+    }
+    if (args.node_id === CALLER_PHONE && args.value && !args.declined) {
+      const problem = unusablePhoneReason(args.value);
+      if (problem) {
+        getLogger().info(
+          { event: 'checklist_phone_rejected', digits: countPhoneDigits(args.value) },
+          'a dictated phone number was not dialable — not recorded, asking again'
+        );
+        return problem;
+      }
+    }
     try {
       tracker.record(args.node_id, { value: args.value, declined: args.declined });
     } catch (err) {
@@ -736,6 +1302,23 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       throw err;
     }
     maybeIdentify();
+    // Self-healing retry of BOOKING_CLOSES_OFFER — see bookingMadeThisCall.
+    // A one-shot close at the moment of booking can miss an offer node that
+    // was not yet 'open'/'latent' (blocked behind other job-tree questions);
+    // this keeps trying on every subsequent answer until it lands.
+    console.error('DEBUG retry check', bookingMadeThisCall);
+    if (bookingMadeThisCall) {
+      for (const [nodeId, value] of Object.entries(BOOKING_CLOSES_OFFER)) {
+        console.error('DEBUG recordIfOpen', nodeId, value, tracker.status(nodeId));
+        recordIfOpen(nodeId, value);
+        console.error(
+          'DEBUG after recordIfOpen',
+          nodeId,
+          tracker.status(nodeId),
+          tracker.value(nodeId)
+        );
+      }
+    }
     // If this answer CORRECTS something a completed write already consumed,
     // rewrite that row — the tracker being right is not the same as the record
     // being right (#2, "Jamil").
@@ -748,6 +1331,67 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     // remembered style rule away. (Caller-ID-prefilled numbers never pass through
     // record_answer, so this fires only on genuinely dictated numbers.)
     let directive = repeatGuardDirective(args.node_id) + readbackDirective(args.value);
+    if (
+      args.node_id === 'meeting_topic' &&
+      args.value &&
+      !args.declined &&
+      meetingTopicNamesOwnerRole(args.value) &&
+      selectableTreeSet.has('job') &&
+      !tracker.selectedTrees().includes('job') &&
+      !tracker.selectedTrees().includes('buy_service')
+    ) {
+      // Inverse of meeting_offer → booking: the topic named a role, so the
+      // job tree is a fact, not a suggestion. Going through set_purpose
+      // would bounce — this call's work_direction was neither_or_unclear
+      // because purpose locked on "schedule a meeting" BEFORE the topic.
+      tracker.select(['job']);
+      if (tracker.selectedTrees().includes('booking')) {
+        recordIfOpen('meeting_offer', 'wants_meeting');
+      }
+      deps.onSelectionChanged();
+      directive +=
+        '\n\nThe meeting is about a role for the owner — the job intake is now ON YOUR ' +
+        'CHECKLIST. Collect the role (who is calling, whose client, what the work is, ' +
+        'contract vs full time). Do not ask whether they want a meeting; they already ' +
+        'asked for one. Nothing reaches the owner until capture_job_inquiry returns ' +
+        'success.';
+    }
+    // AN AMBIGUOUS OPENER MUST NOT BE FILED AS A PLAIN MESSAGE.
+    //
+    // The work-direction gate already refuses job+buy_service together, and the
+    // prompt already says to ask ONE clarifying question ("are you looking to
+    // hire him, or interested in the AI receptionist for your own business?").
+    // Both only fire when the model actually SELECTS one of the two. 2026-08-15
+    // sim (BUY vs JOB): Neil opened with "I wanted to talk to someone about a
+    // business opportunity", the model asked nothing, selected `message`, and
+    // wrote "Neil Ashford called about a business opportunity." He is a dental
+    // clinic owner who wanted to BUY the product — the single warmest lead in
+    // the suite — and none of the qualification happened. The omission case had
+    // no cover, exactly as the job omission had none before its nudge.
+    //
+    // A NUDGE, not a refusal: a genuine message caller who happens to use these
+    // words must still be able to leave one. The answer is recorded either way.
+    if (
+      args.node_id === 'message_body' &&
+      args.value &&
+      !args.declined &&
+      AMBIGUOUS_OPPORTUNITY.test(args.value) &&
+      selectableTreeSet.has('buy_service') &&
+      !tracker.selectedTrees().includes('buy_service') &&
+      !tracker.selectedTrees().includes('job')
+    ) {
+      getLogger().info(
+        { event: 'checklist_ambiguous_opportunity_message' },
+        'an opportunity-shaped message was taken without the buy-vs-job question being asked'
+      );
+      directive +=
+        '\n\nSTOP before you send this. "Opportunity" is the one word that means two ' +
+        'opposite things on this line, and you have not asked which. Ask ONE question now ' +
+        '("Are you looking to hire the owner for something, or are you interested in the AI ' +
+        'receptionist for your own business?") and then set_purpose accordingly — ' +
+        'buy_service if they want to BUY it, job if they are offering the owner work. Only ' +
+        'if they truly just want a note passed along does this stay a plain message.';
+    }
     if (args.node_id === 'meeting_offer' && args.value === 'wants_meeting') {
       // The offer's YES is a booking ask — and the HOST does the selecting, not
       // the model. First shipped as a directive ("call set_purpose NOW adding
@@ -796,7 +1440,31 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       // (or deselecting one) in the first place — see the prompt's WRONG BUSINESS
       // branch and the wrong_trees exit.
       if (tracker.hasSelection() && !tracker.isResolved()) {
-        return `Not yet — the checklist is not complete. Finish these first. ${stateBlock()}`;
+        finishRefusals += 1;
+        if (finishRefusals < FINISH_REFUSAL_LIMIT) {
+          // From the second refusal on, say the thing the model needs to hear
+          // but keeps getting wrong: nothing has landed, so nothing may be
+          // claimed. On 2026-08-15 it answered this refusal with "I'm still
+          // finalizing your meeting" four times over, to a caller who had
+          // already said goodbye — a meeting that did not exist.
+          const stall =
+            finishRefusals > 1
+              ? ' Re-trying the same call has not worked. Nothing on this checklist has landed ' +
+                'yet, so do NOT tell the caller it is done — say plainly what is still needed, ' +
+                'or offer to take a message instead (add the message tree with set_purpose).'
+              : '';
+          return `Not yet — the checklist is not complete. Finish these first.${stall} ${stateBlock()}`;
+        }
+        // RELEASE. See FINISH_REFUSAL_LIMIT — the gate has had its attempts and
+        // the call is now costing the caller more than it is protecting.
+        getLogger().warn(
+          {
+            event: 'goodbye_gate_released',
+            refusals: finishRefusals,
+            unresolved: tracker.unresolvedNodeIds(),
+          },
+          'goodbye gate released an UNRESOLVED checklist — the call ended with work outstanding'
+        );
       }
       // ONE goodbye. closeCall defers session.close() to a macrotask, so a second
       // finish_call can land in the gap and speak a SECOND farewell over the first
@@ -815,7 +1483,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     },
   });
 
-  const baseTools: llm.ToolContext = { set_purpose, record_answer, finish_call };
+  const baseTools: ToolMap = { set_purpose, record_answer, finish_call };
 
   // get_my_appointments — in the toolset EVERY turn, not just when
   // schedule_change is selected (2026-07-30, CALL_IMPROVEMENTS.md #8): a caller
@@ -825,7 +1493,21 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   // read-only passthrough: server-side phone-gated (caller-ID / verified spoken
   // number), completes no checklist node, holds no gate.
   const realMyAppointments = realTools['get_my_appointments'];
-  if (realMyAppointments) baseTools['get_my_appointments'] = realMyAppointments;
+  if (realMyAppointments) {
+    // Transparent to the model — same description, same params, same result.
+    // The host just NOTICES when the answer is unambiguous, so cancel and
+    // reschedule stop depending on the model retyping a UUID (see
+    // buildActionArgs / APPOINTMENT_ID_TOOLS).
+    baseTools['get_my_appointments'] = llm.tool({
+      description: shape(realMyAppointments).description,
+      parameters: shape(realMyAppointments).parameters,
+      execute: async (args: unknown, toolCtx: unknown): Promise<unknown> => {
+        const raw = await shape(realMyAppointments).execute(args, toolCtx);
+        soleAppointmentId = soleAppointmentIdIn(raw);
+        return raw;
+      },
+    });
+  }
 
   // RAG — in the toolset EVERY turn (questions arrive anywhere); the result
   // points the model back at the frontier so a digression cannot lose the call.
@@ -840,11 +1522,40 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
       parameters: shape(realAnswer).parameters,
       execute: async (args: unknown, toolCtx: unknown): Promise<string> => {
         const raw = await shape(realAnswer).execute(args, toolCtx);
+        const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+        // AN UNANSWERED QUESTION IS NOT A FINISHED CALL. 2026-08-15 sim (THE
+        // ELSE): Rosa Delgado asked whether the owner would MC a wedding, the
+        // knowledge base had nothing, and the agent read the fallback aloud,
+        // recorded a qa_summary and hung up. She had given her name in her first
+        // sentence; it was discarded (identity is not selected on a qa call),
+        // no number was taken, no message was left — nobody at the business
+        // will ever learn she rang. The route ALREADY knows it could not answer
+        // and says so in `policyFallback`; that knowledge just never reached
+        // host state. Selecting the lane in host code is what makes the offer a
+        // guarantee instead of a suggestion the model took as permission to
+        // close (the goodbye gate then holds the door until the message lands).
+        if (ragCouldNotAnswer(text) && selectableTreeSet.has('message')) {
+          const before = tracker.selectedTrees().length;
+          tracker.select(['message', 'identity']);
+          if (tracker.selectedTrees().length !== before) {
+            getLogger().info(
+              { event: 'checklist_unanswered_question_takes_message' },
+              'the knowledge base could not answer — message tree selected so the caller is not lost'
+            );
+            deps.onSelectionChanged();
+            return (
+              `${text}\n\nThe knowledge base could NOT answer that, so this call must not end ` +
+              `here: tell them honestly you do not have that and OFFER TO TAKE A MESSAGE so ` +
+              `the owner can get back to them. Taking the message is now on your checklist. ` +
+              `${stateBlock()}`
+            );
+          }
+        }
         const open = tracker.frontier();
         const back = open.length
           ? `\n\n(Answer briefly, then return to the checklist — next open: ${open[0].node_id}.)`
           : '';
-        return `${typeof raw === 'string' ? raw : JSON.stringify(raw)}${back}`;
+        return `${text}${back}`;
       },
     });
   }
@@ -861,6 +1572,22 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     const provided: Record<string, unknown> = {
       ...((args as Record<string, unknown> | null) ?? {}),
     };
+    // THE MODEL NEVER HOLDS A UUID — the rule the job-inquiry link already
+    // follows. cancel_appointment and reschedule_appointment both REQUIRE
+    // `appointment_id`, which the model can only get by copying a UUID out of a
+    // get_my_appointments result and retyping it, mid-voice-call. Found by
+    // actionArgCoverage.test.ts, 2026-08-15 — no sim had reached it. When the
+    // lookup returned exactly ONE appointment there is nothing to choose
+    // between, so the host supplies it. With two or more this stays the model's
+    // call, because picking for the caller is the mistake the unconfirmed-
+    // booking guard exists to prevent, and cancelling the wrong appointment is
+    // the same mistake with a worse ending.
+    if (APPOINTMENT_ID_TOOLS.has(toolName) && soleAppointmentId) {
+      const cur = provided['appointment_id'];
+      if (cur === undefined || cur === null || cur === '') {
+        provided['appointment_id'] = soleAppointmentId;
+      }
+    }
     for (const f of ACTION_ARG_BACKFILL[toolName] ?? []) {
       const cur = provided[f.arg];
       if (cur !== undefined && cur !== null && cur !== '') continue;
@@ -931,7 +1658,7 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
     }
   };
 
-  const wrapAction = (site: ActionSite): llm.ToolContext[string] => {
+  const wrapAction = (site: ActionSite): ToolMap[string] => {
     const { def } = site;
     const real = realTools[def.tool];
     const idField = ACTION_ID_FIELDS[def.tool] ?? 'id';
@@ -957,17 +1684,91 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
         // THE UNCONFIRMED-BOOKING GUARD — see slotsAwaitingChoice. Times were
         // just offered and nothing in these args names which one, so this write
         // would be guessing on the caller's behalf.
-        if (def.tool === 'book_with_scheduling' && slotsAwaitingChoice > 0 && !namesOneInstant(args)) {
-          getLogger().warn(
-            { event: 'booking_before_caller_chose', offered: slotsAwaitingChoice },
-            'refused book_with_scheduling — slots were offered and no time was chosen yet'
-          );
-          return (
-            `Not yet — you offered ${String(slotsAwaitingChoice)} time(s) and the caller has not ` +
-            `picked one. Booking now would choose FOR them. Wait for their answer, then call this ` +
-            `again with requested_start set to exactly the time they said (if they said "the ` +
-            `earliest" or "whichever", use the first time you offered). ${stateBlock()}`
-          );
+        if (
+          def.tool === 'book_with_scheduling' &&
+          slotsAwaitingChoice > 0 &&
+          !namesOneInstant(args)
+        ) {
+          bookingGuardRefusals += 1;
+          // What the model actually left out. The old refusal said only "the
+          // caller has not picked one", which on 2026-08-15 was FALSE — the
+          // caller had said "I'll take the 1:15 slot" and the model had put that
+          // time in `start_time`, a field this tool does not have, while omitting
+          // every required param. A refusal that misnames the fault sends the
+          // model back to a question already answered, and it re-tried the same
+          // malformed call twelve times.
+          // Measured AFTER backfill: `phone` and `service_type` come from the
+          // tracker, so naming them here would send the model chasing values
+          // the host already supplies.
+          const afterBackfill = buildActionArgs(def.tool, args);
+          const missing = BOOKING_REQUIRED_ARGS.filter((k) => !toNonEmptyString(afterBackfill[k]));
+          if (bookingGuardRefusals >= BOOKING_GUARD_REFUSAL_LIMIT) {
+            getLogger().warn(
+              {
+                event: 'booking_guard_stood_down',
+                refusals: bookingGuardRefusals,
+                offered: slotsAwaitingChoice,
+                missing_args: missing,
+              },
+              'unconfirmed-booking guard stood down after repeated refusals — letting the write through'
+            );
+            slotsAwaitingChoice = 0;
+            // Fall through to the write. The guard has already stopped the one
+            // blind booking it exists to stop.
+          } else {
+            getLogger().warn(
+              {
+                event: 'booking_before_caller_chose',
+                offered: slotsAwaitingChoice,
+                missing_args: missing,
+              },
+              'refused book_with_scheduling — no argument names the chosen time'
+            );
+            const missingNote = missing.length
+              ? ` You also omitted required argument(s): ${missing.join(', ')}. `
+              : ' ';
+            return (
+              `Not yet — you offered ${String(slotsAwaitingChoice)} time(s) and NOTHING in your ` +
+              `arguments names which one, so this write would choose FOR them.${missingNote}` +
+              `Call this again with requested_start set to exactly the time the caller said, as ` +
+              `local-naive ISO (e.g. 2026-07-22T13:15:00) — "start_time" is not a parameter of ` +
+              `this tool — plus window_from/window_to around it. If they said "the earliest" or ` +
+              `"whichever", use the first time you offered. NOTHING IS BOOKED: do not tell the ` +
+              `caller the meeting is set. ${stateBlock()}`
+            );
+          }
+        }
+        // ASKING FOR A MEETING IS ATTEMPTING TO BOOK ONE.
+        //
+        // `meeting_offer` asks whether the caller wants time on the owner's
+        // calendar or just wants the details passed along. On 2026-08-15 the
+        // caller said "Can we do it after lunch? Like, maybe at one?", the model
+        // tried to book 1:00 PM — and then, two minutes later, with the booking
+        // still unmade, ASKED him whether he wanted a meeting at all. He
+        // answered "No. I I think we talked about it. I wanted to set up a
+        // meeting at one. Right? Didn't I say that?".
+        //
+        // The node was still `open` because the answer arrives as an ACTION, not
+        // as an utterance anyone thought to record. Close it on the attempt, not
+        // on the success: a booking that fails its phone gate has still told us
+        // what the caller wants, and re-asking after a failure is the same
+        // insult delayed.
+        //
+        // `demo_offer` is the SAME node one vertical over, and it was missed
+        // when meeting_offer was fixed. 2026-08-15 sim (BUY THE SERVICE): Dana
+        // said "Yes, I'd be happy to book a demo any time you have available",
+        // the demo WAS booked (appt_sim_1) — and because demo_offer stayed open
+        // the goodbye gate refused to close, so the model went hunting for the
+        // missing item and asked "would you like me to send you the details by
+        // email now, or leave it for when you're ready?" of a woman who was
+        // already booked. She said email, and the host wrote `demo_offer:
+        // not_now`: the record now says a prospect DECLINED the demo she is
+        // booked into. Wrong data, and the lead reads as cold.
+        if (def.tool === 'book_with_scheduling') {
+          bookingMadeThisCall = true;
+          for (const [nodeId, value] of Object.entries(BOOKING_CLOSES_OFFER)) {
+            recordIfOpen(nodeId, value);
+          }
         }
         // Backfill omitted args from the tracker's recorded answers (see
         // ACTION_ARG_BACKFILL) — model-provided values always win.
@@ -997,19 +1798,24 @@ export function createChecklistTools(deps: ChecklistToolDeps): ChecklistToolkit 
   };
 
   /** Transparent passthrough that records how many times were just offered. */
-  const wrapSlotReader = (real: llm.ToolContext[string]): llm.ToolContext[string] =>
+  const wrapSlotReader = (real: ToolMap[string]): ToolMap[string] =>
     llm.tool({
       description: shape(real).description,
       parameters: shape(real).parameters,
       execute: async (args: unknown, toolCtx: unknown): Promise<unknown> => {
         const raw = await shape(real).execute(args, toolCtx);
         slotsAwaitingChoice = countOfferedSlots(raw);
+        // A FRESH offer is a fresh choice, so the guard gets its full budget
+        // back. Without this the stand-down would be permanent for the rest of
+        // the call: one exhausted round would let every later blind write
+        // through, which is the opposite of what standing down is for.
+        bookingGuardRefusals = 0;
         return raw;
       },
     });
 
-  const selectedTools = (): llm.ToolContext => {
-    const tools: llm.ToolContext = { ...baseTools };
+  const selectedTools = (): ToolMap => {
+    const tools: ToolMap = { ...baseTools };
     for (const treeId of tracker.selectedTrees()) {
       for (const site of actionSites.values()) {
         if (site.treeId === treeId && realTools[site.def.tool] && !tools[site.def.tool]) {

@@ -45,7 +45,7 @@ describe('1:1 extension table PK convention — schema shape', () => {
       root = await getRootClient();
     } catch (err) {
       dbAvailable = false;
-      // eslint-disable-next-line no-console
+       
       console.warn('[pk-extension-tables.test] Skipping DB tests - connection failed', err);
     }
   });
@@ -254,7 +254,7 @@ describe('1:1 extension table PK convention — runtime behavior', () => {
       root = await getRootClient();
     } catch (err) {
       dbAvailable = false;
-      // eslint-disable-next-line no-console
+       
       console.warn('[pk-extension-tables.test] Skipping DB tests - connection failed', err);
     }
   });

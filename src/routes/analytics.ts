@@ -6,7 +6,7 @@ import {
   requireTenantId,
   withPoolClient,
   type AppRequest,
-} from '../middleware';
+} from '../middleware/fastify-middleware';
 import { parseDateRange } from './routeHelpers';
 import { z } from 'zod';
 import {

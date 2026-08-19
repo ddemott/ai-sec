@@ -159,7 +159,7 @@ describe('job inquiry email — escaping happens ONCE, at the emitter', () => {
       callerName: 'Pat Quinn',
       callerCompany: 'Acme Staffing',
       roleDescription: 'R&D lead <contract>',
-    } as Parameters<typeof sendJobInquiryEmail>[1]);
+    });
 
     // The stub transport still records the message it was asked to send.
     const html = String(sendMailMock.mock.calls[0]?.[0]?.html ?? '');

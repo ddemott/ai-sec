@@ -12,17 +12,26 @@
  *      debugs conversations, not plumbing.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { llm } from '@livekit/agents';
 import type { VerticalPresetDef } from './blockTypes.js';
-import { createChecklistTools, type ChecklistToolDeps } from './checklistTools.js';
+import {
+  createChecklistTools,
+  meetingTopicNamesOwnerRole,
+  unusablePhoneReason,
+  countPhoneDigits,
+  placeholderNameReason,
+  topicNamesOnlyAPerson,
+  ragCouldNotAnswer,
+  type ChecklistToolDeps,
+} from './checklistTools.js';
 import { resolveSelectableTreeIds } from './checklistAgent.js';
 import { AUTO_SHOP_PRESET, LOCAL_SERVICE_PRESET, SALON_PRESET } from './presets.js';
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 import { ChecklistTracker } from './tracker.js';
 import { PLATFORM_TREE_LIBRARY } from './trees.js';
+import type { ToolMap } from '../tools.js';
 
 type Exec = (args: unknown, ctx: unknown) => Promise<unknown>;
-const call = async (tools: llm.ToolContext, name: string, args: unknown = {}): Promise<string> =>
+const call = async (tools: ToolMap, name: string, args: unknown = {}): Promise<string> =>
   (await (tools[name] as unknown as { execute: Exec }).execute(args, undefined)) as string;
 
 interface FakeTool {
@@ -63,7 +72,7 @@ function makeKit(overrides: Partial<ChecklistToolDeps> = {}) {
   const toolkit = createChecklistTools({
     tracker,
     library: PLATFORM_TREE_LIBRARY,
-    realTools: fakes as unknown as llm.ToolContext,
+    realTools: fakes as unknown as ToolMap,
     onSelectionChanged,
     closeCall,
     ...overrides,
@@ -307,7 +316,9 @@ describe('the work-direction gate — declared axis checked against the selectio
       parameters?: { properties?: { work_direction?: { description?: string } } };
     };
     const desc = tool.parameters?.properties?.work_direction?.description ?? '';
-    expect(desc.length, 'set_purpose.work_direction must expose its description').toBeGreaterThan(20);
+    expect(desc.length, 'set_purpose.work_direction must expose its description').toBeGreaterThan(
+      20
+    );
     expect(desc).toMatch(/\bposition\b/);
     expect(desc).toMatch(/\bcontract\b/);
   });
@@ -472,7 +483,60 @@ describe('record_answer', () => {
       value: 'kind of both',
     });
     expect(res).toContain('not an option');
-    expect(res).toContain('contract, full_time, contract_to_hire');
+    // Every legal id is still listed — that is the clarify mechanism.
+    for (const id of ['contract', 'full_time', 'contract_to_hire']) {
+      expect(res).toContain(id);
+    }
+    // …and each carries the SPOKEN form, plus the do-not-say-these warning.
+    // 2026-08-15 sim: this refusal listed bare tokens and the model's next
+    // sentence to the caller was "would you say your calls go to an
+    // answering_service?" — underscore out loud, the exact 2026-07-21 defect.
+    expect(res).toContain('say "contract to hire"');
+    expect(res).toContain('NEVER say one to the caller');
+  });
+
+  it('SAD: a 9-digit number is REFUSED — not recorded, and identify_caller never runs', async () => {
+    // WHO: sim-call-1786818806598, 2026-08-15. STT delivered nine digits.
+    // WHAT: the old code recorded it, the checklist showed caller_phone ✓, and
+    //       identify_caller's "Invalid phone number" result was swallowed.
+    // WHEN: the caller was still on the line and could have simply repeated it.
+    // WHERE: runRecordAnswer's CALLER_PHONE guard.
+    // WHY: the failure surfaced half a minute later as a booking refusal, and
+    //      the model relayed it as "The number I have seems not to work" —
+    //      instead of answering the question the caller had just asked.
+    const { toolkit, tracker, fakes } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Sue' });
+
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '608333151',
+    });
+
+    expect(res).toContain('NOT RECORDED');
+    expect(res).toContain('9 digits');
+    expect(tracker.value('caller_phone')).toBeUndefined();
+    expect(tracker.status('caller_phone')).toBe('open');
+    // Nothing may be written from a number nobody can dial.
+    expect(fakes.identify_caller.execute).not.toHaveBeenCalled();
+  });
+
+  it('the corrected number is accepted on the next try', async () => {
+    // The refusal is only useful if the retry lands — otherwise it is a loop.
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '60833',
+    });
+
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '(608) 333-1515',
+    });
+
+    expect(res).not.toContain('NOT RECORDED');
+    expect(tracker.value('caller_phone')).toBe('(608) 333-1515');
   });
 
   it('fires identify_caller from HOST CODE once name + phone are both in — exactly once', async () => {
@@ -514,6 +578,168 @@ describe('record_answer', () => {
     const { toolkit, tracker } = makeKit();
     await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'booking'] });
     expect(tracker.status('meeting_topic')).toBe('open'); // nothing to infer from
+  });
+
+  /**
+   * WHO: Jack Smith, 2026-08-14, room sim-call-1786693849702.
+   * WHAT: answering "what is the meeting about?" with a ROLE must host-add job.
+   * WHEN: after set_purpose locked identity+booking as neither_or_unclear.
+   * WHERE: runRecordAnswer, meeting_topic branch.
+   * WHY: prompt said "call set_purpose again"; model recorded topic and booked.
+   *      Zero job_inquiries. A tool-result instruction the model can skip is a
+   *      hope; a selection the host has already made is a fact.
+   */
+  it('HOST JOB: recording a role as meeting_topic adds the job tree', async () => {
+    const { toolkit, tracker, onSelectionChanged } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['identity', 'booking'],
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Jack Smith',
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '6306301122',
+    });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_topic',
+      value: 'This is about a job position',
+    });
+    expect(tracker.selectedTrees()).toContain('job');
+    expect(tracker.status('meeting_offer')).toBe('answered');
+    expect(tracker.value('meeting_offer')).toBe('wants_meeting');
+    expect(res).toMatch(/job intake is now ON YOUR CHECKLIST/i);
+    expect(Object.keys(toolkit.selectedTools())).toContain('capture_job_inquiry');
+    expect(onSelectionChanged).toHaveBeenCalled();
+    expect(tracker.value('meeting_topic')).toBe('This is about a job position');
+  });
+
+  it('HOST JOB: already-selected job is a no-op — do not re-nudge', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job', 'booking'],
+    });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_topic',
+      value: 'a job position',
+    });
+    expect(tracker.selectedTrees().filter((id) => id === 'job')).toHaveLength(1);
+    expect(res).not.toMatch(/job intake is now ON YOUR CHECKLIST/i);
+  });
+
+  it('HOST JOB: tenant without the job tree stays booking-only', async () => {
+    const { toolkit, tracker } = makeKit({
+      selectableTreeIds: ['identity', 'booking', 'message', 'qa'],
+    });
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['identity', 'booking'],
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_topic',
+      value: 'This is about a job position',
+    });
+    expect(tracker.selectedTrees()).not.toContain('job');
+    expect(Object.keys(toolkit.selectedTools())).not.toContain('capture_job_inquiry');
+  });
+
+  it('HOST JOB: a consult / oil change / bare "a job" do not add the tree', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['identity', 'booking'],
+    });
+    for (const topic of ['a consult', 'oil change', 'a job']) {
+      await call(toolkit.selectedTools(), 'set_purpose', {
+        work_direction: 'neither_or_unclear',
+        trees: ['identity', 'booking'],
+        wrong_trees: ['job'],
+      });
+      await call(toolkit.selectedTools(), 'record_answer', {
+        node_id: 'meeting_topic',
+        value: topic,
+      });
+      expect(tracker.selectedTrees()).not.toContain('job');
+    }
+  });
+
+  it('HOST JOB: goodbye stays shut after a role-topic booking until capture', async () => {
+    const { toolkit, closeCall } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['identity', 'booking'],
+    });
+    for (const [node_id, value] of [
+      ['caller_name', 'Jack Smith'],
+      ['caller_phone', '6306301122'],
+      ['meeting_topic', 'This is about a job position'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    expect(await call(toolkit.selectedTools(), 'book_with_scheduling', {})).toContain('appt_1');
+    const hung = await call(toolkit.selectedTools(), 'finish_call', {});
+    expect(hung).toMatch(/not complete/i);
+    expect(closeCall).not.toHaveBeenCalled();
+  });
+
+  describe('meetingTopicNamesOwnerRole', () => {
+    it('matches the live utterance and the usual role words', () => {
+      expect(meetingTopicNamesOwnerRole('This is about a job position')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('a position')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('talk about a role')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('a job opportunity')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('contract-to-hire React role')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('hiring him for a contract')).toBe(true);
+    });
+
+    it('matches the PLURAL forms — the phrasing recruiters actually use', () => {
+      // WHO: Jaya on the 2026-08-15 sim, in a scenario literally named "talk
+      //      with Dale about job opportunities".
+      // WHAT: she said "About the job opportunities — he shared the resume" and
+      //      this matcher, which looked only for the singular "job opportunity",
+      //      missed. The job tree was never added and a recruiter's entire role
+      //      intake was lost behind a 15-minute meeting with no subject.
+      // WHY: plural is the more natural of the two phrasings, and it was the
+      //      one that failed. A matcher that only knows the singular is a
+      //      matcher that works in tests and not on calls.
+      expect(meetingTopicNamesOwnerRole('about the job opportunities')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('a couple of open positions')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('two contract roles')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('job openings on my team')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('we are recruiters placing candidates')).toBe(true);
+    });
+
+    it('rejects service-shaped topics — bare job is a request, not a role', () => {
+      // Plurals must not widen the exclusion either: "a job" and "some jobs"
+      // are both SERVICE requests in this product.
+      expect(meetingTopicNamesOwnerRole('some jobs I need done')).toBe(false);
+      expect(meetingTopicNamesOwnerRole('a job')).toBe(false);
+      expect(meetingTopicNamesOwnerRole('a consult')).toBe(false);
+      expect(meetingTopicNamesOwnerRole('oil change')).toBe(false);
+      expect(meetingTopicNamesOwnerRole('see the AI receptionist')).toBe(false);
+      expect(meetingTopicNamesOwnerRole('')).toBe(false);
+    });
+
+    // WHO: any tenant on the platform | WHAT: the matcher must be name-agnostic
+    // WHEN: 2026-08-14, after tests/noHardcodedNames.test.ts rejected an owner's
+    // first name baked into the hire/hiring branch | WHERE: meetingTopicNamesOwnerRole
+    // WHY: this function runs for EVERY tenant. A literal name matches one business
+    // and is dead weight in every other — and there is no owner-name column on
+    // `tenants` to substitute, so the pronouns and "the owner" carry the branch.
+    it('PIN: matches hire phrasing by pronoun/role word, never by a person name', () => {
+      expect(meetingTopicNamesOwnerRole('hiring her for a contract')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('hiring them long term')).toBe(true);
+      expect(meetingTopicNamesOwnerRole('about hiring the owner')).toBe(true);
+      // Documented residual gap: a bare "hiring <Name>" no longer matches here.
+      // Widening to "hire/hiring + any token" would swallow "hiring a plumber",
+      // which in this product is a SERVICE request — the same reason bare "job"
+      // is excluded. Such calls still reach the job tree via the role words.
+      expect(meetingTopicNamesOwnerRole('hiring a plumber')).toBe(false);
+      expect(meetingTopicNamesOwnerRole('hiring practices')).toBe(false);
+    });
   });
 
   it('PIN: an empty volunteered caller_name never records (set_purpose passed "" live)', async () => {
@@ -597,8 +823,57 @@ describe('record_answer', () => {
     // observed live): fully conditional → the model skipped the read-back on
     // 2 of 3 eval runs; fully unconditional → a double when it had pre-read.
     expect(res).toContain('READ THE NUMBER BACK NOW');
-    expect(res).toContain('do not repeat it');
     expect(res).toContain('"2 6 2, 4 9 7, 9 0 3 9"');
+    // The directive must claim the WHOLE turn. Bundling it with the next
+    // question is what let the caller be talked over on 2026-08-15.
+    expect(res).toContain('AS YOUR WHOLE TURN');
+  });
+
+  it('HOST READ-BACK: the SAME number is never read back twice, however it is re-recorded', async () => {
+    // WHO: the caller on sim call 1786783128149 (2026-08-15).
+    // WHAT: the identical read-back was issued twice, twenty seconds apart.
+    // WHEN: after the number was re-recorded mid-intake.
+    // WHERE: readbackDirective — the "do not repeat it" clause was a rule the
+    //        MODEL had to remember across turns, and it did not.
+    // WHY: he said it out loud, twice — "You didn't let me confirm", then "You
+    //      already confirmed my phone number. You didn't have to do it again."
+    //      A prompt sentence is a request; the host now guarantees it.
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+
+    const first = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '(608) 217-8835',
+    });
+    expect(first).toContain('READ THE NUMBER BACK NOW');
+
+    // Same number, different formatting — the model re-recording what it just
+    // heard must NOT produce a second read-back.
+    const second = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '6082178835',
+    });
+    expect(second, 'the same number was read back a second time').not.toContain(
+      'READ THE NUMBER BACK NOW'
+    );
+  });
+
+  it('HOST READ-BACK: a CORRECTED number is read back once, because it is a different number', async () => {
+    // The guard must suppress repeats without suppressing corrections — a caller
+    // who fixes a misheard digit needs to hear the new one confirmed exactly once.
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job'] });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '6082178835',
+    });
+
+    const corrected = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '6082178836',
+    });
+    expect(corrected).toContain('READ THE NUMBER BACK NOW');
+    expect(corrected).toContain('"6 0 8, 2 1 7, 8 8 3 6"');
   });
 
   it('HOST READ-BACK: a number volunteered through set_purpose gets the SAME directive (the second door)', async () => {
@@ -892,7 +1167,7 @@ describe('finish_call (the goodbye gate)', () => {
       library: PLATFORM_TREE_LIBRARY,
       realTools: {
         take_message: fakeTool(ok({ message_id: 'msg_1' })),
-      } as unknown as llm.ToolContext,
+      } as unknown as ToolMap,
       onSelectionChanged: vi.fn(),
       closeCall,
     });
@@ -1307,5 +1582,442 @@ describe('a recognized caller is never asked who she is', () => {
     });
     expect(tracker.status('caller_name')).toBe('open');
     expect(res).not.toContain('Do NOT ask who is calling');
+  });
+});
+
+describe('unusablePhoneReason', () => {
+  it('HAPPY: a full US number is usable, with or without the country code', () => {
+    expect(unusablePhoneReason('6082175303')).toBeNull();
+    expect(unusablePhoneReason('(608) 217-5303')).toBeNull();
+    expect(unusablePhoneReason('1 608 217 5303')).toBeNull();
+  });
+
+  it('SAD: a short number is refused and the reason says what was heard', () => {
+    // WHO: the caller on sim-call-1786818806598, 2026-08-15.
+    // WHAT: he said his number, STT delivered NINE digits, and record_answer
+    //       stored it — the checklist showed caller_phone ✓ for a number
+    //       `identify_caller` immediately rejected as undialable.
+    // WHEN: the moment it is dictated, while he can still simply repeat it.
+    // WHERE: agent/src/checklist/checklistTools.ts.
+    // WHY: the rejection was swallowed, so the failure surfaced thirty seconds
+    //      later as a booking refusal, in place of an answer to the question he
+    //      had just asked ("can we do it at one?").
+    const reason = unusablePhoneReason('608333151');
+
+    expect(reason).toContain('9 digits');
+    expect(reason).toContain('say it again');
+    // It must NOT tell the model to read back a number it does not fully have.
+    expect(reason).toContain('Do not read back');
+  });
+
+  it('SAD: no digits at all is named as such', () => {
+    expect(unusablePhoneReason('my cell')).toContain('no digits at all');
+  });
+
+  it('counts digits through the punctuation a caller dictates', () => {
+    expect(countPhoneDigits('(608) 217-5303')).toBe(10);
+    expect(countPhoneDigits('six oh eight')).toBe(0);
+  });
+});
+
+describe('placeholderNameReason — a generic noun is not a name', () => {
+  it('HAPPY: real names pass, including ones that merely look plain', () => {
+    expect(placeholderNameReason('Marcus Webb')).toBeNull();
+    expect(placeholderNameReason('Jaya')).toBeNull();
+    expect(placeholderNameReason('Callie')).toBeNull();
+  });
+
+  it('SAD: the placeholders a model reaches for are refused by name', () => {
+    // WHO: the simulated caller on the 2026-08-15 sim-questiontree DALE'S CALL
+    //      run. WHAT: set_purpose arrived with caller_name = "caller" before a
+    //      single question had been asked; the checklist showed ✓ and the agent
+    //      never addressed him once — there was nothing to say.
+    // WHERE: record_answer + runSetPurpose in checklistTools.
+    // WHY: the value is worse than a blank. A blank asks again; "caller" lands
+    //      a permanent phone-book row that reads as a real customer.
+    for (const junk of ['caller', 'Caller', 'the caller', 'customer', 'unknown', 'N/A']) {
+      expect(placeholderNameReason(junk), junk).toContain('is not a name');
+    }
+  });
+
+  it('SAD: record_answer refuses it, and the node stays open to be asked again', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'caller',
+    });
+    expect(res).toContain('is not a name');
+    expect(tracker.status('caller_name')).toBe('open');
+  });
+
+  it('SAD: set_purpose cannot smuggle it in through its own caller_name arg', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      trees: ['identity', 'message'],
+      caller_name: 'caller',
+    });
+    expect(tracker.status('caller_name')).toBe('open');
+  });
+});
+
+describe('an "opportunity" message is questioned before it is filed', () => {
+  /**
+   * WHO: Neil Ashford on the 2026-08-15 sim (BUY vs JOB) — a dental clinic
+   *      owner who wanted to BUY the AI receptionist.
+   * WHAT: he opened "I wanted to talk to someone about a business opportunity",
+   *      the model asked nothing, selected `message`, and wrote "Neil Ashford
+   *      called about a business opportunity." The warmest lead in the suite,
+   *      filed as a note.
+   * WHERE: record_answer's message_body branch.
+   * WHY: the work-direction gate and the prompt's one-clarifying-question rule
+   *      both only fire when the model SELECTS job or buy_service. Selecting
+   *      NEITHER had no cover — the same omission shape the job under-selection
+   *      nudge was built for. A nudge, not a refusal: a real message caller who
+   *      uses these words must still be able to leave one.
+   */
+  it('nudges for the buy-vs-job question, and still records the message', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['identity', 'message'],
+    });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'message_body',
+      value: 'Neil Ashford called about a business opportunity.',
+    });
+    expect(res).toContain('Ask ONE question now');
+    expect(res).toContain('buy_service');
+    // The answer is NOT refused — the caller's words are kept either way.
+    expect(tracker.value('message_body')).toContain('business opportunity');
+  });
+
+  it('SAD: an ordinary message is not nudged', async () => {
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['identity', 'message'],
+    });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'message_body',
+      value: 'Please call me back about my invoice.',
+    });
+    expect(res).not.toContain('Ask ONE question now');
+  });
+
+  it('SAD: no nudge once the axis is already settled', async () => {
+    const { toolkit } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'buy_service', 'message'],
+    });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'message_body',
+      value: 'Calling about a business opportunity for your business.',
+    });
+    expect(res).not.toContain('Ask ONE question now');
+  });
+});
+
+describe('a booking attempt closes the offer node of WHATEVER tree asked it', () => {
+  /**
+   * WHO: Dana Whitfield on the 2026-08-15 sim (BUY THE SERVICE).
+   * WHAT: she said "Yes, I'd be happy to book a demo any time you have
+   *       available", the demo WAS booked — and `demo_offer` stayed open, so
+   *       the goodbye gate refused to close, so the model went hunting for the
+   *       missing item and asked a woman who was already booked whether she'd
+   *       rather just have the details emailed. She said email. The host wrote
+   *       `demo_offer: not_now`: the record says a prospect DECLINED the demo
+   *       she is booked into, and the lead reads as cold.
+   * WHERE: wrapAction — `meeting_offer` had been fixed for exactly this on the
+   *        booking tree and `demo_offer`, the same node one vertical over, was
+   *        missed. Keyed by node id now (BOOKING_CLOSES_OFFER) so the next
+   *        vertical's version is one line rather than another postmortem.
+   */
+  it('books a demo and records demo_offer = wants_demo without asking again', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'buy_service', 'booking'],
+    });
+    for (const [node_id, value] of [
+      ['caller_name', 'Dana Whitfield'],
+      ['caller_phone', '2624979039'],
+      ['meeting_topic', 'how the AI handles appointment booking'],
+    ] as const) {
+      await call(toolkit.selectedTools(), 'record_answer', { node_id, value });
+    }
+    expect(tracker.status('demo_offer')).toBe('open');
+
+    await call(toolkit.selectedTools(), 'book_with_scheduling', {
+      window_from: '2026-07-22T13:15:00',
+      window_to: '2026-07-22T13:15:00',
+    });
+
+    expect(tracker.value('demo_offer')).toBe('wants_demo');
+  });
+
+  it('a demo_offer the caller already answered is never overwritten by the booking', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_pays_us',
+      trees: ['identity', 'buy_service', 'booking'],
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'demo_offer',
+      value: 'not_now',
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '2624979039',
+    });
+    await call(toolkit.selectedTools(), 'book_with_scheduling', {
+      window_from: '2026-07-22T13:15:00',
+      window_to: '2026-07-22T13:15:00',
+    });
+    // recordIfOpen — the caller's own words win over the host's inference.
+    expect(tracker.value('demo_offer')).toBe('not_now');
+  });
+});
+
+describe('an unanswerable question takes a message instead of ending the call', () => {
+  /**
+   * WHO: Rosa Delgado on the 2026-08-15 sim (THE ELSE) — "would Dale MC my
+   *      nephew's wedding reception?"
+   * WHAT: the knowledge base had nothing, the agent read the fallback aloud,
+   *      recorded a qa_summary and hung up. Her name (given in her opening
+   *      sentence) was discarded because identity is not selected on a qa call,
+   *      no number was taken, no message was left.
+   * WHERE: the answer_question wrapper in checklistTools.
+   * WHY: the route ALREADY knows it could not answer. That knowledge never
+   *      reached host state, so "offer to take a message" stayed a suggestion —
+   *      and the model treated the fallback sentence as permission to close.
+   */
+  const noAnswer =
+    "I don't have specific information on that topic right now. I'd be happy to take a message.";
+
+  it('selects the message + identity trees off the back of a no-answer result', async () => {
+    const { toolkit, tracker, fakes } = makeKit();
+    fakes.get_company_policy_answer.execute = vi.fn(async () => noAnswer);
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['qa'],
+    });
+    expect(tracker.selectedTrees()).not.toContain('message');
+
+    const res = await call(toolkit.selectedTools(), 'answer_question', {
+      question: 'Would Dale MC a wedding reception?',
+    });
+
+    expect(tracker.selectedTrees()).toContain('message');
+    expect(tracker.selectedTrees()).toContain('identity');
+    expect(res).toContain('OFFER TO TAKE A MESSAGE');
+    // And the gate is now shut until it actually happens — the whole point.
+    expect(tracker.isResolved()).toBe(false);
+  });
+
+  it('HAPPY: a real answer changes nothing — no message tree, no extra questions', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['qa'],
+    });
+    const res = await call(toolkit.selectedTools(), 'answer_question', {
+      question: 'What are your hours?',
+    });
+    expect(tracker.selectedTrees()).not.toContain('message');
+    expect(res).not.toContain('OFFER TO TAKE A MESSAGE');
+  });
+
+  it('ragCouldNotAnswer matches the fallback and nothing else', () => {
+    expect(ragCouldNotAnswer(noAnswer)).toBe(true);
+    expect(ragCouldNotAnswer('We are open Monday to Friday, 1 to 5 PM.')).toBe(false);
+  });
+});
+
+describe('topicNamesOnlyAPerson — WHO is not WHAT', () => {
+  it('SAD: a topic that only names a person is refused', () => {
+    for (const junk of [
+      'talk with Dale',
+      'Talk to Dale.',
+      'speak with the owner',
+      'meeting Dale',
+      'chat with someone',
+    ]) {
+      expect(topicNamesOnlyAPerson(junk), junk).toBe(true);
+    }
+  });
+
+  it('HAPPY: anything carrying a subject passes', () => {
+    for (const real of [
+      'talk about a job opportunity',
+      'a meeting to talk about a six-month contract',
+      'my brakes are grinding',
+      'talk with Dale about the Java contract',
+      'pricing for the AI receptionist',
+    ]) {
+      expect(topicNamesOnlyAPerson(real), real).toBe(false);
+    }
+  });
+
+  it('SAD: record_answer refuses it and asks for the subject instead', async () => {
+    // WHO: Jaya on the 2026-08-15 JAYA REPLAY runs — "I want to talk with Dale."
+    // WHAT: the model recorded that verbatim as meeting_topic, so the topic
+    //       never named a role, meetingTopicNamesOwnerRole() never fired, the
+    //       job tree was never added, and the recruiter's role details were lost
+    //       on roughly half of all runs — a 15-minute meeting with no subject.
+    // WHY: the node's own text has forbidden this since 2026-07-27. Prompt text
+    //      the model breaks half the time is not a rule, it is a wish.
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'neither_or_unclear',
+      trees: ['identity', 'booking'],
+    });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_topic',
+      value: 'talk with Dale',
+    });
+    expect(res).toContain('names WHO they want, not WHAT');
+    expect(tracker.status('meeting_topic')).toBe('open');
+  });
+});
+
+describe('a company field cannot be the caller (2026-08-15 sim: callers_company = "Marcus Webb")', () => {
+  it('SAD: refuses the caller name in callers_company and leaves the node open', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job'],
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Marcus Webb',
+    });
+    const res = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'callers_company',
+      value: 'Marcus Webb',
+    });
+    expect(res).toContain("is the CALLER'S NAME");
+    expect(tracker.status('callers_company')).toBe('open');
+  });
+
+  it('HAPPY: a real company still records', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job'],
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_name',
+      value: 'Marcus Webb',
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'callers_company',
+      value: 'Bell Labs',
+    });
+    expect(tracker.value('callers_company')).toBe('Bell Labs');
+  });
+});
+
+describe('identity is host-added on a goal-bearing call', () => {
+  /**
+   * WHO: Grace Okafor on the 2026-08-15 sim (WEDDING MESSAGE) — "I'd love for
+   *      him to call me back."
+   * WHAT: set_purpose selected message + generic_subject and NOT identity, so
+   *      the call ended with a message asking for a callback and no number on
+   *      it. The scenario PASSED; no grader asserts a phone.
+   * WHERE: runSetPurpose, after tracker.select.
+   * WHY: "include identity whenever a goal needs a contact" was a prompt rule.
+   *      A prompt sentence is a request; host code is a guarantee.
+   */
+  it('adds identity when a tree that produces a record is selected without it', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['message'] });
+    expect(tracker.selectedTrees()).toContain('identity');
+  });
+
+  it('SAD: a pure question call is NOT interrogated for contact details', async () => {
+    // Someone asking what time you close must get an answer, not an intake.
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['qa'] });
+    expect(tracker.selectedTrees()).not.toContain('identity');
+  });
+});
+
+describe('meeting_offer is closed by the booking attempt, not by asking again', () => {
+  it('a book_with_scheduling call records wants_meeting even when the booking FAILS', async () => {
+    // WHO: sim-call-1786818806598, 2026-08-15.
+    // WHAT: the caller asked for 1 PM, the model attempted the booking, the
+    //       phone gate refused it — and the model then asked him whether he
+    //       wanted a meeting at all.
+    // WHEN: any booking attempt, successful or not.
+    // WHERE: wrapAction, before the real tool runs.
+    // WHY: he answered "I wanted to set up a meeting at one. Right? Didn't I say
+    //      that?" — a question whose answer the runtime already held.
+    const { toolkit, tracker, fakes } = makeKit();
+    fakes.book_with_scheduling.execute.mockResolvedValue(
+      JSON.stringify({ success: false, error: "Before I book, I'll need a good phone number." })
+    );
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'job', 'booking'] });
+    // The action's own prerequisites, so the attempt is genuinely attempted —
+    // a BLOCKED call is refused before the tool runs and tells us nothing about
+    // what the caller wants.
+    await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'John' });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '6082175303',
+    });
+    expect(tracker.value('meeting_offer')).toBeUndefined();
+
+    await call(toolkit.selectedTools(), 'book_with_scheduling', {
+      requested_start: '2026-08-17T13:00:00',
+    });
+
+    expect(tracker.value('meeting_offer')).toBe('wants_meeting');
+  });
+
+  it('closes meeting_offer even when job is selected AFTER the booking already succeeded', async () => {
+    // WHO: sim-call-1786921082547, 2026-08-16.
+    // WHAT: caller opened with "I'd like to schedule time to meet with Dale
+    //       about a job" — booking + identity only, ran to completion first.
+    //       job was selected afterward, once the role questions started. The
+    //       attempt-time BOOKING_CLOSES_OFFER close (in wrapAction) ran while
+    //       meeting_offer's tree was not yet selected, so it silently did
+    //       nothing — meeting_offer was still 'unselected', not 'open'. At
+    //       [2:48] the model asked "would you like me to schedule a meeting"
+    //       of the caller it had already booked at [1:27].
+    // WHEN: any booking whose offer-tree gets selected LATER in the same call.
+    // WHERE: runRecordAnswer — the self-healing retry.
+    // WHY: a one-shot close at booking time can only close nodes that exist
+    //      in the tracker yet; this proves the retry catches the rest.
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'booking'] });
+    await call(toolkit.selectedTools(), 'record_answer', { node_id: 'caller_name', value: 'Jack' });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'caller_phone',
+      value: '6082175303',
+    });
+    await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'meeting_topic',
+      value: 'a job opportunity',
+    });
+
+    await call(toolkit.selectedTools(), 'book_with_scheduling', {
+      requested_start: '2026-08-17T13:00:00',
+    });
+    expect(tracker.value('meeting_offer')).toBe('wants_meeting');
+
+    await call(toolkit.selectedTools(), 'set_purpose', { trees: ['job'] });
+    expect(tracker.status('meeting_offer')).toBe('answered');
+
+    const r = await call(toolkit.selectedTools(), 'record_answer', {
+      node_id: 'callers_company',
+      value: 'Beta Solutions',
+    });
+    console.error('DEBUG record_answer result:', r);
+    console.error('DEBUG after:', tracker.status('meeting_offer'), tracker.value('meeting_offer'));
+
+    expect(tracker.value('meeting_offer')).toBe('wants_meeting');
+    expect(tracker.status('meeting_offer')).toBe('answered');
   });
 });

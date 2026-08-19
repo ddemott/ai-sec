@@ -14,6 +14,7 @@ import {
   MEETING_NOTES_INSTRUCTIONS,
 } from './meetingContextTask.js';
 import { JOB_INTAKE_INSTRUCTIONS } from './jobIntakeTask.js';
+import { getTaskTool, getTaskToolNames } from './testToolCtx.js';
 
 beforeAll(() => {
   initializeLogger({ pretty: false, level: 'silent' });
@@ -32,15 +33,13 @@ function fakeTool(returns: unknown, onCall?: (args: unknown) => void) {
 }
 
 async function callTool(
-  task: { toolCtx: Record<string, unknown>; done: boolean },
+  task: { toolCtx: unknown; done: boolean },
   name: string,
   args: unknown = {}
 ): Promise<unknown> {
-  const tool = task.toolCtx[name] as {
-    execute: (a: unknown, c: unknown) => Promise<unknown>;
-  };
+  const tool = getTaskTool(task, name);
   expect(tool, `the rung must expose ${name}`).toBeDefined();
-  return tool.execute(args, { ctx: {}, toolCallId: 'tc' });
+  return tool!.execute(args, { ctx: {}, toolCallId: 'tc' });
 }
 
 describe('MeetingContextTask — notes template: the attach IS the transition', () => {
@@ -156,7 +155,7 @@ describe('MeetingContextTask — template dispatch', () => {
     // not_a_job joined 2026-07-18 — the escape hatch for a misrouted call
     // (intent flapped "fix my computer" into has_job_inquiry and the caller
     // was trapped in a job interrogation with no exit).
-    expect(Object.keys(task.toolCtx).sort()).toEqual(['capture_job_inquiry', 'not_a_job']);
+    expect(getTaskToolNames(task)).toEqual(['capture_job_inquiry', 'not_a_job']);
   });
 
   it('HAPPY: mid-intake "just take a message" is a REAL exit — take_message completes the job rung', async () => {
@@ -177,11 +176,12 @@ describe('MeetingContextTask — template dispatch', () => {
       meetingBooked: true,
       onMessageTaken,
     });
-    expect(Object.keys(task.toolCtx)).toContain('take_message');
-    const tool = (task.toolCtx as Record<string, unknown>).take_message as {
-      execute: (a: unknown, c: unknown) => Promise<unknown>;
-    };
-    await tool.execute({ message: 'have Dale call me about the role' }, { ctx: {}, toolCallId: 'tc' });
+    expect(getTaskToolNames(task)).toContain('take_message');
+    const tool = getTaskTool(task, 'take_message');
+    await tool!.execute(
+      { message: 'have Dale call me about the role' },
+      { ctx: {}, toolCallId: 'tc' }
+    );
     expect(task.done, 'a real message_id ends the rung').toBe(true);
     expect(onMessageTaken).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'msg-77' }));
     expect(captureCalled, 'no job row when the caller bailed to a message').not.toHaveBeenCalled();
@@ -202,10 +202,8 @@ describe('MeetingContextTask — template dispatch', () => {
       meetingBooked: true,
     });
     expect(task.done).toBe(false);
-    const tool = (task.toolCtx as Record<string, unknown>).not_a_job as {
-      execute: (a: unknown, c: unknown) => Promise<unknown>;
-    };
-    await tool.execute({}, { ctx: {}, toolCallId: 'tc' });
+    const tool = getTaskTool(task, 'not_a_job');
+    await tool!.execute({}, { ctx: {}, toolCallId: 'tc' });
     expect(task.done, 'not_a_job completes the rung').toBe(true);
     expect(captureCalled, 'the escape must not touch the backend').not.toHaveBeenCalled();
   });
@@ -226,7 +224,7 @@ describe('MeetingContextTask — template dispatch', () => {
       takeMessage: fakeTool('{}'),
       meetingBooked: true,
     });
-    const names = Object.keys(task.toolCtx).sort();
+    const names = getTaskToolNames(task);
     expect(names).toEqual(['attach_meeting_notes', 'no_notes', 'take_message']);
   });
 });

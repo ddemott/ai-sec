@@ -10,7 +10,7 @@
 // WHAT IT DOES: replays the REAL system prompt (buildSystemPrompt) + the REAL
 // 23 tool schemas (buildTools — already OpenAI function-calling JSON Schema;
 // LiveKit passes them through verbatim) against the SAME model the agent runs
-// (gpt-4o-mini) via plain chat.completions. Tools are never executed — each
+// (gpt-4.1-mini) via plain chat.completions. Tools are never executed — each
 // call is answered with a scripted synthetic result, and we grade the SEQUENCE
 // of tool names the model chose: required tools must appear in order
 // (subsequence), forbidden tools fail the case instantly.
@@ -26,7 +26,11 @@ import type { SessionContext } from '../src/sessionContext.js';
 import type { ToolsClient } from '../src/toolsClient.js';
 
 const API_KEY = process.env.OPENAI_API_KEY;
-const MODEL = process.env.SIM_TOOLSELECT_MODEL || 'gpt-4o-mini'; // agent/src/index.ts pipeline model
+// The voice LLM in agent/src/index.ts. It moved gpt-4o-mini → gpt-4.1-mini on
+// 2026-07-20 precisely BECAUSE 4o-mini never scored a clean suite here, and
+// this default was never moved with it — so every run since has been grading a
+// model production stopped using, and reporting the result as if it were prod's.
+const MODEL = process.env.SIM_TOOLSELECT_MODEL || 'gpt-4.1-mini';
 const THRESHOLD = 0.8;
 const MAX_ROUNDS = 12;
 

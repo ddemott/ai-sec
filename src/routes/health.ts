@@ -3,7 +3,7 @@ import type { Pool } from 'pg';
 import { timingSafeEqual } from 'crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { withHandler, requireSuperAdmin, type AppRequest } from '../middleware';
+import { withHandler, requireSuperAdmin, type AppRequest } from '../middleware/fastify-middleware';
 import { registry as metricsRegistry } from '../services/metrics';
 import { runReadinessCheck } from '../readinessHandler';
 import { collectFeatureReadinessFromEnv } from '../services/featureReadiness';

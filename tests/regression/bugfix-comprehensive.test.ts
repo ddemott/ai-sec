@@ -35,7 +35,7 @@ import {
   createAppointment,
   skipIfDbDown,
 } from '../utils';
-import type { AppRequest } from '../../src/middleware';
+import type { AppRequest } from '../../src/middleware/fastify-middleware';
 import type { FastifyReply } from 'fastify';
 
 let client: Client;
@@ -840,7 +840,7 @@ describe('Knowledge file upload validation', () => {
 // requireAuth MIDDLEWARE (Bug 3)
 // ═══════════════════════════════════════════════════════════════════════
 
-describe('requireAuth middleware', () => {
+describe('requireAuth middleware/fastify-middleware', () => {
   // --- Happy path ---
   it('returns true when req.auth is set', async () => {
     // WHO: authenticated dashboard user making an API request
@@ -848,7 +848,7 @@ describe('requireAuth middleware', () => {
     // WHEN: any protected route after JWT middleware has run
     // WHERE: requireAuth helper in src/middleware.ts
     // WHY: BUG-003 — confirms authenticated requests pass through the guard
-    const { requireAuth } = await import('../../src/middleware');
+    const { requireAuth } = await import('../../src/middleware/fastify-middleware');
     const fakeReq = {
       auth: { tenant_id: 't1', user_id: 'u1', email: 'a@b.com' },
     } as unknown as AppRequest;
@@ -863,7 +863,7 @@ describe('requireAuth middleware', () => {
     // WHEN: any protected route called without Authorization header
     // WHERE: requireAuth helper in src/middleware.ts
     // WHY: BUG-003 — without requireAuth, unauthenticated users could access admin routes
-    const { requireAuth } = await import('../../src/middleware');
+    const { requireAuth } = await import('../../src/middleware/fastify-middleware');
     let statusCode: number | undefined;
     let body: unknown;
 
@@ -966,10 +966,10 @@ describe('Source code correctness checks', () => {
     // WHO: external services (Google, Outlook, Square) calling back
     // WHAT: all OAuth callback and webhook routes must be in PUBLIC_ROUTES (skip JWT auth)
     // WHEN: OAuth redirect after user authorizes, or CRM sends webhook event
-    // WHERE: src/middleware.ts PUBLIC_ROUTES array (in registerJwtAuthHook).
-    //        Moved from src/index.ts during historical major refactor (see RESOLVED.md; originally tracked as NEEDS-REFACTORING #11).
+    // WHERE: src/middleware/fastify-middleware.ts PUBLIC_ROUTES array (in registerJwtAuthHook).
+    //        Moved from src/index.ts during historical major refactor, then renamed from src/middleware.ts to avoid Next/Turbopack misdetecting it as app middleware.
     // WHY: OAuth callbacks and webhooks come from external services without JWT — blocking them breaks all integrations
-    const src = fs.readFileSync('src/middleware.ts', 'utf8');
+    const src = fs.readFileSync('src/middleware/fastify-middleware.ts', 'utf8');
     for (const route of [
       '/calendar/auth/google/callback',
       '/calendar/auth/outlook/callback',

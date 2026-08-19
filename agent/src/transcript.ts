@@ -22,6 +22,18 @@ export interface TranscriptTurn {
   /** ms offset from call start — when this turn was COMMITTED (finalized by
    *  STT / finished being spoken), not when it began. */
   tMs: number;
+  /**
+   * The assistant produced this text and the caller never heard a word of it.
+   *
+   * The framework records an assistant turn from the LLM TOKEN STREAM, not from
+   * playout: a TTS stream that accepts the turn and then emits zero audio frames
+   * still yields a ConversationItemAdded, and the call record ends up holding a
+   * tidy conversation that did not happen. Measured 2026-08-15 — the transcript
+   * says "Assistant [1:32]: Thanks, Bob. That's 6 0 8, 1 1 1, 8 6 5 2,
+   * correct?" and the caller's very next words were "You didn't repeat it back
+   * or anything. You just didn't say anything."
+   */
+  unheard?: boolean;
 }
 
 const SPEAKER_LABEL: Record<TranscriptRole, string> = {
@@ -94,6 +106,30 @@ export class TranscriptRecorder {
   }
 
   /**
+   * Mark the most recent assistant turn as never heard by the caller.
+   *
+   * Called by the silent-turn recovery, which is the one place that knows a
+   * turn ended with no audio. It walks back to the last ASSISTANT line rather
+   * than the last line outright: the caller frequently speaks into the silence
+   * ("Hello? Are you there?") before the recovery fires, and their turn is
+   * real — it is the agent's that was imaginary.
+   *
+   * Returns whether a line was marked, so a caller can tell "marked it" from
+   * "there was nothing to mark" instead of assuming.
+   */
+  markLastAssistantUnheard(): boolean {
+    for (let i = this.turns.length - 1; i >= 0; i--) {
+      const turn = this.turns[i];
+      if (turn && turn.role === 'assistant') {
+        if (turn.unheard) return false;
+        turn.unheard = true;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Did the CALLER actually say anything? A transcript that holds only the
    * assistant's greeting is not a conversation — the caller hung up, sat
    * silent, or their audio never reached us.
@@ -119,7 +155,14 @@ export class TranscriptRecorder {
   render(): string | null {
     if (this.turns.length === 0) return null;
     const full = this.turns
-      .map((t) => `${SPEAKER_LABEL[t.role]} [${formatOffset(t.tMs)}]: ${t.text}`)
+      .map(
+        (t) =>
+          // The marker goes in the LABEL, where a human reading the Calls tab
+          // cannot miss it. A record that shows the agent saying something it
+          // never said is worse than no record: the owner reads it, believes
+          // the caller heard it, and cannot explain why they hung up.
+          `${SPEAKER_LABEL[t.role]}${t.unheard ? ' (NOT HEARD — no audio reached the caller)' : ''} [${formatOffset(t.tMs)}]: ${t.text}`
+      )
       .join('\n');
     if (full.length <= MAX_TRANSCRIPT_CHARS) return full;
     return full.slice(0, MAX_TRANSCRIPT_CHARS - TRUNCATION_MARKER.length) + TRUNCATION_MARKER;

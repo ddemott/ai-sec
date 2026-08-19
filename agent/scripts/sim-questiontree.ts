@@ -1170,6 +1170,7 @@ async function main(): Promise<void> {
   );
   let pass = 0;
   let fail = 0;
+  let errored = 0;
   for (const s of picked) {
     for (let run = 1; run <= RUNS; run++) {
       const label = RUNS > 1 ? `${s.title} [run ${run}]` : s.title;
@@ -1195,12 +1196,24 @@ async function main(): Promise<void> {
             console.log(`${C.d}    ${t.who}: ${t.text}${C.x}`);
         }
       } catch (err) {
-        fail++;
+        // NOT a failure — the scenario never ran. Counting an API outage as a
+        // behavioural fail is what made the 2026-08-15 run read "16/22" when
+        // one of the six was a real defect and five were rate limits. Same fix
+        // as sim-offscript: grade what was asked, and exit 2 for the rest.
+        errored++;
         console.log(`${C.r}  ✗ ERROR ${String(err)}${C.x}`);
       }
     }
   }
-  console.log(`\n${C.b}RESULT: ${pass}/${pass + fail} passed${C.x}`);
+  const graded = pass + fail;
+  console.log(`\n${C.b}RESULT: ${pass}/${graded} graded scenario(s) passed${C.x}`);
+  if (errored > 0) {
+    console.log(
+      `${C.y}${errored} scenario(s) never reached the model (API error after retries) — NOT ` +
+        `graded, and NOT counted as failures. Re-run them when the API is available.${C.x}`
+    );
+    process.exit(2);
+  }
   process.exit(fail === 0 ? 0 : 1);
 }
 

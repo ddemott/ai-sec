@@ -1,6 +1,6 @@
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
-import { withHandler, requireTenantId, type AppRequest } from '../middleware';
+import { withHandler, requireTenantId, type AppRequest } from '../middleware/fastify-middleware';
 
 export function registerVocabularyRoutes(
   app: AppFastifyInstance,

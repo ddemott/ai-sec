@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/unbound-method */
 /**
  * Reminders Service Tests
  * Tests reminder scheduling, processing, and cancellation with happy + sad paths.
@@ -796,7 +796,7 @@ describe('SMS-only reminders (regression: 2026-07-12)', () => {
       customer_phone: '+15559876543',
       customer_email: null,
       scheduled_for: new Date().toISOString(),
-    } as unknown as ReminderSchedule);
+    });
     vi.mocked(mockDb.getAppointmentById).mockResolvedValue(phoneOnlyAppointment as never);
     reminderService.consentService.checkConsent = vi.fn().mockResolvedValue(true);
     reminderService.communicationService.sendAppointmentReminder = vi

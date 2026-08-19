@@ -15,7 +15,7 @@ const CUSTOM_QUESTION_SOURCE = 'custom-question';
 interface KnowledgeDocumentsTabProps {
   docs: KnowledgeEntry[];
   uploading: boolean;
-  fileInputRef: React.RefObject<HTMLInputElement>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onDeleteFile: (source: string) => void;
 }

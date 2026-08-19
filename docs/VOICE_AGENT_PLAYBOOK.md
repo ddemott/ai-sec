@@ -2,7 +2,7 @@
 
 **Purpose:** a living rulebook so a new customer voice agent can be built **without days of troubleshooting.** Every rule here is something we verified the hard way (mostly the 2026-06-24→26 go-live + Realtime work). Append new rules as we learn — date them.
 
-**Stack this covers (CURRENT as of 2026-07-27):** LiveKit Agents (Node/TS, `@livekit/agents` 1.4.x) + Deepgram Nova-3 STT + **OpenAI GPT-4.1-mini** (voice LLM; 4o-mini still runs summaries/classify/fallback) + **Deepgram Aura TTS** (`aura-asteria-en`, native WebSocket streaming) + Telnyx/SIP. Agent code in `/agent`; per-tenant config in `tenants` (DB). Deploys from `main` to Railway service `secretary-hq-agent`.
+**Stack this covers (CURRENT as of 2026-08-14):** LiveKit Agents (Node/TS, `@livekit/agents` 1.4.x) + Deepgram Nova-3 STT + **OpenAI GPT-4.1-mini** (voice LLM; 4o-mini still runs summaries/classify/fallback) + **Deepgram Aura TTS** (`aura-asteria-en`, native WebSocket streaming) + Telnyx/SIP. Agent code in `/agent`; per-tenant config in `tenants` (DB). Deploys from `main` to Railway service `secretary-hq-agent`.
 
 > **CALL FLOW — read this before any rule below.** The rules here are about the
 > voice PIPELINE (STT/LLM/TTS, turn-taking, latency), which is shared by every call.
@@ -87,6 +87,10 @@ type: tokens, code: rate_limit_exceeded
 **RULE 3.4** — the greeting fires on session start. On the browser sim the agent may greet before the tester's mic is subscribed → "no greeting." Open the join URL FAST, or say "hello" to prompt. (Real PSTN doesn't have this race the same way.)
 
 **RULE 3.5** — greeting is fire-and-forget; guard its rejection. `SpeechHandle` is a thenable with **no `.catch`** — wrap in `void (async()=>{ try{ await session.say/generateReply }catch{ log } })()`, never a bare `.catch`.
+
+**RULE 3.6 (2026-08-14) — do the warm BEFORE pickup, and never wait AFTER it.** `waitForParticipant()` IS pickup. Anything you do after it — tenant-config fetch, greeting synthesis, cache fill — is dead air the caller is already listening to, and a receptionist does not answer the phone and then go quiet for several seconds. Dispatch metadata gives you `tenant_id` while the phone is still ringing, so fetch the config and synthesise the greeting there, and set the post-pickup wait to **zero**. This rule was learned backwards: the wait cap was *raised* to 12s so a slow local synthesis could finish, and the caller sat in silence after join and hung up. If the audio is not ready at pickup, speak live and take the lesser gap — never hold the line.
+
+**RULE 3.7 (2026-08-14) — a TTS engine can accept your connection and return no audio, which is indistinguishable from a dead line.** Aura's WebSocket `speak` path returned zero audio bytes from one dev host while the HTTP `collect` path returned audio on the same key, voice, and minute. Scope it honestly — one host is not a platform outage, and prod keeps the streaming default — but design for it: the greeting plays a collected frame, and `AURA_TTS_STREAMING=false` moves session replies to the collect path. The general rule is the one `verify:tts` exists to enforce: **a socket that opens is not audio that plays.** Prove bytes, not status codes.
 
 ---
 
@@ -184,6 +188,14 @@ The `agent_session_error` log's `error_body` carries the provider's exact error 
 ---
 
 ## 11. Recipe — build a new customer voice script (checklist)
+
+> **THIS RECIPE IS LADDER-ERA.** Steps 2–3 ("pick capabilities" → `buildTools`, "write a
+> LEAN persona") describe the `SpeakingAgent` path, which a live call does not run —
+> under question trees the composed persona is one line and the toolset is rebuilt from
+> the selected trees. Steps 1, 4, 6 and 7 (mode, Realtime config, deploy-then-real-call,
+> known gotchas) are still correct, because they are about the PIPELINE.
+> **To build a call section under the live architecture, use
+> `docs/CALL_ARCHITECTURE.md` §8.4.**
 
 1. **Pick the mode** (§0). Lean/cheap/high-volume → pipeline (+ streaming TTS). Premium feel + tier budget → Realtime.
 2. **Pick capabilities** the flow needs → `buildTools(..., { capabilities: [...] })`. Fewer = fewer tokens.

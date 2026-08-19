@@ -51,7 +51,7 @@ describe('attachThinkingSound', () => {
     await Promise.resolve(); // let the fire-and-forget start() settle
 
     expect(createPlayer).toHaveBeenCalledWith(0.6);
-    expect(player.start).toHaveBeenCalledWith({ room: fakeRoom, agentSession: fakeSession });
+    expect(player.start.mock.calls).toEqual([[{ room: fakeRoom, agentSession: fakeSession }]]);
     expect(log.info).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'thinking_sound_started', volume: 0.6 }),
       expect.any(String)
@@ -79,7 +79,7 @@ describe('attachThinkingSound', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(player.close).toHaveBeenCalledTimes(1);
+    expect(player.close.mock.calls).toHaveLength(1);
   });
 
   it('detach before start() resolves still closes once start settles (no leaked track)', async () => {
@@ -104,13 +104,13 @@ describe('attachThinkingSound', () => {
 
     // Close arrives BEFORE start() has resolved.
     detach();
-    expect(player.close).not.toHaveBeenCalled(); // must wait for start to settle
+    expect(player.close.mock.calls).toHaveLength(0); // must wait for start to settle
 
     resolveStart();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(player.close).toHaveBeenCalledTimes(1);
+    expect(player.close.mock.calls).toHaveLength(1);
   });
 
   it('swallows a start failure (the call proceeds without the bed)', async () => {
@@ -133,7 +133,7 @@ describe('attachThinkingSound', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(player.start).toHaveBeenCalled();
+    expect(player.start.mock.calls.length).toBeGreaterThan(0);
     expect(log.warn).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'thinking_sound_start_failed' }),
       expect.any(String)

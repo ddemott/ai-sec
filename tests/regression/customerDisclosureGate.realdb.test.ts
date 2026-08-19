@@ -60,7 +60,7 @@ beforeAll(async () => {
     return;
   }
   app = Fastify({ logger: false });
-  registerAgentToolRoutes(app, pool, createWithTenantClient(pool), (async () => []) as never);
+  registerAgentToolRoutes(app, pool, createWithTenantClient(pool), (async () => []));
   await app.ready();
 });
 

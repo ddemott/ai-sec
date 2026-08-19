@@ -22,7 +22,7 @@ describe('Security: Row Level Security (RLS) Isolation (Final Refactor)', () => 
       api = await getApiClient();
     } catch (err) {
       dbAvailable = false;
-      // eslint-disable-next-line no-console
+       
       console.warn('[rls.test] Skipping DB tests - connection failed', err);
     }
   });

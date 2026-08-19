@@ -138,7 +138,7 @@ describe('GoLivePanel — Stage B (verify the raw number)', () => {
 
     await screen.findByText('Your number is ready');
     // First poll (immediate, on mount) sees nothing yet.
-    expect(mockGetHistory).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockGetHistory).toHaveBeenCalledTimes(1));
 
     // A call arrives, started well after "now" (the activatedAt anchor).
     mockGetHistory.mockImplementation(() =>

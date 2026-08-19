@@ -423,7 +423,8 @@ export const QuickBookPanel: React.FC<QuickBookPanelProps> = ({
           };
           setStartTime(toLocalInputValue(slot.start_time));
           setEndTime(toLocalInputValue(slot.end_time));
-          setResourceId(slot.resource_id);
+          // Null when the business owns no resources; this panel's "none" is ''.
+          setResourceId(slot.resource_id ?? '');
           setEmployeeId(slot.employee_id);
           setConflict(null);
           setNextAvailable([]);

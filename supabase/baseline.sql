@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict moMGp7wZ5bqMFhMRv9HQhPIEomiGoG6U5Pe2sTDCOtpFmFSKNXTdMRSwlD7ezR7
+\restrict FKgKCsH6VJGddN7a7zBMsFQBEv04Se4O4KateJ5trKQb7ImP0HUt4qadwWDoPnk
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -1084,6 +1084,86 @@ BEGIN
   RETURN v_new_target;
 END;
 $_$;
+
+
+--
+-- Name: copy_question_tree_templates_to_tenant(uuid, text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.copy_question_tree_templates_to_tenant(p_tenant_id uuid, p_verticals text[]) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_copied INT := 0;
+BEGIN
+  IF p_tenant_id IS NULL OR p_verticals IS NULL OR array_length(p_verticals, 1) IS NULL THEN
+    RETURN 0;
+  END IF;
+
+  CREATE TEMP TABLE _copy_trees ON COMMIT DROP AS
+  SELECT t.vertical, t.tree_id, t.description, t.sort_order
+    FROM question_tree_templates t
+   WHERE t.vertical = ANY (p_verticals)
+     AND NOT EXISTS (
+       SELECT 1 FROM tenant_question_trees existing
+        WHERE existing.tenant_id = p_tenant_id AND existing.tree_id = t.tree_id
+     );
+
+  IF NOT EXISTS (SELECT 1 FROM _copy_trees) THEN
+    RETURN 0;
+  END IF;
+
+  INSERT INTO tenant_question_trees (tenant_id, tree_id, description, source_vertical, sort_order)
+  SELECT p_tenant_id, c.tree_id, c.description, c.vertical, c.sort_order
+    FROM _copy_trees c;
+
+  -- One tenant node per template node, remembering where it came from.
+  CREATE TEMP TABLE _copy_nodes ON COMMIT DROP AS
+  SELECT n.template_node_id,
+         n.parent_template_node_id,
+         gen_random_uuid() AS tenant_question_node_id,
+         n.tree_id, n.node_id, n.option_key, n.sort_order, n.node_type,
+         n.ask, n.listen, n.choice_options, n.tool, n.action_description,
+         n.requires, n.await_tree
+    FROM question_tree_template_nodes n
+    JOIN _copy_trees c ON c.vertical = n.vertical AND c.tree_id = n.tree_id;
+
+  INSERT INTO tenant_question_nodes (
+    tenant_question_node_id, tenant_id, tree_id, node_id,
+    parent_tenant_question_node_id, option_key, sort_order, node_type,
+    ask, listen, choice_options, tool, action_description, requires, await_tree
+  )
+  SELECT cn.tenant_question_node_id,
+         p_tenant_id,
+         cn.tree_id,
+         cn.node_id,
+         parent.tenant_question_node_id,
+         cn.option_key,
+         cn.sort_order,
+         cn.node_type,
+         cn.ask,
+         cn.listen,
+         cn.choice_options,
+         cn.tool,
+         cn.action_description,
+         cn.requires,
+         cn.await_tree
+    FROM _copy_nodes cn
+    LEFT JOIN _copy_nodes parent
+      ON parent.template_node_id = cn.parent_template_node_id;
+
+  GET DIAGNOSTICS v_copied = ROW_COUNT;
+  RETURN v_copied;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION copy_question_tree_templates_to_tenant(p_tenant_id uuid, p_verticals text[]); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.copy_question_tree_templates_to_tenant(p_tenant_id uuid, p_verticals text[]) IS 'Copy the named verticals'' template trees into a tenant. Idempotent: existing tenant trees/nodes are never overwritten, so a re-run cannot revert a customized intake.';
 
 
 --
@@ -3269,6 +3349,55 @@ COMMENT ON COLUMN public.phone_verifications.call_id IS 'The voice call this ver
 
 
 --
+-- Name: question_tree_template_nodes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.question_tree_template_nodes (
+    template_node_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    vertical text NOT NULL,
+    tree_id text NOT NULL,
+    node_id text NOT NULL,
+    parent_template_node_id uuid,
+    option_key text,
+    sort_order integer DEFAULT 0 NOT NULL,
+    node_type text NOT NULL,
+    ask text,
+    listen boolean DEFAULT false NOT NULL,
+    choice_options text[],
+    tool text,
+    action_description text,
+    requires text[],
+    await_tree boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT question_tree_template_nodes_type_chk CHECK ((node_type = ANY (ARRAY['text'::text, 'choice'::text, 'action'::text])))
+);
+
+
+--
+-- Name: question_tree_templates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.question_tree_templates (
+    vertical text NOT NULL,
+    tree_id text NOT NULL,
+    description text NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT question_tree_templates_tree_id_chk CHECK ((tree_id <> ''::text)),
+    CONSTRAINT question_tree_templates_vertical_chk CHECK ((vertical <> ''::text))
+);
+
+
+--
+-- Name: TABLE question_tree_templates; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.question_tree_templates IS 'Platform question-tree templates per vertical — the generic starting point copied into a tenant at provisioning. Content is authored in agent/src/checklist/trees.ts and seeded by scripts/seed-question-tree-templates.ts.';
+
+
+--
 -- Name: recent_record_changes; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -3543,6 +3672,68 @@ ALTER TABLE ONLY public.tenant_integration_settings FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: tenant_question_nodes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tenant_question_nodes (
+    tenant_question_node_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    tree_id text NOT NULL,
+    node_id text NOT NULL,
+    parent_tenant_question_node_id uuid,
+    option_key text,
+    sort_order integer DEFAULT 0 NOT NULL,
+    node_type text NOT NULL,
+    ask text,
+    listen boolean DEFAULT false NOT NULL,
+    choice_options text[],
+    tool text,
+    action_description text,
+    requires text[],
+    await_tree boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT tenant_question_nodes_type_chk CHECK ((node_type = ANY (ARRAY['text'::text, 'choice'::text, 'action'::text])))
+);
+
+ALTER TABLE ONLY public.tenant_question_nodes FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: COLUMN tenant_question_nodes.option_key; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenant_question_nodes.option_key IS 'Which branch of the parent CHOICE node this child hangs from. NULL for top-level nodes and for children of non-choice parents.';
+
+
+--
+-- Name: tenant_question_trees; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tenant_question_trees (
+    tenant_id uuid NOT NULL,
+    tree_id text NOT NULL,
+    description text NOT NULL,
+    source_vertical text,
+    is_customized boolean DEFAULT false NOT NULL,
+    is_enabled boolean DEFAULT true NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT tenant_question_trees_tree_id_chk CHECK ((tree_id <> ''::text))
+);
+
+ALTER TABLE ONLY public.tenant_question_trees FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE tenant_question_trees; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.tenant_question_trees IS 'A tenant OWN copy of the question trees their calls run. Copied from question_tree_templates at provisioning; edits here change that client''s calls only.';
+
+
+--
 -- Name: tenant_skills; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3604,8 +3795,6 @@ CREATE TABLE public.tenants (
     job_inquiry_email text,
     forwarded_from_phone text,
     default_service_id uuid,
-    checklist_preset_id text,
-    checklist_overrides jsonb DEFAULT '{}'::jsonb NOT NULL,
     persona_name text,
     call_disclosure text,
     call_disclosure_attested_at timestamp with time zone,
@@ -3615,7 +3804,10 @@ CREATE TABLE public.tenants (
     deleted_by uuid,
     greeting_menu text,
     greeting_closer text,
-    booking_mechanics text
+    booking_mechanics text,
+    checklist_preset_id text,
+    checklist_overrides jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT tenants_checklist_preset_id_valid CHECK (((checklist_preset_id IS NULL) OR (checklist_preset_id = ANY (ARRAY['auto_shop_front_desk'::text, 'salon_front_desk'::text, 'local_service_front_desk'::text, 'owner_for_hire_front_desk'::text, 'law_firm_front_desk'::text]))))
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;
@@ -3668,20 +3860,6 @@ COMMENT ON COLUMN public.tenants.preferences_instructions IS 'Owner-authored gui
 --
 
 COMMENT ON COLUMN public.tenants.default_buffer_minutes IS 'Minutes of gap the AI must leave between back-to-back bookings (applied symmetrically around each existing appointment at every availability + booking surface). Default 0 = no buffer (current behavior). AI/customer-facing bookings only; owner manual dashboard bookings are unrestricted.';
-
-
---
--- Name: COLUMN tenants.checklist_preset_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.tenants.checklist_preset_id IS 'Optional explicit checklist preset override. NULL = derive from business_type.';
-
-
---
--- Name: COLUMN tenants.checklist_overrides; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.tenants.checklist_overrides IS 'Safe checklist tweaks. Shape: { disabled_conversation_blocks?: string[], booking_mode?: offer_once|prefer|never, message_mode?: always|fallback_only, optional_node_ids?: string[] }. Invalid entries are ignored on read and rejected on write.';
 
 
 --
@@ -3773,6 +3951,20 @@ COMMENT ON COLUMN public.tenants.greeting_closer IS 'Optional spoken closing que
 --
 
 COMMENT ON COLUMN public.tenants.booking_mechanics IS 'Spoken verbatim after a successful booking: what happens at the appointment time (who calls whom / where to go). NULL = say nothing extra.';
+
+
+--
+-- Name: COLUMN tenants.checklist_preset_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.checklist_preset_id IS 'Optional explicit checklist preset override. NULL = derive from business_type. The allowed list here MUST match PRESET_LIBRARY in agent/src/checklist/presets.ts and ChecklistPresetId in shared/checklistPresetDerivation.ts — presetCatalogConstraint.test.ts enforces it.';
+
+
+--
+-- Name: COLUMN tenants.checklist_overrides; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tenants.checklist_overrides IS 'Safe checklist tweaks. Shape: { disabled_conversation_blocks?: string[], booking_mode?: offer_once|prefer|never, message_mode?: always|fallback_only, optional_node_ids?: string[] }. Invalid entries are ignored on read and rejected on write.';
 
 
 --
@@ -4155,6 +4347,22 @@ ALTER TABLE ONLY public.phone_verifications
 
 
 --
+-- Name: question_tree_template_nodes question_tree_template_nodes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.question_tree_template_nodes
+    ADD CONSTRAINT question_tree_template_nodes_pkey PRIMARY KEY (template_node_id);
+
+
+--
+-- Name: question_tree_templates question_tree_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.question_tree_templates
+    ADD CONSTRAINT question_tree_templates_pkey PRIMARY KEY (vertical, tree_id);
+
+
+--
 -- Name: record_versions record_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4240,6 +4448,22 @@ ALTER TABLE ONLY public.tenant_docs
 
 ALTER TABLE ONLY public.tenant_integration_settings
     ADD CONSTRAINT tenant_integration_settings_pkey PRIMARY KEY (tenant_id, provider);
+
+
+--
+-- Name: tenant_question_nodes tenant_question_nodes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_question_nodes
+    ADD CONSTRAINT tenant_question_nodes_pkey PRIMARY KEY (tenant_question_node_id);
+
+
+--
+-- Name: tenant_question_trees tenant_question_trees_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_question_trees
+    ADD CONSTRAINT tenant_question_trees_pkey PRIMARY KEY (tenant_id, tree_id);
 
 
 --
@@ -4624,6 +4848,20 @@ CREATE INDEX idx_phone_verifications_verified_call ON public.phone_verifications
 
 
 --
+-- Name: idx_question_tree_template_nodes_parent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_question_tree_template_nodes_parent ON public.question_tree_template_nodes USING btree (parent_template_node_id);
+
+
+--
+-- Name: idx_question_tree_template_nodes_tree; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_question_tree_template_nodes_tree ON public.question_tree_template_nodes USING btree (vertical, tree_id, sort_order);
+
+
+--
 -- Name: idx_record_versions_change_source; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4705,6 +4943,20 @@ CREATE INDEX idx_services_tenant_id ON public.services USING btree (tenant_id);
 --
 
 CREATE INDEX idx_soft_reservations_expires_at ON public.soft_reservations USING btree (expires_at);
+
+
+--
+-- Name: idx_tenant_question_nodes_parent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tenant_question_nodes_parent ON public.tenant_question_nodes USING btree (parent_tenant_question_node_id);
+
+
+--
+-- Name: idx_tenant_question_nodes_tree; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tenant_question_nodes_tree ON public.tenant_question_nodes USING btree (tenant_id, tree_id, sort_order);
 
 
 --
@@ -4827,6 +5079,13 @@ CREATE INDEX knowledge_suggestion_tenant_idx ON public.knowledge_suggestion USIN
 
 
 --
+-- Name: question_tree_template_nodes_unique_in_branch; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX question_tree_template_nodes_unique_in_branch ON public.question_tree_template_nodes USING btree (vertical, tree_id, COALESCE(parent_template_node_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(option_key, ''::text), node_id);
+
+
+--
 -- Name: reminder_schedules_one_scheduled_per_type; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4838,6 +5097,13 @@ CREATE UNIQUE INDEX reminder_schedules_one_scheduled_per_type ON public.reminder
 --
 
 CREATE INDEX tenant_docs_embedding_idx ON public.tenant_docs USING hnsw (embedding public.vector_cosine_ops);
+
+
+--
+-- Name: tenant_question_nodes_unique_in_branch; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX tenant_question_nodes_unique_in_branch ON public.tenant_question_nodes USING btree (tenant_id, tree_id, COALESCE(parent_tenant_question_node_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(option_key, ''::text), node_id);
 
 
 --
@@ -4981,6 +5247,20 @@ CREATE TRIGGER trg_intake_submissions_updated_at BEFORE UPDATE ON public.intake_
 
 
 --
+-- Name: question_tree_template_nodes trg_question_tree_template_nodes_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_question_tree_template_nodes_updated_at BEFORE UPDATE ON public.question_tree_template_nodes FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: question_tree_templates trg_question_tree_templates_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_question_tree_templates_updated_at BEFORE UPDATE ON public.question_tree_templates FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
 -- Name: customers trg_sync_customer_names; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4992,6 +5272,20 @@ CREATE TRIGGER trg_sync_customer_names BEFORE INSERT OR UPDATE ON public.custome
 --
 
 CREATE TRIGGER trg_sync_user_names BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.sync_user_names();
+
+
+--
+-- Name: tenant_question_nodes trg_tenant_question_nodes_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_tenant_question_nodes_updated_at BEFORE UPDATE ON public.tenant_question_nodes FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: tenant_question_trees trg_tenant_question_trees_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_tenant_question_trees_updated_at BEFORE UPDATE ON public.tenant_question_trees FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
 
 --
@@ -5297,6 +5591,22 @@ ALTER TABLE ONLY public.phone_verifications
 
 
 --
+-- Name: question_tree_template_nodes question_tree_template_nodes_parent_template_node_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.question_tree_template_nodes
+    ADD CONSTRAINT question_tree_template_nodes_parent_template_node_id_fkey FOREIGN KEY (parent_template_node_id) REFERENCES public.question_tree_template_nodes(template_node_id) ON DELETE CASCADE;
+
+
+--
+-- Name: question_tree_template_nodes question_tree_template_nodes_tree_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.question_tree_template_nodes
+    ADD CONSTRAINT question_tree_template_nodes_tree_fk FOREIGN KEY (vertical, tree_id) REFERENCES public.question_tree_templates(vertical, tree_id) ON DELETE CASCADE;
+
+
+--
 -- Name: record_versions record_versions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5438,6 +5748,38 @@ ALTER TABLE ONLY public.tenant_docs
 
 ALTER TABLE ONLY public.tenant_integration_settings
     ADD CONSTRAINT tenant_integration_settings_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
+-- Name: tenant_question_nodes tenant_question_nodes_parent_tenant_question_node_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_question_nodes
+    ADD CONSTRAINT tenant_question_nodes_parent_tenant_question_node_id_fkey FOREIGN KEY (parent_tenant_question_node_id) REFERENCES public.tenant_question_nodes(tenant_question_node_id) ON DELETE CASCADE;
+
+
+--
+-- Name: tenant_question_nodes tenant_question_nodes_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_question_nodes
+    ADD CONSTRAINT tenant_question_nodes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
+-- Name: tenant_question_nodes tenant_question_nodes_tree_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_question_nodes
+    ADD CONSTRAINT tenant_question_nodes_tree_fk FOREIGN KEY (tenant_id, tree_id) REFERENCES public.tenant_question_trees(tenant_id, tree_id) ON DELETE CASCADE;
+
+
+--
+-- Name: tenant_question_trees tenant_question_trees_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_question_trees
+    ADD CONSTRAINT tenant_question_trees_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
 
 
 --
@@ -6081,6 +6423,46 @@ CREATE POLICY tenant_isolation_tenants ON public.tenants USING ((tenant_id = pub
 
 
 --
+-- Name: tenant_question_nodes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.tenant_question_nodes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: tenant_question_nodes tenant_question_nodes_admin_bypass; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tenant_question_nodes_admin_bypass ON public.tenant_question_nodes USING ((public.tenant_ctx() = ''::text)) WITH CHECK ((public.tenant_ctx() = ''::text));
+
+
+--
+-- Name: tenant_question_nodes tenant_question_nodes_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tenant_question_nodes_tenant_isolation ON public.tenant_question_nodes USING ((tenant_id = public.tenant_ctx_uuid())) WITH CHECK ((tenant_id = public.tenant_ctx_uuid()));
+
+
+--
+-- Name: tenant_question_trees; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.tenant_question_trees ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: tenant_question_trees tenant_question_trees_admin_bypass; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tenant_question_trees_admin_bypass ON public.tenant_question_trees USING ((public.tenant_ctx() = ''::text)) WITH CHECK ((public.tenant_ctx() = ''::text));
+
+
+--
+-- Name: tenant_question_trees tenant_question_trees_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY tenant_question_trees_tenant_isolation ON public.tenant_question_trees USING ((tenant_id = public.tenant_ctx_uuid())) WITH CHECK ((tenant_id = public.tenant_ctx_uuid()));
+
+
+--
 -- Name: tenant_skills; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6148,5 +6530,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict moMGp7wZ5bqMFhMRv9HQhPIEomiGoG6U5Pe2sTDCOtpFmFSKNXTdMRSwlD7ezR7
+\unrestrict FKgKCsH6VJGddN7a7zBMsFQBEv04Se4O4KateJ5trKQb7ImP0HUt4qadwWDoPnk
 
