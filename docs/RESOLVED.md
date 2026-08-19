@@ -2017,7 +2017,7 @@ This file is append-only by the loop. Humans update Status fields.
 
 > **Status 2026-06-30:** inbox effectively drained — 3 of the 4 proposals below are `done`. The one remaining open item ("Wizard pre-fill from business template", approved) is the **SetupWizard draft-state Phase B** work tracked canonically in `docs/TODO.md` (UX backlog → "Wizard Phase B") and `docs/IMPROVEMENT_IDEAS.md`. Nothing new from the loop since 2026-06-03.
 
-Cross-references: [docs/TODO.md](TODO.md) | [docs/IMPROVEMENT_IDEAS.md](IMPROVEMENT_IDEAS.md)
+Cross-references: [docs/TODO.md](TODO.md) | archived `docs/IMPROVEMENT_IDEAS.md` section below
 
 ---
 

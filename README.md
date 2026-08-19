@@ -92,8 +92,8 @@ Below is a full list of its features:
 | **Dashboard** | Live at `https://www.secretaryhq.com` (Railway origin `dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                                                                                                                      |
 | **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4.1-mini (LLM) + Deepgram Aura (TTS). Call flow = question trees (`agent/src/checklist/`). PSTN inbound reaches the agent (confirmed 2026-06-30); the booking + transfer legs still need a live different-carrier call — see `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7. |
 | **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                                                                                                                                                      |
-| **Tests**     | 5,379 passing (2,706 backend + 1,044 dashboard + 1,629 agent), recounted 2026-08-14 — all green                                                                                                                                                                                                                                                   |
-| **E2E**       | 39 committed Playwright spec files (a 40th, `caller-pickup.spec.ts`, is uncommitted)                                                                                                                                                                                                                                                              |
+| **Tests**     | Latest audit rerun (2026-08-18): dashboard 1,046 passing, agent 943 passing, root `npm test` blocked locally by missing `app_user` role setup in `test_db`; see `docs/TEST_COVERAGE.md` for exact output and the last full-green snapshot                                                                                                         |
+| **E2E**       | 40 committed Playwright spec files                                                                                                                                                                                                                                                                                                                |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -139,15 +139,15 @@ Telnyx (carrier + SIP trunk) --> LiveKit Cloud (SIP ingress)
                                           |
                                 PostgreSQL + pgvector (RLS multi-tenancy)
                                           |
-                                Next.js 14 Dashboard
+                                Next.js 16 Dashboard
 ```
 
 | Layer             | Tech                                                                                                                                                                                                                                                                                                     |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Voice**         | Telnyx (carrier + SIP trunk), LiveKit Cloud (orchestrator), Deepgram Nova-3 (STT), OpenAI GPT-4.1-mini (voice LLM; 4o-mini for summaries/classify), Deepgram Aura (TTS, streaming, per-tenant voice via dashboard AI Persona page; `tts_speed` is inert under Aura)                                      |
 | **Backend**       | Fastify 5.x, 29 top-level route modules plus the `agentTools/` module dir, JWT auth via `registerJwtAuthHook` in `src/middleware.ts`, Zod validation, RLS via `withTenantClient()` (factory in `src/database/index.ts`)                                                                                  |
-| **Frontend**      | Next.js 14 (App Router), Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                                      |
-| **Database**      | PostgreSQL + pgvector, 182 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                                       |
+| **Frontend**      | Next.js 16 (App Router), React 19, Tailwind CSS 3.4, TypeScript, Lucide icons                                                                                                                                                                                                                            |
+| **Database**      | PostgreSQL + pgvector, 184 migrations, Row Level Security, atomic booking RPCs with GiST exclusion constraints to close the find-then-insert race. Every single-column PK follows the `<table_singular>_id` convention (see `CODING_STANDARDS.md`)                                                       |
 | **Agent runtime** | LiveKit Agents (Node) on Railway as `secretary-hq-agent`. Call flow = **question trees** (`agent/src/checklist/`): host-owned checklist, purpose-selected trees, goodbye gate. 26 tools are defined in `agent/src/tools.ts`; the live question-tree path offers a subset — see `docs/ARCHITECTURE.md` §7 |
 | **Async**         | Inline in Fastify routes (post-call summaries, calendar sync, SMS)                                                                                                                                                                                                                                       |
 | **Billing**       | Stripe Checkout route + subscription gate exist in code; pricing is provisional and the webhook endpoint is not yet registered                                                                                                                                                                           |
@@ -222,12 +222,12 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 │   └── database/           DatabaseService interface + Postgres implementation
 ├── agent/                  LiveKit Agents worker (Node) — Deepgram STT + OpenAI LLM + Deepgram Aura TTS; call flow in agent/src/checklist/
 │   └── src/                Worker entry, session context, prompt, tool client
-├── dashboard/              Next.js 14 frontend
+├── dashboard/              Next.js 16 frontend
 │   ├── components/         60+ components (scheduler, CRM, settings, wizard)
 │   ├── lib/                API client, hooks, types, SessionContext
 │   └── e2e/                Playwright tests
 ├── supabase/
-│   ├── migrations/         182 SQL migrations
+│   ├── migrations/         184 SQL migrations
 │   └── seed.sql            Platform admin + Bella's Hair Studio demo tenant
 ├── shared/                 Cross-runtime code (embeddings, scheduling, voice CRM types + prompt formatter)
 ├── scripts/                Automation (bootstrap, setup-db, seed-db, deploy, QA)
@@ -239,10 +239,10 @@ Default credentials are created by the seed script. See `supabase/seed.sql` for 
 ## Testing
 
 ```bash
-npm test                              # Backend (2,706 passing — 2026-08-14)
-cd dashboard && npx vitest run        # Dashboard (1,044 passing — 2026-08-14)
-cd agent && npm test                  # Agent (1,629 passing — 2026-08-14)
-cd dashboard && npx playwright test   # E2E (39 committed spec files)
+npm test                              # Backend/root Vitest suite (see docs/TEST_COVERAGE.md for latest status)
+cd dashboard && npx vitest run        # Dashboard Vitest suite
+cd agent && npm test                  # Agent Vitest suite
+cd dashboard && npx playwright test   # E2E (40 committed spec files)
 ```
 
 ### Coverage
@@ -253,7 +253,7 @@ cd dashboard && npx playwright test   # E2E (39 committed spec files)
 | Backend services                  | ~570  |
 | Middleware, scheduling, constants | ~500  |
 | Dashboard components + views      | ~747  |
-| Playwright e2e (39 spec files)    | —     |
+| Playwright e2e (40 spec files)    | —     |
 
 ### Test Philosophy
 
@@ -317,7 +317,7 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 | Square CRM sync        | Bidirectional customer + appointment sync                                             |
 | Knowledge base         | 40 policy Q&A pairs, document upload, RAG via pgvector                                |
 | Contextual feedback    | In-app feedback button on every page                                                  |
-| Playwright e2e         | 39 spec files                                                                         |
+| Playwright e2e         | 40 spec files                                                                         |
 
 ---
 

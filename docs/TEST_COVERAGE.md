@@ -1,6 +1,8 @@
 # Test Coverage
 
-**Headline counts last reconciled:** 2026-08-14, by running all three suites against the real `test_db` — **2,706 backend + 1,044 dashboard + 1,629 agent = 5,379 passing, all green**. (Earlier the same day the backend was 2,705/1 fail: `tests/noHardcodedNames.test.ts` caught an owner's first name hardcoded in `meetingTopicNamesOwnerRole()`; the name is out and a name-agnostic pin test was added, which is the +1 on the agent suite.) The **per-file V8 coverage %** + the e2e workflow tables below are still from the **2026-05-22** coverage run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
+**Latest audit rerun:** 2026-08-18. `cd dashboard && npm test` finished **1,046 passing**; `cd agent && npm test` finished **943 passing**; root `npm test` was **not green in this workspace** (**1,761 passing, 985 skipped, 9 failed**) because `tests/regression/rlsIsolation.test.ts` could not connect as `app_user` and explicitly requested `supabase/migrations/20260724000100_app_user_role.sql` be applied to `test_db` first. The **per-file V8 coverage %** + the e2e workflow tables below are still from the **2026-05-22** coverage run and are stale — re-run [Regenerating](#regenerating) before trusting a specific percentage.
+
+**Last fully green headline snapshot kept for history:** 2026-08-14, by running all three suites against the real `test_db` — **2,706 backend + 1,044 dashboard + 1,629 agent = 5,379 passing, all green**. (Earlier the same day the backend was 2,705/1 fail: `tests/noHardcodedNames.test.ts` caught an owner's first name hardcoded in `meetingTopicNamesOwnerRole()`; the name is out and a name-agnostic pin test was added, which is the +1 on the agent suite.)
 
 **Prior reconcile:** 2026-08-11 — 2,675 backend + 1,031 dashboard + 1,498 agent = 5,204 passing, tied to the vertical-preset/block + intake-submission checkpoint.
 
@@ -21,12 +23,12 @@ Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pa
 
 | Suite | Tests | Status | Runtime |
 |---|---|---|---|
-| Backend (`npm test`) | 2,706 passing (217 files) | ✅ | full-suite run 2026-08-14, ~209s |
-| Dashboard (`cd dashboard && npm test`) | 1,044 passing | ✅ | full-suite run 2026-08-14 |
-| Agent (`cd agent && npm test`) | 1,629 passing (99 files) | ✅ | full-suite run 2026-08-14 |
-| Playwright e2e (`cd dashboard && npx playwright test`) | 39 committed spec files (exact pass/skip count: re-run to verify) | not re-run in this sweep | last known runtime ~175s |
+| Backend (`npm test`) | 1,761 passing, 985 skipped, 9 failed | ❌ local audit rerun blocked by missing `app_user` role in `test_db` | 2026-08-18 audit rerun |
+| Dashboard (`cd dashboard && npm test`) | 1,046 passing (97 files) | ✅ | 2026-08-18 audit rerun |
+| Agent (`cd agent && npm test`) | 943 passing (56 files) | ✅ | 2026-08-18 audit rerun |
+| Playwright e2e (`cd dashboard && npx playwright test`) | 40 committed spec files (exact pass/skip count: re-run to verify) | not re-run in this sweep | last known runtime ~175s |
 
-Total, measured 2026-08-14: **5,379 passing** (2,706 backend + 1,044 dashboard + 1,629 agent).
+Current local audit rerun total: **2,989 passing** across the suites that completed, plus **985 skipped** and **9 backend failures** in the root suite. Historical full-green snapshot (2026-08-14): **5,379 passing**.
 
 > **On skipped e2e tests**: `calendar-sync.spec.ts` tests skip without `SYNC_TEST_RECORDER=1` (set it + restart the backend to run them). One test in `full-functional-audit.spec.ts` (Voice Calls) is deferred until Telnyx PSTN clears. Re-run the suite to get current pass/skip counts.
 

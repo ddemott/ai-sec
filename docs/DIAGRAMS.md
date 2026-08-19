@@ -50,10 +50,10 @@ flowchart TB
   Fastify["Fastify Backend<br/>29 route modules + agentTools dir<br/>secretary-hq-production.up.railway.app<br/>(Railway + Nixpacks, Node 22)"]
   Agent -->|POST /agent-tools/* + x-agent-secret| Fastify
 
-  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>182 migrations")]
+  Postgres[("Postgres + pgvector<br/>Supabase us-west-2<br/>184 migrations")]
   Stripe["Stripe"]
   Integrations["Google / Outlook calendars<br/>+ Square CRM"]
-  Dashboard["Next.js 14 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
+  Dashboard["Next.js 16 Dashboard<br/>dashboard-production-cee3.up.railway.app"]
 
   Fastify --> Postgres
   Fastify --> Stripe

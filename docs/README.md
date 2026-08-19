@@ -115,4 +115,4 @@ behaviour.
 
 ---
 
-**Last updated:** 2026-08-11 (repo-wide doc sync: test counts, e2e spec count, migration totals, billing/webhook reality, Node 22 deployment pin, and current voice-stack wording refreshed. Prior major pass 2026-07-05: TODO consolidation — `GAPS.md` / `IMPROVEMENT_IDEAS.md` / `IMPROVEMENTS_TODO.md` / `AIASSISTANT_GO_LIVE_TODO.md` folded into `docs/TODO.md` and deleted; done items + snapshots archived in `RESOLVED.md`; index rows removed.).
+**Last updated:** 2026-08-18 (repo-wide doc sync: package/runtime versions refreshed to Next.js 16 / React 19 / Fastify 5, migration totals bumped to 184, Playwright spec count bumped to 40, and primary architecture/deployment docs re-aligned to the live filesystem. Prior major pass 2026-08-11 refreshed test counts, billing/webhook reality, Node 22 deployment pin, and current voice-stack wording; 2026-07-05 folded `GAPS.md` / `IMPROVEMENT_IDEAS.md` / `IMPROVEMENTS_TODO.md` / `AIASSISTANT_GO_LIVE_TODO.md` into `docs/TODO.md` and archived snapshots in `RESOLVED.md`.)

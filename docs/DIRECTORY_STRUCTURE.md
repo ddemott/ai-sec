@@ -25,7 +25,7 @@ secretary-hq/
 ├── supabase/                      ✓ migrations/ + seed.sql + generated baseline.sql
 ├── portable-workflow-kit/         ✓ extractable copy of the dev workflow (npm run generate-kit)
 ├── agent/                         LiveKit voice worker
-└── dashboard/                     Next.js 14 frontend
+└── dashboard/                     Next.js 16 frontend
 ```
 
 ---
@@ -511,7 +511,7 @@ agent/src/
 
 ---
 
-## `dashboard/` — Next.js 14 frontend
+## `dashboard/` — Next.js 16 frontend
 
 ```
 dashboard/
@@ -523,7 +523,7 @@ dashboard/
 │   └── dpa/              ✓ public DPA (Bonterms DPA v2.0 cover + subprocessors)
 ├── lib/                  ✓ API client, types, hooks, utilities
 ├── types/                ✓
-├── e2e/                  ✓ 39 committed Playwright spec files
+├── e2e/                  ✓ 40 committed Playwright spec files
 │
 └── components/
     ├── ui/               ✓ primitives (Button, Card, Modal, Toast, …)
