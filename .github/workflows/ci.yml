@@ -389,9 +389,9 @@ jobs:
           restore-keys: |
             nextbuild-${{ runner.os }}-${{ hashFiles('dashboard/package-lock.json') }}-
 
-      - name: Install root + dashboard dependencies
+      - name: Install root + dashboard + agent dependencies
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
-        run: npm ci --no-audit --no-fund && cd dashboard && npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund && (cd dashboard && npm ci --no-audit --no-fund) && (cd agent && npm ci --no-audit --no-fund)
 
       - name: Apply migrations and seed
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
