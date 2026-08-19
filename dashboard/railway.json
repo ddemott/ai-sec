@@ -1,12 +1,12 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
-  "//": "Commands run from the REPO ROOT (Railway Root Directory must be BLANK, not 'dashboard') so the build sees repo-root /shared/* that the dashboard imports. Standalone mode (next.config.mjs) bundles all server-side files into .next/standalone/. Static assets (.next/static/) and public/ are NOT traced by standalone and must be copied manually into the standalone tree so next/server serves them. server.js lives at .next/standalone/server.js (repo-root-relative: dashboard/.next/standalone/server.js).",
+  "//": "Commands run from the REPO ROOT (Railway Root Directory must be BLANK, not 'dashboard') so the build sees repo-root /shared/* that the dashboard imports. Standalone mode (next.config.mjs) bundles all server-side files into .next/standalone/ — but next.config.mjs also sets outputFileTracingRoot to the REPO ROOT (one level above dashboard/), so Next.js mirrors dashboard/'s own path inside standalone: the real output is .next/standalone/dashboard/, not .next/standalone/ directly (verified against the actual local build output 2026-08-19, after the flat-path version of this file silently broke every dashboard deploy for 2+ hours with 'cp: cannot create directory .next/standalone/.next/static: No such file or directory' while unrelated agent-only PRs kept merging green). Static assets (.next/static/) and public/ are NOT traced by standalone and must be copied manually into the standalone tree so next/server serves them. server.js lives at .next/standalone/dashboard/server.js (repo-root-relative: dashboard/.next/standalone/dashboard/server.js).",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "cd dashboard && npm ci && npm run build && cp -r .next/static .next/standalone/.next/static && ([ -d public ] && cp -r public .next/standalone/public || true)"
+    "buildCommand": "cd dashboard && npm ci && npm run build && cp -r .next/static .next/standalone/dashboard/.next/static && ([ -d public ] && cp -r public .next/standalone/dashboard/public || true)"
   },
   "deploy": {
-    "startCommand": "HOSTNAME=0.0.0.0 node dashboard/.next/standalone/server.js",
+    "startCommand": "HOSTNAME=0.0.0.0 node dashboard/.next/standalone/dashboard/server.js",
     "healthcheckPath": "/",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
