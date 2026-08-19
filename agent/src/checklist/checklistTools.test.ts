@@ -1663,6 +1663,20 @@ describe('placeholderNameReason — a generic noun is not a name', () => {
     }
   });
 
+  it('SAD, live 2026-08-19 (sim-call-1787164800582): "You" is refused, not stored', () => {
+    // WHO: real browser-simulator call against prod. WHAT: the caller never
+    //      said their own name; the model fabricated caller_name:"You" on its
+    //      OWN set_purpose call anyway. It passed the old check (not in the
+    //      junk list), so the checklist marked the name answered, never asked
+    //      again, and the goodbye line read "You're all set, You." to a real
+    //      person. "you"/"yourself" are the generic word for whoever the
+    //      model is TALKING TO, same shape as "caller" being the generic word
+    //      for whoever is on the line.
+    for (const junk of ['You', 'you', 'Yourself']) {
+      expect(placeholderNameReason(junk), junk).toContain('is not a name');
+    }
+  });
+
   it('SAD: record_answer refuses it, and the node stays open to be asked again', async () => {
     const { toolkit, tracker } = makeKit();
     await call(toolkit.selectedTools(), 'set_purpose', { trees: ['identity', 'message'] });
@@ -1681,6 +1695,17 @@ describe('placeholderNameReason — a generic noun is not a name', () => {
       caller_name: 'caller',
     });
     expect(tracker.status('caller_name')).toBe('open');
+  });
+
+  it('SAD, live 2026-08-19: set_purpose cannot smuggle in "You" either — the exact prod shape', async () => {
+    const { toolkit, tracker } = makeKit();
+    await call(toolkit.selectedTools(), 'set_purpose', {
+      work_direction: 'caller_offers_owner_work',
+      trees: ['identity', 'job'],
+      caller_name: 'You',
+    });
+    expect(tracker.status('caller_name')).toBe('open'); // still asked, not silently answered
+    expect(tracker.value('caller_name')).toBeUndefined();
   });
 });
 
