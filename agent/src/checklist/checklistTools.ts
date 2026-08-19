@@ -536,6 +536,8 @@ const PLACEHOLDER_NAMES = new Set([
   'anonymous',
   'user',
   'guest',
+  'you',
+  'yourself',
   'n/a',
   'na',
   'none',
