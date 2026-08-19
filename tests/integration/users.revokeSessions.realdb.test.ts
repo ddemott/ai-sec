@@ -36,7 +36,7 @@ vi.hoisted(() => {
 });
 
 import Fastify, { type FastifyInstance } from 'fastify';
-import {type Client, type  Pool} from 'pg';
+import { type Client, Pool } from 'pg';
 import jwt from 'jsonwebtoken';
 import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from '../utils';
 import { createWithTenantClient } from '../../src/database';

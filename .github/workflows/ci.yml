@@ -122,6 +122,12 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
 
+      - name: Seed question tree templates
+        if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
+        run: npm run trees:seed
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/test_db
+
       - name: TypeScript check
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npx tsc --noEmit
