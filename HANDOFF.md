@@ -2,7 +2,39 @@
 
 Read this first after session reset.
 
-_Updated 2026-08-18 after full verification rerun. Read the 2026-08-18 section first; it is the current blocker state._
+_Updated 2026-08-19 after prod verification + doc/coverage sync. Read the 2026-08-19 section first; it is the current state._
+
+## 2026-08-19 — main merged, prod moved, old blocker dead
+
+Verdict: `main` is merged, production has moved, and the old agent `ToolContext<unknown>` blocker is gone. Current work is follow-through docs/coverage/backlog cleanup, not rescue surgery.
+
+### Verified this session
+
+- Branch base: `main` tracking `origin/main`
+- Root/backend tests: `226 passed (226)` · `2750 passed (2750)`
+- Dashboard unit tests: `97 passed (97)` · `1044 passed (1044)`
+- Agent tests: `56 passed (56)` · `943 passed (943)`
+- Agent build/typecheck: `cd /home/dale/projects/secretary-hq/agent && npm run build` → exit `0`
+- Prod backend freshness: `GET https://secretary-hq-production.up.railway.app/health` → `{"status":"ok","started_at":"2026-08-19T08:22:19.112Z"}`
+- Prod smoke route: `POST https://secretary-hq-production.up.railway.app/demo/start` → `{"success":true,...}`
+- Root V8 coverage: `npx vitest run --coverage` → `2805 passed (2805)` · `74.17%` statements · `66.35%` branches · `72.64%` functions · `76.08%` lines
+- Dashboard V8 coverage: `cd /home/dale/projects/secretary-hq/dashboard && npx vitest run --coverage` → `1044 passed (1044)` · `61.99%` statements · `58.17%` branches · `57.60%` functions · `63.97%` lines
+
+### Important corrected facts
+
+- The 2026-08-18 handoff is stale on the key point: agent build is no longer red.
+- Production no longer lags local `main`; deploy freshness moved at `2026-08-19T08:22:19.112Z`.
+- Working tree was clean before the doc sweep except for `docs/TODO.md`; any current dirt after this point is markdown sync, not runtime drift.
+
+### Highest-value next move
+
+1. Re-run Playwright when you want a fresh e2e count instead of the 2026-08-18 snapshot.
+2. Then tackle the still-live backlog: test DB / RLS setup, voice naturalness on simulator, real `TELNYX_PUBLIC_KEY`.
+3. If you need production confidence beyond smoke, run a live simulator / call-path check against the deployed stack.
+
+### If resetting now
+
+Resume from verified `main` + verified prod. Do **not** restart from the old `ToolContext<unknown>` thread unless a fresh command makes it real again.
 
 ## 2026-08-18 — reset-safe handoff: functional green, agent typecheck red
 

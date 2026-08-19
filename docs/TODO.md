@@ -18,15 +18,15 @@ Voice/Telnyx go-live ops detail + incident recovery: `docs/RUNBOOK.md` §7.
 
 ## Next items to fix (coverage/build/deploy review)
 
-- Commit E2E sweep fixes (20 defects, 4 livelocks)
-- Deploy recent changes to prod (Railway lags)
-- Refresh V8 coverage (stale since 05-22, run with DB)
-- Setup test DB (fix 9 RLS failures)
-- Create PR for main (protected branch)
-- Sync docs (TEST_COVERAGE, DEPLOYMENT, HANDOFF with current code)
+- [x] ~~Commit E2E sweep fixes (20 defects, 4 livelocks)~~ — **DONE 2026-08-19**: Merged in PR #344 (`41c4d53`).
+- [x] ~~Deploy recent changes to prod (Railway lags)~~ — **DONE 2026-08-19**: Deployed to Railway (`started_at` `2026-08-19T08:22:19Z`). Verified `GET /health` (200) and `POST /demo/start` (200).
+- [x] ~~Create PR for main (protected branch)~~ — **DONE 2026-08-19**: PR #344 merged to `main`.
+- [x] ~~Clean working tree~~ — **DONE 2026-08-19**: `main` clean.
+- [x] ~~Refresh V8 coverage (stale since 05-22, run with DB)~~ — **DONE 2026-08-19**: reran root and dashboard coverage; `docs/TEST_COVERAGE.md` refreshed with exact totals.
+- [x] ~~Setup test DB (fix 9 RLS failures)~~ — **DONE 2026-08-19**: `npm test` now passes at repo root (`2750 passed (2750)`), so the prior `app_user` / test_db RLS blocker is gone.
+- [x] ~~Sync docs (TEST_COVERAGE, DEPLOYMENT, HANDOFF with current code)~~ — **DONE 2026-08-19**: refreshed counts/coverage/handoff and corrected deployment env wording.
 - Test voice naturalness on simulator (inflections, pauses)
 - Fill real TELNYX_PUBLIC_KEY in .env
-- Clean working tree (127 modified, 36 untracked)
 
 ## 📞 Live-call fix series (2026-07-30) — see `docs/CALL_FIX_PLAN.md`
 
