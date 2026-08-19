@@ -94,6 +94,29 @@ describe('browserCallerSession', () => {
     expect(session.agent).toBe('secretary-hq-agent-dev');
   });
 
+  it('E2E STUB: returns deterministic browser-caller session without LiveKit env', async () => {
+    const prev = process.env.BROWSER_CALLER_E2E_STUB;
+    process.env.BROWSER_CALLER_E2E_STUB = '1';
+    try {
+      const runner = vi.fn();
+      const session = await startBrowserCallerSession(
+        { tenantId: 'tenant-override', agentName: 'secretary-hq-agent-dev' },
+        runner as never
+      );
+
+      expect(runner).not.toHaveBeenCalled();
+      expect(session).toMatchObject({
+        tenant: 'tenant-override',
+        agent: 'secretary-hq-agent-dev',
+        access_token: 'e2e-stub-token',
+        e2e_stub: true,
+      });
+    } finally {
+      if (prev === undefined) delete process.env.BROWSER_CALLER_E2E_STUB;
+      else process.env.BROWSER_CALLER_E2E_STUB = prev;
+    }
+  });
+
   it('fails loud when sim-call output is missing the join url', () => {
     expect(() => parseSimCallOutput('room: sim-call-1\ntenant: t\nagent: a')).toThrow(
       'sim-call output missing join URL'

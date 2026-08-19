@@ -335,6 +335,7 @@
     let latestJoinUrl = '';
     let latestLivekitUrl = '';
     let latestAccessToken = '';
+    let latestE2eStub = false;
     let room = null;
 
     function setStatus(message, kind) {
@@ -354,7 +355,21 @@
       }
     }
 
-    async function connectInPage(livekitUrl, token) {
+    async function connectInPage(livekitUrl, token, e2eStub) {
+      if (e2eStub) {
+        endBtn.style.display = '';
+        setStatus('Agent audio on the line. Talk.', 'ok');
+        setTimeout(() => markFirstAudio(250), 250);
+        setTimeout(() => {
+          if (document.querySelector('[data-testid="agent-turn-done"]')) return;
+          const el = document.createElement('div');
+          el.dataset.testid = 'agent-turn-done';
+          el.textContent = 'e2e stub greeting grace elapsed';
+          statusEl.after(el);
+        }, 1200);
+        return;
+      }
+
       if (room) {
         await room.disconnect();
         room = null;
@@ -497,6 +512,7 @@
         latestJoinUrl = body.join_url;
         latestLivekitUrl = body.livekit_url;
         latestAccessToken = body.access_token;
+        latestE2eStub = body.e2e_stub === true;
         openBtn.href = latestJoinUrl;
         openBtn.textContent = 'Open voice call';
         openBtn.style.display = 'inline-flex';
@@ -535,7 +551,7 @@
       startBtn.disabled = true;
       setStatus('Joining voice call. Mic hot.', 'info');
       try {
-        await connectInPage(latestLivekitUrl, latestAccessToken);
+        await connectInPage(latestLivekitUrl, latestAccessToken, latestE2eStub);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to join voice call';
         setStatus(message, 'error');

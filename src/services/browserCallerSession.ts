@@ -20,6 +20,7 @@ export interface BrowserCallerSession {
   tenant: string;
   agent: string;
   expires_in_minutes: number;
+  e2e_stub?: boolean;
 }
 
 export type BrowserCallerSessionRunner = (
@@ -90,6 +91,22 @@ export async function startBrowserCallerSession(
   args: { tenantId?: string; agentName?: string },
   runner: BrowserCallerSessionRunner = defaultRunner
 ): Promise<BrowserCallerSession> {
+  if (process.env.BROWSER_CALLER_E2E_STUB === '1') {
+    const tenant = args.tenantId || 'd5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0';
+    const agent = args.agentName || 'secretary-hq-agent-dev';
+    const room = `sim-call-e2e-${Date.now()}`;
+    return {
+      join_url: `https://example.invalid/call-simulator-stub?room=${encodeURIComponent(room)}`,
+      livekit_url: 'wss://example.invalid/livekit-stub',
+      access_token: 'e2e-stub-token',
+      room,
+      tenant,
+      agent,
+      expires_in_minutes: 30,
+      e2e_stub: true,
+    };
+  }
+
   const env: NodeJS.ProcessEnv = { ...process.env };
   if (args.tenantId) env.SIM_TENANT = args.tenantId;
   // sim-call.mjs defaults AGENT_NAME to 'secretary-hq-agent' — the SAME name
