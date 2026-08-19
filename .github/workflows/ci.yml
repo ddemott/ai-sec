@@ -98,9 +98,12 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            agent/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install root + agent dependencies
+        run: npm ci --no-audit --no-fund && (cd agent && npm ci --no-audit --no-fund --prefer-offline)
 
       - name: Apply migrations
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
@@ -366,6 +369,10 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            dashboard/package-lock.json
+            agent/package-lock.json
 
       # Cache the downloaded browser binaries so `playwright install` is a no-op
       # on a hit (saves the ~30-60s Chromium download every run).
@@ -391,7 +398,7 @@ jobs:
 
       - name: Install root + dashboard + agent dependencies
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
-        run: npm ci --no-audit --no-fund && (cd dashboard && npm ci --no-audit --no-fund) && (cd agent && npm ci --no-audit --no-fund)
+        run: npm ci --no-audit --no-fund --prefer-offline && (cd dashboard && npm ci --no-audit --no-fund --prefer-offline) && (cd agent && npm ci --no-audit --no-fund --prefer-offline)
 
       - name: Apply migrations and seed
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
