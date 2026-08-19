@@ -58,7 +58,13 @@ export const MAX_RESULT_CHARS = 200;
 
 /** Row ids worth keeping verbatim — they join a postmortem to the record the
  *  call produced. Internal identifiers, not caller data. */
-const RESULT_ID_FIELDS = ['appointment_id', 'message_id', 'job_inquiry_id', 'customer_id'] as const;
+const RESULT_ID_FIELDS = [
+  'appointment_id',
+  'message_id',
+  'job_inquiry_id',
+  'submission_id',
+  'customer_id',
+] as const;
 
 /**
  * Reduce a tool's reply to the part that explains a decision, dropping the part

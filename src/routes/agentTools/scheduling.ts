@@ -93,11 +93,12 @@ export function spokenLocalTime(iso: string | null | undefined): string | null {
   const m = /T(\d{2}):(\d{2})/.exec(iso);
   if (!m) return null;
   const hour24 = Number(m[1]);
-  const minute = m[2];
+  const minute = Number(m[2]);
   if (!Number.isFinite(hour24) || hour24 > 23) return null;
+  if (!Number.isFinite(minute) || minute < 0 || minute > 59) return null;
   const suffix = hour24 >= 12 ? 'PM' : 'AM';
   const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  return `${hour12}:${minute} ${suffix}`;
+  return `${hour12}:${String(minute).padStart(2, '0')} ${suffix}`;
 }
 
 /**

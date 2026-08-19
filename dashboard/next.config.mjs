@@ -38,7 +38,6 @@ const nextConfig = {
   // See dashboard/railway.json for the full build + copy + start commands.
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname, '../'),
-  outputFileTracingIgnores: ['../src/middleware.ts'],
 };
 
 // withSentryConfig is a no-op at runtime when SENTRY_DSN is unset; the

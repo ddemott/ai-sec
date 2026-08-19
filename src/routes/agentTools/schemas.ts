@@ -386,7 +386,9 @@ export const CaptureJobInquirySchema = z.object({
  * capture-case-inquiry — a prospective client's legal matter, captured for an
  * attorney's take-or-decline review.
  *
- * EVERY CASE FIELD IS OPTIONAL EXCEPT THE TWO THAT MAKE IT ANSWERABLE. This is
+ * EVERY CASE FIELD IS OPTIONAL EXCEPT THE CALLER NAME. The callback phone is
+ * intentionally schema-optional so the route can return a SPOKEN failure (not a
+ * Zod hard-stop) when the caller never gave one or gave a bad one. This is
  * the same rule capture_job_inquiry learned on 2026-07-14 (a perfect six-month
  * contract lead saved under caller_name "Caller" with no phone number), and it
  * bites harder here: a matter with a filing deadline and no callback number is

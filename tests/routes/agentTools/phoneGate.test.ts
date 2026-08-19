@@ -32,6 +32,7 @@ describe('spokenLocalTime', () => {
     expect(spokenLocalTime('2026-08-17')).toBeNull();
     expect(spokenLocalTime('tomorrow afternoon')).toBeNull();
     expect(spokenLocalTime('2026-08-17T99:00:00')).toBeNull();
+    expect(spokenLocalTime('2026-08-17T13:99:00')).toBeNull();
   });
 });
 
