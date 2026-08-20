@@ -42,6 +42,12 @@ import { CallRootAgent } from './tasks/callRootAgent.js';
 import { ChecklistAgent } from './checklist/checklistAgent.js';
 import { createChecklistTurnDetector } from './session/turnDetector.js';
 import { warmFillers, getFillerFrame, frameStream } from './session/fillerCache.js';
+import {
+  createOutageGuard,
+  noteSessionError,
+  noteAgentSpoke,
+  OUTAGE_ERROR_LIMIT,
+} from './session/outageGuard.js';
 import { callPathHosts, warmDns, slowOrFailed } from './session/dnsWarm.js';
 import { forceIpv4Enabled, installIpv4OnlyLookup, warmLookupFor } from './session/dnsIpv4.js';
 import { idleProcessOverride } from './session/workerTuning.js';
@@ -56,6 +62,7 @@ import {
   RECOVERY_LINE,
   CALLER_CHECK_IN_LINE,
   CALLER_SILENCE_GOODBYE,
+  OUTAGE_LINE,
   HOLD_LINES,
 } from './session/holdLines.js';
 import {
@@ -590,7 +597,7 @@ export default defineAgent({
       // finalizeCall is assigned inside the callId block below and invoked from
       // the session 'close' event (registered after session.start). Declared at
       // this scope so the close handler can see it. Null when there's no callId.
-      let finalizeCall: ((hook: 'close' | 'shutdown') => Promise<void>) | null = null;
+      let finalizeCall: ((hook: 'close' | 'shutdown' | 'outage') => Promise<void>) | null = null;
       // Skipped when callId is absent (nothing to key the session on).
       if (sessionCtx.callId) {
         const callId = sessionCtx.callId;
@@ -643,7 +650,7 @@ export default defineAgent({
         // finalizing dedupes concurrent entry (close + shutdown firing together).
         let callFinalized = false;
         let finalizing = false;
-        finalizeCall = async (hook: 'close' | 'shutdown'): Promise<void> => {
+        finalizeCall = async (hook: 'close' | 'shutdown' | 'outage'): Promise<void> => {
           if (callFinalized || finalizing) return;
           finalizing = true;
           callLog.info({ event: 'voice_session_finalize_entered', hook }, 'finalizing call record');
@@ -1547,6 +1554,10 @@ export default defineAgent({
         // call transcript. Attached BEFORE the greeting `say()` below — which
         // itself emits a `conversation_item_added` (addToChatCtx defaults true)
         // — so the transcript opens with the actual first line, no manual add.
+        // Never leave a caller in silence when the LLM provider is down.
+        // Declared here so both the error handler and the state handler share it.
+        const outageGuard = createOutageGuard();
+
         session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (ev) => {
           if (ev.item.type !== 'message') return;
           transcript.add(ev.item.role, ev.item.textContent);
@@ -1634,6 +1645,10 @@ export default defineAgent({
           );
         });
         session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
+          // Reaching 'speaking' means audio actually reached the caller, which
+          // is what makes the outage guard's error count CONSECUTIVE rather
+          // than cumulative — see outageGuard.ts.
+          if (ev.newState === 'speaking') noteAgentSpoke(outageGuard);
           callLog.info(
             { event: 'agent_state_changed', from: ev.oldState, to: ev.newState },
             `agent state ${ev.oldState} -> ${ev.newState}`
@@ -1692,6 +1707,55 @@ export default defineAgent({
             tenant_id: sessionCtx.tenantId,
             call_id: sessionCtx.callId ?? null,
           });
+
+          // OUTAGE VOICE. On the Nth consecutive session error with no
+          // successful speech in between, tell the caller and hang up.
+          //
+          // This must NOT go through the model. Every other recovery path here
+          // does — the silent-turn nudge is a generateReply, the watchdog's
+          // escalation is a say() that needs a live TTS round trip — so when
+          // the LLM is the thing that is down they all die of the same cause,
+          // which is exactly what happened on 2026-07-21: seven consecutive
+          // errors, and the caller heard nothing at all. The line below plays
+          // from the pre-synthesized cache and falls back to a plain say() only
+          // if the warm never completed.
+          if (noteSessionError(outageGuard)) {
+            callLog.error(
+              {
+                event: 'outage_voice_triggered',
+                consecutive_errors: OUTAGE_ERROR_LIMIT,
+                error_message: e instanceof Error ? e.message : String(e),
+              },
+              'LLM/session errors back to back — telling the caller and ending the call rather than leaving dead air'
+            );
+            void (async () => {
+              try {
+                const frame = ttsVoiceKey ? getFillerFrame(ttsVoiceKey, OUTAGE_LINE) : undefined;
+                const handle = frame
+                  ? session.say(OUTAGE_LINE, { audio: frameStream(frame) })
+                  : session.say(OUTAGE_LINE);
+                await (handle as { waitForPlayout?: () => Promise<void> })?.waitForPlayout?.();
+              } catch (sayErr) {
+                // Saying it is best-effort: if even the cached path fails there
+                // is nothing left to try, and closing is still better than
+                // holding an already-dead line open.
+                callLog.error(
+                  {
+                    event: 'outage_voice_say_failed',
+                    error_message: sayErr instanceof Error ? sayErr.message : String(sayErr),
+                  },
+                  'could not speak the outage line — closing anyway'
+                );
+              } finally {
+                void finalizeCall?.('outage');
+                try {
+                  await session.close();
+                } catch {
+                  /* already closing */
+                }
+              }
+            })();
+          }
         });
 
         // Finalize the call record the instant the caller hangs up. The job
