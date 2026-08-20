@@ -39,7 +39,9 @@ import {
   remindersSkippedTotal,
 } from '../../../src/services/metrics.js';
 
-const TENANT = 't1111111-1111-4111-8111-111111111111';
+// Valid v4 UUIDs — hex only. `t1111111-…` was not one, and would turn this
+// suite into a false negative the day ReminderService adds uuid validation.
+const TENANT = 'd1111111-1111-4111-8111-111111111111';
 const APPT = 'a1111111-1111-4111-8111-111111111111';
 
 function readCounter(name: string, labels: Record<string, string>): number {

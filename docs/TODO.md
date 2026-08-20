@@ -157,9 +157,9 @@ ever happened; the call then could not end.
       `sim-offscript` has no retry and no separate exit path for infrastructure error.
       A red eval that is red for the wrong reason is worse than no eval.
 - [x] **(code) E2E-5 — a message asking for a callback was taken with no number.**
-      Scenario WEDDING MESSAGE, and it **PASSED**: `set_purpose` selected `message +
-generic_subject` and _not_ `identity`, so `caller_phone` was never on the
-      checklist. Grace Okafor said "I'd love for him to call me back", the message
+      Scenario WEDDING MESSAGE, and it **PASSED**: `set_purpose` selected
+      `message + generic_subject` and _not_ `identity`, so `caller_phone` was
+      never on the checklist. Grace Okafor said "I'd love for him to call me back", the message
       was written, the call closed clean, and there is no way to reach her.
       "Include identity whenever a goal needs a contact" was a prompt rule.
 - [x] **(code) E2E-6 — `caller_name` was recorded as the literal string "caller".**
@@ -228,9 +228,9 @@ Agent suite **1687** green, tsc + lint + root format + `verify:claude-md` clean.
       thing. Without that second exit a caller who changes their mind holds the call
       open forever.
 - [x] **E2E-19 — the role matcher only knew the SINGULAR.**
-      `meetingTopicNamesOwnerRole` matched `job opportunity` but not `job
-opportunities` — in a scenario literally named _"talk with Dale about job
-      opportunities"_. The topic guard (E2E-8) worked, the model re-asked, the caller
+      `meetingTopicNamesOwnerRole` matched `job opportunity` but not
+      `job opportunities` — in a scenario literally named _"talk with Dale
+      about job opportunities"_. The topic guard (E2E-8) worked, the model re-asked, the caller
       said "About the job opportunities", and the matcher missed the plural: no job
       tree, no role intake, a 15-minute meeting with no subject. Plural is the more
       natural of the two phrasings and it was the one that failed. Plurals added
@@ -339,8 +339,9 @@ building the guard, not by another call:
       farewells with the caller for twenty turns — "Goodbye!" / "Goodbye!" /
       "Goodbye! If you need anything else, just call back." — until the harness's
       round cap. The existing stall detector fires ONCE and says "wrap up the call",
-      which the model satisfied with a sentence, repeatedly. `ChecklistAgent.
-onUserTurnCompleted` now has a resolved branch (`GOODBYE_STALL_LIMIT`) that
+      which the model satisfied with a sentence, repeatedly.
+      `ChecklistAgent.onUserTurnCompleted` now has a resolved branch
+      (`GOODBYE_STALL_LIMIT`) that
       REPEATS and names the missing fact: _saying goodbye does not end the call, only
       `finish_call` does_. Deliberately conditional — a caller may still ask something
       after the checklist completes. **Verified: scenario went ✗ FAIL (call never

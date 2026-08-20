@@ -332,13 +332,17 @@ export const silentHangupsTotal = registry.counter(
   'Calls that ended with no caller speech at all, bucketed under/over the silent-call threshold'
 );
 
-// Reminder delivery outcomes per channel. Closes TODO.md Phase 5
+// Reminder delivery outcomes per reminder TYPE. Closes TODO.md Phase 5
 // "Monitoring dashboard for reminder delivery rates." A regression that
 // silently breaks the SMS provider or Gmail SMTP shows up here as
 // outcome="failure" climbing while outcome="success" flattens — long
 // before a customer reports a missed appointment. Plot
 // `rate(reminders_sent_total{outcome="success"}[5m]) /
-//  rate(reminders_sent_total[5m])` as the per-channel success rate.
+//  rate(reminders_sent_total[5m])` as the overall success rate, and add
+// `by (type)` to split it. NOT `by (channel)` — see the note below; that
+// label has never been emitted by anything running in production, and this
+// comment said "per channel" right up until the code that would have emitted
+// it was deleted.
 export const remindersSentTotal = registry.counter(
   'reminders_sent_total',
   // Labels are `type` and `outcome`. This description said `channel` (email,
@@ -409,7 +413,7 @@ export const inboundSmsTotal = registry.counter(
 // and alert above a few percent — a bad `from` number pins it to 1.0 instantly.
 //
 // Distinct from message_delivery_receipts_total (carrier-confirmed outcome) and
-// from reminders_sent_total (reminder-channel outcome, one layer up). This one
+// from reminders_sent_total (per-reminder-TYPE outcome, one layer up). This one
 // answers "did the provider accept the request?"
 export const smsSendsTotal = registry.counter(
   'sms_sends_total',
