@@ -62,15 +62,10 @@ beforeAll(async () => {
       }
     });
     const withTenantClient = createWithTenantClient(pool);
-    registerTenantRoutes(
-      app,
-      pool,
-      withTenantClient
-    );
+    registerTenantRoutes(app, pool, withTenantClient);
     await app.ready();
     dbAvailable = true;
   } catch (err) {
-     
     console.warn('[tenants.realdb.test] DB not available, skipping', err);
   }
 });
@@ -402,5 +397,88 @@ describe('POST /tenants/:id/update-config → real DB', () => {
       expect(read.statusCode).toBe(200);
       expect(read.json().call_disclosure).toBe('Round-trip line.');
     });
+  });
+});
+
+describe('GET /templates/full → real DB', () => {
+  it('publishes EXACTLY the declared BusinessTemplate fields — no more, no less', async () => {
+    // WHO: any authenticated user — the business-type picker, the setup wizard,
+    //      SoloWizard, DashboardHome and BusinessTypeSection all read this.
+    // WHAT: the response keys must equal the field set declared by
+    //       `BusinessTemplate` in dashboard/lib/types.ts.
+    // WHEN: onboarding, and every time an owner changes their business type.
+    // WHERE: src/routes/tenants.ts GET /templates/full.
+    // WHY: the route was `SELECT * FROM business_templates`, which is an
+    //      implicit contract that grows by itself — every column added to the
+    //      table was published to every authenticated user the moment the
+    //      migration landed, with nobody deciding to publish it. This test is
+    //      the deciding step: add a column and this fails until someone puts it
+    //      in the list on purpose.
+    //
+    //      NB the fix here is NOT `requireSuperAdmin`, which the backlog
+    //      originally prescribed. Five owner-facing surfaces read this route,
+    //      and the picker's TemplatePreviewModal renders system_prompt_template
+    //      and first_message to the owner deliberately. Locking it to
+    //      super-admin would break onboarding for every real customer.
+    // The harness's preHandler only populates req.auth when x-tenant-id is
+    // present, so without this header the request is not authenticated and
+    // the test would pass even if the route accidentally became public.
+    const id = await freshTenant('Templates Full Contract');
+    const res = await app.inject({ method: 'GET', url: '/templates/full', headers: hdr(id) });
+    expect(res.statusCode).toBe(200);
+
+    const rows: Record<string, unknown>[] = res.json();
+    // The seed installs the platform's business templates; if this is ever
+    // empty the assertion below would pass vacuously.
+    expect(rows.length).toBeGreaterThan(0);
+
+    expect(Object.keys(rows[0]).sort()).toEqual(
+      [
+        'booking_label',
+        'business_type',
+        'category',
+        'default_resource_description',
+        'default_resource_name',
+        'display_name',
+        'employee_label',
+        'employee_plural',
+        'example_services',
+        'first_message',
+        'resource_label',
+        'resource_plural',
+        'sort_order',
+        'system_prompt_template',
+        'voice_id',
+      ].sort()
+    );
+  });
+
+  it('SECURITY: stops shipping the columns no client ever declared', async () => {
+    // WHO: every authenticated user, including a self-serve demo tenant.
+    // WHAT: voice_provider / voice_name / example_resources are real columns on
+    //       business_templates and must not appear in the response.
+    // WHY: voice_provider and voice_name are backfilled 'cartesia' and
+    //      'elevenlabs' — TTS providers this stack has never used — so the
+    //      dashboard was being handed values that are simply false, and
+    //      example_resources is a column no client has ever heard of. None of
+    //      the three was ever a decision; they rode in on `SELECT *`.
+    const id = await freshTenant('Templates Full Undeclared');
+    const res = await app.inject({ method: 'GET', url: '/templates/full', headers: hdr(id) });
+    const rows: Record<string, unknown>[] = res.json();
+
+    for (const leaked of ['voice_provider', 'voice_name', 'example_resources']) {
+      expect(Object.keys(rows[0])).not.toContain(leaked);
+    }
+
+    // And prove the columns really do exist in the table — otherwise the
+    // assertion above passes for the wrong reason.
+    const cols = await setup.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'business_templates'`
+    );
+    const names = cols.rows.map((r) => r.column_name);
+    expect(names).toEqual(
+      expect.arrayContaining(['voice_provider', 'voice_name', 'example_resources'])
+    );
   });
 });

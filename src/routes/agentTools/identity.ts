@@ -221,6 +221,72 @@ function maskPhoneForConfirmation(phone: string | null): string | null {
   return `•••-•••-${last4}`;
 }
 
+// Titles a caller commonly leads with ("Mrs. Thornberry", "Dr. Patel"). Stripped
+// before the name is tokenized so a title never counts as one of the two name
+// parts the search requires.
+const NAME_HONORIFICS = new Set([
+  'mr',
+  'mrs',
+  'ms',
+  'miss',
+  'mx',
+  'mister',
+  'dr',
+  'doctor',
+  'prof',
+  'professor',
+  'sir',
+  'madam',
+  'madame',
+]);
+
+// Generational suffixes. Stripped from the END for the same reason honorifics
+// are stripped from the front: they are not the name, and leaving one on makes
+// the LAST token "jr", so "Jane Doe Jr" would fail to match a stored "Jane Doe"
+// — while this route's own contract says a suffix on either side is tolerated.
+// Kept to the unambiguous ones; a bare "v" is left alone, because a lone
+// trailing letter is far more often an initial than a fifth.
+const NAME_SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv']);
+
+// Normalize a spoken/transcribed name for near-exact comparison. Apostrophes
+// and periods are DELETED rather than turned into separators so "O'Brien",
+// "OBrien" and "O’Brien" all collapse to the same token; every other
+// non-alphanumeric run becomes a single space. Leading honorifics are dropped.
+// Returns '' when nothing usable is left.
+function normalizeNameForSearch(raw: string): string {
+  const cleaned = raw
+    .toLowerCase()
+    .replace(/['’.]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  const tokens = cleaned.split(' ');
+  while (tokens.length > 1 && NAME_HONORIFICS.has(tokens[0])) {
+    tokens.shift();
+  }
+  while (tokens.length > 1 && NAME_SUFFIXES.has(tokens[tokens.length - 1])) {
+    tokens.pop();
+  }
+  return tokens.join(' ');
+}
+
+// Does a stored customer name match what the caller said, near-exactly?
+// Either the whole normalized name is identical, or the FIRST and LAST parts
+// both match exactly — which tolerates a middle name on either side
+// ("Michael Thornberry" ↔ "Michael J Thornberry"), and a generational suffix,
+// which normalizeNameForSearch has already stripped from both, without ever
+// matching on a fragment. A surname alone can never satisfy this: the caller must
+// already know both parts of the name, so the route confirms an identity the
+// caller supplied rather than revealing one they guessed at.
+function nameMatchesNearExactly(storedNormalized: string, queryNormalized: string): boolean {
+  if (!storedNormalized || !queryNormalized) return false;
+  if (storedNormalized === queryNormalized) return true;
+  const stored = storedNormalized.split(' ');
+  const query = queryNormalized.split(' ');
+  if (stored.length < 2 || query.length < 2) return false;
+  return stored[0] === query[0] && stored[stored.length - 1] === query[query.length - 1];
+}
+
 export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps): void {
   // record-consent — the caller verbally agreed on the call to receive SMS
   // appointment confirmations/reminders. Writes a dated `consent_records` row
@@ -648,60 +714,94 @@ export function registerIdentityRoutes({ app, withTenantClient }: AgentToolDeps)
 
   // find-customer-by-name — name-first caller identification. The agent asks
   // the caller's name, looks them up by it, and (when found) reads back the
-  // stored number to confirm "is this still your number?". Needed because the
-  // inbound line is forwarded — caller ID is the forwarding cell, not the
-  // caller — so name is the only identifier we can trust on first contact.
-  // Returns up to 5 matches (name + phone) so the agent can confirm or, if the
-  // number is stale/wrong, collect a new one and create a fresh entry.
+  // MASKED number on file to confirm "is this still your number?". Needed
+  // because the inbound line is forwarded — caller ID is the forwarding cell,
+  // not the caller — so name is the only identifier we can trust on first
+  // contact.
+  //
+  // THE MATCH IS NEAR-EXACT ON PURPOSE. This used to be an unanchored
+  // `ILIKE '%…%'` over a single word, which made the route an address-book
+  // enumerator: anyone who could reach it could type a common surname and get
+  // back up to five real customers' names plus the last four digits of their
+  // phones, with the guessed name as the only credential. A 4-character floor
+  // and LIKE-metacharacter escaping (2026-08-07) removed the cheapest probes
+  // and did nothing about that: "Thornberry" still confirmed who banks here.
+  //
+  // Now the caller must supply BOTH name parts and they must match exactly
+  // (modulo case, punctuation, honorifics, and an extra middle name/suffix on
+  // either side). That turns the route from "who is in this address book"
+  // into "confirm the person I already named" — the question a returning
+  // caller actually asks. It costs fuzzy recovery: "Thornbury" for
+  // "Thornberry" now returns nothing and the caller is treated as new, which
+  // is the safe direction to fail. The route is deliberately NOT in the
+  // model's toolset (see docs/TODO.md); tighten it before wiring it, not after.
   toolRoute(
     app,
     '/agent-tools/find-customer-by-name',
     FindByNameSchema,
     async (args, reply) => {
-      const trimmed = args.name.trim();
-      if (!trimmed) {
-        return ok(reply, { matches: [] });
-      }
-      // Single-word partial search is still legitimate ("Michael", "Thorn"),
-      // but ultra-short probes are not. A 2- or 3-character substring over
-      // ILIKE '%…%' is cheap address-book fishing and too noisy to help a live
-      // caller; require at least 4 characters while still allowing one-word
-      // partials. This is the compromise restored on 2026-08-07 after an
-      // over-tight "must be two words" gate broke real callers.
-      if (trimmed.length < 4) {
-        return ok(reply, { matches: [] });
-      }
-      // Escape LIKE metacharacters so a spoken/transcribed name containing
-      // `%` or `_` matches literally instead of acting as a wildcard — an
-      // unescaped `%` would ILIKE-match the tenant's entire address book and
-      // over-disclose names+phones (found 2026-07-01 by the real-DB companion
-      // test; see docs/TEST_DB_AUDIT.md). Backslash is Postgres's default
-      // LIKE escape character.
-      const likeTerm = trimmed.replace(/([\\%_])/g, '\\$1');
+      const normalizedQuery = normalizeNameForSearch(args.name);
+      const queryTokens = normalizedQuery ? normalizedQuery.split(' ') : [];
 
-      const matches = await withTenantClient(args.tenant_id, async (client) => {
+      // A single token is a bare first name or a bare surname — the shape that
+      // made this an enumeration oracle. Refuse before any SQL runs.
+      if (queryTokens.length < 2) {
+        return ok(reply, { matches: [] });
+      }
+      // Keep the 4-character floor (2026-08-07) so initials-only input
+      // ("J D") can't sweep either.
+      if (queryTokens.join('').length < 4) {
+        return ok(reply, { matches: [] });
+      }
+
+      const surname = queryTokens[queryTokens.length - 1];
+
+      const rows = await withTenantClient(args.tenant_id, async (client) => {
         const res = await client.query<{ name: string | null; phone: string | null }>(
+          // Prefilter in SQL on the SURNAME as a whole word against the same
+          // normalization the TypeScript side applies, then let
+          // nameMatchesNearExactly() make the final call below. Splitting it
+          // this way keeps one round trip while leaving the precise rule (and
+          // its honorific handling) in one testable place. `surname` is built
+          // from normalizeNameForSearch, so it is `[a-z0-9]` only and carries
+          // no regex metacharacters. LIMIT 50 bounds the prefilter; at most 5
+          // survive the filter and reach the caller.
+          //
           // Derive a display name from first/last when the `name` column is
           // empty (common for imported rows) so a real match never surfaces as
           // "Unknown" to the agent.
-          `SELECT COALESCE(
-                    NULLIF(name, ''),
-                    NULLIF(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), '')
-                  ) AS name,
-                  phone
-             FROM customers
-            WHERE tenant_id = $1
-              AND (is_deleted IS NULL OR is_deleted = false)
-              AND (
-                name ILIKE '%' || $2 || '%'
-                OR TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) ILIKE '%' || $2 || '%'
-              )
+          `WITH candidate AS (
+             SELECT COALESCE(
+                      NULLIF(name, ''),
+                      NULLIF(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), '')
+                    ) AS display,
+                    phone,
+                    updated_at
+               FROM customers
+              WHERE tenant_id = $1
+                AND (is_deleted IS NULL OR is_deleted = false)
+           )
+           SELECT display AS name, phone
+             FROM candidate
+            WHERE display IS NOT NULL
+              AND btrim(
+                    regexp_replace(
+                      lower(translate(display, '''’.', '')),
+                      '[^a-z0-9]+', ' ', 'g'
+                    )
+                  ) ~ ('(^| )' || $2 || '( |$)')
             ORDER BY updated_at DESC NULLS LAST
-            LIMIT 5`,
-          [args.tenant_id, likeTerm]
+            LIMIT 50`,
+          [args.tenant_id, surname]
         );
         return res.rows;
       });
+
+      const matches = rows
+        .filter((m) =>
+          nameMatchesNearExactly(normalizeNameForSearch(m.name ?? ''), normalizedQuery)
+        )
+        .slice(0, 5);
 
       // Shape kept LLM-friendly: a plain list of {name, phone}. Empty list =
       // no match → the agent treats them as a new caller.
