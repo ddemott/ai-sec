@@ -25,10 +25,26 @@ let pool: Pool;
 test.beforeAll(() => {
   pool = new Pool({ connectionString: PG_URL });
 });
+// The super-admin tenant this spec edits (auth.setup logs in as
+// admin@secretaryhq.com). Scoping every write to it is the point — see afterAll.
+const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
 test.afterAll(async () => {
-  // Reset every tenant's preference config so this spec leaves no residue.
+  // Reset ONLY the tenant this spec touched. This used to be an unconditional
+  // `UPDATE tenants SET save_preferences_enabled = false,
+  // preferences_instructions = NULL` with no WHERE clause — it reset the
+  // preference config of EVERY tenant in the database, including any a
+  // concurrently-developed spec had just set up. It is harmless today only
+  // because playwright.config.ts pins `workers: 1` and `fullyParallel: false`;
+  // the day anyone raises that for speed, this becomes a cross-spec data
+  // corruption that presents as a flake somewhere else entirely. The house rule
+  // is that a test owns its data and cleans up ITS OWN rows.
   await pool
-    .query(`UPDATE tenants SET save_preferences_enabled = false, preferences_instructions = NULL`)
+    .query(
+      `UPDATE tenants SET save_preferences_enabled = false, preferences_instructions = NULL
+        WHERE tenant_id = $1`,
+      [PLATFORM_TENANT_ID]
+    )
     .catch(() => {});
   await pool.end();
 });
@@ -79,9 +95,35 @@ test('owner enables Customer Preferences + guidance, and it survives a reload', 
 
   const saveBtn = page.getByRole('button', { name: /Save Changes/i });
   await expect(saveBtn).toBeEnabled();
+
+  // Wait for the WRITE, not just the label. "Saved!" is UI state; the thing the
+  // reload depends on is the update-config response having come back. Watching
+  // the response makes the ordering explicit instead of inferred, and if the
+  // save ever fails the test says so here rather than as a confusing empty
+  // field two steps later.
+  const saved = page.waitForResponse(
+    (r) => /\/tenants\/.+\/update-config/.test(r.url()) && r.request().method() === 'POST',
+    { timeout: 20000 }
+  );
   await saveBtn.click();
+  const saveRes = await saved;
+  expect(saveRes.ok()).toBe(true);
+
   // Save flips the button to "Saved!" on success.
   await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+
+  // Prove the DB actually holds it before reloading. This spec has failed twice
+  // in CI (2026-08-20, on two different PRs) with the toggle persisted and the
+  // guidance coming back empty — so the interesting question is whether the
+  // write landed or the read lost it. Asserting here splits those two cases
+  // apart: a failure at this line is a WRITE bug, a failure after the reload is
+  // a READ/render bug. The root cause is not yet proven either way; this makes
+  // the next occurrence diagnostic instead of ambiguous.
+  const stored = await pool.query<{ preferences_instructions: string | null }>(
+    `SELECT preferences_instructions FROM tenants WHERE tenant_id = $1`,
+    [PLATFORM_TENANT_ID]
+  );
+  expect(stored.rows[0]?.preferences_instructions).toBe(guidance);
 
   // Reload from scratch — re-fetches config from the backend/DB.
   await openAiPersona(page);
