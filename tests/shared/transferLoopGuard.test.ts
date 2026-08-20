@@ -2,6 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { isTransferLoop, canTransfer } from '../../shared/phone';
 
 /**
+ * The transfer-loop guard, tested against `shared/phone` DIRECTLY.
+ *
+ * Moved out of `src/services/` 2026-08-21 (the backend convention is that tests
+ * live in `tests/` mirroring `src/`) and renamed for what it actually covers:
+ * it exercises `isTransferLoop`/`canTransfer` in shared/, not the backend alias.
+ * `tests/services/phoneLoopGuard.test.ts` is the sibling that covers the alias
+ * `phonesWouldLoop` — the two are not duplicates, they pin different entry
+ * points to the ONE implementation, and the alias test is what would catch the
+ * re-export being broken or dropped.
+ *
  * The transfer-loop guard. The 20260629 migration split forward_phone from
  * forwarded_from_phone and stated in its own comment that they were kept
  * distinct "so the two can't be the same number and loop the call back to the

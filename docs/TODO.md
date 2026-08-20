@@ -36,6 +36,66 @@ Voice/Telnyx go-live ops detail + incident recovery: `docs/RUNBOOK.md` §7.
   - **The general lesson:** "migrations before merge" assumes the migration is inert until new code uses it. When the RUNNING code already emits the value a constraint blocks, the constraint is a live behavioural gate and relaxing it deploys a change by itself. Ask which side is already emitting the value before choosing the order.
 - Fill real TELNYX_PUBLIC_KEY in .env
 
+## 🔴 Flaky gates that block PROD DEPLOYS (2026-08-20)
+
+A red `main` CI run makes Railway mark that commit's deployments **SKIPPED, and
+SKIPPED is terminal** — turning CI green afterwards does not retry. So a flaky
+test is not a nuisance here, it is a mechanism that silently stops merged code
+from reaching production while every service reports healthy. Both of these
+turned `main` red on `2aa61d4`.
+
+> **THE PATTERN MATTERS MORE THAN ANY ONE OF THESE.** Three _different_ tests
+> turned CI red on 2026-08-20 — `purge-soft-deleted` (timeout mismatch),
+> `customer-preferences-config` (E2E, cause unproven), and
+> `SetupWizard > shows success state with phone number after activation`
+> (dashboard, passes locally, 1,115 ms under CI load). Only the first had a
+> diagnosed cause. In a repo where a red `main` makes Railway skip the deploy
+> **terminally**, CI flakiness is not a test-hygiene issue — it is an
+> availability issue for shipping. If a fourth appears, stop adding features and
+> treat runner contention as the bug: the common factor in all three is a
+> wall-clock expectation meeting a loaded runner.
+
+- [x] **`scripts/purge-soft-deleted.test.ts` — two timeouts that disagreed.** The
+      harness gives its subprocess a 60s budget (`spawnSync timeout: 60_000`)
+      while vitest's default test timeout is 5s, and the shorter one was arrived
+      at by accident. Every case spawns `npx tsx`, paying npx resolution plus a
+      TypeScript compile before the script runs — seconds, not milliseconds. On a
+      loaded runner the happy-path case took **5,862 ms** and vitest killed it at
+      5,000. All five cases now carry an explicit `SUBPROCESS_TEST_TIMEOUT_MS`
+      matched to the subprocess budget, so a genuine hang is reported by
+      `spawnSync` with its exit status and output rather than by vitest with a
+      bare "timed out". Same class as the `PERF_ASSERT` fix: **the test was
+      asserting the machine's speed, not the code's behaviour.**
+- [ ] **Dashboard flake, not yet diagnosed** —
+      `SetupWizard.test.tsx > shows success state with phone number after activation`.
+      Failed once on 2026-08-20 (#362's run) and passes locally in isolation; took 1,115 ms on
+      the CI runner. Not patched — one occurrence is not a diagnosis, and
+      guessing at a fix for a timing-sensitive React test usually produces a
+      test that passes for a new wrong reason. Recorded so the second occurrence
+      is recognized as a pattern rather than investigated from scratch.
+- [ ] **`customer-preferences-config.spec.ts` — root cause NOT yet proven.** It
+      has now failed twice on 2026-08-20, on two different PRs, always the same
+      way: the save succeeds, the toggle persists (`aria-checked=true` passes),
+      and the guidance textarea comes back **empty** after the reload. Serial
+      execution (`workers: 1`, `fullyParallel: false`) rules out cross-spec
+      interference, and the backend merge semantics are correct
+      (`body.preferences_instructions !== undefined ? … : prior`), so the two
+      obvious explanations are already eliminated. **Not blind-patched.** What
+      shipped instead makes the next occurrence diagnostic: the test now waits on
+      the actual `update-config` RESPONSE rather than the "Saved!" label, and
+      then asserts the value is IN POSTGRES before reloading — so a failure
+      before the reload is a write bug and a failure after it is a read/render
+      bug, which the previous version could not distinguish. If it recurs, read
+      which assertion failed first.
+  - **Also fixed here, and it was a real landmine:** the spec's `afterAll` ran
+    `UPDATE tenants SET save_preferences_enabled = false, preferences_instructions = NULL`
+    with **no WHERE clause** — resetting every tenant in the database. Harmless
+    only because `workers: 1` pins serial execution; the day anyone raises that
+    for speed it becomes cross-spec corruption presenting as a flake somewhere
+    else entirely. Now scoped to the one tenant the spec edits.
+
+---
+
 ## 📞 Live-call fix series (2026-07-30) — see `docs/CALL_FIX_PLAN.md`
 
 The 12 real calls from 2026-07-26/27 (`CALL_IMPROVEMENTS.md`, root) produced an
@@ -625,15 +685,15 @@ Both erase PII irreversibly (kill-switched off / inert until enabled). Branches 
 
 Each status re-verified against the code on 2026-07-28, not carried over on trust. Item 1 of the original nine (**split `agentTools.ts` into a domain module**) is **DONE** — `src/routes/agentTools/` is a directory of 8 modules.
 
-- [ ] **(code)** **Move test files out of `src/` into a parallel `tests/` tree** — still mixed (e.g. `src/services/phoneLoopGuard.test.ts`). Backend convention is `tests/` mirroring `src/`.
-- [ ] **(code)** **Extract `src/routes/knowledge.ts` into services** — still **1,087 lines**. Route should orchestrate; scanning/embedding/normalization belong in `src/services/`.
+- [x] ~~**(code)** **Move test files out of `src/` into a parallel `tests/` tree**~~ — **DONE 2026-08-21.** The entry said "still mixed"; the actual remainder was **exactly one file**, `src/services/phoneLoopGuard.test.ts`. It is now `tests/shared/transferLoopGuard.test.ts`, renamed for what it covers — it exercises `isTransferLoop`/`canTransfer` in `shared/phone` directly, not the backend alias. `find src -name '*.test.ts'` returns **0**. Worth knowing it is NOT a duplicate of `tests/services/phoneLoopGuard.test.ts`: that sibling pins the alias `phonesWouldLoop`, so it is the one that would catch the re-export being broken or dropped. Two entry points, one implementation.
+- [ ] **(code)** **Extract `src/routes/knowledge.ts` into services** — still **1,092 lines** (re-counted 2026-08-21; it has grown, not shrunk). Route should orchestrate; scanning/embedding/normalization belong in `src/services/`.
 - [ ] **(code)** **Extract `src/routes/analytics.ts` into services** — still **880 lines**. Same shape as above.
 - [ ] **(code)** **Group agent tool definitions by capability** — `agent/src/tools.ts` defines **26** tools in one flat file; `agent/src/tools/` holds only `wrapTool.ts`. The capability union (`knowledge | messaging | identity | scheduling | verification | transfer`) exists in types but not in the file layout. **Do this together with the reachability audit below** — the two touch the same file.
 - [ ] **(code)** **Reconcile `tools.ts` against what the model can actually reach** (new, 2026-07-27; re-audited 2026-08-03). 26 tools are defined; `selectedTools()` offers **12** under question trees. Some absences are correct (`start_booking` / `manage_appointment` were ladder routers; `book_appointment` / `check_availability` / `get_scheduling_options` are superseded; SMS tools are gated off anyway). Three of the originally-flagged absences are **resolved 2026-08-03**: `get_customer_context`, `send_verification_code`, `verify_phone_code` are now wired via `TREE_PASSTHROUGH_TOOLS.identity` (see the OTP section above). `attach_meeting_notes` was already wired (buy_service passthrough) and `identify_caller` is intentionally host-code-only, never model-facing (`checklistTools.ts`'s `maybeIdentify()`) — neither was actually a gap. **Still undecided:** `transfer_call` — _there is no human handoff on a live call_ — plus `page_owner_via_sms`, `save_customer_preference`, `get_detailed_customer_history`, `find_caller_by_name` (the last deliberately still excluded — see the enumeration bug above). Decide per tool: wire it into a tree / passthrough, or delete it.
-- [ ] **(code)** **Dedupe `src/services/phoneUtils.ts` / `nameUtils.ts` against `shared/`** — both still exist alongside `shared/phone.ts` + `shared/name.ts`.
-- [ ] **(code)** **Finish the dashboard component subdirectory migration** — 87 loose `.tsx` files still at `dashboard/components/`.
-- [ ] **(code)** **Dead CRM schema cleanup** — Jobber/HubSpot/ServiceTitan/GoHighLevel columns still referenced in `supabase/baseline.sql` after the 2026-06-12 adapter deletion.
-- [ ] **(code)** **Migration chain squash** — 173 files in `supabase/migrations/`. Do when convenient; `baseline.sql` already carries the collapsed schema.
+- [x] ~~**(code)** **Dedupe `src/services/phoneUtils.ts` / `nameUtils.ts` against `shared/`**~~ — **ALREADY DONE; entry was misleading (verified 2026-08-21).** Both files exist, but neither contains an implementation — each is a one-line re-export (`export { normalizePhone, isValidPhone, formatPhone } from '../../shared/phone'`, and the same shape for `shared/name`). Same for `phoneLoopGuard.ts`. So there is exactly ONE implementation of each helper and nothing to dedupe; the entry's "both still exist" was true and its implication was not. Collapsing the ~9 importers onto the `shared/` path and deleting the shims is optional cosmetics, not deduplication — the shims' own comments say they are kept as the name the backend already imports.
+- [ ] **(code)** **Finish the dashboard component subdirectory migration** — **49** loose `.tsx` files at `dashboard/components/` (count corrected 2026-08-21; the entry said 87, so this is already ~44% further along than the backlog claimed).
+- [x] ~~**(code)** **Dead CRM schema cleanup**~~ — **DONE 2026-08-21**, migration `20260821020000_drop_dead_crm_providers`. The remainder was smaller and sharper than the entry implied: **two CHECK constraints**, `entity_sync_map_provider_check` and `tenant_integration_settings_provider_check`, both still enumerating `jobber`/`hubspot`/`servicetitan` alongside `square`. Every TypeScript hit for those names is a comment or a test documenting the 2026-06-12 removal. **Checked against prod first: both tables hold ZERO rows**, so narrowing cannot reject existing data. A constraint is a statement about what the system supports — leaving three dead providers in it says the product can sync Jobber, and nothing in the schema tells the reader that is false. `grep -icE 'jobber|hubspot|servicetitan|gohighlevel' supabase/baseline.sql` is now **0**.
+- [ ] **(code)** **Migration chain squash** — **189** files in `supabase/migrations/` (count corrected 2026-08-21; the entry said 173). Do when convenient; `baseline.sql` already carries the collapsed schema.
 
 ---
 
