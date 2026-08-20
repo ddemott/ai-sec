@@ -25,8 +25,6 @@
 -- Forward-only safe: ADD COLUMN IF NOT EXISTS with a constant DEFAULT
 -- backfills every existing row in one statement. Zero downtime, zero data loss.
 
-BEGIN;
-
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS save_preferences_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS preferences_instructions TEXT;
@@ -34,4 +32,3 @@ ALTER TABLE tenants
 COMMENT ON COLUMN tenants.save_preferences_enabled IS 'Opt-in gate for AI customer-preference capture. Default FALSE — owner turns it on in the Phone Assistant config.';
 COMMENT ON COLUMN tenants.preferences_instructions IS 'Owner-authored guidance injected into the AI system prompt: what customer preferences to save, why, when, and how to use them. NULL = use the agent built-in default guidance.';
 
-COMMIT;

@@ -22,8 +22,6 @@
 -- employee_schedule.employee_id (a FK column), NOT employees.id — no
 -- change needed.
 
-BEGIN;
-
 ALTER TABLE employees RENAME COLUMN id TO employee_id;
 
 -- ────────────────────────────────────────────────────────────────────
@@ -883,4 +881,3 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMIT;

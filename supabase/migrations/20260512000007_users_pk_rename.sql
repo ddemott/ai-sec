@@ -14,8 +14,6 @@
 -- Body otherwise identical to the prior definition; only the one
 -- WHERE clause column reference changes.
 
-BEGIN;
-
 ALTER TABLE users RENAME COLUMN id TO user_id;
 
 CREATE OR REPLACE FUNCTION public.book_appointment_atomic(
@@ -246,4 +244,3 @@ BEGIN
 END;
 $function$;
 
-COMMIT;

@@ -11,8 +11,5 @@
 -- (tenant_id, provider, entity_type, local_id, external_id) unique key
 -- and never the surrogate PK. Tests likewise never name the column.
 
-BEGIN;
-
 ALTER TABLE entity_sync_map RENAME COLUMN id TO entity_sync_map_id;
 
-COMMIT;

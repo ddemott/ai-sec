@@ -15,8 +15,6 @@
 --     trg_audit_customers, customers_auto_version) — extend the CASE
 --     mapping in both.
 
-BEGIN;
-
 ALTER TABLE customers RENAME COLUMN id TO customer_id;
 
 -- ────────────────────────────────────────────────────────────────────
@@ -831,4 +829,3 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMIT;

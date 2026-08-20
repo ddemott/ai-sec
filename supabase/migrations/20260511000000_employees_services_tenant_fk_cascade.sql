@@ -34,8 +34,6 @@
 -- orphan employees/services row doesn't blow up any well-tenant'd data.
 -- We're only removing rows whose tenant is already gone.
 
-BEGIN;
-
 -- Step 1: clean up orphans (rows whose tenant_id no longer exists).
 DELETE FROM employees WHERE tenant_id NOT IN (SELECT id FROM tenants);
 DELETE FROM services  WHERE tenant_id NOT IN (SELECT id FROM tenants);
@@ -50,4 +48,3 @@ ALTER TABLE services
   ADD CONSTRAINT services_tenant_id_fkey
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE;
 
-COMMIT;

@@ -10,8 +10,5 @@
 -- The only code reference is dashboard/e2e/tenant-delete-cascade.spec.ts
 -- which counts rows by tenant_id, never naming the PK column.
 
-BEGIN;
-
 ALTER TABLE audit_log RENAME COLUMN id TO audit_log_id;
 
-COMMIT;

@@ -16,8 +16,5 @@
 --     primary key.
 --   - Smallest remaining table in the conversion queue.
 
-BEGIN;
-
 ALTER TABLE reminder_schedules RENAME COLUMN id TO reminder_schedule_id;
 
-COMMIT;

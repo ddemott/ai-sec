@@ -12,8 +12,5 @@
 -- touch the consent service + tests broadly and is unrelated to the
 -- PK-name standardization — not in scope.
 
-BEGIN;
-
 ALTER TABLE opt_out_records RENAME COLUMN id TO opt_out_record_id;
 
-COMMIT;

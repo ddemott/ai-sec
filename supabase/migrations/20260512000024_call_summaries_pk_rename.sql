@@ -12,8 +12,5 @@
 --   - rag-normalization.test.ts and crm-appointments.test.ts INSERT
 --     with explicit column lists that omit the PK
 
-BEGIN;
-
 ALTER TABLE call_summaries RENAME COLUMN id TO call_summary_id;
 
-COMMIT;

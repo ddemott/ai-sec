@@ -20,8 +20,6 @@
 -- column). CREATE OR REPLACE FUNCTION cannot change RETURNS TABLE
 -- shape — DROP first.
 
-BEGIN;
-
 ALTER TABLE tenant_docs RENAME COLUMN id TO tenant_doc_id;
 ALTER TABLE tenant_integration_settings RENAME COLUMN id TO tenant_integration_setting_id;
 
@@ -72,4 +70,3 @@ BEGIN
 END;
 $$;
 
-COMMIT;

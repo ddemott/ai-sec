@@ -9,8 +9,5 @@
 -- `original_consent_record_id` in a follow-up rename so the suffix
 -- stays consistent. Tracked separately — not part of this pilot.
 
-BEGIN;
-
 ALTER TABLE consent_records RENAME COLUMN id TO consent_record_id;
 
-COMMIT;

@@ -7,8 +7,5 @@
 -- column directly — src/index.ts and src/medium-bugs.test.ts only call
 -- the RPC, src/test-utils.ts only names the table in a teardown list.
 
-BEGIN;
-
 ALTER TABLE soft_reservations RENAME COLUMN id TO soft_reservation_id;
 
-COMMIT;

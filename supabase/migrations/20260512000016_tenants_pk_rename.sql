@@ -34,8 +34,6 @@
 --     WHERE id = NEW.tenant_id` lookup + `NEW.id` ref that should
 --     have been `NEW.appointment_id` post-pilot-14 — fixed here)
 
-BEGIN;
-
 ALTER TABLE tenants RENAME COLUMN id TO tenant_id;
 
 -- ────────────────────────────────────────────────────────────────────
@@ -819,4 +817,3 @@ BEGIN
 END;
 $function$;
 
-COMMIT;

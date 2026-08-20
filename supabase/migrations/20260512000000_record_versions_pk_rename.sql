@@ -20,8 +20,6 @@
 --   - Touch FK columns. They were already `<table>_id`; symmetry emerges
 --     automatically once the PK matches.
 
-BEGIN;
-
 ALTER TABLE record_versions RENAME COLUMN id TO record_version_id;
 
 -- ── create_record_version ────────────────────────────────────────────
@@ -130,4 +128,3 @@ SELECT
 FROM record_versions rv
 ORDER BY rv.changed_at DESC;
 
-COMMIT;
