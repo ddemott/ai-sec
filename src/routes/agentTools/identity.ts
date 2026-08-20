@@ -240,6 +240,14 @@ const NAME_HONORIFICS = new Set([
   'madame',
 ]);
 
+// Generational suffixes. Stripped from the END for the same reason honorifics
+// are stripped from the front: they are not the name, and leaving one on makes
+// the LAST token "jr", so "Jane Doe Jr" would fail to match a stored "Jane Doe"
+// — while this route's own contract says a suffix on either side is tolerated.
+// Kept to the unambiguous ones; a bare "v" is left alone, because a lone
+// trailing letter is far more often an initial than a fifth.
+const NAME_SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv']);
+
 // Normalize a spoken/transcribed name for near-exact comparison. Apostrophes
 // and periods are DELETED rather than turned into separators so "O'Brien",
 // "OBrien" and "O’Brien" all collapse to the same token; every other
@@ -256,14 +264,18 @@ function normalizeNameForSearch(raw: string): string {
   while (tokens.length > 1 && NAME_HONORIFICS.has(tokens[0])) {
     tokens.shift();
   }
+  while (tokens.length > 1 && NAME_SUFFIXES.has(tokens[tokens.length - 1])) {
+    tokens.pop();
+  }
   return tokens.join(' ');
 }
 
 // Does a stored customer name match what the caller said, near-exactly?
 // Either the whole normalized name is identical, or the FIRST and LAST parts
-// both match exactly — which tolerates a middle name or a suffix on either
-// side ("Michael Thornberry" ↔ "Michael J Thornberry") without ever matching
-// on a fragment. A surname alone can never satisfy this: the caller must
+// both match exactly — which tolerates a middle name on either side
+// ("Michael Thornberry" ↔ "Michael J Thornberry"), and a generational suffix,
+// which normalizeNameForSearch has already stripped from both, without ever
+// matching on a fragment. A surname alone can never satisfy this: the caller must
 // already know both parts of the name, so the route confirms an identity the
 // caller supplied rather than revealing one they guessed at.
 function nameMatchesNearExactly(storedNormalized: string, queryNormalized: string): boolean {

@@ -23,7 +23,7 @@
  *          (forwarded line ⇒ caller ID is useless, name is all we have)
  *   WHAT — POST /agent-tools/find-customer-by-name {tenant_id, name}
  *   WHEN — first turns of an inbound call, before any booking
- *   WHERE — agentTools.ts find-customer-by-name → near-exact name match
+ *   WHERE — src/routes/agentTools/identity.ts find-customer-by-name → near-exact name match
  *   WHY  — a broken match means every returning caller is greeted as a
  *          stranger; an over-broad match reads a WRONG customer's phone
  *          number back to the caller (privacy leak)
@@ -139,6 +139,9 @@ beforeAll(async () => {
     // Three-part stored name — proves first+last decide the match, so a
     // middle name on the CRM row does not make a real caller unfindable.
     await insertCustomer({ phone: '+15552000007', name: 'Ignatius Bartholomew Vandersplat' });
+    // Stored WITH a generational suffix — the suffix must be ignorable from
+    // whichever side it arrives on.
+    await insertCustomer({ phone: '+15552000008', name: 'Cornelius Ravensworth Jr.' });
     // Six duplicate rows carrying the SAME full name, staggered updated_at —
     // proves the 5-result cap and ORDER BY updated_at DESC (newest first,
     // oldest dropped). The names are deliberately identical: under the
@@ -266,6 +269,34 @@ describe('find-customer-by-name — near-exact name search against real Postgres
     expect(res.statusCode).toBe(200);
     expect(res.json().result.matches).toEqual([
       { name: 'Ignatius Bartholomew Vandersplat', phone: '+1•••-•••-0007' },
+    ]);
+  });
+
+  it('HAPPY: a generational suffix the CALLER says is ignored', async () => {
+    // WHO: someone who introduces themselves as "Michael Thornberry Junior"
+    //      when the CRM row is plain "Michael Thornberry".
+    // WHAT: `jr` is stripped from the end before the two-part rule runs, so the
+    //       surname used for the SQL prefilter is "thornberry", not "jr".
+    // WHY: the route's contract says a suffix on either side is tolerated. It
+    //      was not: the suffix became the last token, the prefilter searched
+    //      for a customer surnamed "Jr", and a real returning caller was
+    //      treated as a stranger. Found in review of this PR.
+    const res = await findByName('Michael Thornberry Jr');
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.matches).toEqual([
+      { name: 'Michael Thornberry', phone: '+1•••-•••-0002' },
+    ]);
+  });
+
+  it('HAPPY: a generational suffix STORED on the CRM row is ignored too', async () => {
+    // WHO: "Cornelius Ravensworth Jr." in the address book; the caller just
+    //      says their name.
+    // WHY: the stripping has to be symmetric or it only fixes half the cases —
+    //      and this half is the one the owner's own data creates.
+    const res = await findByName('Cornelius Ravensworth');
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result.matches).toEqual([
+      { name: 'Cornelius Ravensworth Jr.', phone: '+1•••-•••-0008' },
     ]);
   });
 
