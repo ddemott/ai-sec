@@ -38,7 +38,43 @@ const valueOf = (flag: string): string | undefined => {
 
 const EXECUTE = has('--execute');
 const SKIP_CONFIRM = has('--yes');
-const OLDER_THAN_DAYS = Number(valueOf('--older-than') ?? 0);
+/**
+ * Age guard for the purge. THIS SCRIPT HARD-DELETES; a dropped guard is not a
+ * degraded run, it is a bigger blast radius than the operator asked for.
+ *
+ * `Number(valueOf('--older-than') ?? 0)` silently produced NaN for a
+ * non-numeric value, and `NaN > 0` is false, so the `AND deleted_at < …`
+ * clause was omitted entirely — `--older-than abc --execute --yes` purged
+ * EVERY soft-deleted tenant, including one deleted a minute ago, while the
+ * operator believed they had asked for a 30-day floor. A mistyped guard must
+ * stop the run, never quietly widen it.
+ *
+ * PRESENCE and VALUE are separate questions, and conflating them re-creates the
+ * same bug one step over: `valueOf` returns `undefined` both when the flag was
+ * never passed AND when it was passed last with nothing after it, so
+ * `purge --execute --yes --older-than` would have read as "no guard requested"
+ * and purged everything — an operator who typed the flag getting the behaviour
+ * of one who did not. `has()` answers presence; only then is the value parsed.
+ */
+const OLDER_THAN_REQUESTED = has('--older-than');
+const olderThanRaw = valueOf('--older-than');
+if (OLDER_THAN_REQUESTED && (olderThanRaw === undefined || olderThanRaw.startsWith('--'))) {
+  // Passed last (nothing follows) or immediately followed by another flag, which
+  // `valueOf` would otherwise hand back as the "value".
+  console.error(
+    'FATAL: --older-than was passed with no value. ' +
+      'Refusing to run — a guard the operator asked for must never be silently dropped.'
+  );
+  process.exit(1);
+}
+const OLDER_THAN_DAYS = OLDER_THAN_REQUESTED ? Number(olderThanRaw) : 0;
+if (!Number.isFinite(OLDER_THAN_DAYS) || OLDER_THAN_DAYS < 0) {
+  console.error(
+    `FATAL: --older-than expects a non-negative number of days, got "${olderThanRaw}". ` +
+      'Refusing to run — an unparseable age guard would silently purge everything.'
+  );
+  process.exit(1);
+}
 const DB_URL = valueOf('--db') ?? process.env.DATABASE_URL;
 
 if (!DB_URL) {

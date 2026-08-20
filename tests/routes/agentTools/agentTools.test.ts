@@ -2837,6 +2837,63 @@ describe('agentTools /book-with-scheduling', () => {
     expect(res.json().error_code).toBe('NO_AVAILABILITY');
   });
 
+  it('SAD: alternatives are searched on the RESOLVED service duration + skills, not the model\'s guess', async () => {
+    // WHO:  a caller asking for a 90-minute, skill-gated service
+    // WHAT: the booking fails, and the alternatives search that runs next must
+    //        use the SAME duration and required_skills the booking attempt used
+    // WHEN: any failed book-with-scheduling that falls into the failure branch
+    // WHERE: scheduling.ts searchParams → findNextAvailableSlots
+    // WHY:  the search took args.requirements.durationMinutes (which the model
+    //        often omits, defaulting to 30) and args.requirements
+    //        .requiredEmployeeSkills, while the booking used
+    //        resolved.duration_minutes and resolved.required_skills. So a
+    //        90-minute service was offered a 30-minute gap with an unskilled
+    //        employee; the caller said yes and got NO_SKILLED_EMPLOYEE. A dead
+    //        end became a rejection loop — the agent kept offering, the caller
+    //        kept accepting, nothing ever booked.
+    const { app, queries } = buildApp({
+      queryResponses: [
+        { rows: [{ customer_id: 'cust-align' }] },
+        {
+          rows: [
+            {
+              service_id: 'svc-align',
+              name: 'Four-Wheel Alignment',
+              duration_minutes: 90,
+              price: null,
+              required_skills: ['alignment'],
+            },
+          ],
+        },
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago', booking_mechanics: null }] },
+        { rows: [] },
+        { rows: [] }, // RPC returns no row → failure branch
+        { rows: [{ default_buffer_minutes: 0 }] },
+        { rows: [{ timezone: 'America/Chicago' }] },
+        { rows: [] },
+      ],
+    });
+
+    await post(app, '/agent-tools/book-with-scheduling', {
+      tenant_id: TENANT_ID,
+      phone: '5551234567',
+      // Deliberately NO durationMinutes and NO requiredEmployeeSkills — this is
+      // the common shape, and it is exactly when the old code fell back to 30.
+      requirements: { serviceType: 'Four-Wheel Alignment' },
+      window: { from: '2026-05-01T14:00:00Z', to: '2026-05-01T15:00:00Z' },
+    });
+
+    // findNextAvailableSlots passes String(durationMinutes) as $3 and the
+    // required-skills array as $7 (availabilitySearch.ts).
+    const slotQueries = queries.filter((q) => String(q.text).includes('slot_start'));
+    expect(slotQueries.length).toBeGreaterThan(0);
+    for (const q of slotQueries) {
+      expect(q.params?.[2]).toBe('90');
+      expect(q.params?.[6]).toEqual(['alignment']);
+    }
+  });
+
   it('SAD: invalid phone is rejected at the gate before the RPC is called', async () => {
     // WHO: Agent called book-with-scheduling with a blocked caller-ID
     //       phone (came through as '+1' after digit-strip)
