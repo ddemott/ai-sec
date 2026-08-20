@@ -47,12 +47,20 @@ const SCRIPT = path.resolve(__dirname, 'purge-soft-deleted.ts');
  * hangs, `spawnSync` is what should report it, with its exit status and output,
  * rather than vitest reporting a bare "timed out" that names nothing.
  */
-const SUBPROCESS_TEST_TIMEOUT_MS = 60_000;
+const SUBPROCESS_BUDGET_MS = 60_000;
+/**
+ * Deliberately ABOVE the subprocess budget, not equal to it. If the two match,
+ * vitest and spawnSync race on a genuine hang and vitest can win — emitting a
+ * bare "timed out" that names nothing, which is the exact outcome this constant
+ * exists to prevent. The 5s margin lets spawnSync always finish first and report
+ * the exit status and captured output.
+ */
+const SUBPROCESS_TEST_TIMEOUT_MS = SUBPROCESS_BUDGET_MS + 5_000;
 
 function run(args: string[]) {
   return spawnSync('npx', ['tsx', SCRIPT, ...args], {
     encoding: 'utf-8',
-    timeout: 60_000,
+    timeout: SUBPROCESS_BUDGET_MS,
     // A DB URL is required before the script does anything else; point it at a
     // deliberately unreachable host so a test can never touch a real database.
     // The age guard runs BEFORE any connection, so a rejected value must exit
