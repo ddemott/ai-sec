@@ -466,19 +466,24 @@ describe('GET /templates/full → real DB', () => {
     const res = await app.inject({ method: 'GET', url: '/templates/full', headers: hdr(id) });
     const rows: Record<string, unknown>[] = res.json();
 
-    for (const leaked of ['voice_provider', 'voice_name', 'example_resources']) {
-      expect(Object.keys(rows[0])).not.toContain(leaked);
-    }
+    // `voice_provider` and `voice_name` were dropped outright by migration
+    // 20260821010000 — they had zero readers and stated something false
+    // ('cartesia'/'elevenlabs' for a stack that has only used OpenAI then
+    // Deepgram Aura). `example_resources` still exists and is still undeclared,
+    // so it remains the live case this test guards.
+    expect(Object.keys(rows[0])).not.toContain('example_resources');
 
-    // And prove the columns really do exist in the table — otherwise the
+    // And prove the column really does exist in the table — otherwise the
     // assertion above passes for the wrong reason.
     const cols = await setup.query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'business_templates'`
     );
     const names = cols.rows.map((r) => r.column_name);
-    expect(names).toEqual(
-      expect.arrayContaining(['voice_provider', 'voice_name', 'example_resources'])
-    );
+    expect(names).toEqual(expect.arrayContaining(['example_resources']));
+    // The dropped pair must stay dropped; if either returns, it returns to the
+    // `SELECT` list as a decision, not by accident.
+    expect(names).not.toContain('voice_provider');
+    expect(names).not.toContain('voice_name');
   });
 });
