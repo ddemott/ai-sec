@@ -666,11 +666,32 @@ export function registerTenantRoutes(
     }, 'Failed to fetch templates')
   );
 
+  // GET /templates/full — the business-type picker's data source: every
+  // template with the fields the onboarding UI applies to a tenant.
+  //
+  // AUTHENTICATED, NOT SUPER-ADMIN, AND THAT IS DELIBERATE — the onboarding
+  // wizard and the business-type picker are its callers, and the picker shows
+  // the prompt to the owner on purpose. Locking this to super-admin breaks
+  // onboarding; see the PR linked from docs/TODO.md P0 §4b for the call sites.
+  //
+  // The column list below IS the wire contract. It replaced `SELECT *`, which
+  // published every column ever added to `business_templates` the moment its
+  // migration landed, with nobody deciding to. A test pins the exact field set,
+  // so adding a column here is a deliberate act rather than a side effect.
   app.get(
     '/templates/full',
     withHandler(async (_req: AppRequest, reply) => {
       const res = await withPoolClient(pool, (client) =>
-        client.query('SELECT * FROM business_templates ORDER BY display_name')
+        client.query(
+          `SELECT business_type, display_name, category, sort_order,
+                  system_prompt_template, first_message, voice_id,
+                  default_resource_name, default_resource_description,
+                  resource_label, resource_plural,
+                  employee_label, employee_plural,
+                  booking_label, example_services
+             FROM business_templates
+            ORDER BY display_name`
+        )
       );
       return reply.send(res.rows);
     }, 'Failed to fetch full templates')
