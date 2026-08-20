@@ -268,6 +268,14 @@ export class ReminderService {
         normalizedReminder.tenantId
       );
       if (!appointment) {
+        // Counted, at last. `reminders_skipped_total` has ALWAYS documented an
+        // `appointment_not_found` reason — in metrics.ts, in docs/ALERTS.md, and
+        // in the tests of the parallel implementation deleted alongside this
+        // change — and the LIVE path never incremented it. On 2026-08-20 this
+        // exact branch fired 8 times in one minute in production (the appointment
+        // read was running without RLS tenant context, so live appointments read
+        // as missing) and the only trace was 8 rows quietly marked 'failed'.
+        remindersSkippedTotal.inc({ reason: 'appointment_not_found' });
         await this.updateReminderStatus(reminderId, 'failed', 'Appointment not found');
         return;
       }
