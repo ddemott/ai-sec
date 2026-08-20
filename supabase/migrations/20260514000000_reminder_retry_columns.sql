@@ -33,8 +33,6 @@
 -- We add a tighter index on `(scheduled_for, next_retry_at)` so the
 -- worker's batch pickup stays fast as the table grows.
 
-BEGIN;
-
 ALTER TABLE reminder_schedules
   ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0;
 
@@ -45,4 +43,3 @@ CREATE INDEX IF NOT EXISTS idx_reminder_schedules_pickup
   ON reminder_schedules (scheduled_for, next_retry_at)
   WHERE status = 'scheduled';
 
-COMMIT;

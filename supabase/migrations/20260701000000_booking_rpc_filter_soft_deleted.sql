@@ -18,8 +18,6 @@
 -- status = 'canceled' (already excluded by the status filter); a RESTORE flips
 -- is_deleted back to false so the appointment re-occupies correctly.
 
-BEGIN;
-
 CREATE OR REPLACE FUNCTION public.book_appointment_atomic(p_tenant_id uuid, p_resource_id uuid, p_customer_id uuid DEFAULT NULL::uuid, p_start_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_end_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_description text DEFAULT NULL::text, p_call_id text DEFAULT NULL::text, p_location text DEFAULT NULL::text, p_assignment_id text DEFAULT NULL::text, p_service_id uuid DEFAULT NULL::uuid, p_customer_phone text DEFAULT NULL::text, p_customer_name text DEFAULT NULL::text, p_buffer_minutes integer DEFAULT 0)
  RETURNS TABLE(success boolean, appointment_id uuid, error_message text)
  LANGUAGE plpgsql
@@ -525,4 +523,3 @@ Error codes: TIMESLOT_OCCUPIED, NO_SKILLED_EMPLOYEE, EMPLOYEE_NOT_SCHEDULED, NO_
 
 -- ────────────────────────────────────────────────────────────────────
 
-COMMIT;

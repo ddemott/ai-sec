@@ -19,8 +19,6 @@
 -- Forward-only safe: ADD COLUMN IF NOT EXISTS, all nullable, no backfill needed
 -- (NULL means "use the agent default"). Zero downtime, zero data loss.
 
-BEGIN;
-
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS tts_voice TEXT,
     ADD COLUMN IF NOT EXISTS tts_speed REAL,
@@ -30,4 +28,3 @@ COMMENT ON COLUMN tenants.tts_voice IS 'xAI Grok TTS voice_id (eve/ara/rex/sal/l
 COMMENT ON COLUMN tenants.tts_speed IS 'Grok TTS speech pace multiplier 0.7–1.5. NULL = agent XAI_TTS_SPEED default.';
 COMMENT ON COLUMN tenants.tts_soft  IS 'Wrap TTS text in xAI <soft> prosody tag for a softer delivery. NULL = agent XAI_TTS_SOFT default.';
 
-COMMIT;

@@ -2,8 +2,6 @@
 -- Suggestions are reviewed/approved by owner before being ingested into tenant_docs (the live RAG KB).
 -- Only 'confirmed' rows get embedded.
 
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS knowledge_suggestion (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id     UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
@@ -49,4 +47,3 @@ $$;
 
 COMMENT ON TABLE knowledge_suggestion IS 'Staged website-extracted policy answers. Only status=confirmed rows are ingested to tenant_docs for live RAG.';
 
-COMMIT;

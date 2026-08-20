@@ -27,8 +27,6 @@
 -- (that's the consumer-facing contract); only the source switches from
 -- `a.id` → `a.appointment_id`.
 
-BEGIN;
-
 ALTER TABLE appointments RENAME COLUMN id TO appointment_id;
 
 -- ────────────────────────────────────────────────────────────────────
@@ -851,4 +849,3 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMIT;

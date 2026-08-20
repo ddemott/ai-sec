@@ -16,8 +16,5 @@
 -- The auth.ts SELECT keeps `password_reset_id AS id` so the destructuring
 -- `const { id: resetId, user_id: userId } = r.rows[0]` stays valid.
 
-BEGIN;
-
 ALTER TABLE password_resets RENAME COLUMN id TO password_reset_id;
 
-COMMIT;

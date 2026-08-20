@@ -46,8 +46,6 @@
 -- by force-bypassing the constraint (e.g., manual SQL with the FK
 -- temporarily dropped).
 
-BEGIN;
-
 -- Step 1: clean up orphans (defensive — local DBs report 0 today).
 DELETE FROM service_employee WHERE tenant_id NOT IN (SELECT tenant_id FROM tenants);
 
@@ -62,4 +60,3 @@ ALTER TABLE service_employee
     ADD CONSTRAINT service_employee_tenant_id_fkey
     FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE;
 
-COMMIT;

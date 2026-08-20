@@ -11,8 +11,6 @@
 -- we DROP first so the next reader doesn't wonder whether a stale
 -- definition is still in scope.
 
-BEGIN;
-
 ALTER TABLE voice_sessions RENAME COLUMN id TO voice_session_id;
 
 DROP FUNCTION IF EXISTS start_voice_session(uuid, text, text);
@@ -47,4 +45,3 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-COMMIT;

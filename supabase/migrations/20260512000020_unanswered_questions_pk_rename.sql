@@ -12,8 +12,5 @@
 -- The route keeps `SELECT unanswered_question_id AS id` to preserve the
 -- existing response shape (`Array<{ id: string; ... }>`).
 
-BEGIN;
-
 ALTER TABLE unanswered_questions RENAME COLUMN id TO unanswered_question_id;
 
-COMMIT;

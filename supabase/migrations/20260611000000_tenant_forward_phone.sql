@@ -14,11 +14,8 @@
 -- Forward-only safe: ADD COLUMN IF NOT EXISTS, nullable, no backfill. NULL is
 -- the safe default (transfer disabled), so existing tenants are unaffected.
 
-BEGIN;
-
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS forward_phone TEXT;
 
 COMMENT ON COLUMN tenants.forward_phone IS 'E.164 PSTN number the agent cold-transfers live calls to (owner cell). NULL = transfer disabled, agent takes a message.';
 
-COMMIT;

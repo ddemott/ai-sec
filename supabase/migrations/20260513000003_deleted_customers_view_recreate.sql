@@ -25,8 +25,6 @@
 -- the surface is cheap to keep, and a future admin/audit feature may
 -- want the shorthand.
 
-BEGIN;
-
 DROP VIEW IF EXISTS deleted_customers;
 
 CREATE VIEW deleted_customers AS
@@ -37,4 +35,3 @@ SELECT
 FROM customers c
 WHERE c.is_deleted = true;
 
-COMMIT;

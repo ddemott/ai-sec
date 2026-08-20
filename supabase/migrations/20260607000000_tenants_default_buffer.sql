@@ -27,11 +27,8 @@
 -- Forward-only safe: ADD COLUMN IF NOT EXISTS with a constant DEFAULT
 -- backfills every existing row in one statement. Zero downtime, zero data loss.
 
-BEGIN;
-
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS default_buffer_minutes INTEGER NOT NULL DEFAULT 0;
 
 COMMENT ON COLUMN tenants.default_buffer_minutes IS 'Minutes of gap the AI must leave between back-to-back bookings (applied symmetrically around each existing appointment at every availability + booking surface). Default 0 = no buffer (current behavior). AI/customer-facing bookings only; owner manual dashboard bookings are unrestricted.';
 
-COMMIT;

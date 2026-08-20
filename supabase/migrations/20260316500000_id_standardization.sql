@@ -2,8 +2,6 @@
 -- This is a breaking migration that converts integer PKs to UUIDs
 -- for consistency with the rest of the schema.
 
-BEGIN;
-
 -- ============================================================
 -- Step 1: Add new UUID columns to services and employees
 -- ============================================================
@@ -300,4 +298,3 @@ $$ LANGUAGE plpgsql;
 DROP INDEX IF EXISTS idx_employees_active;
 CREATE INDEX IF NOT EXISTS idx_employees_active ON employees(tenant_id) WHERE is_deleted = false;
 
-COMMIT;

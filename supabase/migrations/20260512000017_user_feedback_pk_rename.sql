@@ -6,8 +6,5 @@
 -- reference the column. Only one consumer: src/routes/analytics.ts uses
 -- INSERT and SELECT * — never references the PK column directly.
 
-BEGIN;
-
 ALTER TABLE user_feedback RENAME COLUMN id TO user_feedback_id;
 
-COMMIT;

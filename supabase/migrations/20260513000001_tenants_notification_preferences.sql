@@ -31,8 +31,6 @@
 -- (e.g., do we keep `owner_phone` AND add `phone`?). Flagged as a
 -- follow-up in docs/TODO.md.
 
-BEGIN;
-
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS sms_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     ADD COLUMN IF NOT EXISTS email_enabled BOOLEAN NOT NULL DEFAULT TRUE;
@@ -40,4 +38,3 @@ ALTER TABLE tenants
 COMMENT ON COLUMN tenants.sms_enabled IS 'Per-tenant SMS reminder channel toggle. Default TRUE — owner opts out by explicit UPDATE.';
 COMMENT ON COLUMN tenants.email_enabled IS 'Per-tenant email reminder channel toggle. Default TRUE — owner opts out by explicit UPDATE.';
 
-COMMIT;

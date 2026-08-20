@@ -48,8 +48,6 @@
 -- raised 42703) since the PK renames landed, so redefining them cannot
 -- regress any working caller.
 
-BEGIN;
-
 -- ── restore_fields_from_version ─────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.restore_fields_from_version(
@@ -321,4 +319,3 @@ BEGIN
 END;
 $function$;
 
-COMMIT;
