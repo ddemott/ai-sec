@@ -755,11 +755,11 @@ describe('agentTools /customer-context', () => {
 });
 
 describe('agentTools /find-customer-by-name', () => {
-  it('HAPPY: returns name + phone matches for confirmation', async () => {
-    // WHO: Caller on the forwarded line who gives their name first
+  it('HAPPY: returns name + masked phone for a near-exact full-name match', async () => {
+    // WHO: Caller on the forwarded line who gives their full name
     // WHAT: Route searches customers by name and returns {name, phone} matches
     //        so the agent can read back the number on file to confirm
-    // WHERE: src/routes/agentTools.ts /agent-tools/find-customer-by-name
+    // WHERE: src/routes/agentTools/identity.ts /agent-tools/find-customer-by-name
     // WHEN: __PERSONA_NAME__ asks the caller's name on this forwarded inbound line
     // WHY: Caller ID is the forwarding cell, not the caller — name is the only
     //        trustworthy first identifier, so name-search is the entry point
@@ -768,14 +768,80 @@ describe('agentTools /find-customer-by-name', () => {
     });
     const res = await post(app, '/agent-tools/find-customer-by-name', {
       tenant_id: TENANT_ID,
-      name: 'Jane',
+      name: 'Jane Doe',
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toEqual({
       matches: [{ name: 'Jane Doe', phone: '+1•••-•••-1234' }],
     });
-    // WHY: the trimmed name is passed to the ILIKE search
-    expect(queries[0].params).toEqual([TENANT_ID, 'Jane']);
+    // WHY: only the normalized SURNAME reaches SQL — it is the prefilter; the
+    //      first name is applied in-process by nameMatchesNearExactly()
+    expect(queries[0].params).toEqual([TENANT_ID, 'doe']);
+  });
+
+  it('HAPPY: an honorific and punctuation do not break a real match', async () => {
+    // WHO: "Mrs. Jane Doe" — how a caller actually introduces themselves
+    // WHAT: the honorific is stripped, punctuation deleted, and the remaining
+    //        two parts still match the stored name near-exactly
+    // WHY: the tightened match must reject fragments, not real callers
+    const { app, queries } = buildApp({
+      queryResponses: [{ rows: [{ name: 'Jane Doe', phone: '+16135551234' }] }],
+    });
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Mrs. Jane Doe',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({
+      matches: [{ name: 'Jane Doe', phone: '+1•••-•••-1234' }],
+    });
+    expect(queries[0].params).toEqual([TENANT_ID, 'doe']);
+  });
+
+  it('HAPPY: a middle name on either side still matches (first + last decide)', async () => {
+    // WHO: stored as "Jane Quilla Doe", caller says "Jane Doe"
+    // WHY: near-exact must not mean brittle — a middle name or suffix is
+    //      exactly the kind of drift a stored CRM row carries
+    const { app } = buildApp({
+      queryResponses: [{ rows: [{ name: 'Jane Quilla Doe', phone: '+16135551234' }] }],
+    });
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Jane Doe',
+    });
+    expect(res.json().result).toEqual({
+      matches: [{ name: 'Jane Quilla Doe', phone: '+1•••-•••-1234' }],
+    });
+  });
+
+  it('SECURITY: a bare surname returns nothing and never reaches SQL', async () => {
+    // WHO: anyone probing the tenant's address book with a common surname
+    // WHAT: one token is refused before withTenantClient is ever called
+    // WHY: THE enumeration bug (docs/TODO.md P0 §4b). "Doe" used to return up
+    //      to five real customers plus the last four digits of their phones,
+    //      with the guessed surname as the only credential. The caller must
+    //      now already know both name parts, which makes this a confirmation
+    //      of an identity they supplied, not a disclosure of one they guessed.
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Doe',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({ matches: [] });
+    expect(queries).toHaveLength(0);
+  });
+
+  it('SECURITY: a bare first name is refused the same way', async () => {
+    // WHY: "Michael" is as cheap a probe as "Doe"; the rule is about the
+    //      NUMBER of name parts, not which part it is
+    const { app, queries } = buildApp({ queryResponses: [] });
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Michael',
+    });
+    expect(res.json().result).toEqual({ matches: [] });
+    expect(queries).toHaveLength(0);
   });
 
   it('SECURITY: one-letter name probes return nothing instead of sweeping the address book', async () => {
@@ -795,25 +861,45 @@ describe('agentTools /find-customer-by-name', () => {
     expect(queries).toHaveLength(0);
   });
 
-  it('SECURITY: two- and three-letter probes also short-circuit before SQL', async () => {
-    // WHO: anyone trying cheap partial sweeps like "Al" or "Ann"
-    // WHAT: route returns no matches without touching the DB
-    // WHY: one-word partial lookup is legitimate, but sub-4-character ILIKE
-    //      probes are still broad enough to fish the address book
+  it('SECURITY: initials-only input stays under the 4-character floor', async () => {
+    // WHO: "J D" — two tokens, so it clears the part count, and still must not
+    //        reach SQL
+    // WHY: the 4-character floor added 2026-08-07 is kept on top of the
+    //      two-part rule; neither gate alone covers this shape
     const { app, queries } = buildApp({ queryResponses: [] });
-    const two = await post(app, '/agent-tools/find-customer-by-name', {
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
       tenant_id: TENANT_ID,
-      name: 'Al',
+      name: 'J D',
     });
-    const three = await post(app, '/agent-tools/find-customer-by-name', {
-      tenant_id: TENANT_ID,
-      name: 'Ann',
-    });
-    expect(two.statusCode).toBe(200);
-    expect(two.json().result).toEqual({ matches: [] });
-    expect(three.statusCode).toBe(200);
-    expect(three.json().result).toEqual({ matches: [] });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toEqual({ matches: [] });
     expect(queries).toHaveLength(0);
+  });
+
+  it('SECURITY: a prefilter row whose FIRST name differs is dropped in-process', async () => {
+    // WHO: two unrelated customers share the surname "Doe"
+    // WHAT: the SQL prefilter is surname-only by design, so the precise rule
+    //        runs in TypeScript; only the row whose first name also matches
+    //        may be returned
+    // WHY: without the in-process filter the tightened SQL would still hand
+    //      back every "Doe" in the tenant — the enumeration this fix closes
+    const { app } = buildApp({
+      queryResponses: [
+        {
+          rows: [
+            { name: 'John Doe', phone: '+16135550000' },
+            { name: 'Jane Doe', phone: '+16135551234' },
+          ],
+        },
+      ],
+    });
+    const res = await post(app, '/agent-tools/find-customer-by-name', {
+      tenant_id: TENANT_ID,
+      name: 'Jane Doe',
+    });
+    expect(res.json().result).toEqual({
+      matches: [{ name: 'Jane Doe', phone: '+1•••-•••-1234' }],
+    });
   });
 
   it('HAPPY: no match returns an empty list (signal to create a new entry)', async () => {
@@ -2837,7 +2923,7 @@ describe('agentTools /book-with-scheduling', () => {
     expect(res.json().error_code).toBe('NO_AVAILABILITY');
   });
 
-  it('SAD: alternatives are searched on the RESOLVED service duration + skills, not the model\'s guess', async () => {
+  it("SAD: alternatives are searched on the RESOLVED service duration + skills, not the model's guess", async () => {
     // WHO:  a caller asking for a 90-minute, skill-gated service
     // WHAT: the booking fails, and the alternatives search that runs next must
     //        use the SAME duration and required_skills the booking attempt used
