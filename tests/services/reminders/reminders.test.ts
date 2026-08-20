@@ -497,6 +497,55 @@ describe('ReminderService', () => {
         // WHEN: appointment cancelled between scheduling and send | WHERE: processReminder
         // WHY: prevent sending reminders for cancelled appointments
       });
+
+      it("REGRESSION: cancels the reminder for the spelling PRODUCTION actually writes ('canceled', one L)", async () => {
+        // WHO:  a customer who cancelled a future appointment
+        // WHAT: processReminder must recognise appointments.status = 'canceled'
+        // WHEN: any pending reminder for an appointment that is later cancelled
+        // WHERE: src/services/reminders/index.ts, the appointment-cancelled gate
+        // WHY:  the gate compared against 'cancelled' (TWO Ls) — a value NOTHING
+        //        in the product writes. Every cancel path stores the American
+        //        'canceled' (one L): appointments.ts /cancel, selfService.ts's
+        //        SMS link, and the voice agent's agentTools/scheduling.ts.
+        //        Verified against production 2026-08-19 — the only non-scheduled/
+        //        completed status present is 'canceled'. So this guard had NEVER
+        //        fired, and a cancelled FUTURE appointment fell through to the
+        //        send path: a reminder for an appointment the customer called to
+        //        cancel.
+        //
+        //        The reason it survived review is the test directly above: its
+        //        fixture uses 'cancelled' too, so the mock and the code agreed
+        //        with each other and both disagreed with the database. The
+        //        confusion is real rather than careless — reminder_schedules
+        //        .status genuinely IS 'cancelled' (two Ls, and it is in that
+        //        table's CHECK constraint). Two tables, two spellings.
+        const mockReminder: ReminderSchedule = {
+          reminder_schedule_id: 2,
+          appointment_id: 456,
+          tenant_id: 1,
+          customer_email: 'customer@example.com',
+          reminder_type: '24h',
+          scheduled_for: new Date().toISOString(),
+          status: 'scheduled',
+        };
+
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
+          id: '456',
+          tenantId: '1',
+          // FUTURE, so the `appointmentDateTime <= now` check below cannot mask
+          // the miss — this is exactly the case that reached the send path.
+          dateTime: createFutureDate(24).toISOString(),
+          status: 'canceled', // ← what production stores
+        });
+
+        await reminderService.processReminder('2');
+
+        expect(mockDb.updateReminderSchedule).toHaveBeenCalledWith(
+          '2',
+          expect.objectContaining({ status: 'cancelled', error: 'Appointment cancelled' })
+        );
+      });
     });
 
     describe('processReminder - Appointment Already Passed', () => {
