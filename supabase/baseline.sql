@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict w1gtYzVDTcuPYuJVucWGjI8tPTdD5eaDO40xMljZEbQgFq9TM8mnwLCgEonsQYS
+\restrict haUXDlMYRcewv0k5FcCfTrGi5EuHkJHNn7wOFLYRDbX523a26yLt8MbOhLECjtE
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -1648,53 +1648,6 @@ CREATE FUNCTION public.match_service_by_intent(p_tenant_id uuid, p_query_embeddi
        AND (s.is_deleted IS NULL OR s.is_deleted = false)
      ORDER BY s.embedding <=> p_query_embedding
      LIMIT 1;
-$$;
-
-
---
--- Name: notify_n8n_on_appointment(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.notify_n8n_on_appointment() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-DECLARE
-    v_webhook_url TEXT;
-    v_payload JSONB;
-BEGIN
-    SELECT n8n_webhook_url INTO v_webhook_url
-    FROM tenants WHERE tenant_id = NEW.tenant_id;
-
-    IF v_webhook_url IS NULL OR v_webhook_url = '' THEN
-        RAISE NOTICE 'No n8n webhook configured for tenant %', NEW.tenant_id;
-        RETURN NEW;
-    END IF;
-
-    v_payload := jsonb_build_object(
-        'event', 'appointment.created',
-        'tenant_id', NEW.tenant_id,
-        'appointment_id', NEW.appointment_id,
-        'resource_id', NEW.resource_id,
-        'customer_id', NEW.customer_id,
-        'start_time', NEW.start_time,
-        'end_time', NEW.end_time,
-        'description', NEW.description,
-        'created_at', NOW()
-    );
-
-    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_net') THEN
-        EXECUTE format(
-            'SELECT net.http_post(url := %L, headers := %L::JSONB, body := %L)',
-            v_webhook_url,
-            '{"Content-Type": "application/json"}',
-            v_payload::TEXT
-        );
-    ELSE
-        RAISE NOTICE 'n8n webhook payload for tenant %: %', NEW.tenant_id, v_payload;
-    END IF;
-
-    RETURN NEW;
-END;
 $$;
 
 
@@ -3791,7 +3744,6 @@ CREATE TABLE public.tenants (
     voice_id text,
     system_prompt text,
     created_at timestamp with time zone DEFAULT now(),
-    n8n_webhook_url text,
     owner_phone text,
     first_message text,
     inbound_phone text,
@@ -5343,13 +5295,6 @@ CREATE TRIGGER trg_tenant_question_trees_updated_at BEFORE UPDATE ON public.tena
 
 
 --
--- Name: appointments trigger_notify_n8n_appointment; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trigger_notify_n8n_appointment AFTER INSERT ON public.appointments FOR EACH ROW EXECUTE FUNCTION public.notify_n8n_on_appointment();
-
-
---
 -- Name: voice_sessions voice_sessions_auto_version; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -6620,5 +6565,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict w1gtYzVDTcuPYuJVucWGjI8tPTdD5eaDO40xMljZEbQgFq9TM8mnwLCgEonsQYS
+\unrestrict haUXDlMYRcewv0k5FcCfTrGi5EuHkJHNn7wOFLYRDbX523a26yLt8MbOhLECjtE
 
