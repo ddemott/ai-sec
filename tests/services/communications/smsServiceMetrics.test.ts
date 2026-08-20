@@ -50,10 +50,14 @@ function counterValue(outcome: string, provider = 'mock'): number {
 }
 
 function mockProvider(impl: { sendSMS: () => Promise<{ messageSid: string }> }) {
+  // No cast needed since 2026-08-20: TelephonyProvider collapsed to
+  // { getName, sendSMS } once the four TwiML methods came out, so this literal
+  // now satisfies the interface outright. The cast used to paper over the four
+  // dead members it did not implement.
   vi.spyOn(providerRegistry, 'getDefaultProvider').mockReturnValue({
     getName: () => 'mock',
     ...impl,
-  } as unknown as ReturnType<typeof providerRegistry.getDefaultProvider>);
+  });
 }
 
 beforeEach(() => {

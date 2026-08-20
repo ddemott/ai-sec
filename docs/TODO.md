@@ -157,9 +157,9 @@ ever happened; the call then could not end.
       `sim-offscript` has no retry and no separate exit path for infrastructure error.
       A red eval that is red for the wrong reason is worse than no eval.
 - [x] **(code) E2E-5 — a message asking for a callback was taken with no number.**
-      Scenario WEDDING MESSAGE, and it **PASSED**: `set_purpose` selected `message +
-  generic_subject` and _not_ `identity`, so `caller_phone` was never on the
-      checklist. Grace Okafor said "I'd love for him to call me back", the message
+      Scenario WEDDING MESSAGE, and it **PASSED**: `set_purpose` selected
+      `message + generic_subject` and _not_ `identity`, so `caller_phone` was
+      never on the checklist. Grace Okafor said "I'd love for him to call me back", the message
       was written, the call closed clean, and there is no way to reach her.
       "Include identity whenever a goal needs a contact" was a prompt rule.
 - [x] **(code) E2E-6 — `caller_name` was recorded as the literal string "caller".**
@@ -228,9 +228,9 @@ Agent suite **1687** green, tsc + lint + root format + `verify:claude-md` clean.
       thing. Without that second exit a caller who changes their mind holds the call
       open forever.
 - [x] **E2E-19 — the role matcher only knew the SINGULAR.**
-      `meetingTopicNamesOwnerRole` matched `job opportunity` but not `job
-  opportunities` — in a scenario literally named _"talk with Dale about job
-      opportunities"_. The topic guard (E2E-8) worked, the model re-asked, the caller
+      `meetingTopicNamesOwnerRole` matched `job opportunity` but not
+      `job opportunities` — in a scenario literally named _"talk with Dale
+      about job opportunities"_. The topic guard (E2E-8) worked, the model re-asked, the caller
       said "About the job opportunities", and the matcher missed the plural: no job
       tree, no role intake, a 15-minute meeting with no subject. Plural is the more
       natural of the two phrasings and it was the one that failed. Plurals added
@@ -339,8 +339,9 @@ building the guard, not by another call:
       farewells with the caller for twenty turns — "Goodbye!" / "Goodbye!" /
       "Goodbye! If you need anything else, just call back." — until the harness's
       round cap. The existing stall detector fires ONCE and says "wrap up the call",
-      which the model satisfied with a sentence, repeatedly. `ChecklistAgent.
-  onUserTurnCompleted` now has a resolved branch (`GOODBYE_STALL_LIMIT`) that
+      which the model satisfied with a sentence, repeatedly.
+      `ChecklistAgent.onUserTurnCompleted` now has a resolved branch
+      (`GOODBYE_STALL_LIMIT`) that
       REPEATS and names the missing fact: _saying goodbye does not end the call, only
       `finish_call` does_. Deliberately conditional — a caller may still ask something
       after the checklist completes. **Verified: scenario went ✗ FAIL (call never
@@ -560,10 +561,10 @@ is now re-verified against the source, not carried forward.
 > review. Evidence is recorded per item so the follow-up does not have to re-derive
 > it.
 
-- [ ] **(code)** **Delete the orphaned parallel reminder implementation — 391 lines, zero prod callers.** **Re-verified 2026-08-19:** `services/reminders/reminderScheduler.ts` has **zero** importers anywhere in `src/` or `tests/`; `reminderProcessor.ts` is reached only by that dead file's discarded `_ReminderProcessor` dynamic import and by its own metrics test. `services/reminders/reminderProcessor.ts` + `services/reminders/reminderScheduler.ts` are a second, unused implementation whose only caller is a discarded `_`-prefixed dynamic import and a test. The **name collision with the live `workers/reminderScheduler.ts` is what hid it** — and it holds the metrics that were supposed to be watching prod. Its `reminderProcessor-metrics.test.ts` gives the dead class a green-CI halo. Textbook "test it or delete it".
+- [x] ~~**Delete the orphaned parallel reminder implementation — 391 lines, zero prod callers.**~~ — **DONE 2026-08-20.** Deleted `reminderProcessor.ts`, `reminderScheduler.ts`, `reminderRepository.ts` and `reminderProcessor-metrics.test.ts`. **The metrics halo was worse than "redundant coverage":** that test asserted `reminders_sent_total{channel: email|sms}` and `reminders_skipped_total{reason: processing_error}` — shapes the LIVE service has never emitted (it partitions by reminder `type`, and rethrows processing failures into `errors_total`). `metrics.ts` and `docs/ALERTS.md` documented the dead shape too, so any dashboard or alert filtering on `channel` matched nothing and read as "healthy". Replaced with `tests/services/reminders/reminderService-metrics.test.ts` against the live emitter, descriptions corrected, and `appointment_not_found` — documented since forever, never incremented — is now emitted (it fired 8 times in one prod minute on 2026-08-20 with nothing counting it). Original text: **Re-verified 2026-08-19:** `services/reminders/reminderScheduler.ts` has **zero** importers anywhere in `src/` or `tests/`; `reminderProcessor.ts` is reached only by that dead file's discarded `_ReminderProcessor` dynamic import and by its own metrics test. `services/reminders/reminderProcessor.ts` + `services/reminders/reminderScheduler.ts` are a second, unused implementation whose only caller is a discarded `_`-prefixed dynamic import and a test. The **name collision with the live `workers/reminderScheduler.ts` is what hid it** — and it holds the metrics that were supposed to be watching prod. Its `reminderProcessor-metrics.test.ts` gives the dead class a green-CI halo. Textbook "test it or delete it".
 - [ ] **(code)** **Live `n8n` trigger fires on every appointment INSERT** — **re-verified 2026-08-19:** `trigger_notify_n8n_appointment AFTER INSERT ON public.appointments`, function `notify_n8n_on_appointment()`, column `tenants.n8n_webhook_url`, all present in `baseline.sql`; the only `n8n` string in TypeScript is an unrelated comment in `calendar.ts:215`. for an integration with **zero application surface** (`n8n_webhook_url` has no readers/writers anywhere). It's `SECURITY DEFINER` and, if `pg_net` were ever installed, would POST **synchronously inside the booking transaction**. Drop the trigger, the function, and the column.
-- [ ] **(code)** **`shared/dateTime.ts` — 85 lines, 8 exports, zero importers.** The only fully-orphaned file in the monorepo. Delete. **Re-verified 2026-08-19:** still exactly 85 lines / 8 exports, and an import grep across `src/`, `shared/`, `dashboard/`, `agent/src/` and `tests/` returns nothing.
-- [ ] **(code)** **`TelephonyProvider`: 4 of 5 methods are dead Twilio residue** — both adapters `throw` on them, and `MockAdapter` still emits **TwiML XML** for a stack that dropped Twilio months ago. Collapse to `{ getName, sendSMS }` (~120 lines); the registry's one real job (the no-creds Mock switch) is a one-liner.
+- [x] ~~**`shared/dateTime.ts` — 85 lines, 8 exports, zero importers.**~~ — **DELETED 2026-08-20.** Import grep across `src/`, `shared/`, `dashboard/`, `agent/src/` and `tests/` returned nothing; removed from CLAUDE.md's `/shared` resident list at the same time. **Re-verified 2026-08-19:** still exactly 85 lines / 8 exports, and an import grep across `src/`, `shared/`, `dashboard/`, `agent/src/` and `tests/` returns nothing.
+- [x] ~~**`TelephonyProvider`: 4 of 5 methods are dead Twilio residue**~~ — **DONE 2026-08-20.** Collapsed to `{ getName, sendSMS }`; `TelephonyCallRequest` removed. Verified zero callers of `makeCall` / `createInstruction` / `wrapResponse` / `generateInstruction` anywhere in `src/` or `tests/` before deleting, and `TelnyxSmsAdapter` threw on all four anyway. A knock-on the deletion exposed: `smsServiceMetrics.test.ts` carried an `as unknown as` cast that existed only to paper over the four members its literal did not implement — now unnecessary, and lint caught it. `ProviderRegistry`'s dead `JEST_WORKER_ID` disjunct went too (repo is Vitest-only). Original text: — both adapters `throw` on them, and `MockAdapter` still emits **TwiML XML** for a stack that dropped Twilio months ago. Collapse to `{ getName, sendSMS }` (~120 lines); the registry's one real job (the no-creds Mock switch) is a one-liner.
 - [ ] **(code)** **42 of 185 migrations self-manage a transaction the runner already owns.** (Count re-verified 2026-08-19: still **42** files carrying a top-level `COMMIT;`, now out of 185 — the ratio improved only because the denominator grew.) Their inner `COMMIT;` ends the runner's `--single-transaction` early, so the `schema_migrations` INSERT lands separately — **the all-or-nothing guarantee in `setup-db.sh`'s own comment does not hold**, and a failed rebuild can leave DDL applied with no tracking row. Inert against prod (already applied); fixes `db:rebuild` + fresh environments.
 - [ ] **(code)** Inert columns to drop (**all re-verified 2026-08-19**: `voice_provider`/`voice_name` and `webhook_secret` are present in `baseline.sql` with **zero** TypeScript readers; `JEST_WORKER_ID` survives only as a dead third disjunct in `ProviderRegistry.ts:42` beside the two live `VITEST` checks; `STRIPE_AUTO_TAX` is still read at `billing.ts:107` and set nowhere in the repo): `business_templates.voice_provider`/`voice_name` (backfilled `'cartesia'`/`'elevenlabs'` — providers that don't exist here, and `SELECT *` ships them to the dashboard), `tenant_integration_settings.webhook_secret` (Jobber-era). `ENABLE_VOICE_SESSION_REAPER`/`ENABLE_SCHEDULE_EXTENDER` are prod-on-only toggles: they run in prod unconditionally and can only be used to enable those workers in non-prod. Decide whether to keep that asymmetry or add explicit disable knobs. `ProviderRegistry`'s `JEST_WORKER_ID` branch is dead (repo is Vitest-only). `STRIPE_AUTO_TAX` is set nowhere, so `automatic_tax` has **never** been sent to Stripe despite RESOLVED.md listing it as shipped.
 - [x] ~~**CLAUDE.md called `tts_soft`/`tts_cheerful` "inert"** — false, and dangerous next to "delete on sight."~~ **Fixed 2026-07-13.** They are live LLM prompt-style flags with dashboard toggles; deleting them would have removed two working features. HIPAA-residue sweep came back **clean**.

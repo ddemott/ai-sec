@@ -1,17 +1,16 @@
-import {
-  type TelephonyProvider,
-  type TelephonyCallRequest,
-  type TelephonySMSRequest,
-} from './TelephonyProvider.interface.js';
+import { type TelephonyProvider, type TelephonySMSRequest } from './TelephonyProvider.interface.js';
 
+/**
+ * The no-credentials provider. Selected by ProviderRegistry when no Telnyx key
+ * is configured, so local and CI runs exercise the full send path without
+ * touching a carrier.
+ *
+ * It used to also implement four TwiML-building methods (see the interface for
+ * why those are gone). It never made a real call and nothing ever read the XML.
+ */
 export class MockAdapter implements TelephonyProvider {
   getName(): string {
     return 'mock';
-  }
-
-  makeCall(request: TelephonyCallRequest): Promise<{ callSid: string }> {
-    console.log(`[Mock Telephony] Making call to ${request.to} for tenant ${request.tenantId}`);
-    return Promise.resolve({ callSid: `mock_call_${Date.now()}` });
   }
 
   sendSMS(request: TelephonySMSRequest): Promise<{ messageSid: string }> {
@@ -19,41 +18,5 @@ export class MockAdapter implements TelephonyProvider {
       `[Mock Telephony] Sending SMS to ${request.to} for tenant ${request.tenantId}: ${request.body}`
     );
     return Promise.resolve({ messageSid: `mock_sms_${Date.now()}` });
-  }
-
-  createInstruction(action: string, options: Record<string, unknown>): string {
-    const attrString = Object.entries(options)
-      .filter(([key]) => !['text', 'say'].includes(key))
-      .map(([key, value]) => `${key}="${String(value)}"`)
-      .join(' ');
-
-    const openingTag = attrString ? `${action} ${attrString}` : action;
-    const rawContent = options.text ?? options.say ?? '';
-    const content =
-      typeof rawContent === 'string'
-        ? rawContent
-        : typeof rawContent === 'number' ||
-            typeof rawContent === 'boolean' ||
-            typeof rawContent === 'bigint'
-          ? String(rawContent)
-          : rawContent === null || rawContent === undefined
-            ? ''
-            : JSON.stringify(rawContent);
-
-    if (content) {
-      return `<${openingTag}>${content}</${action}>`;
-    }
-    return `<${openingTag}/>`;
-  }
-
-  wrapResponse(instructions: string): string {
-    return `<?xml version="1.0" encoding="UTF-8"?><Response>${instructions}</Response>`;
-  }
-
-  generateInstruction(
-    action: 'say' | 'gather' | 'record' | 'hangup',
-    options: Record<string, unknown>
-  ): string {
-    return this.wrapResponse(this.createInstruction(action, options));
   }
 }
