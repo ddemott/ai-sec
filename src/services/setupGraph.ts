@@ -319,6 +319,17 @@ export async function insertDraftGraph(
           WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[]) AND shift_date >= $3::date`,
         [tenantId, editedEmployeeIds, opts.startDate]
       );
+      // Clear the declared RULE for the same employees. The fan-out below
+      // rewrites it for everyone who still has shifts in the draft; the ones
+      // who do NOT are exactly the case this covers — an employee whose shifts
+      // the owner removed entirely never reaches expandWeeklyToSchedule at all,
+      // so nothing else would ever retire their rule and the schedule extender
+      // would keep projecting hours the draft no longer contains.
+      await client.query(
+        `DELETE FROM employee_schedule_pattern
+          WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])`,
+        [tenantId, editedEmployeeIds]
+      );
     }
   }
 

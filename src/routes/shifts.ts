@@ -322,6 +322,19 @@ export function registerShiftRoutes(
                 AND shift_date >= COALESCE($3::date, CURRENT_DATE)`,
             [tenant_id, employee_id, startDate ?? null]
           );
+          // The declared RULE has to go with them. expandWeeklyToSchedule
+          // rewrites it below for any weekday the new pattern contains, but an
+          // EMPTY pattern early-returns without touching it — and `replace`
+          // means this pattern is the complete truth, so an empty one means
+          // "no hours". Without this the owner clears their schedule, the rows
+          // go, and the extender puts the hours straight back from a rule
+          // nobody can see. That is the resurrect-what-the-owner-dropped bug
+          // the rule table exists to kill, arriving through the rule table.
+          await client.query(
+            `DELETE FROM employee_schedule_pattern
+              WHERE tenant_id = $1 AND employee_id = $2`,
+            [tenant_id, employee_id]
+          );
         }
         return expandWeeklyToSchedule(client, {
           tenantId: tenant_id,

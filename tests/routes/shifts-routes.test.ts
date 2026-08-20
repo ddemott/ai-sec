@@ -272,3 +272,57 @@ describe('POST /shifts/expand-weekly — validation', () => {
     expect(queries).toHaveLength(0);
   });
 });
+
+describe('POST /shifts/expand-weekly — replace also retires the declared RULE', () => {
+  it('replace + an EMPTY pattern clears employee_schedule_pattern', async () => {
+    // WHO: an owner who cleared every day out of the weekly grid and saved.
+    // WHAT: `replace` deletes the future employee_schedule rows AND the
+    //       declared weekly rule.
+    // WHEN: any wizard save whose grid ends up empty.
+    // WHERE: src/routes/shifts.ts POST /shifts/expand-weekly, replace branch.
+    // WHY: expandWeeklyToSchedule early-returns on an empty pattern and
+    //      deliberately does NOT touch the rule — an empty pattern on its own
+    //      is ambiguous. `replace` removes the ambiguity: the caller is stating
+    //      this pattern is the complete truth. Without this delete the rows go,
+    //      the rule stays, and the schedule extender puts the hours straight
+    //      back from a rule nobody can see — resurrecting exactly what the
+    //      owner just dropped, through the table added to prevent that.
+    const app2 = buildApp();
+    const res = await app2.inject({
+      method: 'POST',
+      url: '/shifts/expand-weekly',
+      payload: {
+        tenant_id: TENANT_ID,
+        employee_id: EMPLOYEE_ID,
+        pattern: [],
+        replace: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const ruleDeletes = queries.filter((q) =>
+      q.text.includes('DELETE FROM employee_schedule_pattern')
+    );
+    expect(ruleDeletes).toHaveLength(1);
+    expect(ruleDeletes[0].params).toEqual([TENANT_ID, EMPLOYEE_ID]);
+  });
+
+  it('WITHOUT replace, an empty pattern leaves the rule alone', async () => {
+    // WHY: the additive default merges into whatever is already there, so an
+    //      empty pattern carries no statement about the rule. Wiping a working
+    //      rule on that reading is how a bookable business goes dark.
+    const app2 = buildApp();
+    const res = await app2.inject({
+      method: 'POST',
+      url: '/shifts/expand-weekly',
+      payload: {
+        tenant_id: TENANT_ID,
+        employee_id: EMPLOYEE_ID,
+        pattern: [],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(queries.filter((q) => q.text.includes('employee_schedule_pattern'))).toHaveLength(0);
+  });
+});
