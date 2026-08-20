@@ -497,6 +497,30 @@ describe('tenantMiddleware', () => {
     expect(req.tenantId).toBeUndefined();
   });
 
+  it('consults the enumerated exempt list, not just the /tenants/ prefix (WHO: any tenant-scoped route | WHAT: a non-listed, non-prefixed path is NOT exempt | WHERE: tenantMiddleware isTenantExempt | WHY: the predicate used to read `path === r || path.startsWith(\'/tenants/\')`, whose second clause ignores the loop variable — so .some() answered on the FIRST element for any /tenants/* path and the list looked like the boundary without being one)', async () => {
+    const hook = setupMiddleware();
+    // Not in TENANT_EXEMPT_ROUTES and not under an exempt prefix: must fall
+    // through to the real tenant-resolution path, which 401s without auth.
+    const req = createMockRequest({ url: '/customers' });
+    const reply = createMockReply();
+    await hook(req, reply);
+    expect(req.tenantId).toBeUndefined();
+    expect(reply.statusCode).toBe(401);
+  });
+
+  it('keeps BOTH prefix exemptions intact (WHO: super-admin + LiveKit agent | WHAT: /tenants/* and /agent-tools/* stay exempt | WHERE: TENANT_EXEMPT_PREFIXES | WHY: making the prefix rule explicit must not narrow it — /tenants/* self-checks with requireSuperAdmin and the agent authenticates by x-agent-secret, so a 401 here would break both)', async () => {
+    const hook = setupMiddleware();
+    for (const path of ['/tenants/abc-123', '/tenants/abc-123/settings', '/agent-tools/identify']) {
+      const req = createMockRequest({ url: path });
+      const reply = createMockReply();
+      await hook(req, reply);
+      expect(req.tenantId).toBeUndefined();
+      // Exempt means "returned before any gate ran" — the status must be
+      // untouched, not merely non-401.
+      expect(reply.statusCode).toBe(200);
+    }
+  });
+
   it("skips OPTIONS requests (WHO: CORS preflight | WHAT: OPTIONS method skipped | WHERE: tenantMiddleware preHandler | WHY: preflight requests don't carry auth headers)", async () => {
     const hook = setupMiddleware();
     const req = createMockRequest({ method: 'OPTIONS', url: '/customers' });

@@ -734,7 +734,19 @@ export function registerSchedulingRoutes({
           if (row.booked_start) row.booked_start = toLocalWallClock(row.booked_start, ianaTimezone);
           if (row.booked_end) row.booked_end = toLocalWallClock(row.booked_end, ianaTimezone);
         }
-        return { kind: 'booked' as const, row, mechanics };
+        return {
+          kind: 'booked' as const,
+          row,
+          mechanics,
+          // Carried OUT of this callback on purpose: the failure branch below
+          // searches for alternatives, and it must search on the SAME duration
+          // and skills this booking attempt just used. `resolved` is scoped to
+          // this callback, so without hoisting these two the search fell back to
+          // args.requirements — the model's guess, which usually omits
+          // durationMinutes entirely.
+          serviceDurationMinutes: resolved?.duration_minutes ?? null,
+          serviceRequiredSkills: resolved?.required_skills ?? null,
+        };
       });
 
       // The caller already has something today — refuse before anything is
@@ -787,10 +799,26 @@ export function registerSchedulingRoutes({
           // Same buffer as the booking attempt, so every suggested alternative
           // is one the agent can actually book under this tenant's buffer.
           const bufferMinutes = await getTenantBufferMinutes(client, args.tenant_id);
+          // Search on the SAME duration and skills the booking attempt just
+          // used (the RESOLVED service, not the model's guess) — otherwise
+          // every alternative offered here is a slot the booking will refuse.
+          //
+          // The RPC above is handed `resolved?.duration_minutes ?? 30` and
+          // prefers `resolved.required_skills`; this search took
+          // `args.requirements.*` alone. For a 90-minute skill-gated service
+          // where the model did not supply `durationMinutes` — the common shape
+          // — the caller was offered a 30-minute gap with an unskilled
+          // employee, said yes, and got NO_SKILLED_EMPLOYEE. A dead end became a
+          // rejection loop: the agent kept offering, the caller kept accepting,
+          // nothing ever booked.
           const searchParams = {
             tenantId: args.tenant_id,
-            durationMinutes: args.requirements.durationMinutes || 30,
-            requiredSkills: args.requirements.requiredEmployeeSkills || [],
+            durationMinutes:
+              outcomeOfBooking.serviceDurationMinutes ?? args.requirements.durationMinutes ?? 30,
+            requiredSkills:
+              (outcomeOfBooking.serviceRequiredSkills?.length
+                ? outcomeOfBooking.serviceRequiredSkills
+                : args.requirements.requiredEmployeeSkills) || [],
             requiredCapabilities: args.requirements.requiredResourceCapabilities || [],
             bufferMinutes,
           };

@@ -130,9 +130,9 @@ ever happened; the call then could not end.
       one conversation**, the caller saying goodbye twice, and the run ending only
       because the harness caps at 48 rounds. On a phone line there is no 48-round cap.
 - [x] **(code) E2E-2 — the agent verbally confirmed a booking that never happened.**
-      With zero successful writes it said *"The meeting is set for tomorrow, Tuesday,
-      July 22 at 1:15 PM. You'll be talking with the owner then."* and then, four
-      turns later, *"I'm still finalizing your meeting."* This is the same class as the
+      With zero successful writes it said _"The meeting is set for tomorrow, Tuesday,
+      July 22 at 1:15 PM. You'll be talking with the owner then."_ and then, four
+      turns later, _"I'm still finalizing your meeting."_ This is the same class as the
       Telnyx false "sent" and the narrated-lookup filler: the caller hangs up believing
       a thing exists that does not. The anti-double-book gate has no anti-phantom-book
       twin — nothing tells the model "you have never successfully booked; do not say
@@ -143,7 +143,7 @@ ever happened; the call then could not end.
       that is **not in the tool's schema at all**, with all four required params
       (`service_type`, `window_from`, `window_to`, `phone`) omitted. `namesOneInstant`
       only reads `requested_start` (or a zero-width `window_from`/`window_to`), sees
-      neither, and answers *"the caller has not picked one"*. That sentence is false
+      neither, and answers _"the caller has not picked one"_. That sentence is false
       and points the model back at a question already answered. The refusal must name
       what is actually missing.
 - [x] **(code) E2E-4 — `sim-offscript` grades an OpenAI 429 as a behavioural failure.**
@@ -154,7 +154,7 @@ ever happened; the call then could not end.
       A red eval that is red for the wrong reason is worse than no eval.
 - [x] **(code) E2E-5 — a message asking for a callback was taken with no number.**
       Scenario WEDDING MESSAGE, and it **PASSED**: `set_purpose` selected `message +
-      generic_subject` and *not* `identity`, so `caller_phone` was never on the
+    generic_subject` and _not_ `identity`, so `caller_phone` was never on the
       checklist. Grace Okafor said "I'd love for him to call me back", the message
       was written, the call closed clean, and there is no way to reach her.
       "Include identity whenever a goal needs a contact" was a prompt rule.
@@ -173,9 +173,9 @@ ever happened; the call then could not end.
       backfilled. Partly addressed (`service_type` + `name` now backfill); the
       general lesson is that any required action param with no backfill is one
       model slip from a dead call.
-_(Everything found in this sweep is now fixed — the list below is the record of what
-was wrong and why, not a backlog. The only item left open is E2E-9's cousin: filler
-repetition is addressed in the prompt, which is a request, not a guarantee.)_
+      _(Everything found in this sweep is now fixed — the list below is the record of what
+      was wrong and why, not a backlog. The only item left open is E2E-9's cousin: filler
+      repetition is addressed in the prompt, which is a request, not a guarantee.)_
 - [x] **E2E-10 — `agent/` has pre-existing Prettier drift in 23 files.**
       Root `npm run checks` does not cover the agent package's format check, so
       `cd agent && npm run format:check` is red on work that predates this sweep
@@ -184,7 +184,7 @@ repetition is addressed in the prompt, which is a request, not a guarantee.)_
       folding the agent format check into `npm run checks` or running
       `cd agent && npm run format` as its own commit.
 - [x] **E2E-9 (minor, conversational) — filler repetition.** Four of the seven intake
-      turns opened with the identical string *"Thanks for that."* Not asserted
+      turns opened with the identical string _"Thanks for that."_ Not asserted
       anywhere, and exactly the "Absolutely! / Great!" tic already in Known Issues.
 
 **End state:** `sim-questiontree` **22/22**, zero errors, zero livelocks — from a
@@ -216,8 +216,8 @@ Agent suite **1687** green, tsc + lint + root format + `verify:claude-md` clean.
       checklist was open), the model made one malformed booking attempt, then
       **stopped calling tools entirely** and traded farewells for seven turns. Neither
       new hatch could reach it: the resolved-branch nudge needs a COMPLETE checklist,
-      and `FINISH_REFUSAL_LIMIT` needs `finish_call` to keep being called. *"Not done,
-      and no longer trying"* is its own failure mode, and the unresolved-stall nudge
+      and `FINISH_REFUSAL_LIMIT` needs `finish_call` to keep being called. _"Not done,
+      and no longer trying"_ is its own failure mode, and the unresolved-stall nudge
       latched after firing once. It now re-fires every `STALL_TURN_LIMIT` turns, names
       the blocking node, and spells out the exit the model never finds by itself:
       **`set_purpose` with `wrong_trees`** when the caller has stopped wanting the
@@ -225,16 +225,16 @@ Agent suite **1687** green, tsc + lint + root format + `verify:claude-md` clean.
       open forever.
 - [x] **E2E-19 — the role matcher only knew the SINGULAR.**
       `meetingTopicNamesOwnerRole` matched `job opportunity` but not `job
-      opportunities` — in a scenario literally named *"talk with Dale about job
-      opportunities"*. The topic guard (E2E-8) worked, the model re-asked, the caller
+    opportunities` — in a scenario literally named _"talk with Dale about job
+      opportunities"_. The topic guard (E2E-8) worked, the model re-asked, the caller
       said "About the job opportunities", and the matcher missed the plural: no job
       tree, no role intake, a 15-minute meeting with no subject. Plural is the more
       natural of the two phrasings and it was the one that failed. Plurals added
       throughout; bare "a job" / "some jobs" still excluded (a SERVICE request here).
       **JAYA REPLAY 2/2.**
 - [x] **E2E-20 — the warmest lead in the suite was filed as a note.** Neil Ashford, a
-      dental-clinic owner who wanted to BUY the product, opened with *"I wanted to
-      talk to someone about a business opportunity"*. The model asked nothing,
+      dental-clinic owner who wanted to BUY the product, opened with _"I wanted to
+      talk to someone about a business opportunity"_. The model asked nothing,
       selected `message`, and wrote "Neil Ashford called about a business
       opportunity." No business type, no call volume, no current setup, no email, no
       demo. The work-direction gate and the prompt's one-clarifying-question rule
@@ -249,8 +249,8 @@ Agent suite **1687** green, tsc + lint + root format + `verify:claude-md` clean.
 whose grader reported something else entirely:**
 
 - [x] **E2E-16 — a prospect who booked a demo was recorded as having DECLINED one.**
-      BUY THE SERVICE: Dana said *"Yes, I'd be happy to book a demo any time you have
-      available"*, the demo was booked (`book: done`) — and `demo_offer` stayed open,
+      BUY THE SERVICE: Dana said _"Yes, I'd be happy to book a demo any time you have
+      available"_, the demo was booked (`book: done`) — and `demo_offer` stayed open,
       so the goodbye gate refused to close, so the model went looking for the missing
       item and asked an already-booked woman whether she'd rather just have the
       details emailed. She said email. The host wrote `demo_offer: not_now`. **The
@@ -261,10 +261,10 @@ whose grader reported something else entirely:**
       postmortem. The caller's own answer still wins: `recordIfOpen`, never overwrite.
 - [x] **E2E-17 — the host's own error message taught the model to speak an internal
       token aloud.** Same trace: the caller said "calls go to an answering service",
-      the model recorded `"answering service"`, the tracker refused with *"The options
-      are exactly: voicemail, answering_service, a_person, nothing"* — and the model's
-      very next spoken sentence was *"would you say your calls go to an
-      **answering_service**?"*, underscore and all. That is the 2026-07-21 live-call
+      the model recorded `"answering service"`, the tracker refused with _"The options
+      are exactly: voicemail, answering_service, a_person, nothing"_ — and the model's
+      very next spoken sentence was _"would you say your calls go to an
+      **answering_service**?"_, underscore and all. That is the 2026-07-21 live-call
       defect the prompt has forbidden ever since ("record them exactly, but NEVER
       speak them"), reproduced by the runtime handing the model raw tokens at the
       exact moment it was composing a question. The refusal now prints each id with
@@ -300,7 +300,7 @@ building the guard, not by another call:
       box: `tests/services/scheduling-atomic.test.ts` asserted `avg < 50ms` and
       `newAvg < 100ms` against a **real Postgres round trip**. The tight budget is now
       opt-in (`PERF_ASSERT=1`) behind a loose always-on ceiling — and the test named
-      *"compare: old 4-query approach timing"*, which never compared anything, now
+      _"compare: old 4-query approach timing"_, which never compared anything, now
       asserts the ratio it always claimed to.
 - [x] **E2E-10** — `agent/` formatted, and the reason it drifted is closed: root
       `npm run checks` never ran the agent package's format/lint/typecheck. New
@@ -336,9 +336,9 @@ building the guard, not by another call:
       "Goodbye! If you need anything else, just call back." — until the harness's
       round cap. The existing stall detector fires ONCE and says "wrap up the call",
       which the model satisfied with a sentence, repeatedly. `ChecklistAgent.
-      onUserTurnCompleted` now has a resolved branch (`GOODBYE_STALL_LIMIT`) that
-      REPEATS and names the missing fact: *saying goodbye does not end the call, only
-      `finish_call` does*. Deliberately conditional — a caller may still ask something
+    onUserTurnCompleted` now has a resolved branch (`GOODBYE_STALL_LIMIT`) that
+      REPEATS and names the missing fact: _saying goodbye does not end the call, only
+      `finish_call` does_. Deliberately conditional — a caller may still ask something
       after the checklist completes. **Verified: scenario went ✗ FAIL (call never
       closed) → ✓ PASS.**
 - [x] **E2E-1b** — `FINISH_REFUSAL_LIMIT`: the goodbye gate escalates its wording on
@@ -347,8 +347,8 @@ building the guard, not by another call:
       new and is what makes that log readable.
 - [x] **E2E-2 / E2E-3** — the refusal now names the invented field, lists the required
       args actually missing (measured AFTER backfill, so it never sends the model
-      chasing values the host supplies), and ends *"NOTHING IS BOOKED: do not tell the
-      caller the meeting is set."* **Measured effect:** on the JAYA REPLAY scenario the
+      chasing values the host supplies), and ends _"NOTHING IS BOOKED: do not tell the
+      caller the meeting is set."_ **Measured effect:** on the JAYA REPLAY scenario the
       model corrected itself on the very next call and booked — 12 refusals and a
       never-ending call became 1 refusal and a clean close.
 - [x] **E2E-4** — `sim-offscript` retries 429/5xx five times honouring `Retry-After`,
@@ -368,7 +368,7 @@ building the guard, not by another call:
       stopped using on 2026-07-20, and its own comment claimed that was "the same model
       the agent runs". The default now follows `agent/src/index.ts` to `gpt-4.1-mini`:
       the suite went **10/13 (77%, exit 1) → 11/13 (85%, exit 0)** with no other change.
-      The irony is exact — 4o-mini was replaced *because* it never scored a clean suite
+      The irony is exact — 4o-mini was replaced _because_ it never scored a clean suite
       here, and the eval kept scoring it. (The two survivors are real and unfixed: a
       full-call booking case, and one where the model refuses a Sunday time and calls no
       tool at all, which may be the grader's bug rather than the model's — untouched
@@ -445,7 +445,6 @@ _Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voi
 - [ ] **(Dale)** **Rotate the Railway team token** created 2026-06-12 — it was pasted into a Claude session. Burn + reissue.
 - [ ] **(Dale)** **Rotate the Supabase DB password** — exposed in a session transcript 2026-07-11.
 
-
 ### 4b. Code review 2026-07-13 — four-reviewer sweep (backend, security, reliability, dead code)
 
 > **Adversarially re-reviewed 2026-07-13 (Opus).** Two of my findings were **REFUTED and dropped**:
@@ -455,6 +454,28 @@ _Post-live voice enhancements (recording disclaimer, etc.) live in **🎙️ Voi
 
 Every item below was **verified by reading the code**, not inferred. Ranked by what bites first.
 The two CRITICALs are **fixed on branch `fix/jwt-type-confusion-and-context-gate`** (not yet merged).
+
+> ## ⚠️ Re-verified end-to-end 2026-08-19 — and this list had drifted badly
+>
+> Two consecutive sessions found that most of what this section called open had
+> already been fixed weeks earlier. Every remaining unchecked item was re-read
+> against the working tree; the results are recorded inline below, including where
+> the ORIGINAL FINDING WAS WRONG (`/templates/full` is not anonymous;
+> `isTenantExempt` was never a behaviour bug) and where it was overstated
+> (`find-customer-by-name` no longer matches a single letter).
+>
+> **Scoreboard:** 4 genuinely broken and now fixed (alternatives-search duration,
+> purge `--older-than` NaN, `telnyxNumbers` timeout, plus the reminder-claim
+> outage from the previous session) · 3 already fixed and merely unmarked
+> (`'Caller'` placeholder, `/metrics` `!==`, and five items in the SMS/reminders
+> block) · 2 wrong or overstated as written · 6 dead-code items still real and
+> deliberately deferred to their own PR.
+>
+> **The meta-lesson, which is worth more than any single item:** a backlog nobody
+> re-verifies becomes actively misleading, and it costs more than an empty one —
+> it sends the next session to fix what is already fixed while the real outage
+> (13 days of zero reminders) sat one line below, unnoticed. Mark items done when
+> they ship, and re-verify before trusting an entry older than a few weeks.
 
 **A grounding fact that reframes the rest:** production has **never booked an appointment** — 5 voice
 calls, **0 appointments, 0 reminder_schedules, 0 communications_history**, all time. So no reminder
@@ -474,7 +495,7 @@ all go live at the same time.
 - [x] ~~**OTP verification is phone-global for 24h, not call-bound.**~~ **FIXED** (`identity.ts:99-116`, `callerMayHearCustomerData`) — the gate now requires a `phone_verifications` row whose `call_id` matches the live call; a NULL/missing `call_id` can never satisfy it. Backed by migration `20260714000000_phone_verification_call_binding.sql`.
 - [x] ~~**A 4-digit code is brute-forceable because the attempt cap resets per code.**~~ **FIXED** (`identity.ts:837-874`) — attempts are now summed per `(tenant, phone)` over a rolling 1-hour window across every code issued (not per-row); a resend expires all prior live codes first (one live code at a time); a lockout emits `errors_total{event="otp_phone_locked_out"}`.
 - [x] ~~**A verified caller still can't cancel, reschedule, or hear their appointments.**~~ **FIXED** (`agent/src/tools.ts:854-876`, `verify_phone_code`) — on `verified:true` the tool now sets `ctx.callerPhone` to the server-normalized E.164 number, so `get_my_appointments`/`send_self_service_link`/cancel/reschedule stop hard-bailing after a successful OTP.
-- [ ] **(code)** **`find-customer-by-name` still enumerates real customers' NAMES on an unanchored `ILIKE '%…%'`.** "My name is Smith" (or one common letter) returns up to 5 real customers. Address-book enumeration where the caller supplies the only credential. **Half fixed as of #322 (`6d94cf9`, 2026-08-07): the phone is now MASKED** — `maskPhoneForConfirmation` in `identity.ts` emits `+1•••-•••-1234`, so the "is this still your number?" confirmation no longer reads a full number to whoever guesses a name right (`tests/integration/agentToolsCustomerSearch.realdb.test.ts` pins the masked shape). **Still open: the match itself.** An unanchored substring ILIKE over `name` still confirms WHO is a customer here, and the last 4 digits still leak. Fix: require a near-exact match (and consider requiring more than a bare surname). **This is why it is deliberately still OUT of the toolset-wiring fix below** — masking narrowed the blast radius, it did not close the enumeration.
+- [ ] **(code)** **`find-customer-by-name` still enumerates real customers' NAMES on an unanchored `ILIKE '%…%'`.** **Description corrected 2026-08-19 — the "one common letter" claim is no longer true:** a 4-character minimum was added 2026-08-07 (`identity.ts:672`, after an over-tight two-word gate broke real callers) and LIKE metacharacters are escaped, so the cheapest probes are gone. A 4+ character surname still returns up to 5 real customers. **Severity note the old text omitted:** this route is deliberately NOT in the model's toolset, so it is unreachable on a live call today — it is an exposed backend route, not an active leak. Address-book enumeration where the caller supplies the only credential. **Half fixed as of #322 (`6d94cf9`, 2026-08-07): the phone is now MASKED** — `maskPhoneForConfirmation` in `identity.ts` emits `+1•••-•••-1234`, so the "is this still your number?" confirmation no longer reads a full number to whoever guesses a name right (`tests/integration/agentToolsCustomerSearch.realdb.test.ts` pins the masked shape). **Still open: the match itself.** An unanchored substring ILIKE over `name` still confirms WHO is a customer here, and the last 4 digits still leak. Fix: require a near-exact match (and consider requiring more than a bare surname). **This is why it is deliberately still OUT of the toolset-wiring fix below** — masking narrowed the blast radius, it did not close the enumeration.
 - [x] ~~**None of the above ever ran on a live call anyway.**~~ **FIXED 2026-08-03.** All three backend fixes above were correct and complete — and entirely unreachable. Production runs question trees (`agent/src/checklist/`), and `checklistTools.ts`'s `selectedTools()` builds the model's toolset from an allowlist (`TREE_PASSTHROUGH_TOOLS`) that never included `send_verification_code`, `verify_phone_code`, or `get_customer_context` — they existed fully built in `agent/src/tools.ts` but no call could ever reach them. **They ARE capability-gated, in a second and independent place** (corrected 2026-08-07 from PR review — the earlier "confirmed unconditional" reading was wrong): `tools.ts:87-88` maps both OTP tools to the `'verification'` capability, `buildTools` drops them unless `capabilities` includes it (`tools.ts:280`), and `index.ts:884-890` filters `'verification'` out of `activeCapabilities` whenever `ENABLE_PHONE_VERIFICATION` is false. So a tool must clear BOTH gates to reach a live call — the tree allowlist AND the capability list — and neither implies the other. Do not read the fix below as "the OTP tools are always present in ToolContext"; with phone verification off they are absent regardless of the allowlist. A forwarded-line caller could never be recognized or verified, no matter what the backend was ready to do. Fix: added `identity: ['get_customer_context', 'send_verification_code', 'verify_phone_code']` to `TREE_PASSTHROUGH_TOOLS` — the `identity` tree is selected on every goal-bearing call. `find_caller_by_name` deliberately excluded (see item above). 2 new tests in `checklistTools.test.ts`; full agent suite (83 files / 1295 tests) + typecheck green.
 
 **HIGH — SMS/reminders.** Re-audited against the code 2026-08-19. **Most of this
@@ -484,7 +505,7 @@ is now re-verified against the source, not carried forward.
 - [x] ~~The retry policy is unreachable dead code~~ — **DONE (2026-07-13).** `processReminder` rethrows; the worker's catch owns `decideRetry` / `retry_count` / the 5m/30m/2h backoff. Verified in `src/services/reminders/index.ts` (`ReminderSendError`).
 - [x] ~~A reminder cancelled for "no consent" is silent~~ — **DONE.** `remindersSkippedTotal.inc({reason:'no_consent'})` + a 5W warn, plus `appointment_cancelled` / `appointment_passed` on the neighbouring branches.
 - [x] ~~`reminders_sent_total` is never incremented~~ — **DONE.** `remindersSentTotal` fires on both outcomes inside the LIVE `ReminderService`, and `smsSendsTotal` is incremented at 5 call sites in the live `smsService.ts` / `telnyxSms.ts`. (The dead parallel `ReminderProcessor` is still to be deleted — see the dead-code item below.)
-- [x] ~~Unbounded `fetch()` to Telnyx can wedge the reminder worker~~ — **DONE for the SMS paths.** `AbortSignal.timeout(10_000)` in `TelnyxSmsAdapter.ts:60` and `telnyxSms.ts` (`SEND_TIMEOUT_MS`). **Narrower remainder:** `src/services/telnyxNumbers.ts:42` still has no timeout — that is the number-PROVISIONING client, not the reminder tick, so it cannot wedge the worker; it can hang a provisioning request. Lower severity, still worth a `signal`.
+- [x] ~~Unbounded `fetch()` to Telnyx can wedge the reminder worker~~ — **DONE for the SMS paths.** `AbortSignal.timeout(10_000)` in `TelnyxSmsAdapter.ts:60` and `telnyxSms.ts` (`SEND_TIMEOUT_MS`). **Narrower remainder FIXED 2026-08-19:** `src/services/telnyxNumbers.ts` (the number-PROVISIONING client — it could never wedge the reminder tick, only hang a provisioning request an owner is watching) now carries `AbortSignal.timeout(TELNYX_REQUEST_TIMEOUT_MS)` on every call, and its catch names the cap instead of reporting the generic `TimeoutError` message.
 - [x] ~~SIGTERM doesn't drain in-flight worker ticks~~ — **DONE.** `stopReminderScheduler()` awaits `_currentTick` behind a 10s timeout, wired to SIGTERM/SIGINT.
 
 **MEDIUM — correctness in the code shipped 2026-07-12/13**
@@ -518,19 +539,28 @@ is now re-verified against the source, not carried forward.
       the worker's claim statement verbatim. Verified both directions: 5 of its 6 tests
       fail with the migration reverted, all 6 pass with it.
 
-- [ ] **(code)** **The alternatives search offers slots the booking then refuses.** It hardcodes `durationMinutes: 30` and drops the resolved service's real duration + required skills. A 90-minute service gets offered a 30-minute gap with an unskilled employee → the caller says yes → `NO_SKILLED_EMPLOYEE`. The 2026-07-12 dead-end becomes a rejection loop.
-- [ ] **(code)** **`'Caller'` is still an unfixable placeholder on the OTHER write path.** `customerLookup.ts` learned the shared `PLACEHOLDER_NAMES` list; `identity.ts`'s `ON CONFLICT DO UPDATE` still only overwrites `NULL/''/'Valued Customer'`, while `scheduling.ts` writes `'Caller'` on every nameless booking. Book-then-give-name → stuck as "Caller" permanently, greeted that way on every future call. **This is the exact 2026-07-12 bug, still live.**
-- [ ] **(code)** **`purge-soft-deleted.ts` `--older-than` typo → `NaN` → cutoff silently dropped**, and `--execute --yes` then hard-deletes **every** soft-deleted tenant, including one deleted a minute ago. Reject `NaN` explicitly.
-- [ ] **(code)** `/metrics` compares its bearer token with `!==` — use the `timingSafeEqual` helper the agent secret already uses. `GET /templates/full` is reachable **anonymously** and returns every system prompt + first message (platform prompt IP; no PII). `isTenantExempt` exempts _all_ of `/tenants/*` regardless of the list (`path.startsWith('/tenants/')` ignores the loop var) — not exploitable today since every route self-checks, but a new `/tenants/*` route inherits **no** middleware protection.
+- [x] ~~**The alternatives search offers slots the booking then refuses**~~ — **FIXED 2026-08-19.** Re-verified as REAL before fixing, and the original description was half right: skills/capabilities were already threaded through, but the duration was not. The failure branch built its search from `args.requirements.*` — the MODEL's guess, which usually omits `durationMinutes` — while the RPC above used `resolved.duration_minutes` and preferred `resolved.required_skills`. A 90-minute skill-gated service was offered a 30-minute gap with an unskilled employee; the caller accepted and got `NO_SKILLED_EMPLOYEE`. The dead end became a rejection loop. **The reason it was not a one-line fix:** `resolved` is scoped inside the `outcomeOfBooking` callback and is not in scope at the failure branch (a first attempt failed `tsc` on exactly that), so the resolved duration + skills are now carried out on the callback's return value. Guarded by a new case in `agentTools.test.ts` asserting the slots query receives the resolved `90` and `['alignment']`; verified it fails with the fix reverted.
+- [x] ~~**`'Caller'` is still an unfixable placeholder on the OTHER write path**~~ — **ALREADY FIXED 2026-07-13; this entry was stale.** `identity.ts`'s `ON CONFLICT DO UPDATE` now tests `customers.name = ANY($4::text[])` against the shared `PLACEHOLDER_NAMES` (`['Valued Customer', 'Caller', 'Unknown']`), so the `'Caller'` that `scheduling.ts:594` writes on a nameless booking IS overwritten when the caller later gives a name. The fix even carries a comment describing this exact bug. A real name is still never clobbered; a 2026-08-01 `is_correction` flag additionally allows a same-call correction.
+- [x] ~~**`purge-soft-deleted.ts` `--older-than` typo → `NaN` → cutoff silently dropped**~~ — **FIXED 2026-08-19.** Verified real: `Number(valueOf('--older-than') ?? 0)` yielded NaN, `NaN > 0` was false, and the `AND deleted_at < …` clause was omitted ENTIRELY, so `--older-than abc --execute --yes` hard-deleted every soft-deleted tenant while the operator believed they had set a floor. Now rejects non-finite and negative values and exits non-zero before any DB connection is attempted (a negative would push the cutoff into the future — the same over-broad purge by another route). New `scripts/purge-soft-deleted.test.ts` drives the real script as a subprocess, because the guard runs at module scope and calls `process.exit`; verified both cases fail with the guard removed.
+- [x] ~~`/metrics` compares its bearer token with `!==`~~ — **ALREADY FIXED; this entry was stale.** `health.ts:81` uses `safeEquals(provided, token)`, with a comment explaining the timing oracle.
+- [ ] **(code)** **`GET /templates/full` — the original finding was WRONG, and a smaller real one is underneath it.** It is **not** reachable anonymously: it is absent from `PUBLIC_ROUTES`, so the JWT preHandler rejects an unauthenticated request. It IS in `TENANT_EXEMPT_ROUTES` and the handler has no `requireSuperAdmin`, so **any authenticated user of any tenant** can read every business template including system prompts and first messages (platform prompt IP; no PII). Fix: add `requireSuperAdmin`, matching `/templates/create` directly below it.
+- [x] ~~`isTenantExempt` exempts _all_ of `/tenants/*` regardless of the list~~ — **the code was rewritten 2026-08-19, but be clear about what that did: it changed NOTHING about behaviour.** The old predicate `path === r || path.startsWith('/tenants/')` ignores its loop variable, so `.some()` answered on the first element for any `/tenants/*` path — but the result is identical to an explicit prefix rule for every input, which was confirmed by running the new tests against the OLD implementation and watching all 46 pass. So this was never a live hole, and the backlog's "a new `/tenants/*` route inherits no middleware protection" is true of the intended design (those routes self-check with `requireSuperAdmin`), not of a defect. The rewrite splits `TENANT_EXEMPT_ROUTES` (exact matches) from `TENANT_EXEMPT_PREFIXES` (`/tenants/`, `/agent-tools/`) so the prefix rule is stated rather than smuggled into a predicate, and two tests now pin both halves.
 
 **Dead code / simplification** (see also 🧹 Doc hygiene)
 
-- [ ] **(code)** **Delete the orphaned parallel reminder implementation — 391 lines, zero prod callers.** `services/reminders/reminderProcessor.ts` + `services/reminders/reminderScheduler.ts` are a second, unused implementation whose only caller is a discarded `_`-prefixed dynamic import and a test. The **name collision with the live `workers/reminderScheduler.ts` is what hid it** — and it holds the metrics that were supposed to be watching prod. Its `reminderProcessor-metrics.test.ts` gives the dead class a green-CI halo. Textbook "test it or delete it".
-- [ ] **(code)** **Live `n8n` trigger fires on every appointment INSERT** for an integration with **zero application surface** (`n8n_webhook_url` has no readers/writers anywhere). It's `SECURITY DEFINER` and, if `pg_net` were ever installed, would POST **synchronously inside the booking transaction**. Drop the trigger, the function, and the column.
-- [ ] **(code)** **`shared/dateTime.ts` — 85 lines, 8 exports, zero importers.** The only fully-orphaned file in the monorepo. Delete.
+> **Every item below was re-verified against the working tree on 2026-08-19 and all
+> of them are still real** — unlike the correctness block above, which was mostly
+> stale. Deliberately NOT bundled into the fix PR: deleting ~600 lines is a
+> different risk class from fixing four bugs, and mixing them makes both harder to
+> review. Evidence is recorded per item so the follow-up does not have to re-derive
+> it.
+
+- [ ] **(code)** **Delete the orphaned parallel reminder implementation — 391 lines, zero prod callers.** **Re-verified 2026-08-19:** `services/reminders/reminderScheduler.ts` has **zero** importers anywhere in `src/` or `tests/`; `reminderProcessor.ts` is reached only by that dead file's discarded `_ReminderProcessor` dynamic import and by its own metrics test. `services/reminders/reminderProcessor.ts` + `services/reminders/reminderScheduler.ts` are a second, unused implementation whose only caller is a discarded `_`-prefixed dynamic import and a test. The **name collision with the live `workers/reminderScheduler.ts` is what hid it** — and it holds the metrics that were supposed to be watching prod. Its `reminderProcessor-metrics.test.ts` gives the dead class a green-CI halo. Textbook "test it or delete it".
+- [ ] **(code)** **Live `n8n` trigger fires on every appointment INSERT** — **re-verified 2026-08-19:** `trigger_notify_n8n_appointment AFTER INSERT ON public.appointments`, function `notify_n8n_on_appointment()`, column `tenants.n8n_webhook_url`, all present in `baseline.sql`; the only `n8n` string in TypeScript is an unrelated comment in `calendar.ts:215`. for an integration with **zero application surface** (`n8n_webhook_url` has no readers/writers anywhere). It's `SECURITY DEFINER` and, if `pg_net` were ever installed, would POST **synchronously inside the booking transaction**. Drop the trigger, the function, and the column.
+- [ ] **(code)** **`shared/dateTime.ts` — 85 lines, 8 exports, zero importers.** The only fully-orphaned file in the monorepo. Delete. **Re-verified 2026-08-19:** still exactly 85 lines / 8 exports, and an import grep across `src/`, `shared/`, `dashboard/`, `agent/src/` and `tests/` returns nothing.
 - [ ] **(code)** **`TelephonyProvider`: 4 of 5 methods are dead Twilio residue** — both adapters `throw` on them, and `MockAdapter` still emits **TwiML XML** for a stack that dropped Twilio months ago. Collapse to `{ getName, sendSMS }` (~120 lines); the registry's one real job (the no-creds Mock switch) is a one-liner.
-- [ ] **(code)** **42 of 158 migrations self-manage a transaction the runner already owns.** Their inner `COMMIT;` ends the runner's `--single-transaction` early, so the `schema_migrations` INSERT lands separately — **the all-or-nothing guarantee in `setup-db.sh`'s own comment does not hold**, and a failed rebuild can leave DDL applied with no tracking row. Inert against prod (already applied); fixes `db:rebuild` + fresh environments.
-- [ ] **(code)** Inert columns to drop: `business_templates.voice_provider`/`voice_name` (backfilled `'cartesia'`/`'elevenlabs'` — providers that don't exist here, and `SELECT *` ships them to the dashboard), `tenant_integration_settings.webhook_secret` (Jobber-era). `ENABLE_VOICE_SESSION_REAPER`/`ENABLE_SCHEDULE_EXTENDER` are prod-on-only toggles: they run in prod unconditionally and can only be used to enable those workers in non-prod. Decide whether to keep that asymmetry or add explicit disable knobs. `ProviderRegistry`'s `JEST_WORKER_ID` branch is dead (repo is Vitest-only). `STRIPE_AUTO_TAX` is set nowhere, so `automatic_tax` has **never** been sent to Stripe despite RESOLVED.md listing it as shipped.
+- [ ] **(code)** **42 of 185 migrations self-manage a transaction the runner already owns.** (Count re-verified 2026-08-19: still **42** files carrying a top-level `COMMIT;`, now out of 185 — the ratio improved only because the denominator grew.) Their inner `COMMIT;` ends the runner's `--single-transaction` early, so the `schema_migrations` INSERT lands separately — **the all-or-nothing guarantee in `setup-db.sh`'s own comment does not hold**, and a failed rebuild can leave DDL applied with no tracking row. Inert against prod (already applied); fixes `db:rebuild` + fresh environments.
+- [ ] **(code)** Inert columns to drop (**all re-verified 2026-08-19**: `voice_provider`/`voice_name` and `webhook_secret` are present in `baseline.sql` with **zero** TypeScript readers; `JEST_WORKER_ID` survives only as a dead third disjunct in `ProviderRegistry.ts:42` beside the two live `VITEST` checks; `STRIPE_AUTO_TAX` is still read at `billing.ts:107` and set nowhere in the repo): `business_templates.voice_provider`/`voice_name` (backfilled `'cartesia'`/`'elevenlabs'` — providers that don't exist here, and `SELECT *` ships them to the dashboard), `tenant_integration_settings.webhook_secret` (Jobber-era). `ENABLE_VOICE_SESSION_REAPER`/`ENABLE_SCHEDULE_EXTENDER` are prod-on-only toggles: they run in prod unconditionally and can only be used to enable those workers in non-prod. Decide whether to keep that asymmetry or add explicit disable knobs. `ProviderRegistry`'s `JEST_WORKER_ID` branch is dead (repo is Vitest-only). `STRIPE_AUTO_TAX` is set nowhere, so `automatic_tax` has **never** been sent to Stripe despite RESOLVED.md listing it as shipped.
 - [x] ~~**CLAUDE.md called `tts_soft`/`tts_cheerful` "inert"** — false, and dangerous next to "delete on sight."~~ **Fixed 2026-07-13.** They are live LLM prompt-style flags with dashboard toggles; deleting them would have removed two working features. HIPAA-residue sweep came back **clean**.
 
 ### 5. Legal / business (long lead time — start early)

@@ -248,12 +248,32 @@ const TENANT_EXEMPT_ROUTES = [
   '/templates/create',
 ];
 
+/**
+ * Prefix exemptions, stated once and deliberately.
+ *
+ * `/tenants/` is here because the cross-tenant admin routes (`/tenants/:id`,
+ * `/tenants/:id/…`) legitimately operate outside any single tenant's context
+ * and self-check with `requireSuperAdmin`.
+ *
+ * It used to be smuggled into the `.some()` callback below as
+ * `path === r || path.startsWith('/tenants/')` — a predicate whose second
+ * clause ignores its own loop variable `r`, so `.some()` returned true on the
+ * FIRST element for any `/tenants/*` path and the enumerated list was never
+ * consulted. The list read like the boundary and was not one. Not exploitable
+ * today (every `/tenants/*` route calls `requireSuperAdmin` itself), but a new
+ * route added under that prefix would have inherited no middleware tenant
+ * protection while appearing to be covered by an explicit allowlist.
+ */
+const TENANT_EXEMPT_PREFIXES = [
+  '/tenants/', // cross-tenant admin; each route self-checks with requireSuperAdmin
+  '/agent-tools/', // LiveKit agent tool calls; tenant_id supplied in body
+];
+
 function isTenantExempt(url: string): boolean {
   const path = url.split('?')[0];
   return (
-    TENANT_EXEMPT_ROUTES.some((r) => path === r || path.startsWith('/tenants/')) ||
-    path.startsWith('/agent-tools/')
-  ); // LiveKit agent tool calls; tenant_id supplied in body
+    TENANT_EXEMPT_ROUTES.includes(path) || TENANT_EXEMPT_PREFIXES.some((p) => path.startsWith(p))
+  );
 }
 
 /**

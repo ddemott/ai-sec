@@ -16,6 +16,15 @@
 
 const TELNYX_BASE_URL = 'https://api.telnyx.com/v2';
 
+/**
+ * Every call here is a provisioning step an owner is waiting on (number search,
+ * purchase, assignment). Without a signal, one hung TCP connection to Telnyx
+ * leaves that request open indefinitely — the owner sees a spinner that never
+ * resolves and no error is ever logged. The SMS paths were given the same
+ * 10s cap for the same reason; this client was simply missed.
+ */
+const TELNYX_REQUEST_TIMEOUT_MS = 10_000;
+
 export interface AvailableNumber {
   phone_number: string;
   region_information?: Array<{ region_type: string; region_name: string }>;
@@ -46,9 +55,18 @@ export class TelnyxNumbersClient {
           'Content-Type': 'application/json',
         },
         body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(TELNYX_REQUEST_TIMEOUT_MS),
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'unknown';
+      // AbortSignal.timeout raises a TimeoutError DOMException, whose `message`
+      // is unhelpfully generic. Name the cap so the log says what actually
+      // happened rather than "network error: signal timed out".
+      const timedOut = err instanceof Error && err.name === 'TimeoutError';
+      const msg = timedOut
+        ? `no response within ${TELNYX_REQUEST_TIMEOUT_MS}ms`
+        : err instanceof Error
+          ? err.message
+          : 'unknown';
       throw new Error(`Telnyx ${method} ${endpoint} network error: ${msg}`);
     }
 
