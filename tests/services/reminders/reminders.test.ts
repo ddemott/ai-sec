@@ -497,6 +497,67 @@ describe('ReminderService', () => {
         // WHEN: appointment cancelled between scheduling and send | WHERE: processReminder
         // WHY: prevent sending reminders for cancelled appointments
       });
+
+      it("REGRESSION: cancels the reminder for the spelling PRODUCTION actually writes ('canceled', one L)", async () => {
+        // WHO:  a customer who cancelled a future appointment
+        // WHAT: processReminder must recognise appointments.status = 'canceled'
+        // WHEN: any pending reminder for an appointment that is later cancelled
+        // WHERE: src/services/reminders/index.ts, the appointment-cancelled gate
+        // WHY:  the gate compared against 'cancelled' (TWO Ls) — a value NOTHING
+        //        in the product writes. Every cancel path stores the American
+        //        'canceled' (one L): appointments.ts /cancel, selfService.ts's
+        //        SMS link, and the voice agent's agentTools/scheduling.ts.
+        //        Verified against production 2026-08-19 — the only non-scheduled/
+        //        completed status present is 'canceled'. So this guard had NEVER
+        //        fired, and a cancelled FUTURE appointment fell through to the
+        //        send path: a reminder for an appointment the customer called to
+        //        cancel.
+        //
+        //        The reason it survived review is the test directly above: its
+        //        fixture uses 'cancelled' too, so the mock and the code agreed
+        //        with each other and both disagreed with the database. The
+        //        confusion is real rather than careless — reminder_schedules
+        //        .status genuinely IS 'cancelled' (two Ls, and it is in that
+        //        table's CHECK constraint). Two tables, two spellings.
+        // Real UUIDs, not 1/456. `tenant_id` and `appointment_id` are UUID
+        // columns, `withTenantClient` casts the tenant id to uuid, and a
+        // numeric fixture would be rejected by real Postgres — so a fixture
+        // shaped unlike production is the same class of mistake this very test
+        // exists to catch. (Neighbouring older tests still use numbers; left
+        // alone here rather than widening this PR.)
+        const TENANT = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+        const APPT = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+        const mockReminder: ReminderSchedule = {
+          reminder_schedule_id: 2,
+          appointment_id: APPT,
+          tenant_id: TENANT,
+          customer_email: 'customer@example.com',
+          reminder_type: '24h',
+          scheduled_for: new Date().toISOString(),
+          status: 'scheduled',
+        };
+
+        vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
+        vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
+          id: APPT,
+          tenantId: TENANT,
+          // FUTURE, so the `appointmentDateTime <= now` check below cannot mask
+          // the miss — this is exactly the case that reached the send path.
+          dateTime: createFutureDate(24).toISOString(),
+          status: 'canceled', // ← what production stores
+        });
+
+        await reminderService.processReminder('2');
+
+        expect(mockDb.updateReminderSchedule).toHaveBeenCalledWith(
+          '2',
+          expect.objectContaining({ status: 'cancelled', error: 'Appointment cancelled' })
+        );
+        // And the appointment read must carry the tenant id — without it the
+        // RLS policy on `appointments` filters the row out and this reports
+        // "Appointment not found" for an appointment that exists.
+        expect(mockDb.getAppointmentById).toHaveBeenCalledWith(APPT, TENANT);
+      });
     });
 
     describe('processReminder - Appointment Already Passed', () => {

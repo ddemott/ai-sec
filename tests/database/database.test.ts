@@ -279,11 +279,18 @@ describe('PostgresDatabaseService', () => {
           status: 'confirmed',
           notes: 'First visit',
         };
-        const mockClient = createMockClient([{ rows: [appointment] }]);
+        // setTenantContext runs first now, so the mock must answer it before the
+        // SELECT. The tenant id is mandatory: `appointments` is FORCE RLS with
+        // no admin-bypass policy, so a context-less read returns nothing and a
+        // live appointment reads as "not found" (prod, 2026-08-20).
+        const mockClient = createMockClient([{ rows: [] }, { rows: [appointment] }]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
-        const result = await service.getAppointmentById('apt-123');
+        const result = await service.getAppointmentById(
+          'apt-123',
+          'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+        );
 
         expect(result).toEqual(appointment);
         expect(result?.customerName).toBe('John Doe');
@@ -516,12 +523,16 @@ describe('PostgresDatabaseService', () => {
         // WHY: Reminder should be cancelled if appointment no longer exists
 
         const mockClient = createMockClient([
+          { rows: [] }, // setTenantContext
           { rows: [] }, // Empty result
         ]);
         const mockPool = createMockPool(mockClient);
         const service = new PostgresDatabaseService(mockPool);
 
-        const result = await service.getAppointmentById('nonexistent-id');
+        const result = await service.getAppointmentById(
+          'nonexistent-id',
+          'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+        );
 
         expect(result).toBeNull();
       });

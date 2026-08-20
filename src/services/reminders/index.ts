@@ -59,6 +59,22 @@ function anyChannelSucceeded(result?: {
   return result?.email?.success === true || result?.sms?.success === true;
 }
 
+/**
+ * Is this appointment cancelled?
+ *
+ * Exported so the check has ONE home. `appointments.status` carries the
+ * American `'canceled'`; `reminder_schedules.status` carries the British
+ * `'cancelled'`. Both spellings are accepted here because the appointments
+ * column has no CHECK constraint, so nothing prevents either from existing,
+ * and the safe direction is to skip a reminder we were unsure about rather
+ * than send one for an appointment that is off.
+ */
+export function isCancelledAppointmentStatus(status: unknown): boolean {
+  if (typeof status !== 'string') return false;
+  const s = status.trim().toLowerCase();
+  return s === 'canceled' || s === 'cancelled';
+}
+
 /** Legacy lead, recoverable from the type name. Only used when lead_minutes is absent. */
 const LEAD_BY_TYPE: Record<string, number> = { '72h': 4320, '24h': 1440, '2h': 120 };
 
@@ -243,7 +259,14 @@ export class ReminderService {
         leadMinutes: reminder.lead_minutes,
       };
 
-      const appointment = await this.db.getAppointmentById(normalizedReminder.appointmentId);
+      // Tenant id comes from the reminder row itself. Without it the read runs
+      // with no RLS context and `appointments` — FORCE RLS, no admin-bypass
+      // policy — returns nothing, so a live appointment reads as "not found"
+      // and the reminder is marked 'failed'. Observed on prod 2026-08-20.
+      const appointment = await this.db.getAppointmentById(
+        normalizedReminder.appointmentId,
+        normalizedReminder.tenantId
+      );
       if (!appointment) {
         await this.updateReminderStatus(reminderId, 'failed', 'Appointment not found');
         return;
@@ -253,7 +276,31 @@ export class ReminderService {
       const appointmentDateTime = new Date(appointment.dateTime);
       const now = new Date();
 
-      if (appointment.status === 'cancelled') {
+      // TWO TABLES, TWO SPELLINGS, AND THIS LINE HAD THE WRONG ONE.
+      //
+      // `appointments.status` is written `'canceled'` (one L) by EVERY cancel
+      // path in the product — `appointments.ts` /cancel, `selfService.ts`'s SMS
+      // link, and the voice agent's `agentTools/scheduling.ts`. Verified against
+      // production 2026-08-19: the only non-scheduled/completed value present is
+      // `'canceled'`.
+      //
+      // `reminder_schedules.status`, set two lines below, genuinely IS
+      // `'cancelled'` (two Ls) — that spelling is in its CHECK constraint. So
+      // the two columns really do differ, which is exactly how a comparison
+      // against a value nothing writes survived review.
+      //
+      // Consequence, which is not cosmetic: this guard has NEVER fired in
+      // production. A cancelled appointment still in the FUTURE falls past it,
+      // fails the `appointmentDateTime <= now` check too, and proceeds to the
+      // send path — reminding a customer about an appointment they cancelled.
+      // It stayed invisible because the whole reminder pipeline was dead from
+      // 2026-08-06 (migration 20260819000000) and SMS is off platform-wide.
+      // Found while re-enabling that pipeline.
+      //
+      // Accepting both spellings rather than picking one: the DB has no CHECK
+      // constraint on `appointments.status`, so a historical row could carry
+      // either, and a reminder wrongly sent is worse than one wrongly skipped.
+      if (isCancelledAppointmentStatus(appointment.status)) {
         remindersSkippedTotal.inc({ reason: 'appointment_cancelled' });
         await this.updateReminderStatus(reminderId, 'cancelled', 'Appointment cancelled');
         return;
@@ -378,7 +425,7 @@ export class ReminderService {
     await this.cancelAppointmentReminders(appointmentId, tenantId);
 
     // Get the appointment using db mock
-    const appointment = await this.db.getAppointmentById(appointmentId);
+    const appointment = await this.db.getAppointmentById(appointmentId, tenantId);
     if (!appointment) {
       return;
     }

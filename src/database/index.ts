@@ -277,7 +277,17 @@ export interface DatabaseService {
   getDueReminders(): Promise<ReminderSchedule[]>;
 
   // Appointment operations
-  getAppointmentById(id: string): Promise<AppointmentForReminder | null>;
+  //
+  // `tenantId` is REQUIRED, and required in the TYPE rather than in a comment.
+  // `appointments` carries FORCE ROW LEVEL SECURITY with a single policy —
+  // `tenant_id = tenant_ctx_uuid()` — and NO admin-bypass policy, so a read on
+  // a connection with no tenant context matches zero rows and returns null for
+  // an appointment that plainly exists. An earlier version of this fix left the
+  // parameter optional with a comment saying it was required in production;
+  // that is documentation instead of enforcement, and it left a real
+  // context-less caller (reminderRepository) compiling happily. Omitting it is
+  // now a type error. See the implementation for the incident.
+  getAppointmentById(id: string, tenantId: string): Promise<AppointmentForReminder | null>;
 
   // Consent operations
   createConsentRecord(data: Omit<ConsentRecord, 'consent_record_id'>): Promise<ConsentRecord>;
@@ -487,10 +497,33 @@ export class PostgresDatabaseService implements DatabaseService {
 
   // ── Appointment Operations ─────────────────────────────────────────
 
-  async getAppointmentById(id: string): Promise<AppointmentForReminder | null> {
-    return this.withClient(async (client) => {
-      const result = await client.query(
-        `SELECT
+  async getAppointmentById(id: string, tenantId: string): Promise<AppointmentForReminder | null> {
+    // WHY THIS TAKES A tenantId. It used to run on `withClient`, which sets no
+    // RLS tenant context. In production that is fatal and silent:
+    // `appointments` has FORCE ROW LEVEL SECURITY and exactly one policy,
+    // `tenant_id = tenant_ctx_uuid()`. With no context `tenant_ctx_uuid()` is
+    // NULL, `tenant_id = NULL` evaluates to NULL, and the row is filtered out —
+    // so this returned null for appointments that exist, and every reminder was
+    // marked 'failed' with "Appointment not found".
+    //
+    // `reminder_schedules` did NOT show the problem because it carries an
+    // `admin_bypass` policy (`tenant_ctx() = ''`) so the cross-tenant reminder
+    // sweep can read it. `appointments` has no such policy and must not — it is
+    // tenant data. So the fix is to supply the context, not to widen the policy.
+    //
+    // Observed on prod 2026-08-20, in the first 60 seconds after the reminder
+    // pipeline was restored (migration 20260819000000): all 8 pending reminders
+    // went straight to 'failed'. The path had never run before, so this was
+    // never a regression — it was simply unreachable behind the earlier outage.
+    return this.withTenantClient(tenantId, (client) => this.appointmentByIdQuery(client, id));
+  }
+
+  private async appointmentByIdQuery(
+    client: PoolClient,
+    id: string
+  ): Promise<AppointmentForReminder | null> {
+    const result = await client.query(
+      `SELECT
           a.appointment_id as "appointmentId",
           a.tenant_id as "tenantId",
           a.customer_id as "customerId",
@@ -508,10 +541,9 @@ export class PostgresDatabaseService implements DatabaseService {
         LEFT JOIN services s ON a.service_id = s.service_id
         LEFT JOIN employees e ON a.employee_id = e.employee_id
         WHERE a.appointment_id = $1 AND a.is_deleted = false`,
-        [id]
-      );
-      return result.rows[0] || null;
-    });
+      [id]
+    );
+    return result.rows[0] || null;
   }
 
   // ── Consent Operations ─────────────────────────────────────────────

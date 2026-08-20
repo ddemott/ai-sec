@@ -31,9 +31,14 @@ export class ReminderRepository {
    */
   async getAppointmentDetails(
     appointmentId: string,
-    _tenantId: string
+    tenantId: string
   ): Promise<Appointment | null> {
-    const appointment = await this.db.getAppointmentById(appointmentId);
+    // The tenant id was accepted and then DISCARDED (`_tenantId`), so this read
+    // ran with no RLS context and could never find an appointment in
+    // production. Same defect as the live path in ReminderService, sitting in
+    // the not-yet-deleted parallel implementation, ready to go live the moment
+    // anyone wired it up. It is now a type error to omit it.
+    const appointment = await this.db.getAppointmentById(appointmentId, tenantId);
     if (!appointment) return null;
 
     // Transform from camelCase (AppointmentForReminder) to snake_case (Appointment)
