@@ -260,3 +260,128 @@ describe('expandWeeklyToSchedule integration — real Postgres', () => {
     // Critically, no Tuesday/Wednesday/etc. rows.
   });
 });
+
+describe('expandWeeklyToSchedule — it also STORES THE RULE', () => {
+  it('writes the weekly pattern to employee_schedule_pattern, not just the dated rows', async () => {
+    // WHO: the setup wizard finalizing an owner who works Mon/Wed/Fri.
+    // WHAT: the declared rule lands in employee_schedule_pattern alongside the
+    //       fanned-out employee_schedule rows.
+    // WHEN: every wizard finalize and every POST /shifts/expand-weekly.
+    // WHERE: src/services/expandWeeklyToSchedule.ts replaceWeeklyRule().
+    // WHY: employee_schedule holds dates and no rule, so the schedule extender
+    //      had to guess the rule back out of the rows — and its guess was
+    //      poisonable by a single far-future one-off shift, which took the
+    //      whole business unbookable. The wizard HAD the rule and threw it
+    //      away; that was the defect.
+    if (!dbAvailable) return;
+
+    const tenantId = await createTenant(client, 'RuleStore1', 'auto-shop');
+    const employeeId = await createEmployee(client, tenantId, 'Rule Owner');
+
+    await expandWeeklyToSchedule(client as unknown as PoolClient, {
+      tenantId,
+      employeeId,
+      pattern: [
+        { day_of_week: 1, start_time: '09:00', end_time: '17:00' },
+        { day_of_week: 3, start_time: '09:00', end_time: '17:00' },
+        { day_of_week: 5, start_time: '10:00', end_time: '14:00' },
+      ],
+      weeksAhead: 2,
+      startDate: MONDAY_2026_04_27,
+    });
+
+    const rule = await client.query(
+      `SELECT day_of_week, start_time::text AS start_time, end_time::text AS end_time
+         FROM employee_schedule_pattern
+        WHERE tenant_id = $1 AND employee_id = $2
+        ORDER BY day_of_week`,
+      [tenantId, employeeId]
+    );
+    expect(rule.rows).toEqual([
+      { day_of_week: 1, start_time: '09:00:00', end_time: '17:00:00' },
+      { day_of_week: 3, start_time: '09:00:00', end_time: '17:00:00' },
+      { day_of_week: 5, start_time: '10:00:00', end_time: '14:00:00' },
+    ]);
+  });
+
+  it('REPLACES the rule — a weekday the owner dropped is retired, not merged', async () => {
+    // WHO: an owner who stops working Wednesdays and re-saves their hours.
+    // WHAT: the Wednesday rule row must be DELETED, and changed hours on a
+    //       surviving weekday must be updated in place.
+    // WHY: if the rule were merged instead of replaced, the stale Wednesday
+    //      would be projected forward forever by the extender — the exact
+    //      "resurrect a weekday the owner dropped" bug, one table over. The
+    //      dated rows cannot save us here: they are ON CONFLICT DO NOTHING by
+    //      design, so only the rule can express a removal.
+    if (!dbAvailable) return;
+
+    const tenantId = await createTenant(client, 'RuleStore2', 'salon');
+    const employeeId = await createEmployee(client, tenantId, 'Changed Mind');
+
+    await expandWeeklyToSchedule(client as unknown as PoolClient, {
+      tenantId,
+      employeeId,
+      pattern: [
+        { day_of_week: 1, start_time: '09:00', end_time: '17:00' },
+        { day_of_week: 3, start_time: '09:00', end_time: '17:00' },
+      ],
+      weeksAhead: 1,
+      startDate: MONDAY_2026_04_27,
+    });
+
+    // Wednesday dropped; Monday's hours shortened.
+    await expandWeeklyToSchedule(client as unknown as PoolClient, {
+      tenantId,
+      employeeId,
+      pattern: [{ day_of_week: 1, start_time: '11:00', end_time: '15:00' }],
+      weeksAhead: 1,
+      startDate: MONDAY_2026_04_27,
+    });
+
+    const rule = await client.query(
+      `SELECT day_of_week, start_time::text AS start_time, end_time::text AS end_time
+         FROM employee_schedule_pattern
+        WHERE tenant_id = $1 AND employee_id = $2
+        ORDER BY day_of_week`,
+      [tenantId, employeeId]
+    );
+    expect(rule.rows).toEqual([{ day_of_week: 1, start_time: '11:00:00', end_time: '15:00:00' }]);
+  });
+
+  it('an EMPTY pattern leaves an existing rule alone', async () => {
+    // WHO: a caller that sends no pattern at all.
+    // WHAT: no fan-out and no rule change.
+    // WHY: an empty pattern is ambiguous — "this employee has no hours" and
+    //      "the caller had nothing to send" arrive identically. Wiping a
+    //      working rule on the ambiguous reading is how a bookable business
+    //      goes dark. Removing a rule is the wizard's explicit prune path.
+    if (!dbAvailable) return;
+
+    const tenantId = await createTenant(client, 'RuleStore3', 'auto-shop');
+    const employeeId = await createEmployee(client, tenantId, 'Silent Caller');
+
+    await expandWeeklyToSchedule(client as unknown as PoolClient, {
+      tenantId,
+      employeeId,
+      pattern: [{ day_of_week: 2, start_time: '08:00', end_time: '12:00' }],
+      weeksAhead: 1,
+      startDate: MONDAY_2026_04_27,
+    });
+
+    const result = await expandWeeklyToSchedule(client as unknown as PoolClient, {
+      tenantId,
+      employeeId,
+      pattern: [],
+      weeksAhead: 1,
+      startDate: MONDAY_2026_04_27,
+    });
+    expect(result.inserted).toBe(0);
+
+    const rule = await client.query(
+      `SELECT day_of_week FROM employee_schedule_pattern
+        WHERE tenant_id = $1 AND employee_id = $2`,
+      [tenantId, employeeId]
+    );
+    expect(rule.rows).toEqual([{ day_of_week: 2 }]);
+  });
+});

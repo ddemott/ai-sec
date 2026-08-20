@@ -29,6 +29,30 @@ let tenantId: string;
 let employeeId: string;
 const tenantsToClean: string[] = [];
 
+/** Declare a weekly RULE row directly (what the wizard now writes). */
+async function seedRule(dow: number, start = '13:00', end = '17:00') {
+  await setup.query(
+    `INSERT INTO employee_schedule_pattern (tenant_id, employee_id, day_of_week, start_time, end_time)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (tenant_id, employee_id, day_of_week)
+       DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time`,
+    [tenantId, employeeId, dow, start, end]
+  );
+}
+
+/** Distinct weekdays present in employee_schedule, optionally bounded. */
+async function scheduledDows(maxOffsetDays?: number): Promise<number[]> {
+  const res = await setup.query<{ dow: number }>(
+    `SELECT DISTINCT EXTRACT(DOW FROM shift_date)::int AS dow
+       FROM employee_schedule
+      WHERE tenant_id = $1
+        AND ($2::int IS NULL OR shift_date <= CURRENT_DATE + $2::int)
+      ORDER BY dow`,
+    [tenantId, maxOffsetDays ?? null]
+  );
+  return res.rows.map((r) => r.dow);
+}
+
 /** Insert a shift row directly (bypassing the service under test). */
 async function seedShift(date: string, start = '13:00', end = '17:00', isOff = false) {
   await setup.query(
@@ -90,7 +114,6 @@ beforeAll(async () => {
     employeeId = emp.rows[0].employee_id;
     dbAvailable = true;
   } catch (err) {
-     
     console.warn('[extendSchedules.realdb] DB not available, skipping', err);
   }
 });
@@ -109,6 +132,7 @@ beforeEach(async (ctx) => {
   skipIfDbDown(ctx, () => dbAvailable);
   if (!dbAvailable) return;
   await setup.query('DELETE FROM employee_schedule WHERE tenant_id = $1', [tenantId]);
+  await setup.query('DELETE FROM employee_schedule_pattern WHERE tenant_id = $1', [tenantId]);
 });
 
 describe('extendSchedules (real DB)', () => {
@@ -242,5 +266,128 @@ describe('extendSchedules (real DB)', () => {
     const after = await shiftDates();
     const future = after.filter((d) => d > today);
     expect(future.length).toBeGreaterThan(0);
+  });
+});
+
+describe('extendSchedules — the DECLARED weekly rule (employee_schedule_pattern)', () => {
+  it('REGRESSION: one far-future one-off shift no longer hijacks the pattern', async () => {
+    // WHO: an owner who works Mon–Fri 1–5 and put "annual inventory Saturday"
+    //      on the calendar 300 days out.
+    // WHAT: `tail` used to be MAX(shift_date) over ALL TIME, so that single
+    //       Saturday became the tail week — the derived pattern turned
+    //       Saturday-only, Mon–Fri quietly stopped being extended, and the
+    //       business went unbookable in ~180 days.
+    // WHEN: the daily extender tick, silently, for months.
+    // WHERE: src/services/extendSchedules.ts, the tail CTE.
+    // WHY: killed by the worker written to prevent exactly this. The tail is
+    //      now clamped to CURRENT_DATE + 14, which puts a far-future one-off
+    //      out of reach without touching the lapsed-schedule backfill.
+    const mon = await nextDow(1);
+    for (let i = 0; i < 5; i++) {
+      const d = await setup.query<{ d: Date }>(`SELECT ($1::date + $2::int) AS d`, [mon, i]);
+      await seedShift(d.rows[0].d.toISOString().slice(0, 10));
+    }
+    // The poison: a lone Saturday 300 days out.
+    const farSaturday = await setup.query<{ d: Date }>(
+      `SELECT (CURRENT_DATE + 300 + ((6 - EXTRACT(DOW FROM CURRENT_DATE + 300)::int + 7) % 7))::date AS d`
+    );
+    await seedShift(farSaturday.rows[0].d.toISOString().slice(0, 10), '09:00', '12:00');
+
+    const { rowsInserted } = await run(90);
+    expect(rowsInserted).toBeGreaterThan(0);
+
+    // The Wednesday three weeks out — a normal weekday inside normal hours,
+    // and the thing the caller on 2026-07-12 could not book. Under the
+    // all-time tail it does not exist, because the pattern was Saturday.
+    const wedFarOut = await setup.query<{ d: Date }>(`SELECT ($1::date + 2 + 14)::date AS d`, [
+      mon,
+    ]);
+    expect(await shiftDates()).toContain(wedFarOut.rows[0].d.toISOString().slice(0, 10));
+
+    // Mon–Fri projected; NO Saturday invented inside the horizon. (The seeded
+    // one at +300 is outside this window and is not the extender's doing.)
+    expect(await scheduledDows(90)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('HAPPY: the declared rule projects with no existing rows to derive from', async () => {
+    // WHO: a newly provisioned employee whose owner filled in the weekly grid.
+    // WHAT: the rule alone is enough — no seeded employee_schedule rows at all.
+    // WHY: this is the whole point of storing the rule. Before it, an employee
+    //      with no rows had no pattern and the extender could do nothing but
+    //      leave them unbookable.
+    await seedRule(2, '09:00', '12:00'); // Tuesdays
+
+    const { rowsInserted } = await run(30);
+
+    expect(rowsInserted).toBeGreaterThan(0);
+    expect(await scheduledDows()).toEqual([2]);
+
+    const hours = await setup.query<{ start_time: string; end_time: string }>(
+      `SELECT start_time, end_time FROM employee_schedule
+        WHERE tenant_id = $1 ORDER BY shift_date LIMIT 1`,
+      [tenantId]
+    );
+    expect(hours.rows[0].start_time).toBe('09:00:00');
+    expect(hours.rows[0].end_time).toBe('12:00:00');
+  });
+
+  it('HAPPY: the declared rule BEATS whatever the rows would have implied', async () => {
+    // WHO: an owner whose stated hours are Mon + Wed, whose last week of rows
+    //      happens to contain only a Thursday (a one-off cover shift).
+    // WHAT: with a rule present the derivation is skipped entirely for that
+    //       employee — the tail CTE excludes them.
+    // WHY: a stated intent must outrank an inference drawn from history, or
+    //      storing the intent bought us nothing.
+    const thu = await nextDow(4);
+    await seedShift(thu, '08:00', '10:00');
+    await seedRule(1);
+    await seedRule(3);
+
+    await run(30);
+
+    // Thursday exists only as the seeded row; it is never projected forward.
+    const thursdays = await setup.query<{ n: string }>(
+      `SELECT COUNT(*) AS n FROM employee_schedule
+        WHERE tenant_id = $1 AND EXTRACT(DOW FROM shift_date)::int = 4`,
+      [tenantId]
+    );
+    expect(Number(thursdays.rows[0].n)).toBe(1);
+    expect(await scheduledDows()).toEqual([1, 3, 4]);
+  });
+
+  it('SAD: a rule + rows do not double-insert, and a second run is still a no-op', async () => {
+    // WHY: `pattern` is declared UNION ALL derived. If the tail CTE ever stopped
+    //      excluding rule-bearing employees the two would overlap, and the
+    //      INSERT would try the same (tenant, employee, date) twice in one
+    //      statement — which ON CONFLICT DO NOTHING does NOT save you from
+    //      ("cannot affect row a second time").
+    await seedShift(await nextDow(1));
+    await seedRule(1);
+
+    const first = await run(30);
+    expect(first.rowsInserted).toBeGreaterThan(0);
+    const second = await run(30);
+    expect(second.rowsInserted).toBe(0);
+  });
+
+  it('SAD: an inactive employee is skipped even with a declared rule', async () => {
+    // WHY: the rule table has no is_active column and must not become a way
+    //      around the employees filter — a departed employee must not be
+    //      projected back onto the calendar.
+    const gone = await setup.query<{ employee_id: string }>(
+      `INSERT INTO employees (tenant_id, name, is_active) VALUES ($1, 'Departed Dana', false)
+       RETURNING employee_id`,
+      [tenantId]
+    );
+    await setup.query(
+      `INSERT INTO employee_schedule_pattern (tenant_id, employee_id, day_of_week, start_time, end_time)
+       VALUES ($1, $2, 1, '13:00', '17:00')`,
+      [tenantId, gone.rows[0].employee_id]
+    );
+
+    const { rowsInserted } = await run(30);
+
+    expect(rowsInserted).toBe(0);
+    await setup.query(`DELETE FROM employees WHERE employee_id = $1`, [gone.rows[0].employee_id]);
   });
 });

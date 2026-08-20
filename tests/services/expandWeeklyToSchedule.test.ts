@@ -6,6 +6,12 @@
  *
  * Strategy: mock PoolClient.query, drive day-of-week math with a
  * fixed startDate, verify the SQL parameter shapes the helper sends.
+ *
+ * NOTE ON THE TWO BUCKETS: since 2026-08-20 the helper ALSO writes the declared
+ * weekly rule to `employee_schedule_pattern` (so the schedule extender projects
+ * a stated rule instead of guessing one back out of the rows). The mock sorts
+ * queries by target table so `inserts` keeps meaning what it always meant — the
+ * employee_schedule fan-out — and the rule statements are asserted separately.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -41,8 +47,10 @@ interface MockQuery {
 function buildClient(): {
   client: PoolClient;
   inserts: MockQuery[];
+  ruleQueries: MockQuery[];
 } {
   const inserts: MockQuery[] = [];
+  const ruleQueries: MockQuery[] = [];
 
   const client = {
     query: vi.fn(async (text: string, params?: unknown[]) => {
@@ -60,7 +68,13 @@ function buildClient(): {
           end: p[i + 4] as string,
         });
       }
-      inserts.push({ text, params: p, tuples });
+      // The weekly RULE goes to its own table and its own bucket — otherwise
+      // every assertion about the fan-out would be counting three statements.
+      (text.includes('employee_schedule_pattern') ? ruleQueries : inserts).push({
+        text,
+        params: p,
+        tuples,
+      });
       // rowCount = number of rows inserted (mirrors Postgres semantics
       // for multi-row INSERT — caller filters via ON CONFLICT for real
       // conflict cases; mock has no conflicts so all rows count).
@@ -69,7 +83,7 @@ function buildClient(): {
     release: vi.fn(),
   } as unknown as PoolClient;
 
-  return { client, inserts };
+  return { client, inserts, ruleQueries };
 }
 
 beforeEach(() => {
@@ -358,5 +372,85 @@ describe('expandWeeklyToSchedule — sad paths', () => {
         startDate: MONDAY_2026_04_27,
       })
     ).rejects.toThrow(/connection terminated/);
+  });
+});
+
+describe('expandWeeklyToSchedule — the declared weekly rule', () => {
+  it('writes the rule BEFORE the dated rows, retiring weekdays not in the pattern', async () => {
+    // WHO: an owner saving Mon/Wed/Fri hours in the wizard.
+    // WHAT: a DELETE that retires every weekday NOT in this pattern, then an
+    //       upsert of the three that are — and both land before the
+    //       employee_schedule fan-out.
+    // WHERE: src/services/expandWeeklyToSchedule.ts replaceWeeklyRule().
+    // WHEN: every wizard finalize and every POST /shifts/expand-weekly.
+    // WHY: the rule must be REPLACED, not merged. A weekday absent from the
+    //      pattern means the owner dropped it; an upsert alone can only add or
+    //      change a row, never retire one, so a dropped Wednesday would be
+    //      projected forward by the extender forever. Ordering matters only for
+    //      a partial failure: rule-then-rows leaves the extender able to
+    //      project a stated rule, rows-then-rule leaves it guessing again.
+    const { client, inserts, ruleQueries } = buildClient();
+
+    await expandWeeklyToSchedule(client, {
+      tenantId: TENANT_ID,
+      employeeId: EMPLOYEE_ID,
+      pattern: [
+        { day_of_week: 1, start_time: '09:00:00', end_time: '17:00:00' },
+        { day_of_week: 3, start_time: '09:00:00', end_time: '17:00:00' },
+        { day_of_week: 5, start_time: '10:00:00', end_time: '14:00:00' },
+      ],
+      weeksAhead: 1,
+      startDate: MONDAY_2026_04_27,
+    });
+
+    expect(ruleQueries).toHaveLength(2);
+
+    const [del, upsert] = ruleQueries;
+    expect(del.text).toContain('DELETE FROM employee_schedule_pattern');
+    expect(del.text).toContain('day_of_week <> ALL');
+    expect(del.params).toEqual([TENANT_ID, EMPLOYEE_ID, [1, 3, 5]]);
+
+    expect(upsert.text).toContain('INSERT INTO employee_schedule_pattern');
+    expect(upsert.text).toContain('ON CONFLICT (tenant_id, employee_id, day_of_week)');
+    expect(upsert.params).toEqual([
+      TENANT_ID,
+      EMPLOYEE_ID,
+      1,
+      '09:00:00',
+      '17:00:00',
+      TENANT_ID,
+      EMPLOYEE_ID,
+      3,
+      '09:00:00',
+      '17:00:00',
+      TENANT_ID,
+      EMPLOYEE_ID,
+      5,
+      '10:00:00',
+      '14:00:00',
+    ]);
+
+    // The fan-out still happens, and still as ONE multi-row INSERT.
+    expect(inserts).toHaveLength(1);
+  });
+
+  it('sends NO rule statements when the pattern is empty', async () => {
+    // WHY: an empty pattern is ambiguous — "this employee has no hours" and
+    //      "the caller had nothing to send" arrive identically. Wiping a
+    //      working rule on the ambiguous reading is how a bookable business
+    //      goes dark; removing a rule is the wizard's explicit prune path.
+    const { client, inserts, ruleQueries } = buildClient();
+
+    const result = await expandWeeklyToSchedule(client, {
+      tenantId: TENANT_ID,
+      employeeId: EMPLOYEE_ID,
+      pattern: [],
+      weeksAhead: 4,
+      startDate: MONDAY_2026_04_27,
+    });
+
+    expect(result.inserted).toBe(0);
+    expect(ruleQueries).toHaveLength(0);
+    expect(inserts).toHaveLength(0);
   });
 });

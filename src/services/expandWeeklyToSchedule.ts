@@ -11,6 +11,20 @@
  * Idempotent via ON CONFLICT DO NOTHING — re-running won't overwrite
  * existing date-specific entries (which the owner may have edited in
  * the Front Desk scheduler).
+ *
+ * IT ALSO RECORDS THE RULE, not just the rows it produced. `employee_schedule`
+ * stores one concrete row per date and no statement of intent, so for years the
+ * only way to answer "does this owner work Wednesdays?" was to guess it back
+ * out of the rows — and the schedule extender's guess was poisonable by a
+ * single far-future one-off shift (see extendSchedules.ts). The pattern the
+ * caller hands us here IS that statement of intent, and throwing it away was
+ * the actual defect. It now lands in `employee_schedule_pattern` as well.
+ *
+ * The rule is REPLACED, not merged: both callers (POST /shifts/expand-weekly
+ * and the setup wizard's graph sync) pass the COMPLETE weekly pattern for one
+ * employee, so a weekday absent from `pattern` means the owner dropped it. If
+ * it were merged instead, dropping Wednesday would leave a stale Wednesday rule
+ * that the extender projects forever — the same bug one table over.
  */
 
 import type { PoolClient } from 'pg';
@@ -64,6 +78,51 @@ function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Write the declared weekly rule for ONE employee, replacing whatever was
+ * there. Two statements rather than one so a weekday the owner removed is
+ * actually removed — an upsert alone can only ever add or change a row, never
+ * retire one.
+ */
+async function replaceWeeklyRule(
+  client: PoolClient,
+  tenantId: string,
+  employeeId: string,
+  patternByDow: Map<number, WeeklyShiftRow>
+): Promise<void> {
+  const dows = [...patternByDow.keys()];
+
+  // Retire weekdays the owner dropped. `<> ALL(...)` on a non-empty array is
+  // safe here because the empty-pattern case returned before we got here.
+  await client.query(
+    `DELETE FROM employee_schedule_pattern
+      WHERE tenant_id = $1 AND employee_id = $2 AND day_of_week <> ALL($3::smallint[])`,
+    [tenantId, employeeId, dows]
+  );
+
+  const valuesSql: string[] = [];
+  const flatParams: (string | number)[] = [];
+  let i = 0;
+  for (const [dow, row] of patternByDow) {
+    const base = i * 5;
+    valuesSql.push(
+      `($${base + 1}, $${base + 2}, $${base + 3}::SMALLINT, $${base + 4}::TIME, $${base + 5}::TIME)`
+    );
+    flatParams.push(tenantId, employeeId, dow, row.start_time, row.end_time);
+    i++;
+  }
+
+  await client.query(
+    `INSERT INTO employee_schedule_pattern
+       (tenant_id, employee_id, day_of_week, start_time, end_time)
+     VALUES ${valuesSql.join(', ')}
+     ON CONFLICT (tenant_id, employee_id, day_of_week)
+       DO UPDATE SET start_time = EXCLUDED.start_time,
+                     end_time   = EXCLUDED.end_time`,
+    flatParams
+  );
+}
+
 export async function expandWeeklyToSchedule(
   client: PoolClient,
   params: ExpandWeeklyParams
@@ -73,6 +132,12 @@ export async function expandWeeklyToSchedule(
 
   if (params.pattern.length === 0) {
     // Nothing to fan out. Not an error — owner may not have set hours yet.
+    //
+    // Deliberately does NOT clear the stored rule. An empty pattern is
+    // ambiguous — "this employee has no hours" and "the caller had nothing to
+    // send" arrive identically — and wiping a working rule on the ambiguous
+    // reading is how a bookable business goes dark. Clearing a rule is what the
+    // wizard's explicit prune path is for.
     return {
       inserted: 0,
       rangeStart: toIsoDate(startDate),
@@ -100,6 +165,12 @@ export async function expandWeeklyToSchedule(
   for (const row of params.pattern) {
     patternByDow.set(row.day_of_week, row);
   }
+
+  // Persist the RULE before fanning out the rows it implies. Order matters
+  // only for a partial failure: rule-then-rows leaves the extender able to
+  // project the declared pattern, whereas rows-then-rule would leave it
+  // guessing again.
+  await replaceWeeklyRule(client, params.tenantId, params.employeeId, patternByDow);
 
   // Build a single multi-row INSERT for all (date, matching pattern)
   // tuples. Single statement = single lock-acquisition window —

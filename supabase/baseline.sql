@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict h5VpI5r4XryIJac7LTkQh6hMJt6X4wBcMwjXuMBdy0AvzhxqYlkoKz8kXWPJPVG
+\restrict w1gtYzVDTcuPYuJVucWGjI8tPTdD5eaDO40xMljZEbQgFq9TM8mnwLCgEonsQYS
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3008,6 +3008,38 @@ ALTER TABLE ONLY public.employee_schedule FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: employee_schedule_pattern; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_schedule_pattern (
+    tenant_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    day_of_week smallint NOT NULL,
+    start_time time without time zone NOT NULL,
+    end_time time without time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT employee_schedule_pattern_dow_chk CHECK (((day_of_week >= 0) AND (day_of_week <= 6)))
+);
+
+ALTER TABLE ONLY public.employee_schedule_pattern FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE employee_schedule_pattern; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.employee_schedule_pattern IS 'The DECLARED weekly working rule per employee. employee_schedule holds concrete dated rows; this holds the intent those rows were generated from, so the schedule extender projects a stated rule instead of guessing one back out of history.';
+
+
+--
+-- Name: COLUMN employee_schedule_pattern.day_of_week; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.employee_schedule_pattern.day_of_week IS '0-6, Sunday = 0 — same encoding as EXTRACT(DOW) and JS getUTCDay(), which is what the wizard sends.';
+
+
+--
 -- Name: employees; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4235,6 +4267,14 @@ ALTER TABLE ONLY public.customers
 
 
 --
+-- Name: employee_schedule_pattern employee_schedule_pattern_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_schedule_pattern
+    ADD CONSTRAINT employee_schedule_pattern_pkey PRIMARY KEY (tenant_id, employee_id, day_of_week);
+
+
+--
 -- Name: employee_schedule employee_schedule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5247,6 +5287,13 @@ CREATE TRIGGER trg_customers_updated_at BEFORE UPDATE ON public.customers FOR EA
 
 
 --
+-- Name: employee_schedule_pattern trg_employee_schedule_pattern_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_employee_schedule_pattern_updated_at BEFORE UPDATE ON public.employee_schedule_pattern FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
 -- Name: intake_submissions trg_intake_submissions_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -5483,6 +5530,22 @@ ALTER TABLE ONLY public.customer_preferences
 
 ALTER TABLE ONLY public.customers
     ADD CONSTRAINT customers_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
+-- Name: employee_schedule_pattern employee_schedule_pattern_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_schedule_pattern
+    ADD CONSTRAINT employee_schedule_pattern_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(employee_id) ON DELETE CASCADE;
+
+
+--
+-- Name: employee_schedule_pattern employee_schedule_pattern_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_schedule_pattern
+    ADD CONSTRAINT employee_schedule_pattern_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
 
 
 --
@@ -6127,6 +6190,26 @@ ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employee_schedule ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: employee_schedule_pattern; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.employee_schedule_pattern ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: employee_schedule_pattern employee_schedule_pattern_admin_bypass; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY employee_schedule_pattern_admin_bypass ON public.employee_schedule_pattern USING ((public.tenant_ctx() = ''::text)) WITH CHECK ((public.tenant_ctx() = ''::text));
+
+
+--
+-- Name: employee_schedule_pattern employee_schedule_pattern_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY employee_schedule_pattern_tenant_isolation ON public.employee_schedule_pattern USING ((tenant_id = public.tenant_ctx_uuid())) WITH CHECK ((tenant_id = public.tenant_ctx_uuid()));
+
+
+--
 -- Name: employees; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6537,5 +6620,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict h5VpI5r4XryIJac7LTkQh6hMJt6X4wBcMwjXuMBdy0AvzhxqYlkoKz8kXWPJPVG
+\unrestrict w1gtYzVDTcuPYuJVucWGjI8tPTdD5eaDO40xMljZEbQgFq9TM8mnwLCgEonsQYS
 
