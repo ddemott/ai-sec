@@ -39,7 +39,9 @@ export class ProviderRegistry {
       return true;
     }
 
-    if (process.env.VITEST || process.env.VITEST_WORKER_ID || process.env.JEST_WORKER_ID) {
+    // JEST_WORKER_ID dropped 2026-08-20 — this repo is Vitest-only and has been
+    // for a long time, so that disjunct could never be true.
+    if (process.env.VITEST || process.env.VITEST_WORKER_ID) {
       return true;
     }
 
