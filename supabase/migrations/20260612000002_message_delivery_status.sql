@@ -21,8 +21,6 @@
 -- Forward-only safe: CREATE TABLE IF NOT EXISTS, no backfill. (legacy-specific
 -- comments updated on removal of legacy provider support.)
 
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS message_delivery_status (
   message_delivery_status_id SERIAL PRIMARY KEY,
   -- Message SID from provider (e.g. Telnyx ID; historical legacy provider SIDs like SMxx... in old rows). Natural key.
@@ -49,4 +47,3 @@ COMMENT ON TABLE message_delivery_status IS 'Latest SMS delivery status per mess
 COMMENT ON COLUMN message_delivery_status.message_sid IS 'Provider Message SID/ID. UNIQUE -- one row per message, upserted as status advances.';
 COMMENT ON COLUMN message_delivery_status.message_status IS 'Latest MessageStatus (queued|sending|sent|delivered|undelivered|failed|received).';
 
-COMMIT;

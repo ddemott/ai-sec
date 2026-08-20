@@ -12,9 +12,6 @@
 -- COLUMN`, but the FK COLUMN's own name on the source table doesn't
 -- change without an explicit ALTER — hence this migration.
 
-BEGIN;
-
 ALTER TABLE opt_out_records
   RENAME COLUMN original_consent_id TO original_consent_record_id;
 
-COMMIT;

@@ -16,8 +16,5 @@
 -- `tenant_` prefix on the table name is a separate inconsistency
 -- with `customers` / `employees` / etc. — not addressed here.
 
-BEGIN;
-
 ALTER TABLE tenant_skills RENAME COLUMN id TO tenant_skill_id;
 
-COMMIT;

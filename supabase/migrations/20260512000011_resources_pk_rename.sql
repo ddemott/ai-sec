@@ -24,8 +24,6 @@
 -- resources after the rename and produce NULL record_id versions on
 -- every INSERT/UPDATE/DELETE.
 
-BEGIN;
-
 ALTER TABLE resources RENAME COLUMN id TO resource_id;
 
 -- ────────────────────────────────────────────────────────────────────
@@ -764,4 +762,3 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMIT;

@@ -12,8 +12,5 @@
 -- so its TS row-type {id: string} stays valid; the two UPDATE WHERE
 -- clauses switch directly to the new column.
 
-BEGIN;
-
 ALTER TABLE phone_verifications RENAME COLUMN id TO phone_verification_id;
 
-COMMIT;

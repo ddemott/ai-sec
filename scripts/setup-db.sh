@@ -113,6 +113,18 @@ for f in "${FILES[@]}"; do
   # If either the migration SQL or the tracking INSERT fails, the whole
   # transaction rolls back and we report failure.
   #
+  # THAT GUARANTEE DEPENDS ON THE MIGRATION FILE NOT MANAGING ITS OWN
+  # TRANSACTION, and until 2026-08-21 it silently did not hold: 42 of the files
+  # carried their own `BEGIN; ... COMMIT;`. `--single-transaction` wraps this
+  # whole heredoc, so a file's `COMMIT;` ended the wrapper early and the
+  # schema_migrations INSERT landed outside it — leaving, on any later failure,
+  # DDL applied with no tracking row. (The file's own `BEGIN;` was separately a
+  # no-op that merely warned "there is already a transaction in progress".)
+  # Harmless against prod, where those 42 were long since applied; the damage
+  # was confined to fresh rebuilds and new environments, which is exactly where
+  # nobody was watching. tests/regression/migrationsOwnTransaction.test.ts now
+  # fails CI on the next one.
+  #
   # `set +e` for this block is required: with `set -e` enabled, a failing
   # `OUTPUT=$(psql ...)` aborts the whole script BEFORE the FAIL handler
   # runs, leaving the user staring at a silent exit-3 with no error

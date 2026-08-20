@@ -36,8 +36,6 @@
 -- The function signatures and return shapes are unchanged — callers
 -- in versionHistory.ts continue to work without any code change.
 
-BEGIN;
-
 -- ── soft_delete_record ──────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.soft_delete_record(
@@ -177,4 +175,3 @@ BEGIN
 END;
 $function$;
 
-COMMIT;

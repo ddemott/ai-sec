@@ -36,8 +36,6 @@
 -- a double-book, and the race window is vanishingly small for the same resource.
 -- Do not "fix" this by making the GiST constraint buffer-aware.
 
-BEGIN;
-
 -- ────────────────────────────────────────────────────────────────────
 -- 1. book_appointment_atomic — + p_buffer_minutes; pad the 3 appointment
 --    overlap checks (resource / employee / user). Shift-coverage checks
@@ -624,4 +622,3 @@ BEGIN
 END;
 $function$;
 
-COMMIT;

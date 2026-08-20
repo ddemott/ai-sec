@@ -12,8 +12,6 @@
 --   - src/crm-appointments.test.ts inserts + joins on call_id
 --   - src/test-utils.ts only names the table in a teardown list
 
-BEGIN;
-
 ALTER TABLE call_transcripts RENAME COLUMN id TO call_transcript_id;
 
 CREATE OR REPLACE FUNCTION link_orphaned_transcripts(p_tenant_id UUID)
@@ -40,4 +38,3 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-COMMIT;

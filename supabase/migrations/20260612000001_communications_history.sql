@@ -17,8 +17,6 @@
 -- Forward-only safe: pure additive CREATE TABLE IF NOT EXISTS, no backfill,
 -- existing tenants unaffected.
 
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS communications_history (
   communications_history_id SERIAL PRIMARY KEY,
   tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
@@ -74,4 +72,3 @@ COMMENT ON COLUMN communications_history.recipient IS 'Destination address (emai
 COMMENT ON COLUMN communications_history.status IS 'Delivery disposition recorded at send time: sent, failed, or queued';
 COMMENT ON COLUMN communications_history.provider_message_id IS 'Upstream provider message id (nodemailer messageId / Telnyx ID; legacy provider SID references in old rows) for cross-referencing';
 
-COMMIT;

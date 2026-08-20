@@ -16,8 +16,6 @@
 --     start_time / end_time / is_off — none of them touch the PK.
 --     No rewrite needed there.
 
-BEGIN;
-
 ALTER TABLE employee_schedule RENAME COLUMN id TO employee_schedule_id;
 
 -- ────────────────────────────────────────────────────────────────────
@@ -94,4 +92,3 @@ BEGIN
 END;
 $$;
 
-COMMIT;
