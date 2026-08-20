@@ -36,6 +36,66 @@ Voice/Telnyx go-live ops detail + incident recovery: `docs/RUNBOOK.md` §7.
   - **The general lesson:** "migrations before merge" assumes the migration is inert until new code uses it. When the RUNNING code already emits the value a constraint blocks, the constraint is a live behavioural gate and relaxing it deploys a change by itself. Ask which side is already emitting the value before choosing the order.
 - Fill real TELNYX_PUBLIC_KEY in .env
 
+## 🔴 Flaky gates that block PROD DEPLOYS (2026-08-20)
+
+A red `main` CI run makes Railway mark that commit's deployments **SKIPPED, and
+SKIPPED is terminal** — turning CI green afterwards does not retry. So a flaky
+test is not a nuisance here, it is a mechanism that silently stops merged code
+from reaching production while every service reports healthy. Both of these
+turned `main` red on `2aa61d4`.
+
+> **THE PATTERN MATTERS MORE THAN ANY ONE OF THESE.** Three _different_ tests
+> turned CI red on 2026-08-20 — `purge-soft-deleted` (timeout mismatch),
+> `customer-preferences-config` (E2E, cause unproven), and
+> `SetupWizard > shows success state with phone number after activation`
+> (dashboard, passes locally, 1,115 ms under CI load). Only the first had a
+> diagnosed cause. In a repo where a red `main` makes Railway skip the deploy
+> **terminally**, CI flakiness is not a test-hygiene issue — it is an
+> availability issue for shipping. If a fourth appears, stop adding features and
+> treat runner contention as the bug: the common factor in all three is a
+> wall-clock expectation meeting a loaded runner.
+
+- [x] **`scripts/purge-soft-deleted.test.ts` — two timeouts that disagreed.** The
+      harness gives its subprocess a 60s budget (`spawnSync timeout: 60_000`)
+      while vitest's default test timeout is 5s, and the shorter one was arrived
+      at by accident. Every case spawns `npx tsx`, paying npx resolution plus a
+      TypeScript compile before the script runs — seconds, not milliseconds. On a
+      loaded runner the happy-path case took **5,862 ms** and vitest killed it at
+      5,000. All five cases now carry an explicit `SUBPROCESS_TEST_TIMEOUT_MS`
+      matched to the subprocess budget, so a genuine hang is reported by
+      `spawnSync` with its exit status and output rather than by vitest with a
+      bare "timed out". Same class as the `PERF_ASSERT` fix: **the test was
+      asserting the machine's speed, not the code's behaviour.**
+- [ ] **Dashboard flake, not yet diagnosed** —
+      `SetupWizard.test.tsx > shows success state with phone number after activation`.
+      Failed once on 2026-08-20 (#362's run) and passes locally in isolation; took 1,115 ms on
+      the CI runner. Not patched — one occurrence is not a diagnosis, and
+      guessing at a fix for a timing-sensitive React test usually produces a
+      test that passes for a new wrong reason. Recorded so the second occurrence
+      is recognized as a pattern rather than investigated from scratch.
+- [ ] **`customer-preferences-config.spec.ts` — root cause NOT yet proven.** It
+      has now failed twice on 2026-08-20, on two different PRs, always the same
+      way: the save succeeds, the toggle persists (`aria-checked=true` passes),
+      and the guidance textarea comes back **empty** after the reload. Serial
+      execution (`workers: 1`, `fullyParallel: false`) rules out cross-spec
+      interference, and the backend merge semantics are correct
+      (`body.preferences_instructions !== undefined ? … : prior`), so the two
+      obvious explanations are already eliminated. **Not blind-patched.** What
+      shipped instead makes the next occurrence diagnostic: the test now waits on
+      the actual `update-config` RESPONSE rather than the "Saved!" label, and
+      then asserts the value is IN POSTGRES before reloading — so a failure
+      before the reload is a write bug and a failure after it is a read/render
+      bug, which the previous version could not distinguish. If it recurs, read
+      which assertion failed first.
+  - **Also fixed here, and it was a real landmine:** the spec's `afterAll` ran
+    `UPDATE tenants SET save_preferences_enabled = false, preferences_instructions = NULL`
+    with **no WHERE clause** — resetting every tenant in the database. Harmless
+    only because `workers: 1` pins serial execution; the day anyone raises that
+    for speed it becomes cross-spec corruption presenting as a flake somewhere
+    else entirely. Now scoped to the one tenant the spec edits.
+
+---
+
 ## 📞 Live-call fix series (2026-07-30) — see `docs/CALL_FIX_PLAN.md`
 
 The 12 real calls from 2026-07-26/27 (`CALL_IMPROVEMENTS.md`, root) produced an
