@@ -641,3 +641,66 @@ describe('POST /setup/impact — warn BEFORE destroying, not after', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe('setup sync — the declared weekly RULE is pruned with the shifts', () => {
+  it('an employee whose shifts the owner removed loses their rule too', async () => {
+    // WHO: an owner who deleted every shift for a staff member and saved.
+    // WHAT: sync-mode prune clears both the future employee_schedule rows AND
+    //       employee_schedule_pattern for the edited employees.
+    // WHEN: any wizard save that removes an employee's hours entirely.
+    // WHERE: src/services/setupGraph.ts, the prune branch.
+    // WHY: an employee with NO shifts in the draft never reaches
+    //      expandWeeklyToSchedule at all, so nothing else would ever retire
+    //      their rule — and the schedule extender would keep projecting the
+    //      removed hours forward forever, from a rule nobody can see. That is
+    //      the resurrect-what-the-owner-dropped bug arriving through the very
+    //      table added to prevent it.
+    const g = await seedBusiness();
+
+    // The create-mode commit wrote the rule from INITIAL_DRAFT's Monday shift.
+    const before = await setup.query(
+      'SELECT day_of_week FROM employee_schedule_pattern WHERE tenant_id = $1',
+      [tenantId]
+    );
+    expect(before.rows).toEqual([{ day_of_week: 1 }]);
+
+    const draft = toSyncDraft(g);
+    draft.shifts = [];
+
+    const res = await post('/setup/commit', draft);
+    expect(res.statusCode).toBe(200);
+
+    const after = await setup.query(
+      'SELECT day_of_week FROM employee_schedule_pattern WHERE tenant_id = $1',
+      [tenantId]
+    );
+    expect(after.rows).toEqual([]);
+  });
+
+  it('an employee whose shifts CHANGED keeps a rule, and it is the new one', async () => {
+    // WHY: the prune deletes the rule for every edited employee and the fan-out
+    //      immediately rewrites it for anyone still carrying shifts. If the
+    //      order were wrong, or the rewrite missed, a normal edit would leave
+    //      the employee with no rule at all and stop their calendar extending.
+    const g = await seedBusiness();
+    const draft = toSyncDraft(g);
+    draft.shifts = [
+      {
+        employee_tmp_id: g.employees[0].employee_id,
+        day_of_week: 4,
+        start_time: '10:00',
+        end_time: '14:00',
+      },
+    ];
+
+    const res = await post('/setup/commit', draft);
+    expect(res.statusCode).toBe(200);
+
+    const after = await setup.query(
+      `SELECT day_of_week, start_time::text AS start_time, end_time::text AS end_time
+         FROM employee_schedule_pattern WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    expect(after.rows).toEqual([{ day_of_week: 4, start_time: '10:00:00', end_time: '14:00:00' }]);
+  });
+});

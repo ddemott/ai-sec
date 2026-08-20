@@ -134,10 +134,15 @@ export async function expandWeeklyToSchedule(
     // Nothing to fan out. Not an error — owner may not have set hours yet.
     //
     // Deliberately does NOT clear the stored rule. An empty pattern is
-    // ambiguous — "this employee has no hours" and "the caller had nothing to
-    // send" arrive identically — and wiping a working rule on the ambiguous
-    // reading is how a bookable business goes dark. Clearing a rule is what the
-    // wizard's explicit prune path is for.
+    // ambiguous ON ITS OWN — "this employee has no hours" and "the caller had
+    // nothing to send" arrive identically — and wiping a working rule on the
+    // ambiguous reading is how a bookable business goes dark.
+    //
+    // A caller that MEANS "no hours" says so explicitly, and both do: the
+    // `replace` branch of POST /shifts/expand-weekly and the `prune` branch of
+    // setupGraph each delete the rule themselves, right beside the delete of
+    // the future employee_schedule rows, before calling this. That is where the
+    // ambiguity is resolved — by the only code that knows the answer.
     return {
       inserted: 0,
       rangeStart: toIsoDate(startDate),
