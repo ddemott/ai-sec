@@ -55,7 +55,7 @@ import { registerExportRoutes } from './routes/exportData';
 import { registerAuditLogRoutes } from './routes/auditLog';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { buildStubTelnyxProvisioning } from './services/telnyxNumbersStub';
-import { workerEnabled } from './services/workerEnabled.js';
+import { workerEnabled } from './services/workerEnabled';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { startVoiceSessionReaper, stopVoiceSessionReaper } from './workers/voiceSessionReaper';
 import { startScheduleExtender, stopScheduleExtender } from './workers/scheduleExtender';
