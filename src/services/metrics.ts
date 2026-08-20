@@ -332,16 +332,27 @@ export const silentHangupsTotal = registry.counter(
   'Calls that ended with no caller speech at all, bucketed under/over the silent-call threshold'
 );
 
-// Reminder delivery outcomes per channel. Closes TODO.md Phase 5
+// Reminder delivery outcomes per reminder TYPE. Closes TODO.md Phase 5
 // "Monitoring dashboard for reminder delivery rates." A regression that
 // silently breaks the SMS provider or Gmail SMTP shows up here as
 // outcome="failure" climbing while outcome="success" flattens — long
 // before a customer reports a missed appointment. Plot
 // `rate(reminders_sent_total{outcome="success"}[5m]) /
-//  rate(reminders_sent_total[5m])` as the per-channel success rate.
+//  rate(reminders_sent_total[5m])` as the overall success rate, and add
+// `by (type)` to split it. NOT `by (channel)` — see the note below; that
+// label has never been emitted by anything running in production, and this
+// comment said "per channel" right up until the code that would have emitted
+// it was deleted.
 export const remindersSentTotal = registry.counter(
   'reminders_sent_total',
-  'Reminder delivery attempts, partitioned by channel (email, sms) and outcome (success, failure)'
+  // Labels are `type` and `outcome`. This description said `channel` (email,
+  // sms) for months — a shape ONLY the parallel reminder implementation ever
+  // emitted, and that code was never wired to anything and is now deleted. The
+  // live ReminderService partitions by reminder TYPE (confirmation, 72h, 24h,
+  // 2h, custom), because a single reminder can go out on both channels at once
+  // and `anyChannelSucceeded` collapses them to one outcome. Any dashboard or
+  // alert filtering on `channel` matched nothing.
+  'Reminder delivery attempts, partitioned by type (confirmation, 72h, 24h, 2h, custom, unknown) and outcome (success, failure)'
 );
 
 // Reminders that did NOT make it to a delivery attempt — appointment
@@ -350,7 +361,11 @@ export const remindersSentTotal = registry.counter(
 // means callers aren't being asked to opt in correctly).
 export const remindersSkippedTotal = registry.counter(
   'reminders_skipped_total',
-  'Reminders that skipped delivery, partitioned by reason (appointment_not_found, appointment_cancelled, no_consent, processing_error)'
+  // Reasons corrected to what the LIVE path actually emits. `processing_error`
+  // was never emitted by it (a processing failure is rethrown so the worker can
+  // classify retry-vs-fail, and lands in errors_total instead), and
+  // `appointment_passed` was emitted but undocumented.
+  'Reminders that skipped delivery, partitioned by reason (appointment_not_found, appointment_cancelled, appointment_passed, no_consent)'
 );
 
 // the SMS provider SMS delivery receipts — the *carrier-confirmed* outcome, distinct
@@ -398,7 +413,7 @@ export const inboundSmsTotal = registry.counter(
 // and alert above a few percent — a bad `from` number pins it to 1.0 instantly.
 //
 // Distinct from message_delivery_receipts_total (carrier-confirmed outcome) and
-// from reminders_sent_total (reminder-channel outcome, one layer up). This one
+// from reminders_sent_total (per-reminder-TYPE outcome, one layer up). This one
 // answers "did the provider accept the request?"
 export const smsSendsTotal = registry.counter(
   'sms_sends_total',
