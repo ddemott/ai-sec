@@ -599,19 +599,19 @@ describe('PK rename coverage — real-DB integration', () => {
       const ins = await client.query(
         `INSERT INTO tenant_integration_settings
            (tenant_id, provider, access_token, refresh_token, is_active)
-         VALUES ($1, 'jobber', 'access-stub', 'refresh-stub', true)
+         VALUES ($1, 'square', 'access-stub', 'refresh-stub', true)
          RETURNING tenant_id, provider`,
         [tenantId]
       );
       expect(ins.rows[0].tenant_id).toBe(tenantId);
-      expect(ins.rows[0].provider).toBe('jobber');
+      expect(ins.rows[0].provider).toBe('square');
 
       const upd = await client.query(
         `UPDATE tenant_integration_settings
             SET access_token = 'rotated-access', token_expires_at = now() + interval '1 hour'
           WHERE tenant_id = $1 AND provider = $2
           RETURNING access_token`,
-        [tenantId, 'jobber']
+        [tenantId, 'square']
       );
       expect(upd.rowCount).toBe(1);
       expect(upd.rows[0].access_token).toBe('rotated-access');
@@ -622,7 +622,7 @@ describe('PK rename coverage — real-DB integration', () => {
       await expect(
         client.query(
           `INSERT INTO tenant_integration_settings (tenant_id, provider, is_active)
-           VALUES ($1, 'jobber', true)`,
+           VALUES ($1, 'square', true)`,
           [tenantId]
         )
       ).rejects.toThrow(/duplicate key/i);
@@ -632,6 +632,10 @@ describe('PK rename coverage — real-DB integration', () => {
   // ─────────────────────────────────────────────────────────────────────
   // entity_sync_map.entity_sync_map_id (UUID)
   // ─────────────────────────────────────────────────────────────────────
+  // Provider is 'square' throughout: migration 20260821020000 narrowed the
+  // provider CHECK constraints to the one CRM that still exists. These inserts
+  // used 'jobber', whose adapter was deleted 2026-06-12 — the narrowed
+  // constraint is what surfaced it, which is the constraint doing its job.
   describe('entity_sync_map', () => {
     it('INSERT returns entity_sync_map_id; UPDATE by it bumps last_synced_at', async () => {
       // WHO: CRM sync writing the local↔external id mapping
@@ -650,7 +654,7 @@ describe('PK rename coverage — real-DB integration', () => {
         `INSERT INTO entity_sync_map
            (tenant_id, provider, entity_type, local_id, external_id,
             remote_updated_at, sync_status)
-         VALUES ($1, 'jobber', 'customer', $2, 'jobber-client-9999',
+         VALUES ($1, 'square', 'customer', $2, 'square-client-9999',
                  '2026-05-01T00:00:00Z', 'synced')
          RETURNING entity_sync_map_id, sync_status`,
         [tenantId, customerId]

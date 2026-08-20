@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict oo0gC55BsW0bcqoJBqtLBbGUNji5fguecaByca6vPljs7cjqcLlKLyQ4TukDNjH
+\restrict dN4XtohsnYH51Awg5UEfllUbUjX8FVW2EjJ3wTKWBYYH1web07lsjAdxS4e85m8
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3032,7 +3032,7 @@ CREATE TABLE public.entity_sync_map (
     error_message text,
     created_at timestamp with time zone DEFAULT now(),
     CONSTRAINT entity_sync_map_entity_type_check CHECK ((entity_type = ANY (ARRAY['customer'::text, 'appointment'::text]))),
-    CONSTRAINT entity_sync_map_provider_check CHECK ((provider = ANY (ARRAY['jobber'::text, 'hubspot'::text, 'square'::text, 'servicetitan'::text]))),
+    CONSTRAINT entity_sync_map_provider_check CHECK ((provider = ANY (ARRAY['square'::text]))),
     CONSTRAINT entity_sync_map_sync_status_check CHECK ((sync_status = ANY (ARRAY['synced'::text, 'pending'::text, 'conflict'::text, 'error'::text])))
 );
 
@@ -3647,7 +3647,7 @@ CREATE TABLE public.tenant_integration_settings (
     last_sync_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
-    CONSTRAINT tenant_integration_settings_provider_check CHECK ((provider = ANY (ARRAY['jobber'::text, 'hubspot'::text, 'square'::text, 'servicetitan'::text])))
+    CONSTRAINT tenant_integration_settings_provider_check CHECK ((provider = ANY (ARRAY['square'::text])))
 );
 
 ALTER TABLE ONLY public.tenant_integration_settings FORCE ROW LEVEL SECURITY;
@@ -6562,5 +6562,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict oo0gC55BsW0bcqoJBqtLBbGUNji5fguecaByca6vPljs7cjqcLlKLyQ4TukDNjH
+\unrestrict dN4XtohsnYH51Awg5UEfllUbUjX8FVW2EjJ3wTKWBYYH1web07lsjAdxS4e85m8
 
