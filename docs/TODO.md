@@ -29,7 +29,11 @@ Voice/Telnyx go-live ops detail + incident recovery: `docs/RUNBOOK.md` §7.
 - [x] ~~Pull turn_latency_ms from a real prod call~~ — **DONE 2026-08-19, and it found the instrument was BROKEN.** Pulled `voice_sessions.transcript` + Railway logs for a real post-deploy call (`sim-call-1787158785189`, John Jones / job inquiry, 207s). Two real defects, both fixed on `fix/hiring-for-prefix-and-live-turn-latency`: **(1)** the transcript showed a clean re-ask the caller had to repeat — "Are you hiring for your own company... or placing with a client?" → caller answers plainly → agent asks AGAIN "just to be clear" 8s later. Logs showed why: the model recorded `hiring_for` as `"hiring_for_own_company"` (fused the node_id onto the valid option `own_company`), `tracker.record()` rejected it as an unknown option and the model, instead of silently retrying with the corrected key its own rejection message handed it, re-asked the caller. Fixed in `tracker.ts`'s choice-value check: strip a `${nodeId}_` prefix before rejecting, so this ONE mistake shape is accepted rather than round-tripped through the caller. **(2)** `turn_latency_ms` (shipped a few hours earlier, same day) **never once appeared in the log for this call** — zero occurrences, despite two turns that took 17s and 20s of real dead air per the transcript timestamps. Root cause: it was added inside `attachOutputWatchdog`, which is gated behind `ENABLE_OUTPUT_WATCHDOG`, and **prod runs that flag OFF** (`agent/src/index.ts` line ~1770 says so explicitly — the fact was already documented, just not connected to the new instrumentation before shipping it). Moved the same logging into `attachSilentTurnRecovery`, which is unconditional and the only thing that actually runs on every prod call. Both fixes have unit test coverage (`tracker.test.ts`, `watchdog.test.ts`).
 - **OPEN, needs Dale's ear, not mine:** the 17s/20s dead-air turns are real and still uncovered — `ENABLE_OUTPUT_WATCHDOG` (the hold-line/filler backstop, `watchdog.ts`) would speak "Just a moment" into gaps exactly this size, but it is deliberately OFF pending a human validating it on a real call (`docs/VOICE_AGENT_PLAYBOOK.md` RULE 10.2 / RULE 8.1, `docs/RESOLVED.md`: "Real-call validation (Dale, not CI)... flag stays OFF until confirmed"). The code was already retuned after the LAST time it was tried (2800ms deadline, honest non-claiming filler text) but nobody has re-enabled and listened since. Recommend: set `ENABLE_OUTPUT_WATCHDOG=true` on the `secretary-hq-agent` Railway service, place one real test call, confirm the filler feels like cover and not a stutter, keep or revert.
 - [x] ~~Reminder pipeline totally dead since 2026-08-06~~ — **FOUND AND FIXED 2026-08-19** on `fix/reminder-claim-status-constraint`. The atomic claim from #322 wrote a `status` the CHECK constraint rejected, so every tick threw and **zero reminders or confirmations were sent for 13 days** while the worker reported itself healthy. Migration `20260819000000` + `processReminder` accepting `'sending'` + `releaseStaleClaims()`, guarded by a real-DB regression suite. Full write-up in P0 §4b below and `docs/LESSONS_LEARNED.md`.
-- **(Dale) APPLY MIGRATION `20260819000000` TO PROD BEFORE MERGING THAT PR.** House rule: prod DB migrations go in ahead of the merge. Until it is applied, prod's constraint still rejects `'sending'` and reminders stay dark. `npm run db:migrate -- "<prod DATABASE_URL>"`. After the deploy, confirm recovery by watching for the absence of `errors_total{event="reminder_batch_failed"}` and for `reminder_schedules` rows moving past `'scheduled'`.
+- **(Dale) DEPLOY ORDER FOR `20260819000000` — CODE FIRST, THEN THE MIGRATION. This is the REVERSE of the house rule, and the reversal is deliberate.** The standing rule ("prod DB migrations go in ahead of the merge") is right for an ADDITIVE migration that new code will start using. This one is different: prod is ALREADY running code that writes the value the constraint rejects, so widening the constraint changes prod behaviour on its own, with the old code still live.
+  - **What applying the migration alone would do:** `origin/main` today writes `status='sending'` in the claim (#322), gates `processReminder` on `!== 'scheduled'`, and has **no** `releaseStaleClaims`. Widen the constraint and the claim starts SUCCEEDING — rows flip to `'sending'`, `processReminder` reads one, sees `'sending'`, returns, and the row is stranded permanently because the claim query only ever selects `'scheduled'` and nothing in prod recovers it. The worker counts each one as processed. That turns today's loud, harmless, total outage (nothing is written at all) into a **silent leak that damages rows** — strictly worse.
+  - **Correct sequence:** (1) merge PR #350; (2) confirm the `secretary-hq` backend deploy actually landed (`/health` `started_at` moves — Railway can silently skip, see the SKIPPED-is-terminal note in `CLAUDE.md`); (3) THEN `npm run db:migrate -- "<prod DATABASE_URL>"`. Between (1) and (3) prod behaves exactly as it does today: still broken, still harmless.
+  - **Confirm recovery** after step 3: no new `errors_total{event="reminder_batch_failed"}`, `reminder_schedules` rows moving past `'scheduled'`, and nothing accumulating in `'sending'`.
+  - **The general lesson:** "migrations before merge" assumes the migration is inert until new code uses it. When the RUNNING code already emits the value a constraint blocks, the constraint is a live behavioural gate and relaxing it deploys a change by itself. Ask which side is already emitting the value before choosing the order.
 - Fill real TELNYX_PUBLIC_KEY in .env
 
 ## 📞 Live-call fix series (2026-07-30) — see `docs/CALL_FIX_PLAN.md`
@@ -154,7 +158,7 @@ ever happened; the call then could not end.
       A red eval that is red for the wrong reason is worse than no eval.
 - [x] **(code) E2E-5 — a message asking for a callback was taken with no number.**
       Scenario WEDDING MESSAGE, and it **PASSED**: `set_purpose` selected `message +
-    generic_subject` and _not_ `identity`, so `caller_phone` was never on the
+  generic_subject` and _not_ `identity`, so `caller_phone` was never on the
       checklist. Grace Okafor said "I'd love for him to call me back", the message
       was written, the call closed clean, and there is no way to reach her.
       "Include identity whenever a goal needs a contact" was a prompt rule.
@@ -225,7 +229,7 @@ Agent suite **1687** green, tsc + lint + root format + `verify:claude-md` clean.
       open forever.
 - [x] **E2E-19 — the role matcher only knew the SINGULAR.**
       `meetingTopicNamesOwnerRole` matched `job opportunity` but not `job
-    opportunities` — in a scenario literally named _"talk with Dale about job
+  opportunities` — in a scenario literally named _"talk with Dale about job
       opportunities"_. The topic guard (E2E-8) worked, the model re-asked, the caller
       said "About the job opportunities", and the matcher missed the plural: no job
       tree, no role intake, a 15-minute meeting with no subject. Plural is the more
@@ -336,7 +340,7 @@ building the guard, not by another call:
       "Goodbye! If you need anything else, just call back." — until the harness's
       round cap. The existing stall detector fires ONCE and says "wrap up the call",
       which the model satisfied with a sentence, repeatedly. `ChecklistAgent.
-    onUserTurnCompleted` now has a resolved branch (`GOODBYE_STALL_LIMIT`) that
+  onUserTurnCompleted` now has a resolved branch (`GOODBYE_STALL_LIMIT`) that
       REPEATS and names the missing fact: _saying goodbye does not end the call, only
       `finish_call` does_. Deliberately conditional — a caller may still ask something
       after the checklist completes. **Verified: scenario went ✗ FAIL (call never
