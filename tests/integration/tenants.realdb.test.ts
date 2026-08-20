@@ -420,7 +420,11 @@ describe('GET /templates/full → real DB', () => {
     //      and the picker's TemplatePreviewModal renders system_prompt_template
     //      and first_message to the owner deliberately. Locking it to
     //      super-admin would break onboarding for every real customer.
-    const res = await app.inject({ method: 'GET', url: '/templates/full' });
+    // The harness's preHandler only populates req.auth when x-tenant-id is
+    // present, so without this header the request is not authenticated and
+    // the test would pass even if the route accidentally became public.
+    const id = await freshTenant('Templates Full Contract');
+    const res = await app.inject({ method: 'GET', url: '/templates/full', headers: hdr(id) });
     expect(res.statusCode).toBe(200);
 
     const rows: Record<string, unknown>[] = res.json();
@@ -458,7 +462,8 @@ describe('GET /templates/full → real DB', () => {
     //      dashboard was being handed values that are simply false, and
     //      example_resources is a column no client has ever heard of. None of
     //      the three was ever a decision; they rode in on `SELECT *`.
-    const res = await app.inject({ method: 'GET', url: '/templates/full' });
+    const id = await freshTenant('Templates Full Undeclared');
+    const res = await app.inject({ method: 'GET', url: '/templates/full', headers: hdr(id) });
     const rows: Record<string, unknown>[] = res.json();
 
     for (const leaked of ['voice_provider', 'voice_name', 'example_resources']) {

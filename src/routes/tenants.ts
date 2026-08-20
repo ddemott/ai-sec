@@ -669,27 +669,15 @@ export function registerTenantRoutes(
   // GET /templates/full — the business-type picker's data source: every
   // template with the fields the onboarding UI applies to a tenant.
   //
-  // AUTHENTICATED, NOT SUPER-ADMIN, AND THAT IS DELIBERATE. The backlog
-  // prescribed `requireSuperAdmin` here to match /templates/create below. That
-  // fix is wrong and would break onboarding for every real customer: five owner
-  // -facing surfaces read this route — SetupView, SetupWizard, SoloWizard,
-  // DashboardHome and BusinessTypeSection — and the picker's own
-  // TemplatePreviewModal RENDERS `system_prompt_template` and `first_message`
-  // to the owner on purpose, under the headings "AI System Prompt" and
-  // "Greeting Message". The prompt is not withheld from owners anywhere in this
-  // product; AIConfigView lets them edit their own copy of it. A route whose
-  // whole job is to show templates to owners cannot be owner-inaccessible.
+  // AUTHENTICATED, NOT SUPER-ADMIN, AND THAT IS DELIBERATE — the onboarding
+  // wizard and the business-type picker are its callers, and the picker shows
+  // the prompt to the owner on purpose. Locking this to super-admin breaks
+  // onboarding; see the PR linked from docs/TODO.md P0 §4b for the call sites.
   //
-  // WHAT WAS ACTUALLY WRONG: `SELECT *`. It is an implicit contract that grows
-  // by itself — every column ever added to `business_templates` was published
-  // to every authenticated user the moment the migration landed, with nobody
-  // deciding to publish it. Today that means `voice_provider` / `voice_name`
-  // (backfilled 'cartesia' / 'elevenlabs' — TTS providers this stack has never
-  // used, so the dashboard is being handed values that are simply false) and
-  // `example_resources` (no client has ever heard of it). The column list below
-  // IS the wire contract, matches `BusinessTemplate` in dashboard/lib/types.ts
-  // field for field, and is pinned by a test — so publishing a new column
-  // becomes a deliberate act instead of a side effect of a migration.
+  // The column list below IS the wire contract. It replaced `SELECT *`, which
+  // published every column ever added to `business_templates` the moment its
+  // migration landed, with nobody deciding to. A test pins the exact field set,
+  // so adding a column here is a deliberate act rather than a side effect.
   app.get(
     '/templates/full',
     withHandler(async (_req: AppRequest, reply) => {
