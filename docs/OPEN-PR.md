@@ -1,6 +1,6 @@
 # Branch / PR Merge Inventory
 
-**Snapshot: 2026-08-20.** After #353, #356 and #354 merged and prod deployed `a8250f9`.
+**Snapshot: 2026-08-20 (end of day).** After #353, #356, #354, #357, #358 and #355 merged and prod deployed `214e23f`.
 
 Regenerate the raw data with:
 
@@ -12,19 +12,15 @@ gh pr list --state open --json number,title,headRefName,baseRefName,url
 
 ## Current state
 
-- **Open PRs: #355** — `fix(scheduling): store the weekly rule instead of guessing it back out of the rows`.
-  Green on all 4 checks and mergeable, **deliberately not merged**: it ships migration
-  `20260820000000_employee_schedule_pattern`, and merging before that migration is applied
-  to prod makes every schedule-extender tick and every wizard finalize throw
-  `relation "employee_schedule_pattern" does not exist`. Apply the migration first, then merge.
-- Branch refs expected: `main` / `origin/main`, plus
-  `fix/schedule-extender-stores-the-rule` (#355, open) and
-  `backup/local-main-drift-e9e5439` (unmerged Grok-era voice-pacing work, **no PR, no upstream —
-  its hash is not immortal**; see the `branch-hash-anchors` memory).
-- Merged this session:
-  - #353 `chore: delete ~810 lines of dead code — and the metrics illusion it was propping up` — `69d6bdf`
+- **Open PRs: none.**
+- **Branch refs: `main` only**, local and remote. No stashes, clean worktree.
+- Merged 2026-08-20:
+  - #353 `chore: delete ~810 lines of dead code` — `69d6bdf`
   - #356 `fix(templates): GET /templates/full publishes a stated column list, not SELECT *` — `ff9b4cc`
-  - #354 `fix(security): close the name-search enumeration oracle in find-customer-by-name` — `a8250f9`
+  - #354 `fix(security): close the name-search enumeration oracle` — `a8250f9`
+  - #357 `chore(docs): record the branch purge and current prod state` — `d689b34`
+  - #358 `chore: remove two stray session snapshots from the repo root` — `04510a5`
+  - #355 `fix(scheduling): store the weekly rule instead of guessing it back out of the rows` — `214e23f`
 
 ## Purged 2026-08-20
 
@@ -36,8 +32,13 @@ added a merge commit that never existed locally.
 
 ## Prod
 
-All 3 Railway services on `a8250f9`. Backend `/health` `started_at` = `2026-08-20T14:27:27.376Z`;
+All 3 Railway services on `214e23f`. Backend `/health` `started_at` = `2026-08-20T17:35:09.861Z`;
 `/ready` reports `db=ok`, `rls_enforced=true`, `db_role=app_user`, `waiting=0`.
+
+Migration `20260820000000_employee_schedule_pattern` is applied to prod and verified by querying it:
+table present, composite PK `(tenant_id, employee_id, day_of_week)`, RLS enabled AND forced, both
+policies, the `updated_at` trigger, `rows=0` (no backfill, by design). `employee_schedule`'s
+`max(shift_date)` is `2027-02-15` — the full 180-day horizon — so the extender ran clean on the new code.
 
 **Caveat worth carrying forward:** #352's `main` CI run went RED (dashboard `deliveryStats` tests),
 which by the SKIPPED-is-terminal rule in `CLAUDE.md` means its Railway deploys were almost certainly
