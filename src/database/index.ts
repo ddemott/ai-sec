@@ -278,13 +278,16 @@ export interface DatabaseService {
 
   // Appointment operations
   //
-  // `tenantId` is REQUIRED in production even though it is optional here for
-  // back-compat with mocked tests. `appointments` carries FORCE ROW LEVEL
-  // SECURITY with a single policy — `tenant_id = tenant_ctx_uuid()` — and NO
-  // admin-bypass policy, so a read on a connection with no tenant context
-  // matches zero rows and this returns null for an appointment that plainly
-  // exists. See the implementation for the incident.
-  getAppointmentById(id: string, tenantId?: string): Promise<AppointmentForReminder | null>;
+  // `tenantId` is REQUIRED, and required in the TYPE rather than in a comment.
+  // `appointments` carries FORCE ROW LEVEL SECURITY with a single policy —
+  // `tenant_id = tenant_ctx_uuid()` — and NO admin-bypass policy, so a read on
+  // a connection with no tenant context matches zero rows and returns null for
+  // an appointment that plainly exists. An earlier version of this fix left the
+  // parameter optional with a comment saying it was required in production;
+  // that is documentation instead of enforcement, and it left a real
+  // context-less caller (reminderRepository) compiling happily. Omitting it is
+  // now a type error. See the implementation for the incident.
+  getAppointmentById(id: string, tenantId: string): Promise<AppointmentForReminder | null>;
 
   // Consent operations
   createConsentRecord(data: Omit<ConsentRecord, 'consent_record_id'>): Promise<ConsentRecord>;
@@ -494,7 +497,7 @@ export class PostgresDatabaseService implements DatabaseService {
 
   // ── Appointment Operations ─────────────────────────────────────────
 
-  async getAppointmentById(id: string, tenantId?: string): Promise<AppointmentForReminder | null> {
+  async getAppointmentById(id: string, tenantId: string): Promise<AppointmentForReminder | null> {
     // WHY THIS TAKES A tenantId. It used to run on `withClient`, which sets no
     // RLS tenant context. In production that is fatal and silent:
     // `appointments` has FORCE ROW LEVEL SECURITY and exactly one policy,
@@ -512,8 +515,7 @@ export class PostgresDatabaseService implements DatabaseService {
     // pipeline was restored (migration 20260819000000): all 8 pending reminders
     // went straight to 'failed'. The path had never run before, so this was
     // never a regression — it was simply unreachable behind the earlier outage.
-    const run = (client: PoolClient) => this.appointmentByIdQuery(client, id);
-    return tenantId ? this.withTenantClient(tenantId, run) : this.withClient(run);
+    return this.withTenantClient(tenantId, (client) => this.appointmentByIdQuery(client, id));
   }
 
   private async appointmentByIdQuery(

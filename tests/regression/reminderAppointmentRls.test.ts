@@ -150,13 +150,40 @@ describe('getAppointmentById under real RLS as app_user', () => {
   });
 
   it('SAD: a context-less read finds nothing — the exact production failure', async () => {
-    // Documents WHY the argument is required rather than optional-in-practice.
-    // `appointments` has no admin-bypass policy (unlike reminder_schedules), so
-    // with no tenant context the row is filtered out and the query succeeds
-    // while returning nothing. If this ever starts returning a row, an
-    // admin-bypass policy has been added to a tenant-data table and that is the
-    // thing to go look at.
-    const appt = await db.getAppointmentById(appointmentId);
-    expect(appt).toBeNull();
+    // Asserted against the POLICY directly rather than through
+    // getAppointmentById, because omitting the tenant id is now a compile
+    // error there (that is the point of the fix). This is what the broken
+    // version was really doing: a perfectly valid query on a connection with no
+    // tenant context, succeeding and returning zero rows.
+    //
+    // `appointments` has no admin-bypass policy — unlike `reminder_schedules`,
+    // which is exactly why the claim worked while this read came back empty. If
+    // this ever starts returning a row, an admin-bypass policy has been added
+    // to a tenant-data table and THAT is the thing to go look at.
+    const res = await appUserPool.query(
+      'SELECT appointment_id FROM appointments WHERE appointment_id = $1',
+      [appointmentId]
+    );
+    expect(res.rows).toHaveLength(0);
+  });
+
+  it('SAD: reminder_schedules IS readable without context — the asymmetry that hid the bug', async () => {
+    // Pins the contrast that made this so hard to see. The worker claims
+    // reminders on a context-less connection and it WORKS, because
+    // reminder_schedules carries `admin_bypass` (`tenant_ctx() = ''`) for the
+    // cross-tenant sweep. So the pipeline reported itself healthy right up to
+    // the appointment read. Two tables, one code path, different policy shapes.
+    const r = await setup.query(
+      `INSERT INTO reminder_schedules
+         (appointment_id, tenant_id, customer_phone, reminder_type, scheduled_for, status, lead_minutes)
+       VALUES ($1, $2, '+16305559999', '24h', NOW(), 'scheduled', 1440)
+       RETURNING reminder_schedule_id`,
+      [appointmentId, tenantId]
+    );
+    const res = await appUserPool.query(
+      'SELECT reminder_schedule_id FROM reminder_schedules WHERE reminder_schedule_id = $1',
+      [r.rows[0].reminder_schedule_id]
+    );
+    expect(res.rows).toHaveLength(1);
   });
 });

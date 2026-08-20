@@ -519,10 +519,18 @@ describe('ReminderService', () => {
         //        confusion is real rather than careless — reminder_schedules
         //        .status genuinely IS 'cancelled' (two Ls, and it is in that
         //        table's CHECK constraint). Two tables, two spellings.
+        // Real UUIDs, not 1/456. `tenant_id` and `appointment_id` are UUID
+        // columns, `withTenantClient` casts the tenant id to uuid, and a
+        // numeric fixture would be rejected by real Postgres — so a fixture
+        // shaped unlike production is the same class of mistake this very test
+        // exists to catch. (Neighbouring older tests still use numbers; left
+        // alone here rather than widening this PR.)
+        const TENANT = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+        const APPT = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
         const mockReminder: ReminderSchedule = {
           reminder_schedule_id: 2,
-          appointment_id: 456,
-          tenant_id: 1,
+          appointment_id: APPT,
+          tenant_id: TENANT,
           customer_email: 'customer@example.com',
           reminder_type: '24h',
           scheduled_for: new Date().toISOString(),
@@ -531,8 +539,8 @@ describe('ReminderService', () => {
 
         vi.mocked(mockDb.getReminderSchedule).mockResolvedValue(mockReminder);
         vi.mocked(mockDb.getAppointmentById).mockResolvedValue({
-          id: '456',
-          tenantId: '1',
+          id: APPT,
+          tenantId: TENANT,
           // FUTURE, so the `appointmentDateTime <= now` check below cannot mask
           // the miss — this is exactly the case that reached the send path.
           dateTime: createFutureDate(24).toISOString(),
@@ -545,6 +553,10 @@ describe('ReminderService', () => {
           '2',
           expect.objectContaining({ status: 'cancelled', error: 'Appointment cancelled' })
         );
+        // And the appointment read must carry the tenant id — without it the
+        // RLS policy on `appointments` filters the row out and this reports
+        // "Appointment not found" for an appointment that exists.
+        expect(mockDb.getAppointmentById).toHaveBeenCalledWith(APPT, TENANT);
       });
     });
 
