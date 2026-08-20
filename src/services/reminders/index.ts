@@ -209,7 +209,23 @@ export class ReminderService {
         return;
       }
 
-      if (reminder.status !== 'scheduled') {
+      // 'sending' is the CLAIMED state, and it is the state every reminder the
+      // worker asks us to process is actually in — processBatch() flips the row
+      // to 'sending' in the same statement that selects it, precisely so a
+      // second worker (or the next tick after a slow one) cannot pick it up.
+      //
+      // This gate read `!== 'scheduled'` and would therefore have silently
+      // no-op'd EVERY claimed reminder the moment the claim itself started
+      // working: read the row, see 'sending', return, and leave it stranded in
+      // 'sending' where the claim query — which only ever selects 'scheduled' —
+      // can never see it again. A reminder lost with no error, no metric, and a
+      // worker reporting it as processed. The claim never got that far because
+      // the CHECK constraint rejected 'sending' outright (migration
+      // 20260819000000), so this was a second bug hiding behind the first.
+      //
+      // Anything else — sent, failed, cancelled — is genuinely terminal and
+      // still returns.
+      if (reminder.status !== 'scheduled' && reminder.status !== 'sending') {
         return;
       }
 
@@ -320,6 +336,11 @@ export class ReminderService {
     if (!reminder) {
       return false;
     }
+    // Unlike processReminder above, this one MUST keep refusing 'sending'. This
+    // is the human "send it now" path, and a row in 'sending' is one a worker is
+    // holding right this second — triggering it here is precisely the double-text
+    // the atomic claim exists to prevent. Do not "fix" this to match the gate in
+    // processReminder; they guard opposite directions on purpose.
     if (reminder.status !== 'scheduled') {
       return false;
     }

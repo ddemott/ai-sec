@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict FKgKCsH6VJGddN7a7zBMsFQBEv04Se4O4KateJ5trKQb7ImP0HUt4qadwWDoPnk
+\restrict h5VpI5r4XryIJac7LTkQh6hMJt6X4wBcMwjXuMBdy0AvzhxqYlkoKz8kXWPJPVG
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -3440,7 +3440,7 @@ CREATE TABLE public.reminder_schedules (
     lead_minutes integer NOT NULL,
     CONSTRAINT reminder_schedules_lead_minutes_sane CHECK (((lead_minutes >= 0) AND (lead_minutes <= 129600))),
     CONSTRAINT reminder_schedules_reminder_type_check CHECK (((reminder_type)::text = ANY ((ARRAY['confirmation'::character varying, '72h'::character varying, '24h'::character varying, '2h'::character varying, 'custom'::character varying])::text[]))),
-    CONSTRAINT reminder_schedules_status_check CHECK (((status)::text = ANY ((ARRAY['scheduled'::character varying, 'sent'::character varying, 'failed'::character varying, 'cancelled'::character varying])::text[])))
+    CONSTRAINT reminder_schedules_status_check CHECK (((status)::text = ANY (ARRAY['scheduled'::text, 'sending'::text, 'sent'::text, 'failed'::text, 'cancelled'::text])))
 );
 
 ALTER TABLE ONLY public.reminder_schedules FORCE ROW LEVEL SECURITY;
@@ -3464,7 +3464,7 @@ COMMENT ON COLUMN public.reminder_schedules.reminder_type IS 'Type: confirmation
 -- Name: COLUMN reminder_schedules.status; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.reminder_schedules.status IS 'Status: scheduled (pending), sent, failed, or cancelled';
+COMMENT ON COLUMN public.reminder_schedules.status IS 'scheduled = free to claim | sending = a worker holds this row right now (atomic claim; released back to scheduled if stale) | sent | failed | cancelled';
 
 
 --
@@ -4894,6 +4894,13 @@ CREATE INDEX idx_reminder_schedules_appointment_id ON public.reminder_schedules 
 --
 
 CREATE INDEX idx_reminder_schedules_pickup ON public.reminder_schedules USING btree (scheduled_for, next_retry_at) WHERE ((status)::text = 'scheduled'::text);
+
+
+--
+-- Name: idx_reminder_schedules_sending_updated_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_reminder_schedules_sending_updated_at ON public.reminder_schedules USING btree (updated_at) WHERE ((status)::text = 'sending'::text);
 
 
 --
@@ -6530,5 +6537,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict FKgKCsH6VJGddN7a7zBMsFQBEv04Se4O4KateJ5trKQb7ImP0HUt4qadwWDoPnk
+\unrestrict h5VpI5r4XryIJac7LTkQh6hMJt6X4wBcMwjXuMBdy0AvzhxqYlkoKz8kXWPJPVG
 

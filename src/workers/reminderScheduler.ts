@@ -29,6 +29,22 @@ import { createTenantConfigService, type TenantConfigService } from '../services
 const DEFAULT_INTERVAL_MS = 60_000; // 1 minute
 const MAX_BATCH_SIZE = 100;
 
+/**
+ * How long a row may sit in 'sending' before we assume the worker that claimed
+ * it is gone and put it back on the queue.
+ *
+ * The claim query only ever selects status = 'scheduled'. A row claimed by a
+ * process that then dies — SIGTERM past the 10s drain, OOM, pod eviction — is
+ * therefore invisible to every future tick FOREVER. Without this sweep the
+ * atomic claim would trade a loud double-text for a silent lost reminder.
+ *
+ * 5 minutes is deliberately far longer than any real batch (the tick is 60s and
+ * the drain caps at 10s), so this can only fire on a genuinely abandoned claim,
+ * never on a slow-but-alive one. Re-sending a reminder we are not sure went out
+ * is the correct trade against never sending it.
+ */
+const STALE_CLAIM_MS = 5 * 60_000;
+
 // ── State ────────────────────────────────────────────────────────────
 
 let schedulerInterval: NodeJS.Timeout | null = null;
@@ -62,16 +78,73 @@ function initServices(): void {
  * Process a single batch of due reminders.
  * Returns the number of reminders processed.
  */
+/**
+ * Put reminders abandoned in 'sending' back on the queue.
+ *
+ * Exported for direct testing; processBatch calls it at the top of every tick.
+ * `poolOverride` lets tests pass the test-DB pool instead of the production one.
+ *
+ * Non-fatal by design: if this sweep fails we still want the tick to go on and
+ * process the reminders that ARE claimable. It is loud about it, because a
+ * persistently failing release means reminders are piling up unseen.
+ */
+export async function releaseStaleClaims(poolOverride?: Pool): Promise<number> {
+  const pool = poolOverride ?? getPool();
+  try {
+    const res = await pool.query(
+      `UPDATE reminder_schedules
+          SET status = 'scheduled', updated_at = NOW()
+        WHERE status = 'sending'
+          AND updated_at < NOW() - ($1::int * interval '1 millisecond')
+       RETURNING reminder_schedule_id`,
+      [STALE_CLAIM_MS]
+    );
+    const released = res.rowCount ?? 0;
+    if (released > 0) {
+      // WHO: a customer waiting on a confirmation or reminder. WHAT: their row was
+      // claimed and then orphaned. WHEN: a worker died mid-batch. WHERE: the
+      // atomic claim in processBatch. WHY: the claim query only sees 'scheduled',
+      // so without this the reminder would never be attempted again.
+      errorsTotal.inc({ event: 'reminder_stale_claim_released' });
+      console.warn(
+        JSON.stringify({
+          event: 'reminder_stale_claim_released',
+          count: released,
+          stale_after_ms: STALE_CLAIM_MS,
+          reason:
+            'reminder rows sat in status=sending past the stale window — the worker that claimed them did not finish',
+          next: 'expected after a hard kill; if this is nonzero every tick, the worker is crashing mid-batch',
+        })
+      );
+    }
+    return released;
+  } catch (error) {
+    errorsTotal.inc({ event: 'reminder_stale_claim_release_failed' });
+    console.error('❌ Failed to release stale reminder claims:', error);
+    return 0;
+  }
+}
+
 async function processBatch(): Promise<number> {
   initServices();
   if (!db || !reminderService) return 0;
 
   const pool = getPool();
 
+  // Before claiming anything new, take back what a dead worker left behind.
+  await releaseStaleClaims(pool);
+
   try {
     // ATOMIC CLAIM prevents double-SMS race: UPDATE + FOR UPDATE SKIP LOCKED
     // RETURNING guarantees only one worker claims a reminder. Sets 'sending'
     // so concurrent ticks see it as in-flight. High impact on every deploy.
+    //
+    // 'sending' must be in reminder_schedules_status_check (migration
+    // 20260819000000) or this statement throws on every tick and the whole
+    // pipeline goes silently dark — it did, for 13 days. The paired guarantees
+    // are releaseStaleClaims() above (a claim can be abandoned) and
+    // processReminder's acceptance of 'sending' (a claimed row is processable).
+    // Changing any one of the three in isolation breaks reminders.
     const claimRes = await pool.query(
       `
       UPDATE reminder_schedules
@@ -135,8 +208,29 @@ async function processBatch(): Promise<number> {
     console.log(`✅ Processed ${processed}/${dueReminders.length} reminder(s)`);
     return processed;
   } catch (error) {
+    // This catch swallowed a THIRTEEN-DAY total reminder outage into a single
+    // console.error line (2026-08-06 → 2026-08-19). The claim above wrote
+    // status='sending', which the CHECK constraint did not allow, so every tick
+    // threw here, incremented a counter on the token-gated /metrics endpoint
+    // that nothing scrapes, and returned 0 — a worker that looked alive, a
+    // /health that stayed green, and not one reminder sent. See migration
+    // 20260819000000.
+    //
+    // The lesson is not "add a metric" (there already was one). It is that a
+    // batch-wide failure must say IN WORDS what it means for the customer, so
+    // the next person to read a log line knows the pipeline is down rather than
+    // that one batch hiccuped.
     errorsTotal.inc({ event: 'reminder_batch_failed' });
-    console.error('❌ Reminder batch processing error:', error);
+    console.error(
+      JSON.stringify({
+        event: 'reminder_batch_failed',
+        reason: error instanceof Error ? error.message : 'Unknown error',
+        impact:
+          'NO reminders or confirmations were sent this tick — if this repeats, the reminder pipeline is fully down, not degraded',
+        next: 'check the claim UPDATE against the reminder_schedules_status_check constraint and the DB connection',
+      })
+    );
+    if (error instanceof Error && error.stack) console.error(error.stack);
     return 0;
   }
 }
