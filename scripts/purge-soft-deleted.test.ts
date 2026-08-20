@@ -56,6 +56,26 @@ describe('purge-soft-deleted --older-than guard', () => {
     expect(`${res.stderr}${res.stdout}`).toMatch(/--older-than expects a non-negative number/);
   });
 
+  it('SAD: refuses --older-than passed with NO value at all', () => {
+    // Found by review on PR #351 — my first version of this guard re-created the
+    // very bug it was fixing, one step over. `valueOf` returns undefined both
+    // when the flag was never passed AND when it was passed last with nothing
+    // after it, and the parse treated the second case as the first: an operator
+    // who typed --older-than got the behaviour of one who did not.
+    const res = run(['--older-than']);
+    expect(res.status).not.toBe(0);
+    expect(`${res.stderr}${res.stdout}`).toMatch(/--older-than was passed with no value/);
+  });
+
+  it('SAD: refuses --older-than immediately followed by another flag', () => {
+    // `valueOf` would hand back '--execute' as the "value". Number('--execute')
+    // is NaN and would be caught anyway, but the message would blame the wrong
+    // thing; catching it here says what actually happened.
+    const res = run(['--older-than', '--execute']);
+    expect(res.status).not.toBe(0);
+    expect(`${res.stderr}${res.stdout}`).toMatch(/--older-than was passed with no value/);
+  });
+
   it('HAPPY: a valid age is accepted (fails later, at the DB, not at the guard)', () => {
     // Proves the guard did not become over-tight: a legitimate value must get
     // PAST the parse. It then fails to connect, which is the expected and
