@@ -198,11 +198,15 @@ describe('stale claim recovery — real Postgres', () => {
     // next tick sends it again. The window must be far wider than a real batch.
     const id = await seedReminder('sending', 0); // claimed just now
 
-    const released = await releaseStaleClaims(pool);
+    await releaseStaleClaims(pool);
 
+    // Asserted on THIS row's status, not on the returned count. The sweep is
+    // deliberately tenant-agnostic — an abandoned claim is abandoned regardless
+    // of whose reminder it is — so its return value counts rows this suite does
+    // not own and cannot control. Asserting `released === 0` would be testing
+    // the rest of the table, and would go red for a reason that has nothing to
+    // do with the behaviour under test.
     expect(await statusOf(id)).toBe('sending');
-    // released may be >0 from other rows in theory; this row specifically must not move
-    expect(released).toBe(0);
   });
 });
 

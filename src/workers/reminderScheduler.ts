@@ -120,7 +120,19 @@ export async function releaseStaleClaims(poolOverride?: Pool): Promise<number> {
     return released;
   } catch (error) {
     errorsTotal.inc({ event: 'reminder_stale_claim_release_failed' });
-    console.error('❌ Failed to release stale reminder claims:', error);
+    // Same structured shape as reminder_batch_failed below — these two are the
+    // only ways this worker fails wholesale, and a log parser should not have to
+    // handle one of them as JSON and the other as a prose string.
+    console.error(
+      JSON.stringify({
+        event: 'reminder_stale_claim_release_failed',
+        reason: error instanceof Error ? error.message : 'Unknown error',
+        impact:
+          'reminders abandoned in status=sending were NOT returned to the queue — if this persists they are never retried',
+        next: 'check DB reachability and that status=sending is permitted by reminder_schedules_status_check',
+      })
+    );
+    if (error instanceof Error && error.stack) console.error(error.stack);
     return 0;
   }
 }
