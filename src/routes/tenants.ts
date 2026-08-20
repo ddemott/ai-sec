@@ -666,11 +666,44 @@ export function registerTenantRoutes(
     }, 'Failed to fetch templates')
   );
 
+  // GET /templates/full — the business-type picker's data source: every
+  // template with the fields the onboarding UI applies to a tenant.
+  //
+  // AUTHENTICATED, NOT SUPER-ADMIN, AND THAT IS DELIBERATE. The backlog
+  // prescribed `requireSuperAdmin` here to match /templates/create below. That
+  // fix is wrong and would break onboarding for every real customer: five owner
+  // -facing surfaces read this route — SetupView, SetupWizard, SoloWizard,
+  // DashboardHome and BusinessTypeSection — and the picker's own
+  // TemplatePreviewModal RENDERS `system_prompt_template` and `first_message`
+  // to the owner on purpose, under the headings "AI System Prompt" and
+  // "Greeting Message". The prompt is not withheld from owners anywhere in this
+  // product; AIConfigView lets them edit their own copy of it. A route whose
+  // whole job is to show templates to owners cannot be owner-inaccessible.
+  //
+  // WHAT WAS ACTUALLY WRONG: `SELECT *`. It is an implicit contract that grows
+  // by itself — every column ever added to `business_templates` was published
+  // to every authenticated user the moment the migration landed, with nobody
+  // deciding to publish it. Today that means `voice_provider` / `voice_name`
+  // (backfilled 'cartesia' / 'elevenlabs' — TTS providers this stack has never
+  // used, so the dashboard is being handed values that are simply false) and
+  // `example_resources` (no client has ever heard of it). The column list below
+  // IS the wire contract, matches `BusinessTemplate` in dashboard/lib/types.ts
+  // field for field, and is pinned by a test — so publishing a new column
+  // becomes a deliberate act instead of a side effect of a migration.
   app.get(
     '/templates/full',
     withHandler(async (_req: AppRequest, reply) => {
       const res = await withPoolClient(pool, (client) =>
-        client.query('SELECT * FROM business_templates ORDER BY display_name')
+        client.query(
+          `SELECT business_type, display_name, category, sort_order,
+                  system_prompt_template, first_message, voice_id,
+                  default_resource_name, default_resource_description,
+                  resource_label, resource_plural,
+                  employee_label, employee_plural,
+                  booking_label, example_services
+             FROM business_templates
+            ORDER BY display_name`
+        )
       );
       return reply.send(res.rows);
     }, 'Failed to fetch full templates')
