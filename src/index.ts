@@ -55,6 +55,7 @@ import { registerExportRoutes } from './routes/exportData';
 import { registerAuditLogRoutes } from './routes/auditLog';
 import { TelnyxNumbersClient } from './services/telnyxNumbers';
 import { buildStubTelnyxProvisioning } from './services/telnyxNumbersStub';
+import { workerEnabled } from './services/workerEnabled';
 import { startReminderScheduler, stopReminderScheduler } from './workers/reminderScheduler';
 import { startVoiceSessionReaper, stopVoiceSessionReaper } from './workers/voiceSessionReaper';
 import { startScheduleExtender, stopScheduleExtender } from './workers/scheduleExtender';
@@ -295,15 +296,15 @@ registerExportRoutes(app, pool, withTenantClient);
 registerAuditLogRoutes(app, pool, withTenantClient);
 
 // --- Start Reminder Scheduler ---
-// Only start in production or if explicitly enabled
-if (isProduction || process.env.ENABLE_REMINDER_SCHEDULER === 'true') {
+// Prod: on unless ENABLE_REMINDER_SCHEDULER=false. Elsewhere: off unless =true.
+if (workerEnabled(process.env.ENABLE_REMINDER_SCHEDULER, isProduction)) {
   startReminderScheduler();
 }
 
 // --- Start Voice Session Reaper ---
 // Backstop that finalizes calls the agent never closed (so every call has a
 // record). Same gating as the reminder scheduler.
-if (isProduction || process.env.ENABLE_VOICE_SESSION_REAPER === 'true') {
+if (workerEnabled(process.env.ENABLE_VOICE_SESSION_REAPER, isProduction)) {
   startVoiceSessionReaper();
 }
 
@@ -315,7 +316,7 @@ if (isProduction || process.env.ENABLE_VOICE_SESSION_REAPER === 'true') {
 // 2026-08-19 and a real caller was told "no one is scheduled that day" for a
 // normal Wednesday inside the owner's normal hours (2026-07-12). Same gating as
 // the other two workers.
-if (isProduction || process.env.ENABLE_SCHEDULE_EXTENDER === 'true') {
+if (workerEnabled(process.env.ENABLE_SCHEDULE_EXTENDER, isProduction)) {
   startScheduleExtender();
 }
 

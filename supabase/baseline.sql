@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict haUXDlMYRcewv0k5FcCfTrGi5EuHkJHNn7wOFLYRDbX523a26yLt8MbOhLECjtE
+\restrict oo0gC55BsW0bcqoJBqtLBbGUNji5fguecaByca6vPljs7cjqcLlKLyQ4TukDNjH
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -2593,8 +2593,6 @@ CREATE TABLE public.business_templates (
     voice_id text,
     default_resource_name text NOT NULL,
     default_resource_description text,
-    voice_provider text,
-    voice_name text,
     resource_label text DEFAULT 'Resource'::text NOT NULL,
     resource_plural text DEFAULT 'Resources'::text NOT NULL,
     employee_label text DEFAULT 'Employee'::text NOT NULL,
@@ -3644,7 +3642,6 @@ CREATE TABLE public.tenant_integration_settings (
     access_token text,
     refresh_token text,
     token_expires_at timestamp with time zone,
-    webhook_secret text,
     settings jsonb DEFAULT '{}'::jsonb,
     is_active boolean DEFAULT true,
     last_sync_at timestamp with time zone,
@@ -6565,5 +6562,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict haUXDlMYRcewv0k5FcCfTrGi5EuHkJHNn7wOFLYRDbX523a26yLt8MbOhLECjtE
+\unrestrict oo0gC55BsW0bcqoJBqtLBbGUNji5fguecaByca6vPljs7cjqcLlKLyQ4TukDNjH
 
