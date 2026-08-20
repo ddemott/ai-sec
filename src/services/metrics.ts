@@ -341,7 +341,14 @@ export const silentHangupsTotal = registry.counter(
 //  rate(reminders_sent_total[5m])` as the per-channel success rate.
 export const remindersSentTotal = registry.counter(
   'reminders_sent_total',
-  'Reminder delivery attempts, partitioned by channel (email, sms) and outcome (success, failure)'
+  // Labels are `type` and `outcome`. This description said `channel` (email,
+  // sms) for months — a shape ONLY the parallel reminder implementation ever
+  // emitted, and that code was never wired to anything and is now deleted. The
+  // live ReminderService partitions by reminder TYPE (confirmation, 72h, 24h,
+  // 2h, custom), because a single reminder can go out on both channels at once
+  // and `anyChannelSucceeded` collapses them to one outcome. Any dashboard or
+  // alert filtering on `channel` matched nothing.
+  'Reminder delivery attempts, partitioned by type (confirmation, 72h, 24h, 2h, custom, unknown) and outcome (success, failure)'
 );
 
 // Reminders that did NOT make it to a delivery attempt — appointment
@@ -350,7 +357,11 @@ export const remindersSentTotal = registry.counter(
 // means callers aren't being asked to opt in correctly).
 export const remindersSkippedTotal = registry.counter(
   'reminders_skipped_total',
-  'Reminders that skipped delivery, partitioned by reason (appointment_not_found, appointment_cancelled, no_consent, processing_error)'
+  // Reasons corrected to what the LIVE path actually emits. `processing_error`
+  // was never emitted by it (a processing failure is rethrown so the worker can
+  // classify retry-vs-fail, and lands in errors_total instead), and
+  // `appointment_passed` was emitted but undocumented.
+  'Reminders that skipped delivery, partitioned by reason (appointment_not_found, appointment_cancelled, appointment_passed, no_consent)'
 );
 
 // the SMS provider SMS delivery receipts — the *carrier-confirmed* outcome, distinct

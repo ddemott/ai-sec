@@ -1,8 +1,4 @@
-import {
-  type TelephonyProvider,
-  type TelephonyCallRequest,
-  type TelephonySMSRequest,
-} from './TelephonyProvider.interface.js';
+import { type TelephonyProvider, type TelephonySMSRequest } from './TelephonyProvider.interface.js';
 
 export class TelnyxSmsAdapter implements TelephonyProvider {
   private apiKey: string;
@@ -13,12 +9,6 @@ export class TelnyxSmsAdapter implements TelephonyProvider {
 
   getName(): string {
     return 'telnyx';
-  }
-
-  makeCall(_request: TelephonyCallRequest): Promise<{ callSid: string }> {
-    return Promise.reject(
-      new Error('TelnyxSmsAdapter: voice calls are handled by LiveKit, not this adapter')
-    );
   }
 
   async sendSMS(request: TelephonySMSRequest): Promise<{ messageSid: string }> {
@@ -67,23 +57,5 @@ export class TelnyxSmsAdapter implements TelephonyProvider {
 
     const data = (await response.json()) as { data: { id: string } };
     return { messageSid: data.data.id };
-  }
-
-  createInstruction(
-    _action: 'say' | 'gather' | 'record' | 'hangup' | 'dial' | 'redirect',
-    _options: Record<string, unknown>
-  ): string {
-    throw new Error('TelnyxSmsAdapter: createInstruction not supported — use LiveKit for voice');
-  }
-
-  wrapResponse(_instructions: string): string {
-    throw new Error('TelnyxSmsAdapter: wrapResponse not supported — use LiveKit for voice');
-  }
-
-  generateInstruction(
-    _action: 'say' | 'gather' | 'record' | 'hangup',
-    _options: Record<string, unknown>
-  ): string {
-    throw new Error('TelnyxSmsAdapter: generateInstruction not supported — use LiveKit for voice');
   }
 }
