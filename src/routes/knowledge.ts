@@ -27,6 +27,11 @@ import { parseMarkerQuestions } from '../../shared/markerQuestions';
 import { recordAiCostEvent } from '../services/aiCost';
 import { fetchAndExtractSiteText, extractAnswersWithLLM } from '../services/knowledge/siteScrape';
 import { ingestChunks } from '../services/knowledge/ingestChunks';
+import {
+  approveSuggestion,
+  rejectSuggestion,
+  recordEmbeddingCost,
+} from '../services/knowledge/suggestionReview';
 import { scanRateLimiter } from '../services/scanRateLimit';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
@@ -689,78 +694,24 @@ export function registerKnowledgeRoutes(
       const { question, answer } = fetchRes.rows[0] as { question: string; answer: string };
 
       if (status === 'confirmed') {
-        // Ingest into live KB (same path as knowledge.add).
-        // Both writes are in one withTenantClient call with an explicit transaction so
-        // a partial failure can't leave a doc ingested but the suggestion still 'suggested'.
-        const { combined, normalizedText, embedding } = await prepareQADocument(
-          question,
-          answer,
-          getEmbedding,
-          normalizeForEmbedding
-        );
+        // Both writes happen in ONE transaction inside approveSuggestion() so a
+        // partial failure can't leave a doc ingested with the suggestion still
+        // 'suggested' (owner approves twice, agent answers from two copies) or
+        // the reverse (owner believes the agent learned something it did not).
+        const doc = await prepareQADocument(question, answer, getEmbedding, normalizeForEmbedding);
 
-        // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
-        const embTokens = Math.ceil(normalizedText.length / 4);
-        const embCost = embTokens * 0.02e-6;
+        // Ledger write is fire-and-forget and deliberately OUTSIDE the
+        // transaction: bookkeeping must never be able to roll back knowledge.
         withTenantClient(tenantId, (client) =>
-          recordAiCostEvent(client, {
-            tenantId,
-            source: 'kb_ingestion',
-            provider: 'openai',
-            model: 'text-embedding-3-small',
-            inputTokens: embTokens,
-            estimatedCostUsd: embCost,
-          })
+          recordEmbeddingCost(client, tenantId, doc.normalizedText)
         ).catch(() => undefined);
 
-        await withTenantClient(tenantId, async (client) => {
-          await client.query('BEGIN');
-          try {
-            await client.query(
-              `INSERT INTO tenant_docs (tenant_id, title, content, source, normalized_text, embedding)
-               VALUES ($1, $2, $3, $4, $5, $6::vector)`,
-              [
-                tenantId,
-                question,
-                combined,
-                'website-scan',
-                normalizedText,
-                JSON.stringify(embedding),
-              ]
-            );
-            // Guard status='suggested' so a concurrent or retried approve can't re-confirm.
-            // If 0 rows affected the suggestion was already processed — roll back the doc insert.
-            const upd = await client.query(
-              `UPDATE knowledge_suggestion SET status = 'confirmed', updated_at = now()
-               WHERE id = $1 AND tenant_id = $2 AND status = 'suggested'`,
-              [id, tenantId]
-            );
-            if ((upd.rowCount ?? 0) === 0) {
-              // Concurrent/retried approve already reviewed this row. Throw a
-              // 409 and let the catch ROLLBACK + withHandler format the reply —
-              // a reply.send() here only exits the callback, so the outer handler
-              // would still logEvent + send {success:true}, double-sending.
-              const conflict = new Error('Suggestion not found or already reviewed') as Error & {
-                statusCode?: number;
-              };
-              conflict.statusCode = 409;
-              throw conflict;
-            }
-            await client.query('COMMIT');
-          } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-          }
-        });
+        await withTenantClient(tenantId, (client) =>
+          approveSuggestion(client, { tenantId, suggestionId: id, question, doc })
+        );
         logEvent(req, 'knowledge_suggestion_approved', { suggestionId: id, tenantId });
       } else {
-        await withTenantClient(tenantId, async (client) => {
-          await client.query(
-            `UPDATE knowledge_suggestion SET status = 'rejected', updated_at = now()
-             WHERE id = $1 AND tenant_id = $2 AND status = 'suggested'`,
-            [id, tenantId]
-          );
-        });
+        await withTenantClient(tenantId, (client) => rejectSuggestion(client, tenantId, id));
         logEvent(req, 'knowledge_suggestion_rejected', { suggestionId: id, tenantId });
       }
 
