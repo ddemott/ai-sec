@@ -14,13 +14,12 @@
  * ITS ONLY VALUE IS FIDELITY TO PRODUCTION. A debugger that scores questions
  * differently than the live path does not merely fail to help — it actively
  * misleads, and the owner trusts it precisely when they are least able to check
- * it.
+ * it. That is why the production parameters below are IMPORTED from the module
+ * the live path reads, rather than restated here under a promise to keep them
+ * in sync — a promise this file previously made and broke.
  */
 import type { PoolClient } from 'pg';
-
-// Production retrieval params (kept in sync with /agent-tools/policy-answer).
-const PROD_THRESHOLD = 0.5;
-const PROD_MATCH_COUNT = 3;
+import { PROD_MATCH_COUNT, PROD_THRESHOLD } from './retrievalParams';
 
 /** Wider net + no floor: the point is to SHOW the near-misses production drops. */
 const DEBUG_THRESHOLD = 0.0;

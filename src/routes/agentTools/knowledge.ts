@@ -10,6 +10,7 @@
 import { GetPolicyAnswerSchema } from './schemas';
 import { ok, toolRoute, pgErrorFields, type AgentToolDeps } from './helpers';
 import { recordAiCostEvent } from '../../services/aiCost';
+import { PROD_MATCH_COUNT, PROD_THRESHOLD } from '../../services/knowledge/retrievalParams';
 import { errorsTotal } from '../../services/metrics';
 
 export function registerKnowledgeRoutes({
@@ -83,17 +84,15 @@ export function registerKnowledgeRoutes({
         })
       ).catch(() => undefined);
 
-      // Threshold 0.30 (down from 0.5): validated against a widened eval set
-      // (8 paraphrased positives + true out-of-scope negatives). text-embedding-3-small
-      // cosine clusters tightly (~0.2–0.65 here); 0.5 was unreachable for any
-      // vocabulary-gap query. 0.30 sits in the measured ~0.13 gap between the
-      // lowest expanded positive (0.377) and the highest true negative (0.248).
+      // Threshold + match count come from services/knowledge/retrievalParams —
+      // the SAME module the /knowledge/explain debugger reads, so the numbers an
+      // owner is shown cannot drift from the numbers a caller is answered with.
       // Also pull tenant_doc_id (the RPC returns it) so we can attribute each
       // chunk to its source document for caller-facing citations.
       const matches = await withTenantClient(args.tenant_id, (client) =>
         client.query<{ tenant_doc_id: string; content: string; similarity: number }>(
           'SELECT tenant_doc_id, content, similarity FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)',
-          [args.tenant_id, JSON.stringify(embedding), 0.3, 3]
+          [args.tenant_id, JSON.stringify(embedding), PROD_THRESHOLD, PROD_MATCH_COUNT]
         )
       );
 

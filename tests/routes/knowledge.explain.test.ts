@@ -6,23 +6,52 @@
  * WHERE: src/routes/knowledge.ts
  * WHY:   owners can't see the vector search; this surfaces it. The tests pin the
  *        owner gate, the threshold/top-N annotation, and the would_answer signal.
+ *
+ *        AND they pin FIDELITY TO THE LIVE PATH, which is the only property that
+ *        makes the debugger worth having. It previously scored questions at
+ *        threshold 0.5 while the agent answered at 0.30, and embedded the
+ *        NORMALIZED question while the agent embeds the EXPANDED one — so it
+ *        reported "your KB can't answer this" for questions the agent answers,
+ *        and its similarity numbers were measured against text no caller ever
+ *        produced. Both are asserted here now, against the shared constants
+ *        rather than against literals, so a future drift fails rather than
+ *        silently misinforming an owner.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { registerKnowledgeRoutes } from '../../src/routes/knowledge';
 import { buildRouteTestApp, type RouteTestAppHandle } from '../mock';
+import { PROD_MATCH_COUNT, PROD_THRESHOLD } from '../../src/services/knowledge/retrievalParams';
 
 const TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
 const mockGetEmbedding = vi.fn().mockResolvedValue(Array(1536).fill(0.1));
 const mockNormalize = vi.fn(async (text: string) => text);
+// The query-side expander: additive, and what production embeds. Returns a
+// DIFFERENT string than it was given so a test can prove which transform the
+// debugger actually used — an identity stub would make the two indistinguishable.
+const mockExpand = vi.fn(async (text: string) => `${text} expanded`);
+
+// Fixture similarities are expressed RELATIVE to the live threshold, never as
+// literals. These tests are about the annotation logic — "which candidates would
+// production have used" — not about one particular tuning, and the threshold is
+// deliberately re-tuned against the RAG eval. Hard-coded scores would either
+// break on every re-tune (noise) or, worse, drift to one side of the new value
+// and leave a test that still passes while asserting nothing: a "nothing clears
+// the threshold" case whose rows all clear it proves only that the code runs.
+const clearlyAbove = Math.min(0.99, PROD_THRESHOLD + 0.4);
+const above = Math.min(0.98, PROD_THRESHOLD + 0.3);
+const barelyAbove = Math.min(0.97, PROD_THRESHOLD + 0.2);
+const justAbove = Math.min(0.96, PROD_THRESHOLD + 0.02);
+const justBelow = Math.max(0.02, PROD_THRESHOLD - 0.02);
+const clearlyBelow = Math.max(0.01, PROD_THRESHOLD - 0.2);
 
 let handle: RouteTestAppHandle;
 let app: FastifyInstance;
 
 beforeAll(async () => {
   handle = buildRouteTestApp((a, pool, withTenantClient) => {
-    registerKnowledgeRoutes(a, pool, mockGetEmbedding, withTenantClient, mockNormalize);
+    registerKnowledgeRoutes(a, pool, mockGetEmbedding, withTenantClient, mockNormalize, mockExpand);
   });
   app = handle.app;
   await app.ready();
@@ -44,12 +73,14 @@ beforeEach(() => {
   };
   mockGetEmbedding.mockClear();
   mockNormalize.mockClear();
+  mockExpand.mockClear();
 });
 
 describe('POST /knowledge/explain', () => {
   it('HAPPY: ranks candidates and marks which clear the prod threshold + top-N', async () => {
-    // Five candidates, descending similarity. Threshold 0.5, top-3 used.
-    // → ranks 1-3 are above 0.5, but only the first 3 above-threshold are "used".
+    // Five candidates, descending similarity: three clear the live threshold,
+    // two do not. → ranks 1-3 are above it, and since exactly three clear it,
+    // all three are also the top-PROD_MATCH_COUNT that get used.
     // Valid UUIDs — the production composed_answer query casts the id array to
     // ::uuid[], so real Postgres would reject non-UUID ids; keep the mock data
     // shaped like the real column so the test mirrors production.
@@ -60,11 +91,11 @@ describe('POST /knowledge/explain', () => {
     const D5 = '55555555-5555-4555-8555-555555555555';
     handle.queryResponses.push({
       rows: [
-        { tenant_doc_id: D1, content: 'Mon-Fri 9-5', similarity: 0.92 },
-        { tenant_doc_id: D2, content: 'We deliver locally', similarity: 0.71 },
-        { tenant_doc_id: D3, content: 'Parking out back', similarity: 0.55 },
-        { tenant_doc_id: D4, content: 'Founded in 2010', similarity: 0.41 },
-        { tenant_doc_id: D5, content: 'Cat photos', similarity: 0.12 },
+        { tenant_doc_id: D1, content: 'Mon-Fri 9-5', similarity: clearlyAbove },
+        { tenant_doc_id: D2, content: 'We deliver locally', similarity: above },
+        { tenant_doc_id: D3, content: 'Parking out back', similarity: justAbove },
+        { tenant_doc_id: D4, content: 'Founded in 2010', similarity: justBelow },
+        { tenant_doc_id: D5, content: 'Cat photos', similarity: clearlyBelow },
       ],
     });
     // titles lookup for the used-in-production docs (composed_answer)
@@ -86,19 +117,24 @@ describe('POST /knowledge/explain', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
-    // WHY: the debugger must mirror /agent-tools/policy-answer — normalize the
-    //       question (same context) BEFORE embedding, else its scores wouldn't
-    //       match the real retrieval. mockNormalize is identity, so the embedded
-    //       text equals the question, but the normalize call itself is pinned.
-    expect(mockNormalize).toHaveBeenCalledWith('What are your hours?', {
+    // WHY: the debugger must mirror /agent-tools/policy-answer, which EXPANDS
+    //       the caller's question (additive synonyms) before embedding. The
+    //       reductive normalizer is the INGEST-side transform and belongs to the
+    //       other routes in this file; using it here would score a string no
+    //       caller ever produced, so it must NOT be called on this path.
+    expect(mockExpand).toHaveBeenCalledWith('What are your hours?', {
       context: 'customer phone inquiry',
     });
-    expect(mockGetEmbedding).toHaveBeenCalledWith('What are your hours?');
-    expect(body.production_threshold).toBe(0.5);
-    expect(body.production_match_count).toBe(3);
+    expect(mockNormalize).not.toHaveBeenCalled();
+    // The EXPANDED text is what gets embedded — proving which transform ran.
+    expect(mockGetEmbedding).toHaveBeenCalledWith('What are your hours? expanded');
+    // Asserted against the shared constants, not literals: this test's job is
+    // that the debugger reports the LIVE numbers, whatever they are tuned to.
+    expect(body.production_threshold).toBe(PROD_THRESHOLD);
+    expect(body.production_match_count).toBe(PROD_MATCH_COUNT);
     expect(body.candidates).toHaveLength(5);
 
-    // d1-d3 above 0.5, d4-d5 below.
+    // d1-d3 clear the threshold, d4-d5 do not.
     expect(body.candidates.map((c: { above_threshold: boolean }) => c.above_threshold)).toEqual([
       true,
       true,
@@ -133,13 +169,14 @@ describe('POST /knowledge/explain', () => {
   });
 
   it('HAPPY: caps used_in_production at top-3 even when more clear the threshold', async () => {
-    // Four candidates ALL above 0.5 → only the first 3 are "used".
+    // Four candidates ALL clearing the threshold → only the first
+    // PROD_MATCH_COUNT are "used".
     handle.queryResponses.push({
       rows: [
-        { tenant_doc_id: 'd1', content: 'a', similarity: 0.9 },
-        { tenant_doc_id: 'd2', content: 'b', similarity: 0.8 },
-        { tenant_doc_id: 'd3', content: 'c', similarity: 0.7 },
-        { tenant_doc_id: 'd4', content: 'd', similarity: 0.6 },
+        { tenant_doc_id: 'd1', content: 'a', similarity: clearlyAbove },
+        { tenant_doc_id: 'd2', content: 'b', similarity: above },
+        { tenant_doc_id: 'd3', content: 'c', similarity: barelyAbove },
+        { tenant_doc_id: 'd4', content: 'd', similarity: justAbove },
       ],
     });
 
@@ -154,7 +191,7 @@ describe('POST /knowledge/explain', () => {
     const used = body.candidates.filter(
       (c: { used_in_production: boolean }) => c.used_in_production
     );
-    expect(used).toHaveLength(3);
+    expect(used).toHaveLength(PROD_MATCH_COUNT);
     expect(body.would_answer).toBe(true);
   });
 
@@ -163,8 +200,8 @@ describe('POST /knowledge/explain', () => {
     //       the KB had only weak near-misses, so they know to add content.
     handle.queryResponses.push({
       rows: [
-        { tenant_doc_id: 'd1', content: 'weak', similarity: 0.34 },
-        { tenant_doc_id: 'd2', content: 'weaker', similarity: 0.2 },
+        { tenant_doc_id: 'd1', content: 'weak', similarity: justBelow },
+        { tenant_doc_id: 'd2', content: 'weaker', similarity: clearlyBelow },
       ],
     });
 

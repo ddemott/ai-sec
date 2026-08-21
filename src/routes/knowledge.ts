@@ -56,7 +56,15 @@ export function registerKnowledgeRoutes(
   _pool: Pool,
   getEmbedding: (text: string) => Promise<number[]>,
   withTenantClient: <T>(tenantId: string, fn: (client: PoolClient) => Promise<T>) => Promise<T>,
-  normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
+  normalizeForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>,
+  /**
+   * The QUERY-side transform, distinct from normalizeForEmbedding above and not
+   * interchangeable with it. Normalization is reductive and runs at INGEST;
+   * expansion is additive (synonyms) and runs on the caller's question. The
+   * answer debugger needs this one, because scoring a question production never
+   * embedded is how a debugger lies. See services/knowledge/answerExplainer.ts.
+   */
+  expandQueryForEmbedding?: (text: string, options?: { context?: string }) => Promise<string>
 ) {
   app.get(
     '/knowledge',
@@ -748,7 +756,7 @@ export function registerKnowledgeRoutes(
       const { question } = parsed.data;
 
       const explained = await explainAnswer(
-        { getEmbedding, withTenantClient, prepareQuery: normalizeForEmbedding },
+        { getEmbedding, withTenantClient, prepareQuery: expandQueryForEmbedding },
         tenantId,
         question
       );
