@@ -27,6 +27,7 @@ import { parseMarkerQuestions } from '../../shared/markerQuestions';
 import { recordAiCostEvent } from '../services/aiCost';
 import { fetchAndExtractSiteText, extractAnswersWithLLM } from '../services/knowledge/siteScrape';
 import { ingestChunks } from '../services/knowledge/ingestChunks';
+import { explainAnswer } from '../services/knowledge/answerExplainer';
 import {
   approveSuggestion,
   rejectSuggestion,
@@ -746,102 +747,19 @@ export function registerKnowledgeRoutes(
       }
       const { question } = parsed.data;
 
-      // Production retrieval params (kept in sync with /agent-tools/policy-answer).
-      const PROD_THRESHOLD = 0.5;
-      const PROD_MATCH_COUNT = 3;
-      // Debug retrieval: pull a wider, lower-threshold candidate set so the
-      // owner can see near-misses too, then annotate each against prod params.
-      const DEBUG_THRESHOLD = 0.0;
-      const DEBUG_MATCH_COUNT = 10;
-
-      // Embed the question EXACTLY as /agent-tools/policy-answer does — normalize
-      // first (same context string), fall back to the raw question on failure —
-      // otherwise the debug similarity scores wouldn't match the ones that drove
-      // the real answer, and the debugger would mislead.
-      let queryText = question;
-      if (normalizeForEmbedding) {
-        try {
-          queryText = await normalizeForEmbedding(question, { context: 'customer phone inquiry' });
-        } catch {
-          // fall back to the raw question
-        }
-      }
-      const embedding = await getEmbedding(queryText);
-      const matches = await withTenantClient(tenantId, (client) =>
-        client.query<{ tenant_doc_id: string; content: string; similarity: number }>(
-          `SELECT tenant_doc_id, content, similarity
-             FROM search_tenant_docs_normalized($1, $2::vector, $3, $4)`,
-          [tenantId, JSON.stringify(embedding), DEBUG_THRESHOLD, DEBUG_MATCH_COUNT]
-        )
+      const explained = await explainAnswer(
+        { getEmbedding, withTenantClient, prepareQuery: normalizeForEmbedding },
+        tenantId,
+        question
       );
-
-      // Rank order is by similarity DESC (the RPC returns it sorted). The chunks
-      // actually used in production are the top PROD_MATCH_COUNT that also clear
-      // PROD_THRESHOLD.
-      let usedSoFar = 0;
-      const ranked = matches.rows.map((row, i) => {
-        const aboveThreshold = row.similarity >= PROD_THRESHOLD;
-        const usedInProduction = aboveThreshold && usedSoFar < PROD_MATCH_COUNT;
-        if (usedInProduction) usedSoFar += 1;
-        return {
-          rank: i + 1,
-          tenant_doc_id: row.tenant_doc_id,
-          similarity: row.similarity,
-          above_threshold: aboveThreshold,
-          used_in_production: usedInProduction,
-          content: row.content,
-        };
-      });
-
-      // Compose the EXACT context the agent would receive from
-      // /agent-tools/policy-answer (the used chunks joined, each prefixed with
-      // its source-doc title) so the owner sees the real answer the AI gets —
-      // not just the ranked chunks. Null when nothing clears the threshold.
-      const usedDocs = ranked.filter((r) => r.used_in_production);
-      let composedAnswer: string | null = null;
-      if (usedDocs.length > 0) {
-        const usedIds = usedDocs.map((d) => d.tenant_doc_id).filter(Boolean);
-        let titleById = new Map<string, string>();
-        try {
-          const titlesRes = await withTenantClient(tenantId, (client) =>
-            client.query<{ tenant_doc_id: string; title: string | null }>(
-              // ::uuid[] cast — without it Postgres compares uuid against text[]
-              // and errors (same fix as the policy-answer citation lookup).
-              'SELECT tenant_doc_id, title FROM tenant_docs WHERE tenant_id = $1 AND tenant_doc_id = ANY($2::uuid[])',
-              [tenantId, usedIds]
-            )
-          );
-          titleById = new Map(
-            titlesRes.rows.filter((r) => r.title).map((r) => [r.tenant_doc_id, r.title as string])
-          );
-        } catch {
-          // title lookup is non-critical — fall back to un-attributed content
-        }
-        composedAnswer = usedDocs
-          .map((d) => {
-            const title = titleById.get(d.tenant_doc_id);
-            return title ? `[From "${title}"]\n${d.content}` : d.content;
-          })
-          .join('\n\n---\n\n');
-      }
 
       logEvent(req, 'knowledge_answer_explained', {
         tenantId,
-        candidates: ranked.length,
-        usedInProduction: usedSoFar,
+        candidates: explained.candidates.length,
+        usedInProduction: explained.candidates.filter((c) => c.used_in_production).length,
       });
 
-      return reply.send({
-        success: true,
-        question,
-        production_threshold: PROD_THRESHOLD,
-        production_match_count: PROD_MATCH_COUNT,
-        candidates: ranked,
-        // A quick read: did production have anything to answer with at all?
-        would_answer: usedSoFar > 0,
-        // The exact context string the agent would relay for this question.
-        composed_answer: composedAnswer,
-      });
+      return reply.send({ success: true, question, ...explained });
     }, 'Failed to explain answer')
   );
 }
