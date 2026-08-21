@@ -26,23 +26,12 @@
  */
 import type { PoolClient } from 'pg';
 import { recordAiCostEvent } from '../aiCost';
-
-/** Price per input token for text-embedding-3-small. Mirrors aiCost PRICING. */
-const EMBEDDING_USD_PER_TOKEN = 0.02e-6;
+import { estimateTokens } from './tokenEstimate';
 
 export interface PreparedQADocument {
   combined: string;
   normalizedText: string;
   embedding: number[];
-}
-
-/** Estimated embedding cost for text, using the house ~4-chars-per-token rule. */
-export function estimateEmbeddingCost(normalizedText: string): {
-  inputTokens: number;
-  estimatedCostUsd: number;
-} {
-  const inputTokens = Math.ceil(normalizedText.length / 4);
-  return { inputTokens, estimatedCostUsd: inputTokens * EMBEDDING_USD_PER_TOKEN };
 }
 
 /** Thrown when the suggestion was already reviewed by someone (or something) else. */
@@ -109,19 +98,36 @@ export async function rejectSuggestion(
   );
 }
 
-/** Best-effort ledger write for an embedding. Never allowed to fail a review. */
+/**
+ * Best-effort ledger write for an embedding. Never allowed to fail a review.
+ *
+ * `source` is always 'kb_ingestion' — deliberately, and this is now the ONLY
+ * place embedding spend is filed. /knowledge/add and PUT /knowledge/:id used to
+ * write `source: doc.source === 'website-scan' ? 'kb_ingestion' :
+ * 'policy-questionnaire'`, which confused two different meanings of the word
+ * "source": where a KB entry's CONTENT came from (a tenant_docs provenance
+ * field the dashboard renders as a badge) and what CATEGORY of spend a ledger
+ * row is. Embedding a KB entry is one activity with one cost; filing it under
+ * two labels split it across two rows of the owner's spend breakdown depending
+ * on which route created the entry, and 'policy-questionnaire' is in no reader's
+ * vocabulary — not aiCost's documented set, not the ai-cost tool's z.enum, not
+ * the migration's column comment. Nothing crashed because the column has no
+ * CHECK constraint and the analytics query GROUPs BY source without filtering,
+ * so the money was counted under a label nothing recognises.
+ *
+ * Rows already written under the old label keep it; this is not backfilled.
+ */
 export async function recordEmbeddingCost(
   client: PoolClient,
   tenantId: string,
   normalizedText: string
 ): Promise<void> {
-  const { inputTokens, estimatedCostUsd } = estimateEmbeddingCost(normalizedText);
+  // No estimatedCostUsd: recordAiCostEvent prices the row from PRICING. See ./tokenEstimate.
   await recordAiCostEvent(client, {
     tenantId,
     source: 'kb_ingestion',
     provider: 'openai',
     model: 'text-embedding-3-small',
-    inputTokens,
-    estimatedCostUsd,
+    inputTokens: estimateTokens(normalizedText),
   });
 }

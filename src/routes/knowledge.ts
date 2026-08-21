@@ -28,7 +28,6 @@ import {
   stubbedQuestionPicks,
   withUsableAnswer,
 } from '../services/knowledge/importStaging';
-import { recordAiCostEvent } from '../services/aiCost';
 import {
   approveSuggestion,
   rejectSuggestion,
@@ -168,18 +167,8 @@ export function registerKnowledgeRoutes(
         normalizeForEmbedding
       );
 
-      // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
-      const embTokens = Math.ceil(normalizedText.length / 4);
-      const embCost = embTokens * 0.02e-6;
       withTenantClient(tenantId, (client) =>
-        recordAiCostEvent(client, {
-          tenantId,
-          source: source === 'website-scan' ? 'kb_ingestion' : 'policy-questionnaire',
-          provider: 'openai',
-          model: 'text-embedding-3-small',
-          inputTokens: embTokens,
-          estimatedCostUsd: embCost,
-        })
+        recordEmbeddingCost(client, tenantId, normalizedText)
       ).catch(() => undefined);
 
       const res = await withTenantClient(tenantId, async (client) => {
@@ -225,18 +214,8 @@ export function registerKnowledgeRoutes(
         normalizeForEmbedding
       );
 
-      // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
-      const embTokens = Math.ceil(normalizedText.length / 4);
-      const embCost = embTokens * 0.02e-6;
       withTenantClient(tenantId, (client) =>
-        recordAiCostEvent(client, {
-          tenantId,
-          source: source === 'website-scan' ? 'kb_ingestion' : 'policy-questionnaire',
-          provider: 'openai',
-          model: 'text-embedding-3-small',
-          inputTokens: embTokens,
-          estimatedCostUsd: embCost,
-        })
+        recordEmbeddingCost(client, tenantId, normalizedText)
       ).catch(() => undefined);
 
       const res = await withTenantClient(tenantId, async (client) => {

@@ -28,9 +28,7 @@
  */
 import type { PoolClient } from 'pg';
 import { recordAiCostEvent } from '../aiCost';
-
-/** Price per input token for text-embedding-3-small. Mirrors aiCost PRICING. */
-const EMBEDDING_USD_PER_TOKEN = 0.02e-6;
+import { estimateTokens } from './tokenEstimate';
 
 export interface IngestChunksDeps {
   getEmbedding: (text: string) => Promise<number[]>;
@@ -56,16 +54,14 @@ export async function ingestChunks(
       : trimmedChunk;
     const embedding = await deps.getEmbedding(normalizedText);
 
-    const embTokens = Math.ceil(normalizedText.length / 4);
-    const embCost = embTokens * EMBEDDING_USD_PER_TOKEN;
     try {
+      // No estimatedCostUsd: recordAiCostEvent prices from PRICING. See ./tokenEstimate.
       await recordAiCostEvent(client, {
         tenantId,
         source: 'kb_ingestion',
         provider: 'openai',
         model: 'text-embedding-3-small',
-        inputTokens: embTokens,
-        estimatedCostUsd: embCost,
+        inputTokens: estimateTokens(normalizedText),
       });
     } catch {
       /* swallow — a ledger failure must not cost the owner their document */
