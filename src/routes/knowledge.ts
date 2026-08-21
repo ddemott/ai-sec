@@ -26,6 +26,7 @@ import { resolveQuestions } from '../../shared/questionBank';
 import { parseMarkerQuestions } from '../../shared/markerQuestions';
 import { recordAiCostEvent } from '../services/aiCost';
 import { fetchAndExtractSiteText, extractAnswersWithLLM } from '../services/knowledge/siteScrape';
+import { ingestChunks } from '../services/knowledge/ingestChunks';
 import { scanRateLimiter } from '../services/scanRateLimit';
 import { SUPER_ADMIN_TENANT_ID } from '../constants';
 
@@ -122,37 +123,9 @@ export function registerKnowledgeRoutes(
       }
       const chunks = chunked.chunks;
 
-      await withTenantClient(tenantId, async (client) => {
-        for (const chunk of chunks) {
-          const trimmedChunk = chunk.trim();
-          // Normalize text to semantic core before embedding (Phase 12E)
-          const normalizedText = normalizeForEmbedding
-            ? await normalizeForEmbedding(trimmedChunk, { context: 'knowledge base document' })
-            : trimmedChunk;
-          const embedding = await getEmbedding(normalizedText);
-          // ~4 chars/token heuristic; embedding billed per input token (price mirrors aiCost PRICING).
-          const embTokens = Math.ceil(normalizedText.length / 4);
-          const embCost = embTokens * 0.02e-6;
-          // Cost telemetry is best-effort: a ledger write failure (missing table
-          // in dev/test, transient DB error) must NOT abort document ingestion.
-          try {
-            await recordAiCostEvent(client, {
-              tenantId,
-              source: 'kb_ingestion',
-              provider: 'openai',
-              model: 'text-embedding-3-small',
-              inputTokens: embTokens,
-              estimatedCostUsd: embCost,
-            });
-          } catch {
-            /* swallow — ingestion continues */
-          }
-          await client.query(
-            'INSERT INTO tenant_docs (tenant_id, content, normalized_text, source, embedding) VALUES ($1, $2, $3, $4, $5::vector)',
-            [tenantId, trimmedChunk, normalizedText, filename, JSON.stringify(embedding)]
-          );
-        }
-      });
+      await withTenantClient(tenantId, (client) =>
+        ingestChunks(client, tenantId, chunks, filename, { getEmbedding, normalizeForEmbedding })
+      );
 
       logEvent(req, 'knowledge_ingested', { filename, chunksIngested: chunks.length });
       return reply.send({ success: true, chunksIngested: chunks.length });
