@@ -1,9 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
-/**
- * ESLint rules disabled for this file as part of historical full cleanup (REFACTORING_TODO item 10; see RESOLVED.md for details).
- * These are the remaining dynamic/any-heavy areas after previous tranches.
- */
-
 import type { AppFastifyInstance } from '../types/fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -22,12 +16,19 @@ import {
   prepareQADocument,
   ALLOWED_EXTENSIONS,
 } from '../services/knowledgeIngestion';
-import { resolveQuestions } from '../../shared/questionBank';
 import { parseMarkerQuestions } from '../../shared/markerQuestions';
-import { recordAiCostEvent } from '../services/aiCost';
 import { fetchAndExtractSiteText, extractAnswersWithLLM } from '../services/knowledge/siteScrape';
 import { ingestChunks } from '../services/knowledge/ingestChunks';
 import { explainAnswer } from '../services/knowledge/answerExplainer';
+import {
+  isImportStubbed,
+  recordExtractionCost,
+  resolveTenantQuestions,
+  stageSuggestions,
+  stubbedQuestionPicks,
+  withUsableAnswer,
+} from '../services/knowledge/importStaging';
+import { recordAiCostEvent } from '../services/aiCost';
 import {
   approveSuggestion,
   rejectSuggestion,
@@ -182,7 +183,7 @@ export function registerKnowledgeRoutes(
       ).catch(() => undefined);
 
       const res = await withTenantClient(tenantId, async (client) => {
-        return client.query(
+        return client.query<{ tenant_doc_id: string }>(
           'INSERT INTO tenant_docs (tenant_id, title, section, content, source, normalized_text, embedding) VALUES ($1, $2, $3, $4, $5, $6, $7::vector) RETURNING tenant_doc_id',
           [
             tenantId,
@@ -196,8 +197,9 @@ export function registerKnowledgeRoutes(
         );
       });
 
-      logEvent(req, 'knowledge_entry_added', { tenant_doc_id: res.rows[0].tenant_doc_id, source });
-      return reply.send({ success: true, tenant_doc_id: res.rows[0].tenant_doc_id });
+      const tenantDocId = res.rows[0].tenant_doc_id;
+      logEvent(req, 'knowledge_entry_added', { tenant_doc_id: tenantDocId, source });
+      return reply.send({ success: true, tenant_doc_id: tenantDocId });
     }, 'Failed to add knowledge entry')
   );
 
@@ -325,7 +327,7 @@ export function registerKnowledgeRoutes(
       // OpenAI extraction). Rejects with 429 once the tenant's bucket is dry so
       // one tenant can't burn OpenAI budget or hammer external sites through us.
       // Skipped in the E2E stub path (deterministic, zero external cost).
-      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1' && !scanRateLimiter.tryAcquire(tenantId)) {
+      if (!isImportStubbed() && !scanRateLimiter.tryAcquire(tenantId)) {
         logEvent(req, 'website_scan_rate_limited', { tenantId });
         return reply.status(429).send({
           success: false,
@@ -333,39 +335,29 @@ export function registerKnowledgeRoutes(
         });
       }
 
-      // Resolve the questions to extract: the shared static policy bank plus this
-      // tenant's owner-authored custom questions (tenant_docs source='custom-question'),
-      // so the scan also targets what this owner specifically cares about.
-      // Bounded: cap how many custom questions feed the extract prompt so a tenant
-      // with a huge custom-question list can't blow up prompt size / OpenAI cost.
-      const customRows = await withTenantClient(tenantId, async (client) =>
-        client.query(
-          `SELECT title FROM tenant_docs
-           WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL
-           ORDER BY created_at DESC
-           LIMIT 50`,
-          [tenantId]
-        )
-      );
-      const customs = customRows.rows.map((r: any) => r.title as string);
-      const questions = resolveQuestions({ customs });
+      const questions = await resolveTenantQuestions(withTenantClient, tenantId);
 
-      // KNOWLEDGE_IMPORT_E2E_STUB: strict opt-in (literal "1") that swaps the real
-      // site fetch + OpenAI extraction for deterministic canned output, so E2E can
-      // exercise the REAL resolver → staging-INSERT path against a real DB without
-      // a live OpenAI key or external network (CI runs with OPENAI_API_KEY=sk-dummy).
-      // Same env-gated test-hook discipline as SYNC_TEST_RECORDER. Off by default.
-      let extract: { answers: any[]; discovered: any[] };
-      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB === '1') {
-        // Confirm every resolved custom question (id null) + the first two bank
-        // questions, plus one discovered topic — lets a test assert customs flow
-        // through the resolver into staging.
-        const picks = [
-          ...questions.filter((q) => q.id === null),
-          ...questions.filter((q) => q.id !== null).slice(0, 2),
-        ];
+      let extract: {
+        answers: Array<{
+          questionId: string | null;
+          question: string;
+          answer: string | null;
+          sourceUrl?: string;
+          confidence?: number;
+        }>;
+        discovered: Array<{
+          question: string;
+          answer: string;
+          sourceUrl?: string;
+          confidence?: number;
+        }>;
+      };
+      if (isImportStubbed()) {
+        // Deterministic canned output so E2E can exercise the REAL resolver →
+        // staging-INSERT path against a real DB with no live OpenAI key and no
+        // external network (CI runs with OPENAI_API_KEY=sk-dummy).
         extract = {
-          answers: picks.map((q) => ({
+          answers: stubbedQuestionPicks(questions).map((q) => ({
             questionId: q.id,
             question: q.question,
             answer: `Stubbed answer for: ${q.question}`,
@@ -396,69 +388,26 @@ export function registerKnowledgeRoutes(
           return reply.status(500).send({ success: false, error: llm.error });
         }
         extract = { answers: llm.answers, discovered: llm.discovered };
-        if (llm.usage && tenantId) {
-          const input = llm.usage.prompt_tokens || 0;
-          const output = llm.usage.completion_tokens || 0;
-          const cost = input * 0.15e-6 + output * 0.6e-6;
-          withTenantClient(tenantId, (client) =>
-            recordAiCostEvent(client, {
-              tenantId,
-              source: 'kb_ingestion',
-              provider: 'openai',
-              model: 'gpt-4o-mini',
-              inputTokens: input,
-              outputTokens: output,
-              estimatedCostUsd: cost,
-            })
-          ).catch(() => undefined);
-        }
+        recordExtractionCost(withTenantClient, tenantId, llm.usage);
       }
 
-      // Persist extracted (matched) + discovered items to knowledge_suggestion for review.
-      // extractAnswersWithLLM returns camelCase (questionId, sourceUrl) — map to snake_case here.
-      // Skip matched items with null answers — they carry no KB value and inflate the count.
-      // All items enter as 'suggested' — even matched ones — so the owner reviews
-      // everything before it lands in the live KB. The approve route handles ingestion.
-      const matchedItems = extract.answers
-        .filter((a: any) => a.answer != null && (a.answer as string).trim().length > 0)
-        .map((a: any) => ({
-          question_id: a.questionId || null,
-          question: a.question || '',
-          answer: a.answer as string,
-          source_url: a.sourceUrl || url,
-          confidence: a.confidence ?? null,
-          status: 'suggested' as const,
-        }));
-      const suggestedItems = (extract.discovered || []).map((d: any) => ({
+      // extractAnswersWithLLM returns camelCase — map to the staged column names.
+      const matchedItems = withUsableAnswer(extract.answers).map((a) => ({
+        question_id: a.questionId || null,
+        question: a.question || '',
+        answer: a.answer,
+        source_url: a.sourceUrl || url,
+        confidence: a.confidence ?? null,
+      }));
+      const suggestedItems = (extract.discovered || []).map((d) => ({
         question_id: null,
         question: d.question || '',
         answer: d.answer || '',
         source_url: d.sourceUrl || url,
         confidence: d.confidence ?? null,
-        status: 'suggested' as const,
       }));
-      const allItems = [...matchedItems, ...suggestedItems];
 
-      if (allItems.length > 0) {
-        await withTenantClient(tenantId, async (client) => {
-          for (const item of allItems) {
-            await client.query(
-              `INSERT INTO knowledge_suggestion
-                 (tenant_id, question_id, question, answer, source_url, confidence, status)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-              [
-                tenantId,
-                item.question_id,
-                item.question,
-                item.answer,
-                item.source_url,
-                item.confidence,
-                item.status,
-              ]
-            );
-          }
-        });
-      }
+      await stageSuggestions(withTenantClient, tenantId, [...matchedItems, ...suggestedItems]);
 
       // `confirmed` here is the COUNT of bank/custom-matched items (response-field
       // name kept for API/dashboard compatibility). They are staged as 'suggested'
@@ -476,12 +425,6 @@ export function registerKnowledgeRoutes(
       });
     }, 'Failed to import from website')
   );
-
-  // POST /knowledge/import-document — upload a PDF/txt/md info sheet. Deterministic
-  // **Q:/**A: markers become custom questions; the leftover prose is AI-answered
-  // against the standard question bank. Everything stages to knowledge_suggestion
-  // for owner review — same gate as the website scan. (Spec: docs/superpowers/
-  // specs/2026-06-30-document-upload-knowledge-prefill-design.md)
   app.post(
     '/knowledge/import-document',
     withHandler(async (req: AppRequest, reply) => {
@@ -516,7 +459,7 @@ export function registerKnowledgeRoutes(
 
       // Per-tenant guardrail on the expensive AI pass (skipped in the deterministic
       // E2E stub). Same limiter the website scan uses.
-      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB !== '1' && !scanRateLimiter.tryAcquire(tenantId)) {
+      if (!isImportStubbed() && !scanRateLimiter.tryAcquire(tenantId)) {
         logEvent(req, 'document_import_rate_limited', { tenantId });
         return reply.status(429).send({
           success: false,
@@ -532,20 +475,7 @@ export function registerKnowledgeRoutes(
 
       // Deterministic custom Q&A + leftover prose.
       const { custom, malformed, prose } = parseMarkerQuestions(extracted.text);
-
-      // Standard questions = shared bank + this tenant's custom-question titles.
-      const customRows = await withTenantClient(tenantId, async (client) =>
-        client.query(
-          `SELECT title FROM tenant_docs
-           WHERE tenant_id = $1 AND source = 'custom-question' AND title IS NOT NULL
-           ORDER BY created_at DESC
-           LIMIT 50`,
-          [tenantId]
-        )
-      );
-      const customs = customRows.rows.map((r: any) => r.title as string);
-      const questions = resolveQuestions({ customs });
-
+      const questions = await resolveTenantQuestions(withTenantClient, tenantId);
       const sourceTag = `document:${filename}`;
 
       // Standard answers from the prose. Stub → deterministic; else real OpenAI.
@@ -556,12 +486,8 @@ export function registerKnowledgeRoutes(
         question: string;
         answer: string | null;
       }> = [];
-      if (process.env.KNOWLEDGE_IMPORT_E2E_STUB === '1') {
-        const picks = [
-          ...questions.filter((q) => q.id === null),
-          ...questions.filter((q) => q.id !== null).slice(0, 2),
-        ];
-        standardAnswers = picks.map((q) => ({
+      if (isImportStubbed()) {
+        standardAnswers = stubbedQuestionPicks(questions).map((q) => ({
           questionId: q.id,
           question: q.question,
           answer: `Stubbed answer for: ${q.question}`,
@@ -579,53 +505,28 @@ export function registerKnowledgeRoutes(
             question: a.question,
             answer: a.answer,
           }));
-          if (llm.usage) {
-            const input = llm.usage.prompt_tokens || 0;
-            const output = llm.usage.completion_tokens || 0;
-            const cost = input * 0.15e-6 + output * 0.6e-6;
-            withTenantClient(tenantId, (client) =>
-              recordAiCostEvent(client, {
-                tenantId,
-                source: 'kb_ingestion',
-                provider: 'openai',
-                model: 'gpt-4o-mini',
-                inputTokens: input,
-                outputTokens: output,
-                estimatedCostUsd: cost,
-              })
-            ).catch(() => undefined);
-          }
+          recordExtractionCost(withTenantClient, tenantId, llm.usage);
         }
         // AI failure degrades gracefully: standardAnswers stays [] but custom still flows.
       }
 
-      // Stage: standard (with a non-empty answer) + every custom pair, all 'suggested'.
-      const standardItems = standardAnswers
-        .filter((a) => a.answer != null && a.answer.trim().length > 0)
-        .map((a) => ({
-          question_id: a.questionId || null,
-          question: a.question || '',
-          answer: a.answer as string,
-        }));
+      const standardItems = withUsableAnswer(standardAnswers).map((a) => ({
+        question_id: a.questionId || null,
+        question: a.question || '',
+        answer: a.answer,
+        source_url: sourceTag,
+        confidence: null,
+      }));
       const customItems = custom.map((c) => ({
-        question_id: null as string | null,
+        question_id: null,
         question: c.question,
         answer: c.answer,
+        source_url: sourceTag,
+        confidence: null,
       }));
       const allItems = [...standardItems, ...customItems];
 
-      if (allItems.length > 0) {
-        await withTenantClient(tenantId, async (client) => {
-          for (const item of allItems) {
-            await client.query(
-              `INSERT INTO knowledge_suggestion
-                 (tenant_id, question_id, question, answer, source_url, confidence, status)
-               VALUES ($1, $2, $3, $4, $5, $6, 'suggested')`,
-              [tenantId, item.question_id, item.question, item.answer, sourceTag, null]
-            );
-          }
-        });
-      }
+      await stageSuggestions(withTenantClient, tenantId, allItems);
 
       logEvent(req, 'document_knowledge_import', {
         tenantId,
@@ -644,10 +545,6 @@ export function registerKnowledgeRoutes(
       });
     }, 'Failed to import from document')
   );
-
-  // ── Knowledge Suggestions (website-scan staging) ──────────────────────
-
-  /** GET /knowledge/suggestions — list pending suggestions for review */
   app.get(
     '/knowledge/suggestions',
     withHandler(async (req: AppRequest, reply) => {

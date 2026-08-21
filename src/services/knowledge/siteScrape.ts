@@ -106,6 +106,18 @@ export async function fetchAndExtractSiteText(
   }
 }
 
+/**
+ * A Q&A the model found on the site that no bank or custom question asked for.
+ * Shaped like a matched answer minus the question id — there is no question to
+ * point at, which is precisely what makes it "discovered".
+ */
+export interface DiscoveredAnswer {
+  question: string;
+  answer: string;
+  sourceUrl: string;
+  confidence: number;
+}
+
 export async function extractAnswersWithLLM(
   siteText: string,
   questions: Array<{ id: string | null; question: string }>,
@@ -121,7 +133,7 @@ export async function extractAnswersWithLLM(
         sourceUrl: string;
         confidence: number;
       }>;
-      discovered: Array<any>;
+      discovered: DiscoveredAnswer[];
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     }
   | { success: false; error: string }
