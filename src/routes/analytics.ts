@@ -8,82 +8,15 @@ import {
   type AppRequest,
 } from '../middleware/fastify-middleware';
 import { parseDateRange } from './routeHelpers';
-import { z } from 'zod';
+import { getAiCostBreakdown } from '../services/analytics/aiCost';
+import { getCohortAnalytics } from '../services/analytics/cohorts';
+import { getUtilizationCells } from '../services/analytics/utilization';
 import {
-  DraftGraphSchema,
-  findDuplicateTmpIds,
-  findMissingTmpIdReferences,
-  weeksAheadFor,
-  insertDraftGraph,
-} from '../services/setupGraph';
-
-const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-// One row of check_coverage_gaps output (per service, per date in the window).
-interface CoverageGapRow {
-  service_id: string;
-  service_name: string;
-  check_date: string;
-  gap_hours: number[] | null;
-  covered_hours: number[] | null;
-  total_open_hours: number;
-  coverage_pct: string | number;
-  status: string;
-  details: Record<string, unknown> | null;
-}
-
-// Draft graph posted by the setup wizard (Phase B) to preview coverage BEFORE
-// anything is persisted. Shares DraftGraphSchema with POST /setup/commit
-// (src/routes/setup.ts) — see src/services/setupGraph.ts module doc. Every
-// entity carries a client-side `tmp_id` so mappings + shifts can reference
-// each other without real DB ids.
-const CoverageDryRunSchema = DraftGraphSchema.extend({
-  // refine (not just regex): reject calendar-invalid but well-shaped dates like
-  // 2026-02-30 here, so they never reach a `$n::date` cast (→ 500).
-  start_date: z
-    .string()
-    .refine(isValidDateOnly, 'start_date must be a real YYYY-MM-DD date')
-    .optional(),
-  end_date: z
-    .string()
-    .refine(isValidDateOnly, 'end_date must be a real YYYY-MM-DD date')
-    .optional(),
-});
-
-/**
- * True only for a real calendar date in YYYY-MM-DD form. The regex alone is not
- * enough: "2026-02-30" and "2026-13-01" are correctly *shaped* but not real
- * dates, and would pass straight through to a `$n::date` cast and throw a 500.
- * We round-trip through a UTC Date and require every component to survive, so a
- * calendar-invalid bound is rejected here (→ null → all-time), never at the DB.
- */
-function isValidDateOnly(s: string): boolean {
-  const m = DATE_ONLY_RE.exec(s);
-  if (!m) return false;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  const dt = new Date(Date.UTC(year, month - 1, day));
-  return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day;
-}
-
-/**
- * Optional, unbounded-by-default date window for the analytics endpoints.
- * Unlike parseDateRange (which defaults the start to *today* — right for a
- * coverage lookup, wrong for analytics where "no filter" means all-time), this
- * returns null for any missing/malformed/calendar-invalid bound. Callers pass
- * [tenantId, start, end] and guard each side with `($n::date IS NULL OR col >=
- * $n::date)` so an absent bound drops out of the predicate entirely. `end` is
- * treated as inclusive of the whole day via `< $end::date + interval '1 day'`.
- */
-function optionalDateBounds(query: Record<string, string>): {
-  start: string | null;
-  end: string | null;
-} {
-  const start = query.start_date && isValidDateOnly(query.start_date) ? query.start_date : null;
-  const end = query.end_date && isValidDateOnly(query.end_date) ? query.end_date : null;
-  return { start, end };
-}
+  resolveCoverageWindow,
+  findDraftGraphProblem,
+  previewCoverageForDraft,
+} from '../services/analytics/coveragePreview';
+import { CoverageDryRunSchema, optionalDateBounds } from '../services/analytics/dateBounds';
 
 export function registerAnalyticsRoutes(
   app: AppFastifyInstance,
@@ -251,194 +184,11 @@ export function registerAnalyticsRoutes(
       // Optional From/To window (YYYY-MM-DD). Absent → all-time. `end` is
       // inclusive of the whole day. Voice queries filter on started_at; the
       // revenue (top-customers) query filters on the appointment's start_time.
-      const { start, end } = optionalDateBounds(req.query as Record<string, string>);
+      const bounds = optionalDateBounds(req.query as Record<string, string>);
 
-      const data = await withTenantClient(tenantId, async (client) => {
-        const [
-          repeatCallers,
-          byService,
-          summary,
-          topCustomers,
-          abandonmentByService,
-          firstTimeFix,
-        ] = await Promise.all([
-          // Callers who reached out more than once, newest-activity first.
-          client.query<{
-            phone: string;
-            call_count: number;
-            booked_count: number;
-            first_call: string;
-            last_call: string;
-          }>(
-            `SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
-                    count(*)::int AS call_count,
-                    count(*) FILTER (WHERE appointment_id IS NOT NULL)::int AS booked_count,
-                    min(started_at) AS first_call,
-                    max(started_at) AS last_call
-             FROM voice_sessions
-             WHERE tenant_id = $1 AND is_deleted = false
-               AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
-               AND ($2::date IS NULL OR started_at >= $2::date)
-               AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
-             GROUP BY 1
-             HAVING count(*) > 1
-             ORDER BY last_call DESC
-             LIMIT 100`,
-            [tenantId, start, end]
-          ),
-          // Which services the booked calls actually booked.
-          client.query<{ service: string; booked_count: number }>(
-            `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
-                    count(*)::int AS booked_count
-             FROM voice_sessions v
-             JOIN appointments a ON a.appointment_id = v.appointment_id
-             LEFT JOIN services s ON s.service_id = a.service_id
-             WHERE v.tenant_id = $1 AND v.is_deleted = false
-               AND ($2::date IS NULL OR v.started_at >= $2::date)
-               AND ($3::date IS NULL OR v.started_at < ($3::date + interval '1 day'))
-             GROUP BY 1
-             ORDER BY booked_count DESC`,
-            [tenantId, start, end]
-          ),
-          // Top-line: how many distinct callers, how many are repeat, and how
-          // much of total call volume comes from repeat callers.
-          client.query<{
-            distinct_callers: number;
-            repeat_callers: number;
-            repeat_call_volume: number;
-            total_calls: number;
-          }>(
-            `WITH per_caller AS (
-               SELECT right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) AS phone,
-                      count(*)::int AS c
-               FROM voice_sessions
-               WHERE tenant_id = $1 AND is_deleted = false
-                 AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
-                 AND ($2::date IS NULL OR started_at >= $2::date)
-                 AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
-               GROUP BY 1
-             )
-             SELECT count(*)::int AS distinct_callers,
-                    count(*) FILTER (WHERE c > 1)::int AS repeat_callers,
-                    coalesce(sum(c) FILTER (WHERE c > 1), 0)::int AS repeat_call_volume,
-                    coalesce(sum(c), 0)::int AS total_calls
-             FROM per_caller`,
-            [tenantId, start, end]
-          ),
-          // Customer lifetime value: top customers by total booked revenue
-          // (sum of each appointment's service price). services.price defaults
-          // to 0, so a tenant that hasn't priced services sees visits with $0 —
-          // still a useful "who books most" ranking. ::float8 so JSON gets a
-          // number, not a Postgres numeric string.
-          client.query<{
-            customer_id: string;
-            name: string;
-            visits: number;
-            revenue: number;
-          }>(
-            `SELECT c.customer_id,
-                    coalesce(nullif(c.name, ''), 'Unknown') AS name,
-                    count(a.appointment_id)::int AS visits,
-                    coalesce(sum(s.price), 0)::float8 AS revenue
-             FROM appointments a
-             JOIN customers c ON c.customer_id = a.customer_id
-             LEFT JOIN services s ON s.service_id = a.service_id
-             WHERE a.tenant_id = $1 AND a.is_deleted = false AND c.is_deleted = false
-               AND ($2::date IS NULL OR a.start_time >= $2::date)
-               AND ($3::date IS NULL OR a.start_time < ($3::date + interval '1 day'))
-             GROUP BY c.customer_id, c.name
-             ORDER BY revenue DESC, visits DESC
-             LIMIT 20`,
-            [tenantId, start, end]
-          ),
-          // Abandonment-by-service: calls that did NOT book (appointment_id NULL)
-          // but recorded a requested_service_id (the caller tried to book that
-          // service). Surfaces "what are we losing callers over". Depends on the
-          // book-with-scheduling capture writing requested_service_id.
-          //
-          // FORWARD-COMPATIBLE: this is the ONLY query that reads the
-          // voice_sessions.requested_service_id column added by migration
-          // 20260622010000. If a deploy lands before that migration is applied
-          // (as happened on prod), the column is missing and this query throws
-          // — which, inside the Promise.all, would reject the WHOLE /analytics/
-          // cohorts endpoint (500 on every Analytics-tab load). The .catch
-          // degrades just this one panel to empty so the rest of the cohort
-          // data still renders. Once the migration is applied it returns real
-          // rows. (Same "safe pre-migration" stance as the audit-extend work.)
-          client
-            .query<{ service: string; abandoned_count: number }>(
-              `SELECT coalesce(nullif(s.name, ''), 'Unknown service') AS service,
-                    count(*)::int AS abandoned_count
-             FROM voice_sessions v
-             JOIN services s ON s.service_id = v.requested_service_id
-             WHERE v.tenant_id = $1 AND v.is_deleted = false
-               AND v.appointment_id IS NULL
-               AND ($2::date IS NULL OR v.started_at >= $2::date)
-               AND ($3::date IS NULL OR v.started_at < ($3::date + interval '1 day'))
-             GROUP BY 1
-             ORDER BY abandoned_count DESC`,
-              [tenantId, start, end]
-            )
-            .catch((err: unknown) => {
-              // Degrade ONLY for "column does not exist" (Postgres 42703) — the
-              // pre-migration window where requested_service_id isn't there yet.
-              // Any other failure (permissions, outage, syntax) must surface as a
-              // real error via withHandler, not hide behind an empty panel.
-              if (err && typeof err === 'object' && (err as { code?: string }).code === '42703') {
-                return { rows: [] as { service: string; abandoned_count: number }[] };
-              }
-              throw err;
-            }),
-          // First-time-fix rate: of distinct callers (same last-10-digit phone
-          // key as the other cohort cuts; NULL/empty phones excluded), how many
-          // had their FIRST call end in a booking — "resolved on first contact".
-          // "Booked" is the hard signal (appointment_id IS NOT NULL) OR the
-          // agent's 'booked' outcome text, so a booking whose call→appointment
-          // link failed to persist still counts. The From/To window bounds the
-          // calls considered (same $2/$3 guards as abandonment_by_service), so
-          // the "first" call is the earliest one WITHIN the window — consistent
-          // with how the summary CTE treats the range. DISTINCT ON + ORDER BY
-          // started_at picks each caller's earliest in-window call.
-          client.query<{ distinct_callers: number; first_call_booked: number }>(
-            `WITH first_calls AS (
-               SELECT DISTINCT ON (right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10))
-                      (appointment_id IS NOT NULL OR outcome = 'booked') AS first_booked
-               FROM voice_sessions
-               WHERE tenant_id = $1 AND is_deleted = false
-                 AND right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10) <> ''
-                 AND ($2::date IS NULL OR started_at >= $2::date)
-                 AND ($3::date IS NULL OR started_at < ($3::date + interval '1 day'))
-               ORDER BY right(regexp_replace(caller_phone, '[^0-9]', '', 'g'), 10),
-                        started_at ASC
-             )
-             SELECT count(*)::int AS distinct_callers,
-                    count(*) FILTER (WHERE first_booked)::int AS first_call_booked
-             FROM first_calls`,
-            [tenantId, start, end]
-          ),
-        ]);
-
-        // rate is null (not 0) when there are no callers — "no data" and
-        // "0% first-call bookings" are different facts and must render apart.
-        const ftf = firstTimeFix.rows[0] ?? { distinct_callers: 0, first_call_booked: 0 };
-        return {
-          repeat_callers: repeatCallers.rows,
-          by_service: byService.rows,
-          top_customers: topCustomers.rows,
-          abandonment_by_service: abandonmentByService.rows,
-          first_time_fix: {
-            rate: ftf.distinct_callers > 0 ? ftf.first_call_booked / ftf.distinct_callers : null,
-            first_call_booked: ftf.first_call_booked,
-            distinct_callers: ftf.distinct_callers,
-          },
-          summary: summary.rows[0] ?? {
-            distinct_callers: 0,
-            repeat_callers: 0,
-            repeat_call_volume: 0,
-            total_calls: 0,
-          },
-        };
-      });
+      const data = await withTenantClient(tenantId, (client) =>
+        getCohortAnalytics(client, tenantId, bounds)
+      );
 
       logEvent(req, 'analytics_cohorts_viewed', { tenantId });
       return reply.send(data);
@@ -482,122 +232,10 @@ export function registerAnalyticsRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
 
-      const { start, end } = optionalDateBounds(req.query as Record<string, string>);
-
-      const rows = await withTenantClient(tenantId, async (client) => {
-        const res = await client.query<{
-          dow: number;
-          hour: number;
-          staffed_minutes: number;
-          booked_minutes: number;
-        }>(
-          `WITH tenant_tz AS (
-             SELECT COALESCE(timezone, 'UTC') AS tz FROM tenants WHERE tenant_id = $1
-           ),
-           bounds AS (
-             -- Default window: last 28 days (inclusive of today, tenant-local).
-             SELECT COALESCE($2::date, (now() AT TIME ZONE t.tz)::date - 27) AS start_date,
-                    COALESCE($3::date, (now() AT TIME ZONE t.tz)::date) AS end_date
-             FROM tenant_tz t
-           ),
-           -- Working shifts flattened to same-day [m_start, m_end) segments in
-           -- minutes-since-midnight (24:00 → 1440). Night shifts contribute two
-           -- segments (see route comment). is_off rows carry NULL times.
-           shift_segments AS (
-             SELECT es.shift_date,
-                    (EXTRACT(EPOCH FROM es.start_time) / 60)::int AS m_start,
-                    (EXTRACT(EPOCH FROM es.end_time) / 60)::int AS m_end
-             FROM employee_schedule es, bounds b
-             WHERE es.tenant_id = $1 AND es.is_off = false
-               AND es.start_time IS NOT NULL AND es.end_time IS NOT NULL
-               AND es.start_time < es.end_time
-               AND es.shift_date BETWEEN b.start_date AND b.end_date
-             UNION ALL
-             -- Night shift, pre-midnight leg: [start_time, 24:00)
-             SELECT es.shift_date, (EXTRACT(EPOCH FROM es.start_time) / 60)::int, 1440
-             FROM employee_schedule es, bounds b
-             WHERE es.tenant_id = $1 AND es.is_off = false
-               AND es.start_time IS NOT NULL AND es.end_time IS NOT NULL
-               AND es.start_time > es.end_time
-               AND es.shift_date BETWEEN b.start_date AND b.end_date
-             UNION ALL
-             -- Night shift, post-midnight leg: [00:00, end_time)
-             SELECT es.shift_date, 0, (EXTRACT(EPOCH FROM es.end_time) / 60)::int
-             FROM employee_schedule es, bounds b
-             WHERE es.tenant_id = $1 AND es.is_off = false
-               AND es.start_time IS NOT NULL AND es.end_time IS NOT NULL
-               AND es.start_time > es.end_time
-               AND es.end_time > '00:00'::time
-               AND es.shift_date BETWEEN b.start_date AND b.end_date
-           ),
-           staffed AS (
-             SELECT EXTRACT(DOW FROM seg.shift_date)::int AS dow,
-                    h AS hour,
-                    SUM(LEAST(seg.m_end, (h + 1) * 60) - GREATEST(seg.m_start, h * 60))::int
-                      AS staffed_minutes
-             FROM shift_segments seg
-             CROSS JOIN LATERAL generate_series(seg.m_start / 60, (seg.m_end - 1) / 60) AS h
-             GROUP BY 1, 2
-           ),
-           -- Occupying appointments as tenant-local timestamps, CLAMPED to the
-           -- query window [start_date 00:00, end_date+1 00:00) in tenant-local
-           -- time. The clamp (GREATEST against the window start / LEAST against
-           -- the window end) stops a boundary-crossing appointment from
-           -- bucketing its OUT-of-window minutes onto a day/hour outside the
-           -- requested range: e.g. an appointment that starts the evening
-           -- BEFORE start_date and spills past midnight into it should
-           -- contribute only its in-window minutes, and one that runs past
-           -- midnight on end_date must not credit the next (out-of-window) day.
-           -- Because the buckets are keyed by weekday+hour, an unclamped
-           -- spill-over could land on a same-weekday cell that IS staffed
-           -- elsewhere in the window and silently inflate it. The WHERE is an
-           -- interval-OVERLAP test (not start-date-in-window) so appointments
-           -- that begin before the window but reach into it are included, then
-           -- trimmed by the clamp. The LEAST/end side is symmetric to the
-           -- GREATEST/start side. Interior cross-midnight minutes still
-           -- attribute to the calendar day they fall on (matching how a night
-           -- shift's post-midnight leg is credited to that same day).
-           appt_intervals AS (
-             SELECT GREATEST(a.start_time AT TIME ZONE t.tz, b.start_date::timestamp) AS s,
-                    LEAST(a.end_time AT TIME ZONE t.tz, (b.end_date + 1)::timestamp) AS e
-             FROM appointments a, tenant_tz t, bounds b
-             WHERE a.tenant_id = $1
-               AND a.is_deleted = false
-               AND a.status IN ('scheduled', 'completed')
-               -- Half-open overlap: interval intersects [window_start, window_end).
-               AND (a.start_time AT TIME ZONE t.tz) < (b.end_date + 1)::timestamp
-               AND (a.end_time AT TIME ZONE t.tz) > b.start_date::timestamp
-           ),
-           booked AS (
-             SELECT EXTRACT(DOW FROM h)::int AS dow,
-                    EXTRACT(HOUR FROM h)::int AS hour,
-                    ROUND(SUM(EXTRACT(EPOCH FROM
-                      (LEAST(i.e, h + interval '1 hour') - GREATEST(i.s, h))) / 60))::int
-                      AS booked_minutes
-             FROM appt_intervals i
-             CROSS JOIN LATERAL generate_series(
-               date_trunc('hour', i.s), i.e - interval '1 second', interval '1 hour') AS h
-             GROUP BY 1, 2
-           )
-           SELECT s.dow, s.hour, s.staffed_minutes,
-                  COALESCE(bk.booked_minutes, 0) AS booked_minutes
-           FROM staffed s
-           LEFT JOIN booked bk ON bk.dow = s.dow AND bk.hour = s.hour
-           ORDER BY s.dow, s.hour`,
-          [tenantId, start, end]
-        );
-        return res.rows;
-      });
-
-      const cells = rows.map((r) => ({
-        dow: r.dow,
-        hour: r.hour,
-        staffed_minutes: r.staffed_minutes,
-        booked_minutes: r.booked_minutes,
-        // Only staffed cells are returned, so staffed_minutes > 0 always holds
-        // today — the null branch is a contract guard, not a reachable state.
-        utilization: r.staffed_minutes > 0 ? r.booked_minutes / r.staffed_minutes : null,
-      }));
+      const bounds = optionalDateBounds(req.query as Record<string, string>);
+      const cells = await withTenantClient(tenantId, (client) =>
+        getUtilizationCells(client, tenantId, bounds)
+      );
 
       logEvent(req, 'analytics_utilization_viewed', { tenantId });
       return reply.send({ cells });
@@ -645,72 +283,24 @@ export function registerAnalyticsRoutes(
           .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
       }
       const draft = parsed.data;
-      const startDate = draft.start_date ?? new Date().toISOString().split('T')[0];
-      // Coverage needs a BOUNDED window — check_coverage_gaps runs
-      // generate_series(start, end), and generate_series(start, NULL) yields no
-      // rows (→ empty coverage). Default to a 4-week horizon (matches the
-      // wizard's forward-schedule expansion) when the caller gives no end.
-      const endDate =
-        draft.end_date ??
-        new Date(Date.parse(`${startDate}T00:00:00Z`) + 27 * 86_400_000)
-          .toISOString()
-          .split('T')[0];
+      const window = resolveCoverageWindow(draft);
 
-      // A window where end < start makes generate_series() return no rows and
-      // would silently report "no gaps" — reject it instead of misleading.
-      if (endDate < startDate) {
+      // An inverted window makes generate_series() return no rows, which reads
+      // as "no gaps" — refuse it rather than answer misleadingly.
+      if (window.endDate < window.startDate) {
         return reply
           .status(400)
           .send({ success: false, error: 'end_date must be on or after start_date' });
       }
 
-      // Fail fast on a broken draft graph: a shift or mapping that references a
-      // tmp_id not present in the entity lists is a client bug, and silently
-      // dropping it would produce a misleading coverage preview.
-      const duplicates = findDuplicateTmpIds(draft);
-      if (duplicates.length > 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Draft contains duplicate tmp_ids',
-          details: duplicates,
-        });
+      const problem = findDraftGraphProblem(draft);
+      if (problem) {
+        return reply.status(400).send({ success: false, ...problem });
       }
 
-      const missing = findMissingTmpIdReferences(draft);
-      if (missing.length > 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Draft references unknown tmp_ids',
-          details: missing,
-        });
-      }
-
-      const weeksAhead = weeksAheadFor(startDate, endDate);
-
-      const rows = await withTenantClient(tenantId, async (client) => {
-        await client.query('BEGIN');
-        try {
-          // insertDraftGraph writes the FULL column set it's given (description/
-          // price/contact fields included) — dry-run just never sends them, since
-          // a coverage preview doesn't need them and everything rolls back anyway.
-          await insertDraftGraph(client, tenantId, draft, {
-            weeksAhead,
-            startDate: new Date(`${startDate}T00:00:00Z`),
-          });
-
-          const res = await client.query<CoverageGapRow>(
-            `SELECT service_id, service_name, check_date, gap_hours, covered_hours,
-                    total_open_hours, coverage_pct, status, details
-             FROM check_coverage_gaps($1, $2::DATE, $3::DATE)`,
-            [tenantId, startDate, endDate]
-          );
-          return res.rows;
-        } finally {
-          // Never persist the draft — this is a preview. ROLLBACK runs on both the
-          // success and error paths (the rows are already materialized in JS).
-          await client.query('ROLLBACK');
-        }
-      });
+      const rows = await withTenantClient(tenantId, (client) =>
+        previewCoverageForDraft(client, tenantId, draft, window)
+      );
 
       logEvent(req, 'coverage_dry_run', {
         services: draft.services.length,
@@ -831,50 +421,10 @@ export function registerAnalyticsRoutes(
     withHandler(async (req, reply) => {
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
-
-      const res = await withTenantClient(tenantId, async (client) => {
-        return client.query<{
-          source: string;
-          provider: string;
-          model: string;
-          input_tokens: string;
-          output_tokens: string;
-          characters_count: string;
-          audio_duration_ms: string;
-          estimated_cost_usd: string;
-        }>(
-          `SELECT
-             source,
-             provider,
-             model,
-             SUM(input_tokens)::bigint        AS input_tokens,
-             SUM(output_tokens)::bigint       AS output_tokens,
-             SUM(characters_count)::bigint    AS characters_count,
-             SUM(audio_duration_ms)::bigint   AS audio_duration_ms,
-             SUM(estimated_cost_usd)          AS estimated_cost_usd
-           FROM ai_cost_events
-           WHERE tenant_id = $1
-             AND created_at >= date_trunc('month', now())
-           GROUP BY source, provider, model
-           ORDER BY SUM(estimated_cost_usd) DESC`,
-          [tenantId]
-        );
-      });
-
-      const breakdown = res.rows.map((r) => ({
-        source: r.source,
-        provider: r.provider,
-        model: r.model,
-        input_tokens: Number(r.input_tokens),
-        output_tokens: Number(r.output_tokens),
-        characters_count: Number(r.characters_count),
-        audio_duration_ms: Number(r.audio_duration_ms),
-        estimated_cost_usd: Number(r.estimated_cost_usd),
-      }));
-
-      const total_estimated_cost_usd = breakdown.reduce((sum, r) => sum + r.estimated_cost_usd, 0);
-
-      return reply.send({ breakdown, total_estimated_cost_usd });
+      const result = await withTenantClient(tenantId, (client) =>
+        getAiCostBreakdown(client, tenantId)
+      );
+      return reply.send(result);
     }, 'Failed to load AI cost data')
   );
 }
