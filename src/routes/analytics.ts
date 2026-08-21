@@ -8,82 +8,13 @@ import {
   type AppRequest,
 } from '../middleware/fastify-middleware';
 import { parseDateRange } from './routeHelpers';
-import { z } from 'zod';
+import { getAiCostBreakdown } from '../services/analytics/aiCost';
 import {
-  DraftGraphSchema,
-  findDuplicateTmpIds,
-  findMissingTmpIdReferences,
-  weeksAheadFor,
-  insertDraftGraph,
-} from '../services/setupGraph';
-
-const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-// One row of check_coverage_gaps output (per service, per date in the window).
-interface CoverageGapRow {
-  service_id: string;
-  service_name: string;
-  check_date: string;
-  gap_hours: number[] | null;
-  covered_hours: number[] | null;
-  total_open_hours: number;
-  coverage_pct: string | number;
-  status: string;
-  details: Record<string, unknown> | null;
-}
-
-// Draft graph posted by the setup wizard (Phase B) to preview coverage BEFORE
-// anything is persisted. Shares DraftGraphSchema with POST /setup/commit
-// (src/routes/setup.ts) — see src/services/setupGraph.ts module doc. Every
-// entity carries a client-side `tmp_id` so mappings + shifts can reference
-// each other without real DB ids.
-const CoverageDryRunSchema = DraftGraphSchema.extend({
-  // refine (not just regex): reject calendar-invalid but well-shaped dates like
-  // 2026-02-30 here, so they never reach a `$n::date` cast (→ 500).
-  start_date: z
-    .string()
-    .refine(isValidDateOnly, 'start_date must be a real YYYY-MM-DD date')
-    .optional(),
-  end_date: z
-    .string()
-    .refine(isValidDateOnly, 'end_date must be a real YYYY-MM-DD date')
-    .optional(),
-});
-
-/**
- * True only for a real calendar date in YYYY-MM-DD form. The regex alone is not
- * enough: "2026-02-30" and "2026-13-01" are correctly *shaped* but not real
- * dates, and would pass straight through to a `$n::date` cast and throw a 500.
- * We round-trip through a UTC Date and require every component to survive, so a
- * calendar-invalid bound is rejected here (→ null → all-time), never at the DB.
- */
-function isValidDateOnly(s: string): boolean {
-  const m = DATE_ONLY_RE.exec(s);
-  if (!m) return false;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  const dt = new Date(Date.UTC(year, month - 1, day));
-  return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day;
-}
-
-/**
- * Optional, unbounded-by-default date window for the analytics endpoints.
- * Unlike parseDateRange (which defaults the start to *today* — right for a
- * coverage lookup, wrong for analytics where "no filter" means all-time), this
- * returns null for any missing/malformed/calendar-invalid bound. Callers pass
- * [tenantId, start, end] and guard each side with `($n::date IS NULL OR col >=
- * $n::date)` so an absent bound drops out of the predicate entirely. `end` is
- * treated as inclusive of the whole day via `< $end::date + interval '1 day'`.
- */
-function optionalDateBounds(query: Record<string, string>): {
-  start: string | null;
-  end: string | null;
-} {
-  const start = query.start_date && isValidDateOnly(query.start_date) ? query.start_date : null;
-  const end = query.end_date && isValidDateOnly(query.end_date) ? query.end_date : null;
-  return { start, end };
-}
+  resolveCoverageWindow,
+  findDraftGraphProblem,
+  previewCoverageForDraft,
+} from '../services/analytics/coveragePreview';
+import { CoverageDryRunSchema, optionalDateBounds } from '../services/analytics/dateBounds';
 
 export function registerAnalyticsRoutes(
   app: AppFastifyInstance,
@@ -645,72 +576,24 @@ export function registerAnalyticsRoutes(
           .send({ success: false, error: 'Validation failed', details: parsed.error.issues });
       }
       const draft = parsed.data;
-      const startDate = draft.start_date ?? new Date().toISOString().split('T')[0];
-      // Coverage needs a BOUNDED window — check_coverage_gaps runs
-      // generate_series(start, end), and generate_series(start, NULL) yields no
-      // rows (→ empty coverage). Default to a 4-week horizon (matches the
-      // wizard's forward-schedule expansion) when the caller gives no end.
-      const endDate =
-        draft.end_date ??
-        new Date(Date.parse(`${startDate}T00:00:00Z`) + 27 * 86_400_000)
-          .toISOString()
-          .split('T')[0];
+      const window = resolveCoverageWindow(draft);
 
-      // A window where end < start makes generate_series() return no rows and
-      // would silently report "no gaps" — reject it instead of misleading.
-      if (endDate < startDate) {
+      // An inverted window makes generate_series() return no rows, which reads
+      // as "no gaps" — refuse it rather than answer misleadingly.
+      if (window.endDate < window.startDate) {
         return reply
           .status(400)
           .send({ success: false, error: 'end_date must be on or after start_date' });
       }
 
-      // Fail fast on a broken draft graph: a shift or mapping that references a
-      // tmp_id not present in the entity lists is a client bug, and silently
-      // dropping it would produce a misleading coverage preview.
-      const duplicates = findDuplicateTmpIds(draft);
-      if (duplicates.length > 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Draft contains duplicate tmp_ids',
-          details: duplicates,
-        });
+      const problem = findDraftGraphProblem(draft);
+      if (problem) {
+        return reply.status(400).send({ success: false, ...problem });
       }
 
-      const missing = findMissingTmpIdReferences(draft);
-      if (missing.length > 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Draft references unknown tmp_ids',
-          details: missing,
-        });
-      }
-
-      const weeksAhead = weeksAheadFor(startDate, endDate);
-
-      const rows = await withTenantClient(tenantId, async (client) => {
-        await client.query('BEGIN');
-        try {
-          // insertDraftGraph writes the FULL column set it's given (description/
-          // price/contact fields included) — dry-run just never sends them, since
-          // a coverage preview doesn't need them and everything rolls back anyway.
-          await insertDraftGraph(client, tenantId, draft, {
-            weeksAhead,
-            startDate: new Date(`${startDate}T00:00:00Z`),
-          });
-
-          const res = await client.query<CoverageGapRow>(
-            `SELECT service_id, service_name, check_date, gap_hours, covered_hours,
-                    total_open_hours, coverage_pct, status, details
-             FROM check_coverage_gaps($1, $2::DATE, $3::DATE)`,
-            [tenantId, startDate, endDate]
-          );
-          return res.rows;
-        } finally {
-          // Never persist the draft — this is a preview. ROLLBACK runs on both the
-          // success and error paths (the rows are already materialized in JS).
-          await client.query('ROLLBACK');
-        }
-      });
+      const rows = await withTenantClient(tenantId, (client) =>
+        previewCoverageForDraft(client, tenantId, draft, window)
+      );
 
       logEvent(req, 'coverage_dry_run', {
         services: draft.services.length,
@@ -831,50 +714,10 @@ export function registerAnalyticsRoutes(
     withHandler(async (req, reply) => {
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
-
-      const res = await withTenantClient(tenantId, async (client) => {
-        return client.query<{
-          source: string;
-          provider: string;
-          model: string;
-          input_tokens: string;
-          output_tokens: string;
-          characters_count: string;
-          audio_duration_ms: string;
-          estimated_cost_usd: string;
-        }>(
-          `SELECT
-             source,
-             provider,
-             model,
-             SUM(input_tokens)::bigint        AS input_tokens,
-             SUM(output_tokens)::bigint       AS output_tokens,
-             SUM(characters_count)::bigint    AS characters_count,
-             SUM(audio_duration_ms)::bigint   AS audio_duration_ms,
-             SUM(estimated_cost_usd)          AS estimated_cost_usd
-           FROM ai_cost_events
-           WHERE tenant_id = $1
-             AND created_at >= date_trunc('month', now())
-           GROUP BY source, provider, model
-           ORDER BY SUM(estimated_cost_usd) DESC`,
-          [tenantId]
-        );
-      });
-
-      const breakdown = res.rows.map((r) => ({
-        source: r.source,
-        provider: r.provider,
-        model: r.model,
-        input_tokens: Number(r.input_tokens),
-        output_tokens: Number(r.output_tokens),
-        characters_count: Number(r.characters_count),
-        audio_duration_ms: Number(r.audio_duration_ms),
-        estimated_cost_usd: Number(r.estimated_cost_usd),
-      }));
-
-      const total_estimated_cost_usd = breakdown.reduce((sum, r) => sum + r.estimated_cost_usd, 0);
-
-      return reply.send({ breakdown, total_estimated_cost_usd });
+      const result = await withTenantClient(tenantId, (client) =>
+        getAiCostBreakdown(client, tenantId)
+      );
+      return reply.send(result);
     }, 'Failed to load AI cost data')
   );
 }
