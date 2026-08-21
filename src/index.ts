@@ -257,7 +257,14 @@ registerServiceRoutes(app, pool, withTenantClient);
 registerMappingRoutes(app, pool, withTenantClient);
 registerSkillRoutes(app, pool, withTenantClient);
 registerCalendarRoutes(app, pool, withTenantClient);
-registerKnowledgeRoutes(app, pool, getEmbedding, withTenantClient, normalizeForEmbedding);
+registerKnowledgeRoutes(
+  app,
+  pool,
+  getEmbedding,
+  withTenantClient,
+  normalizeForEmbedding,
+  expandQueryForEmbedding
+);
 registerAnalyticsRoutes(app, pool, withTenantClient);
 registerSetupRoutes(app, pool, withTenantClient);
 registerVocabularyRoutes(app, pool, withTenantClient);

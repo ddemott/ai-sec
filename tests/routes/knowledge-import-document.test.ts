@@ -11,12 +11,16 @@
  * WHY: gives owners a file path to prefill knowledge; the marker path must be
  *      deterministic (no OpenAI), so the suite runs with KNOWLEDGE_IMPORT_E2E_STUB=1.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
 import { type Client, Pool } from 'pg';
 import { API_DB_URL, getRootClient, createTenant, createUser, skipIfDbDown } from '../utils';
-import { registerJwtAuthHook, tenantMiddleware, generateToken } from '../../src/middleware/fastify-middleware';
+import {
+  registerJwtAuthHook,
+  tenantMiddleware,
+  generateToken,
+} from '../../src/middleware/fastify-middleware';
 import { createWithTenantClient } from '../../src/database';
 import { registerKnowledgeRoutes } from '../../src/routes/knowledge';
 
@@ -60,7 +64,6 @@ beforeAll(async () => {
 
     dbAvailable = true;
   } catch (err) {
-     
     console.warn('[knowledge-import-document.test] DB not available, skipping', err);
   }
 });
@@ -156,5 +159,90 @@ describe('POST /knowledge/import-document (real DB, stubbed AI)', () => {
     const res = await upload('**Q: x?\n**A: y', 'faq.md', '00000000-0000-0000-0000-0000000000ff');
     expect(res.statusCode).toBe(403);
     expect(res.json().success).toBe(false);
+  });
+});
+
+/**
+ * The AI-cost recording branch on the LLM path (knowledge.ts ~751-778).
+ *
+ * WHY THIS IS WORTH ITS OWN SETUP. Every other case in this file runs with
+ * KNOWLEDGE_IMPORT_E2E_STUB=1, which takes the deterministic branch and never
+ * touches the cost ledger — so the code that writes `ai_cost_events` for a
+ * knowledge import had no coverage at all.
+ *
+ * That ledger has been wrong before, and expensively: on 2026-08-13 the AI-cost
+ * route was costing every call with a copy that knew only gpt-4o-mini, so the
+ * production voice LLM and all TTS recorded $0.00 and the ledger reported
+ * 2.8-4.3% of the real bill. A cost path with no test is a number nobody can
+ * trust, and the failure is silent by construction — nothing errors, the total
+ * is simply too small.
+ */
+describe('POST /knowledge/import-document — AI cost recording on the real LLM path', () => {
+  const savedStub = process.env.KNOWLEDGE_IMPORT_E2E_STUB;
+  const savedKey = process.env.OPENAI_API_KEY;
+
+  beforeEach(() => {
+    // Leave the stub branch so extractAnswersWithLLM actually runs.
+    delete process.env.KNOWLEDGE_IMPORT_E2E_STUB;
+    process.env.OPENAI_API_KEY = 'test-key';
+  });
+
+  afterEach(() => {
+    if (savedStub === undefined) delete process.env.KNOWLEDGE_IMPORT_E2E_STUB;
+    else process.env.KNOWLEDGE_IMPORT_E2E_STUB = savedStub;
+    if (savedKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = savedKey;
+    vi.unstubAllGlobals();
+  });
+
+  it('HAPPY: an OpenAI reply carrying usage writes an ai_cost_events row', async () => {
+    if (!dbAvailable) return;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({ answers: [] }) } }],
+          // The field the cost branch depends on. Omit it — as every other test
+          // in this file effectively does — and the branch never executes.
+          usage: { prompt_tokens: 1000, completion_tokens: 500 },
+        }),
+      }))
+    );
+
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const res = await upload('Our shop opens at nine and closes at five, Monday to Friday.');
+    expect(res.statusCode).toBeLessThan(500);
+    // Prove the LLM branch actually ran; otherwise an empty ledger below would
+    // be a false negative rather than a real regression.
+    expect(fetchMock).toHaveBeenCalled();
+
+    // The cost write is deliberately fire-and-forget (`.catch(() => undefined)`)
+    // so a telemetry failure can never break an import — which means the row
+    // may land after the response. Poll briefly rather than race it; a fixed
+    // sleep would be the wall-clock assertion this repo keeps getting bitten by.
+    let costRows = { rows: [] as Record<string, unknown>[] };
+    for (let i = 0; i < 50 && costRows.rows.length === 0; i++) {
+      costRows = await setup.query(
+        `SELECT source, provider, model, input_tokens, output_tokens, estimated_cost_usd
+         FROM ai_cost_events
+        WHERE tenant_id = $1 AND source = 'kb_ingestion'
+        ORDER BY created_at DESC LIMIT 1`,
+        [tenantId]
+      );
+      if (costRows.rows.length === 0) await new Promise((r) => setTimeout(r, 20));
+    }
+
+    expect(costRows.rows).toHaveLength(1);
+    const row = costRows.rows[0];
+    expect(row.provider).toBe('openai');
+    expect(row.model).toBe('gpt-4o-mini');
+    expect(Number(row.input_tokens)).toBe(1000);
+    expect(Number(row.output_tokens)).toBe(500);
+    // 1000 * 0.15e-6 + 500 * 0.6e-6 = 0.00045. Pinning the arithmetic, not just
+    // that "a number was written" — a zero here is the exact shape of the
+    // 2026-08-13 ledger bug.
+    expect(Number(row.estimated_cost_usd)).toBeCloseTo(0.00045, 8);
   });
 });
