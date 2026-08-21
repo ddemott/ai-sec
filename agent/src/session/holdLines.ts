@@ -76,6 +76,27 @@ export const CALLER_SILENCE_GOODBYE =
   "I'll let you go for now — do call back any time and I'll be glad to help.";
 
 /**
+ * Spoken when the call itself is broken — the LLM provider is erroring and no
+ * generated speech is coming (2026-07-21 08:56: OpenAI returned
+ * `insufficient_quota`, the session raised seven consecutive errors, and the
+ * caller heard the greeting and then NOTHING; "Hello?… can you hear me?", then
+ * a hang-up).
+ *
+ * THIS LINE MUST NEVER DEPEND ON THE LLM, which is the whole point: every other
+ * recovery path on this call is itself a `generateReply`, so when the model is
+ * the thing that is down, each of them dies the same way and the caller gets
+ * silence. It is pre-synthesized with the rest of HOLD_LINES and played from the
+ * cache, so it works precisely when nothing else does.
+ *
+ * It says what is true and nothing more. No promise to call back — the agent
+ * cannot dial out — and no offer to take a message, because taking a message
+ * needs a tool round-trip through the very stack that is failing. Asking the
+ * caller to try again shortly is the only thing this code can actually honour.
+ */
+export const OUTAGE_LINE =
+  "I'm having some technical trouble on my end. Please try calling back in a few minutes — I'm sorry about that.";
+
+/**
  * Every fixed line worth pre-synthesizing per tenant voice, minus the greeting
  * (which is tenant-specific and warmed alongside these at call start).
  */
@@ -86,4 +107,5 @@ export const HOLD_LINES = [
   TOOL_FALLBACK_LINE,
   CALLER_CHECK_IN_LINE,
   CALLER_SILENCE_GOODBYE,
+  OUTAGE_LINE,
 ] as const;
