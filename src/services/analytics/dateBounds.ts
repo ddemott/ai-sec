@@ -21,8 +21,17 @@ export interface CoverageGapRow {
   service_id: string;
   service_name: string;
   check_date: string;
-  gap_hours: number[] | null;
-  covered_hours: number[] | null;
+  // NOT nullable, despite how this type read for a long time.
+  // check_coverage_gaps() COALESCEs both to '{}'::INTEGER[] before returning
+  // (supabase/baseline.sql), so pg hands back an empty array, never null.
+  // Declaring `| null` forced callers into null-handling that could not fire
+  // and, worse, hid the real contract: an empty array means "no gap hours",
+  // which is a meaningful answer, while null would mean "unknown". Caught in
+  // review of the extraction; corrected here because it is a type-only change
+  // with no runtime behaviour attached — the dashboard's own SetupWizard type
+  // already declares these as plain `number[]`.
+  gap_hours: number[];
+  covered_hours: number[];
   total_open_hours: number;
   coverage_pct: string | number;
   status: string;

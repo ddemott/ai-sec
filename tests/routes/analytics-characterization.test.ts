@@ -110,13 +110,6 @@ beforeEach(() => {
 });
 
 describe('GET /analytics/ai-cost — characterization', () => {
-  it('HAPPY: bigint sums arrive as STRINGS from pg and are coerced to numbers', () => {
-    // WHY: `SUM(...)::bigint` comes back as a string over the wire. The route
-    //      Number()s every one. If an extraction drops that mapping the
-    //      dashboard silently starts concatenating strings instead of adding.
-    expect(true).toBe(true);
-  });
-
   it('HAPPY: totals the estimated cost across the breakdown rows', async () => {
     queryResponses.push({
       rows: [
