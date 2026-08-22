@@ -10,6 +10,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { estimateCost } from '../../src/services/aiCost.js';
+import { errorsTotal } from '../../src/services/metrics.js';
+
+function errorsTotalFor(event: string): number {
+  return errorsTotal.snapshot().find((s) => s.labels.event === event)?.value ?? 0;
+}
 
 describe('estimateCost — every model the app invokes has a nonzero rate', () => {
   // WHY: a model with no PRICING entry silently costs $0 — the exact regression
@@ -57,8 +62,24 @@ describe('estimateCost — every model the app invokes has a nonzero rate', () =
     expect(cost).toBeCloseTo(0.015, 6);
   });
 
-  it('an unknown model still returns 0 (no crash) — but that is the gap to watch', () => {
+  it('an unknown model still returns 0 (no crash) and bumps errors_total', () => {
+    // Must not throw — recordAiCostEvent is fire-and-forget on ingest paths.
+    // Must not stay silent — this is how gpt-4.1-mini billed $0 for a month.
+    const before = errorsTotalFor('ai_cost_model_unpriced');
     expect(estimateCost({ provider: 'openai', model: 'gpt-9-imaginary', inputTokens: 1000 })).toBe(0);
+    expect(errorsTotalFor('ai_cost_model_unpriced')).toBe(before + 1);
+  });
+
+  it('a priced model that happens to cost $0 (zero tokens) does not look unpriced', () => {
+    const before = errorsTotalFor('ai_cost_model_unpriced');
+    expect(estimateCost({ provider: 'openai', model: 'gpt-4.1-mini', inputTokens: 0 })).toBe(0);
+    expect(errorsTotalFor('ai_cost_model_unpriced')).toBe(before);
+  });
+
+  it('an unknown model with zero usage does not bump — nothing was billed', () => {
+    const before = errorsTotalFor('ai_cost_model_unpriced');
+    expect(estimateCost({ provider: 'openai', model: 'gpt-9-imaginary' })).toBe(0);
+    expect(errorsTotalFor('ai_cost_model_unpriced')).toBe(before);
   });
 
   // EVERY Aura voice the picker can map to (AURA_BY_OPENAI_VOICE in
