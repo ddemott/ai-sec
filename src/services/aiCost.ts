@@ -1,4 +1,8 @@
 import type { PoolClient } from 'pg';
+import { errorsTotal } from './metrics';
+import { buildLogger } from './logger';
+
+const log = buildLogger({ service: 'secretary-hq-backend' }).child({ component: 'aiCost' });
 
 /**
  * Records an AI usage/cost event to ai_cost_events.
@@ -46,17 +50,42 @@ function estimateCost(params: {
   charactersCount?: number;
   audioDurationMs?: number;
 }): number {
-  const p = PRICING[params.model] || { input: 0, output: 0 };
-  let cost = (params.inputTokens || 0) * p.input + (params.outputTokens || 0) * p.output;
+  const p = PRICING[params.model];
+  const modelKey = params.model.toLowerCase();
+  const audioKnown = modelKey.includes('nova') || modelKey.includes('aura');
+  const used =
+    (params.inputTokens || 0) +
+    (params.outputTokens || 0) +
+    (params.charactersCount || 0) +
+    (params.audioDurationMs || 0);
+  // Unknown model + real usage used to bill $0 with a smile. The voice route
+  // already warns; recordAiCostEvent does not. The metric is what survives
+  // log truncation. Still return 0 — fire-and-forget ingest must not throw.
+  if (!p && !audioKnown && used > 0) {
+    errorsTotal.inc({ event: 'ai_cost_model_unpriced' });
+    log.warn(
+      {
+        event: 'ai_cost_model_unpriced',
+        model: params.model,
+        provider: params.provider,
+        input_tokens: params.inputTokens ?? 0,
+        output_tokens: params.outputTokens ?? 0,
+        characters_count: params.charactersCount ?? 0,
+        audio_duration_ms: params.audioDurationMs ?? 0,
+      },
+      'ai_cost_model_unpriced'
+    );
+  }
+  const rates = p || { input: 0, output: 0 };
+  let cost = (params.inputTokens || 0) * rates.input + (params.outputTokens || 0) * rates.output;
   // Provider/model casing varies at the call site (recorded as "Deepgram" /
   // "deepgram"), so key the audio branches off the MODEL name, case-insensitively
   // — the previous `provider === 'deepgram'` check silently missed capitalized
   // rows, and TTS (Aura, char-priced) was never costed at all → $0.00.
-  const model = params.model.toLowerCase();
-  if (model.includes('nova') && params.audioDurationMs) {
+  if (modelKey.includes('nova') && params.audioDurationMs) {
     cost += (params.audioDurationMs / 1000 / 60) * DEEPGRAM_STT_PER_MINUTE;
   }
-  if (model.includes('aura') && params.charactersCount) {
+  if (modelKey.includes('aura') && params.charactersCount) {
     cost += params.charactersCount * DEEPGRAM_AURA_PER_CHAR;
   }
   return cost;

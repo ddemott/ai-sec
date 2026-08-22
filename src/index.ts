@@ -22,6 +22,7 @@ import { buildLogger } from './services/logger';
 import { httpRequestsTotal, httpRequestDurationMs, errorsTotal } from './services/metrics';
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveLocalHttpsCertDir } from './localHttpsCerts';
 
 import { registerAuthRoutes } from './routes/auth';
 import { registerTenantRoutes } from './routes/tenants';
@@ -110,7 +111,7 @@ const expandQueryForEmbedding = createQueryExpander(OPENAI_API_KEY);
 // all speak http://localhost:4001. CI sets USE_HTTPS=false so the backend
 // doesn't boot TLS the self-signed cert nobody else in the job trusts.
 const useHttps = process.env.NODE_ENV !== 'production' && process.env.USE_HTTPS !== 'false';
-const certDir = path.resolve(__dirname, '..', '..', 'certs');
+const certDir = resolveLocalHttpsCertDir(__dirname);
 const logger = buildLogger({ service: 'secretary-hq-backend' });
 const app = Fastify(
   (useHttps

@@ -4,6 +4,14 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-21 — estimateCost unpriced-model miss is loud
+
+Closed the item filed from PR #367. `src/services/aiCost.ts` `estimateCost` still returns 0 for an unknown model (ingest must not throw) but now increments `errors_total{event="ai_cost_model_unpriced"}` and logs the model name. The voice route already warned under that event; `recordAiCostEvent` did not. Priced model + zero tokens stays quiet.
+
+Website-scan SSRF (owner-supplied URL, no host guard) was flagged on #367 as pre-existing; left as a live TODO rather than mixed into the extraction.
+
+---
+
 ## 2026-08-13 — Live checklist presets + required-field overrides (#338, #339)
 
 Closed ROADMAP Steps 8 and 9 slices 1–3. Prod is on `4610d10` (`/health` `started_at` 2026-08-13T14:00:35Z).
