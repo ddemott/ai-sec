@@ -4,6 +4,14 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — agent tools split by capability + reachability inventory
+
+Closed the two P2 items that had to move together. `buildTools` is still the public API. Definitions moved from a 1,822-line `agent/src/tools.ts` into `agent/src/tools/{knowledge,messaging,identity,scheduling,verification,transfer,sms}.ts`. Nothing was deleted: tools the question-tree path does not offer are listed in `DEFINED_UNREACHABLE_ON_QUESTION_TREE` (KEEP-UNWIRED, including `find_caller_by_name` for the enumeration hole). `reachability.test.ts` fails CI if a new tool is defined without a tree wiring or a parked verdict.
+
+Agent suite: `968 passed (968)`.
+
+---
+
 ## 2026-08-28 — website-scan SSRF guard
 
 Closed the P2 item filed from PR #367. `POST /knowledge/import-website` used to `fetch()` whatever URL an authenticated owner typed: Zod `.url()` accepts `file:` and `http://169.254.169.254`. `src/services/knowledge/siteScrape.ts` now gates every scrape (start URL, crawl links, redirect `Location`) behind `assertSafeSiteFetchUrl`: http/https only, block loopback/private/link-local literals, and block hostnames that resolve there. Redirects are `manual` so a public 302 cannot follow onto metadata.

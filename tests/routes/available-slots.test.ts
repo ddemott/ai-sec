@@ -255,10 +255,10 @@ describe('get_available_slots wiring', () => {
 
   it('agent tool definition is registered with the LiveKit session', () => {
     // WHO: LiveKit agent registering its tool surface with the LLM
-    // WHAT: agent/src/tools.ts must declare get_available_slots
-    // WHERE: agent/src/tools.ts
+    // WHAT: the scheduling capability module must declare get_available_slots
+    // WHERE: agent/src/tools/scheduling.ts (tools.ts is a barrel after the split)
     // WHY: LLM only knows about tools listed here; missing entry = silent loss
-    const src = fs.readFileSync('agent/src/tools.ts', 'utf8');
+    const src = fs.readFileSync('agent/src/tools/scheduling.ts', 'utf8');
     expect(src).toContain('get_available_slots');
   });
 });

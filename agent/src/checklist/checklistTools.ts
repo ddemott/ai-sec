@@ -137,7 +137,7 @@ const REWRITABLE_ON_CORRECTION: Record<string, readonly NodeId[]> = {
 };
 
 /** Read tools a tree needs alongside its action (the calendar for a booking). */
-const TREE_PASSTHROUGH_TOOLS: Record<string, string[]> = {
+export const TREE_PASSTHROUGH_TOOLS: Record<string, string[]> = {
   booking: ['get_available_slots', 'get_service_catalog'],
   schedule_change: ['get_my_appointments', 'get_available_slots'],
   // A sales call's write is the DEMO BOOKING, so buy_service has no action node of
