@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import LoginView from '@/components/LoginView';
+import LoginView from '@/components/auth/LoginView';
 import { OutlookLayout } from '@/components/OutlookLayout';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ShortcutsHelpModal } from '@/components/ui/ShortcutsHelpModal';
@@ -20,7 +20,7 @@ const CRMView = dynamic(() => import('@/components/CRMView'), { ssr: false });
 const SetupView = dynamic(() => import('@/components/SetupView'), { ssr: false });
 const AIInsightsView = dynamic(() => import('@/components/AIInsightsView'), { ssr: false });
 const SettingsView = dynamic(() => import('@/components/SettingsView'), { ssr: false });
-const ProfileView = dynamic(() => import('@/components/ProfileView'), { ssr: false });
+const ProfileView = dynamic(() => import('@/components/auth/ProfileView'), { ssr: false });
 const SuperAdminDashboard = dynamic(() => import('@/components/SuperAdminDashboard'), {
   ssr: false,
 });

@@ -121,7 +121,7 @@ describe('BUG-004: CRMView handleEditFormChange function', () => {
 // =========================================================
 // BUG-005: No dev bypass button in login
 // =========================================================
-import LoginView from './LoginView';
+import LoginView from './auth/LoginView';
 
 describe('BUG-005: No dev bypass button in production code', () => {
   test('LoginView should NOT contain a bypass/dev button', () => {

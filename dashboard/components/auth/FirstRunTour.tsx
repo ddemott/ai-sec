@@ -2,11 +2,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Calendar, Users, Phone, Wrench, Wand2, X, ArrowRight, Sparkles } from 'lucide-react';
-import { useFocusTrap } from '../lib/useFocusTrap';
-import { Button } from './ui/Button';
-import { useActiveTenantId } from '../lib/SessionContext';
+import { useFocusTrap } from '../../lib/useFocusTrap';
+import { Button } from '../ui/Button';
+import { useActiveTenantId } from '../../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
-import type { Tab } from '../app/dashboard/page';
+import type { Tab } from '../../app/dashboard/page';
 
 interface FirstRunTourProps {
   onNavigate?: (tab: Tab) => void;

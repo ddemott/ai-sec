@@ -12,7 +12,7 @@ import { WizardModeChooser } from './SetupWizard/WizardModeChooser';
 import { WizardWelcome } from './SetupWizard/WizardWelcome';
 import { BusinessTypePicker } from './SetupWizard/BusinessTypePicker';
 import { notifySetupProgressChanged } from '../lib/useSetupProgress';
-import { FirstRunTour } from './FirstRunTour';
+import { FirstRunTour } from './auth/FirstRunTour';
 import SetupWizard from './SetupWizard';
 import SoloWizard from './SetupWizard/SoloWizard';
 import { QuickBookPanel } from './scheduler/QuickBookPanel';

@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — dashboard auth slice (81 → 75)
+
+Moved LoginView, ProfileView, FirstRunTour into `dashboard/components/auth/`. Migration item stays open at 75 remaining loose `.tsx` files.
+
+---
+
 ## 2026-08-28 — recording disclaimer already composed, not a greeting column
 
 Phase 2 item asked for `tenants.greeting` spoken verbatim from `index.ts`. That is the 2026-07-10 bug: a tenant First Message deleted the disclosure. Shipped path is `greeting.ts` composition + `call_disclosure` with attestation. Pin: `greeting.test.ts` default never says "recorded"/"training".
