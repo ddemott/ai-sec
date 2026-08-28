@@ -58,6 +58,18 @@ describe('buildChecklistPrompt — wrong-business handling', () => {
   });
 });
 
+describe('buildChecklistPrompt — wrap-up is one question, not a 12s stack', () => {
+  it('SAD: ending does not stack passed-along + email + anything-else in one breath', () => {
+    // WHO: caller at checklist COMPLETE on 2026-07-21
+    // WHAT: wrap-up is ONLY "Anything else I can help you with?" then finish_call
+    // WHY: a 12s turn packed "I've passed that along" + email instruction +
+    //      anything-else. Email is its own node (best_email). Passed-along is a
+    //      tool result, not a wrap-up speech.
+    expect(prompt).toMatch(/Anything else I can help you with\?/);
+    expect(prompt).toMatch(/Do not combine a[\s\S]{0,40}passed-along line, an email instruction, and "anything else" in one turn/);
+  });
+});
+
 describe('the stall detector (SCL_nRKo3KEVw8Yh — five minutes of bot-mirror)', () => {
   // WHO: an AI recruiter bot mirroring "would you like me to leave a message?"
   //      at the agent for 5 minutes, the checklist frozen the whole time.
