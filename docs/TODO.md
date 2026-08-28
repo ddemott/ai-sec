@@ -683,7 +683,12 @@ Both erase PII irreversibly (kill-switched off / inert until enabled). Branches 
   - Every "free forever" tier is free-_within-limits_. Paid vendors (Sentry, Better Stack) were already **declined** 2026-07-02; the code keeps its no-op hooks either way.
   - **`docs/ALERTS.md` stays** as a reusable PromQL reference — the rules are collector-agnostic and cost nothing to keep. If a destination is ever chosen, it's paste-and-go.
   - **The one signal actually worth having** — "SMS failure ratio crossed 20%", which would have caught the dead `TELNYX_PHONE_NUMBER` on day one — needs no vendor. See the zero-vendor option below.
-- [ ] **(code)** _(Optional, unscheduled)_ **Zero-vendor alert** — a scheduled GitHub Actions workflow that curls `/metrics` with `METRICS_TOKEN`, evaluates the two `sms_sends_total` / `errors_total` thresholds from `ALERTS.md` §3.9, and opens an issue on breach. No account, no series cap, no ToS that bans commercial use. Costs Actions minutes (~720/mo at a 30-min cadence, against 2,000 free on a private repo). Gives alerts, not dashboards — which is the actual need until real call volume exists.
+- [x] ~~**(code)** _(Optional, unscheduled)_ **Zero-vendor alert**~~ — **DONE 2026-08-28.**
+      `.github/workflows/zero-vendor-alerts.yml` every 30m curls prod `/metrics` with
+      `METRICS_TOKEN`, `scripts/zeroVendorAlerts.ts` evaluates ALERTS.md §3.9 on the
+      boot-lifetime counters (`rate()` needs two scrapes; a dead from-number pins
+      the ratio at 1.0). Opens or comments one `[zero-vendor]` issue. Unset token
+      is SKIP, not a page. Pin: `tests/scripts/zeroVendorAlerts.test.ts` (5).
 - [ ] **(code)** **Website-scan re-scan scheduler** — periodic re-scan of stale KB. Deferred: needs a `last_scanned` column/migration + is a cost/product call.
 
 ### Structural refactors (folded in from root `07_11_2026_IMPROVEMENTS.md`, 2026-07-28 — that file is deleted; it duplicated this backlog and sat in the root, which by CLAUDE.md holds only CLAUDE.md / README.md / workflow.config.json / DEMO_SECTION.md)
