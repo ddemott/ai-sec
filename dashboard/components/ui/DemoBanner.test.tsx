@@ -4,7 +4,7 @@
  * WHO: any dashboard user whose localStorage has demoTenantId set
  * WHAT: banner visibility, countdown, urgent state, exit behavior
  * WHEN: component mounts with/without demo session in localStorage
- * WHERE: dashboard/components/DemoBanner.tsx
+ * WHERE: dashboard/components/ui/DemoBanner.tsx
  * WHY: demo visitors must always see expiry time and a clear exit path;
  *      a broken banner leaves them stuck in a dead session
  */

@@ -3,7 +3,7 @@
  *
  * WHO: Anyone looking at the deployed dashboard to verify which version is live.
  * WHAT: Hidden by default (env var gate); renders sha+version+time when enabled.
- * WHERE: components/VersionBadge.tsx — 0% coverage.
+ * WHERE: components/ui/VersionBadge.tsx — 0% coverage.
  * WHY: The component previously had no tests; the env-var gate and the
  *   deterministic ISO-slice format (no toLocaleString) were untested.
  */

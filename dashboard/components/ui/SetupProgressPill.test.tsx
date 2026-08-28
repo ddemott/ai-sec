@@ -26,11 +26,11 @@ const { mockProgress } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../lib/useSetupProgress', () => ({
+vi.mock('../../lib/useSetupProgress', () => ({
   useSetupProgress: (tenantId: string | null) => mockProgress.fn(tenantId),
 }));
 
-vi.mock('../lib/SessionContext', () => ({
+vi.mock('../../lib/SessionContext', () => ({
   useActiveTenantId: () => globalTenantId,
 }));
 

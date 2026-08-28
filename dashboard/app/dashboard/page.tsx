@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import LoginView from '@/components/LoginView';
 import { OutlookLayout } from '@/components/OutlookLayout';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ShortcutsHelpModal } from '@/components/ui/ShortcutsHelpModal';
 import { useKeyboardShortcuts, type Shortcut } from '@/lib/useKeyboardShortcuts';
 import { useSessionContext } from '@/lib/SessionContext';

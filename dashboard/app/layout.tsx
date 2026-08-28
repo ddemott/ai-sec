@@ -4,7 +4,7 @@ import './globals.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import { Providers } from './providers';
-import { VersionBadge } from '../components/VersionBadge';
+import { VersionBadge } from '../components/ui/VersionBadge';
 import React from 'react';
 
 const bebasNeue = Bebas_Neue({
