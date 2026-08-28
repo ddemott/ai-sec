@@ -4,7 +4,7 @@
 >
 > This file **stays** as a collector-agnostic PromQL reference — it costs nothing to keep, matches the live registry exactly, and is paste-and-go if a destination is ever chosen. The metrics themselves are already live and free at `GET /metrics` (Bearer `METRICS_TOKEN`) and `GET /ready`.
 >
-> If you want the one alert that matters without any vendor — "SMS failure ratio crossed 20%", the signal that would have caught the dead `TELNYX_PHONE_NUMBER` on day one — see the zero-vendor GitHub Actions option in `docs/TODO.md` P2.
+> If you want the one alert that matters without any vendor — "SMS failure ratio crossed 20%", the signal that would have caught the dead `TELNYX_PHONE_NUMBER` on day one — that is now `.github/workflows/zero-vendor-alerts.yml` (every 30m, opens a GitHub issue). Set repo secret `METRICS_TOKEN`.
 
 Ready-to-apply alert rules for the production backend + agent. The **"Alert rules"
 item was dropped from `docs/TODO.md` P2 on 2026-07-09** (no vendor met the

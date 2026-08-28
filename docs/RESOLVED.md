@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — zero-vendor SMS alerts
+
+`.github/workflows/zero-vendor-alerts.yml` + `scripts/zeroVendorAlerts.ts`. Evaluates ALERTS.md §3.9 on a single `/metrics` scrape (boot-lifetime ratio, not Prometheus `rate()`). Opens one `[zero-vendor]` GitHub issue on breach. `npx vitest run tests/scripts/zeroVendorAlerts.test.ts --run` → `5 passed (5)`.
+
+---
+
 ## 2026-08-28 — dashboard ui primitives slice (89 → 81)
 
 Moved VersionBadge, ErrorBoundary, DemoBanner, SetupProgressPill into `dashboard/components/ui/`. Migration item stays open at 81 remaining loose `.tsx` files.
