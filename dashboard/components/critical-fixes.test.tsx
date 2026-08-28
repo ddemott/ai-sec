@@ -157,7 +157,7 @@ describe('BUG-005: No dev bypass button in production code', () => {
 // =========================================================
 // BUG-010: ErrorBoundary catches component errors
 // =========================================================
-import { ErrorBoundary } from './ErrorBoundary';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 
 // Mock SessionContext for useActiveTenantId
 vi.mock('@/lib/SessionContext', () => ({

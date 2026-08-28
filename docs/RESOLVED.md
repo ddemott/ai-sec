@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — dashboard ui primitives slice (89 → 81)
+
+Moved VersionBadge, ErrorBoundary, DemoBanner, SetupProgressPill into `dashboard/components/ui/`. Migration item stays open at 81 remaining loose `.tsx` files.
+
+---
+
 ## 2026-08-28 — refresh uncustomized tenant question trees
 
 `copy_question_tree_templates_to_tenant` never overwrites existing trees, so `npm run trees:local` could not pick up the 2026-08-15 `qa_summary` reword. `--refresh-uncustomized` deletes and recopies only tenants whose trees are all still `is_customized = false`. One customized tree parks the whole tenant. `trees:local` now passes the flag.

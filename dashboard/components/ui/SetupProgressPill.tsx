@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { Wand2 } from 'lucide-react';
-import { useActiveTenantId } from '../lib/SessionContext';
-import { useSetupProgress } from '../lib/useSetupProgress';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { useSetupProgress } from '../../lib/useSetupProgress';
 
 /**
  * SetupProgressPill — persistent "Setup: N of 6 done" affordance pinned
