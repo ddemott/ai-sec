@@ -14,6 +14,7 @@ import { Mail, MailOpen, RefreshCw, CheckCircle, Briefcase, AlertTriangle } from
 import { type CustomerMessage, type JobInquiry } from '@/lib/types';
 import { Api } from '../../lib/api';
 import { formatPhone } from '../../lib/phone';
+import { formatPayRangeDisplay } from '../../../shared/payRange';
 import { showToast } from '../ui/Toast';
 
 /** One row of the inbox: a message the caller dictated, or a job lead the
@@ -302,7 +303,7 @@ export function MessagesInbox({ tenantId }: { tenantId: string | null }) {
                   ['Client (where the work is)', selected.client_company],
                   ['Caller works for', selected.caller_company],
                   ['Employment type', selected.employment_type],
-                  ['Rate', selected.rate_range],
+                  ['Rate', selected.rate_range ? formatPayRangeDisplay(selected.rate_range) : null],
                   ['Duration', selected.duration],
                   ['Location', selected.location_type],
                   ['Address', selected.address],
