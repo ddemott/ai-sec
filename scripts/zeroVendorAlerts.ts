@@ -94,7 +94,10 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
   if (!res.ok) {
     console.error(`GET ${url} → ${res.status}`);
     process.exit(1);

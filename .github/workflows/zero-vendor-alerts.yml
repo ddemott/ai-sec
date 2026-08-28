@@ -27,11 +27,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install
-        run: npm ci --no-audit --no-fund --ignore-scripts
 
       - name: Scrape and evaluate
         id: eval
@@ -39,7 +34,7 @@ jobs:
           METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
         run: |
           set +e
-          OUTPUT=$(npx tsx scripts/zeroVendorAlerts.ts \
+          OUTPUT=$(npx --yes tsx@4.23.12 scripts/zeroVendorAlerts.ts \
             "https://secretary-hq-production.up.railway.app/metrics" 2>&1)
           CODE=$?
           set -e
