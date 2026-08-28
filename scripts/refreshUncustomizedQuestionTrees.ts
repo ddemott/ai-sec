@@ -33,12 +33,15 @@ type TenantRow = {
 
 /**
  * Delete a tenant's question-tree rows so copy_question_tree_templates_to_tenant
- * will see an empty tenant and recopy. Nodes are self-referential
- * (parent_tenant_question_node_id ON DELETE CASCADE); a single DELETE of all
- * rows for the tenant is enough — Postgres checks the FK after the statement.
+ * will see an empty tenant and recopy.
+ *
+ * ONE statement on tenant_question_trees. Nodes follow via
+ * tenant_question_nodes_tree_fk ON DELETE CASCADE. Two statements (nodes then
+ * trees) leave a window where trees exist and nodes do not — the copy function
+ * then SKIPS because it keys off existing trees, and the tenant is stuck with
+ * empty intake until someone notices.
  */
 async function wipeTenantTrees(pool: Pool, tenantId: string): Promise<void> {
-  await pool.query(`DELETE FROM tenant_question_nodes WHERE tenant_id = $1`, [tenantId]);
   await pool.query(`DELETE FROM tenant_question_trees WHERE tenant_id = $1`, [tenantId]);
 }
 

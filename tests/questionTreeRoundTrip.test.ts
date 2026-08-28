@@ -312,4 +312,33 @@ describe('question tree DB round-trip equals the TypeScript library', () => {
     );
     expect(after.rows[0].ask).toBe('CUSTOMIZED BY THE CLIENT');
   });
+
+  /**
+   * WHO: refresh wipe | WHAT: deleting tenant_question_trees must take nodes
+   * with it | WHEN: the CASCADE fk is the only delete we issue | WHERE:
+   * tenant_question_nodes_tree_fk | WHY: a two-statement wipe (nodes then trees)
+   * can abort between them; copy then skips because trees still exist. Pin the
+   * schema so a later migration that drops the CASCADE fails this test instead
+   * of silently reopening the half-state hole.
+   */
+  it('PIN: deleting tenant_question_trees cascades the nodes', async () => {
+    const tenantId = await createTenant('answering-service');
+    await pool.query('SELECT copy_question_tree_templates_to_tenant($1, $2)', [
+      tenantId,
+      ['owner_for_hire'],
+    ]);
+    const before = await pool.query(
+      'SELECT count(*)::int AS n FROM tenant_question_nodes WHERE tenant_id = $1',
+      [tenantId]
+    );
+    expect(before.rows[0].n).toBeGreaterThan(0);
+
+    await pool.query('DELETE FROM tenant_question_trees WHERE tenant_id = $1', [tenantId]);
+
+    const afterNodes = await pool.query(
+      'SELECT count(*)::int AS n FROM tenant_question_nodes WHERE tenant_id = $1',
+      [tenantId]
+    );
+    expect(afterNodes.rows[0].n).toBe(0);
+  });
 });
