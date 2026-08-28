@@ -85,6 +85,16 @@ Converts every tenant that has no trees yet. A tenant that already has trees is
 **skipped whole, never merged** — re-running cannot restore a question a client
 deleted or wording they rewrote.
 
+To pick up a platform wording change (`qa_summary` 2026-08-15, anything later in
+`trees.ts`) on tenants that have **not** customized:
+
+```bash
+npx tsx scripts/deploy-question-trees.ts --db "$PROD_DATABASE_URL" --apply --refresh-uncustomized
+```
+
+That recopies only tenants whose trees are all still `is_customized = false`.
+One customized tree parks the whole tenant.
+
 Scope to one business with `--tenant <uuid>` when converting a client at a time.
 
 Exit code is the contract: **0 = every converted tenant matches the library, 1 =
@@ -129,7 +139,7 @@ actually changed.
 
 | Test                                | Covers                                                  | The blind spot it exists for                        |
 | ----------------------------------- | ------------------------------------------------------- | --------------------------------------------------- |
-| `questionTreeRoundTrip.test.ts`     | seed → copy → read-back equality per vertical           | the mechanism                                       |
+| `questionTreeRoundTrip.test.ts`     | seed → copy → read-back equality per vertical; refresh restores stale uncustomized copies and skips customized ones | the mechanism, and the skip-existing hole |
 | `questionTreeFieldCoverage.test.ts` | every node field, **every tree incl. unreachable ones** | a field added to a tree no preset offers            |
 | `tenantLiveCallJourneys.test.ts`    | real call journeys on a tenant's own rows               | data can be perfect and the runtime still reject it |
 | `presetCatalogConstraint.test.ts`   | preset ids vs the SQL CHECK                             | drift that only fails at a production UPDATE        |

@@ -13,6 +13,9 @@
  *                    template rows only, never a tenant's).
  *   3. CONVERT     — give each tenant its OWN copy, derived from business_type.
  *                    Tenants that already have trees are SKIPPED, not merged.
+ *                    Pass --refresh-uncustomized to recopy tenants whose trees
+ *                    are all still is_customized = false (platform wording
+ *                    updates). Customized tenants are never touched.
  *   4. VERIFY      — read every converted tenant's trees back through the same
  *                    loader the live agent uses and assert they are identical
  *                    to the TypeScript library. Non-zero exit if any differ.
@@ -45,6 +48,7 @@ import { loadTenantQuestionTrees, type QuestionTree } from '../src/services/ques
 import { verticalForBusinessType } from '../shared/checklistPresetDerivation';
 import { PRESET_LIBRARY } from '../agent/src/checklist/presets';
 import { PLATFORM_TREE_LIBRARY } from '../agent/src/checklist/trees';
+import { refreshUncustomizedQuestionTrees } from './refreshUncustomizedQuestionTrees';
 
 const REQUIRED_TABLES = [
   'question_tree_templates',
@@ -86,6 +90,7 @@ async function main(): Promise<void> {
   const apply = has('--apply');
   const onlyTenant = arg('--tenant');
   const pinPreset = has('--pin-preset');
+  const refreshUncustomized = has('--refresh-uncustomized');
 
   if (!connectionString) {
     console.error('Missing --db "postgres://..." (or DATABASE_URL).');
@@ -212,6 +217,16 @@ async function main(): Promise<void> {
           console.log(`  pinned ${t.name} → ${preset.preset_id}`);
         }
       }
+    }
+
+    if (apply && refreshUncustomized) {
+      console.log(`\n[3b] refresh uncustomized copies (is_customized still false)`);
+      const refreshed = await refreshUncustomizedQuestionTrees(pool, {
+        tenantId: onlyTenant,
+      });
+      console.log(
+        `  refreshed ${refreshed.refreshed}; skipped customized ${refreshed.skippedCustomized}; skipped empty ${refreshed.skippedEmpty}`
+      );
     }
 
     // ── 4. VERIFY ───────────────────────────────────────────────────────────

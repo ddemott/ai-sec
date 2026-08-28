@@ -22,7 +22,7 @@
     "trees:rollout": "npx tsx scripts/deploy-question-trees.ts",
     "trees:verify": "npx tsx scripts/verify-tenant-question-trees.ts",
     "local:business": "npx tsx scripts/seed-local-business.ts",
-    "trees:local": "npx tsx scripts/seed-question-tree-templates.ts --db ${DATABASE_URL:-postgres://postgres:postgres@localhost:5433/postgres} --force && npx tsx scripts/deploy-question-trees.ts --db ${DATABASE_URL:-postgres://postgres:postgres@localhost:5433/postgres} --apply",
+    "trees:local": "npx tsx scripts/seed-question-tree-templates.ts --db ${DATABASE_URL:-postgres://postgres:postgres@localhost:5433/postgres} --force && npx tsx scripts/deploy-question-trees.ts --db ${DATABASE_URL:-postgres://postgres:postgres@localhost:5433/postgres} --apply --refresh-uncustomized",
     "start": "bash scripts/start-all.sh",
     "restart": "bash scripts/restart-all.sh",
     "build": "tsc -p .",

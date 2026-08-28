@@ -37,6 +37,7 @@ import {
 import { PRESET_LIBRARY } from '../agent/src/checklist/presets';
 import { PLATFORM_TREE_LIBRARY } from '../agent/src/checklist/trees';
 import { seedQuestionTreeTemplates } from '../scripts/seed-question-tree-templates';
+import { refreshUncustomizedQuestionTrees } from '../scripts/refreshUncustomizedQuestionTrees';
 
 const CONNECTION =
   process.env.TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/test_db';
@@ -237,5 +238,107 @@ describe('question tree DB round-trip equals the TypeScript library', () => {
       [tenantId]
     );
     expect(after.rows[0].ask).toBe('CUSTOMIZED BY THE CLIENT');
+  });
+
+  /**
+   * WHO: operator running `npm run trees:local` after trees.ts changed | WHAT:
+   * uncustomized tenant copies pick up the new platform wording | WHEN: the
+   * copy function already skipped them because they had trees | WHERE:
+   * tenant_question_nodes.ask for qa_summary | WHY: 2026-08-15 reworded
+   * qa_summary so the model would stop asking the caller to summarize their
+   * own question. deploy-question-trees.ts skips tenants that already have
+   * trees, so `trees:local` left every existing copy on the old interrogation
+   * wording. Refresh must recopy when is_customized is still false.
+   */
+  it('SAD: a stale uncustomized copy is replaced by a refresh', async () => {
+    const tenantId = await createTenant('answering-service');
+    await pool.query('SELECT copy_question_tree_templates_to_tenant($1, $2)', [
+      tenantId,
+      ['owner_for_hire'],
+    ]);
+
+    await pool.query(
+      `UPDATE tenant_question_nodes
+          SET ask = 'Could you please summarize your question about Dale for me?'
+        WHERE tenant_id = $1 AND tree_id = 'qa' AND node_id = 'qa_summary'`,
+      [tenantId]
+    );
+
+    const result = await refreshUncustomizedQuestionTrees(pool, { tenantId });
+    expect(result.refreshed).toBe(1);
+    expect(result.skippedCustomized).toBe(0);
+
+    const fromDb = await loadTenantQuestionTrees(pool, tenantId);
+    const qa = fromDb.find((t) => t.tree_id === 'qa');
+    const expected = PLATFORM_TREE_LIBRARY.find((t) => t.tree_id === 'qa');
+    expect(qa).toEqual(JSON.parse(JSON.stringify(expected)));
+  });
+
+  /**
+   * WHO: a tenant who actually edited intake | WHAT: refresh must not revert
+   * them | WHEN: is_customized is true on any of their trees | WHERE:
+   * tenant_question_trees.is_customized | WHY: the copy function's contract is
+   * "never overwrite a customized intake". Refresh is the one new path that
+   * deletes rows; if it ignored the flag it would be a silent data-loss bug.
+   */
+  it('SAD: a customized tenant is skipped by refresh', async () => {
+    const tenantId = await createTenant('answering-service');
+    await pool.query('SELECT copy_question_tree_templates_to_tenant($1, $2)', [
+      tenantId,
+      ['owner_for_hire'],
+    ]);
+
+    await pool.query(
+      `UPDATE tenant_question_nodes
+          SET ask = 'CUSTOMIZED BY THE CLIENT'
+        WHERE tenant_id = $1 AND tree_id = 'job' AND node_id = 'role_description'`,
+      [tenantId]
+    );
+    await pool.query(
+      `UPDATE tenant_question_trees
+          SET is_customized = true
+        WHERE tenant_id = $1 AND tree_id = 'job'`,
+      [tenantId]
+    );
+
+    const result = await refreshUncustomizedQuestionTrees(pool, { tenantId });
+    expect(result.refreshed).toBe(0);
+    expect(result.skippedCustomized).toBe(1);
+
+    const after = await pool.query(
+      `SELECT ask FROM tenant_question_nodes
+        WHERE tenant_id = $1 AND tree_id = 'job' AND node_id = 'role_description'`,
+      [tenantId]
+    );
+    expect(after.rows[0].ask).toBe('CUSTOMIZED BY THE CLIENT');
+  });
+
+  /**
+   * WHO: refresh wipe | WHAT: deleting tenant_question_trees must take nodes
+   * with it | WHEN: the CASCADE fk is the only delete we issue | WHERE:
+   * tenant_question_nodes_tree_fk | WHY: a two-statement wipe (nodes then trees)
+   * can abort between them; copy then skips because trees still exist. Pin the
+   * schema so a later migration that drops the CASCADE fails this test instead
+   * of silently reopening the half-state hole.
+   */
+  it('PIN: deleting tenant_question_trees cascades the nodes', async () => {
+    const tenantId = await createTenant('answering-service');
+    await pool.query('SELECT copy_question_tree_templates_to_tenant($1, $2)', [
+      tenantId,
+      ['owner_for_hire'],
+    ]);
+    const before = await pool.query(
+      'SELECT count(*)::int AS n FROM tenant_question_nodes WHERE tenant_id = $1',
+      [tenantId]
+    );
+    expect(before.rows[0].n).toBeGreaterThan(0);
+
+    await pool.query('DELETE FROM tenant_question_trees WHERE tenant_id = $1', [tenantId]);
+
+    const afterNodes = await pool.query(
+      'SELECT count(*)::int AS n FROM tenant_question_nodes WHERE tenant_id = $1',
+      [tenantId]
+    );
+    expect(afterNodes.rows[0].n).toBe(0);
   });
 });

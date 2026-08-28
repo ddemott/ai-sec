@@ -4,6 +4,14 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — refresh uncustomized tenant question trees
+
+`copy_question_tree_templates_to_tenant` never overwrites existing trees, so `npm run trees:local` could not pick up the 2026-08-15 `qa_summary` reword. `--refresh-uncustomized` deletes and recopies only tenants whose trees are all still `is_customized = false`. One customized tree parks the whole tenant. `trees:local` now passes the flag.
+
+`npx vitest run tests/questionTreeRoundTrip.test.ts --run` → `12 passed (12)`.
+
+---
+
 ## 2026-08-28 — wrap-up is one question, not a 12s stack
 
 Ending guidance in `checklistAgent.ts` now forbids combining a passed-along line, an email instruction, and "anything else" in one turn. Email stays `best_email`. COMPLETE wrap-up is only "Anything else I can help you with?" then `finish_call`. Pin: `checklistAgent.test.ts`. `npx vitest run src/checklist/checklistAgent.test.ts --run` → `75 passed (75)`.

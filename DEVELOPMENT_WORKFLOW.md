@@ -29,7 +29,7 @@ Then dispatch a call: `./scripts/simulate.sh call --tenant <id>` (browser + mic)
 
 ```bash
 npm run local:business   # services + employee + shifts → the tenant is bookable
-npm run trees:local      # per-tenant question trees (without them the agent uses the TS fallback)
+npm run trees:local      # seed templates + convert/refresh uncustomized local tenant copies
 ```
 
 Without `local:business` the agent reaches the booking step, gets no service back from the resolver, and says "I'm not able to pull up our booking options right now" — a **success-shaped** dead end (HTTP 200, `success:true`) that nothing counts as an error, so the call slides into message-taking and looks like a model decision rather than missing data.

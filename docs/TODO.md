@@ -268,10 +268,14 @@ Agent suite **1687** green, tsc + lint + root format + `verify:claude-md` clean.
       decision, not a side effect of a bug sweep. **Its pass/fail set also moves
       between runs** (2026-08-15: 11/13 both times, but a different two failed), so
       treat it as a trend line, not a gate.
-- [ ] **`trees.ts` changed — tenant DB copies are now stale.** `qa_summary`'s wording
-      is template content since migration 20260814130000. Run `npm run trees:local`
-      locally and the prod tree rollout on deploy, or provisioned tenants keep asking
-      the caller to summarize their own question.
+- [x] ~~**`trees.ts` changed — tenant DB copies are now stale.**~~ — **DONE 2026-08-28.**
+      Root cause was not "forgot to run trees:local": `copy_question_tree_templates_to_tenant`
+      skips any tenant that already has trees, so seed+deploy left existing copies on the
+      old `qa_summary` interrogation wording. `--refresh-uncustomized` recopies only when
+      every tree still has `is_customized = false`. Customized tenants are skipped whole.
+      `npm run trees:local` now passes the flag. Prod: `--apply --refresh-uncustomized`.
+      Pin: `tests/questionTreeRoundTrip.test.ts` (stale copy restored; customized copy kept).
+      `npx vitest run tests/questionTreeRoundTrip.test.ts --run` → `12 passed (12)`.
 
 **Fourth pass — a fourth livelock, a plural, and a lost sales lead:**
 
