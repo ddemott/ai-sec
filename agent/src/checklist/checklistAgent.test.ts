@@ -66,7 +66,7 @@ describe('buildChecklistPrompt — wrap-up is one question, not a 12s stack', ()
     //      anything-else. Email is its own node (best_email). Passed-along is a
     //      tool result, not a wrap-up speech.
     expect(prompt).toMatch(/Anything else I can help you with\?/);
-    expect(prompt).toMatch(/Do not combine a passed-along line, an email instruction, and \"anything else\" in one turn/i);
+    expect(prompt).toMatch(/Do not combine a[\s\S]{0,40}passed-along line, an email instruction, and "anything else" in one turn/);
   });
 });
 
