@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — wrap-up is one question, not a 12s stack
+
+Ending guidance in `checklistAgent.ts` now forbids combining a passed-along line, an email instruction, and "anything else" in one turn. Email stays `best_email`. COMPLETE wrap-up is only "Anything else I can help you with?" then `finish_call`. Pin: `checklistAgent.test.ts`. `npx vitest run src/checklist/checklistAgent.test.ts --run` → `75 passed (75)`.
+
+---
+
 ## 2026-08-28 — salary display $k next to caller words
 
 Job leads stored spoken pay as words. `shared/payRange.ts` `formatPayRangeDisplay` keeps verbatim and prefixes `$140–160k` when parseable. Wired in MessagesInbox Rate row and job-inquiry email bits. DB column unchanged.
