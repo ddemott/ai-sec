@@ -4,6 +4,16 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — ENABLE_OUTPUT_WATCHDOG is on; living docs said off
+
+Dale confirmed Railway `secretary-hq-agent` Variables has `ENABLE_OUTPUT_WATCHDOG=true`. Agent env schema default was already ON (`undefined` → true; only the literal string `false` disables it). Living comments and playbook still said prod runs the flag OFF (true on 2026-07-17 / 2026-08-19). Comments, PLAYBOOK RULE 8.1/10.2, TODO, and the research remaining-gap text now match: default ON, Railway true. No runtime change.
+
+Still open: Dale listening on a real call (filler vs stutter). CI cannot grade that.
+
+Agent: `npx vitest run src/session/holdLines.test.ts src/session/watchdog.test.ts --run` → `Test Files  2 passed (2)` / `Tests  36 passed (36)`.
+
+---
+
 ## 2026-08-28 — agent tools split by capability + reachability inventory
 
 Closed the two P2 items that had to move together. `buildTools` is still the public API. Definitions moved from a 1,822-line `agent/src/tools.ts` into `agent/src/tools/{knowledge,messaging,identity,scheduling,verification,transfer,sms}.ts`. Nothing was deleted: tools the question-tree path does not offer are listed in `DEFINED_UNREACHABLE_ON_QUESTION_TREE` (KEEP-UNWIRED, including `find_caller_by_name` for the enumeration hole). `reachability.test.ts` fails CI if a new tool is defined without a tree wiring or a parked verdict.

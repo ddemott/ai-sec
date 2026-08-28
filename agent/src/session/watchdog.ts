@@ -384,9 +384,10 @@ export const NUDGE_INSTRUCTIONS =
  * over them), and the nudge claims nothing about work not done.
  *
  * DELIBERATELY SEPARATE from attachOutputWatchdog and NOT behind
- * ENABLE_OUTPUT_WATCHDOG: prod runs with that flag OFF (found 2026-07-17), and
- * a turn that ends in permanent silence is a dropped call, not a UX polish
- * option. index.ts attaches this unconditionally.
+ * ENABLE_OUTPUT_WATCHDOG. Prod had that flag OFF on 2026-07-17; a turn that
+ * ends in permanent silence is a dropped call, not a UX polish option, so
+ * this stays attached even when the hold-line watchdog is also on.
+ * index.ts attaches this unconditionally.
  */
 export function attachSilentTurnRecovery(
   session: voice.AgentSession,
@@ -437,12 +438,12 @@ export function attachSilentTurnRecovery(
     if (ev.newState === 'thinking') thinkingAtMs = Date.now();
     if (ev.newState === 'speaking') {
       // turn_latency_ms belongs here, not only in attachOutputWatchdog — THIS
-      // function is UNCONDITIONAL (prod runs with ENABLE_OUTPUT_WATCHDOG
-      // off), so it is the only place that reliably observes every real turn.
-      // Confirmed live 2026-08-19 (sim-call-1787158785189): a 17s and a 20s
-      // gap between 'thinking' and real audio, and zero turn_latency_ms lines
-      // anywhere in the call's log — the watchdog's copy of this instrument
-      // never fires in prod because it lives behind the disabled flag.
+      // function is UNCONDITIONAL, so it observes every real turn when the
+      // hold-line watchdog is off. When outputWatchdogActive is true, skip
+      // this copy (the watchdog's filler-aware copy owns the number).
+      // Why the dual copy exists: 2026-08-19 sim-call-1787158785189 had 17s
+      // and 20s gaps and zero turn_latency_ms lines — the watchdog copy lived
+      // behind a then-disabled flag.
       if (thinkingAtMs != null && !opts.outputWatchdogActive) {
         const latencyMs = Date.now() - thinkingAtMs;
         const fields = { event: 'turn_latency_ms', latency_ms: latencyMs, hold_played: false };

@@ -948,8 +948,9 @@ describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
 
   test('generic error message used when error is not an Error instance', async () => {
     await goToStep9();
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-      if (url.includes('/provisioning/activate')) {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: unknown) => {
+      const path = typeof url === 'string' ? url : String(url);
+      if (path.includes('/provisioning/activate')) {
         // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- THE POINT of this sad-path is to exercise the non-Error rejection branch in the production component
         return Promise.reject('string error without Error wrapper');
       }
@@ -958,10 +959,11 @@ describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
 
     fireEvent.click(screen.getByText('Activate AI Phone Line'));
 
-    await waitFor(() => {
-      expect(screen.getByText('Activation failed')).toBeInTheDocument();
-      expect(screen.getByText('Failed to activate phone')).toBeInTheDocument();
-    });
+    // CI runners under load have blown the default 1000ms waitFor here
+    // (same class as the recorded SetupWizard flake). The assertion is
+    // "the generic copy appeared", not "it appeared in 1s".
+    expect(await screen.findByText('Activation failed', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByText('Failed to activate phone')).toBeInTheDocument();
   });
 });
 

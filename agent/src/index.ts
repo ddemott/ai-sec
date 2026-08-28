@@ -1766,7 +1766,7 @@ export default defineAgent({
           void finalizeCall?.('close');
         });
 
-        // Output watchdog (never-silent backstop) — OFF unless ENABLE_OUTPUT_WATCHDOG.
+        // Output watchdog (never-silent backstop) — ON unless ENABLE_OUTPUT_WATCHDOG=false.
         // Pre-synthesize the fixed hold lines once (per voice, async — never blocks
         // the call; until warm, the watchdog falls back to live TTS), then attach
         // the session-level deadline timer.
@@ -1831,11 +1831,11 @@ export default defineAgent({
         }
 
         // Silent-turn-death recovery — UNCONDITIONAL, deliberately NOT behind
-        // ENABLE_OUTPUT_WATCHDOG (prod runs with that flag off; found 2026-07-17
-        // when a maxToolSteps-capped turn ended in permanent silence and nothing
-        // covered it). A turn that ends with zero audio is a dropped call, not a
-        // polish option: the runtime forces a spoken, tool-free reply. See
-        // attachSilentTurnRecovery for the full post-mortem.
+        // ENABLE_OUTPUT_WATCHDOG. Prod had that flag off as of 2026-07-17
+        // (maxToolSteps-capped turn, permanent silence, nothing covered it).
+        // The recovery stays unconditional even when the watchdog is on: a
+        // turn that ends with zero audio is a dropped call, not a polish
+        // option. See attachSilentTurnRecovery for the full post-mortem.
         const detachTurnRecovery = attachSilentTurnRecovery(session, {
           voice: ttsVoiceKey,
           recoveryText: RECOVERY_LINE,
