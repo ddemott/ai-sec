@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — recording disclaimer already composed, not a greeting column
+
+Phase 2 item asked for `tenants.greeting` spoken verbatim from `index.ts`. That is the 2026-07-10 bug: a tenant First Message deleted the disclosure. Shipped path is `greeting.ts` composition + `call_disclosure` with attestation. Pin: `greeting.test.ts` default never says "recorded"/"training".
+
+---
+
 ## 2026-08-28 — zero-vendor SMS alerts
 
 `.github/workflows/zero-vendor-alerts.yml` + `scripts/zeroVendorAlerts.ts`. Evaluates ALERTS.md §3.9 on a single `/metrics` scrape (boot-lifetime ratio, not Prometheus `rate()`). Opens one `[zero-vendor]` GitHub issue on breach. `npx vitest run tests/scripts/zeroVendorAlerts.test.ts --run` → `5 passed (5)`.
