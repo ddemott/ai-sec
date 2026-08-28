@@ -4,6 +4,14 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — website-scan SSRF guard
+
+Closed the P2 item filed from PR #367. `POST /knowledge/import-website` used to `fetch()` whatever URL an authenticated owner typed: Zod `.url()` accepts `file:` and `http://169.254.169.254`. `src/services/knowledge/siteScrape.ts` now gates every scrape (start URL, crawl links, redirect `Location`) behind `assertSafeSiteFetchUrl`: http/https only, block loopback/private/link-local literals, and block hostnames that resolve there. Redirects are `manual` so a public 302 cannot follow onto metadata.
+
+Tests: `tests/services/knowledge/siteScrapeUrlGuard.test.ts` + a route case in `knowledge.importWebsite.test.ts`. Verified both directions: before the guard, fetch was called with `http://169.254.169.254/latest/meta-data/`; after, it is not. `npx vitest run tests/services/knowledge/siteScrapeUrlGuard.test.ts tests/routes/knowledge.importWebsite.test.ts --run` → `15 passed (15)`.
+
+---
+
 ## 2026-08-21 — estimateCost unpriced-model miss is loud
 
 Closed the item filed from PR #367. `src/services/aiCost.ts` `estimateCost` still returns 0 for an unknown model (ingest must not throw) but now increments `errors_total{event="ai_cost_model_unpriced"}` and logs the model name. The voice route already warned under that event; `recordAiCostEvent` did not. Priced model + zero tokens stays quiet.

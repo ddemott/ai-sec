@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any */
+import { lookup as dnsLookup } from 'node:dns/promises';
+import { BlockList, isIP } from 'node:net';
 /*
  * The disable above is carried over verbatim from src/routes/knowledge.ts,
  * where this code lived. It is NOT an endorsement: the OpenAI response is
@@ -25,6 +27,92 @@
  */
 // ── Website scrape helpers for onboarding (item 10) ─────────────────────
 
+export type AddressLookup = (hostname: string) => Promise<string[]>;
+
+const BLOCKED_NETS = new BlockList();
+BLOCKED_NETS.addSubnet('0.0.0.0', 8, 'ipv4');
+BLOCKED_NETS.addSubnet('10.0.0.0', 8, 'ipv4');
+BLOCKED_NETS.addSubnet('100.64.0.0', 10, 'ipv4');
+BLOCKED_NETS.addSubnet('127.0.0.0', 8, 'ipv4');
+BLOCKED_NETS.addSubnet('169.254.0.0', 16, 'ipv4');
+BLOCKED_NETS.addSubnet('172.16.0.0', 12, 'ipv4');
+BLOCKED_NETS.addSubnet('192.168.0.0', 16, 'ipv4');
+BLOCKED_NETS.addSubnet('::', 128, 'ipv6');
+BLOCKED_NETS.addSubnet('::1', 128, 'ipv6');
+BLOCKED_NETS.addSubnet('fc00::', 7, 'ipv6');
+BLOCKED_NETS.addSubnet('fe80::', 10, 'ipv6');
+
+async function defaultAddressLookup(hostname: string): Promise<string[]> {
+  const results = await dnsLookup(hostname, { all: true });
+  return results.map((r) => r.address);
+}
+
+function stripBrackets(host: string): string {
+  return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+}
+
+function ipv4Mapped(host: string): string | null {
+  const dotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(host);
+  if (dotted) return dotted[1];
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(host);
+  if (!hex) return null;
+  const hi = parseInt(hex[1], 16);
+  const lo = parseInt(hex[2], 16);
+  return `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
+}
+
+function isBlockedAddress(address: string): boolean {
+  const host = stripBrackets(address);
+  const mapped = ipv4Mapped(host);
+  if (mapped) return isBlockedAddress(mapped);
+  const version = isIP(host);
+  if (version === 4) return BLOCKED_NETS.check(host, 'ipv4');
+  if (version === 6) return BLOCKED_NETS.check(host, 'ipv6');
+  return false;
+}
+
+function isBlockedHostname(host: string): boolean {
+  const h = stripBrackets(host).toLowerCase().replace(/\.$/, '');
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local')) return true;
+  return isBlockedAddress(h);
+}
+
+/**
+ * Refuse anything the website scan must not fetch: non-http(s) schemes,
+ * loopback / private / link-local literals, and hostnames that resolve there.
+ * Lookup is injected so tests can pin DNS without touching the network.
+ */
+export async function assertSafeSiteFetchUrl(
+  raw: string,
+  lookup: AddressLookup = defaultAddressLookup
+): Promise<{ ok: true; url: URL } | { ok: false; error: string }> {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return { ok: false, error: 'Invalid or unreachable URL' };
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return { ok: false, error: 'URL must be http or https' };
+  }
+  if (!url.hostname || isBlockedHostname(url.hostname)) {
+    return { ok: false, error: 'URL host is not allowed' };
+  }
+  const host = stripBrackets(url.hostname);
+  if (!isIP(host)) {
+    let addresses: string[];
+    try {
+      addresses = await lookup(host);
+    } catch {
+      return { ok: false, error: 'Invalid or unreachable URL' };
+    }
+    if (!addresses.length || addresses.some((addr) => isBlockedAddress(addr))) {
+      return { ok: false, error: 'URL host is not allowed' };
+    }
+  }
+  return { ok: true, url };
+}
+
 // Bound every outbound call in the scan path so a slow/hung site page or a slow
 // OpenAI response can't hold a request (and a pool slot) open indefinitely —
 // same AbortController discipline the rest of the codebase uses on OpenAI calls.
@@ -43,10 +131,14 @@ export async function fetchWithTimeout(
 }
 
 export async function fetchAndExtractSiteText(
-  startUrl: string
+  startUrl: string,
+  lookup: AddressLookup = defaultAddressLookup
 ): Promise<{ success: true; text: string } | { success: false; error: string }> {
   try {
-    const origin = new URL(startUrl).origin;
+    const startGate = await assertSafeSiteFetchUrl(startUrl, lookup);
+    if (!startGate.ok) return { success: false, error: startGate.error };
+
+    const origin = startGate.url.origin;
     const visited = new Set<string>();
     const pages: string[] = [];
     const queue = [startUrl];
@@ -56,16 +148,31 @@ export async function fetchAndExtractSiteText(
     while (queue.length && pages.length < maxPages) {
       const u = queue.shift()!;
       if (visited.has(u)) continue;
+      const pageGate = await assertSafeSiteFetchUrl(u, lookup);
+      if (!pageGate.ok) continue;
       visited.add(u);
       try {
         const resp = await fetchWithTimeout(
           u,
           {
             headers: { 'User-Agent': 'SecretaryHQ-Bot/1.0' },
-            redirect: 'follow',
+            redirect: 'manual',
           },
           8000
         );
+        const location =
+          resp.status >= 300 && resp.status < 400 && typeof resp.headers?.get === 'function'
+            ? resp.headers.get('location')
+            : null;
+        if (location) {
+          try {
+            const abs = new URL(location, u).toString();
+            if (!visited.has(abs)) queue.unshift(abs);
+          } catch {
+            // skip malformed Location
+          }
+          continue;
+        }
         if (!resp.ok) continue;
         const html = await resp.text();
         const text = html

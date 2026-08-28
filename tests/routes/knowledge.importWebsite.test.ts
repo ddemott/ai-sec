@@ -16,6 +16,13 @@ import { registerKnowledgeRoutes } from '../../src/routes/knowledge';
 import { buildRouteTestApp, type RouteTestAppHandle } from '../mock';
 import { scanRateLimiter } from '../../src/services/scanRateLimit';
 
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async (_hostname: string, options?: { all?: boolean }) => {
+    const rec = { address: '93.184.216.34', family: 4 as const };
+    return options?.all ? [rec] : rec;
+  }),
+}));
+
 const TENANT_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
 const mockGetEmbedding = vi.fn().mockResolvedValue(Array(1536).fill(0));
@@ -162,6 +169,23 @@ describe('POST /knowledge/import-website', () => {
 
     expect(res.statusCode).toBe(400);
     expect(openAiPrompts.length).toBe(0);
+  });
+
+  it('SAD: refuses a link-local metadata URL before any scrape or LLM call', async () => {
+    // WHAT: 169.254.169.254 is a valid URL to Zod and used to reach fetch
+    // WHY: an owner must not scan the host metadata endpoint through our backend
+    const res = await app.inject({
+      method: 'POST',
+      url: '/knowledge/import-website',
+      headers: AUTH,
+      payload: { url: 'http://169.254.169.254/latest/meta-data/' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().success).toBe(false);
+    expect(res.json().error).toMatch(/not allowed/i);
+    expect(openAiPrompts.length).toBe(0);
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
   it('SAD: an OpenAI non-2xx (e.g. 429) surfaces as an error, not empty success', async () => {
