@@ -41,6 +41,9 @@ BLOCKED_NETS.addSubnet('::', 128, 'ipv6');
 BLOCKED_NETS.addSubnet('::1', 128, 'ipv6');
 BLOCKED_NETS.addSubnet('fc00::', 7, 'ipv6');
 BLOCKED_NETS.addSubnet('fe80::', 10, 'ipv6');
+// Do not add ::ffff:0:0/96. Node's BlockList then treats every IPv4 as
+// blocked (8.8.8.8 included). IPv4-mapped v6 still matches the IPv4
+// rules above when checked as ipv6 — pinned in siteScrapeUrlGuard.test.ts.
 
 async function defaultAddressLookup(hostname: string): Promise<string[]> {
   const results = await dnsLookup(hostname, { all: true });

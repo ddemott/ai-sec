@@ -63,6 +63,7 @@ describe('assertSafeSiteFetchUrl — loopback / private / link-local literals', 
     'http://[fd00::1]/',
     'http://[fe80::1]/',
     'http://[::ffff:169.254.169.254]/',
+    'http://[0:0:0:0:0:ffff:a9fe:a9fe]/', // uncompressed IPv4-mapped; WHATWG compresses to ::ffff:a9fe:a9fe
     'http://2130706433', // Node canonicalizes to 127.0.0.1
   ];
 
@@ -78,6 +79,15 @@ describe('assertSafeSiteFetchUrl — loopback / private / link-local literals', 
 describe('assertSafeSiteFetchUrl — resolved address', () => {
   it('SAD: a public-looking hostname that resolves to loopback is refused', async () => {
     const result = await assertSafeSiteFetchUrl('https://evil.example', loopbackLookup);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/not allowed/i);
+  });
+
+  it('SAD: a hostname that resolves to uncompressed IPv4-mapped link-local is refused', async () => {
+    // WHAT: DNS can return 0:0:0:0:0:ffff:a9fe:a9fe (169.254.169.254) without :: compression
+    // WHY: ipv4Mapped() only matched the compressed ::ffff: form; BlockList must still catch it
+    const mappedLookup: AddressLookup = async () => ['0:0:0:0:0:ffff:a9fe:a9fe'];
+    const result = await assertSafeSiteFetchUrl('https://evil.example', mappedLookup);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/not allowed/i);
   });
