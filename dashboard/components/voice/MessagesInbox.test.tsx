@@ -110,6 +110,41 @@ describe('MessagesInbox — loading / empty states', () => {
     expect(screen.getByText(/Azure\/M365 developer/)).toBeInTheDocument();
   });
 
+  test('HAPPY: spoken salary shows $k next to the caller words', async () => {
+    // WHO: owner opening a job lead whose rate was captured as words
+    // WHAT: inbox Rate row is "$140–160k (one forty to one hundred and sixty thousand)"
+    // WHY: verbatim capture stays in the DB; the owner still needs a number
+    mockApi.voice.listMessages.mockResolvedValue([]);
+    mockApi.voice.listJobInquiries.mockResolvedValue([
+      {
+        job_inquiry_id: 'ji-2',
+        caller_name: 'Marcus',
+        callback_phone: '+1262***9039',
+        caller_company: 'Bell Labs',
+        client_company: null,
+        represents_company: true,
+        employment_type: 'full_time',
+        role_description: 'Java contractor',
+        rate_range: 'one forty to one hundred and sixty thousand',
+        duration: null,
+        location_type: 'remote',
+        address: null,
+        timezone: null,
+        call_id: 'SCL_salary',
+        appointment_id: null,
+        created_at: '2026-07-21T12:34:00.000Z',
+      },
+    ]);
+    render(<MessagesInbox tenantId="tenant-test" />);
+    await waitFor(() => expect(screen.getByText('Marcus')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /marcus/i }));
+    await waitFor(() =>
+      expect(
+        screen.getByText('$140–160k (one forty to one hundred and sixty thousand)')
+      ).toBeInTheDocument()
+    );
+  });
+
   test('SAD: API error shows toast and renders empty list', async () => {
     mockApi.voice.listMessages.mockRejectedValue(new Error('API error'));
     render(<MessagesInbox tenantId="tenant-test" />);

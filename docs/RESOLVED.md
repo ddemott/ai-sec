@@ -4,6 +4,14 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — salary display $k next to caller words
+
+Job leads stored spoken pay as words. `shared/payRange.ts` `formatPayRangeDisplay` keeps verbatim and prefixes `$140–160k` when parseable. Wired in MessagesInbox Rate row and job-inquiry email bits. DB column unchanged.
+
+`npx vitest run tests/shared/payRange.test.ts --run` → 5 passed.
+
+---
+
 ## 2026-08-28 — ENABLE_OUTPUT_WATCHDOG is on; living docs said off
 
 Dale confirmed Railway `secretary-hq-agent` Variables has `ENABLE_OUTPUT_WATCHDOG=true`. Agent env schema default was already ON (`undefined` → true; only the literal string `false` disables it). Living comments and playbook still said prod runs the flag OFF (true on 2026-07-17 / 2026-08-19). Comments, PLAYBOOK RULE 8.1/10.2, TODO, and the research remaining-gap text now match: default ON, Railway true. No runtime change.

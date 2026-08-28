@@ -1,4 +1,5 @@
 import { JOB_DETAILS_PREFIX, toStampText } from '../../shared/callContext';
+import { formatPayRangeDisplay } from '../../shared/payRange';
 
 export interface JobInquiryCompanies {
   clientCompany: string | null;
@@ -118,7 +119,7 @@ export function jobSummaryLine(
           ? 'contract to hire'
           : 'full time'
     );
-  if (args.rate_range) bits.push(args.rate_range);
+  if (args.rate_range) bits.push(formatPayRangeDisplay(args.rate_range));
   if (args.duration) bits.push(args.duration);
   if (args.location_type) {
     bits.push(
