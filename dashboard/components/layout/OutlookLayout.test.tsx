@@ -36,7 +36,7 @@ const { mockApi } = vi.hoisted(() => ({
     mappings: { listServiceEmployee: vi.fn() },
   },
 }));
-vi.mock('../lib/api', () => ({ Api: mockApi }));
+vi.mock('../../lib/api', () => ({ Api: mockApi }));
 
 vi.mock('@/lib/ThemeContext', () => ({
   useTheme: () => ({

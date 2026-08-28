@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import LoginView from '@/components/auth/LoginView';
-import { OutlookLayout } from '@/components/OutlookLayout';
+import { OutlookLayout } from '@/components/layout/OutlookLayout';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ShortcutsHelpModal } from '@/components/ui/ShortcutsHelpModal';
 import { useKeyboardShortcuts, type Shortcut } from '@/lib/useKeyboardShortcuts';

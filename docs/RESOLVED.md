@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — dashboard layout shell slice (75 → 71)
+
+Moved AppShell and OutlookLayout into `dashboard/components/layout/`. Migration item stays open at 71 remaining loose `.tsx` files.
+
+---
+
 ## 2026-08-28 — dashboard auth slice (81 → 75)
 
 Moved LoginView, ProfileView, FirstRunTour into `dashboard/components/auth/`. Migration item stays open at 75 remaining loose `.tsx` files.
