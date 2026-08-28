@@ -403,11 +403,11 @@ describe('attachSilentTurnRecovery', () => {
 
   it('turn_latency_ms logs on every real turn — the UNCONDITIONAL copy of the instrument', () => {
     // WHY THIS EXISTS: attachOutputWatchdog's copy lives behind
-    // ENABLE_OUTPUT_WATCHDOG, which prod runs OFF — confirmed live 2026-08-19
+    // ENABLE_OUTPUT_WATCHDOG. Prod ran that flag OFF — confirmed live 2026-08-19
     // (sim-call-1787158785189): a real call had 17s and 20s thinking→speaking
     // gaps and ZERO turn_latency_ms lines anywhere in the deployed log. This
-    // function is the only one that actually runs on every prod call, so it
-    // is the only place this instrument can be trusted to fire.
+    // copy is unconditional, so it fires when the hold-line watchdog is off.
+    // When outputWatchdogActive is true, this copy is suppressed (test below).
     const logs: Array<{ level: 'info' | 'warn'; obj: Record<string, unknown> }> = [];
     const log = {
       info: (obj: Record<string, unknown>) => logs.push({ level: 'info', obj }),
