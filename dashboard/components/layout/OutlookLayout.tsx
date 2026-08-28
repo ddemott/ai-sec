@@ -14,19 +14,19 @@ import {
   LayoutDashboard,
   Phone,
 } from 'lucide-react';
-import { Api } from '../lib/api';
-import { FolderTab, FolderTabBar } from './ui/FolderTabs';
+import { Api } from '../../lib/api';
+import { FolderTab, FolderTabBar } from '../ui/FolderTabs';
 import { useTheme, THEMES } from '@/lib/ThemeContext';
 import { useSessionContext, type UserRole } from '@/lib/SessionContext';
-import { FeedbackButton } from './ui/FeedbackButton';
-import { SetupProgressPill } from './ui/SetupProgressPill';
-import { DemoBanner } from './ui/DemoBanner';
-import { useAnchorRect } from '../lib/useAnchorRect';
+import { FeedbackButton } from '../ui/FeedbackButton';
+import { SetupProgressPill } from '../ui/SetupProgressPill';
+import { DemoBanner } from '../ui/DemoBanner';
+import { useAnchorRect } from '../../lib/useAnchorRect';
 import { AppShell } from './AppShell';
-import { TenantSwitcherDropdown } from './layout/TenantSwitcherDropdown';
-import { ProfileMenuDropdown } from './layout/ProfileMenuDropdown';
-import { ThemeSelectorDropdown } from './layout/ThemeSelectorDropdown';
-import { MobileTabBar } from './layout/MobileTabBar';
+import { TenantSwitcherDropdown } from './TenantSwitcherDropdown';
+import { ProfileMenuDropdown } from './ProfileMenuDropdown';
+import { ThemeSelectorDropdown } from './ThemeSelectorDropdown';
+import { MobileTabBar } from './MobileTabBar';
 
 type Tab =
   | 'dashboard'

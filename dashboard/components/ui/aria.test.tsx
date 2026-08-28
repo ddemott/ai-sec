@@ -231,9 +231,12 @@ describe('BUG-039: FolderTabs ARIA', () => {
     test('OutlookLayout uses FolderTabs for accessibility', async () => {
       const fs = await import('fs');
       const path = await import('path');
-      const source = fs.readFileSync(path.join(__dirname, '..', 'OutlookLayout.tsx'), 'utf-8');
+      const source = fs.readFileSync(
+        path.join(__dirname, '..', 'layout', 'OutlookLayout.tsx'),
+        'utf-8'
+      );
       // Verify OutlookLayout imports and uses the accessible FolderTabs components
-      expect(source).toContain("import { FolderTab, FolderTabBar } from './ui/FolderTabs'");
+      expect(source).toContain("import { FolderTab, FolderTabBar } from '../ui/FolderTabs'");
       expect(source).toContain('<FolderTabBar');
       expect(source).toContain('<FolderTab');
       // WHO: developers | WHAT: ensures OutlookLayout uses accessible components
