@@ -18,6 +18,7 @@ describe('normalizePayRange', () => {
   it('SAD: unparseable copy stays null so the UI keeps verbatim only', () => {
     expect(normalizePayRange('competitive')).toBeNull();
     expect(normalizePayRange('')).toBeNull();
+    expect(normalizePayRange('between 65 and 82')).toBeNull();
   });
 });
 
@@ -28,7 +29,13 @@ describe('formatPayRangeDisplay', () => {
     );
   });
 
+  it('HAPPY: already-numeric ranges stay compact, no wrap', () => {
+    expect(formatPayRangeDisplay('$180k-200k')).toBe('$180–200k');
+    expect(formatPayRangeDisplay('$65-82/hr')).toBe('$65-82/hr');
+  });
+
   it('SAD: unparseable returns the original string unchanged', () => {
     expect(formatPayRangeDisplay('competitive')).toBe('competitive');
+    expect(formatPayRangeDisplay('between 65 and 82')).toBe('between 65 and 82');
   });
 });

@@ -56,6 +56,9 @@ function parseSpokenChunk(tokens: string[]): number | null {
   if (tokens.length === 0) return null;
 
   const numeric = tokens.filter((t) => /^\d+(\.\d+)?k?$/.test(t));
+  // Two+ digit tokens in one chunk (e.g. "between 65 and 82") would sum
+  // and invent a number. Unparseable — leave verbatim.
+  if (numeric.length > 1) return null;
   if (numeric.length === 1 && numeric.length === tokens.length) {
     const t = numeric[0];
     return t.endsWith('k') ? Number(t.slice(0, -1)) * 1000 : Number(t);
@@ -143,5 +146,9 @@ export function formatPayRangeDisplay(raw: string): string {
   const normalized = normalizePayRange(raw);
   if (!normalized || normalized === raw.replace(/-/g, '–')) return raw;
   if (raw === normalized) return raw;
+  // Already-numeric copy ($180k-200k) is only a hyphen/k cosmetic away from
+  // the compact form. Wrapping would be noise; wrap spoken words only.
+  const looksSpoken = /[a-z]/i.test(raw.replace(/k\b|hr\b|hour\b/gi, ''));
+  if (!looksSpoken) return normalized;
   return `${normalized} (${raw})`;
 }
