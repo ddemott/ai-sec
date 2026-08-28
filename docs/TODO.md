@@ -785,5 +785,5 @@ The call succeeded end-to-end (booked 4:30 PM ✓ linked job_inquiries.appointme
 
 ### Phase 2 backlog
 
-- [ ] Recording disclaimer → deterministic verbatim greeting (Illinois 2-party consent). Needs a `tenants.greeting` column + tenant-config route + `agent/src/index.ts` greeting line (currently hardcoded).
+- [x] ~~Recording disclaimer → deterministic verbatim greeting (Illinois 2-party consent).~~ — **ALREADY DONE; entry was stale (verified 2026-08-28).** The prescribed `tenants.greeting` column that `index.ts` would speak verbatim is the design `greeting.ts` exists to reject: a tenant-controlled whole greeting silently deleted the disclosure. What shipped instead: composed opener + **unconditional** disclosure + closer. Default: _"this call is transcribed for quality and service"_ (never "recorded", never "training"). Custom wording is `tenants.call_disclosure` with attestation (`20260711000000`), not a `greeting` column. Pin: `agent/src/greeting.test.ts` (`discloses AI + transcription` ×5 configs; `never "recorded", never "training"`). `npx vitest run src/greeting.test.ts --run` → `40 passed (40)`.
 - [x] ~~`get_my_appointments` transfer-fallback string~~ — DONE 2026-07-05 (PR #198): the no-caller-ID fallbacks in `get_my_appointments`/cancel/reschedule now capability-gate the transfer offer (offer a message only when transfer is unwired).
