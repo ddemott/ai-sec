@@ -14,7 +14,7 @@ import { Step7CallerQuestions } from './Step7CallerQuestions';
 import type { ServiceForm, WizardShift, WizardService, SetupWizardProps } from './types';
 import type { CoverageItem } from '../../lib/types';
 import { EMPTY_SERVICE } from './types';
-import { markFirstRunTourPending } from '../FirstRunTour';
+import { markFirstRunTourPending } from '../auth/FirstRunTour';
 
 type SoloStep = 1 | 2 | 3 | 4;
 

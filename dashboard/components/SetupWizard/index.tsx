@@ -11,7 +11,7 @@ import { showToast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { WizardStepContent } from './WizardStepContent';
 import { useWizardCrud } from './useWizardCrud';
-import { markFirstRunTourPending } from '../FirstRunTour';
+import { markFirstRunTourPending } from '../auth/FirstRunTour';
 import type { WizardStep, SetupWizardProps } from './types';
 
 // Step labels are verbs/outcomes ("What you offer", "Who works here") so the

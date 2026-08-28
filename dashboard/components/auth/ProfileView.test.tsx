@@ -21,16 +21,16 @@ const mockRevokeMySessions = vi.fn();
 const mockForceLogout = vi.fn();
 const mockShowToast = vi.fn();
 
-vi.mock('../lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   Api: { users: { revokeMySessions: () => mockRevokeMySessions() } },
   forceLogout: () => mockForceLogout(),
 }));
 
-vi.mock('./ui/Toast', () => ({
+vi.mock('../ui/Toast', () => ({
   showToast: (...args: unknown[]) => mockShowToast(...args),
 }));
 
-vi.mock('../lib/SessionContext', () => ({
+vi.mock('../../lib/SessionContext', () => ({
   useSessionContext: () => ({
     userName: mockUserName,
     userEmail: mockUserEmail,

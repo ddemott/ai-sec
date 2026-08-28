@@ -3,14 +3,14 @@
 import React, { useState } from 'react';
 import { User, Mail, Shield, Lock, LogOut } from 'lucide-react';
 import Link from 'next/link';
-import { useSessionContext } from '../lib/SessionContext';
+import { useSessionContext } from '../../lib/SessionContext';
 import { useTheme, THEMES } from '@/lib/ThemeContext';
-import { Api, forceLogout } from '../lib/api';
-import { useConfirm } from '../lib/useConfirm';
-import { Card } from './ui/Card';
-import { Button } from './ui/Button';
-import { ConfirmModal } from './ui/ConfirmModal';
-import { showToast } from './ui/Toast';
+import { Api, forceLogout } from '../../lib/api';
+import { useConfirm } from '../../lib/useConfirm';
+import { Card } from '../ui/Card';
+import { Button } from '../ui/Button';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { showToast } from '../ui/Toast';
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Owner',
