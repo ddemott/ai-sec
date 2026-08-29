@@ -27,7 +27,7 @@ import type { AnalyticsCalls, AnalyticsStats, AnalyticsCohorts } from '../lib/ty
 import { useActiveTenantId } from '../lib/SessionContext';
 import { EmptyState } from './ui/EmptyState';
 import { CalendarCheck } from 'lucide-react';
-import ReminderDeliveryStats from './ReminderDeliveryStats';
+import ReminderDeliveryStats from './communications/ReminderDeliveryStats';
 import UtilizationHeatmap from './UtilizationHeatmap';
 import type { AppointmentSummary } from './analytics/types';
 import { AnalyticsSkeleton } from './analytics/AnalyticsSkeleton';

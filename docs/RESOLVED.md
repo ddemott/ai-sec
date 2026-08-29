@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — dashboard communications slice (71 → 68)
+
+Moved CommsSentView and ReminderDeliveryStats into `dashboard/components/communications/`. Migration item stays open at 68 remaining loose `.tsx` files.
+
+---
+
 ## 2026-08-28 — dashboard layout shell slice (75 → 71)
 
 Moved AppShell and OutlookLayout into `dashboard/components/layout/`. Migration item stays open at 71 remaining loose `.tsx` files.

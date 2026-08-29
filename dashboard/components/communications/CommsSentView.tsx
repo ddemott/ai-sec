@@ -9,7 +9,7 @@ import {
   ChevronRight,
   AlertCircle,
 } from 'lucide-react';
-import { Api } from '../lib/api';
+import { Api } from '../../lib/api';
 
 type ChannelFilter = 'all' | 'sms' | 'email';
 
