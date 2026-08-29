@@ -13,8 +13,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
-vi.mock('../lib/SessionContext', () => ({ useActiveTenantId: () => 'tenant-test' }));
-vi.mock('./ui/Toast', () => ({ showToast: vi.fn() }));
+vi.mock('../../lib/SessionContext', () => ({ useActiveTenantId: () => 'tenant-test' }));
+vi.mock('../ui/Toast', () => ({ showToast: vi.fn() }));
 
 const { mockApi } = vi.hoisted(() => ({
   mockApi: {
@@ -26,10 +26,10 @@ const { mockApi } = vi.hoisted(() => ({
     },
   },
 }));
-vi.mock('../lib/api', () => ({ Api: mockApi }));
+vi.mock('../../lib/api', () => ({ Api: mockApi }));
 
 import BillingView from './BillingView';
-import { showToast } from './ui/Toast';
+import { showToast } from '../ui/Toast';
 
 const mockToast = vi.mocked(showToast);
 
