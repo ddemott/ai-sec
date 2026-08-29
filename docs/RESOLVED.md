@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-29 — dashboard records slice (61 → 57)
+
+Moved AuditLogView and RecordHistoryModal into `dashboard/components/records/`. Migration item stays open at 57 remaining loose `.tsx` files.
+
+---
+
 ## 2026-08-29 — dashboard team slice (66 → 61)
 
 Moved SuperAdminDashboard, TenantCard, TenantCreateForm, TenantEditPanel into `dashboard/components/team/`. Migration item stays open at 61 remaining loose `.tsx` files.

@@ -16,7 +16,7 @@ import React from 'react';
 
 const mockGetHistory = vi.fn();
 
-vi.mock('../lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   Api: {
     versionHistory: {
       getHistory: (...a: unknown[]) => mockGetHistory(...a),

@@ -12,7 +12,7 @@ import SkillAssignmentsView from './SkillAssignmentsView';
 import TeamAccessView from './TeamAccessView';
 import BusinessSettingsView from './BusinessSettingsView';
 import BillingView from './billing/BillingView';
-import AuditLogView from './AuditLogView';
+import AuditLogView from './records/AuditLogView';
 import ExplainAnswerView from './ExplainAnswerView';
 import SetupWizard from './SetupWizard';
 import SoloWizard from './SetupWizard/SoloWizard';
