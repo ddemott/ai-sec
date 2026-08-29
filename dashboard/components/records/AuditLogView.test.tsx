@@ -10,7 +10,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
-vi.mock('../lib/SessionContext', () => ({
+vi.mock('../../lib/SessionContext', () => ({
   useActiveTenantId: () => 'tenant-123',
 }));
 
@@ -19,8 +19,8 @@ const { mockApi, mockToast } = vi.hoisted(() => ({
   mockToast: vi.fn(),
 }));
 
-vi.mock('../lib/api', () => ({ Api: mockApi }));
-vi.mock('./ui/Toast', () => ({ showToast: mockToast }));
+vi.mock('../../lib/api', () => ({ Api: mockApi }));
+vi.mock('../ui/Toast', () => ({ showToast: mockToast }));
 
 import AuditLogView from './AuditLogView';
 
@@ -158,5 +158,15 @@ describe('AuditLogView', () => {
     expect(screen.getByText('status')).toBeInTheDocument();
     expect(screen.getByText('scheduled')).toBeInTheDocument();
     expect(screen.getByText('completed')).toBeInTheDocument();
+  });
+});
+
+describe('AuditLogView — subdirectory pin', () => {
+  test('SetupView imports AuditLogView from components/records/', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const setup = fs.readFileSync(path.join(__dirname, '..', 'SetupView.tsx'), 'utf-8');
+    expect(setup).toContain("import AuditLogView from './records/AuditLogView'");
+    expect(setup).not.toContain("import AuditLogView from './AuditLogView'");
   });
 });

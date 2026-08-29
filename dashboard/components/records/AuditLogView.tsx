@@ -7,18 +7,18 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Card } from './ui/Card';
-import { Badge } from './ui/Badge';
-import { Button } from './ui/Button';
-import { Select } from './ui/Select';
-import { Input } from './ui/Input';
-import { Modal } from './ui/Modal';
-import { LoadingState } from './ui/LoadingState';
-import { EmptyState } from './ui/EmptyState';
-import { Api } from '../lib/api';
-import { useActiveTenantId } from '../lib/SessionContext';
-import { showToast } from './ui/Toast';
-import type { AuditLogEntry } from '../lib/types';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Select } from '../ui/Select';
+import { Input } from '../ui/Input';
+import { Modal } from '../ui/Modal';
+import { LoadingState } from '../ui/LoadingState';
+import { EmptyState } from '../ui/EmptyState';
+import { Api } from '../../lib/api';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { showToast } from '../ui/Toast';
+import type { AuditLogEntry } from '../../lib/types';
 
 const PAGE_SIZE = 50;
 
