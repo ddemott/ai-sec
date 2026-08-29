@@ -117,7 +117,7 @@ const mockExportToast = vi.fn();
 vi.mock('./ui/Toast', () => ({ showToast: (...args: unknown[]) => mockExportToast(...args) }));
 
 // Mock CRMIntegrationCard to simplify tests
-vi.mock('./CRMIntegrationCard', () => ({
+vi.mock('./crm/CRMIntegrationCard', () => ({
   CRMIntegrationCard: ({ provider }: { provider: { name: string } }) => (
     <div data-testid={`crm-card-${provider.name}`}>{provider.name} Integration</div>
   ),

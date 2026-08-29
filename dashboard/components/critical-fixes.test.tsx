@@ -67,7 +67,7 @@ describe('BUG-003: AppointmentView draftEvent state', () => {
 // =========================================================
 // BUG-004: CRMView — handleEditFormChange is defined
 // =========================================================
-import CRMView from './CRMView';
+import CRMView from './crm/CRMView';
 
 describe('BUG-004: CRMView handleEditFormChange function', () => {
   beforeEach(() => {
