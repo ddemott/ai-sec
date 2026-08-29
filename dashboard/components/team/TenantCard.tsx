@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
-import { Badge } from './ui/Badge';
-import type { TenantFull } from '../lib/types';
+import { Badge } from '../ui/Badge';
+import type { TenantFull } from '../../lib/types';
 
 interface TenantCardProps {
   tenant: TenantFull;

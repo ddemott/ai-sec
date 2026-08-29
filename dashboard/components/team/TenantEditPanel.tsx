@@ -11,16 +11,16 @@ import {
   Clock,
   Trash2,
 } from 'lucide-react';
-import { formatPhone } from '../lib/phone';
-import { US_TIMEZONES } from '../lib/constants';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { PhoneInput } from './ui/PhoneInput';
-import { Select } from './ui/Select';
-import { Card } from './ui/Card';
-import type { TenantFull } from '../lib/types';
-import { TenantPhoneProvisioning } from './admin/TenantPhoneProvisioning';
-import { TenantCoreAttributesSection } from './admin/TenantCoreAttributesSection';
+import { formatPhone } from '../../lib/phone';
+import { US_TIMEZONES } from '../../lib/constants';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { PhoneInput } from '../ui/PhoneInput';
+import { Select } from '../ui/Select';
+import { Card } from '../ui/Card';
+import type { TenantFull } from '../../lib/types';
+import { TenantPhoneProvisioning } from '../admin/TenantPhoneProvisioning';
+import { TenantCoreAttributesSection } from '../admin/TenantCoreAttributesSection';
 
 type Tenant = TenantFull;
 
