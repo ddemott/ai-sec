@@ -1,10 +1,10 @@
 'use client';
 
 import React from 'react';
-import { FolderTab, FolderTabBar } from './ui/FolderTabs';
-import AIConfigView from './AIConfigView';
-import KnowledgeBaseView from './KnowledgeBaseView';
-import { useUrlQueryState } from '../lib/useUrlQueryState';
+import { FolderTab, FolderTabBar } from '../ui/FolderTabs';
+import AIConfigView from '../AIConfigView';
+import KnowledgeBaseView from '../knowledge/KnowledgeBaseView';
+import { useUrlQueryState } from '../../lib/useUrlQueryState';
 
 type SubTab = 'persona' | 'knowledge';
 

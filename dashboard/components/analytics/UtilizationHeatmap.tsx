@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { LayoutGrid } from 'lucide-react';
-import { Api } from '../lib/api';
-import type { UtilizationCell } from '../lib/types';
-import { useActiveTenantId } from '../lib/SessionContext';
-import { formatHour } from '../lib/utils';
-import { EmptyState } from './ui/EmptyState';
+import { Api } from '../../lib/api';
+import type { UtilizationCell } from '../../lib/types';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { formatHour } from '../../lib/utils';
+import { EmptyState } from '../ui/EmptyState';
 
 /**
  * Utilization heatmap (GAPS §6) — weekday × hour grid of how much staffed

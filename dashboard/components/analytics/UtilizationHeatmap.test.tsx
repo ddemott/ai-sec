@@ -15,7 +15,7 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
-vi.mock('../lib/SessionContext', () => ({
+vi.mock('../../lib/SessionContext', () => ({
   useActiveTenantId: () => 'tenant-123',
 }));
 
@@ -25,7 +25,7 @@ const { mockApi } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../lib/api', () => ({ Api: mockApi }));
+vi.mock('../../lib/api', () => ({ Api: mockApi }));
 
 import UtilizationHeatmap from './UtilizationHeatmap';
 

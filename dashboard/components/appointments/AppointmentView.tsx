@@ -1,19 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { formatPhone } from '../lib/phone';
-import { type Appointment } from '../lib/types';
-import { toLocalISO, splitFullName } from '../lib/utils';
-import { useStaticData } from '../lib/hooks';
-import { useActiveTenantId } from '../lib/SessionContext';
+import { formatPhone } from '../../lib/phone';
+import { type Appointment } from '../../lib/types';
+import { toLocalISO, splitFullName } from '../../lib/utils';
+import { useStaticData } from '../../lib/hooks';
+import { useActiveTenantId } from '../../lib/SessionContext';
 import { useVocabulary } from '@/lib/VocabularyContext';
 import { type View as CalendarViewType } from 'react-big-calendar';
 import { AppointmentListSidebar } from './AppointmentListSidebar';
 import { AppointmentDetailPanel } from './AppointmentDetailPanel';
-import { AppointmentDetailProvider, useAppointmentDetail } from '../lib/AppointmentDetailContext';
-import { ConflictModal } from './scheduler/ConflictModal';
-import { ConfirmModal } from './ui/ConfirmModal';
-import { AppointmentCalendar, type DnDEventArgs } from './appointments/AppointmentCalendar';
-import { useAppointmentCRUD } from '../lib/useAppointmentCRUD';
-import { ZOOM_LEVELS, toCalendarEvent } from '../lib/appointments/calendarConfig';
+import { AppointmentDetailProvider, useAppointmentDetail } from '../../lib/AppointmentDetailContext';
+import { ConflictModal } from '../scheduler/ConflictModal';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { AppointmentCalendar, type DnDEventArgs } from './AppointmentCalendar';
+import { useAppointmentCRUD } from '../../lib/useAppointmentCRUD';
+import { ZOOM_LEVELS, toCalendarEvent } from '../../lib/appointments/calendarConfig';
 
 export interface AppointmentViewProps {
   /** When provided, the BigCalendar becomes `selectable` and slot clicks fire

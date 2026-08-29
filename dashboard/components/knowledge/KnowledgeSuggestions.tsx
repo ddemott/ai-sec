@@ -2,8 +2,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { CheckCircle, XCircle, Globe, RefreshCw } from 'lucide-react';
-import { Api } from '../lib/api';
-import { Button } from './ui/Button';
+import { Api } from '../../lib/api';
+import { Button } from '../ui/Button';
 
 interface Suggestion {
   id: string;

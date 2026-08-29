@@ -22,17 +22,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { TrendingUp } from 'lucide-react';
-import { Api } from '../lib/api';
-import type { AnalyticsCalls, AnalyticsStats, AnalyticsCohorts } from '../lib/types';
-import { useActiveTenantId } from '../lib/SessionContext';
-import { EmptyState } from './ui/EmptyState';
+import { Api } from '../../lib/api';
+import type { AnalyticsCalls, AnalyticsStats, AnalyticsCohorts } from '../../lib/types';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { EmptyState } from '../ui/EmptyState';
 import { CalendarCheck } from 'lucide-react';
-import ReminderDeliveryStats from './communications/ReminderDeliveryStats';
+import ReminderDeliveryStats from '../communications/ReminderDeliveryStats';
 import UtilizationHeatmap from './UtilizationHeatmap';
-import type { AppointmentSummary } from './analytics/types';
-import { AnalyticsSkeleton } from './analytics/AnalyticsSkeleton';
-import { DateRangePicker } from './analytics/DateRangePicker';
-import { AnalyticsMetricsGrid } from './analytics/AnalyticsMetricsGrid';
+import type { AppointmentSummary } from './types';
+import { AnalyticsSkeleton } from './AnalyticsSkeleton';
+import { DateRangePicker } from './DateRangePicker';
+import { AnalyticsMetricsGrid } from './AnalyticsMetricsGrid';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 

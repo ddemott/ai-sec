@@ -11,7 +11,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
-vi.mock('../lib/SessionContext', () => ({
+vi.mock('../../lib/SessionContext', () => ({
   useActiveTenantId: () => 'tenant-123',
 }));
 
@@ -20,8 +20,8 @@ const { mockApi, mockToast } = vi.hoisted(() => ({
   mockToast: vi.fn(),
 }));
 
-vi.mock('../lib/api', () => ({ Api: mockApi }));
-vi.mock('./ui/Toast', () => ({ showToast: mockToast }));
+vi.mock('../../lib/api', () => ({ Api: mockApi }));
+vi.mock('../ui/Toast', () => ({ showToast: mockToast }));
 
 import ExplainAnswerView from './ExplainAnswerView';
 

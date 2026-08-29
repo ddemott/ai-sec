@@ -27,7 +27,7 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 // =========================================================
 // BUG-003: AppointmentView — draftEvent state is defined
 // =========================================================
-import AppointmentView from './AppointmentView';
+import AppointmentView from './appointments/AppointmentView';
 
 describe('BUG-003: AppointmentView draftEvent state', () => {
   beforeEach(() => {

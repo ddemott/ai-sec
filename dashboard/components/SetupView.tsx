@@ -13,7 +13,7 @@ import TeamAccessView from './TeamAccessView';
 import BusinessSettingsView from './BusinessSettingsView';
 import BillingView from './billing/BillingView';
 import AuditLogView from './records/AuditLogView';
-import ExplainAnswerView from './ExplainAnswerView';
+import ExplainAnswerView from './knowledge/ExplainAnswerView';
 import SetupWizard from './SetupWizard';
 import SoloWizard from './SetupWizard/SoloWizard';
 import { WizardModeChooser } from './SetupWizard/WizardModeChooser';

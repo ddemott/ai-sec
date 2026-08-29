@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button } from './ui/Button';
-import { Modal } from './ui/Modal';
-import { useServiceMappings } from '../lib/hooks';
-import { useActiveTenantId } from '../lib/SessionContext';
-import { filterEmployeesByService, filterResourcesByService } from '../lib/availability';
+import { Button } from '../ui/Button';
+import { Modal } from '../ui/Modal';
+import { useServiceMappings } from '../../lib/hooks';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { filterEmployeesByService, filterResourcesByService } from '../../lib/availability';
 import { Calendar as CalendarIcon } from 'lucide-react';
-import { useAppointmentDetail } from '../lib/AppointmentDetailContext';
-import type { Appointment } from '../lib/types';
-import { Api } from '../lib/api';
-import { showToast } from './ui/Toast';
-import { AppointmentPanelHeader } from './appointments/AppointmentPanelHeader';
-import { AppointmentEditForm } from './appointments/AppointmentEditForm';
-import { AppointmentViewDisplay } from './appointments/AppointmentViewDisplay';
+import { useAppointmentDetail } from '../../lib/AppointmentDetailContext';
+import type { Appointment } from '../../lib/types';
+import { Api } from '../../lib/api';
+import { showToast } from '../ui/Toast';
+import { AppointmentPanelHeader } from './AppointmentPanelHeader';
+import { AppointmentEditForm } from './AppointmentEditForm';
+import { AppointmentViewDisplay } from './AppointmentViewDisplay';
 
 interface AppointmentDetailPanelProps {
   customers: {
