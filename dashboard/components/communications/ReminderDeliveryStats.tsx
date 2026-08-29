@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Api } from '../lib/api';
-import { useActiveTenantId } from '../lib/SessionContext';
-import { Card } from './ui/Card';
+import { Api } from '../../lib/api';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { Card } from '../ui/Card';
 import { Mail, AlertTriangle, Clock } from 'lucide-react';
 
 interface DeliveryStats {

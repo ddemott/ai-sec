@@ -15,7 +15,7 @@ const { mockApi } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../lib/api', () => ({ Api: mockApi }));
+vi.mock('../../lib/api', () => ({ Api: mockApi }));
 
 import { CommsSentView } from './CommsSentView';
 
