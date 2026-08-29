@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-28 — dashboard billing slice (68 → 66)
+
+Moved BillingView into `dashboard/components/billing/`. Migration item stays open at 66 remaining loose `.tsx` files.
+
+---
+
 ## 2026-08-28 — dashboard communications slice (71 → 68)
 
 Moved CommsSentView and ReminderDeliveryStats into `dashboard/components/communications/`. Migration item stays open at 68 remaining loose `.tsx` files.

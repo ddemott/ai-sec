@@ -11,7 +11,7 @@ import ShiftManagementView from './ShiftManagementView';
 import SkillAssignmentsView from './SkillAssignmentsView';
 import TeamAccessView from './TeamAccessView';
 import BusinessSettingsView from './BusinessSettingsView';
-import BillingView from './BillingView';
+import BillingView from './billing/BillingView';
 import AuditLogView from './AuditLogView';
 import ExplainAnswerView from './ExplainAnswerView';
 import SetupWizard from './SetupWizard';

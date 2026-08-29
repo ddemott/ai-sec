@@ -13,8 +13,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
-vi.mock('../lib/SessionContext', () => ({ useActiveTenantId: () => 'tenant-test' }));
-vi.mock('./ui/Toast', () => ({ showToast: vi.fn() }));
+vi.mock('../../lib/SessionContext', () => ({ useActiveTenantId: () => 'tenant-test' }));
+vi.mock('../ui/Toast', () => ({ showToast: vi.fn() }));
 
 const { mockApi } = vi.hoisted(() => ({
   mockApi: {
@@ -26,10 +26,10 @@ const { mockApi } = vi.hoisted(() => ({
     },
   },
 }));
-vi.mock('../lib/api', () => ({ Api: mockApi }));
+vi.mock('../../lib/api', () => ({ Api: mockApi }));
 
 import BillingView from './BillingView';
-import { showToast } from './ui/Toast';
+import { showToast } from '../ui/Toast';
 
 const mockToast = vi.mocked(showToast);
 
@@ -291,5 +291,15 @@ describe('BillingView — usage statements', () => {
 
     expect(await screen.findByText(/couldn't load usage right now/i)).toBeInTheDocument();
     expect(screen.queryByText(/answered calls/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('BillingView — subdirectory pin', () => {
+  test('SetupView imports BillingView from components/billing/', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const setup = fs.readFileSync(path.join(__dirname, '..', 'SetupView.tsx'), 'utf-8');
+    expect(setup).toContain("import BillingView from './billing/BillingView'");
+    expect(setup).not.toContain("import BillingView from './BillingView'");
   });
 });
