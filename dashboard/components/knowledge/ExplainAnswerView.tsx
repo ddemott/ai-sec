@@ -9,15 +9,15 @@
  */
 
 import React, { useState } from 'react';
-import { Card } from './ui/Card';
-import { Badge } from './ui/Badge';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { EmptyState } from './ui/EmptyState';
-import { Api } from '../lib/api';
-import { useActiveTenantId } from '../lib/SessionContext';
-import { showToast } from './ui/Toast';
-import type { KnowledgeExplainResponse } from '../lib/types';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { EmptyState } from '../ui/EmptyState';
+import { Api } from '../../lib/api';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { showToast } from '../ui/Toast';
+import type { KnowledgeExplainResponse } from '../../lib/types';
 
 export default function ExplainAnswerView() {
   const tenantId = useActiveTenantId();

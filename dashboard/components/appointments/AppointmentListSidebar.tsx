@@ -1,7 +1,7 @@
 import React from 'react';
-import { splitCallContext } from '../../shared/callContext';
-import { type Appointment } from '../lib/types';
-import { Button } from './ui/Button';
+import { splitCallContext } from '../../../shared/callContext';
+import { type Appointment } from '../../lib/types';
+import { Button } from '../ui/Button';
 import { RefreshCw, ChevronRight, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 

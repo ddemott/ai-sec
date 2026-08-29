@@ -19,10 +19,10 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
-vi.mock('./AIConfigView', () => ({
+vi.mock('../AIConfigView', () => ({
   default: () => <div data-testid="persona-marker">persona</div>,
 }));
-vi.mock('./KnowledgeBaseView', () => ({
+vi.mock('../knowledge/KnowledgeBaseView', () => ({
   default: () => <div data-testid="knowledge-marker">knowledge</div>,
 }));
 
@@ -73,5 +73,18 @@ describe('AIInsightsView — sub-tab URL persistence', () => {
     });
     expect(screen.getByTestId('persona-marker')).toBeInTheDocument();
     expect(screen.queryByTestId('knowledge-marker')).not.toBeInTheDocument();
+  });
+});
+
+describe('AIInsightsView — subdirectory pin', () => {
+  test('page.tsx imports AIInsightsView from components/analytics/', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const page = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'app', 'dashboard', 'page.tsx'),
+      'utf-8'
+    );
+    expect(page).toContain("import('@/components/analytics/AIInsightsView')");
+    expect(page).not.toContain("import('@/components/AIInsightsView')");
   });
 });

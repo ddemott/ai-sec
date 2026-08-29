@@ -14,13 +14,13 @@ import '@testing-library/jest-dom';
 import React from 'react';
 
 const mockTenantId = 'test-tenant-kb';
-vi.mock('../lib/SessionContext', () => ({
+vi.mock('../../lib/SessionContext', () => ({
   useActiveTenantId: () => mockTenantId,
 }));
 
 const mockList = vi.fn();
 const mockSuggestions = vi.fn();
-vi.mock('../lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   Api: {
     knowledge: {
       list: (...a: unknown[]) => mockList(...a),
@@ -32,8 +32,8 @@ vi.mock('../lib/api', () => ({
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('./ui/Toast', () => ({ showToast: vi.fn() }));
-vi.mock('../lib/useConfirm', () => ({
+vi.mock('../ui/Toast', () => ({ showToast: vi.fn() }));
+vi.mock('../../lib/useConfirm', () => ({
   useConfirm: () => ({ confirm: vi.fn(), closeConfirm: vi.fn(), confirmState: { isOpen: false } }),
 }));
 

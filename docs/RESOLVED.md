@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-29 — dashboard appointments/knowledge/analytics slice (53 → 38)
+
+Moved AppointmentView family into `appointments/`, KnowledgeBaseView/KnowledgeSuggestions/ExplainAnswerView into `knowledge/`, AnalyticsView/UtilizationHeatmap/AIInsightsView into `analytics/`. One PR. Migration item stays open at 38 remaining loose `.tsx` files.
+
+---
+
 ## 2026-08-29 — dashboard crm slice (57 → 53)
 
 Moved CRMView and CRMIntegrationCard into `dashboard/components/crm/`. Migration item stays open at 53 remaining loose `.tsx` files.

@@ -11,19 +11,19 @@ import {
   Globe,
   Loader2,
 } from 'lucide-react';
-import { Api } from '../lib/api';
-import { useActiveTenantId } from '../lib/SessionContext';
-import { useUrlQueryState } from '../lib/useUrlQueryState';
-import { Badge } from './ui/Badge';
-import { ConfirmModal } from './ui/ConfirmModal';
-import { useConfirm } from '../lib/useConfirm';
-import { showToast } from './ui/Toast';
-import type { KnowledgeEntry } from '../lib/types';
-import { POLICY_QUESTIONS } from '../lib/policyQuestions';
+import { Api } from '../../lib/api';
+import { useActiveTenantId } from '../../lib/SessionContext';
+import { useUrlQueryState } from '../../lib/useUrlQueryState';
+import { Badge } from '../ui/Badge';
+import { ConfirmModal } from '../ui/ConfirmModal';
+import { useConfirm } from '../../lib/useConfirm';
+import { showToast } from '../ui/Toast';
+import type { KnowledgeEntry } from '../../lib/types';
+import { POLICY_QUESTIONS } from '../../lib/policyQuestions';
 import { KnowledgeSuggestions } from './KnowledgeSuggestions';
-import { KnowledgeQuestionnaireTab } from './knowledge/KnowledgeQuestionnaireTab';
-import { KnowledgeDocumentsTab } from './knowledge/KnowledgeDocumentsTab';
-import { KnowledgeEntriesTab } from './knowledge/KnowledgeEntriesTab';
+import { KnowledgeQuestionnaireTab } from './KnowledgeQuestionnaireTab';
+import { KnowledgeDocumentsTab } from './KnowledgeDocumentsTab';
+import { KnowledgeEntriesTab } from './KnowledgeEntriesTab';
 
 type Tab = 'questionnaire' | 'documents' | 'entries' | 'suggestions';
 const VALID_TABS: Tab[] = ['questionnaire', 'documents', 'entries', 'suggestions'];

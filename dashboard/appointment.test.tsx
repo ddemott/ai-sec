@@ -2,7 +2,7 @@
 import React from 'react'
 import { expect, test, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import AppointmentView from './components/AppointmentView'
+import AppointmentView from './components/appointments/AppointmentView'
 import { MOCK_APPOINTMENTS } from './lib/mockData'
 
 // Mock VocabularyContext

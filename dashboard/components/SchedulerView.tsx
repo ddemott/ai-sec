@@ -11,7 +11,7 @@ import { EmployeeDayFocusPanel } from './scheduler/EmployeeDayFocusPanel';
 import NewSchedulerView from './scheduler/NewSchedulerView';
 import { AppointmentPopover } from './scheduler/AppointmentPopover';
 import { ConfirmModal } from './ui/ConfirmModal';
-import AppointmentView from './AppointmentView';
+import AppointmentView from './appointments/AppointmentView';
 import { SchedulerToolbar } from './scheduler/SchedulerToolbar';
 import { useSchedulerActions } from '../lib/useSchedulerActions';
 

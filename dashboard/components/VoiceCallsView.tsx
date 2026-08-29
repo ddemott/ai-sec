@@ -8,7 +8,7 @@ import { useConfirm } from '../lib/useConfirm';
 import { ConfirmModal } from './ui/ConfirmModal';
 import { showToast } from './ui/Toast';
 import { FolderTab, FolderTabBar } from './ui/FolderTabs';
-import AnalyticsView from './AnalyticsView';
+import AnalyticsView from './analytics/AnalyticsView';
 import { CommsSentView } from './communications/CommsSentView';
 import { MessagesInbox } from './voice/MessagesInbox';
 import { CallListPanel } from './voice/CallListPanel';
