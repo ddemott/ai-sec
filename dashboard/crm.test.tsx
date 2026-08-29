@@ -1,7 +1,7 @@
 import React from 'react'
 import { describe, expect, test, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import CRMView from './components/CRMView'
+import CRMView from './components/crm/CRMView'
 import { MOCK_CUSTOMERS } from './lib/mockData'
 
 // Mock fetch

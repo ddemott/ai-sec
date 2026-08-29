@@ -13,7 +13,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
-vi.mock('./ui/Toast', () => ({ showToast: vi.fn() }));
+vi.mock('../ui/Toast', () => ({ showToast: vi.fn() }));
 
 import { CRMIntegrationCard } from './CRMIntegrationCard';
 

@@ -17,7 +17,7 @@ import '@testing-library/jest-dom';
 
 // Mutable tenant id so a single mock can flip between real-tenant and demo.
 let mockTenantId: string | null = 'tenant-real-123';
-vi.mock('../lib/SessionContext', () => ({
+vi.mock('../../lib/SessionContext', () => ({
   useActiveTenantId: () => mockTenantId,
   // CRMView reads role/isAdmin to gate the CSV export/import buttons; a plain
   // owner keeps the default view intact for the fetch-path tests below.
@@ -27,7 +27,7 @@ vi.mock('../lib/SessionContext', () => ({
 const mockListCustomers = vi.fn();
 const mockListSummaries = vi.fn();
 const mockCustomerAppointments = vi.fn();
-vi.mock('../lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   Api: {
     customers: {
       list: (...a: unknown[]) => mockListCustomers(...a),
@@ -41,17 +41,17 @@ vi.mock('../lib/api', () => ({
 }));
 
 const mockToast = vi.fn();
-vi.mock('./ui/Toast', () => ({ showToast: (...a: unknown[]) => mockToast(...a) }));
+vi.mock('../ui/Toast', () => ({ showToast: (...a: unknown[]) => mockToast(...a) }));
 
 // Confirm dialog is irrelevant to the fetch paths under test.
-vi.mock('../lib/useConfirm', () => ({
+vi.mock('../../lib/useConfirm', () => ({
   useConfirm: () => ({ state: { isOpen: false }, confirm: vi.fn(), close: vi.fn() }),
 }));
-vi.mock('./ui/ConfirmModal', () => ({ ConfirmModal: () => null }));
+vi.mock('../ui/ConfirmModal', () => ({ ConfirmModal: () => null }));
 
 // Stub the detail pane so the test only exercises CRMView's own list + fetch
 // logic (the pane has its own dedicated tests).
-vi.mock('./CustomerDetailPanel', () => ({
+vi.mock('../CustomerDetailPanel', () => ({
   CustomerDetailPanel: ({ selectedCustomer }: { selectedCustomer: { name?: string } | null }) => (
     <div data-testid="detail">{selectedCustomer?.name ?? 'none'}</div>
   ),
@@ -98,5 +98,29 @@ describe('CRMView — no mock-data leak into a real tenant', () => {
     await waitFor(() => expect(mockListCustomers).toHaveBeenCalled());
     expect(screen.queryByText('Bob Smith')).not.toBeInTheDocument();
     expect(screen.queryByText('Alice Johnson')).not.toBeInTheDocument();
+  });
+});
+
+describe('CRMView — subdirectory pin', () => {
+  test('page.tsx imports CRMView from components/crm/', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const page = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'app', 'dashboard', 'page.tsx'),
+      'utf-8'
+    );
+    expect(page).toContain("import('@/components/crm/CRMView')");
+    expect(page).not.toContain("import('@/components/CRMView')");
+  });
+
+  test('BusinessSettingsView.test mocks CRMIntegrationCard at components/crm/', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const settingsTest = fs.readFileSync(
+      path.join(__dirname, '..', 'BusinessSettingsView.test.tsx'),
+      'utf-8'
+    );
+    expect(settingsTest).toContain("vi.mock('./crm/CRMIntegrationCard'");
+    expect(settingsTest).not.toContain("vi.mock('./CRMIntegrationCard'");
   });
 });

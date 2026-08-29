@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, ArrowRight } from 'lucide-react';
 import { Api } from '../lib/api';
-import { CRMIntegrationCard } from './CRMIntegrationCard';
+import { CRMIntegrationCard } from './crm/CRMIntegrationCard';
 import BusinessTypeSection from './BusinessTypeSection';
 import ChecklistPresetSection from './ChecklistPresetSection';
 import { useStaticData } from '../lib/hooks';
