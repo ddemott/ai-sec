@@ -4,6 +4,12 @@ Historical session journals, completed phases, and resolved bug logs. Moved out 
 
 ---
 
+## 2026-08-29 — dashboard team slice (66 → 61)
+
+Moved SuperAdminDashboard, TenantCard, TenantCreateForm, TenantEditPanel into `dashboard/components/team/`. Migration item stays open at 61 remaining loose `.tsx` files.
+
+---
+
 ## 2026-08-28 — dashboard billing slice (68 → 66)
 
 Moved BillingView into `dashboard/components/billing/`. Migration item stays open at 66 remaining loose `.tsx` files.

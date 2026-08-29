@@ -21,7 +21,7 @@ const SetupView = dynamic(() => import('@/components/SetupView'), { ssr: false }
 const AIInsightsView = dynamic(() => import('@/components/AIInsightsView'), { ssr: false });
 const SettingsView = dynamic(() => import('@/components/SettingsView'), { ssr: false });
 const ProfileView = dynamic(() => import('@/components/auth/ProfileView'), { ssr: false });
-const SuperAdminDashboard = dynamic(() => import('@/components/SuperAdminDashboard'), {
+const SuperAdminDashboard = dynamic(() => import('@/components/team/SuperAdminDashboard'), {
   ssr: false,
 });
 const VoiceCallsView = dynamic(() => import('@/components/VoiceCallsView'), { ssr: false });

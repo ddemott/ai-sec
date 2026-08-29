@@ -1,6 +1,6 @@
 import React from 'react';
-import { Input } from './ui/Input';
-import { Select } from './ui/Select';
+import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
 
 type Template = {
   business_type: string;

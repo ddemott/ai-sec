@@ -2,7 +2,7 @@
 import React from 'react'
 import { expect, test, vi } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-import SuperAdminDashboard from './components/SuperAdminDashboard'
+import SuperAdminDashboard from './components/team/SuperAdminDashboard'
 import { mockJsonResponse } from './lib/test-utils'
 
 // Mock SessionContext so SuperAdminDashboard can call useSessionContext

@@ -2,14 +2,14 @@
 
 import React from 'react';
 import { Building2, RefreshCw, Search, Globe, ShieldAlert } from 'lucide-react';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { Modal } from './ui/Modal';
-import { LoadingState } from './ui/LoadingState';
+import { Button } from '../ui/Button';
+import { Input } from '../ui/Input';
+import { Modal } from '../ui/Modal';
+import { LoadingState } from '../ui/LoadingState';
 import { TenantCard } from './TenantCard';
 import { TenantCreateForm } from './TenantCreateForm';
 import { TenantEditPanel } from './TenantEditPanel';
-import { useSuperAdminTenants } from '../lib/useSuperAdminTenants';
+import { useSuperAdminTenants } from '../../lib/useSuperAdminTenants';
 
 interface SuperAdminProps {
   onSelectTenant?: (id: string, name: string) => void;

@@ -65,3 +65,16 @@ describe('TenantCard a11y', () => {
     expect(onSelect).toHaveBeenCalled();
   });
 });
+
+describe('SuperAdminDashboard — subdirectory pin', () => {
+  test('page.tsx imports SuperAdminDashboard from components/team/', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const page = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'app', 'dashboard', 'page.tsx'),
+      'utf-8'
+    );
+    expect(page).toContain("import('@/components/team/SuperAdminDashboard')");
+    expect(page).not.toContain("import('@/components/SuperAdminDashboard')");
+  });
+});
