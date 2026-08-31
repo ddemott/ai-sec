@@ -1,20 +1,31 @@
 import type { VerticalPresetDef } from './blockTypes.js';
+import { VERTICAL_INTAKE_PRESETS } from './verticalIntakeTrees.js';
 
 export const AUTO_SHOP_PRESET: VerticalPresetDef = {
   preset_id: 'auto_shop_front_desk',
   vertical: 'auto_shop',
   description:
-    'Starter preset for auto shops: answer questions, book work, take messages, and handle schedule changes.',
-  conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+    'Starter preset for auto shops: capture the vehicle and symptom, answer questions, book work, take messages, and handle schedule changes.',
+  // auto_shop_intake sits right after identity so the caller's vehicle + symptom
+  // are captured and ride into the booking (its composed sink). See
+  // verticalIntakeTrees.ts.
+  conversation_blocks: [
+    'identity',
+    'auto_shop_intake',
+    'booking',
+    'message',
+    'qa',
+    'schedule_change',
+  ],
   policy_blocks: [],
   knowledge_blocks: [],
   outcome_blocks: [],
   // job = recruiter intake (wrong vertical). buy_service = selling THIS product
-  // (not a shop service). Unique shop trees wait for a real tenant that needs them.
+  // (not a shop service).
   forbidden_trees: ['job', 'buy_service'],
   defaults: {
     booking_mode: 'offer_once',
-    primary_intake: 'booking',
+    primary_intake: 'auto_shop_intake',
   },
 };
 
@@ -22,17 +33,19 @@ export const SALON_PRESET: VerticalPresetDef = {
   preset_id: 'salon_front_desk',
   vertical: 'salon',
   description:
-    'Starter preset for salons: answer questions, book appointments, take messages, and handle schedule changes.',
-  conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+    'Starter preset for salons: capture the service and stylist preference, answer questions, book appointments, take messages, and handle schedule changes.',
+  // salon_intake sits right after identity so the requested service rides into
+  // the booking (its composed sink). See verticalIntakeTrees.ts.
+  conversation_blocks: ['identity', 'salon_intake', 'booking', 'message', 'qa', 'schedule_change'],
   policy_blocks: [],
   knowledge_blocks: [],
   outcome_blocks: [],
-  // Same front-desk set as auto shop on purpose: both book / message / answer /
-  // move appointments. Salon-only intake is not invented until a salon asks.
+  // Same shared front-desk trees as auto shop (book / message / answer / move
+  // appointments); the vertical-specific difference is the intake block.
   forbidden_trees: ['job', 'buy_service'],
   defaults: {
     booking_mode: 'offer_once',
-    primary_intake: 'booking',
+    primary_intake: 'salon_intake',
   },
 };
 
@@ -171,6 +184,10 @@ export const PRESET_LIBRARY: VerticalPresetDef[] = [
   LOCAL_SERVICE_PRESET,
   OWNER_FOR_HIRE_PRESET,
   LAW_FIRM_PRESET,
+  // The 28 additional vertical front-desk presets (auto_shop and salon are
+  // defined above, with their intake block wired in directly). Each new preset
+  // makes its vertical's intake tree reachable. See verticalIntakeTrees.ts.
+  ...VERTICAL_INTAKE_PRESETS,
 ];
 
 const PRESET_BY_ID = new Map(PRESET_LIBRARY.map((preset) => [preset.preset_id, preset]));

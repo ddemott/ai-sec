@@ -15,13 +15,46 @@ import { PLATFORM_TREE_LIBRARY } from './trees.js';
 import { materializeRuntimeConfig } from './runtimeConfig.js';
 
 describe('preset catalog', () => {
-  it('contains the five real vertical presets', () => {
+  // The five original presets, followed by the 28 vertical front-desk presets
+  // added with the per-vertical intake trees (auto_shop and salon keep their
+  // original slots — their intake block is wired in directly, not via the new
+  // batch). The exact list is asserted so an accidental add/drop/reorder fails
+  // here, and so this stays the single readable inventory of the catalog.
+  it('contains the shipped vertical presets', () => {
     expect(PRESET_LIBRARY.map((preset) => preset.preset_id)).toEqual([
       'auto_shop_front_desk',
       'salon_front_desk',
       'local_service_front_desk',
       'owner_for_hire_front_desk',
       'law_firm_front_desk',
+      'mobile_tire_front_desk',
+      'car_detailing_front_desk',
+      'body_shop_front_desk',
+      'oil_change_front_desk',
+      'car_wash_front_desk',
+      'barbershop_front_desk',
+      'nail_salon_front_desk',
+      'spa_front_desk',
+      'med_spa_front_desk',
+      'lash_studio_front_desk',
+      'plumber_front_desk',
+      'electrician_front_desk',
+      'hvac_front_desk',
+      'pest_control_front_desk',
+      'cleaning_front_desk',
+      'landscaping_front_desk',
+      'garage_door_front_desk',
+      'locksmith_front_desk',
+      'personal_trainer_front_desk',
+      'yoga_studio_front_desk',
+      'tax_prep_front_desk',
+      'tutoring_front_desk',
+      'photography_front_desk',
+      'real_estate_front_desk',
+      'insurance_front_desk',
+      'answering_service_front_desk',
+      'bakery_front_desk',
+      'catering_front_desk',
     ]);
   });
 
@@ -105,10 +138,11 @@ describe('preset catalog', () => {
     });
   });
 
-  it('compiles auto shop preset into booking, message, qa, and schedule-change capabilities', () => {
+  it('compiles auto shop preset into vehicle intake, booking, message, qa, and schedule-change capabilities', () => {
     const runtime = materializeRuntimeConfig(AUTO_SHOP_PRESET);
     expect(compileRuntimeConfig(runtime).map((tree) => tree.tree_id)).toEqual([
       'identity',
+      'auto_shop_intake',
       'booking',
       'message',
       'qa',
@@ -116,10 +150,11 @@ describe('preset catalog', () => {
     ]);
   });
 
-  it('compiles salon preset into booking, message, qa, and schedule-change capabilities', () => {
+  it('compiles salon preset into service intake, booking, message, qa, and schedule-change capabilities', () => {
     const runtime = materializeRuntimeConfig(SALON_PRESET);
     expect(compileRuntimeConfig(runtime).map((tree) => tree.tree_id)).toEqual([
       'identity',
+      'salon_intake',
       'booking',
       'message',
       'qa',
@@ -149,8 +184,31 @@ describe('preset catalog', () => {
     }
   });
 
-  it('auto shop and salon share the same front-desk trees (unique vertical trees not invented)', () => {
-    expect(AUTO_SHOP_PRESET.conversation_blocks).toEqual(SALON_PRESET.conversation_blocks);
+  // Auto shop and salon now each carry their OWN intake tree (auto_shop_intake /
+  // salon_intake) right after identity — that is the whole point of the
+  // per-vertical intake work. What they still share is the front-desk backbone
+  // (identity + booking + message + qa + schedule_change) and their
+  // forbidden_trees. This asserts both halves: the intake differs, the rest is
+  // identical. (The old test asserted the two presets were byte-identical,
+  // which encoded "no unique vertical trees yet" — an invariant this feature
+  // deliberately retires.)
+  it('auto shop and salon share the front-desk backbone but each carry their own intake', () => {
+    expect(AUTO_SHOP_PRESET.conversation_blocks).toContain('auto_shop_intake');
+    expect(SALON_PRESET.conversation_blocks).toContain('salon_intake');
+    expect(AUTO_SHOP_PRESET.conversation_blocks).not.toContain('salon_intake');
+    expect(SALON_PRESET.conversation_blocks).not.toContain('auto_shop_intake');
+
+    const backbone = (blocks: string[]) => blocks.filter((b) => !b.endsWith('_intake'));
+    expect(backbone(AUTO_SHOP_PRESET.conversation_blocks)).toEqual([
+      'identity',
+      'booking',
+      'message',
+      'qa',
+      'schedule_change',
+    ]);
+    expect(backbone(AUTO_SHOP_PRESET.conversation_blocks)).toEqual(
+      backbone(SALON_PRESET.conversation_blocks)
+    );
     expect(AUTO_SHOP_PRESET.forbidden_trees).toEqual(SALON_PRESET.forbidden_trees);
   });
 
