@@ -1160,7 +1160,14 @@ describe('GET /tenants/:id/config', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().checklist_runtime_config).toEqual({
       preset_id: 'salon_front_desk',
-      enabled_conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+      enabled_conversation_blocks: [
+        'identity',
+        'salon_intake',
+        'booking',
+        'message',
+        'qa',
+        'schedule_change',
+      ],
       enabled_policy_blocks: [],
       enabled_knowledge_blocks: [],
       enabled_outcome_blocks: [],

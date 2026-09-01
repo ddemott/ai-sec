@@ -90,8 +90,11 @@ describe('createTenantWithOwner — happy paths', () => {
     ]);
     expect(queries[1].params).toEqual(['dale@test.com']);
     expect(queries[2].params).toEqual(['DynaTire', 'mobile-tire']);
-    // mobile-tire resolves to the local_service vertical (the fallback preset).
-    expect(queries[4].params).toEqual([TENANT_ID, ['local_service']]);
+    // mobile-tire now resolves to its own dedicated `mobile_tire` vertical — the
+    // slot-filling intake tree that shipped with the vertical-intake presets — so
+    // a new mobile-tire tenant provisions the mobile_tire questions, not the
+    // generic local_service fallback it received before those presets existed.
+    expect(queries[4].params).toEqual([TENANT_ID, ['mobile_tire']]);
   });
 
   it('2. tenant_name policy: commits on no duplicate, persists first/last name', async () => {

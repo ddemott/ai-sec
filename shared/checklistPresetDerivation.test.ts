@@ -10,9 +10,20 @@ describe('deriveChecklistRuntimeConfig', () => {
   it('maps salon business type to the salon front-desk preset', () => {
     const runtime = deriveChecklistRuntimeConfig('salon');
 
+    // salon_intake sits right after identity now — the salon preset carries its
+    // own service-intake tree (see SALON_PRESET in agent/src/checklist/presets.ts
+    // and salon_intake in verticalIntakeTrees.ts). The rest of the block list is
+    // unchanged.
     expect(runtime).toEqual({
       preset_id: 'salon_front_desk',
-      enabled_conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+      enabled_conversation_blocks: [
+        'identity',
+        'salon_intake',
+        'booking',
+        'message',
+        'qa',
+        'schedule_change',
+      ],
       enabled_policy_blocks: [],
       enabled_knowledge_blocks: [],
       enabled_outcome_blocks: [],
@@ -24,9 +35,11 @@ describe('deriveChecklistRuntimeConfig', () => {
   it('maps auto-shop business type to the auto-shop front-desk preset', () => {
     const runtime = deriveChecklistRuntimeConfig('auto-shop');
 
+    // auto_shop_intake sits right after identity now (vehicle + symptom capture).
     expect(runtime.preset_id).toBe('auto_shop_front_desk');
     expect(runtime.enabled_conversation_blocks).toEqual([
       'identity',
+      'auto_shop_intake',
       'booking',
       'message',
       'qa',
@@ -41,7 +54,10 @@ describe('deriveChecklistRuntimeConfig', () => {
   });
 
   it('maps unmatched business types to the local-service fallback preset', () => {
-    const runtime = deriveChecklistRuntimeConfig('plumber');
+    // 'plumber' used to be an unmatched example, but it now has its own vertical
+    // preset (plumber_front_desk). 'florist' is a business type with no dedicated
+    // preset, so it still exercises the fallback — the invariant this test guards.
+    const runtime = deriveChecklistRuntimeConfig('florist');
 
     expect(runtime.preset_id).toBe('local_service_front_desk');
     expect(runtime.enabled_conversation_blocks).toEqual([

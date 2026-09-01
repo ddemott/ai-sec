@@ -23,6 +23,7 @@
  * shared node ids (caller_name, caller_phone) merge to one node each.
  */
 import type { QuestionTreeDef } from './types.js';
+import { VERTICAL_INTAKE_TREES } from './verticalIntakeTrees.js';
 
 /** Shared node ids — every tree that wants these MUST use these exact ids so
  *  the merge dedupes them (tracker enforces type agreement at construction). */
@@ -873,4 +874,7 @@ export const PLATFORM_TREE_LIBRARY: QuestionTreeDef[] = [
   CASE_INTAKE_TREE,
   SCHEDULE_CHANGE_TREE,
   FIX_COMPUTER_TREE,
+  // The 30 per-vertical slot-filling intake trees. Each is reachable through a
+  // vertical front-desk preset (presetCatalog reachability enforces this).
+  ...VERTICAL_INTAKE_TREES,
 ];

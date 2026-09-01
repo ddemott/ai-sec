@@ -1,4 +1,5 @@
 import type { ConversationBlockDef } from './blockTypes.js';
+import { VERTICAL_INTAKE_BLOCKS } from './verticalIntakeTrees.js';
 
 /**
  * THE BLOCK CONTRACT — what a section of a call must declare to be swappable.
@@ -105,4 +106,7 @@ export const BLOCK_LIBRARY: Record<string, ConversationBlockDef> = {
     pairs_with: ['identity', 'booking', 'message'],
     sink: 'intake_submission',
   },
+  // The 30 per-vertical intake blocks (composed sink; answers ride into the
+  // booking or message named in pairs_with). Defined in verticalIntakeTrees.ts.
+  ...VERTICAL_INTAKE_BLOCKS,
 };

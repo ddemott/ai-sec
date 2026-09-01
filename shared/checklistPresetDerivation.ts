@@ -33,13 +33,56 @@ export const CHECKLIST_PRESET_IDS = [
   'local_service_front_desk',
   'owner_for_hire_front_desk',
   'law_firm_front_desk',
+  // The 28 additional vertical front-desk presets added alongside the per-vertical
+  // intake trees (agent/src/checklist/verticalIntakeTrees.ts). auto_shop and salon
+  // already appear above. `answering_service_front_desk` ships as a reachable
+  // catalog entry, but NO business_type resolves to it: 'answering-service' is
+  // Thinking Hammer's own business_type and stays mapped to
+  // owner_for_hire_front_desk (see the 2026-08-13 regression note below), so the
+  // owner-for-hire lane and its `job` tree are preserved.
+  'mobile_tire_front_desk',
+  'car_detailing_front_desk',
+  'body_shop_front_desk',
+  'oil_change_front_desk',
+  'car_wash_front_desk',
+  'barbershop_front_desk',
+  'nail_salon_front_desk',
+  'spa_front_desk',
+  'med_spa_front_desk',
+  'lash_studio_front_desk',
+  'plumber_front_desk',
+  'electrician_front_desk',
+  'hvac_front_desk',
+  'pest_control_front_desk',
+  'cleaning_front_desk',
+  'landscaping_front_desk',
+  'garage_door_front_desk',
+  'locksmith_front_desk',
+  'personal_trainer_front_desk',
+  'yoga_studio_front_desk',
+  'tax_prep_front_desk',
+  'tutoring_front_desk',
+  'photography_front_desk',
+  'real_estate_front_desk',
+  'insurance_front_desk',
+  'answering_service_front_desk',
+  'bakery_front_desk',
+  'catering_front_desk',
 ] as const;
 
 export type ChecklistPresetId = (typeof CHECKLIST_PRESET_IDS)[number];
 
 const AUTO_SHOP_RUNTIME: DerivedChecklistRuntimeConfig = {
   preset_id: 'auto_shop_front_desk',
-  enabled_conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+  // auto_shop_intake mirrors AUTO_SHOP_PRESET in agent/src/checklist/presets.ts.
+  enabled_conversation_blocks: [
+    'identity',
+    'auto_shop_intake',
+    'booking',
+    'message',
+    'qa',
+    'schedule_change',
+  ],
   enabled_policy_blocks: [],
   enabled_knowledge_blocks: [],
   enabled_outcome_blocks: [],
@@ -49,7 +92,15 @@ const AUTO_SHOP_RUNTIME: DerivedChecklistRuntimeConfig = {
 
 const SALON_RUNTIME: DerivedChecklistRuntimeConfig = {
   preset_id: 'salon_front_desk',
-  enabled_conversation_blocks: ['identity', 'booking', 'message', 'qa', 'schedule_change'],
+  // salon_intake mirrors SALON_PRESET in agent/src/checklist/presets.ts.
+  enabled_conversation_blocks: [
+    'identity',
+    'salon_intake',
+    'booking',
+    'message',
+    'qa',
+    'schedule_change',
+  ],
   enabled_policy_blocks: [],
   enabled_knowledge_blocks: [],
   enabled_outcome_blocks: [],
@@ -118,6 +169,108 @@ const LAW_FIRM_RUNTIME: DerivedChecklistRuntimeConfig = {
   version: 1,
 };
 
+/**
+ * The 30 per-vertical intake verticals, in canonical order. Each ships a
+ * front-desk preset whose blocks are `identity + <slug>_intake + booking +
+ * message + qa + schedule_change` — the shared front-desk set with the
+ * vertical's own intake tree wired in right after identity. auto_shop and salon
+ * are defined explicitly above (they predate this batch); the rest are derived
+ * from this list so the runtime mirror cannot drift from the block shape.
+ *
+ * Kept as data, not 28 more hand-written literals, for the same reason
+ * CHECKLIST_PRESET_IDS is a runtime value: a per-vertical config that exists
+ * only implicitly is one a test cannot read.
+ */
+const VERTICAL_INTAKE_SLUGS = [
+  'auto_shop',
+  'mobile_tire',
+  'car_detailing',
+  'body_shop',
+  'oil_change',
+  'car_wash',
+  'salon',
+  'barbershop',
+  'nail_salon',
+  'spa',
+  'med_spa',
+  'lash_studio',
+  'plumber',
+  'electrician',
+  'hvac',
+  'pest_control',
+  'cleaning',
+  'landscaping',
+  'garage_door',
+  'locksmith',
+  'personal_trainer',
+  'yoga_studio',
+  'tax_prep',
+  'tutoring',
+  'photography',
+  'real_estate',
+  'insurance',
+  'answering_service',
+  'bakery',
+  'catering',
+] as const;
+
+function intakeRuntime(slug: string): DerivedChecklistRuntimeConfig {
+  return {
+    preset_id: `${slug}_front_desk`,
+    enabled_conversation_blocks: [
+      'identity',
+      `${slug}_intake`,
+      'booking',
+      'message',
+      'qa',
+      'schedule_change',
+    ],
+    enabled_policy_blocks: [],
+    enabled_knowledge_blocks: [],
+    enabled_outcome_blocks: [],
+    overrides: {},
+    version: 1,
+  };
+}
+
+/**
+ * Every preset id → its runtime config. The five hand-written presets keep their
+ * explicit literals (auto_shop and salon are the intake-bearing versions above);
+ * the 28 vertical presets are generated from VERTICAL_INTAKE_SLUGS.
+ */
+const RUNTIME_BY_PRESET: Record<ChecklistPresetId, DerivedChecklistRuntimeConfig> = (() => {
+  const map = {
+    auto_shop_front_desk: AUTO_SHOP_RUNTIME,
+    salon_front_desk: SALON_RUNTIME,
+    local_service_front_desk: LOCAL_SERVICE_RUNTIME,
+    owner_for_hire_front_desk: OWNER_FOR_HIRE_RUNTIME,
+    law_firm_front_desk: LAW_FIRM_RUNTIME,
+  } as Record<ChecklistPresetId, DerivedChecklistRuntimeConfig>;
+  for (const slug of VERTICAL_INTAKE_SLUGS) {
+    const presetId = `${slug}_front_desk` as ChecklistPresetId;
+    if (!map[presetId]) map[presetId] = intakeRuntime(slug);
+  }
+  return map;
+})();
+
+/**
+ * business_type (normalized, hyphenated) → preset id, for the vertical presets.
+ *
+ * `answering_service` is DELIBERATELY excluded: 'answering-service' is Thinking
+ * Hammer's own business_type and stays mapped to owner_for_hire_front_desk (see
+ * defaultChecklistPresetIdForBusinessType and the 2026-08-13 regression). Its
+ * preset/tree still ship and are reachable via the catalog — just not selected
+ * by this business_type default.
+ */
+const PRESET_BY_BUSINESS_TYPE: Record<string, ChecklistPresetId> = (() => {
+  const map: Record<string, ChecklistPresetId> = {};
+  for (const slug of VERTICAL_INTAKE_SLUGS) {
+    if (slug === 'answering_service') continue;
+    map[slug.replace(/_/g, '-')] = `${slug}_front_desk` as ChecklistPresetId;
+  }
+  return map;
+})();
+
 function normalizeBusinessType(businessType: string | null | undefined): string {
   return (businessType ?? '')
     .trim()
@@ -140,8 +293,6 @@ export function defaultChecklistPresetIdForBusinessType(
   businessType: string | null | undefined
 ): ChecklistPresetId {
   const normalized = normalizeBusinessType(businessType);
-  if (normalized === 'salon') return 'salon_front_desk';
-  if (normalized === 'auto-shop') return 'auto_shop_front_desk';
   // 'answering-service' is Thinking Hammer's own business_type and it fell
   // through to local_service — the preset with no `job` tree — which is how two
   // recruiter calls on a line advertising the owner for hire produced zero
@@ -167,6 +318,11 @@ export function defaultChecklistPresetIdForBusinessType(
   if (normalized === 'owner-for-hire' || normalized === 'answering-service') {
     return 'owner_for_hire_front_desk';
   }
+  // The 29 remaining vertical presets (all intake verticals except
+  // answering_service, which is handled above). Checked AFTER the law-firm and
+  // owner-for-hire lanes so those keep precedence.
+  const verticalPreset = PRESET_BY_BUSINESS_TYPE[normalized];
+  if (verticalPreset) return verticalPreset;
   return 'local_service_front_desk';
 }
 
@@ -180,12 +336,12 @@ export function defaultChecklistPresetIdForBusinessType(
  * answer.
  */
 export function verticalForBusinessType(businessType: string | null | undefined): string {
+  // The vertical is the preset id minus its `_front_desk` suffix — one derivation
+  // that stays correct for all 33 presets (auto_shop, salon, owner_for_hire,
+  // law_firm, local_service, and every intake vertical) without a per-id ladder
+  // that a new preset could be forgotten from.
   const presetId = defaultChecklistPresetIdForBusinessType(businessType);
-  if (presetId === 'auto_shop_front_desk') return 'auto_shop';
-  if (presetId === 'salon_front_desk') return 'salon';
-  if (presetId === 'owner_for_hire_front_desk') return 'owner_for_hire';
-  if (presetId === 'law_firm_front_desk') return 'law_firm';
-  return 'local_service';
+  return presetId.replace(/_front_desk$/, '');
 }
 
 export function resolveChecklistPresetId(
@@ -203,16 +359,10 @@ export function deriveChecklistRuntimeConfig(
   overrides?: ChecklistOverrides | null
 ): DerivedChecklistRuntimeConfig {
   const resolvedPresetId = resolveChecklistPresetId(businessType, presetId);
-  const base =
-    resolvedPresetId === 'salon_front_desk'
-      ? SALON_RUNTIME
-      : resolvedPresetId === 'auto_shop_front_desk'
-        ? AUTO_SHOP_RUNTIME
-        : resolvedPresetId === 'owner_for_hire_front_desk'
-          ? OWNER_FOR_HIRE_RUNTIME
-          : resolvedPresetId === 'law_firm_front_desk'
-            ? LAW_FIRM_RUNTIME
-            : LOCAL_SERVICE_RUNTIME;
+  // One lookup over every shipped preset, falling back to local_service for the
+  // impossible case of an id with no runtime (resolveChecklistPresetId only ever
+  // returns a CHECKLIST_PRESET_IDS member, so the fallback is belt-and-braces).
+  const base = RUNTIME_BY_PRESET[resolvedPresetId] ?? LOCAL_SERVICE_RUNTIME;
   const applied = applyChecklistOverrides(base, overrides);
   return applied.ok ? applied.config : { ...base };
 }
