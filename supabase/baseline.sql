@@ -3788,7 +3788,7 @@ CREATE TABLE public.tenants (
     booking_mechanics text,
     checklist_preset_id text,
     checklist_overrides jsonb DEFAULT '{}'::jsonb NOT NULL,
-    CONSTRAINT tenants_checklist_preset_id_valid CHECK (((checklist_preset_id IS NULL) OR (checklist_preset_id = ANY (ARRAY['auto_shop_front_desk'::text, 'salon_front_desk'::text, 'local_service_front_desk'::text, 'owner_for_hire_front_desk'::text, 'law_firm_front_desk'::text]))))
+    CONSTRAINT tenants_checklist_preset_id_valid CHECK (((checklist_preset_id IS NULL) OR (checklist_preset_id = ANY (ARRAY['auto_shop_front_desk'::text, 'salon_front_desk'::text, 'local_service_front_desk'::text, 'owner_for_hire_front_desk'::text, 'law_firm_front_desk'::text, 'mobile_tire_front_desk'::text, 'car_detailing_front_desk'::text, 'body_shop_front_desk'::text, 'oil_change_front_desk'::text, 'car_wash_front_desk'::text, 'barbershop_front_desk'::text, 'nail_salon_front_desk'::text, 'spa_front_desk'::text, 'med_spa_front_desk'::text, 'lash_studio_front_desk'::text, 'plumber_front_desk'::text, 'electrician_front_desk'::text, 'hvac_front_desk'::text, 'pest_control_front_desk'::text, 'cleaning_front_desk'::text, 'landscaping_front_desk'::text, 'garage_door_front_desk'::text, 'locksmith_front_desk'::text, 'personal_trainer_front_desk'::text, 'yoga_studio_front_desk'::text, 'tax_prep_front_desk'::text, 'tutoring_front_desk'::text, 'photography_front_desk'::text, 'real_estate_front_desk'::text, 'insurance_front_desk'::text, 'answering_service_front_desk'::text, 'bakery_front_desk'::text, 'catering_front_desk'::text]))))
 );
 
 ALTER TABLE ONLY public.tenants FORCE ROW LEVEL SECURITY;

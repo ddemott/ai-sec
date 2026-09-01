@@ -1412,12 +1412,14 @@ export const CATERING_INTAKE_TREE: QuestionTreeDef = {
     {
       node_id: 'catering_event_date',
       type: 'text',
-      ask: 'the date of the event \u2014 record it exactly as they say it, even if approximate.',
+      listen: true,
+      ask: 'the date of the event \u2014 record it exactly as they say it, even if approximate, whenever they mention it.',
     },
     {
       node_id: 'catering_guest_count',
       type: 'text',
-      ask: 'roughly how many guests \u2014 a number or a range is fine, never push for precision.',
+      listen: true,
+      ask: 'roughly how many guests \u2014 a number or a range is fine, never push for precision \u2014 if they say.',
     },
     {
       node_id: 'catering_meal_type',

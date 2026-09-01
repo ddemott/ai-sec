@@ -22,21 +22,17 @@
 -- Widening a CHECK is non-destructive: it only ever accepts more values, no
 -- existing row can violate it, and no rewrite is required. Idempotent.
 
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'tenants_checklist_preset_id_valid'
-  ) THEN
-    ALTER TABLE tenants
-      DROP CONSTRAINT tenants_checklist_preset_id_valid;
-  END IF;
+-- DROP ... IF EXISTS is table-scoped (it only ever touches tenants' own
+-- constraint) and a no-op when absent, so it is both idempotent and immune to
+-- the conname collision a bare pg_constraint lookup would risk — a constraint of
+-- the same name on another table can neither satisfy nor block this DROP.
+ALTER TABLE tenants
+  DROP CONSTRAINT IF EXISTS tenants_checklist_preset_id_valid;
 
-  ALTER TABLE tenants
-    ADD CONSTRAINT tenants_checklist_preset_id_valid
-    CHECK (
-      checklist_preset_id IS NULL OR checklist_preset_id IN (
+ALTER TABLE tenants
+  ADD CONSTRAINT tenants_checklist_preset_id_valid
+  CHECK (
+    checklist_preset_id IS NULL OR checklist_preset_id IN (
         'auto_shop_front_desk',
         'salon_front_desk',
         'local_service_front_desk',
@@ -70,9 +66,8 @@ BEGIN
         'answering_service_front_desk',
         'bakery_front_desk',
         'catering_front_desk'
-      )
-    );
-END $$;
+    )
+  );
 
 COMMENT ON COLUMN tenants.checklist_preset_id IS
   'Optional explicit checklist preset override. NULL = derive from business_type. The allowed list here MUST match PRESET_LIBRARY in agent/src/checklist/presets.ts and ChecklistPresetId in shared/checklistPresetDerivation.ts — presetCatalogConstraint.test.ts enforces it.';
