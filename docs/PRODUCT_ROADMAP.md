@@ -239,11 +239,11 @@ PRIORITY: CRITICAL
 EFFORT: Human 2h + carrier approval wait (days) · Claude 3h
 DEPENDS_ON: None
 CONTEXT: SMS is OFF **by design** — `ENABLE_SMS` defaults false in the agent/backend config schema because US A2P SMS requires 10DLC brand+campaign registration. This is NOT a code bug. The task is: register 10DLC, then flip the gate, then prove one message actually delivers.
-FILES: `agent/src/configSchema.ts` (or wherever `ENABLE_SMS` is defined — grep it), `src/services/telnyxSms.ts`, `src/services/smsService.ts`, `src/services/reminders/index.ts`, plus a new verification script `scripts/verify-sms-delivery.mjs`.
+FILES: `agent/src/configSchema.ts` (or wherever `ENABLE_SMS` is defined — grep it), `src/services/communications/TelnyxSmsAdapter.ts`, `src/services/communications/smsService.ts`, `src/services/reminders/index.ts`, plus a new verification script `scripts/verify-sms-delivery.mjs`.
 STEPS:
 1. (Human) Register 10DLC brand + campaign in Telnyx portal; associate `+1 630-822-9086`; wait for approval.
 2. (Human) Confirm `TELNYX_API_KEY` + `TELNYX_MESSAGING_PROFILE_ID` set on Railway.
-3. (Claude) Add `scripts/verify-sms-delivery.mjs`: sends one SMS via the real `telnyxSms` path to a provided number, then polls `communications_history` for `status='delivered'`.
+3. (Claude) Add `scripts/verify-sms-delivery.mjs`: sends one SMS via the real Telnyx path (`src/services/communications/TelnyxSmsAdapter.ts` → `smsService.ts`) to a provided number, then polls `communications_history` for `status='delivered'`.
 4. (Human) Set `ENABLE_SMS=true` on Railway once campaign approved.
 ACCEPTANCE_TEST:
 ```bash
@@ -271,15 +271,16 @@ STEPS:
 1. Dashboard → Phone Assistant → set the escalation contact.
 2. From a second phone, call `+1 630-822-9086`.
 3. Book an appointment for a real time inside a shift window.
-4. Trigger escalation ("this is urgent") → verify a message row with urgency flag.
+4. Trigger escalation ("this is urgent") → verify a `customer_messages` row with `is_urgent=true`.
 ACCEPTANCE_TEST (objective DB queries after the call):
 ```sql
 -- 1 new voice session with a transcript:
 SELECT count(*) FROM voice_sessions WHERE created_at > now() - interval '15 min';   -- >= 1
 -- 1 appointment booked at the requested time for the test tenant:
 SELECT count(*) FROM appointments WHERE created_at > now() - interval '15 min';      -- >= 1
--- escalation captured as an urgent message:
-SELECT urgency FROM messages WHERE created_at > now() - interval '15 min';           -- 'urgent'
+-- escalation captured as an urgent customer message (schema: customer_messages.is_urgent BOOLEAN):
+SELECT count(*) FROM customer_messages
+  WHERE is_urgent = true AND created_at > now() - interval '15 min';                 -- >= 1
 ```
 DEFINITION_OF_DONE:
 - [ ] `voice_sessions` has the call with a non-empty transcript.
@@ -1256,8 +1257,8 @@ DEFINITION_OF_DONE:
 
 ### Owner split (who does what)
 - **Claude-able** (pure code, no external account needed): the implementer can start and finish these autonomously.
-- **Human-only** (needs an external account/phone/bank/live call): T-001 (rotate creds), T-002 (10DLC/SMS live), the live-mode half of T-004 (real Stripe card), T-012 (real test call).
-- **Mixed** (Claude writes code; human does the external step): T-108, T-205, T-206, T-207, T-304.
+- **Human-only** (needs an external account/phone/bank/live call): T-001 (rotate creds), T-003 (real live validation call), T-005 (live-mode Stripe + real card/bank), T-013 (owner onboarding walk-through).
+- **Mixed** (Claude writes code; human does the external step): T-002 (Claude builds the SMS gate + delivery script; human does 10DLC registration), T-004 (Claude wires Stripe test-mode; human confirms dashboard/keys), T-108, T-205, T-206, T-207, T-304.
 
 ### How to claim a task (implementer workflow)
 1. **Pick** the lowest-numbered task whose `DEPENDS_ON` are all ✅ DONE in the Master Status Table (Section 1).

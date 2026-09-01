@@ -9,10 +9,20 @@ set -euo pipefail
 #   (or run `gh auth login` first and it will reuse the gh CLI token)
 #
 # Idempotency: this script does NOT check for existing issues. Run it once.
-# Labels are created with `|| true` so re-creating an existing label is harmless.
+# Labels are created idempotently — an existing label (HTTP 422) is ignored,
+# but any other HTTP failure (bad token, wrong repo, API outage) fails fast.
 
 REPO="ddemott/secretary-hq"
 API="https://api.github.com/repos/${REPO}"
+
+# Fail fast if required tooling is missing (with `set -e`, a missing dep would
+# otherwise abort mid-run after some issues/labels were already created).
+for dep in curl jq; do
+  if ! command -v "$dep" >/dev/null 2>&1; then
+    echo "ERROR: required dependency '$dep' not found on PATH." >&2
+    exit 1
+  fi
+done
 
 TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 if [ -z "$TOKEN" ]; then
@@ -31,10 +41,15 @@ auth=( -H "Authorization: Bearer ${TOKEN}" -H "Accept: application/vnd.github+js
 # 1. Ensure labels exist (422 = already exists, ignored)
 # ---------------------------------------------------------------------------
 make_label() {
-  local name="$1" color="$2" desc="$3"
-  curl -s "${auth[@]}" -X POST "${API}/labels" \
+  local name="$1" color="$2" desc="$3" code
+  code="$(curl -s -o /dev/null -w '%{http_code}' "${auth[@]}" -X POST "${API}/labels" \
     -d "$(jq -n --arg n "$name" --arg c "$color" --arg d "$desc" \
-      '{name:$n,color:$c,description:$d}')" >/dev/null || true
+      '{name:$n,color:$c,description:$d}')")"
+  # 201 = created, 422 = already exists (both fine); anything else is a real error.
+  if [ "$code" != "201" ] && [ "$code" != "422" ]; then
+    echo "ERROR: creating label '$name' failed (HTTP $code)." >&2
+    exit 1
+  fi
 }
 
 echo "Ensuring labels..."
@@ -120,7 +135,7 @@ T003=$(create_issue "[T-003] Live Voice Validation Call" \
 - [ ] T-003c: Validate booking — appointment lands in DB for correct tenant + time
 - [ ] T-003d: Validate escalation — "talk to a person" records a message with urgent flag
 - [ ] T-003e: Validate dialog — agent natural, asks preferred time, no forced slots
-- [ ] T-003f: Log findings (repeated questions, weird phrasing, dead air) to `CALL_FIX_PLAN.md`
+- [ ] T-003f: Log findings (repeated questions, weird phrasing, dead air) to `docs/CALL_FIX_PLAN.md`
 
 _Tracked in docs/PRODUCT_ROADMAP.md § PASS 1_' \
 '["pass-1","roadmap","owner:dale","priority:critical"]')
