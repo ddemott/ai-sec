@@ -13,6 +13,7 @@ import {
   findRemovalImpact,
   insertDraftGraph,
 } from '../services/setupGraph';
+import { applyDefaultServicePolicy } from '../services/defaultServicePolicy';
 
 /**
  * POST /setup/commit — the wizard's Phase B commit-on-enter-step-9 endpoint.
@@ -147,6 +148,37 @@ export function registerSetupRoutes(
     }, 'Failed to compute setup impact')
   );
 
+  /**
+   * POST /setup/default-service — apply the fallthrough-service policy.
+   *
+   * /setup/commit already does this inside its transaction, but the SOLO wizard
+   * never goes through commit: it creates services one at a time via
+   * POST /services and finalizes with mappings + shifts. Without this, a solo
+   * tenant — the single most common shape of new business on this product —
+   * finished setup with `default_service_id` unset, and the next caller whose
+   * words matched nothing was booked into whatever service sorted first
+   * alphabetically. Explicit endpoint rather than a side effect of creating a
+   * service: a write that changes which service every unmatched call books
+   * should be something a caller asked for, not something that happens quietly.
+   */
+  app.post(
+    '/setup/default-service',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const result = await withTenantClient(tenantId, (client) =>
+        applyDefaultServicePolicy(client, tenantId)
+      );
+      if (result.applied) {
+        logEvent(req, 'default_service_applied', {
+          tenantId,
+          serviceName: result.serviceName,
+        });
+      }
+      return reply.send({ success: true, ...result });
+    }, 'Failed to apply default service policy')
+  );
+
   app.post(
     '/setup/commit',
     withHandler(async (req: AppRequest, reply) => {
@@ -247,7 +279,20 @@ export function registerSetupRoutes(
             startDate: new Date(),
             prune: mode === 'sync',
           });
+          // The fallthrough service, chosen by POLICY rather than by sort order.
+          // In the same transaction as the graph insert, because a tenant that
+          // has services but no usable default is a tenant whose next unmatched
+          // call books whatever sorts first alphabetically. See
+          // src/services/defaultServicePolicy.ts.
+          const defaultService = await applyDefaultServicePolicy(client, tenantId);
+
           await client.query('COMMIT');
+          if (defaultService.applied) {
+            logEvent(req, 'default_service_applied', {
+              tenantId,
+              serviceName: defaultService.serviceName,
+            });
+          }
           return { ...result.counts, upcoming_appointments_affected: impact.upcomingAppointments };
         } catch (err) {
           await client.query('ROLLBACK');

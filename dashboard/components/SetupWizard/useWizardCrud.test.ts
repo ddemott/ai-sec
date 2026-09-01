@@ -206,10 +206,10 @@ describe('useWizardCrud — buildDraftGraph serialization', () => {
   it('seedServices never re-seeds over an existing name (user-typed or already seeded)', () => {
     const { result } = setup();
 
-    act(() => result.current.seedServices(['Haircut', 'Color']));
+    act(() => result.current.seedServices([{ name: 'Haircut' }, { name: 'Color' }]));
     expect(result.current.draftServices).toHaveLength(2);
 
-    act(() => result.current.seedServices(['Haircut', 'Manicure']));
+    act(() => result.current.seedServices([{ name: 'Haircut' }, { name: 'Manicure' }]));
     // 'Haircut' already exists by name — not duplicated; 'Manicure' is new.
     expect(result.current.draftServices.map((s) => s.name).sort()).toEqual([
       'Color',
@@ -218,10 +218,39 @@ describe('useWizardCrud — buildDraftGraph serialization', () => {
     ]);
   });
 
+  it('seedServices carries the starter description onto the draft row', () => {
+    // WHO: an owner whose vertical has a LOOK-FIRST starter ("Service call").
+    // WHAT: the description reaches the draft, so /setup/commit writes it to
+    //       services.description.
+    // WHEN: business-type pick → auto-seed.
+    // WHERE: useWizardCrud.seedServices → insertDraftGraph.
+    // WHY: resolveServiceForBooking's semantic step embeds
+    //      concat_ws('. ', name, subtitle, description). Seeded name-only, a
+    //      look-first row is unreachable by meaning — "water under my sink"
+    //      matches nothing in the words "Service call" — so the call silently
+    //      falls through to the tenant default instead of the right visit type.
+    const { result } = setup();
+
+    act(() =>
+      result.current.seedServices([
+        { name: 'Service call', description: 'Come out, find the leak, and say what the fix takes.' },
+        { name: 'Drain cleaning' },
+      ])
+    );
+
+    const byName = Object.fromEntries(result.current.draftServices.map((s) => [s.name, s]));
+    expect(byName['Service call'].description).toBe(
+      'Come out, find the leak, and say what the fix takes.'
+    );
+    // A SKU row has no description and must not gain an empty-string one — the
+    // resolver's concat_ws would then embed a trailing separator for nothing.
+    expect(byName['Drain cleaning'].description).toBeUndefined();
+  });
+
   it('clearAutoSeeded drops only auto-seeded rows, keeping user-typed ones', () => {
     const { result } = setup();
 
-    act(() => result.current.seedServices(['Haircut']));
+    act(() => result.current.seedServices([{ name: 'Haircut' }]));
     act(() => result.current.startAddService());
     act(() =>
       result.current.setEditingService({ name: 'My Custom', description: '', duration_minutes: 30 })
@@ -236,7 +265,7 @@ describe('useWizardCrud — buildDraftGraph serialization', () => {
   it('clearAutoSeeded cascades to mappings made against the dropped rows', () => {
     const { result } = setup();
 
-    act(() => result.current.seedServices(['Haircut']));
+    act(() => result.current.seedServices([{ name: 'Haircut' }]));
     const seededServiceId = result.current.draftServices[0].service_id;
 
     act(() => result.current.startAddEmployee());

@@ -1,5 +1,7 @@
 'use client';
 
+import type { StarterService } from '../../../shared/starterServices';
+
 import { useState, useEffect, useCallback } from 'react';
 import { Api } from '../../lib/api';
 import { roundUpTo15 } from '../../lib/duration';
@@ -283,19 +285,32 @@ export function useWizardCrud(tenantId: string | null, step: WizardStep) {
 
   // --- Auto-seed (Phase B: pushes into local draft state, no DB writes) ---
 
-  /** Adds a draft service per name not already present (by name — avoids
+  /** Adds a draft service per starter not already present (by name — avoids
    *  re-seeding over a user-typed row with the same name). Marks each as
-   *  auto-seeded so a later "Change business type" can drop exactly these. */
+   *  auto-seeded so a later "Change business type" can drop exactly these.
+   *
+   *  The DESCRIPTION is carried through, and that is not cosmetic. A look-first
+   *  starter ("Diagnostic visit", "Service call") is bookable precisely because
+   *  the caller cannot name the work, so the booking resolver has to reach it by
+   *  MEANING: resolveServiceForBooking embeds
+   *  concat_ws('. ', name, subtitle, description). Seeded name-only, "Diagnostic
+   *  visit" gives "my check engine light is on" almost nothing to match, the
+   *  semantic step misses, and the call falls through to the tenant default. */
   const seedServices = useCallback(
-    (names: string[]) => {
+    (starters: StarterService[]) => {
       const existingNames = new Set(draftServices.map((s) => s.name));
-      const toAdd = names.filter((name) => !existingNames.has(name));
+      const toAdd = starters.filter((s) => !existingNames.has(s.name));
       if (toAdd.length === 0) return;
       const newIds = new Set<string>();
-      const newServices: WizardService[] = toAdd.map((name) => {
+      const newServices: WizardService[] = toAdd.map((starter) => {
         const id = newTmpId();
         newIds.add(id);
-        return { service_id: id, name, duration_minutes: 30 };
+        return {
+          service_id: id,
+          name: starter.name,
+          ...(starter.description ? { description: starter.description } : {}),
+          duration_minutes: 30,
+        };
       });
       setDraftServices((prev) => [...prev, ...newServices]);
       setAutoSeededServiceTmpIds((prev) => new Set([...prev, ...newIds]));

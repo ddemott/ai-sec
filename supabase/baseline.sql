@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict dN4XtohsnYH51Awg5UEfllUbUjX8FVW2EjJ3wTKWBYYH1web07lsjAdxS4e85m8
+\restrict gBbMicVSJ6rS1LUqWaXUXudx9umlIaD1zL966jFzNYeDPQdPSwjOAZ7dqTRxU4y
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
--- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
+-- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -2598,7 +2598,7 @@ CREATE TABLE public.business_templates (
     employee_label text DEFAULT 'Employee'::text NOT NULL,
     employee_plural text DEFAULT 'Employees'::text NOT NULL,
     booking_label text DEFAULT 'Appointment'::text NOT NULL,
-    example_services text[] DEFAULT '{}'::text[],
+    example_services jsonb DEFAULT '[]'::jsonb NOT NULL,
     category text DEFAULT 'Other'::text NOT NULL,
     sort_order integer DEFAULT 0 NOT NULL,
     example_resources text[] DEFAULT '{}'::text[]
@@ -6562,5 +6562,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dN4XtohsnYH51Awg5UEfllUbUjX8FVW2EjJ3wTKWBYYH1web07lsjAdxS4e85m8
+\unrestrict gBbMicVSJ6rS1LUqWaXUXudx9umlIaD1zL966jFzNYeDPQdPSwjOAZ7dqTRxU4y
 

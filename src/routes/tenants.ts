@@ -126,7 +126,19 @@ const CreateTemplateSchema = z.object({
   employee_label: z.string().optional(),
   employee_plural: z.string().optional(),
   booking_label: z.string().optional(),
-  example_services: z.array(z.string()).optional(),
+  // Starter services are objects now, not bare names: a look-first row needs a
+  // description or resolveServiceForBooking's semantic step has nothing to match
+  // (it embeds name + subtitle + description). See shared/starterServices.ts.
+  example_services: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(120),
+        description: z.string().max(500).optional(),
+        look_first: z.boolean().optional(),
+        is_default: z.boolean().optional(),
+      })
+    )
+    .optional(),
 });
 
 export function registerTenantRoutes(
@@ -749,7 +761,7 @@ export function registerTenantRoutes(
             body.employee_label || 'Employee',
             body.employee_plural || 'Employees',
             body.booking_label || 'Appointment',
-            body.example_services || '{}',
+            JSON.stringify(body.example_services ?? []),
           ]
         )
       );
