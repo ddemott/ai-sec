@@ -412,7 +412,7 @@ DEFINITION_OF_DONE:
 ---
 
 ### T-008: Validate intake trees end-to-end
-STATUS: 🟡 IN_PROGRESS (Claude half complete and verified; the Human half — confirming the business-type picker in the wizard UI — is outstanding)
+STATUS: 🟡 IN_PROGRESS (every DoD item now verified, including the picker, which was driven through the real wizard UI in a real browser rather than via the API. Held at IN_PROGRESS pending owner sign-off + merge — this doc's own rule is that DONE means merged to `main`.)
 OWNER: Mixed (Claude runs simulator; Human confirms UI picker)
 PRIORITY: HIGH
 EFFORT: 2–3h
@@ -426,6 +426,7 @@ STEPS:
 2. Assert derivation + enabled blocks. — done, and widened to **all 33 presets** as a permanent CI test rather than a one-off script.
 3. Run the simulator and confirm the intake questions fire. — done via the new `SIM_BUSINESS` mode.
 4. (Added) Confirm the per-tenant tree COPY path, not just derivation: `npm run trees:local` converted all four probe tenants and read each back through the live agent loader.
+5. (Added) Drive the wizard's business-type picker in a real browser. The picker's options come from `Api.templates.list()` (the `business_templates` table), **not** from the preset catalog — two independent lists that nothing forced to agree. A vertical with a preset but no template row is unpickable; a template row with no preset falls back to local-service. That seam had to be checked in the UI, not asserted in a unit test.
 ACCEPTANCE_TEST:
 ```bash
 # Derivation + block wiring, every preset, deterministic, in CI:
@@ -439,12 +440,23 @@ RESULT (local, 2026-09-01):
 - `SIM_BUSINESS` vertical probe — **8/8 graded scenarios passed** (4 verticals × 2 runs). Each call selected the vertical's own intake tree, answered at least one of its nodes, and closed.
 - Live route probe — all four business types resolved through `POST /tenants/create` → `GET /tenants/:id/config` to `<slug>_front_desk` with `<slug>_intake` in `enabled_conversation_blocks`. Probe tenants soft-deleted afterwards.
 - `npm run trees:local` — all 7 tenants converted, "40 trees identical to the library" for each, including the four probes.
+- **Wizard picker, real browser (Playwright chromium, live local stack, throwaway tenant that started as `auto-shop`).** For each of the four: open My Business → Setup Assistant → the picker, click the card, then read `tenants.business_type` from Postgres and `checklist_runtime_config` from `GET /tenants/:id/config`.
+
+  ```
+  Catering Service         clicked -> business_type=catering      OK  preset=catering_front_desk        OK  intake_block=OK
+  Plumbing Service         clicked -> business_type=plumber       OK  preset=plumber_front_desk         OK  intake_block=OK
+  Hair Salon               clicked -> business_type=salon         OK  preset=salon_front_desk           OK  intake_block=OK
+  Real Estate Showings     clicked -> business_type=real-estate   OK  preset=real_estate_front_desk     OK  intake_block=OK
+  PICKER CHECK: ALL 4 OK
+  ```
+
+  The picker offers **31** business types across 6 categories (Auto & Vehicle 6, Beauty & Personal Care 6, Fitness & Wellness 2, Food & Beverage 2, Home Services 8, Professional Services 7). That is 31 template rows against 33 presets; the two without a template row are `local_service_front_desk` and `owner_for_hire_front_desk`, which are catch-alls reached by fallback and were never meant to be picked. Probe tenant soft-deleted afterwards.
 DEFINITION_OF_DONE:
 - [x] All 4 sampled verticals resolve to `<slug>_front_desk`.
 - [x] Enabled blocks for each include `<slug>_intake`.
 - [x] Simulator trace shows at least one intake node fired per vertical.
 - [x] No "tree not found" errors in the simulator log.
-- [ ] Human: confirm the business-type picker in the setup wizard offers these verticals and writes the expected `business_type`.
+- [x] Confirm the business-type picker in the setup wizard offers these verticals and writes the expected `business_type` — done by driving the real UI in a browser (evidence above), not by calling the API. Owner sign-off still welcome; the mechanical claim is verified.
 
 **Trap the vertical mode had to avoid, recorded so the next person does not re-make it:** the first cut handed the tracker the library *compiled from the preset*, which seemed obviously right — give a business exactly the trees it can use. It throws:
 
