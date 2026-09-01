@@ -203,22 +203,27 @@ describe('Business Vocabulary System', () => {
     });
 
     it('should have example_services populated on all 20 templates', async () => {
-      // T-015 CHANGED THE RULE THIS ASSERTS, deliberately, so the bound moved.
+      // T-015 changed what this asserts, so the bound moved from 3 to 2.
       //
       // It used to demand >= 3, which encoded the old 5-item department menus
       // ("Oil Change, Brake Service, Engine Diagnostic, Tire Rotation, State
-      // Inspection"). The starter catalogue is now 2–4 caller-language rows per
-      // vertical, and two verticals ship exactly ONE on purpose (med-spa and
-      // law-firm: everything either of them does is decided AT the consultation,
-      // so seeding treatments would have the agent booking work nobody has
-      // assessed). A wizard that opens with seven rows to prune is worse than
-      // one with three to accept.
+      // Inspection"). The starter catalogue is 2–4 caller-language rows per
+      // vertical, so 2 is the floor.
       //
-      // The lower bound is therefore 1, not 3 — but the assertion got STRONGER,
-      // not weaker: it now also caps the list, and checks every row is a real
-      // object with a name rather than counting entries of any shape. The shape
-      // check is the one that matters, because the column changed from text[] to
-      // jsonb and a silent shape regression would otherwise pass a length test.
+      // CORRECTION, recorded because the wrong version was committed first: this
+      // comment previously said the floor was 1 and that "the work order's
+      // product rule changed". That was false. The work order's rule always said
+      // 2–4; its reference LIST said "consultation only" for med-spa and
+      // law-firm, which is a conflict inside the work order — not permission to
+      // ship one. Loosening this floor to 1 hid that conflict and left the
+      // catalogue header, the roadmap, and this test disagreeing. Those two
+      // verticals now carry a second defensible starter and the floor is 2.
+      //
+      // The assertion also got STRONGER, not weaker: it caps the list at 4,
+      // asserts every expected template was actually found, and checks each entry
+      // is an object with a non-empty name rather than counting entries of any
+      // shape. That last part matters because the column changed from text[] to
+      // jsonb, and a silent shape regression would sail through a length check.
       if (!dbAvailable) return;
       const res = await client.query(
         'SELECT business_type, example_services FROM business_templates WHERE business_type = ANY($1)',
@@ -233,8 +238,9 @@ describe('Business Vocabulary System', () => {
         ).toBe(true);
         expect(
           starters.length,
-          `${row.business_type} has no starter services — its wizard Step 1 is blank`
-        ).toBeGreaterThanOrEqual(1);
+          `${row.business_type} has ${starters.length} starter(s) — the rule is 2–4, and a blank ` +
+            `or single-row Step 1 is what T-015 exists to prevent`
+        ).toBeGreaterThanOrEqual(2);
         expect(
           starters.length,
           `${row.business_type} has ${starters.length} starters; 2–4 is the rule, more is a menu`

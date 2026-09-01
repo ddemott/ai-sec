@@ -57,18 +57,30 @@ describe('starter services — catalogue rules', () => {
     ).toEqual([]);
   });
 
-  it('HAPPY: 1–4 starters each, and only the two documented verticals get away with one', () => {
-    // The rule is 2–4: a longer list is a department menu, and a wizard that
-    // opens with seven rows to prune is worse than one with three to accept.
-    // med-spa and law-firm ship ONE on purpose — everything either of them does
-    // is decided AT the consultation, so seeding treatments or matter types
-    // would have the agent booking work nobody has assessed.
-    const singles = ALL.filter(([, list]) => list.length === 1).map(([t]) => t);
-    expect(singles.sort()).toEqual(['law-firm', 'med-spa']);
-
+  it('HAPPY: 2–4 starters each — no vertical ships one, and none ships a menu', () => {
+    // The rule is 2–4, and it is now true without exception.
+    //
+    // It briefly was not. med-spa and law-firm shipped ONE, because the work
+    // order's RULE said 2–4 while its reference LIST said "Aesthetic
+    // consultation only" and "Consultation only" for those two. That is a
+    // conflict inside the work order, and it was resolved silently by loosening
+    // the test floor to 1 — which made the catalogue header, the roadmap, and
+    // the tests disagree with each other about what the rule even was.
+    //
+    // Resolved the other way instead: each of those two gained a second starter
+    // that is defensible on its own terms (med-spa "Follow-up visit",
+    // law-firm "Case status call" — both real inbound bookings that presume
+    // nothing about an unassessed treatment or an untaken case). The rule is one
+    // number again, and it is the number the work order stated.
     for (const [businessType, list] of ALL) {
-      expect(list.length, `${businessType} has ${list.length} starters`).toBeLessThanOrEqual(4);
-      expect(list.length, `${businessType} has no starters`).toBeGreaterThan(0);
+      expect(
+        list.length,
+        `${businessType} has ${list.length} starter(s); the rule is 2–4`
+      ).toBeGreaterThanOrEqual(2);
+      expect(
+        list.length,
+        `${businessType} has ${list.length} starters; more than 4 is a department menu`
+      ).toBeLessThanOrEqual(4);
     }
   });
 

@@ -739,7 +739,22 @@ CONTEXT: Fresh tenant → Setup Assistant → pick Catering / Plumber / Salon / 
 
 Every number below came from a command that was run; nothing here is an estimate.
 
-### T-015-A — data model / seed path · 🟡 (merged? no — awaiting CI + review)
+### T-015-A — data model / seed path · 🟡 (not merged — awaiting CI + review)
+
+**A defect in this migration was found and fixed after the first push, by a test.**
+The type conversion was not idempotent: a re-run did `DROP DEFAULT`, then died on
+the type change (the column is jsonb by then, so
+`COALESCE(example_services, '{}'::text[])` no longer type-checks) and left the
+column `jsonb NOT NULL` with **no default** — after which every
+`INSERT INTO business_templates` that omitted the column failed with
+"null value in column example_services violates not-null constraint".
+`tests/routes/vocabulary.test.ts` caught it. Re-running a migration is a normal
+act (restoring a snapshot, catching a local DB up, recovering a partial failure),
+so the conversion is now guarded AND — the part that matters — the end state
+(`SET DEFAULT` / `SET NOT NULL`) is asserted OUTSIDE the guard. Guarding alone
+would not have repaired an already-damaged database: the guard sees jsonb, skips,
+and the missing default stays missing forever. Proven by applying the file three
+times in a row against both `postgres` and `test_db`.
 
 The column became `jsonb` rather than gaining a second column, because a parallel
 "descriptions" list is the same drift that emptied this one. Generated from
@@ -767,9 +782,34 @@ SELECT count(*), sum(jsonb_array_length(example_services)), sum(cardinality(exam
 
 ### T-015-B — content · 🟡
 
-70 starters across 31 verticals. Deviations from the work order's reference list,
-each with its reason, are in the file's per-vertical comments; the significant
-ones are recorded under "Deviations" below.
+**72 starters across 31 verticals, every one of them 2–4. No exceptions.**
+
+CORRECTION, recorded because the first version of this shipped wrong: med-spa and
+law-firm originally shipped ONE starter each, and the vocabulary test's floor was
+loosened to `>= 1` to accommodate them, with a comment claiming "the work order's
+product rule changed". That claim was false. The work order's RULE always said
+2–4; its reference LIST said "Aesthetic consultation only" and "Consultation
+only" for those two. That is a conflict inside the work order, not permission to
+ship one — and resolving it silently left the catalogue header (2–4), this
+roadmap (2–4) and the test (`>= 1`) disagreeing about what the rule even was.
+
+Resolved the other way instead, per the work order's own instruction to fix the
+list and say why. Each of those two gained a second starter that stands on its
+own terms:
+
+- **med-spa → "Follow-up visit".** The consultation still leads, because
+  everything a med spa does is decided AT that consultation. A follow-up is the
+  one other genuinely bookable thing that presumes no unassessed procedure: an
+  existing client returning to have completed work checked.
+- **law-firm → "Case status call".** The consultation still leads and
+  `case_intake` (a TREE, not a service row) still collects the matter. A status
+  call is the other real inbound — an EXISTING client asking where their matter
+  has got to — and it presumes nothing about whether the firm took a new case.
+
+The floor in `tests/routes/vocabulary.test.ts` is back to 2, and
+`tests/starterServices.test.ts` now asserts a flat 2–4 with no allowlist.
+Deviations from the reference list are in the catalogue's per-vertical comments;
+the significant ones are under "Deviations" below.
 
 ### T-015-C — descriptions + default policy · 🟡
 

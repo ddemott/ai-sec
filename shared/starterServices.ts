@@ -169,9 +169,11 @@ export const STARTER_SERVICES: Record<string, StarterService[]> = {
       look_first: true,
     },
   ],
-  // Day one is the consultation only: everything a med spa actually does is
-  // decided AT that consultation, and seeding treatments would have the agent
-  // booking procedures nobody has assessed.
+  // The consultation leads because everything a med spa actually does is decided
+  // AT that consultation — seeding treatments would have the agent booking
+  // procedures nobody has assessed. The follow-up is the one other thing that is
+  // genuinely bookable without an assessment: an existing client coming back to
+  // have a completed treatment checked.
   'med-spa': [
     {
       name: 'Aesthetic consultation',
@@ -180,6 +182,7 @@ export const STARTER_SERVICES: Record<string, StarterService[]> = {
       look_first: true,
       is_default: true,
     },
+    { name: 'Follow-up visit' },
   ],
   'nail-salon': [
     { name: 'Manicure', is_default: true },
@@ -330,8 +333,11 @@ export const STARTER_SERVICES: Record<string, StarterService[]> = {
   // something a caller books a slot for.
   'answering-service': [{ name: 'Phone consultation', is_default: true }, { name: 'Meeting' }],
   insurance: [{ name: 'Insurance quote', is_default: true }, { name: 'Policy review' }],
-  // Consultation only. The case_intake tree — not a service row — is what
-  // collects the matter, and the firm decides whether to take it.
+  // The consultation leads, and the case_intake TREE — not a service row — is
+  // what collects the matter; the firm decides whether to take it. The status
+  // call is the other real inbound: an EXISTING client ringing to ask where
+  // their matter has got to. It presumes nothing about whether the firm took a
+  // new case, which is why it is safe to seed on day one.
   'law-firm': [
     {
       name: 'Consultation',
@@ -340,6 +346,7 @@ export const STARTER_SERVICES: Record<string, StarterService[]> = {
       look_first: true,
       is_default: true,
     },
+    { name: 'Case status call' },
   ],
   photography: [
     {

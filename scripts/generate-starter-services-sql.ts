@@ -103,33 +103,66 @@ function migrationBody(statements: string[]): string {
 -- Adding a second column instead would have created yet another list that must
 -- agree with the first one; this schema has been bitten by that three times.
 
-ALTER TABLE business_templates
-  ALTER COLUMN example_services DROP DEFAULT;
+-- The type conversion is GUARDED so this file is idempotent. Re-running a
+-- migration is a normal thing to do — restoring a database from a snapshot,
+-- catching a local DB up by hand, or re-applying after a partial failure — and
+-- unguarded, the second run dies on
+--   COALESCE(example_services, '{}'::text[])
+-- because the column is jsonb by then and the two types no longer match. A
+-- migration that only works once is a migration that will strand somebody.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'business_templates'
+       AND column_name = 'example_services'
+       AND data_type = 'ARRAY'
+  ) THEN
+    ALTER TABLE business_templates ALTER COLUMN example_services DROP DEFAULT;
 
--- Existing text[] values become [{"name": ...}] so nothing is lost on the way
--- through. Every live row is overwritten below anyway; this matters only for a
--- database holding a value this generator does not know about.
+    -- Existing text[] values become [{"name": ...}] so nothing is lost on the
+    -- way through. Every live row is overwritten below anyway; this matters only
+    -- for a database holding a value this generator does not know about.
+    --
+    -- Two steps, not one: Postgres refuses a subquery inside
+    -- ALTER COLUMN ... USING ("cannot use subquery in transform expression"), so
+    -- the array becomes a jsonb array of STRINGS first, and a plain UPDATE then
+    -- lifts each string into an object. NULL folds to '[]' rather than staying
+    -- NULL, because every reader treats this column as a list.
+    ALTER TABLE business_templates
+      ALTER COLUMN example_services TYPE jsonb
+      USING to_jsonb(COALESCE(example_services, '{}'::text[]));
+
+    UPDATE business_templates
+       SET example_services = COALESCE(
+             (SELECT jsonb_agg(jsonb_build_object('name', value))
+                FROM jsonb_array_elements_text(example_services) AS value),
+             '[]'::jsonb
+           )
+     WHERE jsonb_typeof(example_services) = 'array'
+       AND EXISTS (
+         SELECT 1 FROM jsonb_array_elements(example_services) AS e
+          WHERE jsonb_typeof(e) = 'string'
+       );
+
+  END IF;
+END $$;
+
+-- The END STATE is asserted OUTSIDE the guard, unconditionally, and that
+-- distinction is not academic — it is the bug this file already caused once.
 --
--- Two steps, not one: Postgres refuses a subquery inside ALTER COLUMN ... USING
--- ("cannot use subquery in transform expression"), so the array becomes a jsonb
--- array of STRINGS first, and a plain UPDATE then lifts each string into an
--- object. NULL folds to '[]' rather than staying NULL, because every reader
--- treats this column as a list.
-ALTER TABLE business_templates
-  ALTER COLUMN example_services TYPE jsonb
-  USING to_jsonb(COALESCE(example_services, '{}'::text[]));
-
-UPDATE business_templates
-   SET example_services = COALESCE(
-         (SELECT jsonb_agg(jsonb_build_object('name', value))
-            FROM jsonb_array_elements_text(example_services) AS value),
-         '[]'::jsonb
-       )
- WHERE jsonb_typeof(example_services) = 'array'
-   AND EXISTS (
-     SELECT 1 FROM jsonb_array_elements(example_services) AS e
-      WHERE jsonb_typeof(e) = 'string'
-   );
+-- When the conversion above was unguarded, a re-run did DROP DEFAULT, then died
+-- on the type change (the column was already jsonb, so
+-- COALESCE(example_services, '{}'::text[]) no longer type-checks), and left the
+-- column jsonb NOT NULL with NO DEFAULT. Every later
+-- INSERT INTO business_templates (...) that omitted the column then failed with
+-- "null value in column example_services violates not-null constraint".
+-- Guarding the conversion alone would not have repaired that database: the guard
+-- sees jsonb, skips, and the missing default stays missing forever.
+--
+-- So the guard covers only the one-way CONVERSION, and the invariants below run
+-- every time. All three statements are idempotent.
+UPDATE business_templates SET example_services = '[]'::jsonb WHERE example_services IS NULL;
 
 ALTER TABLE business_templates
   ALTER COLUMN example_services SET DEFAULT '[]'::jsonb,

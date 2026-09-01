@@ -235,7 +235,7 @@ UPDATE business_templates SET
   example_resources = ARRAY['Station 1', 'Station 2']::text[]
  WHERE business_type = 'lash-studio';
 UPDATE business_templates SET
-  example_services  = '[{"name":"Consultation","description":"Talk through the situation, what happened and when, and whether the firm can take it on.","look_first":true,"is_default":true}]'::jsonb,
+  example_services  = '[{"name":"Consultation","description":"Talk through the situation, what happened and when, and whether the firm can take it on.","look_first":true,"is_default":true},{"name":"Case status call"}]'::jsonb,
   example_resources = ARRAY['Office 1', 'Office 2']::text[]
  WHERE business_type = 'law-firm';
 UPDATE business_templates SET
@@ -243,7 +243,7 @@ UPDATE business_templates SET
   example_resources = ARRAY['Van 1', 'Van 2']::text[]
  WHERE business_type = 'locksmith';
 UPDATE business_templates SET
-  example_services  = '[{"name":"Aesthetic consultation","description":"Talk through skin or body goals, look at what is needed, and recommend a treatment plan.","look_first":true,"is_default":true}]'::jsonb,
+  example_services  = '[{"name":"Aesthetic consultation","description":"Talk through skin or body goals, look at what is needed, and recommend a treatment plan.","look_first":true,"is_default":true},{"name":"Follow-up visit"}]'::jsonb,
   example_resources = ARRAY['Treatment Room 1', 'Treatment Room 2']::text[]
  WHERE business_type = 'med-spa';
 UPDATE business_templates SET
