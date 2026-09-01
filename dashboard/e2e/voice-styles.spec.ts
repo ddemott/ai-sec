@@ -21,57 +21,68 @@
  * platform tenant). We edit that tenant's AI config and reset it afterward.
  */
 import { test, expect } from './helpers/test';
-import type { Page } from '@playwright/test';
+import { openAiPersona, saveAiPersona } from './helpers/aiPersona';
 import { Pool } from 'pg';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
 let pool: Pool;
+
+// The super-admin tenant this spec edits (auth.setup logs in as
+// admin@secretaryhq.com). Every write below is scoped to it. The reset used to
+// be an unqualified `UPDATE tenants SET tts_* = NULL` with no WHERE clause,
+// which wiped the voice-style config of EVERY tenant in the database. That is
+// harmless only because playwright.config.ts pins `workers: 1` and
+// `fullyParallel: false`; the day anyone raises those for speed it becomes
+// cross-spec data corruption that presents as a flake somewhere else entirely.
+// House rule: a test owns its own rows. (Same fix as
+// customer-preferences-config.spec.ts.)
+const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+const RESET_STYLES = `UPDATE tenants SET
+     tts_formal   = NULL,
+     tts_warm     = NULL,
+     tts_concise  = NULL,
+     tts_soft     = NULL,
+     tts_cheerful = NULL
+   WHERE tenant_id = $1`;
+
+type StyleRow = {
+  tts_formal: boolean | null;
+  tts_warm: boolean | null;
+  tts_concise: boolean | null;
+};
+
+/**
+ * Read the style flags straight out of Postgres.
+ *
+ * Asserting these BETWEEN the save and the reload is what makes a failure
+ * diagnostic instead of ambiguous: a failure here is a WRITE bug (the form sent
+ * the wrong payload, or never registered the toggle), a failure after the reload
+ * is a READ/render bug. The CI flake this spec produced on `main`
+ * (run 33203910276, 2026-08-28) reported only "unexpected value unchecked" after
+ * the reload, which named neither side.
+ */
+async function storedStyles(): Promise<StyleRow> {
+  const res = await pool.query<StyleRow>(
+    `SELECT tts_formal, tts_warm, tts_concise FROM tenants WHERE tenant_id = $1`,
+    [PLATFORM_TENANT_ID]
+  );
+  return res.rows[0];
+}
 
 test.beforeAll(() => {
   pool = new Pool({ connectionString: PG_URL });
 });
 
 test.beforeEach(async () => {
-  await pool.query(
-    `UPDATE tenants SET
-       tts_formal   = NULL,
-       tts_warm     = NULL,
-       tts_concise  = NULL,
-       tts_soft     = NULL,
-       tts_cheerful = NULL`
-  );
+  await pool.query(RESET_STYLES, [PLATFORM_TENANT_ID]);
 });
 
 test.afterAll(async () => {
-  // Reset every tenant's voice-style config so this spec leaves no residue.
-  await pool
-    .query(
-      `UPDATE tenants SET
-         tts_formal    = NULL,
-         tts_warm      = NULL,
-         tts_concise   = NULL`
-    )
-    .catch(() => {});
+  // Reset ONLY the tenant this spec touched, so it leaves no residue.
+  await pool.query(RESET_STYLES, [PLATFORM_TENANT_ID]).catch(() => {});
   await pool.end();
 });
-
-async function openAiPersona(page: Page) {
-  await page.goto('/dashboard');
-  await page
-    .getByRole('tab', { name: /^Phone Assistant$/ })
-    .first()
-    .click();
-  // AI Persona is the default sub-tab (renders AIConfigView), but click it
-  // explicitly in case a prior interaction left another sub-tab active.
-  const personaTab = page.getByRole('tab', { name: /AI Persona/ }).first();
-  if (await personaTab.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await personaTab.click();
-  }
-  // The Voice Settings header confirms AIConfigView mounted.
-  await expect(page.getByRole('heading', { name: /Voice Settings/i })).toBeVisible({
-    timeout: 10000,
-  });
-}
 
 test('HAPPY: all 5 voice style checkboxes render on the AI Persona page', async ({ page }) => {
   // WHO: any owner visiting Phone Assistant → AI Persona
@@ -110,15 +121,12 @@ test('HAPPY: checking Formal + saving persists through reload', async ({ page })
   // Ensure Formal is unchecked before we start (reset in afterAll + clean DB).
   if (await formalCheckbox.isChecked()) {
     await formalCheckbox.uncheck();
-    await page.getByRole('button', { name: /Save Changes/i }).click();
-    await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+    await saveAiPersona(page);
     await openAiPersona(page);
   }
 
   await formalCheckbox.check();
-  await expect(page.getByRole('button', { name: /Save Changes/i })).toBeEnabled();
-  await page.getByRole('button', { name: /Save Changes/i }).click();
-  await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+  await saveAiPersona(page);
 
   // Reload — re-fetches config from backend/DB.
   await openAiPersona(page);
@@ -139,15 +147,13 @@ test('HAPPY: unchecking Warm + saving persists through reload', async ({ page })
   // Step 1: ensure Warm is checked and saved.
   if (!(await warmCheckbox.isChecked())) {
     await warmCheckbox.check();
-    await page.getByRole('button', { name: /Save Changes/i }).click();
-    await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+    await saveAiPersona(page);
     await openAiPersona(page);
   }
 
   // Step 2: uncheck and save.
   await page.getByRole('checkbox', { name: /Warm/i }).uncheck();
-  await page.getByRole('button', { name: /Save Changes/i }).click();
-  await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+  await saveAiPersona(page);
 
   // Step 3: reload — Warm must now be unchecked.
   await openAiPersona(page);
@@ -166,8 +172,10 @@ test('HAPPY: multiple styles (Warm + Concise) save and reload correctly', async 
   // Fresh DB baseline from beforeEach: all style flags start unchecked.
   await page.getByRole('checkbox', { name: /Warm/i }).check();
   await page.getByRole('checkbox', { name: /Concise/i }).check();
-  await page.getByRole('button', { name: /Save Changes/i }).click();
-  await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+  await saveAiPersona(page);
+
+  // Prove the WRITE landed before blaming the read (see storedStyles).
+  expect(await storedStyles()).toMatchObject({ tts_warm: true, tts_concise: true });
 
   // Reload and verify.
   await openAiPersona(page);
@@ -189,8 +197,13 @@ test('HAPPY: all 3 styles checked + save + reload — all 3 still checked', asyn
     const cb = page.getByRole('checkbox', { name });
     if (!(await cb.isChecked())) await cb.check();
   }
-  await page.getByRole('button', { name: /Save Changes/i }).click();
-  await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+  await saveAiPersona(page);
+
+  expect(await storedStyles()).toMatchObject({
+    tts_formal: true,
+    tts_warm: true,
+    tts_concise: true,
+  });
 
   await openAiPersona(page);
   for (const name of [/Formal/i, /Warm/i, /Concise/i]) {
@@ -215,8 +228,7 @@ test('HAPPY: uncheck all styles + save + reload — all unchecked', async ({ pag
     await cb.uncheck();
     await cb.check();
   }
-  await page.getByRole('button', { name: /Save Changes/i }).click();
-  await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+  await saveAiPersona(page);
   await openAiPersona(page);
 
   // Now uncheck all 3 and save.
@@ -224,8 +236,7 @@ test('HAPPY: uncheck all styles + save + reload — all unchecked', async ({ pag
     const cb = page.getByRole('checkbox', { name });
     if (await cb.isChecked()) await cb.uncheck();
   }
-  await page.getByRole('button', { name: /Save Changes/i }).click();
-  await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+  await saveAiPersona(page);
 
   // Reload — all must be unchecked.
   await openAiPersona(page);
