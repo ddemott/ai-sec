@@ -19,7 +19,7 @@ of them are complete.
 
 **Goal**: System is operational, secure, billable, and validated on a real call.
 **Target**: ~4 weeks
-**Exit criteria**: One paying customer can sign up, get an AI receptionist, receive SMS confirmations, and be charged automatically.
+**Exit criteria**: One paying customer can sign up, get an AI receptionist, and be charged automatically. (Note: SMS confirmations/reminders stay OFF platform-wide until per-tenant 10DLC registration lands — see T-002. The confirmation path is validated in-app, but no text reaches a handset until the campaign is approved and `ENABLE_SMS` is flipped.)
 
 ---
 
@@ -37,19 +37,22 @@ of them are complete.
 
 ---
 
-### T-002: Diagnose & Fix SMS Delivery
+### T-002: Enable SMS — 10DLC Registration + Gating Flip
 **Priority**: CRITICAL  
-**Owner**: (Code)  
-**Effort**: 6-12 hours  
+**Owner**: (Dale + Code)  
+**Effort**: 6-12 hours code/ops + 1-3 weeks carrier approval (out of our hands)  
 **Dependencies**: None  
+**Context**: SMS is **OFF by design**, not broken. The reminder/confirmation code exists and works in-app, but `ENABLE_SMS` defaults to `false` (see `agent/src/configSchema.ts`) because the sending number is not 10DLC-registered — until it is, carriers silently drop everything and Telnyx reports false success. This is a registration + gating task, not a bug hunt.  
 **Subtasks**:
-- [ ] T-002a: Pull `communications_history` rows from prod — check for `status != 'sent'`
-- [ ] T-002b: Check Railway logs for `telnyxSms.ts` / `smsService.ts` errors
-- [ ] T-002c: Verify `TELNYX_API_KEY` and `TELNYX_PHONE_NUMBER` on Railway are still valid + owned
-- [ ] T-002d: Send a test SMS via Telnyx API directly (bypass app) to isolate provider vs. code
-- [ ] T-002e: Fix root cause (likely: key rotation, E.164 format, or carrier rejection)
-- [ ] T-002f: Add loud error logging on SMS failure (not silent `status='failed'`)
-- [ ] T-002g: Verify one full reminder cycle end-to-end (appointment → reminder → SMS → delivery receipt)
+- [ ] T-002a: Register a 10DLC brand for the business with Telnyx (EIN, business details)
+- [ ] T-002b: Create + submit a 10DLC campaign (use case: appointment reminders/confirmations, informational — sample messages, opt-in/opt-out language)
+- [ ] T-002c: Associate the sending `TELNYX_PHONE_NUMBER` with the approved campaign
+- [ ] T-002d: Verify `TELNYX_API_KEY` and `TELNYX_PHONE_NUMBER` on Railway are valid + owned by the registered brand
+- [ ] T-002e: Once the campaign is approved, flip `ENABLE_SMS=true` on Railway (nothing else changes — the code is already wired)
+- [ ] T-002f: Flip `ENABLE_PHONE_VERIFICATION=true` too (it is gated on `ENABLE_SMS` — a code that can't be delivered is not a gate)
+- [ ] T-002g: Send a test SMS end-to-end and confirm carrier delivery receipt (not just Telnyx-accepted)
+- [ ] T-002h: Add loud error logging on SMS failure (not silent `status='failed'`)
+- [ ] T-002i: Verify one full reminder cycle end-to-end (appointment → reminder → SMS → delivery receipt)
 
 ---
 
@@ -57,13 +60,13 @@ of them are complete.
 **Priority**: CRITICAL  
 **Owner**: (Dale)  
 **Effort**: 30 min call + 1 hour follow-up  
-**Dependencies**: T-002 (SMS must work so confirmation arrives)  
+**Dependencies**: None (SMS validation deferred — see T-002; production calls take a message for escalation, not a live transfer — see `docs/SECRETARYHQ_FEATURES.md`)  
 **Subtasks**:
 - [ ] T-003a: Set forward number on dashboard (Phone Assistant → `+1 608-217-5303`)
-- [ ] T-003b: Wife calls `+1 630-822-9086` (not your phone — must be able to transfer)
+- [ ] T-003b: Wife calls `+1 630-822-9086` (not your phone)
 - [ ] T-003c: Validate booking — appointment lands in DB for correct tenant + time
-- [ ] T-003d: Validate transfer — say "talk to a person" → your cell rings
-- [ ] T-003e: Validate SMS — wife receives confirmation after call ends
+- [ ] T-003d: Validate escalation — say "talk to a person" / "it's urgent" → a message is taken and the urgent flag is set (there is NO live human transfer on the question-tree flow today; SIP REFER plumbing exists in code but is not exposed on production calls)
+- [ ] T-003e: Validate SMS confirmation path in-app (message row written) — actual handset delivery is blocked until T-002 (10DLC) lands, so do not expect a text yet
 - [ ] T-003f: Validate dialog — agent natural, asks preferred time, no forced slots
 - [ ] T-003g: Log findings (any repeated questions, weird phrasing, dead air) to `CALL_FIX_PLAN.md`
 
@@ -168,17 +171,18 @@ of them are complete.
 
 ---
 
-### T-010: Schedule Pattern Backfill (Existing Tenants)
+### T-010: Schedule Pattern Adoption (Existing Tenants)
 **Priority**: MEDIUM  
 **Owner**: (Code)  
 **Effort**: 2-4 hours  
 **Dependencies**: None  
+**Context**: The `20260820000000_employee_schedule_pattern` migration deliberately does **NO BACKFILL** — inventing a weekly rule from existing dated rows is exactly the "row archaeology" the `employee_schedule_pattern` table was created to end. Legacy tenants safely use the now-clamped derived fallback (`CURRENT_DATE + 14`) until they next re-save their hours, at which point `expandWeeklyToSchedule` writes the declared rule. This task is about driving that re-save, NOT scripting a guess.  
 **Subtasks**:
-- [ ] T-010a: Write script to find employees with far-future shifts (> 180 days out)
-- [ ] T-010b: Extract intended pattern from last 30 days (safer window than last 7)
-- [ ] T-010c: Write backfilled pattern to `employee_schedule_pattern`
-- [ ] T-010d: Run against prod for Thinking Hammer — verify pattern written correctly
-- [ ] T-010e: Verify new extends use the rule
+- [ ] T-010a: Write a read-only script to find tenants with NO `employee_schedule_pattern` rows (still on the derived fallback)
+- [ ] T-010b: Confirm the clamped fallback is working for them (no far-future unbookability — the bug the clamp already fixes)
+- [ ] T-010c: Prompt those owners to re-save their hours in the wizard (in-app nudge / email) so the declared rule is written the correct way
+- [ ] T-010d: For Thinking Hammer specifically, re-save hours in the dashboard and verify a pattern row is written by `expandWeeklyToSchedule`
+- [ ] T-010e: Verify new extends use the declared rule once present, and the clamped fallback until then
 
 ---
 
@@ -234,8 +238,8 @@ of them are complete.
 
 ### PASS 1 — Exit Criteria
 - [ ] First paying customer can sign up, complete setup, and get AI reception
-- [ ] SMS confirmations and reminders arrive
-- [ ] Call booking + transfer work end-to-end
+- [ ] SMS confirmation/reminder path validated in-app (actual handset delivery gated on T-002 / 10DLC)
+- [ ] Call booking works end-to-end; escalation takes a message + urgent flag (no live transfer on the question-tree flow today)
 - [ ] Stripe charges and subscription gate enforced
 - [ ] Monitoring alerts before anyone notices an outage
 - [ ] CI is green and stable (no flaky gates)
@@ -611,7 +615,7 @@ of them are complete.
 **Subtasks**:
 - [ ] T-304a: SSO (SAML 2.0 / Google Workspace)
 - [ ] T-304b: Custom data retention policies
-- [ ] T-304c: HIPAA-compliant tier (BAA, encrypted PHI storage, audit logs) — legal-hold until signed off
+- [ ] T-304c: Security/compliance hardening for enterprise (SOC 2-style audit logs, encryption-at-rest attestation, data-processing addendum) — **explicitly NON-HIPAA**: HIPAA verticals (dentist, chiropractor, vet-clinic) and PHI scope are permanently excluded from this product (no BAA), per `20260321000000_remove_hipaa_templates.sql` and project policy
 - [ ] T-304d: SLA guarantees (99.9% uptime, documented)
 - [ ] T-304e: Dedicated support channel (Slack shared channel or dedicated email)
 - [ ] T-304f: Custom AI training (fine-tune on tenant's call history)
@@ -646,14 +650,14 @@ of them are complete.
 ```
 PASS 1 FOUNDATION
 ├── T-001 (Creds Rotation) ──────────────────────────────── independent, do first
-├── T-002 (SMS Fix) ──────────────────────────────────────── independent
-│     └── T-003 (Live Voice Call) ─── T-013 (Walk-Through)
+├── T-002 (SMS Enable / 10DLC) ──────────────────────────── independent (carrier approval gated)
+├── T-003 (Live Voice Call) ─── T-013 (Walk-Through) ─────── independent
 ├── T-004 (Stripe Test) ──────────────────────────────────── independent
 │     └── T-005 (Stripe Live) ─── T-009 (Volume Metering)
 ├── T-006 (Monitoring) ──────────────────────────────────── independent
 ├── T-007 (E2E Fix) ─────────────────────────────────────── independent
 ├── T-008 (Intake Trees Test) ───────────────────────────── independent
-├── T-010 (Schedule Backfill) ───────────────────────────── independent
+├── T-010 (Schedule Adoption) ───────────────────────────── independent
 ├── T-011 (Cost Tracking) ───────────────────────────────── independent
 ├── T-012 (Deploy Checklist) ────────────────────────────── independent
 └── T-014 (Dead Code) ────────────────────────────── after everything else
