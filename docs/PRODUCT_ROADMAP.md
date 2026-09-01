@@ -675,11 +675,14 @@ Rewriting intake trees · owner-editable "add questions to tree" · full service
 
 #### DEFINITION OF DONE (epic)
 
-- [ ] Seed/rebuild leaves live verticals with non-empty `example_services` and sensible `example_resources`
-- [ ] Wizard Step 1 shows starters after a pick, for the T-008 sample verticals + auto-shop
-- [ ] Defaults + descriptions wired; resolver tests cover SKU / look-first / fallthrough
-- [ ] No HIPAA / event-as-service / Message Taking / emergency-fix SKUs
-- [ ] Acceptance commands pasted in full (no `tail`); PR stays 🟡 until CI green; human spot-checks Step 1
+- [x] Seed/rebuild leaves live verticals with non-empty `example_services` and sensible `example_resources` — 0 empty rows after `npm run db:rebuild -- --yes`; 31 templates / 72 starters / 62 resources
+- [x] Wizard Step 1 shows starters after a pick, for the T-008 sample verticals + auto-shop — `starterSeeding.test.tsx` 7/7, real component against the real catalogue
+- [x] Defaults + descriptions wired; resolver tests cover SKU / look-first / fallthrough — `starterServiceResolution.realdb.test.ts` 8/8, real DB + pgvector
+- [x] No HIPAA / event-as-service / Message Taking / emergency-fix SKUs — enforced by four SAD tests, not by care
+- [x] Acceptance commands pasted in full (no `tail`); CI green — PR #393, run 33524251105, all 4 jobs pass
+- [ ] **Human spot-check of wizard Step 1** — the owner's, not mine. The only box left.
+
+**STATUS stays 🟡, not ✅.** This doc's own rule is that DONE means merged to `main`; CI green is a precondition, not the finish line.
 
 ---
 
@@ -739,7 +742,7 @@ CONTEXT: Fresh tenant → Setup Assistant → pick Catering / Plumber / Salon / 
 
 Every number below came from a command that was run; nothing here is an estimate.
 
-### T-015-A — data model / seed path · 🟡 (not merged — awaiting CI + review)
+### T-015-A — data model / seed path · 🟡 (CI green on e0c0847; not merged)
 
 **A defect in this migration was found and fixed after the first push, by a test.**
 The type conversion was not idempotent: a re-run did `DROP DEFAULT`, then died on
@@ -780,7 +783,7 @@ SELECT count(*), sum(jsonb_array_length(example_services)), sum(cardinality(exam
         31 |               70 |                62
 ```
 
-### T-015-B — content · 🟡
+### T-015-B — content · 🟡 (CI green on e0c0847; not merged)
 
 **72 starters across 31 verticals, every one of them 2–4. No exceptions.**
 
@@ -811,19 +814,19 @@ The floor in `tests/routes/vocabulary.test.ts` is back to 2, and
 Deviations from the reference list are in the catalogue's per-vertical comments;
 the significant ones are under "Deviations" below.
 
-### T-015-C — descriptions + default policy · 🟡
+### T-015-C — descriptions + default policy · 🟡 (CI green on e0c0847; not merged)
 
 `seedServices` and the SOLO wizard's own seeding path both carry the description
 now. `src/services/defaultServicePolicy.ts` sets `default_service_id` from the
 starter marked `is_default`, wired into `/setup/commit` AND a new
 `POST /setup/default-service` for the solo path, which never goes through commit.
 
-### T-015-D — resolver safety · 🟡
+### T-015-D — resolver safety · 🟡 (CI green on e0c0847; not merged)
 
 `tests/integration/starterServiceResolution.realdb.test.ts`, 8/8, real DB and
 real pgvector. `INTENT_MATCH_THRESHOLD` was NOT touched — see "Honest limits".
 
-### T-015-E — wizard UX · 🟡, and the human half is still open
+### T-015-E — wizard UX · 🟡 (component proof CI-green; the human half is still open)
 
 `dashboard/components/SetupWizard/starterSeeding.test.tsx`, 7/7: the real
 `SetupWizard` renders Step 1 with each vertical's starters and the look-first
