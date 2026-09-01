@@ -2,7 +2,7 @@
  * T-015: the starter-service catalogue's rules, enforced.
  *
  * WHO: an owner picking their business type in the setup wizard.
- * WHAT: they get 1–4 bookable starters that a caller would actually say, with a
+ * WHAT: they get 2–4 bookable starters that a caller would actually say, with a
  *       description on the ones a caller cannot name, and exactly one marked as
  *       the fallthrough.
  * WHEN: every CI run — this file is the guard on shared/starterServices.ts.
