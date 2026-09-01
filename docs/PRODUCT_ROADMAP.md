@@ -412,7 +412,7 @@ DEFINITION_OF_DONE:
 ---
 
 ### T-008: Validate intake trees end-to-end
-STATUS: 🟡 IN_PROGRESS (every DoD item now verified, including the picker, which was driven through the real wizard UI in a real browser rather than via the API. Held at IN_PROGRESS pending owner sign-off + merge — this doc's own rule is that DONE means merged to `main`.)
+STATUS: 🟡 IN_PROGRESS (the Claude half is complete and verified. The Human half — owner sign-off on the wizard's business-type picker — is OPEN. A browser probe of the picker is recorded below as evidence for that sign-off; it does not substitute for it. DONE additionally requires merge to `main`, per this doc's own rule.)
 OWNER: Mixed (Claude runs simulator; Human confirms UI picker)
 PRIORITY: HIGH
 EFFORT: 2–3h
@@ -456,7 +456,7 @@ DEFINITION_OF_DONE:
 - [x] Enabled blocks for each include `<slug>_intake`.
 - [x] Simulator trace shows at least one intake node fired per vertical.
 - [x] No "tree not found" errors in the simulator log.
-- [x] Confirm the business-type picker in the setup wizard offers these verticals and writes the expected `business_type` — done by driving the real UI in a browser (evidence above), not by calling the API. Owner sign-off still welcome; the mechanical claim is verified.
+- [ ] **Human: confirm the business-type picker in the setup wizard offers these verticals and writes the expected `business_type`.** This box is the OWNER's, and stays unchecked until the owner clicks it. A browser probe covering the same ground is recorded above as evidence — it is input to the sign-off, not the sign-off itself. (An automated pass checking its own work is not the second pair of eyes this item was written to get.)
 
 **Trap the vertical mode had to avoid, recorded so the next person does not re-make it:** the first cut handed the tracker the library *compiled from the preset*, which seemed obviously right — give a business exactly the trees it can use. It throws:
 
