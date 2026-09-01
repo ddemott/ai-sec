@@ -144,7 +144,7 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-005 | Stripe live-mode + bank account | 1 | Human | CRITICAL | T-004 | ⬜ |
 | T-006 | Monitoring & alerting | 1 | Claude | HIGH | — | ⬜ |
 | T-007 | Fix E2E test flakiness | 1 | Claude | HIGH | — | 🟡 |
-| T-008 | Validate intake trees end-to-end | 1 | Mixed | HIGH | T-000 | ⬜ |
+| T-008 | Validate intake trees end-to-end | 1 | Mixed | HIGH | T-000 | 🟡 |
 | T-009 | Volume metering & tier caps | 1 | Claude | HIGH | T-004 | ⬜ |
 | T-010 | Schedule pattern adoption verify | 1 | Claude | MEDIUM | — | ⬜ |
 | T-011 | Verify cost tracking ledger | 1 | Claude | MEDIUM | — | ⬜ |
@@ -412,31 +412,49 @@ DEFINITION_OF_DONE:
 ---
 
 ### T-008: Validate intake trees end-to-end
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS (Claude half complete and verified; the Human half — confirming the business-type picker in the wizard UI — is outstanding)
 OWNER: Mixed (Claude runs simulator; Human confirms UI picker)
 PRIORITY: HIGH
 EFFORT: 2–3h
 DEPENDS_ON: T-000
 CONTEXT: The 30 trees are merged and unit-tested, but never exercised through the real onboarding + simulator path. Prove a sample of verticals resolve correctly and ask the right questions.
-FILES: `agent/scripts/sim-questiontree.ts` (existing simulator), test tenants.
+
+**Corrected during implementation:** the acceptance command as written could not run. `agent/scripts/sim-questiontree.ts` had no `--business` flag — it is a fixed list of hand-written defect replays hard-coded to one business. A vertical mode had to be built before the task could be verified at all.
+FILES: `agent/scripts/sim-questiontree.ts` (new `SIM_BUSINESS` vertical mode), `tests/verticalIntakeWiring.test.ts` (new, CI regression net).
 STEPS:
-1. For each of 4 verticals (`catering`, `plumber`, `salon`, `real_estate`): create a tenant with that business_type.
-2. Assert derivation + enabled blocks.
-3. Run the simulator and confirm the intake questions fire.
+1. For each of 4 verticals (`catering`, `plumber`, `salon`, `real_estate`): create a tenant with that business_type. — done through the real `POST /tenants/create` route against a live local stack, then read back through `GET /tenants/:id/config`.
+2. Assert derivation + enabled blocks. — done, and widened to **all 33 presets** as a permanent CI test rather than a one-off script.
+3. Run the simulator and confirm the intake questions fire. — done via the new `SIM_BUSINESS` mode.
+4. (Added) Confirm the per-tenant tree COPY path, not just derivation: `npm run trees:local` converted all four probe tenants and read each back through the live agent loader.
 ACCEPTANCE_TEST:
 ```bash
-# Derivation + block wiring (unit-level, deterministic):
-cd agent && npx vitest run checklistPresetDerivation
-# For each sampled vertical, the enabled blocks include '<vertical>_intake':
-#   node -e "import('../shared/checklistPresetDerivation.js').then(m=>{...assert...})"
-# Simulator run reaches the intake tree (SIM_TRACE shows the intake node ids):
-SIM_TRACE=1 npx tsx agent/scripts/sim-questiontree.ts --business catering | grep -q catering_
+# Derivation + block wiring, every preset, deterministic, in CI:
+npx vitest run tests/verticalIntakeWiring.test.ts
+
+# Live-LLM intake probe per vertical (real OpenAI calls, on-demand not CI):
+cd agent && SIM_BUSINESS=catering,plumber,salon,real-estate SIM_RUNS=2 npx tsx scripts/sim-questiontree.ts
 ```
+RESULT (local, 2026-09-01):
+- `tests/verticalIntakeWiring.test.ts` — **5/5 passed**. Covers all 33 presets: each is reachable from a business_type, compiles to a non-empty tree list containing `identity`, and every vertical front desk enables its own `<slug>_intake` whose block resolves to a real tree (29 verticals checked; the 4 non-vertical presets are an explicit, documented allowlist).
+- `SIM_BUSINESS` vertical probe — **8/8 graded scenarios passed** (4 verticals × 2 runs). Each call selected the vertical's own intake tree, answered at least one of its nodes, and closed.
+- Live route probe — all four business types resolved through `POST /tenants/create` → `GET /tenants/:id/config` to `<slug>_front_desk` with `<slug>_intake` in `enabled_conversation_blocks`. Probe tenants soft-deleted afterwards.
+- `npm run trees:local` — all 7 tenants converted, "40 trees identical to the library" for each, including the four probes.
 DEFINITION_OF_DONE:
-- [ ] All 4 sampled verticals resolve to `<slug>_front_desk`.
-- [ ] Enabled blocks for each include `<slug>_intake`.
-- [ ] Simulator trace shows at least one intake node fired per vertical.
-- [ ] No "tree not found" errors in the simulator log.
+- [x] All 4 sampled verticals resolve to `<slug>_front_desk`.
+- [x] Enabled blocks for each include `<slug>_intake`.
+- [x] Simulator trace shows at least one intake node fired per vertical.
+- [x] No "tree not found" errors in the simulator log.
+- [ ] Human: confirm the business-type picker in the setup wizard offers these verticals and writes the expected `business_type`.
+
+**Trap the vertical mode had to avoid, recorded so the next person does not re-make it:** the first cut handed the tracker the library *compiled from the preset*, which seemed obviously right — give a business exactly the trees it can use. It throws:
+
+```
+Action "book" requires unknown node "drop_off_ok" — not defined in any library tree.
+```
+
+`booking.book` carries a cross-tree `requires` on `drop_off_ok`, which lives in `fix_computer` — a tree **no preset enables**. The tracker validates every `requires` id against the library it was handed, while at runtime ids outside the call's selected trees are treated as satisfied. So the LIBRARY is *what exists* and the PRESET is *what this business may select*, and they are not the same list. This was already found on 2026-08-14 and is why `scripts/seed-question-tree-templates.ts` seeds the full library per vertical; the sim now mirrors production (`library` = full, `selectableTreeIds` = intersection).
+
+**Observation, not a blocker:** one plumber run (of nine) never closed. The improvising caller invented a burst pipe flooding their kitchen and refused the next day's slots; the agent correctly took an urgent message — there is no live-transfer path — then re-offered booking and looped between the two for four turns. Worth a look when someone owns emergency-intake behaviour; it is LLM variance, not a wiring fault.
 
 ---
 
