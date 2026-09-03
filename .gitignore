@@ -85,3 +85,7 @@ test-results/
 # Local Obsidian vault config (editor state — not source)
 .obsidian/
 scripts/script-backups/
+
+# External audit output (Grok watcher) — local artifacts, never committed
+GROK_FINDINGS-*.md
+.grok-audit/

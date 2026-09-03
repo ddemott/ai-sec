@@ -157,7 +157,7 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-007 | Fix E2E test flakiness               | 1    | Claude | HIGH     | —            | ⬜      |
 | T-008 | Validate intake trees end-to-end     | 1    | Mixed  | HIGH     | T-000        | ⬜      |
 | T-009 | Volume metering & tier caps          | 1    | Claude | HIGH     | T-004        | ⬜      |
-| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | ⬜      |
+| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | 🟡      |
 | T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | 🟡      |
 | T-012 | Deployment checklist & automation    | 1    | Claude | MEDIUM   | —            | ⬜      |
 | T-013 | Full onboarding walk-through         | 1    | Human  | MEDIUM   | T-003, T-008 | ⬜      |
@@ -539,7 +539,9 @@ DEFINITION_OF_DONE:
 
 ### T-010: Schedule pattern adoption verify
 
-STATUS: ✅ DONE (2026-09-03) — pending merge to `main`
+STATUS: 🟡 IN_PROGRESS — code + tests done and green on
+`feat/T-006-T-010-T-011-monitoring-schedule-cost`; NOT on `main`, so by §0.7 it
+is not DONE.
 
 <!--
   ACCEPTANCE_TEST run: `npx vitest run tests/services/schedulePatternAdoption.realdb.test.ts`
@@ -583,7 +585,9 @@ DEFINITION_OF_DONE:
 
 ### T-011: Verify cost tracking ledger
 
-STATUS: ✅ DONE (2026-09-03) — pending merge to `main`
+STATUS: 🟡 IN_PROGRESS — code + tests done and green on
+`feat/T-006-T-010-T-011-monitoring-schedule-cost`; NOT on `main`, so by §0.7 it
+is not DONE.
 
 <!--
   ACCEPTANCE_TEST run: `npx vitest run tests/services/aiCostLedger.realdb.test.ts`
