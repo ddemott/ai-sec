@@ -164,7 +164,7 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-014 | Dead code removal                    | 1    | Claude | LOW      | T-001..T-013 | ⬜      |
 | T-101 | Onboarding wizard redesign           | 2    | Claude | CRITICAL | T-013        | ⬜      |
 | T-102 | AI persona customization             | 2    | Claude | HIGH     | T-003        | ⬜      |
-| T-103 | Knowledge base builder UX            | 2    | Claude | HIGH     | —            | ⬜      |
+| T-103 | Knowledge base builder UX            | 2    | Claude | HIGH     | —            | 🟡      |
 | T-104 | Dashboard UX polish                  | 2    | Claude | HIGH     | T-013        | ⬜      |
 | T-105 | Vocabulary customization             | 2    | Claude | HIGH     | T-008        | ⬜      |
 | T-106 | Scheduler UX improvements            | 2    | Claude | MEDIUM   | —            | ⬜      |
@@ -801,7 +801,55 @@ DEFINITION_OF_DONE:
 
 ### T-103: Knowledge base builder UX
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — **and the spec below is partly WRONG about this
+codebase.** Read this before writing any code for it.
+
+<!--
+  WHAT THIS TASK ASKED FOR THAT MUST NOT BE BUILT:
+  a new `kb_entries(tenant_id, category, question, answer, keywords[])` table
+  plus `agent/src/checklist/infoLookup.ts` doing keyword matching, described as
+  "no vector RAG required for MVP".
+
+  WHY NOT: all of it already exists, and the existing version is better.
+   - Storage: `tenant_docs` (title/section/content/normalized_text/embedding),
+     pgvector, retrieved by `search_tenant_docs_normalized()`.
+   - CRUD + categories: `dashboard/components/knowledge/KnowledgeBaseView.tsx`
+     with Api.knowledge.list/add/update/delete, plus website import, document
+     ingest, and an unanswered-question feed the owner can answer in one click.
+   - Agent path: `/agent-tools/policy-answer`, reachable on EVERY call as the
+     `answer_question` tool (checklistTools.ts) — it is a base tool, not gated
+     behind a tree.
+   - The miss path the DoD asks for is ALREADY host-enforced: when RAG cannot
+     answer, `ragCouldNotAnswer()` selects the `message` + `identity` trees so
+     the call cannot end without taking a message (checklistTools.ts, written
+     after a real 2026-08-15 sim where a caller was lost exactly that way).
+  Building `kb_entries` would be a SECOND, keyword-only knowledge system next to
+  a working semantic one — the "working flat code beats a dormant abstraction"
+  rule in CLAUDE.md, inverted.
+
+  WHAT WAS ACTUALLY DONE: the gap was PROOF, not features. Every layer was
+  tested in isolation with mocks, and a mock cannot show that the vector reached
+  the column, that the RPC threshold lets a real paraphrase through, or that
+  DELETE reaches the row the answer came from.
+  `tests/integration/knowledgeRoundTrip.realdb.test.ts` (real Postgres +
+  pgvector, 4 passed) covers the DoD end to end:
+   - add → embedding IS in the column → list → the AGENT's own policy-answer
+     returns the answer → delete → the answer stops coming back;
+   - an unanswerable question returns the graceful spoken fallback, never a 500;
+   - the miss is recorded in `unanswered_questions` (polled, because the route
+     logs it fire-and-forget so a live caller never waits on analytics);
+   - a second tenant asking the same question does NOT get the first tenant's
+     door code.
+  LIMIT, stated plainly: the test injects a deterministic bag-of-words embedder,
+  so it proves storage/retrieval/threshold/wiring, NOT that OpenAI ranks a given
+  paraphrase above the threshold. That is what `./scripts/simulate.sh rag`
+  measures, on demand, with real embeddings.
+
+  REMAINING, if anyone still wants it: nothing in the DoD. The UI work worth
+  doing is polish on the existing view (the `TODO` for a URL-import input at
+  KnowledgeBaseView.tsx ~L374), which belongs in T-104, not here.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 10–12h
