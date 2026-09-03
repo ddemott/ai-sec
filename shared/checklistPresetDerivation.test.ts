@@ -93,6 +93,34 @@ describe('defaultChecklistPresetIdForBusinessType', () => {
   });
 });
 
+/**
+ * T-008 sample verticals: catering / plumber / salon / real_estate must each
+ * resolve to `<slug>_front_desk` with `<slug>_intake` in enabled conversation
+ * blocks. These four are the PRODUCT_ROADMAP acceptance sample — a missing
+ * intake block here means the vertical's questions are unreachable on a live
+ * call no matter what the model asks for.
+ */
+describe('T-008 sampled vertical intake wiring', () => {
+  const samples = ['catering', 'plumber', 'salon', 'real_estate'] as const;
+
+  it.each(samples)('%s business_type → %s_front_desk with %s_intake enabled', (slug) => {
+    const runtime = deriveChecklistRuntimeConfig(slug);
+    expect(runtime.preset_id).toBe(`${slug}_front_desk`);
+    expect(runtime.enabled_conversation_blocks).toContain(`${slug}_intake`);
+    // Intake sits immediately after identity — same shape as every vertical
+    // preset in intakeRuntime() / SALON_RUNTIME / AUTO_SHOP_RUNTIME.
+    expect(runtime.enabled_conversation_blocks[0]).toBe('identity');
+    expect(runtime.enabled_conversation_blocks[1]).toBe(`${slug}_intake`);
+  });
+
+  it('hyphenated business_type variants still resolve to the intake-bearing preset', () => {
+    expect(deriveChecklistRuntimeConfig('real-estate').preset_id).toBe('real_estate_front_desk');
+    expect(deriveChecklistRuntimeConfig('real-estate').enabled_conversation_blocks).toContain(
+      'real_estate_intake'
+    );
+  });
+});
+
 describe('resolveChecklistPresetId', () => {
   it('returns explicit preset when valid', () => {
     expect(resolveChecklistPresetId('salon', 'local_service_front_desk')).toBe(
