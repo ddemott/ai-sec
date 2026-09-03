@@ -4,11 +4,14 @@
  * Month-to-date AI spend, with the number the pricing decision actually needs:
  * average cost per call (T-011).
  *
- * OPERATOR-ONLY. This is cost-of-goods — showing a customer the margin math on
- * their own calls is not a feature, and AnalyticsView has carried a test
- * asserting exactly that since the panel did not exist. The gate is the caller
- * (`isAdmin`), not this component: a component that hides itself is one
- * `props` change away from not hiding.
+ * OPERATOR-ONLY, and gated in TWO places for two different reasons:
+ *   - the SERVER (`requireSuperAdmin` on GET /analytics/ai-cost) is the actual
+ *     authorization boundary. Not hiding a panel is not a control: the route is
+ *     reachable with any tenant's own JWT and one curl, which is exactly what
+ *     the #394 review caught when this file claimed the UI was the gate.
+ *   - the CALL SITE (`isAdmin` in AnalyticsView) keeps a non-admin from firing
+ *     a request that would only 403 anyway. A component that decides for itself
+ *     whether to hide is one `props` change away from not hiding.
  *
  * Why it exists at all: the ledger once undercounted 35x because the production
  * voice LLM was missing from the pricing table, and nobody saw it because

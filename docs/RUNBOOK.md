@@ -156,11 +156,9 @@ Two behaviours worth knowing before you touch anything:
   ambiguous reading is how a bookable business goes dark. The callers that mean
   "no hours" delete the rule explicitly, beside the delete of the future rows.
 
-Covered by `tests/services/schedulePatternAdoption.realdb.test.ts` (adoption path
-
-- the clamp regression) and `tests/services/extendSchedules.realdb.test.ts`.
-
----
+Covered by `tests/services/schedulePatternAdoption.realdb.test.ts`, which
+exercises both the adoption path and the clamp regression, and by
+`tests/services/extendSchedules.realdb.test.ts`.
 
 ---
 

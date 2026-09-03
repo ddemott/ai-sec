@@ -4,6 +4,7 @@ import {
   withHandler,
   logEvent,
   requireTenantId,
+  requireSuperAdmin,
   withPoolClient,
   type AppRequest,
 } from '../middleware/fastify-middleware';
@@ -415,10 +416,20 @@ export function registerAnalyticsRoutes(
     }, 'Failed to fetch feedback')
   );
 
-  // GET /analytics/ai-cost — month-to-date AI usage aggregated by provider + model.
+  // GET /analytics/ai-cost — month-to-date AI usage aggregated by provider +
+  // model, plus the per-call figures (T-011).
+  //
+  // SUPER-ADMIN ONLY, enforced HERE (review catch on #394). This is the
+  // platform's cost-of-goods: what a call costs us, and therefore the margin on
+  // what the tenant pays. `AnalyticsView` renders the panel only for an admin,
+  // but a UI gate is a rendering decision, not an authorization one — the route
+  // is reachable with any tenant's own JWT, so before this check a customer
+  // could read their own margin math with one curl. The same mistake shape as
+  // every "we don't show it" control: the data still went over the wire.
   app.get(
     '/analytics/ai-cost',
     withHandler(async (req, reply) => {
+      if (!requireSuperAdmin(req, reply)) return;
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
       const result = await withTenantClient(tenantId, (client) =>

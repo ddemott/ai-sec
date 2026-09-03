@@ -241,10 +241,11 @@ export default function AnalyticsView() {
         </div>
 
         {/* Internal AI spend stays operator-only. Tenant analytics should never
-            expose margin math back to the customer — so the panel is rendered
-            ONLY for a platform super-admin (T-011). The gate lives here, at the
-            call site, rather than inside AiCostPanel: a component that decides
-            for itself whether to hide is one props change away from not hiding. */}
+            expose margin math back to the customer, so the panel renders ONLY
+            for a platform super-admin (T-011). This check is not the security
+            boundary — GET /analytics/ai-cost enforces requireSuperAdmin
+            server-side, because a UI that declines to draw something does not
+            stop a curl. This one just avoids firing a request that would 403. */}
         {isAdmin && (
           <div className="mt-6">
             <AiCostPanel />
