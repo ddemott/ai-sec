@@ -14,6 +14,17 @@ import {
   type AppRequest,
 } from '../middleware/fastify-middleware';
 import { expandWeeklyToSchedule } from '../services/expandWeeklyToSchedule';
+import { sendValidationError, assertRowAffected } from './routeHelpers';
+
+/**
+ * A closure is a DATE and (optionally) a reason for the owner's own eyes.
+ * `YYYY-MM-DD` only — a timestamp here would invite a timezone bug into the one
+ * concept that is definitionally a calendar day in the business's own locale.
+ */
+const BlackoutSchema = z.object({
+  blackout_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'blackout_date must be YYYY-MM-DD'),
+  reason: z.string().max(200).nullable().optional(),
+});
 
 const CreateOverrideSchema = z.object({
   tenant_id: z.string().uuid(),
@@ -353,5 +364,84 @@ export function registerShiftRoutes(
       });
       return reply.send({ success: true, ...result });
     }, 'Failed to expand weekly schedule')
+  );
+  // ── Blackout dates (tenant-wide closures, T-106) ─────────────────
+  //
+  // `employee_schedule.is_off` says one PERSON is off; this says the BUSINESS
+  // is shut. Enforced in the booking RPC (BUSINESS_CLOSED) and excluded by the
+  // suggester, so a closed day is neither offered nor bookable.
+
+  app.get(
+    '/shifts/blackouts',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const { start_date, end_date } = req.query as Record<string, string | undefined>;
+      const res = await withTenantClient(tenantId, (client) =>
+        client.query(
+          `SELECT blackout_date, reason, created_at, updated_at
+             FROM blackout_dates
+            WHERE tenant_id = $1
+              AND ($2::date IS NULL OR blackout_date >= $2::date)
+              AND ($3::date IS NULL OR blackout_date <= $3::date)
+            ORDER BY blackout_date`,
+          [tenantId, start_date ?? null, end_date ?? null]
+        )
+      );
+      return reply.send(res.rows);
+    }, 'Failed to fetch blackout dates')
+  );
+
+  app.post(
+    '/shifts/blackouts',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const parsed = BlackoutSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return sendValidationError(reply, parsed.error.issues);
+      }
+      const { blackout_date, reason } = parsed.data;
+
+      // UPSERT, not INSERT. Re-declaring a closure is not an error the owner
+      // should have to reason about — the second save just updates the reason.
+      // The natural PK makes that a one-liner instead of a read-then-write.
+      const res = await withTenantClient(tenantId, (client) =>
+        client.query(
+          `INSERT INTO blackout_dates (tenant_id, blackout_date, reason)
+           VALUES ($1, $2::date, $3)
+           ON CONFLICT (tenant_id, blackout_date)
+             DO UPDATE SET reason = EXCLUDED.reason
+           RETURNING blackout_date, reason`,
+          [tenantId, blackout_date, reason ?? null]
+        )
+      );
+      logEvent(req, 'blackout_date_saved', { blackout_date });
+      return reply.send({ success: true, blackout: res.rows[0] });
+    }, 'Failed to save blackout date')
+  );
+
+  app.delete(
+    '/shifts/blackouts/:date',
+    withHandler(async (req: AppRequest, reply) => {
+      const tenantId = requireTenantId(req, reply);
+      if (!tenantId) return;
+      const { date } = req.params as { date: string };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return reply.status(400).send({ success: false, error: 'date must be YYYY-MM-DD' });
+      }
+      const res = await withTenantClient(tenantId, (client) =>
+        client.query(
+          'DELETE FROM blackout_dates WHERE tenant_id = $1 AND blackout_date = $2::date',
+          [tenantId, date]
+        )
+      );
+      // 404 on a zero-row delete rather than a cheerful success — the house
+      // rule (assertRowAffected). "Removed a closure that was never there" is
+      // the shape that lets an owner believe the business is open when it is not.
+      if (!assertRowAffected(res, reply, 'Blackout date')) return;
+      logEvent(req, 'blackout_date_removed', { blackout_date: date });
+      return reply.send({ success: true });
+    }, 'Failed to remove blackout date')
   );
 }

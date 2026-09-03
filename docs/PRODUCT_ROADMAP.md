@@ -167,7 +167,7 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-103 | Knowledge base builder UX            | 2    | Claude | HIGH     | —            | 🟡      |
 | T-104 | Dashboard UX polish                  | 2    | Claude | HIGH     | T-013        | ⬜      |
 | T-105 | Vocabulary customization             | 2    | Claude | HIGH     | T-008        | ⬜      |
-| T-106 | Scheduler UX improvements            | 2    | Claude | MEDIUM   | —            | ⬜      |
+| T-106 | Scheduler UX improvements            | 2    | Claude | MEDIUM   | —            | 🟡      |
 | T-107 | Customer self-service booking page   | 2    | Claude | MEDIUM   | T-005        | ⬜      |
 | T-108 | SMS & reminder customization         | 2    | Claude | MEDIUM   | T-002        | ⬜      |
 | T-109 | Owner mobile PWA                     | 2    | Claude | MEDIUM   | T-104        | ⬜      |
@@ -946,7 +946,52 @@ DEFINITION_OF_DONE:
 
 ### T-106: Scheduler UX
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — the **blackout-date half is built and enforced**; the
+weekly-grid UI half is NOT, and part of the spec describes things that already
+exist. Read this before continuing it.
+
+<!--
+  BUILT (2026-09-03, branch feat/T-012-deployment-checklist):
+   - migration 20260903000000_blackout_dates.sql — `blackout_dates
+     (tenant_id, blackout_date, reason)`, natural composite PK, RLS enabled +
+     forced + tenant-isolation policy, house updated_at trigger.
+   - The booking RPC refuses a closed day with a NEW error code
+     BUSINESS_CLOSED, checked BEFORE any employee/resource search — otherwise a
+     tenant with no staff that day would hear "no one is scheduled" instead of
+     "we are closed": same facts, different sentence, only one of them true.
+   - availabilitySearch.ts excludes the day too. Suggest and enforce must read
+     the same calendar or the agent offers a slot the booking then refuses —
+     the 2026-07-17 midnight-wrap lesson, restated.
+   - CRUD at GET/POST/DELETE /shifts/blackouts (upsert on re-declare; 404 on a
+     zero-row delete, because "removed a closure that was never there" is how an
+     owner comes to believe they are open when they are shut).
+   - Tests: tests/integration/blackoutDates.realdb.test.ts (7, real Postgres —
+     control day bookable, blackout refused with the right CODE, suggester
+     returns nothing, neighbouring days untouched, removal reopens, another
+     tenant's closure does not close this one, re-declare upserts) and
+     tests/routes/blackoutRoutes.test.ts (12).
+   - The RPC guard is proven LOAD-BEARING by mutation: re-applying the previous
+     function definition makes the BUSINESS_CLOSED case fail, and only that case.
+
+  WHY THIS WAS THE REAL GAP: `employee_schedule.is_off` says one PERSON is off.
+  Nothing could say the BUSINESS is shut, so closing meant editing every
+  employee's row for that date — and anyone hired afterwards was silently
+  bookable on a day the doors are locked.
+
+  NOT BUILT, and deliberately scoped out rather than half-done:
+   - the weekly-grid editing UI and per-day BREAKS. Breaks have no
+     representation yet (employee_schedule holds ONE start/end per day); adding
+     them is a schema question, not a UI one, and should be its own task.
+   - a dashboard surface for blackouts. The API is live and tested; the Schedule
+     tab does not yet show or edit closures.
+
+  ALREADY EXISTED, contrary to the spec's FILES list: there is no
+  `src/services/availability.ts` or `getSlots` — the suggester is
+  `src/services/availabilitySearch.ts` (`findNextAvailableSlots`), the booking
+  RPCs are in supabase/migrations, and `dashboard/components/SchedulerView.tsx`
+  plus `components/scheduler/` already render appointments.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 10–12h
