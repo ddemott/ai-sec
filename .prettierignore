@@ -28,3 +28,11 @@ dashboard/e2e/.auth/
 
 # Self-signed certs
 certs/
+
+# External audit output (Grok watcher, 2026-09-03). Written into the repo root
+# by a tool outside this codebase, mid-session, on its own schedule. It is not
+# source and we do not own its formatting — but `format:check` globs `*.md` at
+# the root, so without this entry every commit and push fails on a file that
+# appeared while the hook was running.
+GROK_FINDINGS-*.md
+.grok-audit/

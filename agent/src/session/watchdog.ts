@@ -62,6 +62,14 @@ export interface WatchdogOptions {
    * index.ts wires this straight into the transcript; chat context stays clean.
    */
   onSpoken?: (text: string) => void;
+
+  /**
+   * Called once per turn with the same number the `turn_latency_ms` log line
+   * carries (T-006). The log line is only greppable in a log sink; index.ts
+   * wires this into a TurnLatencyCollector so the same measurement also reaches
+   * the backend histogram, where an alert can actually see it.
+   */
+  onTurnLatency?: (latencyMs: number, holdPlayed: boolean) => void;
 }
 
 type LogFn = (obj: Record<string, unknown>, msg: string) => void;
@@ -129,6 +137,7 @@ export function attachOutputWatchdog(
     const latencyMs = Date.now() - turnThinkingStartedAt;
     turnThinkingStartedAt = undefined;
     const fields = { event: 'turn_latency_ms', latency_ms: latencyMs, hold_played: holdPlayed };
+    opts.onTurnLatency?.(latencyMs, holdPlayed);
     if (latencyMs >= SLOW_TURN_WARN_MS) {
       opts.log.warn(fields, `slow turn: ${latencyMs}ms from thinking to real audio`);
     } else {
@@ -420,6 +429,11 @@ export function attachSilentTurnRecovery(
      * filler-aware copy be the only source.
      */
     outputWatchdogActive?: boolean;
+    /** Same contract as WatchdogOptions.onTurnLatency. Fires only from this
+     *  function's own copy of the measurement, i.e. only when
+     *  outputWatchdogActive is false — so exactly one of the two watchdogs
+     *  feeds the collector, never both. */
+    onTurnLatency?: (latencyMs: number, holdPlayed: boolean) => void;
   }
 ): () => void {
   // True from the moment we fire a nudge until any agent audio plays. If a
@@ -447,6 +461,7 @@ export function attachSilentTurnRecovery(
       if (thinkingAtMs != null && !opts.outputWatchdogActive) {
         const latencyMs = Date.now() - thinkingAtMs;
         const fields = { event: 'turn_latency_ms', latency_ms: latencyMs, hold_played: false };
+        opts.onTurnLatency?.(latencyMs, false);
         if (latencyMs >= SLOW_TURN_WARN_MS) {
           opts.log.warn(fields, `slow turn: ${latencyMs}ms from thinking to real audio`);
         } else {

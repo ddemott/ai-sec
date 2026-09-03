@@ -141,23 +141,47 @@ describe('Deadlock Prevention: Transaction Isolation in Tests', () => {
   });
 });
 
+/**
+ * This test does REAL work against Postgres — one `TRUNCATE ... CASCADE` over
+ * every seeded table, plus a count. Vitest's default budget is 5s, and on a
+ * loaded CI runner that truncate has taken 5,004 ms (#394, 2026-09-03): a
+ * 4-millisecond miss that reddened `main`-bound CI and, per the SKIPPED-is-
+ * terminal note in CLAUDE.md, is a mechanism for silently not deploying.
+ *
+ * The assertions below are about SHAPE — one statement, no deadlock, table
+ * empty afterwards — and say nothing about speed. So the budget is raised to
+ * match the database work rather than the runner's mood. Nothing is loosened:
+ * a genuine deadlock still hangs and still fails, just with a timeout that
+ * means "the DB never answered" instead of "the runner was busy".
+ *
+ * Same class as SUBPROCESS_TEST_TIMEOUT_MS in scripts/purge-soft-deleted.test.ts
+ * and the SetupWizard findBy* fix: a test asserting the machine's speed instead
+ * of the code's behaviour. This is the FOURTH occurrence of that pattern — see
+ * the flaky-gates section of docs/TODO.md.
+ */
+const TRUNCATE_TEST_TIMEOUT_MS = 30_000;
+
 describe('Deadlock Prevention: Consistent Lock Ordering', () => {
-  it('HAPPY: clearDB truncates all tables in a single statement to prevent partial locks', async () => {
-    // WHO: test file's beforeAll/beforeEach that needs a clean DB slate
-    // WHAT: clearDB issues one TRUNCATE ... CASCADE for all tables at once
-    // WHEN: beforeAll in any test file that uses clearDB
-    // WHERE: src/test-utils.ts clearDB()
-    // WHY: if tables were truncated one at a time (TRUNCATE tenants; TRUNCATE customers; ...),
-    //      a concurrent test file could acquire a lock between the two TRUNCATEs, creating
-    //      a deadlock: File A holds AccessExclusiveLock on tenants (from TRUNCATE), tries to
-    //      lock customers. File B holds RowShareLock on customers (from INSERT), tries to
-    //      lock tenants. Single-statement TRUNCATE acquires all locks atomically.
-    if (!dbAvailable) return;
-    // Verify clearDB doesn't throw — the single-statement pattern prevents deadlocks
-    await clearDB(client);
-    const res = await client.query('SELECT count(*) FROM tenants');
-    expect(parseInt(res.rows[0].count)).toBe(0);
-  });
+  it(
+    'HAPPY: clearDB truncates all tables in a single statement to prevent partial locks',
+    async () => {
+      // WHO: test file's beforeAll/beforeEach that needs a clean DB slate
+      // WHAT: clearDB issues one TRUNCATE ... CASCADE for all tables at once
+      // WHEN: beforeAll in any test file that uses clearDB
+      // WHERE: src/test-utils.ts clearDB()
+      // WHY: if tables were truncated one at a time (TRUNCATE tenants; TRUNCATE customers; ...),
+      //      a concurrent test file could acquire a lock between the two TRUNCATEs, creating
+      //      a deadlock: File A holds AccessExclusiveLock on tenants (from TRUNCATE), tries to
+      //      lock customers. File B holds RowShareLock on customers (from INSERT), tries to
+      //      lock tenants. Single-statement TRUNCATE acquires all locks atomically.
+      if (!dbAvailable) return;
+      // Verify clearDB doesn't throw — the single-statement pattern prevents deadlocks
+      await clearDB(client);
+      const res = await client.query('SELECT count(*) FROM tenants');
+      expect(parseInt(res.rows[0].count)).toBe(0);
+    },
+    TRUNCATE_TEST_TIMEOUT_MS
+  );
 
   it('HAPPY: vitest config enforces sequential file execution', () => {
     // WHO: the vitest test runner executing all 78 test files

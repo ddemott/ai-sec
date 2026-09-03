@@ -78,11 +78,16 @@ let serviceHairId: string;
 let serviceColorId: string;
 const tenantsToClean: string[] = [];
 
-function get(path: string, withTenant = true) {
+const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
+
+function get(path: string, withTenant = true, opts: { asSuperAdmin?: boolean } = {}) {
+  if (!withTenant) return app.inject({ method: 'GET', url: path, headers: {} });
   return app.inject({
     method: 'GET',
     url: path,
-    headers: withTenant ? { 'x-tenant-id': tenantId } : {},
+    headers: opts.asSuperAdmin
+      ? { 'x-tenant-id': tenantId, 'x-auth-tenant': PLATFORM_TENANT_ID }
+      : { 'x-tenant-id': tenantId },
   });
 }
 
@@ -125,12 +130,24 @@ beforeAll(async () => {
     // x-tenant-id header plays that role so the ROUTE + SQL under test run
     // unmodified. Requests without the header exercise the unauthenticated
     // path (requireTenantId → 401).
-    type TenantRequest = FastifyRequest & { tenantId?: string; auth?: { user_id: string } };
+    type TenantRequest = FastifyRequest & {
+      tenantId?: string;
+      auth?: { user_id: string; tenant_id?: string };
+    };
     app.addHook('preHandler', async (request: TenantRequest) => {
       const headerTenant = request.headers['x-tenant-id'];
       if (typeof headerTenant === 'string' && headerTenant) {
         request.tenantId = headerTenant;
-        request.auth = { user_id: '00000000-0000-0000-0000-000000000001' };
+        // The AUTHENTICATED tenant is a different thing from the tenant being
+        // QUERIED, and /analytics/ai-cost is super-admin only (#394 review
+        // catch — it returns the platform's cost-of-goods). `x-auth-tenant`
+        // lets a test arrive as the platform operator; without it the session
+        // is an ordinary tenant, which is what every other route here wants.
+        const authTenant = request.headers['x-auth-tenant'];
+        request.auth = {
+          user_id: '00000000-0000-0000-0000-000000000001',
+          tenant_id: typeof authTenant === 'string' && authTenant ? authTenant : headerTenant,
+        };
       }
     });
     const withTenantClient = createWithTenantClient(pool);
@@ -474,7 +491,8 @@ describe('GET /analytics/ai-cost (real SQL)', () => {
     // WHY: a column rename in ai_cost_events (a young table) or a broken
     //      GROUP BY would 500 the cost panel; string-typed sums would render
     //      as NaN math in the dashboard.
-    const res = await get('/analytics/ai-cost');
+    // Super-admin only — the operator, not the tenant, reads cost-of-goods.
+    const res = await get('/analytics/ai-cost', true, { asSuperAdmin: true });
     expect(res.statusCode).toBe(200);
     const body = res.json();
 

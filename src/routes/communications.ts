@@ -19,7 +19,12 @@ import { CommunicationService } from '../services/communications/index.js';
 import { ConsentService } from '../services/consentService.js';
 import { createDatabaseService } from '../database/index.js';
 import { createTenantConfigService } from '../services/tenants/index.js';
-import { messageDeliveryReceiptsTotal, inboundSmsTotal, errorsTotal } from '../services/metrics.js';
+import {
+  messageDeliveryReceiptsTotal,
+  inboundSmsTotal,
+  errorsTotal,
+  webhookSignatureFailuresTotal,
+} from '../services/metrics.js';
 import { verifyTelnyxSignature } from '../services/telnyxWebhookAuth.js';
 import { classifySmsKeyword, NotAnOptOutCommandError } from '../services/smsKeywords.js';
 import { normalizePhone } from '../services/phoneUtils.js';
@@ -450,6 +455,10 @@ export function registerCommunicationRoutes(
           );
           return reply.status(400).send({ success: false, error: 'Raw body unavailable' });
         }
+        webhookSignatureFailuresTotal.inc({
+          provider: 'telnyx',
+          endpoint: 'status_callback',
+        });
         req.log.warn(
           { event: 'telnyx_status_callback_invalid_signature', reason: verdict.reason },
           'Telnyx status callback signature mismatch'
@@ -555,6 +564,11 @@ export function registerCommunicationRoutes(
     if (!verdict.valid) {
       inboundSmsTotal.inc({ outcome: 'rejected' });
       errorsTotal.inc({ event: 'telnyx_inbound_invalid_signature' });
+      // Same event, third counter (T-006): inbound_sms_total is about SMS
+      // handling and errors_total is the generic sad-path tally, but an alert
+      // on "is anyone forging webhooks at us" must not have to know which
+      // providers exist this quarter. That is what this one is for.
+      webhookSignatureFailuresTotal.inc({ provider: 'telnyx', endpoint: 'inbound_sms' });
       // 5W: WHAT a forged/unsigned inbound webhook, WHY the specific failure.
       // This is the line that tells you someone is POSTing at the endpoint
       // directly — the attack the signature check exists to stop.
