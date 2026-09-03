@@ -152,9 +152,18 @@ describe('GET /analytics/ai-cost — characterization', () => {
 
   it('HAPPY: no rows → empty breakdown and a zero total (not null, not undefined)', async () => {
     // WHY: the dashboard renders `total.toFixed(...)`; a null here is a crash.
-    queryResponses.push({ rows: [] });
+    queryResponses.push({ rows: [] }); // the grouped breakdown
+    queryResponses.push({ rows: [{ call_count: '0', voice_cost: null }] }); // the per-call rollup
     const res = await app.inject({ method: 'GET', url: '/analytics/ai-cost', headers: hdr });
-    expect(res.json()).toEqual({ breakdown: [], total_estimated_cost_usd: 0 });
+    // avg is NULL, not 0 (T-011): "no call has been costed" and "calls are
+    // free" are different claims, and only the second is safe to price from.
+    expect(res.json()).toEqual({
+      breakdown: [],
+      total_estimated_cost_usd: 0,
+      call_count: 0,
+      voice_call_cost_usd: 0,
+      avg_cost_per_call_usd: null,
+    });
   });
 
   it('HAPPY: scopes to the current calendar month and to the tenant', async () => {

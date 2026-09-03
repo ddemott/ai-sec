@@ -158,7 +158,7 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-008 | Validate intake trees end-to-end     | 1    | Mixed  | HIGH     | T-000        | ⬜      |
 | T-009 | Volume metering & tier caps          | 1    | Claude | HIGH     | T-004        | ⬜      |
 | T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | ⬜      |
-| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | ⬜      |
+| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | 🟡      |
 | T-012 | Deployment checklist & automation    | 1    | Claude | MEDIUM   | —            | ⬜      |
 | T-013 | Full onboarding walk-through         | 1    | Human  | MEDIUM   | T-003, T-008 | ⬜      |
 | T-014 | Dead code removal                    | 1    | Claude | LOW      | T-001..T-013 | ⬜      |
@@ -583,7 +583,24 @@ DEFINITION_OF_DONE:
 
 ### T-011: Verify cost tracking ledger
 
-STATUS: ⬜ NOT_STARTED
+STATUS: ✅ DONE (2026-09-03) — pending merge to `main`
+
+<!--
+  ACCEPTANCE_TEST run: `npx vitest run tests/services/aiCostLedger.realdb.test.ts`
+  → 6 passed (real Postgres, test_db), posting through the SAME route the agent
+  posts through. Synthetic 2-minute call totals **$0.100028**, inside the
+  $0.03-$0.20 sanity band, and the voice LLM is 51.8% of it.
+  Per leg: gpt-4.1-mini $0.05184 · aura-asteria-en $0.039 · nova-3 $0.0086 ·
+  gpt-4o-mini (summary) $0.000588 — all four priced, none $0.
+  Dashboard: `AiCostPanel` (avg cost/call to 4dp, call count, MTD total,
+  per-model breakdown, and a loud warning when a leg shows real usage at $0.00 —
+  the 35x-undercount shape). Rendered ONLY for a platform super-admin; the
+  existing "internal AI cost is NEVER shown to the tenant" test now also asserts
+  the endpoint is not even FETCHED from a tenant session.
+  Backend: getAiCostBreakdown gained call_count / voice_call_cost_usd /
+  avg_cost_per_call_usd (NULL, never 0, when nothing was costed).
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 2–3h
