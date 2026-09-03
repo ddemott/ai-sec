@@ -16,6 +16,7 @@ import {
   type AppRequest,
 } from '../middleware/fastify-middleware';
 import { computeUsageStatements } from '../services/billingUsage';
+import { webhookSignatureFailuresTotal } from '../services/metrics';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -132,6 +133,10 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
 
       const sig = req.headers['stripe-signature'];
       if (!sig) {
+        // A MISSING signature counts the same as a BAD one (T-006). Both mean
+        // an unverifiable POST reached the endpoint; distinguishing them in the
+        // alert would only let an attacker pick the quieter one.
+        webhookSignatureFailuresTotal.inc({ provider: 'stripe', endpoint: 'billing_webhook' });
         return reply.status(400).send({ success: false, error: 'Missing stripe-signature header' });
       }
 
@@ -148,6 +153,7 @@ export function registerBillingRoutes(app: AppFastifyInstance, pool: Pool) {
         const bodyStr = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
         event = stripe.webhooks.constructEvent(bodyStr, sig, STRIPE_WEBHOOK_SECRET);
       } catch (err) {
+        webhookSignatureFailuresTotal.inc({ provider: 'stripe', endpoint: 'billing_webhook' });
         logError(req, 'stripe_webhook_signature_failed', err);
         return reply.status(400).send({ success: false, error: 'Invalid webhook signature' });
       }
