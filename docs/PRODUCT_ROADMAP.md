@@ -539,7 +539,23 @@ DEFINITION_OF_DONE:
 
 ### T-010: Schedule pattern adoption verify
 
-STATUS: ⬜ NOT_STARTED
+STATUS: ✅ DONE (2026-09-03) — pending merge to `main`
+
+<!--
+  ACCEPTANCE_TEST run: `npx vitest run tests/services/schedulePatternAdoption.realdb.test.ts`
+  → 6 passed (real Postgres, test_db). Plus the pre-existing
+  `tests/services/extendSchedules.realdb.test.ts` → 12 passed.
+  - Clamp proven load-bearing by MUTATION, not by assertion alone: replacing
+    `AND es.shift_date <= CURRENT_DATE + INTERVAL '14 days'` with `AND TRUE`
+    makes the regression case fail with
+    `expected [ 1, 2, 3, 4, 5, 6 ] to deeply equal [ 1, 2, 3, 4, 5 ]`.
+  - Adoption path proven end-to-end through the REAL save path
+    (`expandWeeklyToSchedule`), not by inserting pattern rows directly.
+  - docs/RUNBOOK.md §6b documents the re-save trigger, both source-of-truth
+    branches, and the two behaviours (replace-not-merge; empty pattern does not
+    wipe). NO backfill script was added — deliberately.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 2–4h

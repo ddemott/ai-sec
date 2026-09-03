@@ -9,16 +9,16 @@ Pairs with `docs/DEPLOYMENT.md` (how prod is wired) and `docs/SECURITY.md`.
 
 ## 0. Quick reference
 
-| Thing         | Value                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------ |
-| Backend       | `https://secretary-hq-production.up.railway.app/`                                                |
-| Liveness      | `GET /health` — process up only, no DB (`{status, started_at}`)                            |
-| Readiness     | `GET /ready` — pings DB + reports pool saturation; 503 when DB unreachable                 |
-| Metrics       | `GET /metrics` — Prometheus text, Bearer `METRICS_TOKEN` (404 if token unset)              |
-| Phone (prod)  | `+1 630-822-9086` (Telnyx, tenant Thinking Hammer LLC; current)            |
-| Inbound trunk | LiveKit trunk `ST_aUM3GuCuc9wL`                                                            |
-| Logs          | Railway live-tail (stdout) + Better Stack (if `BETTER_STACK_TOKEN` set)                    |
-| Errors        | Sentry (if `SENTRY_DSN` set)                                                               |
+| Thing         | Value                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| Backend       | `https://secretary-hq-production.up.railway.app/`                                                      |
+| Liveness      | `GET /health` — process up only, no DB (`{status, started_at}`)                                        |
+| Readiness     | `GET /ready` — pings DB + reports pool saturation; 503 when DB unreachable                             |
+| Metrics       | `GET /metrics` — Prometheus text, Bearer `METRICS_TOKEN` (404 if token unset)                          |
+| Phone (prod)  | `+1 630-822-9086` (Telnyx, tenant Thinking Hammer LLC; current)                                        |
+| Inbound trunk | LiveKit trunk `ST_aUM3GuCuc9wL`                                                                        |
+| Logs          | Railway live-tail (stdout) + Better Stack (if `BETTER_STACK_TOKEN` set)                                |
+| Errors        | Sentry (if `SENTRY_DSN` set)                                                                           |
 | Services      | Railway: `secretary-hq` (backend), `secretary-hq-agent` (worker), `dashboard` — all deploy from `main` |
 
 **Key metric series** (`/metrics`): `errors_total{event}`, `http_requests_total{route,method,status}`, `http_request_duration_ms`, `booking_attempts_total{outcome,source}`, `tool_calls_total{tool,outcome}`, `sync_dispatches_total{provider,entity,action}`.
@@ -96,6 +96,71 @@ Check:
 2. **A lock fight** — `lock_timeout` errors point at contended rows (e.g. booking under load; the GiST exclusion constraints are race-safe but a pathological pattern can still queue).
 3. **Connection leak** — `pool.total` pinned at 10 with low throughput. Restart the backend to drain; then hunt the un-released client.
 4. `/ready` is a signal, not a traffic gate, unless Railway's healthcheck path was repointed to it.
+
+### 6b. "No one is scheduled that day" for hours the owner does work
+
+Symptom: a caller asks for a normal weekday inside the owner's normal hours and
+is told nobody is scheduled. `employee_schedule` simply has no row for that date.
+
+Background: `employee_schedule` stores one dated row per shift and **no rule**.
+The rolling extender (`src/services/extendSchedules.ts`, worker
+`src/workers/scheduleExtender.ts`) keeps the bookable window from shrinking a day
+per day. It projects from ONE of two sources, and which one it used decides what
+you do next:
+
+1. **The DECLARED rule** — `employee_schedule_pattern (tenant_id, employee_id, day_of_week)`,
+   written by `expandWeeklyToSchedule` from the same weekly grid the wizard and
+   `POST /shifts/expand-weekly` already collect. When a rule exists for an
+   employee, it wins outright and the derivation is skipped for them.
+2. **A DERIVED fallback** — the employee's tail week, **clamped to
+   `CURRENT_DATE + 14`**. The clamp is load-bearing: without it, a single
+   one-off shift far in the future (an "annual inventory Saturday" 300 days out)
+   becomes the whole tail week, Mon–Fri silently stop being extended, and the
+   business goes unbookable in about six months.
+
+**ADOPTION IS ON THE OWNER'S NEXT SAVE, AND ONLY ON THEIR NEXT SAVE.** Migration
+`20260820000000` added the table and **deliberately backfilled nothing** —
+inventing a rule out of historical rows is the row archaeology the table exists
+to end, and every archaeological rule is wrong in its own way (a recent-window
+rule resurrects a weekday the owner dropped; a "densest week" rule over-schedules
+the light leg of a rotation, which puts a real customer in front of a locked
+door; a "3+ weekdays" rule never qualifies for the Saturday-only owner and leaves
+them unbookable). So every tenant provisioned before that migration runs on the
+clamped fallback until somebody saves hours for them.
+
+Check:
+
+```sql
+-- Which source is this employee on?
+SELECT day_of_week, start_time, end_time
+  FROM employee_schedule_pattern
+ WHERE tenant_id = $1 AND employee_id = $2
+ ORDER BY day_of_week;          -- rows → declared rule; empty → derived fallback
+
+-- How far the bookable window actually reaches:
+SELECT MAX(shift_date) FROM employee_schedule
+ WHERE tenant_id = $1 AND employee_id = $2 AND is_off IS NOT TRUE;
+```
+
+Fix: **have the owner re-save their weekly hours** (Schedule tab → weekly hours,
+or the setup wizard's hours step). That one save writes the rule and the next
+extender tick projects it. Do NOT write a backfill script — the rule is a
+statement of intent and only the owner has it.
+
+Two behaviours worth knowing before you touch anything:
+
+- The rule is **replaced, not merged**. A weekday absent from the saved grid
+  means the owner dropped it; merging would resurrect it forever.
+- An **empty** pattern does not wipe an existing rule. "This employee has no
+  hours" and "the caller sent nothing" arrive identically, and wiping on the
+  ambiguous reading is how a bookable business goes dark. The callers that mean
+  "no hours" delete the rule explicitly, beside the delete of the future rows.
+
+Covered by `tests/services/schedulePatternAdoption.realdb.test.ts` (adoption path
+
+- the clamp regression) and `tests/services/extendSchedules.realdb.test.ts`.
+
+---
 
 ---
 
