@@ -1,0 +1,59 @@
+name: Pre-merge checks
+
+# T-012. Two mechanical gates that the four CI jobs do NOT cover, kept in their
+# own workflow so they stay fast (no DB, no browsers, ~30s) and can be made a
+# required check without waiting on the 7-minute Backend job.
+#
+#   1. DOC DRIFT — `verify:claude-md` counts route modules, migrations and YAML
+#      bundles against the live filesystem, checks every `- `/path`` in Key
+#      Directories exists, and checks every commit hash it cites is an ancestor
+#      of main. CLAUDE.md is the file every agent and new contributor reads
+#      first; when it drifts it does not fail loudly, it just starts lying.
+#   2. PLAINTEXT SECRETS — `scripts/scan-secrets.ts`. A credential is in git
+#      history the moment it is committed; removing the line later does not
+#      un-leak it, only rotation does. The cheapest possible moment to catch one
+#      is before the merge button.
+#
+# Deliberately NOT here: format/lint/typecheck/tests. Those live in ci.yml and
+# duplicating them would double the runner cost for no extra signal.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Doc drift + secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # verify-claude-md resolves cited commit hashes against main, so a
+          # shallow clone would make every hash look unmerged.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Both checks run even if the first fails, so one PR round-trip reports
+      # both problems instead of revealing the second one only after the first
+      # is fixed.
+      - name: CLAUDE.md drift
+        id: drift
+        run: npm run verify:claude-md
+
+      - name: Plaintext secret scan
+        if: always() && steps.drift.conclusion != 'cancelled'
+        run: npx tsx scripts/scan-secrets.ts

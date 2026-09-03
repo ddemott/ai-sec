@@ -157,9 +157,9 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-007 | Fix E2E test flakiness               | 1    | Claude | HIGH     | —            | ⬜      |
 | T-008 | Validate intake trees end-to-end     | 1    | Mixed  | HIGH     | T-000        | ⬜      |
 | T-009 | Volume metering & tier caps          | 1    | Claude | HIGH     | T-004        | ⬜      |
-| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | 🟡      |
-| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | 🟡      |
-| T-012 | Deployment checklist & automation    | 1    | Claude | MEDIUM   | —            | ⬜      |
+| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | ✅      |
+| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | ✅      |
+| T-012 | Deployment checklist & automation    | 1    | Claude | MEDIUM   | —            | 🟡      |
 | T-013 | Full onboarding walk-through         | 1    | Human  | MEDIUM   | T-003, T-008 | ⬜      |
 | T-014 | Dead code removal                    | 1    | Claude | LOW      | T-001..T-013 | ⬜      |
 | T-101 | Onboarding wizard redesign           | 2    | Claude | CRITICAL | T-013        | ⬜      |
@@ -539,9 +539,9 @@ DEFINITION_OF_DONE:
 
 ### T-010: Schedule pattern adoption verify
 
-STATUS: 🟡 IN_PROGRESS — code + tests done and green on
-`feat/T-006-T-010-T-011-monitoring-schedule-cost`; NOT on `main`, so by §0.7 it
-is not DONE.
+STATUS: ✅ DONE (merged to `main` 2026-09-03 as `d0c31ac`, PR #394; prod deploy
+verified — backend `started_at` moved to 2026-09-03T22:33:09Z, 4/4 on
+`npm run status --env prod`)
 
 <!--
   ACCEPTANCE_TEST run: `npx vitest run tests/services/schedulePatternAdoption.realdb.test.ts`
@@ -585,9 +585,9 @@ DEFINITION_OF_DONE:
 
 ### T-011: Verify cost tracking ledger
 
-STATUS: 🟡 IN_PROGRESS — code + tests done and green on
-`feat/T-006-T-010-T-011-monitoring-schedule-cost`; NOT on `main`, so by §0.7 it
-is not DONE.
+STATUS: ✅ DONE (merged to `main` 2026-09-03 as `d0c31ac`, PR #394; prod deploy
+verified — backend `started_at` moved to 2026-09-03T22:33:09Z, 4/4 on
+`npm run status --env prod`)
 
 <!--
   ACCEPTANCE_TEST run: `npx vitest run tests/services/aiCostLedger.realdb.test.ts`
@@ -629,7 +629,26 @@ DEFINITION_OF_DONE:
 
 ### T-012: Deployment checklist & automation
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — code + docs done on `feat/T-012-deployment-checklist`;
+not on `main`, so by §0.7 not DONE.
+
+<!--
+  ACCEPTANCE_TEST run:
+    npm run verify:claude-md   → "✓ CLAUDE.md verified — no drift detected", exit 0
+    npm run scan:secrets       → "clean — no plaintext credentials", exit 0
+  Both gates PROVEN to fail, not just to pass:
+    - a path edited to `/src/does-not-exist` in CLAUDE.md → exit 1,
+      "[directory-existence] path ... listed but does not exist on disk"
+    - a planted synthetic `sk_live_…` in src/ → exit 1, "src/__leak_proof.ts:1:
+      stripe_live_key" (redacted in output; both artifacts removed after)
+  The secret scan is a TESTED script (scripts/scan-secrets.ts, 23 tests in
+  tests/scripts/scanSecrets.test.ts) rather than a git-grep line in YAML,
+  because a rule that lives only in a workflow step is never exercised until
+  the day it should fire.
+  NOTE: making `Pre-merge checks` a REQUIRED check is a repo-settings change —
+  Dale's, not doable from here. Listed in the PR body.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 3–4h
