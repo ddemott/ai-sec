@@ -196,4 +196,4 @@ The inbound path: **PSTN caller → Telnyx DID → Telnyx SIP Connection → Liv
 - Capture the dominant `errors_total{event}` label + a Better Stack log window + the Sentry issue link.
 - If a deploy caused it: revert on `main` (merge), confirm CI green (`npm run ci:status`), let Railway redeploy.
 - Apply prod DB migrations BEFORE merging code that depends on them (`./scripts/setup-db.sh "<prod-url>"`).
-- Record the incident + fix in `RESOLVED.md` once closed.
+- Record the incident + fix in `planning/RESOLVED.md` once closed.

@@ -3,7 +3,7 @@
 **Date:** 2026-07-05
 **Status:** Design settled (two judge-panel syntheses + one follow-up finding, all decisions locked with Dale). Not yet implemented.
 **Scope:** `dashboard/components/SetupWizard/` (SetupWizard only — SoloWizard is a later, separate PR) + a new backend commit endpoint + a new phone go-live UX layer.
-**Related:** `docs/TODO.md` UX backlog → "Wizard Phase B". PR #203 (`POST /coverage/dry-run`, merged) is the foundation this design builds on.
+**Related:** `docs/planning/TODO.md` UX backlog → "Wizard Phase B". PR #203 (`POST /coverage/dry-run`, merged) is the foundation this design builds on.
 
 ## Background
 

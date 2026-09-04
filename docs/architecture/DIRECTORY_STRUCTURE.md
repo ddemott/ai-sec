@@ -566,3 +566,20 @@ dashboard/
 - **Dashboard tests** stay co-located in `dashboard/` (React convention; jsdom config is separate).
 - **Agent tests** move to `agent/src/tests/` to match the backend pattern without affecting the agent's own vitest config.
 - **Migrations** (`supabase/migrations/`) are never reorganized — the numbered chain is the source of truth.
+
+## `docs/` organization (updated 2026-09-04)
+
+Flat *.md files reorganized into topic dirs to eliminate root clutter:
+
+- `architecture/` — ARCHITECTURE.md, DIRECTORY_STRUCTURE.md, core tech maps
+- `planning/` — TODO.md (single backlog), RESOLVED.md, ROADMAP.md, TEST_*.md, item lifecycle
+- `voice/` — VOICE_AGENT_PLAYBOOK.md, QUESTION_TREE_ARCHITECTURE.md, CALL_*.md, migrations, superseded call designs, knowledge base
+- `product/` — MISSION, STRATEGY, FEATURES, COMPETITOR_*, VERTICAL-*
+- `design/` — DESIGN_HANDOFF.md, UI_UX_DESIGN.md, DIAGRAMS.md
+- `workflow/` — DEVELOPMENT_WORKFLOW.*, CODING_STANDARDS.md, BRANCH_CHECKLIST.md, AGENTS.md, LESSONS_LEARNED.md
+- `operations/` — DEPLOYMENT.*, RUNBOOK.md, SECURITY.md, onboarding, TICKET_SUPPORT.md
+
+Existing structured subdirs unchanged: `legaldocs/`, `superpowers/{specs,plans}/`, `mockups/`.
+
+All cross-references and index tables in README.md updated. No stragglers (verified via repo search).
+

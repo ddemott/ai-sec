@@ -70,7 +70,7 @@ intercept: "The number you dialed is not in service… Message EL402IL53." This 
 support's "the FQDN connection lacks inbound call handling." Earlier "recycled-DID propagation"
 theory is superseded; LiveKit `+`/format theory is ruled out (no INVITE arrives to reject).
 
-> **Full evidence in the archived go-live log (`docs/RESOLVED.md`, 2026-07-05 entry → Step 5, 2026-06-03 ~16:00 UTC).**
+> **Full evidence in the archived go-live log (`docs/planning/RESOLVED.md`, 2026-07-05 entry → Step 5, 2026-06-03 ~16:00 UTC).**
 
 **Added evidence (2026-06-03):** Telnyx's own Elastic SIP Trunking dashboard shows
 **0 inbound calls / 0 minutes** for this number — inbound never reaches the trunk at

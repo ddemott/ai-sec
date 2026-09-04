@@ -3,9 +3,9 @@
 **Status:** initial implementation checkpoint plus Step 5/6 proof and first preset-catalog slice completed; broader preset rollout still in progress. **Date:** 2026-08-12. **Owner:** Dale.
 
 Related docs:
-- [VERTICAL-PRESET-BLOCK-ARCHITECTURE](../../VERTICAL-PRESET-BLOCK-ARCHITECTURE.md)
-- [ROADMAP](../../ROADMAP.md)
-- [QUESTION_TREE_ARCHITECTURE](../../QUESTION_TREE_ARCHITECTURE.md)
+- [VERTICAL-PRESET-BLOCK-ARCHITECTURE](../../product/VERTICAL-PRESET-BLOCK-ARCHITECTURE.md)
+- [ROADMAP](../../planning/ROADMAP.md)
+- [QUESTION_TREE_ARCHITECTURE](../../voice/QUESTION_TREE_ARCHITECTURE.md)
 
 ## Checkpoint outcome now implemented
 

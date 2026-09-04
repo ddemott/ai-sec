@@ -14,9 +14,9 @@
 
 **Prior refresh:** 2026-05-22 — Walk-in customer create modal work. Replaced the single "Full name" field in CustomerCombobox with a proper `CustomerCreateModal` (split name, phone, email, address, timezone, internal notes). `name` is now derived from first+last on submit. Dashboard test count: 705 → 716.
 
-**Previous major refresh (2026-05-13):** PK-rename pilot 28 closed the real-DB coverage gap. See `RESOLVED.md` for the full 28-pilot summary (including the 121 follow-up renames, 5 latent bugs surfaced, and the UUID type fixes). Detailed migration and test counts are in RESOLVED.md.
+**Previous major refresh (2026-05-13):** PK-rename pilot 28 closed the real-DB coverage gap. See `planning/RESOLVED.md` for the full 28-pilot summary (including the 121 follow-up renames, 5 latent bugs surfaced, and the UUID type fixes). Detailed migration and test counts are in RESOLVED.md.
 
-Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pass 2, etc.) has been consolidated in `RESOLVED.md`.
+Older refresh history (May 9–12 PK-rename sprint, reminder wiring, security pass 2, etc.) has been consolidated in `planning/RESOLVED.md`.
 
 
 > **Maintenance rule:** Refresh this file whenever a commit measurably moves

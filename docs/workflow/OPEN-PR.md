@@ -48,4 +48,4 @@ inference from a red run plus the documented rule, not an observation of Railway
 ## Why this file is short
 
 This file only answers: what is open, and what just merged. Longer archaeology lives in
-`docs/RESOLVED.md` and git history.
+`docs/planning/RESOLVED.md` and git history.

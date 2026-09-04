@@ -1,6 +1,6 @@
 # Framework Migrations
 
-Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `docs/TODO.md`.
+Tracks in-flight and recently-completed framework/provider swaps. This is the index — detailed retrospectives live in commit messages, and active follow-ups live in `docs/planning/TODO.md`.
 
 **Last updated:** 2026-08-11 (refreshed current tool-count wording and kept the live voice stack / question-tree status aligned with the repo)
 
@@ -14,7 +14,7 @@ Tracks in-flight and recently-completed framework/provider swaps. This is the in
 
 **Current stack:** Telnyx (carrier + SIP trunk) → LiveKit Cloud (SIP ingress) → LiveKit Agent worker (Node) → Deepgram Nova-3 (STT) + **OpenAI GPT-4.1-mini** (voice LLM; 4o-mini for summaries/classify/fallback) + **Deepgram Aura** (TTS, streaming; per-tenant voice via `tenants.tts_voice` — `tts_speed` is INERT, see §5) → Fastify `/agent-tools/*`. Call SEQUENCING is question trees (§6).
 
-**Open follow-up:** First live PSTN call still pending full different-carrier verification — see `docs/TODO.md` (P0 Voice) and `docs/RUNBOOK.md` section 7.
+**Open follow-up:** First live PSTN call still pending full different-carrier verification — see `docs/planning/TODO.md` (P0 Voice) and `docs/RUNBOOK.md` section 7.
 
 ---
 
@@ -54,7 +54,7 @@ The fallback path inside `runFallback()` uses `openai.TTS` as a last-resort voic
 
 ## Related docs
 
-- `docs/TODO.md` — full active task list
+- `docs/planning/TODO.md` — full active task list
 - `docs/ARCHITECTURE.md` — system architecture
 - `CLAUDE.md` — project overview, includes migration callout
 - `docs/VOICE_AGENT_PLAYBOOK.md` — rules for building/maintaining voice agents (pipeline vs Realtime, never-silent layers, etc.)

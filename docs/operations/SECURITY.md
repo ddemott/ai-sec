@@ -157,7 +157,7 @@ Square also verifies HMAC against `${notificationUrl}${body}` rather than the bo
 
 ## Open follow-ups
 
-These are tracked in `docs/TODO.md`:
+These are tracked in `docs/planning/TODO.md`:
 
 - Admin "lock account" UI surface (currently SQL-only via `password_changed_at` update).
 - Per-worker agent identity (only matters when we run multiple agent workers concurrently).

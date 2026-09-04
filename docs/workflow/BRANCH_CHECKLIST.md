@@ -2,7 +2,7 @@
 
 Use this checklist when starting and finishing work on a feature branch.
 
-For the full **TODO/roadmap item lifecycle** (clean close vs parallel/conflict close, including mandatory re-test after resolving conflicts): see [`TODO_ITEM_LIFECYCLE.md`](TODO_ITEM_LIFECYCLE.md).
+For the full **TODO/roadmap item lifecycle** (clean close vs parallel/conflict close, including mandatory re-test after resolving conflicts): see [`TODO_ITEM_LIFECYCLE.md`](../planning/TODO_ITEM_LIFECYCLE.md).
 
 ## When Starting a Branch
 
@@ -20,7 +20,7 @@ For the full **TODO/roadmap item lifecycle** (clean close vs parallel/conflict c
   - [ ] `npm run verify:claude-md`
   - [ ] `npm run build` (via script)
   - [ ] `npm test` (or targeted tests)
-- [ ] Local tracking started (this checklist + docs/TODO.md + RESOLVED.md entry)
+- [ ] Local tracking started (this checklist + `planning/TODO.md` + `planning/RESOLVED.md` entry)
 
 ## While Developing
 
@@ -41,7 +41,7 @@ For the full **TODO/roadmap item lifecycle** (clean close vs parallel/conflict c
 - [ ] All new or modified tests have proper 5W diagnostic comments
 - [ ] Documentation updated:
   - [ ] `CLAUDE.md` (if new patterns, directories, commands, or principles)
-  - [ ] `docs/TODO.md` / `RESOLVED.md`
+  - [ ] `planning/TODO.md` / `planning/RESOLVED.md`
   - [ ] Other relevant `*.md` files
 - [ ] `npm run verify:claude-md` passes
 - [ ] No test `.only` / `.skip` leftovers

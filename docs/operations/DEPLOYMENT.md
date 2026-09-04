@@ -359,7 +359,7 @@ The agent worker lives in `agent/` and runs as a separate Railway service (`secr
 
 (The competitor-CRM integrations — Jobber/HubSpot/ServiceTitan/GoHighLevel — were removed from the codebase 2026-06-12. **Square sync remains live.**)
 
-Google/Outlook OAuth creds and the Square webhook signature key are set in Railway. Stripe route code exists too, but the Stripe webhook endpoint is still unregistered and final billing price IDs are still pending per `docs/TODO.md`. No separate workflow engine to deploy.
+Google/Outlook OAuth creds and the Square webhook signature key are set in Railway. Stripe route code exists too, but the Stripe webhook endpoint is still unregistered and final billing price IDs are still pending per `docs/planning/TODO.md`. No separate workflow engine to deploy.
 
 ---
 
@@ -444,7 +444,7 @@ If the token is unset, both services keep running with stdout-only logging — t
 
 ### What's NOT yet wired
 
-This is the first observability slice; metrics, error monitoring, and expanded live QA are tracked separately in `docs/TODO.md`. Specifically out of scope for this slice:
+This is the first observability slice; metrics, error monitoring, and expanded live QA are tracked separately in `docs/planning/TODO.md`. Specifically out of scope for this slice:
 
 - Dashboard logs (Next.js). Backend + agent are the priority because they handle the call path; dashboard logs are nice-to-have for support.
 - Metrics (call success rate, booking success rate, tool-call latency). Daily-summary cron is a planned follow-up.
