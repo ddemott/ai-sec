@@ -179,9 +179,11 @@ Before you create a new feature branch or open a new PR, the previous feature br
 
 - Pushed to its remote
 - Merged into `main`
-- Deleted (both locally and on the remote)
+- Deleted (both locally and on the remote) — **no dead branches left open**
 
-This rule prevents painful rebase conflicts and context loss when multiple long-lived branches exist in parallel.
+This rule prevents painful rebase conflicts and context loss when multiple long-lived branches exist in parallel. A merged PR whose branch still exists is not closed out.
+
+**End-to-end close-out (pick → PR → merge → purge), including the exception playbook when other PRs are already open or conflicts appear after testing:** see [`docs/TODO_ITEM_LIFECYCLE.md`](TODO_ITEM_LIFECYCLE.md). After any merge-from-`main` that touched conflicts, re-run the relevant test suites before claiming green.
 
 The rule is enforced in:
 
