@@ -18,6 +18,14 @@
  * Run:  cd agent && npx tsx scripts/sim-questiontree.ts
  *   env: OPENAI_API_KEY (repo-root .env is loaded)
  *   SIM_CASE=<substr>      run only matching scenarios
+ *   SIM_BUSINESS=a,b,c     VERTICAL MODE (T-008): instead of the scripted
+ *                          scenarios, generate one intake call per business_type
+ *                          and grade that the vertical's OWN intake tree fired.
+ *                          The SELECTABLE tree ids are compiled from that
+ *                          business_type's preset exactly as production does
+ *                          (the library handed to the agent stays the full
+ *                          platform set), so a tree the preset withholds is
+ *                          unreachable here too.
  *   SIM_RUNS=N             runs per scenario (default 1)
  *   SIM_TRACE=1            print every line + tool call
  *   SIM_QT_MODEL=…         agent model (default gpt-4.1-mini — the prod voice LLM)
@@ -30,10 +38,16 @@ loadEnv(); // agent-local .env, if any, wins for agent-specific vars
 import type { llm } from '@livekit/agents';
 import { ChecklistTracker } from '../src/checklist/tracker.js';
 import { createChecklistTools } from '../src/checklist/checklistTools.js';
-import { buildChecklistPrompt } from '../src/checklist/checklistAgent.js';
+import { buildChecklistPrompt, resolveSelectableTreeIds } from '../src/checklist/checklistAgent.js';
 import type { KnownCustomer } from '../src/customerContext.js';
 import { PLATFORM_TREE_LIBRARY } from '../src/checklist/trees.js';
-import type { NodeStatus } from '../src/checklist/types.js';
+import { compileRuntimeConfig } from '../src/checklist/blockCompiler.js';
+import type { NodeStatus, QuestionTreeDef } from '../src/checklist/types.js';
+import type { TenantRuntimeConfig } from '../src/checklist/blockTypes.js';
+import {
+  defaultChecklistPresetIdForBusinessType,
+  deriveChecklistRuntimeConfig,
+} from '../../shared/checklistPresetDerivation.js';
 
 const API_KEY = process.env.OPENAI_API_KEY;
 const AGENT_MODEL = process.env.SIM_QT_MODEL || 'gpt-4.1-mini';
@@ -49,6 +63,10 @@ const AGENT_BASE = (process.env.SIM_QT_BASE_URL || '').replace(/\/+$/, '');
 const AGENT_URL = AGENT_BASE ? `${AGENT_BASE}/chat/completions` : OPENAI_URL;
 const AGENT_KEY = process.env.SIM_QT_API_KEY || API_KEY;
 const CASE_FILTER = process.env.SIM_CASE || '';
+const BUSINESS_TYPES = (process.env.SIM_BUSINESS || '')
+  .split(',')
+  .map((b) => b.trim())
+  .filter(Boolean);
 const RUNS = Number(process.env.SIM_RUNS || 1);
 const TRACE = !!process.env.SIM_TRACE;
 
@@ -201,7 +219,7 @@ function makeFakeBackend(): Record<string, Fake> {
       JSON.stringify({ success: true, customer_id: 'cust_sim_1' })
     ),
     get_company_policy_answer: fake(
-      "Answer a question about the business from the knowledge base.",
+      'Answer a question about the business from the knowledge base.',
       { question: str },
       JSON.stringify({
         success: true,
@@ -244,6 +262,15 @@ interface Persona {
   opener: string;
   facts: string;
   behaviour: string;
+  /**
+   * VERTICAL MODE only. The scripted scenarios pin exact facts because their
+   * graders measure recorded VALUES, so an invented fact would be measured as
+   * truth. A vertical probe measures something different — whether the intake
+   * tree's questions get ASKED at all — and it has no fact sheet for 30 trades.
+   * Letting the caller improvise concrete answers is the only way to walk an
+   * unseen tree; the graders here never assert a specific value.
+   */
+  improvise?: boolean;
 }
 
 function personaSystem(p: Persona): string {
@@ -253,8 +280,14 @@ stage directions, no lists, no quotes around your words.
 
 WHY you called (open with this, in your own words): ${p.opener}
 
-FACTS YOU HOLD (give them when asked — or as your behaviour says; NEVER invent facts not
-listed; if asked something not here, say you don't know or would rather not say):
+${
+  p.improvise
+    ? `FACTS YOU HOLD (give them when asked — or as your behaviour says; if asked something
+not listed, INVENT one plausible, concrete, ordinary answer and stick to it for the rest
+of the call — never say "I don't know" to a routine question):`
+    : `FACTS YOU HOLD (give them when asked — or as your behaviour says; NEVER invent facts not
+listed; if asked something not here, say you don't know or would rather not say):`
+}
 ${p.facts}
 
 BEHAVIOUR: ${p.behaviour}
@@ -299,9 +332,27 @@ async function runCall(
     bookResults?: string[];
     /** Override get_available_slots' result (batch C reason codes). */
     slotsResult?: string;
+    /**
+     * VERTICAL MODE: the tenant's tree LIBRARY — what EXISTS. Production seeds
+     * every vertical with the WHOLE platform library and lets the preset decide
+     * what is SELECTABLE; those are two different jobs. Collapsing them (seeding
+     * only the preset's trees) crashes tracker construction, because
+     * `booking.book` carries a cross-tree `requires` on `drop_off_ok`, which
+     * lives in `fix_computer` — a tree no preset enables. That was found on
+     * 2026-08-14 and is why scripts/seed-question-tree-templates.ts seeds the
+     * full library. This sim mirrors production; it does not re-make the bug.
+     */
+    library?: QuestionTreeDef[];
+    /**
+     * VERTICAL MODE: the tenant's derived preset. Restricts what the model may
+     * SELECT (via resolveSelectableTreeIds) and drives the prompt's call policy.
+     * A tree the preset withholds is unreachable no matter what the caller asks.
+     */
+    runtimeConfig?: TenantRuntimeConfig;
   } = {}
 ): Promise<RunOutcome> {
-  const tracker = new ChecklistTracker(PLATFORM_TREE_LIBRARY);
+  const library = extras.library ?? PLATFORM_TREE_LIBRARY;
+  const tracker = new ChecklistTracker(library);
   const fakes = makeFakeBackend();
   if (extras.myAppointments) {
     const orig = fakes.get_my_appointments;
@@ -335,7 +386,10 @@ async function runCall(
   let goodbye = '';
   const toolkit = createChecklistTools({
     tracker,
-    library: PLATFORM_TREE_LIBRARY,
+    library,
+    selectableTreeIds: extras.runtimeConfig
+      ? resolveSelectableTreeIds({ library, runtimeConfig: extras.runtimeConfig })
+      : undefined,
     realTools: fakes as unknown as llm.ToolContext,
     callerPhone,
     onSelectionChanged: () => {}, // schemas are rebuilt fresh every round below
@@ -358,7 +412,8 @@ async function runCall(
       businessHours: 'Monday to Friday, 1:00 PM to 5:00 PM',
       bookableThrough: 'Friday, August 15, 2026',
     },
-    library: PLATFORM_TREE_LIBRARY,
+    library,
+    runtimeConfig: extras.runtimeConfig,
     callerPhone,
     knownCustomer: extras.knownCustomer ?? null,
     staffFirstNames: extras.staffFirstNames,
@@ -392,8 +447,7 @@ async function runCall(
       }
       for (const tc of toolCalls) {
         const tool = tools[tc.function.name] as
-          | { execute: (a: unknown, o: unknown) => Promise<unknown> }
-          | undefined;
+          { execute: (a: unknown, o: unknown) => Promise<unknown> } | undefined;
         let res: unknown = `unknown tool ${tc.function.name}`;
         if (tool) {
           let args: unknown = {};
@@ -402,8 +456,9 @@ async function runCall(
           } catch {
             /* {} */
           }
-          res = await (tool as unknown as { execute: (a: unknown, o: unknown) => Promise<unknown> })
-            .execute(args, { toolCallId: tc.id });
+          res = await (
+            tool as unknown as { execute: (a: unknown, o: unknown) => Promise<unknown> }
+          ).execute(args, { toolCallId: tc.id });
         }
         const rs = typeof res === 'string' ? res : JSON.stringify(res);
         if (TRACE)
@@ -445,6 +500,8 @@ interface Scenario {
   staffFirstNames?: string[];
   bookResults?: string[];
   slotsResult?: string;
+  library?: QuestionTreeDef[];
+  runtimeConfig?: TenantRuntimeConfig;
   grade: (o: RunOutcome) => string[]; // list of failures; empty = pass
 }
 
@@ -505,9 +562,7 @@ team on Central time. You WANT the meeting — accept the first offered time.`,
             ? []
             : [`dictated number read back ${readbacks} times — must be exactly once`];
         })(),
-        ...(agentSaid(o, /\bMarcus\b/)
-          ? []
-          : ["the caller's name was never used in conversation"]),
+        ...(agentSaid(o, /\bMarcus\b/) ? [] : ["the caller's name was never used in conversation"]),
         ...(agentSaid(o, /what would you like to (discuss|talk about)/i)
           ? ['asked for the topic the opener already gave']
           : []),
@@ -668,7 +723,8 @@ the details this time.`,
   {
     title: 'BUY THE SERVICE — a prospect qualifies, then books the demo',
     persona: {
-      opener: 'Hi — I heard your phone is answered by an AI? I want something like that for my shop.',
+      opener:
+        'Hi — I heard your phone is answered by an AI? I want something like that for my shop.',
       facts: `Your name: Dana Whitfield. Number: 262-497-9039. Email: dana@whitfieldauto.com.
 You run an independent auto repair shop, two bays. You take maybe twenty-five calls a day.
 What you want handled is APPOINTMENT BOOKING and nothing else — messages and questions
@@ -774,7 +830,7 @@ on the machine.`,
     ],
   },
   {
-    title: "THE ELSE — a need no tree covers still ends in a saved message, never a dead end",
+    title: 'THE ELSE — a need no tree covers still ends in a saved message, never a dead end',
     persona: {
       opener:
         "This is an odd one — my nephew's getting married and I want to know if Dale " +
@@ -892,8 +948,7 @@ placing a contractor with a client called Fermilab Systems. Six-month contract, 
 an hour, fully remote, team on Central time. Take the FIRST time offered. Once a time is
 agreed, ASK PLAINLY: "So do I call him at that time, or does he call me?" — you need to
 know before you hang up.`,
-      behaviour:
-        'Practical and brisk. You always ask who is calling whom before you finish.',
+      behaviour: 'Practical and brisk. You always ask who is calling whom before you finish.',
     },
     grade: (o) => [
       ...has(o, 'book', ['done']),
@@ -991,9 +1046,7 @@ Accept a message being passed along urgently.`,
     grade: (o) => [
       ...has(o, 'take_message_action', ['done']),
       // The flag the owner's inbox sorts on — the caller said it, so it must ride.
-      ...(o.fakes.take_message.calls.some(
-        (c) => (c as { is_urgent?: boolean }).is_urgent === true
-      )
+      ...(o.fakes.take_message.calls.some((c) => (c as { is_urgent?: boolean }).is_urgent === true)
         ? []
         : ['took the message but never marked it urgent — the caller said it plainly']),
       // And it must NOT promise a handoff that cannot happen on this flow.
@@ -1067,7 +1120,7 @@ say "oh, that's the one I made this morning — I'll keep it" and do not book an
       // The true reason, spoken.
       ...(agentSaid(o, /already have an appointment at 2:?30|already have.{0,20}2:?30/i)
         ? []
-        : ["never told the caller the 2:30 was their OWN existing appointment"]),
+        : ['never told the caller the 2:30 was their OWN existing appointment']),
       // The invented reason must never appear.
       ...(agentSaid(o, /quarter hour|only book on the/i)
         ? ['manufactured a reason (the "quarter hour" lie) instead of relaying the tool\'s']
@@ -1135,9 +1188,7 @@ late. Nothing else.`,
     callerPhone: '7734487716',
     myAppointments: JSON.stringify({
       success: true,
-      appointments: [
-        { time: 'Monday, July 21 at 2:30 PM', service: 'Programming Consultation' },
-      ],
+      appointments: [{ time: 'Monday, July 21 at 2:30 PM', service: 'Programming Consultation' }],
     }),
     persona: {
       opener: "I already have a call scheduled with Dale — I need to check what time it's at.",
@@ -1159,10 +1210,130 @@ all you need.`,
   },
 ];
 
+// ── VERTICAL MODE (T-008) ─────────────────────────────────────────────────────
+//
+// The scripted scenarios above are hand-written replays of real defects. This
+// mode answers a different question, and one no unit test can: for a given
+// business_type, does the vertical's OWN intake tree actually get selected and
+// asked on a live conversation?
+//
+// The SELECTABLE tree ids are COMPILED FROM THE PRESET. The `library` itself is
+// still the full platform set — production works the same way, and `runCall`'s
+// note on `extras.library` says why the two must not be the same list: the
+// library is what EXISTS, the selectable ids are what this tenant may pick.
+// Restricting selection is the whole point: a tree a tenant's preset withholds
+// is unreachable on their calls no matter what the caller asks for, because
+// ChecklistOverrides can only SUBTRACT blocks. Letting the model select any tree
+// would prove nothing about what a real tenant's call can do.
+
+/** Build the tree list + runtime config a tenant of this business_type would run. */
+function verticalSetup(businessType: string): {
+  runtimeConfig: TenantRuntimeConfig;
+  library: QuestionTreeDef[];
+  selectable: string[];
+  intakeTree: QuestionTreeDef | undefined;
+} {
+  const runtimeConfig = deriveChecklistRuntimeConfig(
+    businessType,
+    defaultChecklistPresetIdForBusinessType(businessType),
+    {}
+  ) as unknown as TenantRuntimeConfig;
+  // The preset's own trees — what this tenant may SELECT. compileRuntimeConfig
+  // throws, loudly and by name, on an unknown block or an unresolvable tree_ref,
+  // so this doubles as the "no tree not found" check.
+  const selectable = compileRuntimeConfig(runtimeConfig).map((tree) => tree.tree_id);
+  // The LIBRARY is the full platform set — what EXISTS. See the note on
+  // `extras.library` in runCall for why these must not be the same list.
+  const library = PLATFORM_TREE_LIBRARY;
+  const slug = businessType.replace(/-/g, '_');
+  const intakeTree = selectable.includes(`${slug}_intake`)
+    ? library.find((tree) => tree.tree_id === `${slug}_intake`)
+    : undefined;
+  return { runtimeConfig, library, selectable, intakeTree };
+}
+
+/**
+ * A caller persona derived from the intake tree itself.
+ *
+ * The tree's `description` is written FOR THE PURPOSE SELECTOR and states what
+ * the caller wants; its nodes' `ask` text states what the business needs to
+ * know. Together that is enough to brief a caller for any of the 30 verticals
+ * without hand-writing 30 fact sheets — and hand-writing them would be worse,
+ * because the fixture would then encode what we EXPECT to be asked rather than
+ * what the tree actually asks.
+ */
+function verticalPersona(businessType: string, intakeTree: QuestionTreeDef): Persona {
+  const asks = intakeTree.nodes
+    .map((node) => ('ask' in node && node.ask ? `- ${node.ask}` : ''))
+    .filter(Boolean)
+    .join('\n');
+  return {
+    opener: `you need what a ${businessType.replace(/-/g, ' ')} business does. ${intakeTree.description}`,
+    facts: `You are an ordinary customer of a ${businessType.replace(/-/g, ' ')} business.
+Your name is Jordan Avery and your number is 630-555-0142.
+You are flexible on timing and happy to book. The receptionist may ask you about:
+${asks}
+Answer each with one plausible, ordinary, concrete detail and keep it consistent.`,
+    behaviour:
+      'Volunteer only your reason for calling at first; answer the rest as asked, one short ' +
+      'line per turn. Accept the first time you are offered. Do not steer the call.',
+    improvise: true,
+  };
+}
+
+function verticalScenarios(businessTypes: string[]): Scenario[] {
+  return businessTypes.map((businessType) => {
+    const { runtimeConfig, library, selectable, intakeTree } = verticalSetup(businessType);
+    const slug = businessType.replace(/-/g, '_');
+    if (!intakeTree) {
+      // Not a crash: some presets legitimately have no <slug>_intake (the
+      // local-service catch-all, owner-for-hire, law firm). Say so as a graded
+      // failure so a typo'd business_type can't masquerade as a pass.
+      return {
+        title: `vertical ${businessType} — no ${slug}_intake tree in the compiled preset`,
+        persona: { opener: 'n/a', facts: 'n/a', behaviour: 'n/a' },
+        library,
+        runtimeConfig,
+        grade: () => [
+          `preset '${runtimeConfig.preset_id}' offers [${selectable.join(', ')}] — no ` +
+            `'${slug}_intake', so this vertical's questions are unreachable`,
+        ],
+      };
+    }
+    return {
+      title: `vertical ${businessType} — ${slug}_intake fires on a real call`,
+      persona: verticalPersona(businessType, intakeTree),
+      callerPhone: '+16305550142',
+      library,
+      runtimeConfig,
+      grade: (o) => {
+        const ids = intakeTree.nodes.map((n) => n.node_id);
+        const asked = ids.filter((id) => o.tracker.status(id) === 'answered');
+        const touched = ids.filter((id) => o.tracker.status(id) !== 'unselected');
+        return [
+          // The DoD: at least one intake node fired. Not "all of them" — most
+          // nodes in these trees are `listen: true` on purpose and are only
+          // recorded if the caller volunteers them.
+          ...(asked.length > 0
+            ? []
+            : [
+                `no ${slug}_intake node was answered (statuses: ${ids
+                  .map((id) => `${id}=${o.tracker.status(id)}`)
+                  .join(', ')})`,
+              ]),
+          ...(touched.length > 0 ? [] : [`${slug}_intake was never selected at all`]),
+          ...mustClose(o),
+        ];
+      },
+    };
+  });
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const picked = SCENARIOS.filter(
+  const all = BUSINESS_TYPES.length ? verticalScenarios(BUSINESS_TYPES) : SCENARIOS;
+  const picked = all.filter(
     (s) => !CASE_FILTER || s.title.toLowerCase().includes(CASE_FILTER.toLowerCase())
   );
   console.log(
@@ -1182,6 +1353,8 @@ async function main(): Promise<void> {
           staffFirstNames: s.staffFirstNames,
           bookResults: s.bookResults,
           slotsResult: s.slotsResult,
+          library: s.library,
+          runtimeConfig: s.runtimeConfig,
         });
         const failures = s.grade(outcome);
         if (failures.length === 0) {
