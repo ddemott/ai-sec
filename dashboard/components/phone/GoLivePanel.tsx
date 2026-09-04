@@ -140,15 +140,52 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
   const [portSubmitting, setPortSubmitting] = useState(false);
   const [portSubmitted, setPortSubmitted] = useState(false);
 
+  // Bumped by every user-initiated action that owns `status`. A status poll
+  // captures this before its await and discards its result if the value moved
+  // while it was in flight: a poll that STARTED before the user acted must not
+  // land on top of what the user's action produced.
+  //
+  // Without it, the mount-time poll routinely resolved AFTER a failed
+  // activation and reset `status` away from 'failed' — which unmounts the
+  // "Activation failed" block at line ~283 along with the reason for it. The
+  // owner clicks Activate, it fails, and the screen silently goes back to
+  // looking like nothing happened. Found 2026-09-03 as a 1-in-20 flake in
+  // `SetupWizard > Step 9 Go Live > shows error state when activation fails`,
+  // which is the same defect the user hits, just on a faster clock.
+  const userActionSeq = useRef(0);
+  // The tenant whose activation OUTCOME (success or failure) this session
+  // established by a user action, or null. While it matches the current tenant,
+  // a status poll may not downgrade `status` — only promote it to 'active'.
+  //
+  // Both outcomes need this, and a poll is never evidence against either:
+  //   - failed:  a failed activation provisions nothing, so /provisioning/status
+  //              answers 'unprovisioned' forever. Applying it erases the error
+  //              and its reason, and the owner concludes the button did nothing.
+  //   - active:  a poll that STARTED before the number existed still reports
+  //              'unprovisioned'. Applying it takes the number back off the
+  //              screen seconds after handing it over.
+  //
+  // Keyed by tenant because the panel can be re-pointed at another business; one
+  // tenant's outcome says nothing about another's, and an unkeyed flag would
+  // freeze the NEW tenant's real status behind the old one's.
+  const activationOutcomeForTenant = useRef<string | null>(null);
+
   const fetchStatus = useCallback(async () => {
     if (!tenantId) return;
+    const seqAtStart = userActionSeq.current;
     try {
       const data = await Api.provisioning.status(tenantId);
+      // A user action superseded this poll while it was in flight — drop it.
+      if (userActionSeq.current !== seqAtStart) return;
+      const polled = toStatus(data.phone_status);
+      // Don't let a poll talk us out of a failure we just observed. 'active' is
+      // the one answer that legitimately overrides it — it means the activation
+      // actually landed despite the client-side error.
+      if (activationOutcomeForTenant.current === tenantId && polled !== 'active') return;
       setStatus((prev) => {
-        const next = toStatus(data.phone_status);
         // First time this session sees 'active' — anchor the poll window.
-        if (next === 'active' && prev !== 'active') setActivatedAt(new Date().toISOString());
-        return next;
+        if (polled === 'active' && prev !== 'active') setActivatedAt(new Date().toISOString());
+        return polled;
       });
       setInboundPhone(data.inbound_phone);
       setForwardedFromPhone(data.forwarded_from_phone);
@@ -159,21 +196,32 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
     }
   }, [tenantId]);
 
+  // Re-pointing the panel at another business must not carry the previous
+  // one's activation failure across with it. The error belongs to the tenant it
+  // happened on; for the new tenant it is stale and actively misleading.
+  useEffect(() => {
+    setActivateError(null);
+  }, [tenantId]);
+
   useEffect(() => {
     void fetchStatus();
   }, [fetchStatus]);
 
   async function handleActivate() {
     if (!tenantId) return;
+    userActionSeq.current += 1;
+    activationOutcomeForTenant.current = null;
     setActivating(true);
     setActivateError(null);
     setStatus('provisioning');
     try {
       const result = await Api.provisioning.activate(tenantId, areaCode.trim() || undefined);
+      activationOutcomeForTenant.current = tenantId;
       setStatus('active');
       setInboundPhone(result.phone_number);
       setActivatedAt(new Date().toISOString());
     } catch (err: unknown) {
+      activationOutcomeForTenant.current = tenantId;
       setStatus('failed');
       setActivateError(err instanceof Error ? err.message : 'Failed to activate phone');
     } finally {
