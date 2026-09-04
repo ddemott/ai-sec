@@ -102,9 +102,9 @@ bash scripts/setup-db.sh "$U" && DATABASE_URL="$U" npm run db:seed
 
 ### Open loose ends, stated rather than buried
 
-- **One unexplained test failure.** A full backend run showed `1 failed | 252
-passed` and the output was not captured before two consecutive re-runs came
-  back fully green. The failing test was never identified. The obvious suspects
+- **One unexplained test failure.** A full backend run showed
+  `1 failed | 252 passed` and the output was not captured before two
+  consecutive re-runs came back fully green. The failing test was never identified. The obvious suspects
   were checked and ruled out: `vocabulary.test.ts` filters by an explicit type
   list and `starterServices.test.ts` parses `seed.sql` text, so neither can see
   the throwaway `business_templates` row the new realdb test inserts. Recorded
