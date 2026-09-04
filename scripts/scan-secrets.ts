@@ -1,4 +1,3 @@
-#!/usr/bin/env npx tsx
 /**
  * Plaintext-secret scan for the pre-merge gate (T-012).
  *
@@ -22,9 +21,13 @@
  *   - Placeholder values (`xxx`, `...`, `<your-key>`, `changeme`, `example`).
  *     A committed placeholder is documentation, not a leak.
  *
- * Exit 0 = clean. Exit 1 = at least one finding, printed as `path:line: rule`
- * with the match REDACTED — a CI log is world-readable on a public repo, and a
- * scanner that prints the secret it found has leaked it a second time.
+ * Exit 0 = clean. Exit 1 = at least one finding, printed as
+ * `path:line: rule [redacted-preview]`. The preview is `redact()`'s output —
+ * a six-character prefix and a length — never the match itself: a CI log is
+ * world-readable on a public repo, and a scanner that prints the secret it
+ * found has leaked it a second time. The prefix is there because "which of the
+ * four keys on this line" is the first thing you need to know, and a length
+ * distinguishes a real credential from a placeholder at a glance.
  */
 import { execFileSync } from 'child_process';
 import { readFileSync } from 'fs';
@@ -91,6 +94,8 @@ export interface Finding {
   file: string;
   line: number;
   rule: string;
+  /** `redact()`'s output for the matched text — never the match itself. */
+  preview: string;
 }
 
 /** Redact so a CI log never becomes the second copy of the leak. */
@@ -109,7 +114,7 @@ export function scanContent(file: string, content: string): Finding[] {
       rule.pattern.lastIndex = 0;
       for (const m of text.matchAll(rule.pattern)) {
         if (looksLikePlaceholder(m[0])) continue;
-        findings.push({ file, line: i + 1, rule: rule.name });
+        findings.push({ file, line: i + 1, rule: rule.name, preview: redact(m[0]) });
       }
     }
   });
@@ -166,7 +171,7 @@ if (isDirectRun()) {
     process.exit(0);
   }
   console.error(`[scan-secrets] ${findings.length} finding(s):`);
-  for (const f of findings) console.error(`  ${f.file}:${f.line}: ${f.rule}`);
+  for (const f of findings) console.error(`  ${f.file}:${f.line}: ${f.rule} [${f.preview}]`);
   console.error(
     '\nRotate the credential FIRST — it is in git history the moment it was committed, ' +
       'and removing the line does not un-leak it. Then remove it from the working tree.'

@@ -21,8 +21,27 @@ import { sendValidationError, assertRowAffected } from './routeHelpers';
  * `YYYY-MM-DD` only — a timestamp here would invite a timezone bug into the one
  * concept that is definitionally a calendar day in the business's own locale.
  */
+/**
+ * Exported so tests can exercise the calendar rule directly — the guard is the
+ * interesting part, and reaching it only through HTTP hides which half failed.
+ */
+export const BlackoutDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'blackout_date must be YYYY-MM-DD')
+  // SHAPE IS NOT VALIDITY (review catch on #395). `2026-02-30` and
+  // `2026-13-01` match the regex, reach `$2::date`, and Postgres raises
+  // `date/time field value out of range` — a 500 the owner reads as "the app
+  // is broken" rather than "that day does not exist". Round-tripping through
+  // Date and comparing the ISO string back is the cheapest check that
+  // actually consults the calendar: JS normalises Feb 30 to Mar 2, so the
+  // strings stop matching.
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'blackout_date is not a real calendar date');
+
 const BlackoutSchema = z.object({
-  blackout_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'blackout_date must be YYYY-MM-DD'),
+  blackout_date: BlackoutDateSchema,
   reason: z.string().max(200).nullable().optional(),
 });
 
@@ -427,8 +446,14 @@ export function registerShiftRoutes(
       const tenantId = requireTenantId(req, reply);
       if (!tenantId) return;
       const { date } = req.params as { date: string };
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return reply.status(400).send({ success: false, error: 'date must be YYYY-MM-DD' });
+      // Same shape-plus-calendar check as the POST — the cast that would 500 is
+      // identical on this path, and a guard that covers one of two doors is not
+      // a guard.
+      const parsedDate = BlackoutDateSchema.safeParse(date);
+      if (!parsedDate.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: 'date must be a real calendar date in YYYY-MM-DD form' });
       }
       const res = await withTenantClient(tenantId, (client) =>
         client.query(

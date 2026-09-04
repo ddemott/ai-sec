@@ -17,7 +17,10 @@ import Fastify from 'fastify';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 
-import { registerShiftRoutes } from '../../src/routes/shifts';
+import {
+  registerShiftRoutes,
+  BlackoutDateSchema as BlackoutDateForTest,
+} from '../../src/routes/shifts';
 
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
@@ -176,5 +179,44 @@ describe('DELETE /shifts/blackouts/:date', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(queries).toHaveLength(0);
+  });
+});
+
+describe('blackout dates that pass the SHAPE check but are not real days', () => {
+  // Review catch on #395: the regex accepts any `\d{4}-\d{2}-\d{2}`, so
+  // 2026-02-30 reached `$2::date` and Postgres raised
+  // `date/time field value out of range` — a 500 the owner reads as "the app is
+  // broken" rather than "that day does not exist". Both doors (POST and DELETE)
+  // cast the same way, so both are checked.
+  it.each([
+    ['a day February does not have', '2026-02-30'],
+    ['a 13th month', '2026-13-01'],
+    ['day zero', '2026-01-00'],
+    ['a 32nd day', '2026-01-32'],
+  ])('SAD: POST rejects %s before any DB call', async (_label, blackout_date) => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/shifts/blackouts',
+      headers: hdr,
+      payload: { blackout_date },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(queries).toHaveLength(0);
+  });
+
+  it('SAD: DELETE rejects an impossible date before any DB call', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/shifts/blackouts/2026-02-30',
+      headers: hdr,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(queries).toHaveLength(0);
+  });
+
+  it('HAPPY: a real leap day is still accepted — the guard must not overreach', () => {
+    // 2028 is a leap year. A validator that rejected Feb 29 outright would be
+    // "safe" and wrong, and the owner would have no way to close that day.
+    expect(BlackoutDateForTest.safeParse('2028-02-29').success).toBe(true);
   });
 });

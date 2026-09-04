@@ -56,6 +56,12 @@ describe('scan-secrets: things that MUST trip the gate', () => {
     const findings = scanContent('src/config.ts', `ok\nok\nkey = "${STRIPE_LIVE_SHORT}"\n`);
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({ file: 'src/config.ts', line: 3, rule: 'stripe_live_key' });
+    // The finding carries a REDACTED preview, never the match. The CLI prints
+    // this, so a CI log on a public repo cannot become the second copy of the
+    // leak (review catch on #395: the header claimed redaction while the CLI
+    // printed no match at all — the claim and the code have to agree).
+    expect(findings[0].preview).not.toContain('abcdefgh12345678');
+    expect(findings[0].preview).toContain('sk_liv');
   });
 
   it('finds EVERY occurrence on one line, not just the first', () => {
