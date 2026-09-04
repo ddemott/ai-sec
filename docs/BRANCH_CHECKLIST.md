@@ -2,14 +2,17 @@
 
 Use this checklist when starting and finishing work on a feature branch.
 
+For the full **TODO/roadmap item lifecycle** (clean close vs parallel/conflict close, including mandatory re-test after resolving conflicts): see [`TODO_ITEM_LIFECYCLE.md`](TODO_ITEM_LIFECYCLE.md).
+
 ## When Starting a Branch
 
 **Critical hygiene rule:** Work on ONE PR at a time.
 
-- [ ] **The previous feature branch has been fully closed out**:
+- [ ] **The previous feature branch has been fully closed out** (no dead branches left open):
   - [ ] Previous work pushed to its remote
   - [ ] Merged into your main branch
   - [ ] Old feature branch deleted (both locally and remotely)
+  - [ ] `git branch -a` / `gh pr list` show no leftover feature ref for that work
 - [ ] Branch created using `bash scripts/create-feature-branch.sh <type>/<name>`
 - [ ] Branch name follows convention (feat/ fix/ chore/ refactor/ docs/)
 - [ ] GitHub Issue created (or existing issue linked) if the work is non-trivial
