@@ -1,6 +1,6 @@
 # TODO Item Lifecycle — Start to Finish (and Purge)
 
-End-to-end process for taking one backlog item (a `docs/TODO.md` entry or a `docs/PRODUCT_ROADMAP.md` task `T-XXX`) from pick → ship → branch purge.
+End-to-end process for taking one backlog item (a `docs/planning/TODO.md` entry or a `docs/PRODUCT_ROADMAP.md` task `T-XXX`) from pick → ship → branch purge.
 
 This doc does **not** replace `DEVELOPMENT_WORKFLOW.md` or `BRANCH_CHECKLIST.md`. It stitches them into two explicit paths:
 
@@ -57,7 +57,7 @@ Use when: no other feature PRs open, and you will not start a second branch unti
 
 ### A1. Pick and claim
 
-- [ ] Pick the highest-priority unblocked item from `docs/TODO.md` or `docs/PRODUCT_ROADMAP.md`.
+- [ ] Pick the highest-priority unblocked item from `docs/planning/TODO.md` or `docs/PRODUCT_ROADMAP.md`.
 - [ ] Set roadmap status `🟡` (section + master table) if it is a `T-XXX` task.
 - [ ] Confirm no open feature PRs / leftover feature branches:
 
@@ -85,7 +85,7 @@ npm run create-branch feat/T-XXX-short-slug
 ### A3. Implement
 
 - [ ] Code + tests (happy + sad, 5W comments on new/changed tests).
-- [ ] Docs updated in the same work (`CLAUDE.md` / `TODO.md` / roadmap / feature docs as needed).
+- [ ] Docs updated in the same work (`CLAUDE.md` / `planning/TODO.md` / roadmap / feature docs as needed).
 - [ ] Loop: `npm run checks` and targeted tests as you go.
 
 ### A4. Pre-push gate
@@ -133,7 +133,7 @@ git push origin --delete feat/T-XXX-short-slug
 ```
 
 - [ ] Set roadmap task `✅ DONE` (section + master table + DOD checkboxes that are truly met).
-- [ ] Move/check off the `docs/TODO.md` item; archive narrative in `docs/RESOLVED.md` when appropriate.
+- [ ] Move/check off the `docs/planning/TODO.md` item; archive narrative in `docs/planning/RESOLVED.md` when appropriate.
 - [ ] If runtime-facing: verify deploy (`started_at` moved / status board).
 - [ ] Worktree clean; only `main` left for feature work → ready for the next item (back to A1).
 
@@ -272,7 +272,7 @@ Then:
 - [ ] Feature branch deleted **local and remote** (not optional)
 - [ ] No open PR left for this work unless intentionally still in flight
 - [ ] Roadmap `✅` + DOD checkboxes that are actually true
-- [ ] `docs/TODO.md` updated; `docs/RESOLVED.md` if the item needs a historical note
+- [ ] `docs/planning/TODO.md` updated; `docs/planning/RESOLVED.md` if the item needs a historical note
 - [ ] No dirty WIP left that belongs to the closed task
 - [ ] Next work starts from Path A unless parallels remain (then stay on Path B)
 
@@ -314,7 +314,7 @@ number of open branches. Finish one, purge it, then start the next.
 - `docs/DEVELOPMENT_WORKFLOW.md` — day-to-day standards, hooks, PR process, one-active-PR rule
 - `docs/BRANCH_CHECKLIST.md` — checkbox form for a single branch
 - `docs/PRODUCT_ROADMAP.md` §0.7 — when status may become `DONE`
-- `docs/TODO.md` / `docs/RESOLVED.md` — backlog vs archive
+- `docs/planning/TODO.md` / `docs/planning/RESOLVED.md` — backlog vs archive
 - `docs/OPEN-PR.md` — example inventory of open/merged/purged branches
 - `.github/BRANCH_PROTECTION.md` — what CI must be green to merge
 - `.github/pull_request_template.md` — PR evidence checklist

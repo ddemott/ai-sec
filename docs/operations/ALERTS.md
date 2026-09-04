@@ -7,7 +7,7 @@
 > If you want the one alert that matters without any vendor — "SMS failure ratio crossed 20%", the signal that would have caught the dead `TELNYX_PHONE_NUMBER` on day one — that is now `.github/workflows/zero-vendor-alerts.yml` (every 30m, opens a GitHub issue). Set repo secret `METRICS_TOKEN`.
 
 Ready-to-apply alert rules for the production backend + agent. The **"Alert rules"
-item was dropped from `docs/TODO.md` P2 on 2026-07-09** (no vendor met the
+item was dropped from `docs/planning/TODO.md` P2 on 2026-07-09** (no vendor met the
 free-forever bar); these rules remain as reference. The metric names, label keys, and
 label _values_ below match the live registry in `src/services/metrics.ts`
 exactly — paste them as written.
@@ -407,10 +407,10 @@ or a Slack/Discord channel reviewed daily. Don't send everything to one firehose
 ## 6. Apply checklist
 
 - [ ] `METRICS_TOKEN` set on Railway backend — **DONE** (verified 2026-06-29).
-- [ ] _(No destination planned — see the status note at the top.)_ If one is ever chosen: stand up a scraper per §2, **or** set `BETTER_STACK_TOKEN` + use §4 log alerts. For the single high-value signal without any vendor, see the zero-vendor GitHub Actions option in `docs/TODO.md` P2.
+- [ ] _(No destination planned — see the status note at the top.)_ If one is ever chosen: stand up a scraper per §2, **or** set `BETTER_STACK_TOKEN` + use §4 log alerts. For the single high-value signal without any vendor, see the zero-vendor GitHub Actions option in `docs/planning/TODO.md` P2.
 - [ ] Load the §3 rules (or §4 log queries).
 - [ ] Configure §5 routing to a watched channel.
 - [ ] Fire a test alert (e.g. temporarily lower a threshold) → confirm it reaches your phone → restore.
 - [ ] _(Only if a paid/free vendor path is ever chosen — declined 2026-07-02.)_ Set `BETTER_STACK_TOKEN` + `SENTRY_DSN` on backend **and** agent for full log + exception coverage.
 
-When this checklist is green, mark the **"Alert rules"** P0 item done in `docs/TODO.md`.
+When this checklist is green, mark the **"Alert rules"** P0 item done in `docs/planning/TODO.md`.

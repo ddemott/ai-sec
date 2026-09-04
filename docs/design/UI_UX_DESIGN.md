@@ -6,7 +6,7 @@
 ## Purpose
 This document captures the current state of the dashboard UI, its problems, and all design decisions. The goal is to make the dashboard intuitive for service business owners (tire shops, salons, auto shops, spas, trades, fitness) who are not technical users.
 
-> **Related:** an earlier component-level UX audit (231 lines, 2026-04-20) was addressed in the commit `f9ffa8e` UX/a11y batch. The standalone audit notes (`sessions/`) and bug tracker (`BUGS.md`) were since removed — history is consolidated in `docs/RESOLVED.md`.
+> **Related:** an earlier component-level UX audit (231 lines, 2026-04-20) was addressed in the commit `f9ffa8e` UX/a11y batch. The standalone audit notes (`sessions/`) and bug tracker (`BUGS.md`) were since removed — history is consolidated in `docs/planning/RESOLVED.md`.
 
 ---
 

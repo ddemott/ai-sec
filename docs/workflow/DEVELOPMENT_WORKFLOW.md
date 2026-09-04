@@ -66,7 +66,7 @@ npm run create-branch feat/your-descriptive-name
    cp docs/BRANCH_CHECKLIST.md .
    ```
    Edit `.BRANCH_CHECKLIST.md` (or the copied file) in your branch root and keep it updated.
-5. Start tracking what needs to be done (tests, docs, etc.). Consider adding an entry in `docs/TODO.md`.
+5. Start tracking what needs to be done (tests, docs, etc.). Consider adding an entry in `docs/planning/TODO.md`.
 
 ## 3. Development Standards (While Coding)
 
@@ -139,7 +139,7 @@ See the skill at `.claude/skills/commit-code/SKILL.md` for the exact expectation
 - `npm run ci:watch` — live-follows the latest CI run using the gh CLI (great while waiting for a PR check)
   These surface the exact stages (typecheck, migration apply, vitest, playwright, simulate tools gate in e2e, etc.) without leaving the terminal. See `scripts/simulate.sh` for implementation.
 
-**CI gate on merges**: As of 2026-06-15, branch protection on `main` requires all 4 CI jobs (plus PR + up-to-date + conversation resolution) before a merge is allowed. Use `npm run ci:status` before merging. This gates Railway deploys from `main`. (See `.github/BRANCH_PROTECTION.md` and `docs/TODO.md`.)
+**CI gate on merges**: As of 2026-06-15, branch protection on `main` requires all 4 CI jobs (plus PR + up-to-date + conversation resolution) before a merge is allowed. Use `npm run ci:status` before merging. This gates Railway deploys from `main`. (See `.github/BRANCH_PROTECTION.md` and `docs/planning/TODO.md`.)
 
 ## Branch & PR Hygiene (Critical Rule)
 
@@ -153,7 +153,7 @@ Before you create a new feature branch or open a new PR, the previous feature br
 
 This rule prevents painful rebase conflicts and context loss when multiple long-lived branches exist in parallel. A merged PR whose branch still exists is not closed out.
 
-**End-to-end close-out (pick → PR → merge → purge), including the exception playbook when other PRs are already open or conflicts appear after testing:** see [`docs/TODO_ITEM_LIFECYCLE.md`](TODO_ITEM_LIFECYCLE.md). After any merge-from-`main` that touched conflicts, re-run the relevant test suites before claiming green.
+**End-to-end close-out (pick → PR → merge → purge), including the exception playbook when other PRs are already open or conflicts appear after testing:** see [`planning/TODO_ITEM_LIFECYCLE.md`](../planning/TODO_ITEM_LIFECYCLE.md). After any merge-from-`main` that touched conflicts, re-run the relevant test suites before claiming green.
 
 The rule is enforced in:
 

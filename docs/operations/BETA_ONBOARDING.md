@@ -4,7 +4,7 @@
 > the gap that until this doc existed, a beta customer needed a
 > screen-share with the founder to get from "I'd like to try this" to
 > "my voice AI is taking real calls." Tracked closed in
-> `docs/TODO.md`. Author/owner: founder + dashboard team.
+> `docs/planning/TODO.md`. Author/owner: founder + dashboard team.
 
 This guide assumes a brand-new tenant. If your account was pre-seeded
 with demo data (e.g., DynaTire/Bella's during the demo period), skip to

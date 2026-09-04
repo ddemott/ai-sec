@@ -1,7 +1,7 @@
 # Mocked-DB Test Audit — real-SQL coverage map
 
 **Created 2026-07-01** (branch `test/blindspot-p0-verification`), fulfilling the
-`docs/TODO.md` "Verification blind spots" P0 item: *"Audit every `*.test.ts` that mocks the DB and add
+`docs/planning/TODO.md` "Verification blind spots" P0 item: *"Audit every `*.test.ts` that mocks the DB and add
 a real-DB companion for anything that builds SQL."* Rule of record (CLAUDE.md):
 **mocked-API tests prove the mock works, not the integration** — any code that BUILDS
 SQL (dynamic WHERE, interpolated identifiers, multi-row VALUES, RPC calls, casts) must
@@ -145,7 +145,7 @@ marshalling/validation/error-branch coverage — the two are companions, not sub
   password_hash leak, is_self, owner-only 403), the invite 409-dup guard (fires
   at the users INSERT), PATCH role (promote, can't-change-own 400, unknown 404).
   **Surfaced a real finding** — the invite→password_resets write is RLS-blocked
-  under a non-BYPASSRLS role (logged in docs/TODO.md "Verification blind spots" P2); the HAPPY invite path
+  under a non-BYPASSRLS role (logged in docs/planning/TODO.md "Verification blind spots" P2); the HAPPY invite path
   can't be exercised under `api_user` until that's resolved.
 - `src/services/crmSync.realdb.test.ts` — getCrmSyncStatus (entity_sync_map
   GROUP BY fold → pending/error/total_mapped) + disconnectCrmIntegration (both

@@ -30,7 +30,7 @@ text passes through untouched).
 1. **NULL / no-token = no-op fallback.** If `persona_name` is NULL, or the prompt
    contains no `__PERSONA_NAME__` token, substitution returns the text unchanged.
    Existing tenants (e.g. Bella's Hair Studio) are unaffected — forward-compatible
-   per the "merge before migrate" rule (`RESOLVED.md`). The column can ship before
+   per the "merge before migrate" rule (`planning/RESOLVED.md`). The column can ship before
    any prompt uses the token.
 2. **Backfill only Thinking Hammer.** Migration sets `persona_name = 'Chris'` for
    tenant `d5e3c6a1-7b9f-4e2a-bf30-8c11a5d8e9f0`; all other tenants stay NULL.

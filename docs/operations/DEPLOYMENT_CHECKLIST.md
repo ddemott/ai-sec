@@ -2,7 +2,7 @@
 
 **What this is:** the sequence to follow from "the work is done" to "it is
 actually running in production", plus the three ways this repo has silently
-failed to deploy. Reference doc, not a backlog — see `docs/TODO.md` for work.
+failed to deploy. Reference doc, not a backlog — see `docs/planning/TODO.md` for work.
 
 **Why it exists:** every step here is written from a failure that happened.
 Nothing below is precautionary.
@@ -29,7 +29,7 @@ exceeded`, no test ever ran), and all three services skipped.
 
 **Consequence for how you work:** flaky tests are not a hygiene problem here,
 they are an availability problem. Four wall-clock flakes have reddened CI to
-date (`docs/TODO.md` → flaky gates). Recovery when it happens: re-run the failed
+date (`docs/planning/TODO.md` → flaky gates). Recovery when it happens: re-run the failed
 job, confirm green, then trigger the deploy **explicitly** —
 `serviceInstanceDeployV2(serviceId, environmentId, commitSha)` against
 `https://backboard.railway.com/graphql/v2` for each of the three service ids, or
@@ -74,7 +74,7 @@ the migration.
 - [ ] **If a test asserts real I/O** (a DB round-trip, a subprocess, a rendered
       async component), it carries an explicit timeout sized to that work. The
       vitest default is 5s and four separate tests have now missed it on a
-      loaded runner. See the flaky-gates section of `docs/TODO.md`.
+      loaded runner. See the flaky-gates section of `docs/planning/TODO.md`.
 - [ ] If the local DB behaves oddly, suspect its migration state before
       suspecting the code: `schema_migrations` can list migrations as applied
       whose data statements never ran (a `--baseline` adoption after a
