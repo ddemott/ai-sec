@@ -136,12 +136,62 @@ if [ -f "$BASELINE" ]; then
   #
   # The migration is idempotent (CREATE ROLE guarded by an existence check, the
   # rest is GRANT), so re-running it is the whole fix.
-  APP_USER_MIGRATION="$ROOT_DIR/supabase/migrations/20260724000100_app_user_role.sql"
-  if [ -f "$APP_USER_MIGRATION" ]; then
-    echo "[rebuild-db] Re-applying app_user role + grants (pg_dump omits both)..."
-    psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$APP_USER_MIGRATION" > /dev/null
-    echo "[rebuild-db] app_user grants restored."
-  fi
+  #
+  # BOTH login roles have to be restored, not just one. This step fixed app_user
+  # only until 2026-09-04, and the omission cost a session: a rebuild left the
+  # realdb rig (which connects as api_user — tests/utils.ts API_DB_URL) with ZERO
+  # grants, and 332 tests across 49 files failed with the exact message the
+  # comment above predicts, "permission denied for table tenants". Confirmed by
+  # count: `role_table_grants` held 0 rows for api_user after the rebuild and 322
+  # after re-applying its migration.
+  #
+  # Restoring api_user works even though its grants predate most of the schema:
+  # the GRANTs are ON ALL TABLES IN SCHEMA public, evaluated when they run, and
+  # baseline.sql has already created every table by this point. Both files are
+  # idempotent (guarded CREATE ROLE, then REVOKE/GRANT).
+  #
+  # KNOWN LIMIT of baseline mode, separate from grants: baseline.sql carries no
+  # DATA, and setup-db.sh --baseline only MARKS migrations applied. Columns that
+  # data migrations populate — business_templates.system_prompt_template and
+  # .example_services — therefore stay empty, and seed.sql deliberately does not
+  # fill them ("real values come from the original insert migrations which run
+  # before seed in CI"). tests/routes/auth.test.ts and
+  # tests/routes/vocabulary.test.ts require that data, so a baseline-rebuilt DB
+  # cannot pass the full suite. For a CI-equivalent local DB, run the chain:
+  #   psql "$DB_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+  #   bash scripts/setup-db.sh "$DB_URL" && npm run db:seed
+  # app_user's migration is a dedicated role migration (role + grants, nothing
+  # else), so replaying it is safe. api_user's is NOT — see the header of
+  # scripts/sql/restore-role-grants.sql for why replaying either of its two
+  # migrations is wrong, one subtly and one destructively.
+  for ROLE_SQL in \
+    "$ROOT_DIR/supabase/migrations/20260724000100_app_user_role.sql" \
+    "$ROOT_DIR/scripts/sql/restore-role-grants.sql"; do
+    if [ -f "$ROLE_SQL" ]; then
+      echo "[rebuild-db] Re-applying $(basename "$ROLE_SQL") (pg_dump omits roles + privileges)..."
+      psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$ROLE_SQL" > /dev/null
+    fi
+  done
+  # Assert rather than announce: a silent zero here is the whole failure mode.
+  for ROLE in app_user api_user; do
+    GRANT_COUNT="$(psql "$DB_URL" -tAc \
+      "SELECT count(*) FROM information_schema.role_table_grants WHERE grantee = '$ROLE';")"
+    if [ "${GRANT_COUNT:-0}" -lt 1 ]; then
+      echo "[rebuild-db] FATAL: $ROLE has no table grants after restore — the rebuilt DB"
+      echo "            would fail as 'permission denied for table ...'. Aborting."
+      exit 1
+    fi
+    # Grants alone are half a guarantee: a role that has picked up SUPERUSER or
+    # BYPASSRLS out of band holds the right verbs AND bypasses every policy.
+    ELEVATED="$(psql "$DB_URL" -tAc \
+      "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = '$ROLE';")"
+    if [ "$ELEVATED" = "t" ]; then
+      echo "[rebuild-db] FATAL: $ROLE is SUPERUSER or has BYPASSRLS — RLS would not apply"
+      echo "            to it and every policy in the database becomes decoration. Aborting."
+      exit 1
+    fi
+    echo "[rebuild-db] $ROLE grants restored ($GRANT_COUNT), NOSUPERUSER + NOBYPASSRLS confirmed."
+  done
 else
   echo "[rebuild-db] baseline.sql not found — falling back to cumulative migrations..."
   bash "$ROOT_DIR/scripts/setup-db.sh" "$DB_URL"
