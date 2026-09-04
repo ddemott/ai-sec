@@ -153,13 +153,13 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-003   | Live voice validation call                 | 1    | Human  | CRITICAL | —            | ⬜      |
 | T-004   | Stripe test-mode wiring                    | 1    | Human  | CRITICAL | —            | ⬜      |
 | T-005   | Stripe live-mode + bank account            | 1    | Human  | CRITICAL | T-004        | ⬜      |
-| T-006   | Monitoring & alerting                      | 1    | Claude | HIGH     | —            | ⬜      |
-| T-007   | Fix E2E test flakiness                     | 1    | Claude | HIGH     | —            | ⬜      |
-| T-008   | Validate intake trees end-to-end           | 1    | Mixed  | HIGH     | T-000        | ⬜      |
+| T-006   | Monitoring & alerting                      | 1    | Claude | HIGH     | —            | 🟡      |
+| T-007   | Fix E2E test flakiness                     | 1    | Claude | HIGH     | —            | ✅ DONE |
+| T-008   | Validate intake trees end-to-end           | 1    | Mixed  | HIGH     | T-000        | 🟡      |
 | T-009   | Volume metering & tier caps                | 1    | Claude | HIGH     | T-004        | ⬜      |
-| T-010   | Schedule pattern adoption verify           | 1    | Claude | MEDIUM   | —            | ⬜      |
-| T-011   | Verify cost tracking ledger                | 1    | Claude | MEDIUM   | —            | ⬜      |
-| T-012   | Deployment checklist & automation          | 1    | Claude | MEDIUM   | —            | ⬜      |
+| T-010   | Schedule pattern adoption verify           | 1    | Claude | MEDIUM   | —            | ✅      |
+| T-011   | Verify cost tracking ledger                | 1    | Claude | MEDIUM   | —            | ✅      |
+| T-012   | Deployment checklist & automation          | 1    | Claude | MEDIUM   | —            | 🟡      |
 | T-013   | Full onboarding walk-through               | 1    | Human  | MEDIUM   | T-003, T-008 | ⬜      |
 | T-014   | Dead code removal                          | 1    | Claude | LOW      | T-001..T-013 | ⬜      |
 | T-015   | **Restore wizard starter services (epic)** | 1    | Claude | HIGH     | —            | 🟡      |
@@ -170,10 +170,10 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-015-E | · Wizard UX acceptance                     | 1    | Mixed  | HIGH     | T-015-B      | 🟡      |
 | T-101   | Onboarding wizard redesign                 | 2    | Claude | CRITICAL | T-013        | ⬜      |
 | T-102   | AI persona customization                   | 2    | Claude | HIGH     | T-003        | ⬜      |
-| T-103   | Knowledge base builder UX                  | 2    | Claude | HIGH     | —            | ⬜      |
+| T-103   | Knowledge base builder UX                  | 2    | Claude | HIGH     | —            | 🟡      |
 | T-104   | Dashboard UX polish                        | 2    | Claude | HIGH     | T-013        | ⬜      |
 | T-105   | Vocabulary customization                   | 2    | Claude | HIGH     | T-008        | ⬜      |
-| T-106   | Scheduler UX improvements                  | 2    | Claude | MEDIUM   | —            | ⬜      |
+| T-106   | Scheduler UX improvements                  | 2    | Claude | MEDIUM   | —            | 🟡      |
 | T-107   | Customer self-service booking page         | 2    | Claude | MEDIUM   | T-005        | ⬜      |
 | T-108   | SMS & reminder customization               | 2    | Claude | MEDIUM   | T-002        | ⬜      |
 | T-109   | Owner mobile PWA                           | 2    | Claude | MEDIUM   | T-104        | ⬜      |
@@ -391,7 +391,32 @@ DEFINITION_OF_DONE:
 
 ### T-006: Monitoring & alerting
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — code + rules landed 2026-09-03; the two HUMAN items below are open
+<!--
+  DONE (code, tested):
+   - All 8 named series now exist AND are incremented from a real call site:
+     calls_total{source}, call_outcome_total{outcome}, turn_latency_ms (histogram),
+     webhook_signature_failures_total{provider,endpoint} were added; the other four
+     (reminders_sent_total, reminders_skipped_total, errors_total, sms_sends_total)
+     already existed and were verified.
+   - turn_latency_ms is measured in the AGENT and shipped on voice-session-end —
+     before this it was a log line only, and prod's log sink is unconfigured, so
+     the number was measurable and unalertable at the same time.
+   - docs/ALERTS.md §3.10-3.12 + the 5% warn tier in §3.9 carry the four rules
+     this task names, as collector-agnostic PromQL.
+   - Tests: tests/services/t006MetricSeries.test.ts (series + label-key contract),
+     tests/routes/agentTools/callMetrics.test.ts (route wiring, incl. the
+     double-count and DB-outage cases), agent/src/session/turnLatency.test.ts,
+     agent/src/session/watchdog.test.ts (T-006 block), plus metric assertions
+     added to the existing Stripe/Telnyx signature-rejection tests.
+  OPEN (Human — cannot be done from here):
+   - Choose a scrape destination. There is none today and that is a DECISION,
+     not an oversight (docs/ALERTS.md header: paid vendors declined 2026-07-02,
+     no free tier met the bar). Until one exists, the rules are paste-and-go text
+     and `.github/workflows/zero-vendor-alerts.yml` is the only live alert.
+   - Prove one alert fires (screenshot in the PR). Requires the above.
+-->
+
 OWNER: Claude-able (code) + Human (create alert channel)
 PRIORITY: HIGH
 EFFORT: 6–10h
@@ -423,65 +448,128 @@ DEFINITION_OF_DONE:
 
 ### T-007: Fix E2E test flakiness
 
-STATUS: ⬜ NOT_STARTED
+STATUS: ✅ DONE — merged to `main` 2026-09-03 as #391, and the acceptance test
+was re-run against `main` afterwards: SetupWizard 20/20, Playwright 201 passed.
+
+Two follow-ups were required before that claim held, both merged:
+
+- **#396** — `asyncUtilTimeout` (10s) had been raised above vitest's default
+  `testTimeout` (5s), so the SHORTER clock fired first. Every `waitFor` failure
+  surfaced as an opaque `Test timed out in 5000ms` instead of naming the missing
+  element. Ordering them restored the diagnostic.
+- **#397** — with failures legible again, the residual 1-in-20 turned out to be a
+  real product bug, not a flake: `GoLivePanel`'s status poll overwrote whatever
+  the owner's Activate click had just established — erasing the failure reason in
+  one direction, and the newly-provisioned number in the other.
+
+That last one is the same defect class as the `AIConfigView.fetchConfig()`
+follow-up noted below, found in a second component.
 OWNER: Claude-able
 PRIORITY: HIGH
 EFFORT: 4–6h
 DEPENDS_ON: None
-CONTEXT: 3 tests intermittently redden `main` CI (which terminally SKIPs the Railway deploy). They assert wall-clock speed on a loaded runner rather than behavior. Known offenders: `SetupWizard > shows success state with phone number after activation`; `customer-preferences-config.spec.ts`; `purge-soft-deleted.test.ts` (partially fixed).
-FILES: `dashboard/components/SetupWizard/SetupWizard.test.tsx`, `dashboard/e2e/customer-preferences-config.spec.ts`, `scripts/purge-soft-deleted.test.ts`.
-STEPS:
+CONTEXT: Tests intermittently redden `main` CI (which terminally SKIPs the Railway deploy).
 
-1. Replace timeout-based waits with `waitFor()` on actual DOM/API state.
-2. For the E2E spec, wait on the `update-config` network response, then assert value in Postgres before reload.
-3. Remove any machine-speed assertions.
+**Corrected during implementation — the original three offenders were only two-thirds right, and only one of them was a wall-clock problem:**
+
+1. `SetupWizard > shows success state with phone number after activation` — WAS wall-clock. Testing Library's `waitFor` defaults to a 1000ms ceiling; CI run `33249344101` (2026-08-29, `main`) failed it at **1110ms**. The component was correct, the runner was slow. Fixed by `configure({ asyncUtilTimeout })` in `dashboard/vitest.setup.ts` — one place, covers every async dashboard test, changes no assertion.
+2. `purge-soft-deleted.test.ts` — **already fully fixed** before this task started. All 5 cases carry `SUBPROCESS_TEST_TIMEOUT_MS`; nothing to do.
+3. `customer-preferences-config.spec.ts` — **NOT wall-clock. A real wrong-row bug**, and `voice-styles.spec.ts` (the actual current offender, which failed `main` in CI run `33203910276`, 2026-08-28) has the identical cause:
+
+   The AI Persona form writes to `useActiveTenantId()` = `managedTenantId || tenantId`. A super-admin session starts with no `managedTenantId`, so `useSuperAdminTenants` AUTO-SELECTS `tenantsArray[0]` (`dashboard/lib/useSuperAdminTenants.ts:80-84`) and persists it. Both specs hard-coded the PLATFORM tenant for their DB reset and their assertions — so the browser was writing one business's row while the spec reset and read another's. Reproduced locally: the save POSTed to `d5e3c6a1…/update-config` (Thinking Hammer) while the spec asserted on `00000000…`, which was still NULL. The specs passed as often as they did only because their resets were unqualified `UPDATE tenants SET …` with **no WHERE clause**, which happened to clear the real row too. Whether the auto-select lands before or after `AIConfigView`'s first `fetchConfig()` is a timing question — hence flaky, hence worse on a loaded runner.
+   FILES: `dashboard/vitest.setup.ts`, `dashboard/e2e/helpers/aiPersona.ts` (new, shared), `dashboard/e2e/voice-styles.spec.ts`, `dashboard/e2e/customer-preferences-config.spec.ts`. (`scripts/purge-soft-deleted.test.ts` needed no change.)
+   STEPS:
+
+4. Replace timeout-based waits with `waitFor()` on actual DOM/API state. — done via the global `asyncUtilTimeout`.
+5. For the E2E specs, wait on the `update-config` network response, then assert value in Postgres before reload. — done in `saveAiPersona()`; `voice-styles` gained the Postgres assertions it lacked.
+6. Remove any machine-speed assertions. — none remained.
+7. (Added) PIN the managed tenant before navigation so the tenant under test is chosen by the test, not by a list ordering; assert the config GET was for that tenant so a wrong-tenant session fails by name instead of as a value that "didn't persist" three steps later.
+8. (Added) Scope every DB reset with `WHERE tenant_id = $1`. An unqualified reset is cross-spec data corruption the moment anyone raises `workers` above 1.
    ACCEPTANCE_TEST:
 
 ```bash
-# Each previously-flaky test passes 20 consecutive runs:
-cd dashboard && npx vitest run SetupWizard --repeat 20     # 20/20 pass
-npx playwright test customer-preferences-config --repeat-each 20   # 20/20 pass
+# Each previously-flaky test passes 20 consecutive runs.
+# NB: vitest 4 has no --repeat flag; loop the run instead.
+cd dashboard && for i in $(seq 1 20); do npx vitest run components/SetupWizard.test.tsx; done
+npx playwright test voice-styles customer-preferences-config --repeat-each 20
 ```
 
+RESULT (local, 2026-09-01): SetupWizard **20/20** (`Tests 68 passed` each run). Playwright **201/201 passed (6.7m)** — 20 repeats of both specs plus the auth setup.
 DEFINITION_OF_DONE:
 
-- [ ] Each named test passes 20/20 locally.
-- [ ] 3 consecutive green CI runs on the PR.
-- [ ] No `setTimeout`/hard-coded ms assertions remain in the touched tests (grep proves it).
+- [x] Each named test passes 20/20 locally.
+- [x] 3 consecutive green CI runs on the PR — all 4 jobs pass on each:
+      run `33481575523` (pull_request), then `33497814412` and `33498392610`
+      (workflow_dispatch on the same SHA, which is how the repeat runs were
+      obtained without polluting the branch with empty commits).
+- [x] No `setTimeout`/hard-coded ms assertions remain in the touched tests (grep proves it).
+
+**Follow-up surfaced, NOT fixed here (needs its own task):** `AIConfigView`'s `fetchConfig()` re-runs whenever `tenantId` changes and calls `setConfig(server)` + `setDirty(false)`. A real owner typing into the form while a late refetch lands loses the edit silently. The E2E helper now closes that window for tests; the product still has it.
 
 ---
 
 ### T-008: Validate intake trees end-to-end
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS (PR #392 — all 4 CI jobs green. The Claude half is complete and verified. The Human half — owner sign-off on the wizard's business-type picker — is OPEN: a browser probe of the picker is recorded below as evidence FOR that sign-off, not a substitute for it. DONE additionally requires merge to `main`, per this doc's own rule.)
 OWNER: Mixed (Claude runs simulator; Human confirms UI picker)
 PRIORITY: HIGH
 EFFORT: 2–3h
 DEPENDS_ON: T-000
 CONTEXT: The 30 trees are merged and unit-tested, but never exercised through the real onboarding + simulator path. Prove a sample of verticals resolve correctly and ask the right questions.
-FILES: `agent/scripts/sim-questiontree.ts` (existing simulator), test tenants.
+
+**Corrected during implementation:** the acceptance command as written could not run. `agent/scripts/sim-questiontree.ts` had no `--business` flag — it is a fixed list of hand-written defect replays hard-coded to one business. A vertical mode had to be built before the task could be verified at all.
+FILES: `agent/scripts/sim-questiontree.ts` (new `SIM_BUSINESS` vertical mode), `tests/verticalIntakeWiring.test.ts` (new, CI regression net).
 STEPS:
 
-1. For each of 4 verticals (`catering`, `plumber`, `salon`, `real_estate`): create a tenant with that business_type.
-2. Assert derivation + enabled blocks.
-3. Run the simulator and confirm the intake questions fire.
+1. For each of 4 verticals (`catering`, `plumber`, `salon`, `real_estate`): create a tenant with that business_type. — done through the real `POST /tenants/create` route against a live local stack, then read back through `GET /tenants/:id/config`.
+2. Assert derivation + enabled blocks. — done, and widened to **all 33 presets** as a permanent CI test rather than a one-off script.
+3. Run the simulator and confirm the intake questions fire. — done via the new `SIM_BUSINESS` mode.
+4. (Added) Confirm the per-tenant tree COPY path, not just derivation: `npm run trees:local` converted all four probe tenants and read each back through the live agent loader.
+5. (Added) Drive the wizard's business-type picker in a real browser. The picker's options come from `Api.templates.list()` (the `business_templates` table), **not** from the preset catalog — two independent lists that nothing forced to agree. A vertical with a preset but no template row is unpickable; a template row with no preset falls back to local-service. That seam had to be checked in the UI, not asserted in a unit test.
    ACCEPTANCE_TEST:
 
 ```bash
-# Derivation + block wiring (unit-level, deterministic):
-cd agent && npx vitest run checklistPresetDerivation
-# For each sampled vertical, the enabled blocks include '<vertical>_intake':
-#   node -e "import('../shared/checklistPresetDerivation.js').then(m=>{...assert...})"
-# Simulator run reaches the intake tree (SIM_TRACE shows the intake node ids):
-SIM_TRACE=1 npx tsx agent/scripts/sim-questiontree.ts --business catering | grep -q catering_
+# Derivation + block wiring, every preset, deterministic, in CI:
+npx vitest run tests/verticalIntakeWiring.test.ts
+
+# Live-LLM intake probe per vertical (real OpenAI calls, on-demand not CI):
+cd agent && SIM_BUSINESS=catering,plumber,salon,real-estate SIM_RUNS=2 npx tsx scripts/sim-questiontree.ts
 ```
 
-DEFINITION_OF_DONE:
+RESULT (local, 2026-09-01):
 
-- [ ] All 4 sampled verticals resolve to `<slug>_front_desk`.
-- [ ] Enabled blocks for each include `<slug>_intake`.
-- [ ] Simulator trace shows at least one intake node fired per vertical.
-- [ ] No "tree not found" errors in the simulator log.
+- `tests/verticalIntakeWiring.test.ts` — **5/5 passed**. Covers all 33 presets: each is reachable from a business_type, compiles to a non-empty tree list containing `identity`, and every vertical front desk enables its own `<slug>_intake` whose block resolves to a real tree (29 verticals checked; the 4 non-vertical presets are an explicit, documented allowlist).
+- `SIM_BUSINESS` vertical probe — **8/8 graded scenarios passed** (4 verticals × 2 runs). Each call selected the vertical's own intake tree, answered at least one of its nodes, and closed.
+- Live route probe — all four business types resolved through `POST /tenants/create` → `GET /tenants/:id/config` to `<slug>_front_desk` with `<slug>_intake` in `enabled_conversation_blocks`. Probe tenants soft-deleted afterwards.
+- `npm run trees:local` — all 7 tenants converted, "40 trees identical to the library" for each, including the four probes.
+- **Wizard picker, real browser (Playwright chromium, live local stack, throwaway tenant that started as `auto-shop`).** For each of the four: open My Business → Setup Assistant → the picker, click the card, then read `tenants.business_type` from Postgres and `checklist_runtime_config` from `GET /tenants/:id/config`.
+
+  ```
+  Catering Service         clicked -> business_type=catering      OK  preset=catering_front_desk        OK  intake_block=OK
+  Plumbing Service         clicked -> business_type=plumber       OK  preset=plumber_front_desk         OK  intake_block=OK
+  Hair Salon               clicked -> business_type=salon         OK  preset=salon_front_desk           OK  intake_block=OK
+  Real Estate Showings     clicked -> business_type=real-estate   OK  preset=real_estate_front_desk     OK  intake_block=OK
+  PICKER CHECK: ALL 4 OK
+  ```
+
+  The picker offers **31** business types across 6 categories (Auto & Vehicle 6, Beauty & Personal Care 6, Fitness & Wellness 2, Food & Beverage 2, Home Services 8, Professional Services 7). That is 31 template rows against 33 presets; the two without a template row are `local_service_front_desk` and `owner_for_hire_front_desk`, which are catch-alls reached by fallback and were never meant to be picked. Probe tenant soft-deleted afterwards.
+  DEFINITION_OF_DONE:
+
+- [x] All 4 sampled verticals resolve to `<slug>_front_desk`.
+- [x] Enabled blocks for each include `<slug>_intake`.
+- [x] Simulator trace shows at least one intake node fired per vertical.
+- [x] No "tree not found" errors in the simulator log.
+- [ ] **Human: confirm the business-type picker in the setup wizard offers these verticals and writes the expected `business_type`.** This box is the OWNER's, and stays unchecked until the owner clicks it. A browser probe covering the same ground is recorded above as evidence — it is input to the sign-off, not the sign-off itself. (An automated pass checking its own work is not the second pair of eyes this item was written to get.)
+
+**Trap the vertical mode had to avoid, recorded so the next person does not re-make it:** the first cut handed the tracker the library _compiled from the preset_, which seemed obviously right — give a business exactly the trees it can use. It throws:
+
+```
+Action "book" requires unknown node "drop_off_ok" — not defined in any library tree.
+```
+
+`booking.book` carries a cross-tree `requires` on `drop_off_ok`, which lives in `fix_computer` — a tree **no preset enables**. The tracker validates every `requires` id against the library it was handed, while at runtime ids outside the call's selected trees are treated as satisfied. So the LIBRARY is _what exists_ and the PRESET is _what this business may select_, and they are not the same list. This was already found on 2026-08-14 and is why `scripts/seed-question-tree-templates.ts` seeds the full library per vertical; the sim now mirrors production (`library` = full, `selectableTreeIds` = intersection).
+
+**Observation, not a blocker:** one plumber run (of nine) never closed. The improvising caller invented a burst pipe flooding their kitchen and refused the next day's slots; the agent correctly took an urgent message — there is no live-transfer path — then re-offered booking and looped between the two for four turns. Worth a look when someone owns emergency-intake behaviour; it is LLM variance, not a wiring fault.
 
 ---
 
@@ -520,7 +608,25 @@ DEFINITION_OF_DONE:
 
 ### T-010: Schedule pattern adoption verify
 
-STATUS: ⬜ NOT_STARTED
+STATUS: ✅ DONE (merged to `main` 2026-09-03 as `d0c31ac`, PR #394; prod deploy
+verified — backend `started_at` moved to 2026-09-03T22:33:09Z, 4/4 on
+`npm run status --env prod`)
+
+<!--
+  ACCEPTANCE_TEST run: `npx vitest run tests/services/schedulePatternAdoption.realdb.test.ts`
+  → 6 passed (real Postgres, test_db). Plus the pre-existing
+  `tests/services/extendSchedules.realdb.test.ts` → 12 passed.
+  - Clamp proven load-bearing by MUTATION, not by assertion alone: replacing
+    `AND es.shift_date <= CURRENT_DATE + INTERVAL '14 days'` with `AND TRUE`
+    makes the regression case fail with
+    `expected [ 1, 2, 3, 4, 5, 6 ] to deeply equal [ 1, 2, 3, 4, 5 ]`.
+  - Adoption path proven end-to-end through the REAL save path
+    (`expandWeeklyToSchedule`), not by inserting pattern rows directly.
+  - docs/RUNBOOK.md §6b documents the re-save trigger, both source-of-truth
+    branches, and the two behaviours (replace-not-merge; empty pattern does not
+    wipe). NO backfill script was added — deliberately.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 2–4h
@@ -548,7 +654,26 @@ DEFINITION_OF_DONE:
 
 ### T-011: Verify cost tracking ledger
 
-STATUS: ⬜ NOT_STARTED
+STATUS: ✅ DONE (merged to `main` 2026-09-03 as `d0c31ac`, PR #394; prod deploy
+verified — backend `started_at` moved to 2026-09-03T22:33:09Z, 4/4 on
+`npm run status --env prod`)
+
+<!--
+  ACCEPTANCE_TEST run: `npx vitest run tests/services/aiCostLedger.realdb.test.ts`
+  → 6 passed (real Postgres, test_db), posting through the SAME route the agent
+  posts through. Synthetic 2-minute call totals **$0.100028**, inside the
+  $0.03-$0.20 sanity band, and the voice LLM is 51.8% of it.
+  Per leg: gpt-4.1-mini $0.05184 · aura-asteria-en $0.039 · nova-3 $0.0086 ·
+  gpt-4o-mini (summary) $0.000588 — all four priced, none $0.
+  Dashboard: `AiCostPanel` (avg cost/call to 4dp, call count, MTD total,
+  per-model breakdown, and a loud warning when a leg shows real usage at $0.00 —
+  the 35x-undercount shape). Rendered ONLY for a platform super-admin; the
+  existing "internal AI cost is NEVER shown to the tenant" test now also asserts
+  the endpoint is not even FETCHED from a tenant session.
+  Backend: getAiCostBreakdown gained call_count / voice_call_cost_usd /
+  avg_cost_per_call_usd (NULL, never 0, when nothing was costed).
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 2–3h
@@ -573,7 +698,26 @@ DEFINITION_OF_DONE:
 
 ### T-012: Deployment checklist & automation
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — code + docs done on `feat/T-012-deployment-checklist`;
+not on `main`, so by §0.7 not DONE.
+
+<!--
+  ACCEPTANCE_TEST run:
+    npm run verify:claude-md   → "✓ CLAUDE.md verified — no drift detected", exit 0
+    npm run scan:secrets       → "clean — no plaintext credentials", exit 0
+  Both gates PROVEN to fail, not just to pass:
+    - a path edited to `/src/does-not-exist` in CLAUDE.md → exit 1,
+      "[directory-existence] path ... listed but does not exist on disk"
+    - a planted synthetic `sk_live_…` in src/ → exit 1, "src/__leak_proof.ts:1:
+      stripe_live_key" (redacted in output; both artifacts removed after)
+  The secret scan is a TESTED script (scripts/scan-secrets.ts, 23 tests in
+  tests/scripts/scanSecrets.test.ts) rather than a git-grep line in YAML,
+  because a rule that lives only in a workflow step is never exercised until
+  the day it should fire.
+  NOTE: making `Pre-merge checks` a REQUIRED check is a repo-settings change —
+  Dale's, not doable from here. Listed in the PR body.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 3–4h
@@ -688,7 +832,7 @@ Rewriting intake trees · owner-editable "add questions to tree" · full service
 
 ### T-015-A: Data model / seed path
 
-STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8; not merged — evidence in the results section below)
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
 OWNER: Claude-able
 PRIORITY: HIGH
 DEPENDS_ON: None
@@ -704,7 +848,7 @@ psql "$LOCAL" -c "SELECT business_type, cardinality(example_services) FROM busin
 
 ### T-015-B: Content — starter lists for all 31 live templates
 
-STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8; not merged — evidence in the results section below)
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
 OWNER: Claude-able
 PRIORITY: HIGH
 DEPENDS_ON: T-015-A
@@ -712,7 +856,7 @@ CONTEXT: 2–4 per vertical under the SKU / look-first rules. Deviations from th
 
 ### T-015-C: Descriptions + default_service_id policy
 
-STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8; not merged — evidence in the results section below)
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
 OWNER: Claude-able
 PRIORITY: HIGH
 DEPENDS_ON: T-015-B
@@ -720,7 +864,7 @@ CONTEXT: Finding 4 — the alphabetical default must be replaced by an explicit 
 
 ### T-015-D: Resolver / booking safety checks
 
-STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8; not merged — evidence in the results section below)
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
 OWNER: Claude-able
 PRIORITY: HIGH
 DEPENDS_ON: T-015-C
@@ -728,7 +872,7 @@ CONTEXT: Prove the three paths against a real DB: spoken "check engine light" / 
 
 ### T-015-E: Wizard UX acceptance
 
-STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8; not merged — evidence in the results section below)
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
 OWNER: Mixed (Claude drives the browser; human spot-checks)
 PRIORITY: HIGH
 DEPENDS_ON: T-015-B
@@ -742,7 +886,7 @@ CONTEXT: Fresh tenant → Setup Assistant → pick Catering / Plumber / Salon / 
 
 Every number below came from a command that was run; nothing here is an estimate.
 
-### T-015-A — data model / seed path · 🟡 (CI green on 6c2bdd8; not merged)
+### T-015-A — data model / seed path · 🟡 (CI green on 6c2bdd8)
 
 **A defect in this migration was found and fixed after the first push, by a test.**
 The type conversion was not idempotent: a re-run did `DROP DEFAULT`, then died on
@@ -783,7 +927,7 @@ SELECT count(*), sum(jsonb_array_length(example_services)), sum(cardinality(exam
         31 |               70 |                62
 ```
 
-### T-015-B — content · 🟡 (CI green on 6c2bdd8; not merged)
+### T-015-B — content · 🟡 (CI green on 6c2bdd8)
 
 **72 starters across 31 verticals, every one of them 2–4. No exceptions.**
 
@@ -814,14 +958,14 @@ The floor in `tests/routes/vocabulary.test.ts` is back to 2, and
 Deviations from the reference list are in the catalogue's per-vertical comments;
 the significant ones are under "Deviations" below.
 
-### T-015-C — descriptions + default policy · 🟡 (CI green on 6c2bdd8; not merged)
+### T-015-C — descriptions + default policy · 🟡 (CI green on 6c2bdd8)
 
 `seedServices` and the SOLO wizard's own seeding path both carry the description
 now. `src/services/defaultServicePolicy.ts` sets `default_service_id` from the
 starter marked `is_default`, wired into `/setup/commit` AND a new
 `POST /setup/default-service` for the solo path, which never goes through commit.
 
-### T-015-D — resolver safety · 🟡 (CI green on 6c2bdd8; not merged)
+### T-015-D — resolver safety · 🟡 (CI green on 6c2bdd8)
 
 `tests/integration/starterServiceResolution.realdb.test.ts`, 8/8, real DB and
 real pgvector. `INTENT_MATCH_THRESHOLD` was NOT touched — see "Honest limits".
@@ -973,7 +1117,55 @@ DEFINITION_OF_DONE:
 
 ### T-103: Knowledge base builder UX
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — **and the spec below is partly WRONG about this
+codebase.** Read this before writing any code for it.
+
+<!--
+  WHAT THIS TASK ASKED FOR THAT MUST NOT BE BUILT:
+  a new `kb_entries(tenant_id, category, question, answer, keywords[])` table
+  plus `agent/src/checklist/infoLookup.ts` doing keyword matching, described as
+  "no vector RAG required for MVP".
+
+  WHY NOT: all of it already exists, and the existing version is better.
+   - Storage: `tenant_docs` (title/section/content/normalized_text/embedding),
+     pgvector, retrieved by `search_tenant_docs_normalized()`.
+   - CRUD + categories: `dashboard/components/knowledge/KnowledgeBaseView.tsx`
+     with Api.knowledge.list/add/update/delete, plus website import, document
+     ingest, and an unanswered-question feed the owner can answer in one click.
+   - Agent path: `/agent-tools/policy-answer`, reachable on EVERY call as the
+     `answer_question` tool (checklistTools.ts) — it is a base tool, not gated
+     behind a tree.
+   - The miss path the DoD asks for is ALREADY host-enforced: when RAG cannot
+     answer, `ragCouldNotAnswer()` selects the `message` + `identity` trees so
+     the call cannot end without taking a message (checklistTools.ts, written
+     after a real 2026-08-15 sim where a caller was lost exactly that way).
+  Building `kb_entries` would be a SECOND, keyword-only knowledge system next to
+  a working semantic one — the "working flat code beats a dormant abstraction"
+  rule in CLAUDE.md, inverted.
+
+  WHAT WAS ACTUALLY DONE: the gap was PROOF, not features. Every layer was
+  tested in isolation with mocks, and a mock cannot show that the vector reached
+  the column, that the RPC threshold lets a real paraphrase through, or that
+  DELETE reaches the row the answer came from.
+  `tests/integration/knowledgeRoundTrip.realdb.test.ts` (real Postgres +
+  pgvector, 4 passed) covers the DoD end to end:
+   - add → embedding IS in the column → list → the AGENT's own policy-answer
+     returns the answer → delete → the answer stops coming back;
+   - an unanswerable question returns the graceful spoken fallback, never a 500;
+   - the miss is recorded in `unanswered_questions` (polled, because the route
+     logs it fire-and-forget so a live caller never waits on analytics);
+   - a second tenant asking the same question does NOT get the first tenant's
+     door code.
+  LIMIT, stated plainly: the test injects a deterministic bag-of-words embedder,
+  so it proves storage/retrieval/threshold/wiring, NOT that OpenAI ranks a given
+  paraphrase above the threshold. That is what `./scripts/simulate.sh rag`
+  measures, on demand, with real embeddings.
+
+  REMAINING, if anyone still wants it: nothing in the DoD. The UI work worth
+  doing is polish on the existing view (the `TODO` for a URL-import input at
+  KnowledgeBaseView.tsx ~L374), which belongs in T-104, not here.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 10–12h
@@ -1070,7 +1262,52 @@ DEFINITION_OF_DONE:
 
 ### T-106: Scheduler UX
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — the **blackout-date half is built and enforced**; the
+weekly-grid UI half is NOT, and part of the spec describes things that already
+exist. Read this before continuing it.
+
+<!--
+  BUILT (2026-09-03, branch feat/T-012-deployment-checklist):
+   - migration 20260903000000_blackout_dates.sql — `blackout_dates
+     (tenant_id, blackout_date, reason)`, natural composite PK, RLS enabled +
+     forced + tenant-isolation policy, house updated_at trigger.
+   - The booking RPC refuses a closed day with a NEW error code
+     BUSINESS_CLOSED, checked BEFORE any employee/resource search — otherwise a
+     tenant with no staff that day would hear "no one is scheduled" instead of
+     "we are closed": same facts, different sentence, only one of them true.
+   - availabilitySearch.ts excludes the day too. Suggest and enforce must read
+     the same calendar or the agent offers a slot the booking then refuses —
+     the 2026-07-17 midnight-wrap lesson, restated.
+   - CRUD at GET/POST/DELETE /shifts/blackouts (upsert on re-declare; 404 on a
+     zero-row delete, because "removed a closure that was never there" is how an
+     owner comes to believe they are open when they are shut).
+   - Tests: tests/integration/blackoutDates.realdb.test.ts (7, real Postgres —
+     control day bookable, blackout refused with the right CODE, suggester
+     returns nothing, neighbouring days untouched, removal reopens, another
+     tenant's closure does not close this one, re-declare upserts) and
+     tests/routes/blackoutRoutes.test.ts (12).
+   - The RPC guard is proven LOAD-BEARING by mutation: re-applying the previous
+     function definition makes the BUSINESS_CLOSED case fail, and only that case.
+
+  WHY THIS WAS THE REAL GAP: `employee_schedule.is_off` says one PERSON is off.
+  Nothing could say the BUSINESS is shut, so closing meant editing every
+  employee's row for that date — and anyone hired afterwards was silently
+  bookable on a day the doors are locked.
+
+  NOT BUILT, and deliberately scoped out rather than half-done:
+   - the weekly-grid editing UI and per-day BREAKS. Breaks have no
+     representation yet (employee_schedule holds ONE start/end per day); adding
+     them is a schema question, not a UI one, and should be its own task.
+   - a dashboard surface for blackouts. The API is live and tested; the Schedule
+     tab does not yet show or edit closures.
+
+  ALREADY EXISTED, contrary to the spec's FILES list: there is no
+  `src/services/availability.ts` or `getSlots` — the suggester is
+  `src/services/availabilitySearch.ts` (`findNextAvailableSlots`), the booking
+  RPCs are in supabase/migrations, and `dashboard/components/SchedulerView.tsx`
+  plus `components/scheduler/` already render appointments.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 10–12h

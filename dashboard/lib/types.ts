@@ -365,6 +365,20 @@ export interface AiCostSummary {
   total_estimated_cost_usd: number;
 }
 
+/**
+ * GET /analytics/ai-cost (T-011). Extends AiCostSummary with the per-call
+ * figures a pricing decision actually needs.
+ *
+ * `avg_cost_per_call_usd` is NULL — not 0 — when no call has been costed this
+ * month. "We have not measured one" and "our calls are free" are different
+ * claims, and a tier priced off the second is a tier priced off nothing.
+ */
+export interface AiCostBreakdown extends AiCostSummary {
+  call_count: number;
+  voice_call_cost_usd: number;
+  avg_cost_per_call_usd: number | null;
+}
+
 export interface PlanQuota {
   includedCalls: number;
   packCalls: number;

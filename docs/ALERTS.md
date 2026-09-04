@@ -43,18 +43,22 @@ turn it into pages. §2 and §4 cover both. §3 is the rule catalog (collector-a
 
 ### Live series (exact names + labels)
 
-| Metric                            | Type      | Labels                         | Label values                                                                                                                                                |
-| --------------------------------- | --------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `http_requests_total`             | counter   | `route`, `method`, `status`    | `status` ∈ `2xx`/`4xx`/`5xx`                                                                                                                                |
-| `http_request_duration_ms`        | histogram | `route`, `method`, `status`    | buckets: 10,25,50,100,250,500,1000,2500,5000,10000 ms                                                                                                       |
-| `booking_attempts_total`          | counter   | `outcome`, `source`            | `outcome` ∈ success, timeslot_occupied, employee_not_scheduled, no_skilled_employee, no_availability, validation_error, other_error · `source` ∈ api, agent |
-| `tool_calls_total`                | counter   | `tool`, `outcome`              | `outcome` ∈ success, error, validation_error                                                                                                                |
-| `sync_dispatches_total`           | counter   | `provider`, `entity`, `action` | —                                                                                                                                                           |
-| `errors_total`                    | counter   | `event`                        | the `event` arg passed to `logError()` (e.g. `voice_session_reaped`, `provisioning_failed`, `unhandled_route_error`)                                        |
-| `reminders_sent_total`            | counter   | `type`, `outcome`              | `type` ∈ confirmation, 72h, 24h, 2h, custom, unknown · `outcome` ∈ success, failure. **Corrected 2026-08-20** — this row said `channel` (email, sms), a shape only the never-wired parallel implementation emitted; any query filtering on `channel` matched nothing. A reminder can go out on both channels at once and is collapsed to ONE outcome. |
-| `reminders_skipped_total`         | counter   | `reason`                       | appointment_not_found, appointment_cancelled, appointment_passed, no_consent. **Corrected 2026-08-20** — `processing_error` is never emitted (a processing failure is rethrown so the worker can classify retry-vs-fail, and lands in `errors_total`); `appointment_passed` was emitted but undocumented; `appointment_not_found` was documented but not emitted until now. |
-| `sms_sends_total`                 | counter   | `provider`, `outcome`          | `provider` ∈ telnyx, mock · `outcome` ∈ sent, failed, rate_limited                                                                                          |
-| `message_delivery_receipts_total` | counter   | `status`                       | queued, sending, sent, delivered, undelivered, failed, received                                                                                             |
+| Metric                             | Type      | Labels                         | Label values                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------- | --------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http_requests_total`              | counter   | `route`, `method`, `status`    | `status` ∈ `2xx`/`4xx`/`5xx`                                                                                                                                                                                                                                                                                                                                                |
+| `http_request_duration_ms`         | histogram | `route`, `method`, `status`    | buckets: 10,25,50,100,250,500,1000,2500,5000,10000 ms                                                                                                                                                                                                                                                                                                                       |
+| `booking_attempts_total`           | counter   | `outcome`, `source`            | `outcome` ∈ success, timeslot_occupied, employee_not_scheduled, no_skilled_employee, no_availability, validation_error, other_error · `source` ∈ api, agent                                                                                                                                                                                                                 |
+| `tool_calls_total`                 | counter   | `tool`, `outcome`              | `outcome` ∈ success, error, validation_error                                                                                                                                                                                                                                                                                                                                |
+| `sync_dispatches_total`            | counter   | `provider`, `entity`, `action` | —                                                                                                                                                                                                                                                                                                                                                                           |
+| `errors_total`                     | counter   | `event`                        | the `event` arg passed to `logError()` (e.g. `voice_session_reaped`, `provisioning_failed`, `unhandled_route_error`)                                                                                                                                                                                                                                                        |
+| `reminders_sent_total`             | counter   | `type`, `outcome`              | `type` ∈ confirmation, 72h, 24h, 2h, custom, unknown · `outcome` ∈ success, failure. **Corrected 2026-08-20** — this row said `channel` (email, sms), a shape only the never-wired parallel implementation emitted; any query filtering on `channel` matched nothing. A reminder can go out on both channels at once and is collapsed to ONE outcome.                       |
+| `reminders_skipped_total`          | counter   | `reason`                       | appointment_not_found, appointment_cancelled, appointment_passed, no_consent. **Corrected 2026-08-20** — `processing_error` is never emitted (a processing failure is rethrown so the worker can classify retry-vs-fail, and lands in `errors_total`); `appointment_passed` was emitted but undocumented; `appointment_not_found` was documented but not emitted until now. |
+| `sms_sends_total`                  | counter   | `provider`, `outcome`          | `provider` ∈ telnyx, mock · `outcome` ∈ sent, failed, rate_limited                                                                                                                                                                                                                                                                                                          |
+| `message_delivery_receipts_total`  | counter   | `status`                       | queued, sending, sent, delivered, undelivered, failed, received                                                                                                                                                                                                                                                                                                             |
+| `calls_total`                      | counter   | `source`                       | `source` ∈ phone, browser. **Added 2026-09-03 (T-006).** Incremented on `voice-session-start` BEFORE the DB write, so a database outage cannot silence the denominator and make an outage look like a quiet hour. `browser` is the caller-simulator (a call id of `room:<roomName>`, i.e. a dispatch with no SIP participant).                                              |
+| `call_outcome_total`               | counter   | `outcome`                      | booked, transferred, message, price, no_availability, unknown, … (whatever the agent's outcome tracker sends; absent → `unknown`). **Added 2026-09-03 (T-006).** Counted only when `end_voice_session` returns `ended:true` — the agent posts voice-session-end TWICE per call (finalize + enrich) and that flag is the only thing preventing double-counting.              |
+| `turn_latency_ms`                  | histogram | —                              | buckets: 250,500,1000,1500,2000,2500,3000,4000,6000,10000 ms. **Added 2026-09-03 (T-006).** Caller turn end → first real agent audio. Measured in the AGENT (the backend never sees a turn) and shipped as per-call samples on `voice-session-end`, capped at 100/call.                                                                                                     |
+| `webhook_signature_failures_total` | counter   | `provider`, `endpoint`         | `provider` ∈ stripe, telnyx · `endpoint` ∈ billing_webhook, status_callback, inbound_sms. **Added 2026-09-03 (T-006).** A missing signature counts the same as a bad one.                                                                                                                                                                                                   |
 
 > Histograms expose `_bucket{le=…}`, `_count`, and `_sum` suffixes — the
 > `histogram_quantile()` rules below depend on `_bucket`.
@@ -264,6 +268,23 @@ are expected under burst and are retried by the worker, not incidents.
     runbook: 'docs/RUNBOOK.md — SMS delivery failures'
 ```
 
+Earlier warn tier (added 2026-09-03, T-006). 20% is where a `from` number is
+dead; **5% is where something is wrong and nobody has noticed yet** — a single
+bad recipient format, one carrier rejecting, a partial rate-limit. It warns
+rather than pages precisely so it can sit at a threshold a page could not:
+
+```yaml
+- alert: SmsSendFailureRateElevated
+  expr: |
+    sum(rate(sms_sends_total{outcome="failed"}[30m]))
+      / clamp_min(sum(rate(sms_sends_total{outcome=~"sent|failed"}[30m])), 0.001) > 0.05
+  for: 15m
+  labels: { severity: warn }
+  annotations:
+    summary: '>5% of SMS sends failing over 30m — check for a single bad recipient or a carrier rejecting'
+    runbook: 'docs/RUNBOOK.md — SMS delivery failures'
+```
+
 Cheaper companion that needs no ratio — any failed opt-out confirmation is a
 compliance event, because that path persists no `communications_history` row:
 
@@ -276,6 +297,79 @@ compliance event, because that path persists no `communications_history` row:
     summary: 'An opt-out confirmation SMS failed — TCPA exposure, no DB record exists'
     runbook: 'docs/RUNBOOK.md — SMS delivery failures'
 ```
+
+### 3.10 Reminder batch failing — `page`
+
+**The rule that would have caught the 13-day reminder outage.** On 2026-08-06 the
+worker's atomic claim started writing a `status` the CHECK constraint rejected;
+every 60s tick threw, the exception bumped `errors_total{event="reminder_batch_failed"}`,
+and nobody was looking. `/health` stayed green and zero reminders were sent for
+thirteen days. The counter existed the whole time — what was missing was this.
+
+The worker ticks every 60s, so a genuine fault produces ~10 failures per 10
+minutes. The threshold sits above transient blips and far below a total outage.
+
+```yaml
+- alert: ReminderBatchFailing
+  expr: increase(errors_total{event="reminder_batch_failed"}[10m]) > 3
+  for: 0m
+  labels: { severity: page }
+  annotations:
+    summary: 'Reminder batch failing repeatedly — no reminders or confirmations are going out'
+    runbook: 'docs/RUNBOOK.md — reminder pipeline'
+```
+
+Pair it with a silence check: a worker that stops throwing because it stopped
+running produces no failures either. See §3.8's no-traffic canary shape.
+
+---
+
+### 3.11 Webhook signature failures — `page`
+
+In normal operation this is **flat zero**: only Stripe can sign a Stripe payload
+and only Telnyx can sign a Telnyx one. Any sustained rate means either someone is
+POSTing at the endpoint directly, or a secret was rotated on one side only. Both
+need a human the same hour — the second one silently drops real traffic.
+
+```yaml
+- alert: WebhookSignatureFailures
+  expr: increase(webhook_signature_failures_total[1h]) > 0
+  for: 0m
+  labels: { severity: page }
+  annotations:
+    summary: 'Webhook signature verification failing on {{ $labels.provider }}/{{ $labels.endpoint }} — forged traffic or a half-rotated secret'
+    runbook: 'docs/RUNBOOK.md — webhook verification'
+```
+
+Tell the two causes apart by whether legitimate traffic on the SAME endpoint kept
+flowing (`http_requests_total{route="/billing/webhook",status="2xx"}`). Still
+flowing → forgery attempts. Stopped → the secret is the problem.
+
+---
+
+### 3.12 Turn latency p95 — `warn`
+
+Dead air is the failure callers actually hang up on, and it is invisible in every
+other series: the call completes, the outcome is recorded, and the transcript
+reads fine. 3000 ms is the line — the hold line fires at 2500 ms, so a p95 above
+3000 means the filler has become the normal case rather than a backstop.
+
+```yaml
+- alert: TurnLatencyP95
+  expr: |
+    histogram_quantile(0.95, sum(rate(turn_latency_ms_bucket[15m])) by (le)) > 3000
+  for: 10m
+  labels: { severity: warn }
+  annotations:
+    summary: 'p95 agent turn latency above 3s over 15m — callers are sitting in silence'
+    runbook: 'docs/RUNBOOK.md — voice latency'
+```
+
+**Read the buckets, not just the quantile, before acting.** The 2026-08-15 case
+looked like slow TTS and was one DNS lookup taking 11 seconds (`dnsWarm.ts`).
+A latency alert says _where the caller waited_, never _why_.
+
+---
 
 ---
 

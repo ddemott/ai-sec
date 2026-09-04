@@ -515,6 +515,17 @@ export const VoiceSessionEndSchema = z.object({
     .refine((v) => v == null || JSON.stringify(v).length <= 120_000, {
       message: 'tool_calls payload too large',
     }),
+  // Per-turn latency samples in ms (T-006, 2026-09-03) — caller turn end to
+  // first real agent audio. Measured in the agent because nothing on the
+  // backend can see a turn; observed into the `turn_latency_ms` histogram on
+  // arrival. Capped at 100 samples (a very long call is dozens of turns, and a
+  // p95 does not improve past that) and 600_000 ms per sample so a clock skew
+  // cannot write a nonsense bucket.
+  turn_latency_ms: z
+    .array(z.number().int().nonnegative().max(600_000))
+    .max(100)
+    .nullable()
+    .optional(),
 });
 
 // Incremental transcript save — the agent posts the transcript-so-far after each

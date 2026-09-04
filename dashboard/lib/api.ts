@@ -19,6 +19,7 @@ import type {
   AnalyticsStats,
   AnalyticsCohorts,
   AnalyticsUtilization,
+  AiCostBreakdown,
   UsageStatementResult,
   Vocabulary,
   CoverageItem,
@@ -685,6 +686,13 @@ export const Api = {
 
     getUtilization: (tenantId: string | null, range?: { start_date?: string; end_date?: string }) =>
       apiFetch<AnalyticsUtilization>(`/analytics/utilization`, analyticsQuery(tenantId, range)),
+
+    // Month-to-date AI spend + the per-call average (T-011). OPERATOR-ONLY on
+    // the UI side: this is cost-of-goods, and showing a customer the margin
+    // math on their own calls is not a feature. The endpoint is tenant-scoped
+    // like every other analytics route; the gate is who renders it.
+    getAiCost: (tenantId: string | null) =>
+      apiFetch<AiCostBreakdown>(`/analytics/ai-cost`, tenantParam(tenantId)),
   },
 
   // --- REMINDERS (delivery monitoring) ---

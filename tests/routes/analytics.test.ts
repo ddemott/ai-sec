@@ -15,6 +15,7 @@ import type { Pool, PoolClient } from 'pg';
 import { registerAnalyticsRoutes } from '../../src/routes/analytics';
 
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
 interface MockQuery {
   text: string;
@@ -62,6 +63,21 @@ function buildApp() {
       (request.headers['x-tenant-id'] as string);
     if (tenantId) {
       request.tenantId = tenantId;
+    }
+    // /analytics/ai-cost is super-admin only (review catch on #394 — it returns
+    // the platform's cost-of-goods, i.e. the margin on what the tenant pays).
+    // requireSuperAdmin reads req.auth, so tests must be able to arrive as a
+    // real session: `x-auth-tenant` sets the AUTHENTICATED tenant, which is a
+    // different thing from the tenant being QUERIED. Absent header → no auth at
+    // all, which is exactly the anonymous case.
+    const authTenant = request.headers['x-auth-tenant'] as string | undefined;
+    if (authTenant) {
+      request.auth = {
+        tenant_id: authTenant,
+        user_id: '99999999-9999-4999-8999-999999999999',
+        email: 'tester@example.com',
+        role: 'owner',
+      };
     }
   });
 
@@ -574,13 +590,72 @@ describe('GET /feedback', () => {
   });
 });
 
+describe('GET /analytics/ai-cost — authorization', () => {
+  /**
+   * WHO: a paying tenant's owner, holding a perfectly valid session.
+   * WHAT: the route must refuse them — 403 — and run NO query.
+   * WHEN: any request that is not the platform super-admin.
+   * WHERE: src/routes/analytics.ts, requireSuperAdmin ahead of requireTenantId.
+   * WHY: this endpoint returns the platform's COST OF GOODS — what a call costs
+   *      us, and with the per-call average (T-011), the margin on what the
+   *      customer pays. Before #394's review catch the only thing hiding it was
+   *      `AnalyticsView` not rendering the panel for non-admins, which is a
+   *      rendering decision, not an authorization one: the route was reachable
+   *      with the tenant's own JWT and one curl. Same shape as the 2026-05-21
+   *      anonymous `?tenant_id=` finding — a control that looks like a boundary
+   *      and is not one.
+   */
+  it('SAD (security): an authenticated NON-admin tenant gets 403 and no query runs', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/analytics/ai-cost',
+      headers: { 'x-tenant-id': TENANT_ID, 'x-auth-tenant': TENANT_ID },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toMatch(/super-admin/i);
+    // Not just "the body was empty" — the DB was never touched, so there is no
+    // cost data anywhere in the response path to leak.
+    expect(queries).toHaveLength(0);
+  });
+
+  it('SAD (security): an unauthenticated request gets 401, not tenant data', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/analytics/ai-cost',
+      headers: { 'x-tenant-id': TENANT_ID },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(queries).toHaveLength(0);
+  });
+
+  it('HAPPY: the platform super-admin can read it', async () => {
+    // The gate must not be so tight that the operator loses the number the
+    // panel exists to show — that would trade a leak for a blind spot.
+    queryResponses.push({ rows: [] });
+    queryResponses.push({ rows: [{ call_count: '0', voice_cost: null }] });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/analytics/ai-cost',
+      headers: { 'x-tenant-id': TENANT_ID, 'x-auth-tenant': PLATFORM_TENANT_ID },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ avg_cost_per_call_usd: number | null }>().avg_cost_per_call_usd).toBeNull();
+  });
+});
+
 describe('GET /analytics/ai-cost', () => {
   it('HAPPY: returns monthly breakdown and total_estimated_cost_usd', async () => {
-    // WHO: Tenant owner checking AI usage in the Analytics tab
+    // WHO: the platform super-admin reviewing AI spend for one tenant. NOT the
+    //      tenant's own owner — this endpoint is cost-of-goods and is gated on
+    //      requireSuperAdmin (see the authorization describe above).
     // WHAT: Route queries ai_cost_events grouped by source+provider+model for current month
     // WHEN: Called with a valid tenant_id after voice calls have run
     // WHERE: src/routes/analytics.ts GET /analytics/ai-cost
-    // WHY: Owner needs to understand AI spend without reading OpenAI/Deepgram dashboards
+    // WHY: the operator needs real per-tenant spend to price tiers, without
+    //      reading the OpenAI/Deepgram dashboards by hand
     queryResponses.push({
       rows: [
         {
@@ -609,6 +684,7 @@ describe('GET /analytics/ai-cost', () => {
     const res = await app.inject({
       method: 'GET',
       url: `/analytics/ai-cost?tenant_id=${TENANT_ID}`,
+      headers: { 'x-auth-tenant': PLATFORM_TENANT_ID },
     });
 
     expect(res.statusCode).toBe(200);
@@ -626,14 +702,16 @@ describe('GET /analytics/ai-cost', () => {
   });
 
   it('HAPPY: returns empty breakdown when no events this month', async () => {
-    // WHO: New tenant who hasn't had any calls yet
+    // WHO: the operator looking at a new tenant that hasn't had any calls yet
     // WHAT: ai_cost_events returns no rows → empty breakdown + $0 total
     // WHY: Must render cleanly with empty state rather than error
-    queryResponses.push({ rows: [] });
+    queryResponses.push({ rows: [] }); // grouped breakdown
+    queryResponses.push({ rows: [{ call_count: '0', voice_cost: null }] }); // per-call rollup
 
     const res = await app.inject({
       method: 'GET',
       url: `/analytics/ai-cost?tenant_id=${TENANT_ID}`,
+      headers: { 'x-auth-tenant': PLATFORM_TENANT_ID },
     });
 
     expect(res.statusCode).toBe(200);

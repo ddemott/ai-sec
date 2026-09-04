@@ -133,6 +133,17 @@ export async function findNextAvailableSlots(
             random()
         ) AS rn
       FROM slot_starts ss
+      -- CLOSED DAYS ARE NOT AVAILABILITY (T-106). The booking RPC refuses a
+      -- blackout date with BUSINESS_CLOSED; if the suggester did not also
+      -- exclude it, the agent would read out times for a day the doors are
+      -- locked and the booking would then fail on the caller — the exact
+      -- suggest/enforce split that produced the 11:30 PM offers in the
+      -- 2026-07-17 midnight-wrap incident. The date is compared in the TENANT's
+      -- timezone ($5), the same conversion the shift join uses, because a
+      -- closure is a calendar day where the business is, not in UTC.
+      LEFT JOIN blackout_dates bd
+        ON bd.tenant_id = $4
+       AND bd.blackout_date = (ss.s AT TIME ZONE $5)::date
       CROSS JOIN employees emp
       -- A RESOURCE IS REQUIRED ONLY BY A TENANT THAT HAS ONE (2026-08-15).
       --
@@ -207,6 +218,10 @@ export async function findNextAvailableSlots(
                AND es.end_time >= ((ss.s + ($3 || ' minutes')::interval) AT TIME ZONE $5)::time
            END
       WHERE emp.tenant_id = $4
+        -- The closed-day exclusion. A LEFT JOIN plus IS NULL rather than NOT
+        -- EXISTS so the blackout probe rides the (tenant_id, blackout_date)
+        -- primary key once per slot instead of running a subquery per row.
+        AND bd.tenant_id IS NULL
         AND emp.is_active = true
         AND (emp.is_deleted IS NULL OR emp.is_deleted = false)
         -- The resource requirement, stated once, and it falls open in exactly

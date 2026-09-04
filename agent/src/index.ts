@@ -71,6 +71,7 @@ import {
   attachCallerSilenceWatch,
 } from './session/watchdog.js';
 import { attachThinkingSound } from './session/thinkingSound.js';
+import { TurnLatencyCollector } from './session/turnLatency.js';
 import { TranscriptRecorder } from './transcript.js';
 import { ToolCallLog } from './toolCallLog.js';
 import { CallOutcomeTracker } from './callOutcome.js';
@@ -537,6 +538,10 @@ export default defineAgent({
     //   vad>0, stt>0  → speech was captured; any emptiness is downstream.
     let vadSpeechEvents = 0;
     let sttTranscribed = 0;
+    // Per-turn latency samples, shipped on voice-session-end so the backend can
+    // observe them into the `turn_latency_ms` histogram (T-006). The agent has
+    // no scrapeable registry of its own — see session/turnLatency.ts.
+    const turnLatency = new TurnLatencyCollector();
     // Tracks what happened on the call (booked / transferred + appointment_id),
     // mutated by the booking/transfer tools, read at shutdown for session-end.
     const outcomeTracker = new CallOutcomeTracker();
@@ -705,6 +710,10 @@ export default defineAgent({
               // carries it; the enrich pass merges nothing, so a re-SET of the
               // other columns can't erase it.
               tool_calls: toolCallLog.toPayload() ?? undefined,
+              // Turn latencies measured during THIS call. Omitted entirely when
+              // no turn was measured (silent hang-up) — an empty array would
+              // read as a call with zero-latency turns.
+              turn_latency_ms: turnLatency.toPayload(),
             });
             // ToolsClient.call() resolves { ok:false } on a backend 5xx (does NOT
             // throw), so the catch below won't fire on a 500 — inspect the result
@@ -1803,6 +1812,10 @@ export default defineAgent({
           const detachWatchdog = attachOutputWatchdog(session, {
             voice: watchdogVoice,
             thinkingText,
+            // T-006: same measurement the turn_latency_ms log line carries, on
+            // its way to the backend histogram. Exactly one watchdog feeds the
+            // collector — see outputWatchdogActive below.
+            onTurnLatency: (ms) => turnLatency.record(ms),
             // 3.5s, not 2.5s. At 2.5s it fired SEVEN TIMES in one call — the pipeline
             // (STT → gpt-4o-mini → TTS) routinely takes longer than that to produce a
             // first word, so the "backstop" became the normal case and the caller was
@@ -1845,6 +1858,9 @@ export default defineAgent({
           // apart from the real reply's; this function cannot. See the option's
           // doc comment in watchdog.ts for what goes wrong without this.
           outputWatchdogActive: config.ENABLE_OUTPUT_WATCHDOG,
+          // Fires only when this function owns the measurement (i.e. the output
+          // watchdog is off), so a turn is never recorded twice.
+          onTurnLatency: (ms) => turnLatency.record(ms),
           onSpoken: (text) => transcript.add('assistant', text),
           // The turn made no sound, but its text is already in the transcript —
           // the framework records assistant turns off the token stream, not off

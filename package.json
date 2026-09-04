@@ -42,7 +42,8 @@
     "ci:status": "bash scripts/simulate.sh ci",
     "ci:watch": "bash scripts/simulate.sh ci --watch",
     "starter-services:generate": "npx tsx scripts/generate-starter-services-sql.ts",
-    "verify:starter-services": "npx tsx scripts/generate-starter-services-sql.ts --check"
+    "verify:starter-services": "npx tsx scripts/generate-starter-services-sql.ts --check",
+    "scan:secrets": "npx tsx scripts/scan-secrets.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

@@ -29,7 +29,13 @@ import { canTransfer } from '../../../shared/phone';
 import { deriveChecklistRuntimeConfig } from '../../../shared/checklistPresetDerivation';
 import { loadTenantQuestionTrees } from '../../services/questionTrees';
 import { sendSms } from '../../services/telnyxSms';
-import { errorsTotal, silentHangupsTotal } from '../../services/metrics';
+import {
+  callOutcomeTotal,
+  callsTotal,
+  errorsTotal,
+  silentHangupsTotal,
+  turnLatencyMs,
+} from '../../services/metrics';
 
 /**
  * How long a call must last before "the caller never spoke" is evidence of a
@@ -240,6 +246,16 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
     '/agent-tools/voice-session-start',
     VoiceSessionStartSchema,
     async (args, reply) => {
+      // COUNT THE CALL BEFORE ANYTHING CAN FAIL (T-006). Every per-call rate
+      // needs a denominator, and the denominator has to be incremented on the
+      // way IN — count it after the INSERT and a database outage stops the
+      // counter too, so an outage and a quiet hour produce the same flat line.
+      //
+      // `source` is derived, not claimed: sessionContext.ts sets callId from the
+      // SIP call ID when there is a SIP participant, and falls back to
+      // `room:<roomName>` when there is none — which is exactly the browser
+      // caller-simulator. No third value is invented.
+      callsTotal.inc({ source: args.call_id.startsWith('room:') ? 'browser' : 'phone' });
       try {
         await withTenantClient(args.tenant_id, async (client) => {
           await client.query('SELECT start_voice_session($1, $2, $3) AS context', [
@@ -463,6 +479,23 @@ export function registerSessionRoutes({ app, withTenantClient }: AgentToolDeps):
         return fail(reply, 'Failed to end voice session', 500);
       }
       const { ended, forwardPhone, inboundPhone } = sessionEnd;
+
+      // WHAT THE CALL ENDED AS + HOW SLOW ITS TURNS WERE (T-006).
+      //
+      // Only when `ended` — voice-session-end is called TWICE per call (a
+      // finalize pass and a later enrich pass, agent/src/index.ts), and
+      // end_voice_session returns false the second time because the row is
+      // already closed. Counting on `ended` alone is what keeps one call from
+      // being counted as two.
+      //
+      // Turn latency can only be measured by the agent (the backend never sees
+      // a turn), so it arrives as per-call samples here. Observing them one by
+      // one is what makes the histogram's p95 mean the same thing it would if
+      // the agent scraped itself.
+      if (ended) {
+        callOutcomeTotal.inc({ outcome: args.outcome ?? 'unknown' });
+        for (const ms of args.turn_latency_ms ?? []) turnLatencyMs.observe(ms);
+      }
 
       // SILENT CALL — the caller was on the line long enough to speak and not
       // one word of theirs reached us. The call still finalizes 'completed'
