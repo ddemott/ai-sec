@@ -133,41 +133,7 @@ Durable rules-of-engagement that override "build for the future":
 
 ## Code Conventions
 
-**Dashboard**
-
-- Single primary nav bar: Primary tabs (Home, Schedule, Customers, Calls) always visible; Advanced tabs (My Business, My Team, Phone Assistant) shown for owners/admins only. Front-desk-only users see Primary tabs only and are snapped back to Home if they hit a restricted tab via a stale URL.
-- Components: List+Detail pane pattern (sidebar list, detail right). Large views split into sub-components.
-- UI primitives in `dashboard/components/ui/` — Button (`isLoading`), Card, Input, Select, Modal (Escape/backdrop close), Badge, Toast (5s err/warn, 3s success/info, max 5), `ConfirmModal` + `useConfirm()` for destructive actions.
-- API client: `dashboard/lib/api.ts` with namespaced `Api.{resource}.{action}()`, fully typed returns. Shared `forceLogout()` + `checkAuthFailure()`.
-- Entity types: `dashboard/lib/types.ts`.
-- Session: `SessionContext` + `useActiveTenantId()`. No `overrideTenantId` prop drilling.
-- `useFormState<T>()` for form state + dirty tracking.
-- Tab state synced to URL (`?tab=schedule`).
-- **Zero TypeScript errors** (`npx tsc --noEmit`).
-
-**Backend**
-
-- Slim `index.ts` wires 29 top-level route modules + `routes/agentTools/` (a directory since 2026-07-11). Tenant-scoped routes use `withTenantClient()` for RLS.
-- All mutations: Zod-validated, response shape `{ success, error?, details? }`, `assertRowAffected()` returns 404 on zero-row UPDATE/DELETE (never silent success).
-- Production env validation: refuses to start without `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`.
-- Graceful shutdown on SIGTERM/SIGINT (closes Fastify + drains pool — required for Railway).
-- Fetch timeouts on OpenAI calls (10s embeddings, 15s normalization) via AbortController.
-
-**Agent tools**
-
-- `/agent-tools/*` responses: `{ success: true, result }` or `{ success: false, error }` at status 200 — LLM relays both shapes naturally. Auth via `x-agent-secret` header.
-- `SYNC_TEST_RECORDER=1` (off by default) flips on an in-memory ring buffer in `syncOrchestrator.ts` that records every appointment + customer sync dispatch (provider, action, tenantId, entityId, ts). Exposed via `GET /agent-tools/_test/sync-events` (read) and `DELETE /agent-tools/_test/sync-events` (clear), both gated by the env var AND the existing agent-secret. Used exclusively by `dashboard/e2e/calendar-sync.spec.ts` to assert the orchestration contract without real Google/Outlook/CRM credentials. Strict opt-in — anything other than the literal string `"1"` keeps it disabled, so a stray prod request can't enumerate sync activity.
-
-**Observability**
-
-- Health: `GET /health` is shallow liveness (process up; `{status, started_at}`, no DB — E2E stale-binary check depends on this shape). `GET /ready` (added 2026-05-21) is deep readiness — pings the DB and reports pool saturation (`pool.{total,idle,waiting}`); 503 when DB unreachable. Both are PUBLIC + tenant-exempt + metrics-skipped. `/ready` is a monitoring/alert signal (curl/scrape, page on 503 or sustained `waiting>0`); it does NOT gate live traffic unless Railway's healthcheck path is repointed to it.
-- Pino → stdout (Railway live-tail) + Better Stack (when `BETTER_STACK_TOKEN` is set). Per-request enrichment: `service`, `env`, `tenant_id`, `call_id`. `logEvent`/`logWarning`/`logError` helpers in `middleware.ts` add structured fields. `withHandler`'s unhandled-error branch routes through `logError` (so unknown route errors — incl. pool-checkout timeouts — increment `errors_total` and reach Sentry; pre-2026-05-21 it used a raw `req.log.error` that did neither).
-- Prometheus-style metrics at `GET /metrics`, gated by `METRICS_TOKEN` env var (returns 404 when unset, 401 on missing/wrong Bearer). In-process registry in `src/services/metrics.ts` — no external deps, hard cap at 1000 series per metric (overflow funnels to `overflow="true"`). Pre-declared metrics: `http_requests_total{route,method,status}` + `http_request_duration_ms` (histogram, same labels), `booking_attempts_total{outcome,source}`, `tool_calls_total{tool,outcome}`, `sync_dispatches_total{provider,entity,action}`, `errors_total{event}`. Auto-emitted by Fastify `onResponse` hook (HTTP) and inside `logError` (errors); domain counters wired into appointments + agentTools + syncOrchestrator.
-
-**Tests**
-
-- All tests cover happy + sad paths with 5W diagnostic comments (WHO/WHAT/WHEN/WHERE/WHY).
-- Mock helpers in `src/services/test-utils-mock.ts`.
+See `docs/CODING_STANDARDS.md` — canonical source of truth for naming, DB schema, testing (5W/HAPPY/SAD), routes, dashboard patterns, commit messages, review checklist, Prettier/ESLint, function size, and all other standards. CLAUDE.md no longer duplicates them.
 
 ## Known Issues
 
