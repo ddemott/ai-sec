@@ -45,10 +45,32 @@ vi.mock('stripe', () => ({
 
 // ── Import after mocks ────────────────────────────────────────────────────
 import { registerBillingRoutes, subscriptionGate } from '../../src/routes/billing';
+import { registry } from '../../src/services/metrics';
 import { jsonContentTypeParser } from '../../src/jsonContentTypeParser';
 import type { AppRequest } from '../../src/middleware/fastify-middleware';
 
 const TENANT_ID = 'f234e471-0e60-4163-86c9-93cfd9338e3a';
+
+/**
+ * Current value of webhook_signature_failures_total for a label set (T-006).
+ * Read as a DELTA around the request under test — the registry is a process
+ * singleton and other suites in the same worker also increment it.
+ */
+function sigFailures(provider: string, endpoint: string): number {
+  const line = registry
+    .expose()
+    .split('\n')
+    .find(
+      (l) =>
+        l.startsWith('webhook_signature_failures_total{') &&
+        l.includes(`provider="${provider}"`) &&
+        l.includes(`endpoint="${endpoint}"`)
+    );
+  if (!line) return 0;
+  const n = Number(line.trim().split(/\s+/).pop());
+  return Number.isFinite(n) ? n : 0;
+}
+
 const STRIPE_CUSTOMER_ID = 'cus_test_12345';
 const STRIPE_SUBSCRIPTION_ID = 'sub_test_67890';
 
@@ -303,12 +325,17 @@ describe('POST /billing/webhook', () => {
     // WHY: Without signature verification, anyone could forge events and
     //      activate subscriptions they haven't paid for
     const { app, queries } = buildApp({ poolResponses: [] });
+    const before = sigFailures('stripe', 'billing_webhook');
 
     const res = await post(app, '/billing/webhook', { type: 'checkout.session.completed' });
 
     expect(res.statusCode).toBe(400);
     expect(queries).toHaveLength(0);
     expect(mockConstructEvent).not.toHaveBeenCalled();
+    // T-006: a MISSING signature is counted the same as a bad one. Both mean an
+    // unverifiable POST arrived; splitting them would let an attacker choose
+    // the quieter counter.
+    expect(sigFailures('stripe', 'billing_webhook')).toBe(before + 1);
   });
 
   it('SAD (security): invalid signature → 400, no DB mutation', async () => {
@@ -321,6 +348,7 @@ describe('POST /billing/webhook', () => {
       throw new Error('No signatures found matching the expected signature');
     });
     const { app, queries } = buildApp({ poolResponses: [] });
+    const before = sigFailures('stripe', 'billing_webhook');
 
     const res = await post(
       app,
@@ -333,6 +361,9 @@ describe('POST /billing/webhook', () => {
 
     expect(res.statusCode).toBe(400);
     expect(queries).toHaveLength(0);
+    // T-006: this is the series docs/ALERTS.md pages on. Without it, a forged
+    // webhook run leaves nothing behind but a log line in a sink nobody reads.
+    expect(sigFailures('stripe', 'billing_webhook')).toBe(before + 1);
   });
 });
 

@@ -419,3 +419,59 @@ export const smsSendsTotal = registry.counter(
   'sms_sends_total',
   'SMS send attempts at the service layer, partitioned by provider and outcome (sent, failed, rate_limited)'
 );
+
+// ─────────────────────────────────────────────────────────────────────
+// T-006 (2026-09-03) — the four series the monitoring task named that the
+// registry did not have. Everything below is emitted from a REAL call site;
+// a declared-but-never-incremented metric is worse than a missing one,
+// because a flat line reads as "healthy" rather than "not measured".
+// ─────────────────────────────────────────────────────────────────────
+
+// Every call the agent opens a voice session for. The denominator for
+// every per-call rate on the dashboard — without it, `call_outcome_total`
+// answers "what happened" but never "out of how many", and a total outage
+// (zero calls arriving) looks identical to a quiet hour.
+export const callsTotal = registry.counter(
+  'calls_total',
+  'Voice sessions started, partitioned by source (phone, browser, unknown)'
+);
+
+// What the call ENDED as, straight from the agent's own outcome tracker.
+// Cardinality is safe: `outcome` is a short bounded vocabulary the agent
+// writes (booked, transferred, message, price, no_availability, …) and
+// anything absent lands in `unknown` rather than inventing a series.
+export const callOutcomeTotal = registry.counter(
+  'call_outcome_total',
+  'Voice sessions finalized, partitioned by outcome (booked, transferred, message, price, no_availability, unknown, …)'
+);
+
+// Time from the caller's turn ending to the first real agent audio, in ms.
+// The agent measures it (only the agent can — the backend never sees a
+// turn) and ships the per-call samples on voice-session-end; this is where
+// they become a scrapeable distribution.
+//
+// Buckets are chosen around the number that matters: 2500ms is where the
+// hold line fires, 3000ms is the p95 alert threshold in docs/ALERTS.md. A
+// bucket edge below both makes "we crossed the line" visible instead of
+// interpolated.
+export const turnLatencyMs = registry.histogram(
+  'turn_latency_ms',
+  'Agent turn latency in milliseconds — caller turn end to first real agent audio',
+  [250, 500, 1000, 1500, 2000, 2500, 3000, 4000, 6000, 10000]
+);
+
+// Webhook deliveries REJECTED for a bad/missing signature. In normal
+// operation this is flat zero — only Stripe can sign a Stripe payload and
+// only Telnyx can sign a Telnyx one — so ANY sustained rate means someone
+// is POSTing at the endpoint directly, or a secret rotated on one side
+// only. Both are pages, and the two causes are told apart by whether real
+// traffic on the same endpoint kept flowing.
+//
+// Overlaps `inbound_sms_total{outcome="rejected"}` on one endpoint on
+// purpose: that counter is about SMS handling, this one is about signature
+// integrity across EVERY webhook, so an alert does not need to know which
+// provider exists this quarter.
+export const webhookSignatureFailuresTotal = registry.counter(
+  'webhook_signature_failures_total',
+  'Webhook deliveries rejected for an invalid or missing signature, partitioned by provider and endpoint'
+);

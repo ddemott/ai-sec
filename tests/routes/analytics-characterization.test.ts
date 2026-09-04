@@ -30,6 +30,7 @@ import type { Pool, PoolClient } from 'pg';
 
 import { registerAnalyticsRoutes } from '../../src/routes/analytics';
 
+const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 const TENANT_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
 let app: FastifyInstance;
@@ -94,6 +95,21 @@ function buildApp() {
       (request.query as Record<string, string>)?.tenant_id ||
       (request.headers['x-tenant-id'] as string);
     if (tenantId) request.tenantId = tenantId;
+    // /analytics/ai-cost is super-admin only (review catch on #394 — it returns
+    // the platform's cost-of-goods, i.e. the margin on what the tenant pays).
+    // requireSuperAdmin reads req.auth, so tests must be able to arrive as a
+    // real session: `x-auth-tenant` sets the AUTHENTICATED tenant, which is a
+    // different thing from the tenant being QUERIED. Absent header → no auth at
+    // all, which is exactly the anonymous case.
+    const authTenant = request.headers['x-auth-tenant'] as string | undefined;
+    if (authTenant) {
+      request.auth = {
+        tenant_id: authTenant,
+        user_id: '99999999-9999-4999-8999-999999999999',
+        email: 'tester@example.com',
+        role: 'owner',
+      };
+    }
   });
 
   registerAnalyticsRoutes(fastify, mockPool, withTenantClient);
@@ -101,6 +117,9 @@ function buildApp() {
 }
 
 const hdr = { 'x-tenant-id': TENANT_ID };
+// The ai-cost route is super-admin only, so its cases arrive authenticated as
+// the platform tenant. Everything else keeps using `hdr` unchanged.
+const adminHdr = { 'x-tenant-id': TENANT_ID, 'x-auth-tenant': PLATFORM_TENANT_ID };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -136,7 +155,7 @@ describe('GET /analytics/ai-cost — characterization', () => {
       ],
     });
 
-    const res = await app.inject({ method: 'GET', url: '/analytics/ai-cost', headers: hdr });
+    const res = await app.inject({ method: 'GET', url: '/analytics/ai-cost', headers: adminHdr });
     expect(res.statusCode).toBe(200);
     const body = res.json();
 
@@ -152,16 +171,25 @@ describe('GET /analytics/ai-cost — characterization', () => {
 
   it('HAPPY: no rows → empty breakdown and a zero total (not null, not undefined)', async () => {
     // WHY: the dashboard renders `total.toFixed(...)`; a null here is a crash.
-    queryResponses.push({ rows: [] });
-    const res = await app.inject({ method: 'GET', url: '/analytics/ai-cost', headers: hdr });
-    expect(res.json()).toEqual({ breakdown: [], total_estimated_cost_usd: 0 });
+    queryResponses.push({ rows: [] }); // the grouped breakdown
+    queryResponses.push({ rows: [{ call_count: '0', voice_cost: null }] }); // the per-call rollup
+    const res = await app.inject({ method: 'GET', url: '/analytics/ai-cost', headers: adminHdr });
+    // avg is NULL, not 0 (T-011): "no call has been costed" and "calls are
+    // free" are different claims, and only the second is safe to price from.
+    expect(res.json()).toEqual({
+      breakdown: [],
+      total_estimated_cost_usd: 0,
+      call_count: 0,
+      voice_call_cost_usd: 0,
+      avg_cost_per_call_usd: null,
+    });
   });
 
   it('HAPPY: scopes to the current calendar month and to the tenant', async () => {
     // WHY: the month window is in SQL (`date_trunc('month', now())`). Pinning it
     //      means an extraction cannot quietly widen the billing window.
     queryResponses.push({ rows: [] });
-    await app.inject({ method: 'GET', url: '/analytics/ai-cost', headers: hdr });
+    await app.inject({ method: 'GET', url: '/analytics/ai-cost', headers: adminHdr });
     expect(queries[0].text).toContain("date_trunc('month', now())");
     expect(queries[0].params).toEqual([TENANT_ID]);
   });

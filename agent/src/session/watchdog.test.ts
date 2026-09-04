@@ -364,6 +364,66 @@ describe('attachOutputWatchdog', () => {
   });
 });
 
+describe('turn latency reporting (T-006)', () => {
+  beforeEach(() => _resetFillerCacheForTest());
+
+  it('HAPPY: attachSilentTurnRecovery reports the turn it logs', () => {
+    // WHO: every prod call — this attach is unconditional.
+    // WHY: turn_latency_ms was a LOG LINE only, and prod ships logs to a sink
+    //      that is not configured, so a 20s dead-air turn was measurable and
+    //      unalertable at the same time. The callback is the path to /metrics.
+    const f = makeFakeSession();
+    const seen: Array<{ ms: number; hold: boolean }> = [];
+    attachSilentTurnRecovery(f.session, {
+      voice: 'eve',
+      recoveryText: RECOVERY,
+      log: noopLog,
+      onTurnLatency: (ms, hold) => seen.push({ ms, hold }),
+    });
+    f.emit('thinking');
+    f.emit('speaking');
+    expect(seen).toHaveLength(1);
+    expect(seen[0].ms).toBeGreaterThanOrEqual(0);
+    expect(seen[0].hold).toBe(false);
+  });
+
+  it('SAD: one turn reports ONCE, even when a later say() re-enters speaking', () => {
+    // The recovery line is spoken via a direct say() that never passes through
+    // 'thinking'. Without the thinkingAtMs reset, that second 'speaking' would
+    // report a second latency for the same turn and double-count the sample.
+    const f = makeFakeSession();
+    const seen: number[] = [];
+    attachSilentTurnRecovery(f.session, {
+      voice: 'eve',
+      recoveryText: RECOVERY,
+      log: noopLog,
+      onTurnLatency: (ms) => seen.push(ms),
+    });
+    f.emit('thinking');
+    f.emit('speaking');
+    f.emit('speaking');
+    expect(seen).toHaveLength(1);
+  });
+
+  it('SAD: with the output watchdog active this copy reports NOTHING', () => {
+    // Exactly one watchdog owns the measurement. Both reporting would put a
+    // filler's time-to-audio and the real reply's into the same histogram, and
+    // the p95 would then describe a mixture of two different things.
+    const f = makeFakeSession();
+    const seen: number[] = [];
+    attachSilentTurnRecovery(f.session, {
+      voice: 'eve',
+      recoveryText: RECOVERY,
+      log: noopLog,
+      outputWatchdogActive: true,
+      onTurnLatency: (ms) => seen.push(ms),
+    });
+    f.emit('thinking');
+    f.emit('speaking');
+    expect(seen).toHaveLength(0);
+  });
+});
+
 describe('attachSilentTurnRecovery', () => {
   beforeEach(() => _resetFillerCacheForTest());
 

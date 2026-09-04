@@ -12,8 +12,13 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 
+// isAdmin is a LET so a test can flip it — the AI-cost panel is gated on it,
+// and both sides of that gate are load-bearing: hidden for a tenant owner,
+// present for the platform operator (T-011).
+let mockIsAdmin = false;
 vi.mock('../../lib/SessionContext', () => ({
   useActiveTenantId: () => 'tenant-123',
+  useSessionContext: () => ({ isAdmin: mockIsAdmin }),
 }));
 
 const { mockApi } = vi.hoisted(() => ({
@@ -276,12 +281,55 @@ describe('AnalyticsView — copy defects (UX review)', () => {
       by_outcome: [],
       by_day: [],
     });
+    mockIsAdmin = false;
     render(<AnalyticsView />);
 
     await screen.findByText(/Analytics/i);
     expect(screen.queryByText(/AI Usage/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/estimated cost/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/\$0\./)).not.toBeInTheDocument();
+    // T-011: the operator cost panel must not render, and must not even be
+    // FETCHED — a request for cost-of-goods from a tenant session is the shape
+    // of the leak, whether or not anything is drawn with the answer.
+    expect(screen.queryByText(/AI cost \(month to date\)/i)).not.toBeInTheDocument();
+    expect(mockApi.analytics.getAiCost).not.toHaveBeenCalled();
+  });
+
+  test('HAPPY: the platform operator DOES see AI cost, including avg per call', async () => {
+    // WHO: Dale on the platform tenant, deciding tier pricing.
+    // WHY: the ledger once undercounted 35x and nobody saw it because nothing
+    //      rendered the number. Rendering it for the operator is the whole
+    //      point of T-011; hiding it from the tenant is the constraint.
+    mockIsAdmin = true;
+    mockApi.analytics.getCalls.mockResolvedValue({
+      totals: { total: 3, booked: 1, abandoned: 1 },
+      by_outcome: [],
+      by_day: [],
+    });
+    mockApi.analytics.getAiCost.mockResolvedValue({
+      breakdown: [
+        {
+          source: 'voice_call',
+          provider: 'openai',
+          model: 'gpt-4.1-mini',
+          input_tokens: 120000,
+          output_tokens: 2400,
+          characters_count: 0,
+          audio_duration_ms: 0,
+          estimated_cost_usd: 0.05184,
+        },
+      ],
+      total_estimated_cost_usd: 0.1,
+      call_count: 1,
+      voice_call_cost_usd: 0.1,
+      avg_cost_per_call_usd: 0.1,
+    });
+
+    render(<AnalyticsView />);
+
+    expect(await screen.findByText(/AI cost \(month to date\)/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('avg-cost-per-call')).toHaveTextContent('$0.1000');
+    mockIsAdmin = false;
   });
 
   test('HAPPY: the reliability snapshot does not leak the internal endpoint path', async () => {

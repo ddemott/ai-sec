@@ -19,6 +19,27 @@ import type { FastifyInstance } from 'fastify';
 import { registerCommunicationRoutes } from '../../src/routes/communications';
 import { jsonContentTypeParser } from '../../src/jsonContentTypeParser';
 import { buildRouteTestApp, type RouteTestAppHandle } from '../mock';
+import { registry } from '../../src/services/metrics';
+
+/**
+ * Current value of webhook_signature_failures_total for a label set (T-006).
+ * Read as a DELTA — the registry is a process singleton shared with every other
+ * suite in this worker.
+ */
+function sigFailures(provider: string, endpoint: string): number {
+  const line = registry
+    .expose()
+    .split('\n')
+    .find(
+      (l) =>
+        l.startsWith('webhook_signature_failures_total{') &&
+        l.includes(`provider="${provider}"`) &&
+        l.includes(`endpoint="${endpoint}"`)
+    );
+  if (!line) return 0;
+  const n = Number(line.trim().split(/\s+/).pop());
+  return Number.isFinite(n) ? n : 0;
+}
 
 /**
  * Telnyx signs webhooks with Ed25519 (telnyx-signature-ed25519 + telnyx-timestamp,
@@ -302,6 +323,7 @@ describe('POST /communications/telnyx/status (delivery-status webhook)', () => {
     // WHERE: the signature-verification branch
     // WHY: a public DB-writing endpoint must reject unsigned/forged callers
     process.env.TELNYX_PUBLIC_KEY = PUBLIC_KEY_B64;
+    const before = sigFailures('telnyx', 'status_callback');
     const res = await app.inject({
       method: 'POST',
       url: `/communications/telnyx/status?tenant_id=${TENANT_ID}`,
@@ -312,6 +334,10 @@ describe('POST /communications/telnyx/status (delivery-status webhook)', () => {
     expect(res.statusCode).toBe(403);
     expect(res.json().success).toBe(false);
     expect(handle.queries.find((q) => q.text.includes('message_delivery_status'))).toBeUndefined();
+    // T-006: rejecting the forgery is half the job — the rejection has to be
+    // COUNTABLE, or "someone is POSTing at our webhook" is knowable only by
+    // reading logs nobody is reading.
+    expect(sigFailures('telnyx', 'status_callback')).toBe(before + 1);
   });
 
   it('SAD: an unsigned `{}` body dies at the signature check, not the id/status guard', async () => {

@@ -661,10 +661,15 @@ describe('SetupWizard: Step 9 Go Live', () => {
     // Activation success lands on Stage B (verify the raw number actually
     // answers) — GoLivePanel never claims "live" before a real call is
     // confirmed. See GoLivePanel.test.tsx for the full stage-by-stage flow.
-    await waitFor(() => {
-      expect(screen.getByText('Your number is ready')).toBeInTheDocument();
-      expect(screen.getByText('+1 (630) 555-1234')).toBeInTheDocument();
-    });
+    //
+    // Wait on the DOM outcome, not wall-clock. Default waitFor (1000ms) is
+    // what failed once on CI at 1,115ms under load (#362) — same class as the
+    // FIND_BUDGET_MS sad-path fix below. findBy* retries until the node
+    // appears; the budget is "activation finished", not "machine is fast".
+    expect(
+      await screen.findByText('Your number is ready', {}, { timeout: 5000 })
+    ).toBeInTheDocument();
+    expect(await screen.findByText('+1 (630) 555-1234', {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
   test('shows error state when activation fails', async () => {

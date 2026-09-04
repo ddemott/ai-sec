@@ -153,12 +153,12 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-003 | Live voice validation call           | 1    | Human  | CRITICAL | —            | ⬜      |
 | T-004 | Stripe test-mode wiring              | 1    | Human  | CRITICAL | —            | ⬜      |
 | T-005 | Stripe live-mode + bank account      | 1    | Human  | CRITICAL | T-004        | ⬜      |
-| T-006 | Monitoring & alerting                | 1    | Claude | HIGH     | —            | ⬜      |
+| T-006 | Monitoring & alerting                | 1    | Claude | HIGH     | —            | 🟡      |
 | T-007 | Fix E2E test flakiness               | 1    | Claude | HIGH     | —            | 🟡      |
 | T-008 | Validate intake trees end-to-end     | 1    | Mixed  | HIGH     | T-000        | ⬜      |
 | T-009 | Volume metering & tier caps          | 1    | Claude | HIGH     | T-004        | ⬜      |
-| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | ⬜      |
-| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | ⬜      |
+| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | 🟡      |
+| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | 🟡      |
 | T-012 | Deployment checklist & automation    | 1    | Claude | MEDIUM   | —            | ⬜      |
 | T-013 | Full onboarding walk-through         | 1    | Human  | MEDIUM   | T-003, T-008 | ⬜      |
 | T-014 | Dead code removal                    | 1    | Claude | LOW      | T-001..T-013 | ⬜      |
@@ -385,7 +385,32 @@ DEFINITION_OF_DONE:
 
 ### T-006: Monitoring & alerting
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — code + rules landed 2026-09-03; the two HUMAN items below are open
+<!--
+  DONE (code, tested):
+   - All 8 named series now exist AND are incremented from a real call site:
+     calls_total{source}, call_outcome_total{outcome}, turn_latency_ms (histogram),
+     webhook_signature_failures_total{provider,endpoint} were added; the other four
+     (reminders_sent_total, reminders_skipped_total, errors_total, sms_sends_total)
+     already existed and were verified.
+   - turn_latency_ms is measured in the AGENT and shipped on voice-session-end —
+     before this it was a log line only, and prod's log sink is unconfigured, so
+     the number was measurable and unalertable at the same time.
+   - docs/ALERTS.md §3.10-3.12 + the 5% warn tier in §3.9 carry the four rules
+     this task names, as collector-agnostic PromQL.
+   - Tests: tests/services/t006MetricSeries.test.ts (series + label-key contract),
+     tests/routes/agentTools/callMetrics.test.ts (route wiring, incl. the
+     double-count and DB-outage cases), agent/src/session/turnLatency.test.ts,
+     agent/src/session/watchdog.test.ts (T-006 block), plus metric assertions
+     added to the existing Stripe/Telnyx signature-rejection tests.
+  OPEN (Human — cannot be done from here):
+   - Choose a scrape destination. There is none today and that is a DECISION,
+     not an oversight (docs/ALERTS.md header: paid vendors declined 2026-07-02,
+     no free tier met the bar). Until one exists, the rules are paste-and-go text
+     and `.github/workflows/zero-vendor-alerts.yml` is the only live alert.
+   - Prove one alert fires (screenshot in the PR). Requires the above.
+-->
+
 OWNER: Claude-able (code) + Human (create alert channel)
 PRIORITY: HIGH
 EFFORT: 6–10h
@@ -531,7 +556,25 @@ DEFINITION_OF_DONE:
 
 ### T-010: Schedule pattern adoption verify
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — code + tests done and green on
+`feat/T-006-T-010-T-011-monitoring-schedule-cost`; NOT on `main`, so by §0.7 it
+is not DONE.
+
+<!--
+  ACCEPTANCE_TEST run: `npx vitest run tests/services/schedulePatternAdoption.realdb.test.ts`
+  → 6 passed (real Postgres, test_db). Plus the pre-existing
+  `tests/services/extendSchedules.realdb.test.ts` → 12 passed.
+  - Clamp proven load-bearing by MUTATION, not by assertion alone: replacing
+    `AND es.shift_date <= CURRENT_DATE + INTERVAL '14 days'` with `AND TRUE`
+    makes the regression case fail with
+    `expected [ 1, 2, 3, 4, 5, 6 ] to deeply equal [ 1, 2, 3, 4, 5 ]`.
+  - Adoption path proven end-to-end through the REAL save path
+    (`expandWeeklyToSchedule`), not by inserting pattern rows directly.
+  - docs/RUNBOOK.md §6b documents the re-save trigger, both source-of-truth
+    branches, and the two behaviours (replace-not-merge; empty pattern does not
+    wipe). NO backfill script was added — deliberately.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 2–4h
@@ -559,7 +602,26 @@ DEFINITION_OF_DONE:
 
 ### T-011: Verify cost tracking ledger
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — code + tests done and green on
+`feat/T-006-T-010-T-011-monitoring-schedule-cost`; NOT on `main`, so by §0.7 it
+is not DONE.
+
+<!--
+  ACCEPTANCE_TEST run: `npx vitest run tests/services/aiCostLedger.realdb.test.ts`
+  → 6 passed (real Postgres, test_db), posting through the SAME route the agent
+  posts through. Synthetic 2-minute call totals **$0.100028**, inside the
+  $0.03-$0.20 sanity band, and the voice LLM is 51.8% of it.
+  Per leg: gpt-4.1-mini $0.05184 · aura-asteria-en $0.039 · nova-3 $0.0086 ·
+  gpt-4o-mini (summary) $0.000588 — all four priced, none $0.
+  Dashboard: `AiCostPanel` (avg cost/call to 4dp, call count, MTD total,
+  per-model breakdown, and a loud warning when a leg shows real usage at $0.00 —
+  the 35x-undercount shape). Rendered ONLY for a platform super-admin; the
+  existing "internal AI cost is NEVER shown to the tenant" test now also asserts
+  the endpoint is not even FETCHED from a tenant session.
+  Backend: getAiCostBreakdown gained call_count / voice_call_cost_usd /
+  avg_cost_per_call_usd (NULL, never 0, when nothing was costed).
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 2–3h
