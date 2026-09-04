@@ -21,9 +21,11 @@
  *   SIM_BUSINESS=a,b,c     VERTICAL MODE (T-008): instead of the scripted
  *                          scenarios, generate one intake call per business_type
  *                          and grade that the vertical's OWN intake tree fired.
- *                          The library is compiled from that business_type's
- *                          preset exactly as production does, so a tree the
- *                          preset withholds is unreachable here too.
+ *                          The SELECTABLE tree ids are compiled from that
+ *                          business_type's preset exactly as production does
+ *                          (the library handed to the agent stays the full
+ *                          platform set), so a tree the preset withholds is
+ *                          unreachable here too.
  *   SIM_RUNS=N             runs per scenario (default 1)
  *   SIM_TRACE=1            print every line + tool call
  *   SIM_QT_MODEL=…         agent model (default gpt-4.1-mini — the prod voice LLM)
@@ -1215,11 +1217,14 @@ all you need.`,
 // business_type, does the vertical's OWN intake tree actually get selected and
 // asked on a live conversation?
 //
-// The library is COMPILED FROM THE PRESET, not taken from the platform library.
-// That is the whole point: a tree a tenant's preset withholds is unreachable on
-// their calls no matter what the caller asks for, because ChecklistOverrides can
-// only SUBTRACT blocks. Handing the model every tree would prove nothing about
-// what a real tenant's call can do.
+// The SELECTABLE tree ids are COMPILED FROM THE PRESET. The `library` itself is
+// still the full platform set — production works the same way, and `runCall`'s
+// note on `extras.library` says why the two must not be the same list: the
+// library is what EXISTS, the selectable ids are what this tenant may pick.
+// Restricting selection is the whole point: a tree a tenant's preset withholds
+// is unreachable on their calls no matter what the caller asks for, because
+// ChecklistOverrides can only SUBTRACT blocks. Letting the model select any tree
+// would prove nothing about what a real tenant's call can do.
 
 /** Build the tree list + runtime config a tenant of this business_type would run. */
 function verticalSetup(businessType: string): {

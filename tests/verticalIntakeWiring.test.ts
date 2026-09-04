@@ -67,11 +67,20 @@ const businessTypeForPreset = (presetId: string) =>
   presetId.replace(/_front_desk$/, '').replace(/_/g, '-');
 
 describe('vertical intake wiring (business_type → preset → blocks → trees)', () => {
-  it('HAPPY: every preset in the catalog is reachable from a business_type and compiles to real trees', () => {
+  it('HAPPY: every preset in the catalog compiles to real trees', () => {
     for (const presetId of CHECKLIST_PRESET_IDS) {
       const businessType = businessTypeForPreset(presetId);
-      const derivedPreset = defaultChecklistPresetIdForBusinessType(businessType);
-      const config = deriveChecklistRuntimeConfig(businessType, derivedPreset, {});
+      // Compile the preset UNDER TEST, not whatever its business_type derives
+      // to. Those two are not the same for every catalog entry —
+      // 'answering-service' deliberately derives to owner_for_hire_front_desk —
+      // so deriving here would silently compile owner-for-hire twice and never
+      // compile answering_service_front_desk at all, while the failure message
+      // still named it. Reachability is a separate claim, asserted below.
+      const config = deriveChecklistRuntimeConfig(businessType, presetId, {});
+      expect(
+        config.preset_id,
+        `deriveChecklistRuntimeConfig ignored the explicit preset '${presetId}'`
+      ).toBe(presetId);
 
       // compileRuntimeConfig THROWS on an unknown block or an unresolvable
       // tree_ref, which is the "tree not found" failure this test exists to
@@ -89,6 +98,19 @@ describe('vertical intake wiring (business_type → preset → blocks → trees)
         trees.map((tree) => tree.tree_id),
         `preset '${presetId}' does not compile to the identity tree`
       ).toContain('identity');
+    }
+  });
+
+  it('HAPPY: every preset is reachable from a business_type, except the one pinned elsewhere', () => {
+    // The claim the loop above deliberately does NOT make: that a real owner can
+    // actually LAND on each preset. A preset nothing routes to is dead config —
+    // it compiles fine and no call ever runs it.
+    for (const presetId of CHECKLIST_PRESET_IDS) {
+      if (presetId === 'answering_service_front_desk') continue; // pinned in the SAD test below
+      expect(
+        defaultChecklistPresetIdForBusinessType(businessTypeForPreset(presetId)),
+        `no business_type resolves to preset '${presetId}' — it is unreachable config`
+      ).toBe(presetId);
     }
   });
 
@@ -110,13 +132,17 @@ describe('vertical intake wiring (business_type → preset → blocks → trees)
           `vertical's own questions are unreachable, and overrides cannot ADD a block back`
       ).toContain(`${slug}_intake`);
 
-      // The block existing is not the same as its trees existing.
+      // The block existing is not the same as its trees existing. Assert the
+      // EXACT tree id, not a prefix: `startsWith(slug)` would be satisfied by any
+      // future tree that merely shares the prefix (a 'salon_upsell' would pass
+      // for a salon whose 'salon_intake' had gone missing), which is the failure
+      // this test exists to catch.
       const treeIds = compileRuntimeConfig(config).map((tree) => tree.tree_id);
       expect(
-        treeIds.some((id) => id.startsWith(slug)),
-        `'${slug}_intake' enabled for '${businessType}' but compiled to no tree named for it ` +
-          `(got: ${treeIds.join(', ')})`
-      ).toBe(true);
+        treeIds,
+        `'${slug}_intake' enabled for '${businessType}' but its tree_refs did not resolve to ` +
+          `the '${slug}_intake' tree (got: ${treeIds.join(', ')})`
+      ).toContain(`${slug}_intake`);
       checked.push(slug);
     }
     // Guard the guard: if the allowlist above ever swallowed the whole catalog,
