@@ -16,7 +16,7 @@
  * the change doesn't bleed into other specs (the DB is also rebuilt per run).
  */
 import { test, expect } from './helpers/test';
-import type { Page } from '@playwright/test';
+import { openAiPersona, saveAiPersona } from './helpers/aiPersona';
 import { Pool } from 'pg';
 
 const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
@@ -49,24 +49,6 @@ test.afterAll(async () => {
   await pool.end();
 });
 
-async function openAiPersona(page: Page) {
-  await page.goto('/dashboard');
-  await page
-    .getByRole('tab', { name: /^Phone Assistant$/ })
-    .first()
-    .click();
-  // AI Persona is the default sub-tab (renders AIConfigView), but click it
-  // explicitly in case a prior interaction left another sub-tab active.
-  const personaTab = page.getByRole('tab', { name: /AI Persona/ }).first();
-  if (await personaTab.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await personaTab.click();
-  }
-  // The Voice Settings header confirms AIConfigView mounted.
-  await expect(page.getByRole('heading', { name: /Voice Settings/i })).toBeVisible({
-    timeout: 10000,
-  });
-}
-
 test('owner enables Customer Preferences + guidance, and it survives a reload', async ({
   page,
 }) => {
@@ -93,24 +75,10 @@ test('owner enables Customer Preferences + guidance, and it survives a reload', 
 
   await textarea.fill(guidance);
 
-  const saveBtn = page.getByRole('button', { name: /Save Changes/i });
-  await expect(saveBtn).toBeEnabled();
-
-  // Wait for the WRITE, not just the label. "Saved!" is UI state; the thing the
-  // reload depends on is the update-config response having come back. Watching
-  // the response makes the ordering explicit instead of inferred, and if the
-  // save ever fails the test says so here rather than as a confusing empty
-  // field two steps later.
-  const saved = page.waitForResponse(
-    (r) => /\/tenants\/.+\/update-config/.test(r.url()) && r.request().method() === 'POST',
-    { timeout: 20000 }
-  );
-  await saveBtn.click();
-  const saveRes = await saved;
-  expect(saveRes.ok()).toBe(true);
-
-  // Save flips the button to "Saved!" on success.
-  await expect(page.getByRole('button', { name: /Saved!/i })).toBeVisible({ timeout: 10000 });
+  // Waits for the WRITE, not just the label, and asserts the Save button was
+  // ENABLED first — an enabled button is proof React registered the edit. See
+  // helpers/aiPersona.ts.
+  await saveAiPersona(page);
 
   // Prove the DB actually holds it before reloading. This spec has failed twice
   // in CI (2026-08-20, on two different PRs) with the toggle persisted and the

@@ -154,7 +154,7 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-004 | Stripe test-mode wiring              | 1    | Human  | CRITICAL | —            | ⬜      |
 | T-005 | Stripe live-mode + bank account      | 1    | Human  | CRITICAL | T-004        | ⬜      |
 | T-006 | Monitoring & alerting                | 1    | Claude | HIGH     | —            | 🟡      |
-| T-007 | Fix E2E test flakiness               | 1    | Claude | HIGH     | —            | ⬜      |
+| T-007 | Fix E2E test flakiness               | 1    | Claude | HIGH     | —            | 🟡      |
 | T-008 | Validate intake trees end-to-end     | 1    | Mixed  | HIGH     | T-000        | ⬜      |
 | T-009 | Volume metering & tier caps          | 1    | Claude | HIGH     | T-004        | ⬜      |
 | T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | 🟡      |
@@ -442,31 +442,48 @@ DEFINITION_OF_DONE:
 
 ### T-007: Fix E2E test flakiness
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS (PR #391 — acceptance test passing locally, all 4 CI jobs green on 3 consecutive runs. NOT merged, so not ✅.)
 OWNER: Claude-able
 PRIORITY: HIGH
 EFFORT: 4–6h
 DEPENDS_ON: None
-CONTEXT: 3 tests intermittently redden `main` CI (which terminally SKIPs the Railway deploy). They assert wall-clock speed on a loaded runner rather than behavior. Known offenders: `SetupWizard > shows success state with phone number after activation`; `customer-preferences-config.spec.ts`; `purge-soft-deleted.test.ts` (partially fixed).
-FILES: `dashboard/components/SetupWizard/SetupWizard.test.tsx`, `dashboard/e2e/customer-preferences-config.spec.ts`, `scripts/purge-soft-deleted.test.ts`.
-STEPS:
+CONTEXT: Tests intermittently redden `main` CI (which terminally SKIPs the Railway deploy).
 
-1. Replace timeout-based waits with `waitFor()` on actual DOM/API state.
-2. For the E2E spec, wait on the `update-config` network response, then assert value in Postgres before reload.
-3. Remove any machine-speed assertions.
+**Corrected during implementation — the original three offenders were only two-thirds right, and only one of them was a wall-clock problem:**
+
+1. `SetupWizard > shows success state with phone number after activation` — WAS wall-clock. Testing Library's `waitFor` defaults to a 1000ms ceiling; CI run `33249344101` (2026-08-29, `main`) failed it at **1110ms**. The component was correct, the runner was slow. Fixed by `configure({ asyncUtilTimeout })` in `dashboard/vitest.setup.ts` — one place, covers every async dashboard test, changes no assertion.
+2. `purge-soft-deleted.test.ts` — **already fully fixed** before this task started. All 5 cases carry `SUBPROCESS_TEST_TIMEOUT_MS`; nothing to do.
+3. `customer-preferences-config.spec.ts` — **NOT wall-clock. A real wrong-row bug**, and `voice-styles.spec.ts` (the actual current offender, which failed `main` in CI run `33203910276`, 2026-08-28) has the identical cause:
+
+   The AI Persona form writes to `useActiveTenantId()` = `managedTenantId || tenantId`. A super-admin session starts with no `managedTenantId`, so `useSuperAdminTenants` AUTO-SELECTS `tenantsArray[0]` (`dashboard/lib/useSuperAdminTenants.ts:80-84`) and persists it. Both specs hard-coded the PLATFORM tenant for their DB reset and their assertions — so the browser was writing one business's row while the spec reset and read another's. Reproduced locally: the save POSTed to `d5e3c6a1…/update-config` (Thinking Hammer) while the spec asserted on `00000000…`, which was still NULL. The specs passed as often as they did only because their resets were unqualified `UPDATE tenants SET …` with **no WHERE clause**, which happened to clear the real row too. Whether the auto-select lands before or after `AIConfigView`'s first `fetchConfig()` is a timing question — hence flaky, hence worse on a loaded runner.
+   FILES: `dashboard/vitest.setup.ts`, `dashboard/e2e/helpers/aiPersona.ts` (new, shared), `dashboard/e2e/voice-styles.spec.ts`, `dashboard/e2e/customer-preferences-config.spec.ts`. (`scripts/purge-soft-deleted.test.ts` needed no change.)
+   STEPS:
+
+4. Replace timeout-based waits with `waitFor()` on actual DOM/API state. — done via the global `asyncUtilTimeout`.
+5. For the E2E specs, wait on the `update-config` network response, then assert value in Postgres before reload. — done in `saveAiPersona()`; `voice-styles` gained the Postgres assertions it lacked.
+6. Remove any machine-speed assertions. — none remained.
+7. (Added) PIN the managed tenant before navigation so the tenant under test is chosen by the test, not by a list ordering; assert the config GET was for that tenant so a wrong-tenant session fails by name instead of as a value that "didn't persist" three steps later.
+8. (Added) Scope every DB reset with `WHERE tenant_id = $1`. An unqualified reset is cross-spec data corruption the moment anyone raises `workers` above 1.
    ACCEPTANCE_TEST:
 
 ```bash
-# Each previously-flaky test passes 20 consecutive runs:
-cd dashboard && npx vitest run SetupWizard --repeat 20     # 20/20 pass
-npx playwright test customer-preferences-config --repeat-each 20   # 20/20 pass
+# Each previously-flaky test passes 20 consecutive runs.
+# NB: vitest 4 has no --repeat flag; loop the run instead.
+cd dashboard && for i in $(seq 1 20); do npx vitest run components/SetupWizard.test.tsx; done
+npx playwright test voice-styles customer-preferences-config --repeat-each 20
 ```
 
+RESULT (local, 2026-09-01): SetupWizard **20/20** (`Tests 68 passed` each run). Playwright **201/201 passed (6.7m)** — 20 repeats of both specs plus the auth setup.
 DEFINITION_OF_DONE:
 
-- [ ] Each named test passes 20/20 locally.
-- [ ] 3 consecutive green CI runs on the PR.
-- [ ] No `setTimeout`/hard-coded ms assertions remain in the touched tests (grep proves it).
+- [x] Each named test passes 20/20 locally.
+- [x] 3 consecutive green CI runs on the PR — all 4 jobs pass on each:
+      run `33481575523` (pull_request), then `33497814412` and `33498392610`
+      (workflow_dispatch on the same SHA, which is how the repeat runs were
+      obtained without polluting the branch with empty commits).
+- [x] No `setTimeout`/hard-coded ms assertions remain in the touched tests (grep proves it).
+
+**Follow-up surfaced, NOT fixed here (needs its own task):** `AIConfigView`'s `fetchConfig()` re-runs whenever `tenantId` changes and calls `setConfig(server)` + `setDirty(false)`. A real owner typing into the form while a late refetch lands loses the edit silently. The E2E helper now closes that window for tests; the product still has it.
 
 ---
 
