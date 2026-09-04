@@ -59,7 +59,7 @@ describe('SetupWizard auto-seed failure + retry (Phase B: local push, not a DB w
   beforeEach(() => {
     vi.clearAllMocks();
     listFull.mockResolvedValue([
-      { business_type: 'salon', example_services: ['Haircut', 'Color'] },
+      { business_type: 'salon', example_services: [{ name: 'Haircut' }, { name: 'Color' }] },
     ]);
   });
 
@@ -81,7 +81,7 @@ describe('SetupWizard auto-seed failure + retry (Phase B: local push, not a DB w
     const callsBeforeRetry = listFull.mock.calls.length;
 
     listFull.mockResolvedValue([
-      { business_type: 'salon', example_services: ['Haircut', 'Color'] },
+      { business_type: 'salon', example_services: [{ name: 'Haircut' }, { name: 'Color' }] },
     ]); // now succeeds
     fireEvent.click(screen.getByRole('button', { name: /Retry/i }));
 

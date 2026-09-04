@@ -1,3 +1,5 @@
+import type { StarterService } from '../../shared/starterServices';
+
 export interface Appointment {
   appointment_id: string;
   tenant_id: string;
@@ -139,7 +141,7 @@ export interface BusinessTemplate {
   employee_label?: string;
   employee_plural?: string;
   booking_label?: string;
-  example_services?: string[];
+  example_services?: StarterService[];
 }
 
 export interface Resource {
@@ -409,10 +411,14 @@ export interface Vocabulary {
   employee_label: string;
   employee_plural: string;
   booking_label: string;
-  /** Industry-specific service-name examples from the matched
-   *  business_template; empty when no template is matched. */
-  example_services: string[];
-  /** Mirror of example_services for resource names. */
+  /** Industry-specific STARTER services from the matched business_template;
+   *  empty when no template is matched. Objects, not bare names — a look-first
+   *  starter carries the description that makes the booking resolver's semantic
+   *  match work. See shared/starterServices.ts. */
+  example_services: StarterService[];
+  /** Example RESOURCE names ("Bay 1", "Van 1"). Deliberately separate from
+   *  services: a resource seeded as a service becomes a bookable slot type, so
+   *  a caller can be booked for "Bay 1" instead of an oil change. */
   example_resources: string[];
 }
 
