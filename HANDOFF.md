@@ -4,167 +4,130 @@ Read this first after session reset.
 
 _Updated 2026-09-04 — newest section is the branch-merge queue below; older handoffs follow._
 
-## 2026-09-04 — Merging the 4 stale PRs one at a time (in progress)
+## 2026-09-04 — The branch-merge queue is CLOSED
 
-### ⚠️ DO THESE FIRST AFTER THE REBOOT
+Every PR that was open at the start of this work is merged, re-tested against
+`main`, and purged from local AND remote. `git ls-remote --heads origin` shows
+`main` plus one branch, `copilot/fix-dashboard-typecheck-tests` (#387), which is
+Dale's call — see below.
 
-Two things were left undone when the machine went down. In order:
+### Merged and fully purged
+
+| PR   | Squash    | What it was                                                    |
+| ---- | --------- | -------------------------------------------------------------- |
+| #394 | `d0c31ac` | T-006 / T-010 / T-011                                          |
+| #391 | `2ab4363` | T-007 E2E flakiness                                            |
+| #396 | `636b567` | clock ordering                                                 |
+| #397 | `75b5e44` | GoLivePanel status-poll clobber                                |
+| #392 | `bfd5045` | T-008 validate intake trees                                    |
+| #395 | `d8f4e72` | T-012 deploy checklist + T-103 KB round-trip + T-106           |
+| #393 | `19437bf` | T-015 wizard starter services (31 verticals)                   |
+| #398 | `95692b0` | rebuild-db.sh restores api_user (opened + closed this session) |
+
+Prod deploys verified after the merges by watching `/health`'s `started_at`
+move (07:29:22Z, then 08:35:24Z) rather than assuming the trigger fired.
+
+### The two remote branches that would not delete — fixed at the cause
+
+`fix/T-007-followup-test-timeout` and `fix/golive-stale-status-clobbers-error`
+are gone, confirmed with `git ls-remote` and not with a push exit code.
+
+The reason they had survived two attempts is fixed: `scripts/example-pre-push-hook.sh`
+ran the FULL backend suite on a branch DELETION, so a suite that went red for an
+unrelated reason BLOCKED the purge outright. Git signals a deletion with an
+all-zero LOCAL sha; the hook now exits 0 on a deletion-only push. Measured: a
+deletion skips in 11 ms, a deletion mixed with a real ref still runs the checks.
+
+### #387 — still Dale's call, but the evidence is now conclusive
+
+`git merge-tree --write-tree origin/main copilot/fix-dashboard-typecheck-tests`
+returns **the exact tree hash of `main`** (`b214128`). Merging it would change
+nothing; its 13,509-line diff is entirely `main`'s newer work that it lacks. By
+`docs/TODO_ITEM_LIFECYCLE.md` it is an empty leftover: close the PR, purge the
+branch. Not done here because it is someone else's open PR.
+
+### What the reviews turned up — these were not rubber stamps
+
+Copilot findings on #392, #393 and #398 were substantive and all were fixed:
+
+- **#393 was losing data.** `POST /templates/create` passed
+  `JSON.stringify(body.example_services ?? [])` — the string `[]`, never SQL
+  NULL — so the upsert's `COALESCE(EXCLUDED..., business_templates...)` guard
+  could never fire. Any template edit that did not resend the list (a rename, a
+  voice change) replaced that vertical's starter services with an empty array,
+  returned 200, and logged nothing. That is the exact blank-wizard state T-015
+  exists to end. The column is NOT NULL, so the fix coalesces `$14` to `[]` for
+  the INSERT and reads `$14` RAW in the ON CONFLICT branch. The route had NO
+  test; it has 12 now, including a real-DB one, mutation-proven.
+- **#392's proof did not prove.** The catalog loop derived a preset from a
+  business_type and compiled THAT, so `answering_service_front_desk` — which
+  deliberately derives elsewhere — was never compiled at all, under a failure
+  message naming it. And `treeIds.some(id => id.startsWith(slug))` passed for a
+  salon whose `salon_intake` had been repointed at `salon_nails_addon`. Both
+  measured, both now fail on the broken wiring.
+- **#398** was granting the right privileges without re-asserting
+  `NOSUPERUSER`/`NOBYPASSRLS`, which is half a guarantee — an elevated role
+  holds the correct verbs and bypasses every policy.
+
+### The DB trap that cost the most time, now fixed
+
+`scripts/rebuild-db.sh` restored `app_user` and NOT `api_user`. The realdb test
+rig connects as `api_user` (`tests/utils.ts` `API_DB_URL`), and `baseline.sql`
+is dumped `--no-privileges`, so a rebuild left it with ZERO grants: **332 tests
+across 49 files** failed with `permission denied for table tenants` — the exact
+message the script's own comment predicts.
+
+The first fix was WRONG and the tests caught it: re-running
+`20260228000003_api_user.sql` grants ALL PRIVILEGES, handing back the TRUNCATE
+BUG-008 revoked. Re-running `20260316100000_fix_high_bugs.sql` instead would
+have been worse — the same file recreates `book_appointment_atomic` against
+`employee_shifts` (dropped 2026-04-30). So the restore is now a declarative
+`scripts/sql/restore-role-grants.sql`, and the script ABORTS on a zero grant
+count or an elevated role rather than announcing success.
+
+**KNOWN LIMIT, documented not fixed:** baseline mode cannot produce a
+CI-equivalent DB. `baseline.sql` carries no data and `setup-db.sh --baseline`
+only MARKS migrations applied, so `business_templates.system_prompt_template`
+and `.example_services` stay empty — `seed.sql` says so itself and leaves them
+to the insert migrations. `auth.test.ts` and `vocabulary.test.ts` need that
+data. For a DB that matches CI:
 
 ```bash
-# 1. Purge the two remote branches whose deletes FAILED (see "REMOTE BRANCH STILL
-#    EXISTS" below). Both are already merged to main; only the remote ref is left.
-git push origin --delete fix/T-007-followup-test-timeout
-git push origin --delete fix/golive-stale-status-clobbers-error
-
-# 2. Confirm they are actually gone. Do NOT trust the exit code or a local
-#    "Deleted branch" line — that is exactly how these two were mis-reported as
-#    purged the first time.
-git ls-remote --heads origin
-
-# 3. T-008 IS PUSHED — remote tip is f9d7047, verified against local. Nothing to
-#    re-push. Pick it up at CI instead:
-gh pr checks 392
+U="postgres://postgres:postgres@localhost:5433/test_db"
+psql "$U" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+bash scripts/setup-db.sh "$U" && DATABASE_URL="$U" npm run db:seed
 ```
 
-Note step 1 may fail again for the same reason it failed the first time: the
-pre-push hook runs the full backend suite on a DELETION. If it does, either fix
-the hook first (see the papercut note below — it is a few lines) or run the suite
-green once and retry the delete immediately.
+`test_db` is currently in exactly that state: 192 migrations, no drift.
 
-Also uncommitted in the working tree: **this file**. Commit it wherever it fits.
+### Open loose ends, stated rather than buried
 
-**Task:** Dale's loop, one branch at a time, no parallel open branches:
+- **One unexplained test failure.** A full backend run showed
+  `1 failed | 252 passed` and the output was not captured before two
+  consecutive re-runs came back fully green. The failing test was never identified. The obvious suspects
+  were checked and ruled out: `vocabulary.test.ts` filters by an explicit type
+  list and `starterServices.test.ts` parses `seed.sql` text, so neither can see
+  the throwaway `business_templates` row the new realdb test inserts. Recorded
+  as unexplained, not as solved — same class as the 30-failure run noted in the
+  previous handoff.
+- **T-008 and T-012 still read 🟡 on the roadmap** even though #392 and #395
+  merged. Left exactly as `main` asserts them: both are `Mixed`/human-owner
+  tasks with open human halves, and promoting them is Dale's call, not a merge
+  resolution's.
+- The `activationOutcomeForTenant` guard from #397 is still not unit-covered,
+  and the mechanism producing the same-tenant re-poll in the wizard is still
+  unknown. Unchanged from the previous handoff.
 
-1. Run the branch's tests, confirming the requested functionality works.
-2. Merge `main` in, resolving conflicts.
-3. Re-run that same functionality's acceptance test **against `main`**.
-4. Purge the branch (local + remote). Repeat.
+### Environment notes that still apply
 
-The rule exists because 4 PRs were open at once, #394 merged first and rewrote
-`docs/PRODUCT_ROADMAP.md`, and all three others went CONFLICTING on that one file
-simultaneously. Process doc: `docs/TODO_ITEM_LIFECYCLE.md` (now tracked, landed in #397).
-
-### DONE — merged and fully purged
-
-| PR                     | Squash commit | Branch                                           |
-| ---------------------- | ------------- | ------------------------------------------------ |
-| #394 T-006/T-010/T-011 | `d0c31ac`     | `feat/T-006-T-010-T-011-…` purged local + remote |
-| #391 T-007 flakiness   | `2ab4363`     | `fix/T-007-e2e-flakiness` purged local + remote  |
-
-### DONE — merged, local purged, **REMOTE BRANCH STILL EXISTS**
-
-| PR                  | Squash commit | What is left                                                      |
-| ------------------- | ------------- | ----------------------------------------------------------------- |
-| #396 clock ordering | `636b567`     | `git push origin --delete fix/T-007-followup-test-timeout`        |
-| #397 GoLivePanel    | `75b5e44`     | `git push origin --delete fix/golive-stale-status-clobbers-error` |
-
-**Why they failed, and it matters:** `scripts/example-pre-push-hook.sh` runs the FULL
-backend suite on a branch DELETION. Its own comment says a deletion "falls back to running
-the full suite." Both deletes were attempted while the machine was under load, the suite
-failed, and husky rejected the push. So the hook does not merely cost ~7 min per purge — it
-can BLOCK a purge entirely. A deletion pushes no code and cannot break anything; it should
-skip outright. The `ZERO` sha constant needed for the check is already defined in that file.
-**This is an unfixed papercut and the highest-value small cleanup available.**
-
-### IN PROGRESS — #392 T-008
-
-- Branch `feat/T-008-validate-intake-trees`, local HEAD `f9d7047` (merge commit).
-- `main` merged in; the only conflict was `docs/PRODUCT_ROADMAP.md`, 9 hunks, resolved.
-  Code files did not conflict. T-008 content vs `main` is 3 files:
-  `tests/verticalIntakeWiring.test.ts`, `agent/scripts/sim-questiontree.ts`, the roadmap.
-- In the resolution T-007 was set to **✅ DONE**, which neither side said — #391 merged
-  after this branch was last updated and `main`'s own copy still read "NOT merged, so not ✅".
-- Verified before pushing: T-008 acceptance test `tests/verticalIntakeWiring.test.ts` **5/5**;
-  `npm run checks` clean; backend suite **2940 passed** on two consecutive runs.
-- **Pushed successfully** (`e9921d6..f9d7047`), verified: the remote tip is `f9d7047`,
-  matching local. PR #392 should have CI running or finished on that SHA.
-
-**Next steps for #392:** wait for the 4 CI checks on `f9d7047` → merge squash → re-run
-`npx vitest run tests/verticalIntakeWiring.test.ts` against `main` → purge branch
-(local AND remote — verify with `git ls-remote`).
-
-Note #392 may also need its Copilot review threads resolved before it will merge:
-branch protection has `required_conversation_resolution` on, which is what blocked
-#397 even with all 4 checks green.
-
-### QUEUE after #392
-
-| PR                                 | State  | Note                                                                                                                                                                                                                                               |
-| ---------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #393 T-015 wizard starter services | DIRTY  | roadmap conflict; its last CI run was CANCELLED with a real failure inside — `deadlock-prevention.test.ts` blew a 5003 ms budget. That exact flake is already fixed on `main` (#394), so merging `main` in should clear it. Do not touch the test. |
-| #395 T-012 deploy checklist        | BEHIND | was CLEAN, went behind when #391/#396/#397 landed. No conflict expected, but `strict: true` means it must absorb `main` and re-run CI.                                                                                                             |
-| #387 copilot `[WIP]`               | open   | **Dale's call, unanswered.** Adds nothing to `main` (merge-tree yields main's tree exactly). By the lifecycle doc it is an empty leftover: close the PR and purge. Not done unilaterally because it is someone else's open PR.                     |
-
-### What the T-007 chain actually turned up (three layers, each hidden by the one above)
-
-1. **#391** fixed a real 1110 ms wall-clock flake by raising `asyncUtilTimeout` to 10 s.
-2. That left it ABOVE vitest's default `testTimeout` of 5 s, so the shorter clock fired first
-   and every `waitFor` failure surfaced as an opaque `Test timed out in 5000ms`. **#396**
-   ordered them (`testTimeout: 15_000` in `dashboard/vitest.config.ts`), restoring the
-   Testing Library diagnostic that names the missing element.
-3. With failures legible, the residual 1-in-20 was **a real product bug**, not a flake.
-   `GoLivePanel.fetchStatus()` applied its result unconditionally, so a status poll landing
-   after `handleActivate()` overwrote what the owner's click established — **in both
-   directions**: it erased the "Activation failed" reason, and it took a newly-provisioned
-   number back off the screen. **#397** fixed it.
-
-**#397's design, because it took four attempts to get right:**
-
-- `userActionSeq` — captured before the await, re-checked after; drops a poll that was
-  already in flight when the owner clicked.
-- `activationOutcomeForTenant` — the tenant whose outcome this session established. While it
-  matches the current tenant a poll may only PROMOTE status to `active`, never downgrade.
-  Keyed by tenant because the panel can be re-pointed at another business; an unkeyed flag
-  (the first version) froze the new tenant's real status behind the old one's.
-- A `[tenantId]` effect clears `activateError` so a tenant whose own status is legitimately
-  `failed` shows ITS reason, not the previous tenant's.
-
-Measured, because two earlier variants each passed one 20-run sample and then regressed:
-
-```
-baseline (main at the time)        18/20, then 19/20
-failure-only guard, tenant-keyed   20/20, then 19/20   <- success path clobbered
-sticky guard removed               17/20
-shipped version                    20/20 + 20/20 (two independent samples)
-```
-
-**Honest gap:** the `activationOutcomeForTenant` guard is NOT unit-covered. The same-tenant
-re-poll could not be reproduced in a unit test and **the mechanism that produces it in the
-wizard is still unknown** — a probe showed `fetchStatus` is somehow never logged in the
-SetupWizard run, which was not chased to the end. Its evidence is the acceptance run above
-(20/20 with it, 17/20 without). The sequence guard and the `[tenantId]` reset ARE
-mutation-proven at unit level. Worth understanding properly; do not assume it is settled.
-
-### Environment traps hit this session — all cost real time
-
-1. **The Bash tool's background runner kills `npm test` claiming low memory when there is
-   none.** Measured: available RAM never below **44.6 GB** of 47 GiB, node RSS peak ~1 GB,
-   killed ~60 s in before any file reported. The same command in the FOREGROUND with a
-   600000 ms timeout passes (244 files / 2935 tests / ~390 s). **Run the backend suite in the
-   foreground, and run pushes via `setsid nohup … &` so the watchdog does not supervise
-   them.** A feedback draft about this is queued locally; `/feedback` to review and send.
-2. **Concurrent heavy runs corrupt the shared test DB.** Running the SetupWizard ×20 loop,
-   Playwright, a backend suite, and two purge-pushes (each running the full suite via the
-   hook) at once produced 150 then 122 FK violations on `tenant_id` — while every file passed
-   in isolation. Vitest fork workers dying mid-transaction. **Run one heavy thing at a time.**
-3. **`test_db` schema drift, still unfixed.** It has **191** migrations applied against
-   `main`'s **190** on disk — it still carries `blackout_dates` and T-012's modified
-   `book_with_scheduling_atomic`, applied at session start while on the T-012 branch. It did
-   NOT cause the failures above (the suite is green with the drift present), but **rebuild it
-   before working #395 T-012**, or that branch gets tested against a DB that already has its
-   migration.
-4. **Playwright's `globalSetup` refuses to run against a stale backend** ("STALE BACKEND
-   DETECTED"). Rebuild + restart: `kill $(lsof -ti :4001) && npm run build && node dist/src/index.js &`.
-   A backend was restarted this session and is running on `:4001` — a reboot kills it.
-5. One backend run on the T-008 branch showed **30 failures**, then two identical re-runs were
-   fully green (2940 passed). The first run's output was not captured, so it is **unexplained**
-   — recorded as an open loose end, not as solved.
-
-### Memory files updated this session
-
-- `branch-merge-cycle` — the 4-step loop, incl. the docs-only exception (skips step 3's
-  re-test ONLY; the purge in step 4 is unconditional).
-- `branch-hash-anchors` — rows added for #391/#394/#396/#397 with their squash commits.
+1. Run the backend suite in the FOREGROUND (the background runner kills it
+   claiming low memory when there is none) and run pushes via
+   `setsid nohup … &` — the pre-push hook takes ~7 min.
+2. One heavy thing at a time; concurrent runs corrupt the shared test DB.
+3. The Docker DB does not survive a reboot: `docker start secretary-hq-db`, and
+   it takes ~90 s before it accepts connections. Every realdb test fails with
+   `ECONNREFUSED 127.0.0.1:5433` until it does, which reads like 332 broken
+   tests and is one stopped container.
 
 ---
 
