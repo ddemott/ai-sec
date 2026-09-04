@@ -29,10 +29,20 @@
 -- file in the same commit. tests/regression/high-bugs.test.ts (BUG-008) is the
 -- guard that fails when the two disagree.
 
+-- The role FLAGS are re-asserted, not just the grants. api_user exists to be
+-- SUBJECT to RLS; a role that has picked up SUPERUSER or BYPASSRLS out of band
+-- (a hand-run ALTER during debugging, a restore from an older cluster) silently
+-- bypasses every policy while this file happily grants it the right four verbs
+-- and reports success. Privileges without the flags are half a guarantee.
+-- 20260724000100_app_user_role.sql re-asserts them on its existing-role branch
+-- for the same reason; this matches it.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'api_user') THEN
-        CREATE ROLE api_user WITH LOGIN PASSWORD 'api_password';
+        CREATE ROLE api_user WITH LOGIN PASSWORD 'api_password'
+          NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+    ELSE
+        ALTER ROLE api_user NOSUPERUSER NOBYPASSRLS;
     END IF;
 END
 $$;

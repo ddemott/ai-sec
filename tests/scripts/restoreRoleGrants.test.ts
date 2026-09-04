@@ -58,7 +58,7 @@ async function apiUserPrivilegesOn(table: string): Promise<string[]> {
   const res = await root.query(
     `SELECT DISTINCT privilege_type
        FROM information_schema.role_table_grants
-      WHERE grantee = 'api_user' AND table_name = $1
+      WHERE grantee = 'api_user' AND table_schema = 'public' AND table_name = $1
       ORDER BY privilege_type`,
     [table]
   );
@@ -86,6 +86,22 @@ describe('restore-role-grants.sql', () => {
         `api_user privileges on ${table} drifted from the BUG-008 set`
       ).toEqual(EXPECTED);
     }
+  });
+
+  it('SAD: api_user must be NOSUPERUSER and NOBYPASSRLS — grants without the flags are half a guarantee', async () => {
+    // WHY: api_user exists to be SUBJECT to RLS. A role elevated out of band
+    // bypasses every policy while this script still grants it the correct four
+    // verbs and reports success — the restore would look right and enforce
+    // nothing. Proven by elevating the role, re-running, and re-reading.
+    await root.query('ALTER ROLE api_user BYPASSRLS');
+    await root.query(readFileSync(SQL_PATH, 'utf8'));
+    const res = await root.query(
+      `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'api_user'`
+    );
+    expect(res.rows[0].rolsuper, 'api_user is a superuser — RLS does not apply to it').toBe(false);
+    expect(res.rows[0].rolbypassrls, 'api_user can bypass RLS — every policy is decoration').toBe(
+      false
+    );
   });
 
   it('HAPPY: rebuild-db.sh restores BOTH login roles, not just app_user', async () => {

@@ -181,7 +181,16 @@ if [ -f "$BASELINE" ]; then
       echo "            would fail as 'permission denied for table ...'. Aborting."
       exit 1
     fi
-    echo "[rebuild-db] $ROLE grants restored ($GRANT_COUNT)."
+    # Grants alone are half a guarantee: a role that has picked up SUPERUSER or
+    # BYPASSRLS out of band holds the right verbs AND bypasses every policy.
+    ELEVATED="$(psql "$DB_URL" -tAc \
+      "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = '$ROLE';")"
+    if [ "$ELEVATED" = "t" ]; then
+      echo "[rebuild-db] FATAL: $ROLE is SUPERUSER or has BYPASSRLS — RLS would not apply"
+      echo "            to it and every policy in the database becomes decoration. Aborting."
+      exit 1
+    fi
+    echo "[rebuild-db] $ROLE grants restored ($GRANT_COUNT), NOSUPERUSER + NOBYPASSRLS confirmed."
   done
 else
   echo "[rebuild-db] baseline.sql not found — falling back to cumulative migrations..."
