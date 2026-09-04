@@ -16,6 +16,15 @@ export default defineConfig({
     // and locally. The suite is still fast enough (~10s locally) that reliability wins.
     pool: 'forks',
     fileParallelism: false,
+    // MUST stay above `asyncUtilTimeout` in vitest.setup.ts (10s). Testing Library's
+    // waitFor ceiling and vitest's per-test ceiling are two different clocks, and if
+    // the test clock is the shorter one it fires first: a slow-but-correct waitFor is
+    // killed at 5s with an opaque `Test timed out in 5000ms`, and a genuinely failing
+    // one never reaches the Testing Library diagnostic that says WHICH element was
+    // missing. T-007 raised asyncUtilTimeout to 10s without raising this, which left
+    // the default 5s in charge and made two SetupWizard sad-path tests flaky at ~10%
+    // (2 failures in 20 consecutive local runs on `main`, 2026-09-03).
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
