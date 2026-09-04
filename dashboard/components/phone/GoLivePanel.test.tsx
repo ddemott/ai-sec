@@ -164,37 +164,108 @@ describe('GoLivePanel — Stage A (unprovisioned)', () => {
     expect(screen.getByText('No numbers available')).toBeInTheDocument();
   });
 
-  test('a status poll that STARTS after a failed activation must not erase the error either', async () => {
-    // WHO:   same owner, same failed activation.
-    // WHAT:  this is the other half of the race and it is NOT covered by the
-    //        in-flight sequence guard. `fetchStatus` is a useCallback on
-    //        [tenantId] and the effect depends on its identity, so a tenantId
-    //        that resolves late re-fires the effect and starts a FRESH poll
-    //        after the click. That poll passes the sequence check.
-    // WHY:   a failed activation provisions nothing, so /provisioning/status
-    //        answers 'unprovisioned' forever. The server can never confirm the
-    //        failure, which means no poll is ever evidence against it — and
-    //        applying one silently deletes the only record the owner has.
-    // WHERE: GoLivePanel.fetchStatus — the activationFailedLocally guard.
+  test("switching to another tenant clears the previous tenant's activation error", async () => {
+    // WHO:   a super-admin whose managed tenant changes while the panel is open.
+    // WHAT:  tenant A's activation failed. Re-pointing the panel at tenant B must
+    //        drop A's error AND stop suppressing B's status polls — B's phone line
+    //        has nothing to do with A's failure.
+    // WHY:   this is the failure mode of a NON-tenant-keyed sticky flag: it would
+    //        hold B's status at whatever A left behind and show B an error that
+    //        was never theirs. Caught in review on #397.
+    // WHERE: GoLivePanel — activationFailedForTenant + the [tenantId] reset effect.
+    mockActivate.mockRejectedValue(new Error('Telnyx API error'));
     mockStatus.mockResolvedValue({
       phone_status: null,
       inbound_phone: null,
       forwarded_from_phone: null,
     });
-    mockActivate.mockRejectedValue(new Error('Telnyx API error'));
 
     const { rerender } = render(<GoLivePanel tenantId="tenant-a" />);
     await screen.findByRole('button', { name: /Activate AI Phone Line/i });
     fireEvent.click(screen.getByRole('button', { name: /Activate AI Phone Line/i }));
     await waitFor(() => expect(screen.getByText('Activation failed')).toBeInTheDocument());
 
-    // Change tenantId -> fetchStatus identity changes -> effect re-runs -> a NEW
-    // status poll begins, entirely after the failure.
+    // Tenant B is a live number — if A's flag leaked, this poll would be
+    // suppressed and B would never render as active.
+    mockStatus.mockResolvedValue({
+      phone_status: 'active',
+      inbound_phone: '+16305559999',
+      forwarded_from_phone: null,
+    });
+    rerender(<GoLivePanel tenantId="tenant-b" />);
+
+    await waitFor(() => expect(screen.queryByText('Activation failed')).toBeNull());
+    expect(screen.queryByText('Telnyx API error')).toBeNull();
+    await waitFor(() => expect(screen.getByText('+16305559999')).toBeInTheDocument());
+  });
+
+  test('a stale poll must not undo a SUCCESSFUL activation', async () => {
+    // WHO:   an owner whose activation just succeeded.
+    // WHAT:  the mount-time status poll is still in flight and describes the world
+    //        from BEFORE the click ('unprovisioned'). Applying it flips the panel
+    //        out of the ready state and hides the number they were just given.
+    // WHY:   this is the half the sticky-failure guard cannot cover — nothing
+    //        failed, so there is no failure to be sticky about. Only the
+    //        in-flight sequence check catches it.
+    // WHERE: GoLivePanel.fetchStatus — the userActionSeq guard.
+    let releaseStatus: (v: unknown) => void = () => {};
+    const statusInFlight = new Promise((resolve) => {
+      releaseStatus = resolve;
+    });
+    mockStatus.mockImplementation(async () => {
+      await statusInFlight;
+      return { phone_status: null, inbound_phone: null, forwarded_from_phone: null };
+    });
+    mockActivate.mockResolvedValue({
+      phone_number: '+16305551234',
+      telnyx_phone_number_id: 'pn-abc',
+    });
+
+    render(<GoLivePanel />);
+    await screen.findByRole('button', { name: /Activate AI Phone Line/i });
+    fireEvent.click(screen.getByRole('button', { name: /Activate AI Phone Line/i }));
+    await waitFor(() => expect(screen.getByText('Your number is ready')).toBeInTheDocument());
+
+    // Let the pre-click poll land. Without the guard it resets status and the
+    // owner watches their brand-new number disappear.
+    releaseStatus(undefined);
+    await waitFor(() => expect(mockStatus).toHaveBeenCalled());
+
+    expect(screen.getByText('Your number is ready')).toBeInTheDocument();
+    expect(screen.getByText('+16305551234')).toBeInTheDocument();
+  });
+
+  test("a new tenant whose OWN status is 'failed' must not inherit the previous tenant's reason", async () => {
+    // WHO:   super-admin switching from tenant A (activation just failed here)
+    //        to tenant B, whose server-side phone_status is independently 'failed'.
+    // WHAT:  B legitimately renders the failed state — but with ITS own reason,
+    //        never A's message.
+    // WHY:   `activateError` is a plain string with no tenant attached, and the
+    //        failed block renders `status === 'failed' && activateError`. Without
+    //        the [tenantId] reset, B's failed status pairs with A's text and the
+    //        admin reads a Telnyx error about the wrong business.
+    // WHERE: GoLivePanel — the [tenantId] reset effect.
+    mockActivate.mockRejectedValue(new Error('Telnyx API error'));
+    mockStatus.mockResolvedValue({
+      phone_status: null,
+      inbound_phone: null,
+      forwarded_from_phone: null,
+    });
+
+    const { rerender } = render(<GoLivePanel tenantId="tenant-a" />);
+    await screen.findByRole('button', { name: /Activate AI Phone Line/i });
+    fireEvent.click(screen.getByRole('button', { name: /Activate AI Phone Line/i }));
+    await waitFor(() => expect(screen.getByText('Telnyx API error')).toBeInTheDocument());
+
+    mockStatus.mockResolvedValue({
+      phone_status: 'failed',
+      inbound_phone: null,
+      forwarded_from_phone: null,
+    });
     rerender(<GoLivePanel tenantId="tenant-b" />);
 
     await waitFor(() => expect(mockStatus).toHaveBeenCalledWith('tenant-b'));
-    expect(screen.getByText('Activation failed')).toBeInTheDocument();
-    expect(screen.getByText('Telnyx API error')).toBeInTheDocument();
+    expect(screen.queryByText('Telnyx API error')).toBeNull();
   });
 });
 

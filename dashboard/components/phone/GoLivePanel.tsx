@@ -153,13 +153,22 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
   // `SetupWizard > Step 9 Go Live > shows error state when activation fails`,
   // which is the same defect the user hits, just on a faster clock.
   const userActionSeq = useRef(0);
-  // Set when THIS session's activation attempt failed. The server cannot
-  // corroborate that: a failed activation provisions nothing, so
-  // /provisioning/status keeps answering 'unprovisioned' indefinitely. A poll is
-  // therefore never evidence that the failure did not happen, and letting one
-  // overwrite `status` erases the only record of it. Sticky until the owner
-  // acts again (a retry clears it in handleActivate).
-  const activationFailedLocally = useRef(false);
+  // The tenant whose activation OUTCOME (success or failure) this session
+  // established by a user action, or null. While it matches the current tenant,
+  // a status poll may not downgrade `status` — only promote it to 'active'.
+  //
+  // Both outcomes need this, and a poll is never evidence against either:
+  //   - failed:  a failed activation provisions nothing, so /provisioning/status
+  //              answers 'unprovisioned' forever. Applying it erases the error
+  //              and its reason, and the owner concludes the button did nothing.
+  //   - active:  a poll that STARTED before the number existed still reports
+  //              'unprovisioned'. Applying it takes the number back off the
+  //              screen seconds after handing it over.
+  //
+  // Keyed by tenant because the panel can be re-pointed at another business; one
+  // tenant's outcome says nothing about another's, and an unkeyed flag would
+  // freeze the NEW tenant's real status behind the old one's.
+  const activationOutcomeForTenant = useRef<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     if (!tenantId) return;
@@ -172,7 +181,7 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
       // Don't let a poll talk us out of a failure we just observed. 'active' is
       // the one answer that legitimately overrides it — it means the activation
       // actually landed despite the client-side error.
-      if (activationFailedLocally.current && polled !== 'active') return;
+      if (activationOutcomeForTenant.current === tenantId && polled !== 'active') return;
       setStatus((prev) => {
         // First time this session sees 'active' — anchor the poll window.
         if (polled === 'active' && prev !== 'active') setActivatedAt(new Date().toISOString());
@@ -187,6 +196,13 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
     }
   }, [tenantId]);
 
+  // Re-pointing the panel at another business must not carry the previous
+  // one's activation failure across with it. The error belongs to the tenant it
+  // happened on; for the new tenant it is stale and actively misleading.
+  useEffect(() => {
+    setActivateError(null);
+  }, [tenantId]);
+
   useEffect(() => {
     void fetchStatus();
   }, [fetchStatus]);
@@ -194,17 +210,18 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
   async function handleActivate() {
     if (!tenantId) return;
     userActionSeq.current += 1;
-    activationFailedLocally.current = false;
+    activationOutcomeForTenant.current = null;
     setActivating(true);
     setActivateError(null);
     setStatus('provisioning');
     try {
       const result = await Api.provisioning.activate(tenantId, areaCode.trim() || undefined);
+      activationOutcomeForTenant.current = tenantId;
       setStatus('active');
       setInboundPhone(result.phone_number);
       setActivatedAt(new Date().toISOString());
     } catch (err: unknown) {
-      activationFailedLocally.current = true;
+      activationOutcomeForTenant.current = tenantId;
       setStatus('failed');
       setActivateError(err instanceof Error ? err.message : 'Failed to activate phone');
     } finally {
