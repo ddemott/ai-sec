@@ -140,15 +140,43 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
   const [portSubmitting, setPortSubmitting] = useState(false);
   const [portSubmitted, setPortSubmitted] = useState(false);
 
+  // Bumped by every user-initiated action that owns `status`. A status poll
+  // captures this before its await and discards its result if the value moved
+  // while it was in flight: a poll that STARTED before the user acted must not
+  // land on top of what the user's action produced.
+  //
+  // Without it, the mount-time poll routinely resolved AFTER a failed
+  // activation and reset `status` away from 'failed' — which unmounts the
+  // "Activation failed" block at line ~283 along with the reason for it. The
+  // owner clicks Activate, it fails, and the screen silently goes back to
+  // looking like nothing happened. Found 2026-09-03 as a 1-in-20 flake in
+  // `SetupWizard > Step 9 Go Live > shows error state when activation fails`,
+  // which is the same defect the user hits, just on a faster clock.
+  const userActionSeq = useRef(0);
+  // Set when THIS session's activation attempt failed. The server cannot
+  // corroborate that: a failed activation provisions nothing, so
+  // /provisioning/status keeps answering 'unprovisioned' indefinitely. A poll is
+  // therefore never evidence that the failure did not happen, and letting one
+  // overwrite `status` erases the only record of it. Sticky until the owner
+  // acts again (a retry clears it in handleActivate).
+  const activationFailedLocally = useRef(false);
+
   const fetchStatus = useCallback(async () => {
     if (!tenantId) return;
+    const seqAtStart = userActionSeq.current;
     try {
       const data = await Api.provisioning.status(tenantId);
+      // A user action superseded this poll while it was in flight — drop it.
+      if (userActionSeq.current !== seqAtStart) return;
+      const polled = toStatus(data.phone_status);
+      // Don't let a poll talk us out of a failure we just observed. 'active' is
+      // the one answer that legitimately overrides it — it means the activation
+      // actually landed despite the client-side error.
+      if (activationFailedLocally.current && polled !== 'active') return;
       setStatus((prev) => {
-        const next = toStatus(data.phone_status);
         // First time this session sees 'active' — anchor the poll window.
-        if (next === 'active' && prev !== 'active') setActivatedAt(new Date().toISOString());
-        return next;
+        if (polled === 'active' && prev !== 'active') setActivatedAt(new Date().toISOString());
+        return polled;
       });
       setInboundPhone(data.inbound_phone);
       setForwardedFromPhone(data.forwarded_from_phone);
@@ -165,6 +193,8 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
 
   async function handleActivate() {
     if (!tenantId) return;
+    userActionSeq.current += 1;
+    activationFailedLocally.current = false;
     setActivating(true);
     setActivateError(null);
     setStatus('provisioning');
@@ -174,6 +204,7 @@ export function GoLivePanel({ tenantId: tenantIdProp }: GoLivePanelProps) {
       setInboundPhone(result.phone_number);
       setActivatedAt(new Date().toISOString());
     } catch (err: unknown) {
+      activationFailedLocally.current = true;
       setStatus('failed');
       setActivateError(err instanceof Error ? err.message : 'Failed to activate phone');
     } finally {

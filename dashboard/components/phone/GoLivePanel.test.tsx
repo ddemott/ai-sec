@@ -125,6 +125,77 @@ describe('GoLivePanel — Stage A (unprovisioned)', () => {
     await waitFor(() => expect(screen.getByText('Activation failed')).toBeInTheDocument());
     expect(screen.getByText('No numbers available')).toBeInTheDocument();
   });
+
+  test('a status poll that resolves AFTER a failed activation must not erase the error', async () => {
+    // WHO:   an owner on Step 9 clicking "Activate AI Phone Line".
+    // WHAT:  the mount-time GET /provisioning/status is still in flight when the
+    //        activation POST fails. Its response must be DISCARDED — it describes
+    //        the world from before the click, and applying it resets `status` away
+    //        from 'failed', which unmounts the "Activation failed" block and the
+    //        reason with it.
+    // WHEN:  any run where the status call is slower than the activate call. Found
+    //        2026-09-03 as a 1-in-20 failure of the SetupWizard Step 9 test; the
+    //        user-visible version is "I clicked Activate, it failed, and the screen
+    //        went back to normal with no explanation."
+    // WHERE: GoLivePanel.fetchStatus — the userActionSeq guard.
+    // WHY:   a silently-erased failure is worse than a visible one; the owner
+    //        concludes the click did nothing and clicks again.
+    let releaseStatus: (v: unknown) => void = () => {};
+    const statusInFlight = new Promise((resolve) => {
+      releaseStatus = resolve;
+    });
+    mockStatus.mockImplementation(async () => {
+      await statusInFlight;
+      return { phone_status: null, inbound_phone: null, forwarded_from_phone: null };
+    });
+    mockActivate.mockRejectedValue(new Error('No numbers available'));
+
+    render(<GoLivePanel />);
+
+    await screen.findByRole('button', { name: /Activate AI Phone Line/i });
+    fireEvent.click(screen.getByRole('button', { name: /Activate AI Phone Line/i }));
+    await waitFor(() => expect(screen.getByText('Activation failed')).toBeInTheDocument());
+
+    // Now let the stale poll land. Without the guard this resets `status` and the
+    // error disappears.
+    releaseStatus(undefined);
+
+    await waitFor(() => expect(screen.getByText('Activation failed')).toBeInTheDocument());
+    expect(screen.getByText('No numbers available')).toBeInTheDocument();
+  });
+
+  test('a status poll that STARTS after a failed activation must not erase the error either', async () => {
+    // WHO:   same owner, same failed activation.
+    // WHAT:  this is the other half of the race and it is NOT covered by the
+    //        in-flight sequence guard. `fetchStatus` is a useCallback on
+    //        [tenantId] and the effect depends on its identity, so a tenantId
+    //        that resolves late re-fires the effect and starts a FRESH poll
+    //        after the click. That poll passes the sequence check.
+    // WHY:   a failed activation provisions nothing, so /provisioning/status
+    //        answers 'unprovisioned' forever. The server can never confirm the
+    //        failure, which means no poll is ever evidence against it — and
+    //        applying one silently deletes the only record the owner has.
+    // WHERE: GoLivePanel.fetchStatus — the activationFailedLocally guard.
+    mockStatus.mockResolvedValue({
+      phone_status: null,
+      inbound_phone: null,
+      forwarded_from_phone: null,
+    });
+    mockActivate.mockRejectedValue(new Error('Telnyx API error'));
+
+    const { rerender } = render(<GoLivePanel tenantId="tenant-a" />);
+    await screen.findByRole('button', { name: /Activate AI Phone Line/i });
+    fireEvent.click(screen.getByRole('button', { name: /Activate AI Phone Line/i }));
+    await waitFor(() => expect(screen.getByText('Activation failed')).toBeInTheDocument());
+
+    // Change tenantId -> fetchStatus identity changes -> effect re-runs -> a NEW
+    // status poll begins, entirely after the failure.
+    rerender(<GoLivePanel tenantId="tenant-b" />);
+
+    await waitFor(() => expect(mockStatus).toHaveBeenCalledWith('tenant-b'));
+    expect(screen.getByText('Activation failed')).toBeInTheDocument();
+    expect(screen.getByText('Telnyx API error')).toBeInTheDocument();
+  });
 });
 
 describe('GoLivePanel — Stage B (verify the raw number)', () => {
