@@ -112,7 +112,7 @@ const UpdateConfigSchema = z.object({
   disclosure_attested: z.boolean().optional(),
 });
 
-const CreateTemplateSchema = z.object({
+export const CreateTemplateSchema = z.object({
   business_type: z.string().min(1).max(50),
   display_name: z.string().min(1).max(100),
   category: z.string().min(1).max(50),
@@ -138,7 +138,54 @@ const CreateTemplateSchema = z.object({
         is_default: z.boolean().optional(),
       })
     )
-    .optional(),
+    .optional()
+    // The three invariants shared/starterServices.ts states in prose and this
+    // schema used to accept violations of. An admin-created template that
+    // breaks one does not fail loudly — it produces a vertical whose booking
+    // resolution is quietly worse, which is the failure mode T-015 exists to
+    // remove.
+    .superRefine((services, ctx) => {
+      if (!services) return;
+
+      services.forEach((svc, index) => {
+        // A look-first row is one the resolver is meant to reach semantically,
+        // and the semantic step embeds name + subtitle + description. Without a
+        // description it has only the name to match on, which is exactly the
+        // case measured to score ~0.30 against the production threshold of 0.35.
+        if (svc.look_first && !svc.description?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index, 'description'],
+            message: `look_first service "${svc.name}" needs a non-blank description — the semantic resolver matches on the description, not the name`,
+          });
+        }
+      });
+
+      const defaults = services.filter((svc) => svc.is_default);
+      if (defaults.length > 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['is_default'],
+          message: `exactly one starter service may be is_default, got ${defaults.length}: ${defaults.map((svc) => svc.name).join(', ')}`,
+        });
+      }
+
+      // Duplicate names make the default and look-first rows ambiguous, and the
+      // dashboard's preview keys its pills by name.
+      const seen = new Map<string, number>();
+      services.forEach((svc, index) => {
+        const key = svc.name.trim().toLowerCase();
+        if (seen.has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index, 'name'],
+            message: `duplicate starter service name "${svc.name}" (also at index ${seen.get(key)})`,
+          });
+        } else {
+          seen.set(key, index);
+        }
+      });
+    }),
 });
 
 export function registerTenantRoutes(
@@ -730,7 +777,7 @@ export function registerTenantRoutes(
           default_resource_name, default_resource_description,
           resource_label, resource_plural, employee_label, employee_plural,
           booking_label, example_services
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,COALESCE($14::jsonb,'[]'::jsonb))
         ON CONFLICT (business_type) DO UPDATE SET
           display_name = EXCLUDED.display_name, category = EXCLUDED.category,
           system_prompt_template = COALESCE(EXCLUDED.system_prompt_template, business_templates.system_prompt_template),
@@ -743,7 +790,11 @@ export function registerTenantRoutes(
           employee_label = COALESCE(EXCLUDED.employee_label, business_templates.employee_label),
           employee_plural = COALESCE(EXCLUDED.employee_plural, business_templates.employee_plural),
           booking_label = COALESCE(EXCLUDED.booking_label, business_templates.booking_label),
-          example_services = COALESCE(EXCLUDED.example_services, business_templates.example_services)
+          -- $14, not EXCLUDED: EXCLUDED.example_services has already been
+          -- coalesced to '[]' to satisfy the column's NOT NULL, so guarding on it
+          -- would preserve nothing. The raw parameter is the only place the
+          -- caller's "I did not send this field" still exists.
+          example_services = COALESCE($14::jsonb, business_templates.example_services)
         RETURNING *
       `,
           [
@@ -761,7 +812,14 @@ export function registerTenantRoutes(
             body.employee_label || 'Employee',
             body.employee_plural || 'Employees',
             body.booking_label || 'Appointment',
-            JSON.stringify(body.example_services ?? []),
+            // NULL, not '[]', when the caller omitted the field — the SQL above
+            // turns it into '[]' for the INSERT (the column is NOT NULL) and reads
+            // it raw in the ON CONFLICT branch. `?? []` here made the parameter
+            // always non-null, so the guard could never fire: every edit that did
+            // not resend the list — renaming a template, changing its voice —
+            // silently replaced that vertical's starter services with an empty
+            // array. An explicit [] still means "empty it".
+            body.example_services === undefined ? null : JSON.stringify(body.example_services),
           ]
         )
       );

@@ -86,9 +86,9 @@ export function TemplatePreviewModal({
               Suggested Services
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {template.example_services.map((svc) => (
+              {template.example_services.map((svc, index) => (
                 <span
-                  key={svc.name}
+                  key={`${svc.name}-${index}`}
                   title={svc.description ?? undefined}
                   className="text-xs px-2 py-1 rounded-full"
                   style={{ backgroundColor: 'var(--accent-muted)', color: 'var(--accent-soft)' }}
