@@ -32,6 +32,22 @@ jobs:
     name: Doc drift + secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 6
+    env:
+      # `tsx` is NOT a dependency of this repo — every `npx tsx …` script
+      # relies on npx fetching it on demand. That is invisible locally (npx
+      # caches it) and it HANGS on a clean runner: npx asks "Ok to proceed?",
+      # there is no TTY to answer, and the step sits until the job timeout kills
+      # it. First run of this workflow did exactly that — six minutes of silence
+      # after "The following package was not found and will be installed:
+      # tsx@4.23.13", then cancelled. The timeout was not the bug; it is what
+      # made the hang visible instead of endless.
+      #
+      # NPM_CONFIG_YES makes every npx in this job non-interactive, so the npm
+      # scripts stay the single definition of what the check IS
+      # (`npm run verify:claude-md`, not a re-typed command that can drift from
+      # it). zero-vendor-alerts.yml solves the same problem inline with
+      # `npx --yes tsx@4.23.12`.
+      NPM_CONFIG_YES: 'true'
     steps:
       - uses: actions/checkout@v4
         with:
