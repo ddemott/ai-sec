@@ -40,7 +40,8 @@
     "generate-kit": "bash scripts/generate-portable-kit.sh",
     "status": "bash scripts/simulate.sh status --deep",
     "ci:status": "bash scripts/simulate.sh ci",
-    "ci:watch": "bash scripts/simulate.sh ci --watch"
+    "ci:watch": "bash scripts/simulate.sh ci --watch",
+    "scan:secrets": "npx tsx scripts/scan-secrets.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

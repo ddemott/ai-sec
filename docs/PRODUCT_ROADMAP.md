@@ -157,17 +157,17 @@ Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 | T-007 | Fix E2E test flakiness               | 1    | Claude | HIGH     | —            | ✅ DONE |
 | T-008 | Validate intake trees end-to-end     | 1    | Mixed  | HIGH     | T-000        | 🟡      |
 | T-009 | Volume metering & tier caps          | 1    | Claude | HIGH     | T-004        | ⬜      |
-| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | 🟡      |
-| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | 🟡      |
-| T-012 | Deployment checklist & automation    | 1    | Claude | MEDIUM   | —            | ⬜      |
+| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | ✅      |
+| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | ✅      |
+| T-012 | Deployment checklist & automation    | 1    | Claude | MEDIUM   | —            | 🟡      |
 | T-013 | Full onboarding walk-through         | 1    | Human  | MEDIUM   | T-003, T-008 | ⬜      |
 | T-014 | Dead code removal                    | 1    | Claude | LOW      | T-001..T-013 | ⬜      |
 | T-101 | Onboarding wizard redesign           | 2    | Claude | CRITICAL | T-013        | ⬜      |
 | T-102 | AI persona customization             | 2    | Claude | HIGH     | T-003        | ⬜      |
-| T-103 | Knowledge base builder UX            | 2    | Claude | HIGH     | —            | ⬜      |
+| T-103 | Knowledge base builder UX            | 2    | Claude | HIGH     | —            | 🟡      |
 | T-104 | Dashboard UX polish                  | 2    | Claude | HIGH     | T-013        | ⬜      |
 | T-105 | Vocabulary customization             | 2    | Claude | HIGH     | T-008        | ⬜      |
-| T-106 | Scheduler UX improvements            | 2    | Claude | MEDIUM   | —            | ⬜      |
+| T-106 | Scheduler UX improvements            | 2    | Claude | MEDIUM   | —            | 🟡      |
 | T-107 | Customer self-service booking page   | 2    | Claude | MEDIUM   | T-005        | ⬜      |
 | T-108 | SMS & reminder customization         | 2    | Claude | MEDIUM   | T-002        | ⬜      |
 | T-109 | Owner mobile PWA                     | 2    | Claude | MEDIUM   | T-104        | ⬜      |
@@ -602,9 +602,9 @@ DEFINITION_OF_DONE:
 
 ### T-010: Schedule pattern adoption verify
 
-STATUS: 🟡 IN_PROGRESS — code + tests done and green on
-`feat/T-006-T-010-T-011-monitoring-schedule-cost`; NOT on `main`, so by §0.7 it
-is not DONE.
+STATUS: ✅ DONE (merged to `main` 2026-09-03 as `d0c31ac`, PR #394; prod deploy
+verified — backend `started_at` moved to 2026-09-03T22:33:09Z, 4/4 on
+`npm run status --env prod`)
 
 <!--
   ACCEPTANCE_TEST run: `npx vitest run tests/services/schedulePatternAdoption.realdb.test.ts`
@@ -648,9 +648,9 @@ DEFINITION_OF_DONE:
 
 ### T-011: Verify cost tracking ledger
 
-STATUS: 🟡 IN_PROGRESS — code + tests done and green on
-`feat/T-006-T-010-T-011-monitoring-schedule-cost`; NOT on `main`, so by §0.7 it
-is not DONE.
+STATUS: ✅ DONE (merged to `main` 2026-09-03 as `d0c31ac`, PR #394; prod deploy
+verified — backend `started_at` moved to 2026-09-03T22:33:09Z, 4/4 on
+`npm run status --env prod`)
 
 <!--
   ACCEPTANCE_TEST run: `npx vitest run tests/services/aiCostLedger.realdb.test.ts`
@@ -692,7 +692,26 @@ DEFINITION_OF_DONE:
 
 ### T-012: Deployment checklist & automation
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — code + docs done on `feat/T-012-deployment-checklist`;
+not on `main`, so by §0.7 not DONE.
+
+<!--
+  ACCEPTANCE_TEST run:
+    npm run verify:claude-md   → "✓ CLAUDE.md verified — no drift detected", exit 0
+    npm run scan:secrets       → "clean — no plaintext credentials", exit 0
+  Both gates PROVEN to fail, not just to pass:
+    - a path edited to `/src/does-not-exist` in CLAUDE.md → exit 1,
+      "[directory-existence] path ... listed but does not exist on disk"
+    - a planted synthetic `sk_live_…` in src/ → exit 1, "src/__leak_proof.ts:1:
+      stripe_live_key" (redacted in output; both artifacts removed after)
+  The secret scan is a TESTED script (scripts/scan-secrets.ts, 23 tests in
+  tests/scripts/scanSecrets.test.ts) rather than a git-grep line in YAML,
+  because a rule that lives only in a workflow step is never exercised until
+  the day it should fire.
+  NOTE: making `Pre-merge checks` a REQUIRED check is a repo-settings change —
+  Dale's, not doable from here. Listed in the PR body.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 3–4h
@@ -845,7 +864,55 @@ DEFINITION_OF_DONE:
 
 ### T-103: Knowledge base builder UX
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — **and the spec below is partly WRONG about this
+codebase.** Read this before writing any code for it.
+
+<!--
+  WHAT THIS TASK ASKED FOR THAT MUST NOT BE BUILT:
+  a new `kb_entries(tenant_id, category, question, answer, keywords[])` table
+  plus `agent/src/checklist/infoLookup.ts` doing keyword matching, described as
+  "no vector RAG required for MVP".
+
+  WHY NOT: all of it already exists, and the existing version is better.
+   - Storage: `tenant_docs` (title/section/content/normalized_text/embedding),
+     pgvector, retrieved by `search_tenant_docs_normalized()`.
+   - CRUD + categories: `dashboard/components/knowledge/KnowledgeBaseView.tsx`
+     with Api.knowledge.list/add/update/delete, plus website import, document
+     ingest, and an unanswered-question feed the owner can answer in one click.
+   - Agent path: `/agent-tools/policy-answer`, reachable on EVERY call as the
+     `answer_question` tool (checklistTools.ts) — it is a base tool, not gated
+     behind a tree.
+   - The miss path the DoD asks for is ALREADY host-enforced: when RAG cannot
+     answer, `ragCouldNotAnswer()` selects the `message` + `identity` trees so
+     the call cannot end without taking a message (checklistTools.ts, written
+     after a real 2026-08-15 sim where a caller was lost exactly that way).
+  Building `kb_entries` would be a SECOND, keyword-only knowledge system next to
+  a working semantic one — the "working flat code beats a dormant abstraction"
+  rule in CLAUDE.md, inverted.
+
+  WHAT WAS ACTUALLY DONE: the gap was PROOF, not features. Every layer was
+  tested in isolation with mocks, and a mock cannot show that the vector reached
+  the column, that the RPC threshold lets a real paraphrase through, or that
+  DELETE reaches the row the answer came from.
+  `tests/integration/knowledgeRoundTrip.realdb.test.ts` (real Postgres +
+  pgvector, 4 passed) covers the DoD end to end:
+   - add → embedding IS in the column → list → the AGENT's own policy-answer
+     returns the answer → delete → the answer stops coming back;
+   - an unanswerable question returns the graceful spoken fallback, never a 500;
+   - the miss is recorded in `unanswered_questions` (polled, because the route
+     logs it fire-and-forget so a live caller never waits on analytics);
+   - a second tenant asking the same question does NOT get the first tenant's
+     door code.
+  LIMIT, stated plainly: the test injects a deterministic bag-of-words embedder,
+  so it proves storage/retrieval/threshold/wiring, NOT that OpenAI ranks a given
+  paraphrase above the threshold. That is what `./scripts/simulate.sh rag`
+  measures, on demand, with real embeddings.
+
+  REMAINING, if anyone still wants it: nothing in the DoD. The UI work worth
+  doing is polish on the existing view (the `TODO` for a URL-import input at
+  KnowledgeBaseView.tsx ~L374), which belongs in T-104, not here.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 10–12h
@@ -942,7 +1009,52 @@ DEFINITION_OF_DONE:
 
 ### T-106: Scheduler UX
 
-STATUS: ⬜ NOT_STARTED
+STATUS: 🟡 IN_PROGRESS — the **blackout-date half is built and enforced**; the
+weekly-grid UI half is NOT, and part of the spec describes things that already
+exist. Read this before continuing it.
+
+<!--
+  BUILT (2026-09-03, branch feat/T-012-deployment-checklist):
+   - migration 20260903000000_blackout_dates.sql — `blackout_dates
+     (tenant_id, blackout_date, reason)`, natural composite PK, RLS enabled +
+     forced + tenant-isolation policy, house updated_at trigger.
+   - The booking RPC refuses a closed day with a NEW error code
+     BUSINESS_CLOSED, checked BEFORE any employee/resource search — otherwise a
+     tenant with no staff that day would hear "no one is scheduled" instead of
+     "we are closed": same facts, different sentence, only one of them true.
+   - availabilitySearch.ts excludes the day too. Suggest and enforce must read
+     the same calendar or the agent offers a slot the booking then refuses —
+     the 2026-07-17 midnight-wrap lesson, restated.
+   - CRUD at GET/POST/DELETE /shifts/blackouts (upsert on re-declare; 404 on a
+     zero-row delete, because "removed a closure that was never there" is how an
+     owner comes to believe they are open when they are shut).
+   - Tests: tests/integration/blackoutDates.realdb.test.ts (7, real Postgres —
+     control day bookable, blackout refused with the right CODE, suggester
+     returns nothing, neighbouring days untouched, removal reopens, another
+     tenant's closure does not close this one, re-declare upserts) and
+     tests/routes/blackoutRoutes.test.ts (12).
+   - The RPC guard is proven LOAD-BEARING by mutation: re-applying the previous
+     function definition makes the BUSINESS_CLOSED case fail, and only that case.
+
+  WHY THIS WAS THE REAL GAP: `employee_schedule.is_off` says one PERSON is off.
+  Nothing could say the BUSINESS is shut, so closing meant editing every
+  employee's row for that date — and anyone hired afterwards was silently
+  bookable on a day the doors are locked.
+
+  NOT BUILT, and deliberately scoped out rather than half-done:
+   - the weekly-grid editing UI and per-day BREAKS. Breaks have no
+     representation yet (employee_schedule holds ONE start/end per day); adding
+     them is a schema question, not a UI one, and should be its own task.
+   - a dashboard surface for blackouts. The API is live and tested; the Schedule
+     tab does not yet show or edit closures.
+
+  ALREADY EXISTED, contrary to the spec's FILES list: there is no
+  `src/services/availability.ts` or `getSlots` — the suggester is
+  `src/services/availabilitySearch.ts` (`findNextAvailableSlots`), the booking
+  RPCs are in supabase/migrations, and `dashboard/components/SchedulerView.tsx`
+  plus `components/scheduler/` already render appointments.
+-->
+
 OWNER: Claude-able
 PRIORITY: MEDIUM
 EFFORT: 10–12h

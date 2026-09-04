@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict dN4XtohsnYH51Awg5UEfllUbUjX8FVW2EjJ3wTKWBYYH1web07lsjAdxS4e85m8
+\restrict om2hR6CeFIRcg43tsSexy4Zcrq8NAMplgQ1w2H9H7dNWqEZFzlxwRVnTgdfQoMW
 
 -- Dumped from database version 15.4 (Debian 15.4-2.pgdg120+1)
--- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
+-- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -505,6 +505,36 @@ BEGIN
     END IF;
 
     v_shift_date := (v_start AT TIME ZONE v_tenant_tz)::DATE;
+
+    -- TENANT-WIDE CLOSURE (T-106, 2026-09-03).
+    --
+    -- `employee_schedule.is_off` says one PERSON is off. Nothing said the
+    -- BUSINESS is shut. Closing for Christmas therefore meant editing every
+    -- employee's row for that date, and any employee added afterwards silently
+    -- became bookable on a day the doors are locked — the failure lands on a
+    -- real customer standing outside, which is the same class of harm as the
+    -- over-scheduling rule rejected in migration 20260820000000.
+    --
+    -- Checked HERE, before any employee/resource search, because a closed day
+    -- is not a staffing question: with the guard further down, a tenant with no
+    -- staff on that date would return EMPLOYEE_NOT_SCHEDULED and the caller
+    -- would be told "no one is scheduled" rather than "we are closed". Same
+    -- facts, different sentence, and only one of them is true.
+    --
+    -- availabilitySearch.ts carries the matching exclusion in the same commit:
+    -- suggest and enforce must read the same calendar, or the agent offers a
+    -- slot the booking then refuses (the 2026-07-17 midnight-wrap lesson).
+    IF EXISTS (
+        SELECT 1 FROM blackout_dates
+         WHERE tenant_id = p_tenant_id
+           AND blackout_date = v_shift_date
+    ) THEN
+        RETURN QUERY SELECT FALSE, NULL::UUID, NULL::UUID, NULL::TEXT, NULL::UUID, NULL::TEXT,
+            NULL::TIMESTAMPTZ, NULL::TIMESTAMPTZ, v_customer_id,
+            'The business is closed on that date'::TEXT,
+            'BUSINESS_CLOSED'::TEXT;
+        RETURN;
+    END IF;
     v_day_of_week := EXTRACT(DOW FROM v_start AT TIME ZONE v_tenant_tz)::INTEGER;
     v_start_time_of_day := (v_start AT TIME ZONE v_tenant_tz)::TIME;
     -- WRAP-AWARE, SHIFT-SHAPE-AWARE (2026-07-17 22:13 CDT live call; night
@@ -2582,6 +2612,21 @@ ALTER TABLE ONLY public.audit_log FORCE ROW LEVEL SECURITY;
 
 
 --
+-- Name: blackout_dates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.blackout_dates (
+    tenant_id uuid NOT NULL,
+    blackout_date date NOT NULL,
+    reason text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.blackout_dates FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: business_templates; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4136,6 +4181,14 @@ ALTER TABLE ONLY public.audit_log
 
 
 --
+-- Name: blackout_dates blackout_dates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.blackout_dates
+    ADD CONSTRAINT blackout_dates_pkey PRIMARY KEY (tenant_id, blackout_date);
+
+
+--
 -- Name: business_templates business_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5180,6 +5233,13 @@ CREATE TRIGGER services_auto_version AFTER INSERT OR DELETE OR UPDATE ON public.
 
 
 --
+-- Name: blackout_dates set_blackout_dates_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_blackout_dates_updated_at BEFORE UPDATE ON public.blackout_dates FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
 -- Name: appointments trg_appointments_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -5368,6 +5428,14 @@ ALTER TABLE ONLY public.appointments
 
 ALTER TABLE ONLY public.audit_log
     ADD CONSTRAINT audit_log_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
+
+
+--
+-- Name: blackout_dates blackout_dates_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.blackout_dates
+    ADD CONSTRAINT blackout_dates_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(tenant_id) ON DELETE CASCADE;
 
 
 --
@@ -6029,6 +6097,19 @@ CREATE POLICY audit_log_tenant_isolation ON public.audit_log USING (((tenant_id)
 
 
 --
+-- Name: blackout_dates; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.blackout_dates ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: blackout_dates blackout_dates_tenant_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY blackout_dates_tenant_isolation ON public.blackout_dates USING ((tenant_id = public.tenant_ctx_uuid())) WITH CHECK ((tenant_id = public.tenant_ctx_uuid()));
+
+
+--
 -- Name: business_templates; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6562,5 +6643,5 @@ CREATE POLICY voice_sessions_tenant_isolation ON public.voice_sessions USING (((
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dN4XtohsnYH51Awg5UEfllUbUjX8FVW2EjJ3wTKWBYYH1web07lsjAdxS4e85m8
+\unrestrict om2hR6CeFIRcg43tsSexy4Zcrq8NAMplgQ1w2H9H7dNWqEZFzlxwRVnTgdfQoMW
 
