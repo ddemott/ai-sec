@@ -38,7 +38,15 @@ const REPO_ROOT = resolve(__dirname, '..', '..');
  * what "local" means. `db` / `postgres` / `secretary-hq-db` are container hostnames
  * (docker-compose, CI service containers).
  */
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '', 'db', 'postgres', 'secretary-hq-db']);
+const LOCAL_HOSTS = new Set([
+  'localhost',
+  '127.0.0.1',
+  '::1',
+  '',
+  'db',
+  'postgres',
+  'secretary-hq-db',
+]);
 
 function hostOf(url: string): string {
   try {
