@@ -70,37 +70,7 @@ npm run create-branch feat/your-descriptive-name
 
 ## 3. Development Standards (While Coding)
 
-### Code Quality
-
-- Follow existing patterns in the file/module you are changing.
-- All new or changed code must pass:
-  - TypeScript (`npx tsc --noEmit` root + dashboard)
-  - ESLint (`npm run lint`)
-  - Prettier (`npm run format:check`)
-- Backend code changes **require both** `npm run build` **and** a restart to take effect (see CLAUDE.md "Build Principles").
-
-### Testing
-
-- **Unit / integration tests** (Vitest): Required for almost all logic.
-- **E2E (Playwright)**: Required for user-facing flows, especially anything involving the dashboard UI, booking, auth, or configuration that affects real users.
-  - Do **not** run the entire E2E suite for every small change. Use `--grep` to run only relevant tests:
-    ```bash
-    cd dashboard && npx playwright test --grep "owner-config|booking"
-    ```
-- **Live QA** (`./scripts/simulate.sh tools`): Use for voice/agent tool flows when E2E is not practical. Runs the full agent-tools journey end-to-end against a demo tenant.
-- Every new or meaningfully changed test file **must** contain 5W diagnostic comments (WHO / WHAT / WHEN / WHERE / WHY). See existing good examples in `appointment-cancel-restore.spec.ts`.
-
-**Rule of thumb**: If a user or the voice agent could experience different behavior, there should be a test (unit, E2E, or live QA) that would catch the regression.
-
-### Documentation
-
-- Update the relevant `*.md` file(s) as part of the same work, not as an afterthought.
-- Critical files that frequently need updates:
-  - `CLAUDE.md` (especially Key Directories, Development, and Build Principles)
-  - `docs/TODO.md`
-  - `RESOLVED.md` (move completed items here)
-  - Any feature-specific docs under `docs/`
-- Run `npm run verify:claude-md` before considering the work done. It is a hard gate in CI.
+See `CODING_STANDARDS.md` for general standards (tooling gates, testing conventions, naming, structure, commits, review). Project specifics (hooks, middleware, tenant patterns, migration recipes) stay in this file, ARCHITECTURE.md.
 
 ## 4. Pre-Commit / Pre-PR Checklist
 
