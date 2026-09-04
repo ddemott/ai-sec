@@ -44,6 +44,23 @@ import { API_DB_URL, getRootClient, createTenant, skipIfDbDown } from '../utils'
 import { createWithTenantClient } from '../../src/database';
 import { registerCommunicationRoutes } from '../../src/routes/communications';
 import { jsonContentTypeParser } from '../../src/jsonContentTypeParser';
+import { registry } from '../../src/services/metrics';
+
+/** webhook_signature_failures_total for one label set (T-006), read as a delta. */
+function sigFailures(provider: string, endpoint: string): number {
+  const line = registry
+    .expose()
+    .split('\n')
+    .find(
+      (l) =>
+        l.startsWith('webhook_signature_failures_total{') &&
+        l.includes(`provider="${provider}"`) &&
+        l.includes(`endpoint="${endpoint}"`)
+    );
+  if (!line) return 0;
+  const n = Number(line.trim().split(/\s+/).pop());
+  return Number.isFinite(n) ? n : 0;
+}
 
 // A REAL Ed25519 keypair. The tests sign with the private half and the app
 // verifies with the public half — genuinely asymmetric, exactly as Telnyx does it.
@@ -179,12 +196,16 @@ describe('POST /communications/telnyx/inbound — signature guard', () => {
     //        -d '{"data":{"payload":{"from":{"phone_number":"<victim>"},...,"text":"STOP"}}}'
     // The `from` number is attacker-supplied. Without the guard this endpoint
     // would happily act on it.
+    const before = sigFailures('telnyx', 'inbound_sms');
     const res = await postInbound(inboundPayload('STOP'), { sign: false });
 
     expect(res.statusCode).toBe(403);
     // The decisive assertion: no state changed. Not "it logged a warning" —
     // nothing happened.
     expect(await optOutRows(tenantId)).toHaveLength(0);
+    // T-006: and the attempt is on a counter an alert can page on, so a forging
+    // campaign is visible without anyone reading logs.
+    expect(sigFailures('telnyx', 'inbound_sms')).toBe(before + 1);
   });
 
   it('SECURITY: a WRONG signature is rejected 403 and changes nothing', async () => {

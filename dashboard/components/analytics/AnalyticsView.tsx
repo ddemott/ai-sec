@@ -24,11 +24,12 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { Api } from '../../lib/api';
 import type { AnalyticsCalls, AnalyticsStats, AnalyticsCohorts } from '../../lib/types';
-import { useActiveTenantId } from '../../lib/SessionContext';
+import { useActiveTenantId, useSessionContext } from '../../lib/SessionContext';
 import { EmptyState } from '../ui/EmptyState';
 import { CalendarCheck } from 'lucide-react';
 import ReminderDeliveryStats from '../communications/ReminderDeliveryStats';
 import UtilizationHeatmap from './UtilizationHeatmap';
+import AiCostPanel from './AiCostPanel';
 import type { AppointmentSummary } from './types';
 import { AnalyticsSkeleton } from './AnalyticsSkeleton';
 import { DateRangePicker } from './DateRangePicker';
@@ -38,6 +39,8 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function AnalyticsView() {
   const tenantId = useActiveTenantId();
+  // Platform super-admin only — see the AiCostPanel mount below.
+  const { isAdmin } = useSessionContext();
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<AppointmentSummary | null>(null);
   const [calls, setCalls] = useState<AnalyticsCalls | null>(null);
@@ -238,7 +241,16 @@ export default function AnalyticsView() {
         </div>
 
         {/* Internal AI spend stays operator-only. Tenant analytics should never
-            expose margin math back to the customer. */}
+            expose margin math back to the customer, so the panel renders ONLY
+            for a platform super-admin (T-011). This check is not the security
+            boundary — GET /analytics/ai-cost enforces requireSuperAdmin
+            server-side, because a UI that declines to draw something does not
+            stop a curl. This one just avoids firing a request that would 403. */}
+        {isAdmin && (
+          <div className="mt-6">
+            <AiCostPanel />
+          </div>
+        )}
 
         {/* Roadmap: richer WHY analysis still ahead */}
         <div
