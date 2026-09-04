@@ -145,46 +145,52 @@ DEFINITION_OF_DONE: binary checklist, each item independently verifiable
 
 Legend: ✅ DONE · 🟡 IN_PROGRESS · ⛔ BLOCKED · ⬜ NOT_STARTED
 
-| ID    | Title                                | Pass | Owner  | Priority | Depends On   | Status  |
-| ----- | ------------------------------------ | ---- | ------ | -------- | ------------ | ------- |
-| T-000 | Vertical intake trees (30 verticals) | 1    | Claude | HIGH     | —            | ✅ DONE |
-| T-001 | Security credentials rotation        | 1    | Human  | CRITICAL | —            | ⬜      |
-| T-002 | 10DLC registration + ENABLE_SMS flip | 1    | Mixed  | CRITICAL | —            | ⬜      |
-| T-003 | Live voice validation call           | 1    | Human  | CRITICAL | —            | ⬜      |
-| T-004 | Stripe test-mode wiring              | 1    | Human  | CRITICAL | —            | ⬜      |
-| T-005 | Stripe live-mode + bank account      | 1    | Human  | CRITICAL | T-004        | ⬜      |
-| T-006 | Monitoring & alerting                | 1    | Claude | HIGH     | —            | 🟡      |
-| T-007 | Fix E2E test flakiness               | 1    | Claude | HIGH     | —            | ✅ DONE |
-| T-008 | Validate intake trees end-to-end     | 1    | Mixed  | HIGH     | T-000        | 🟡      |
-| T-009 | Volume metering & tier caps          | 1    | Claude | HIGH     | T-004        | ⬜      |
-| T-010 | Schedule pattern adoption verify     | 1    | Claude | MEDIUM   | —            | ✅      |
-| T-011 | Verify cost tracking ledger          | 1    | Claude | MEDIUM   | —            | ✅      |
-| T-012 | Deployment checklist & automation    | 1    | Claude | MEDIUM   | —            | 🟡      |
-| T-013 | Full onboarding walk-through         | 1    | Human  | MEDIUM   | T-003, T-008 | ⬜      |
-| T-014 | Dead code removal                    | 1    | Claude | LOW      | T-001..T-013 | ⬜      |
-| T-101 | Onboarding wizard redesign           | 2    | Claude | CRITICAL | T-013        | ⬜      |
-| T-102 | AI persona customization             | 2    | Claude | HIGH     | T-003        | ⬜      |
-| T-103 | Knowledge base builder UX            | 2    | Claude | HIGH     | —            | 🟡      |
-| T-104 | Dashboard UX polish                  | 2    | Claude | HIGH     | T-013        | ⬜      |
-| T-105 | Vocabulary customization             | 2    | Claude | HIGH     | T-008        | ⬜      |
-| T-106 | Scheduler UX improvements            | 2    | Claude | MEDIUM   | —            | 🟡      |
-| T-107 | Customer self-service booking page   | 2    | Claude | MEDIUM   | T-005        | ⬜      |
-| T-108 | SMS & reminder customization         | 2    | Claude | MEDIUM   | T-002        | ⬜      |
-| T-109 | Owner mobile PWA                     | 2    | Claude | MEDIUM   | T-104        | ⬜      |
-| T-110 | In-app onboarding checklist          | 2    | Claude | MEDIUM   | T-101        | ⬜      |
-| T-201 | Advanced analytics dashboard         | 3    | Claude | HIGH     | T-006        | ⬜      |
-| T-202 | Multi-location support               | 3    | Claude | HIGH     | T-009, T-005 | ⬜      |
-| T-203 | Team management (multi-user)         | 3    | Claude | HIGH     | —            | ⬜      |
-| T-204 | Zapier & outbound webhooks           | 3    | Claude | MEDIUM   | —            | ⬜      |
-| T-205 | Additional CRM integrations          | 3    | Claude | MEDIUM   | T-204        | ⬜      |
-| T-206 | Google Business Profile integration  | 3    | Claude | MEDIUM   | —            | ⬜      |
-| T-207 | Deposit payment collection           | 3    | Claude | MEDIUM   | T-005        | ⬜      |
-| T-208 | Demo / trial mode                    | 3    | Claude | HIGH     | T-101        | ⬜      |
-| T-301 | White-label / reseller program       | 4    | Claude | HIGH     | T-203, T-202 | ⬜      |
-| T-302 | Public API                           | 4    | Claude | MEDIUM   | T-204        | ⬜      |
-| T-303 | Advanced AI voice features           | 4    | Claude | MEDIUM   | T-003        | ⬜      |
-| T-304 | Enterprise hardening (non-HIPAA)     | 4    | Claude | MEDIUM   | T-203, T-202 | ⬜      |
-| T-305 | Integration marketplace              | 4    | Claude | LOW      | T-302, T-204 | ⬜      |
+| ID      | Title                                      | Pass | Owner  | Priority | Depends On   | Status  |
+| ------- | ------------------------------------------ | ---- | ------ | -------- | ------------ | ------- |
+| T-000   | Vertical intake trees (30 verticals)       | 1    | Claude | HIGH     | —            | ✅ DONE |
+| T-001   | Security credentials rotation              | 1    | Human  | CRITICAL | —            | ⬜      |
+| T-002   | 10DLC registration + ENABLE_SMS flip       | 1    | Mixed  | CRITICAL | —            | ⬜      |
+| T-003   | Live voice validation call                 | 1    | Human  | CRITICAL | —            | ⬜      |
+| T-004   | Stripe test-mode wiring                    | 1    | Human  | CRITICAL | —            | ⬜      |
+| T-005   | Stripe live-mode + bank account            | 1    | Human  | CRITICAL | T-004        | ⬜      |
+| T-006   | Monitoring & alerting                      | 1    | Claude | HIGH     | —            | 🟡      |
+| T-007   | Fix E2E test flakiness                     | 1    | Claude | HIGH     | —            | ✅ DONE |
+| T-008   | Validate intake trees end-to-end           | 1    | Mixed  | HIGH     | T-000        | 🟡      |
+| T-009   | Volume metering & tier caps                | 1    | Claude | HIGH     | T-004        | ⬜      |
+| T-010   | Schedule pattern adoption verify           | 1    | Claude | MEDIUM   | —            | ✅      |
+| T-011   | Verify cost tracking ledger                | 1    | Claude | MEDIUM   | —            | ✅      |
+| T-012   | Deployment checklist & automation          | 1    | Claude | MEDIUM   | —            | 🟡      |
+| T-013   | Full onboarding walk-through               | 1    | Human  | MEDIUM   | T-003, T-008 | ⬜      |
+| T-014   | Dead code removal                          | 1    | Claude | LOW      | T-001..T-013 | ⬜      |
+| T-015   | **Restore wizard starter services (epic)** | 1    | Claude | HIGH     | —            | 🟡      |
+| T-015-A | · Data model / seed path                   | 1    | Claude | HIGH     | —            | 🟡      |
+| T-015-B | · Content: starter lists (31 verticals)    | 1    | Claude | HIGH     | T-015-A      | 🟡      |
+| T-015-C | · Descriptions + default_service_id policy | 1    | Claude | HIGH     | T-015-B      | 🟡      |
+| T-015-D | · Resolver / booking safety checks         | 1    | Claude | HIGH     | T-015-C      | 🟡      |
+| T-015-E | · Wizard UX acceptance                     | 1    | Mixed  | HIGH     | T-015-B      | 🟡      |
+| T-101   | Onboarding wizard redesign                 | 2    | Claude | CRITICAL | T-013        | ⬜      |
+| T-102   | AI persona customization                   | 2    | Claude | HIGH     | T-003        | ⬜      |
+| T-103   | Knowledge base builder UX                  | 2    | Claude | HIGH     | —            | 🟡      |
+| T-104   | Dashboard UX polish                        | 2    | Claude | HIGH     | T-013        | ⬜      |
+| T-105   | Vocabulary customization                   | 2    | Claude | HIGH     | T-008        | ⬜      |
+| T-106   | Scheduler UX improvements                  | 2    | Claude | MEDIUM   | —            | 🟡      |
+| T-107   | Customer self-service booking page         | 2    | Claude | MEDIUM   | T-005        | ⬜      |
+| T-108   | SMS & reminder customization               | 2    | Claude | MEDIUM   | T-002        | ⬜      |
+| T-109   | Owner mobile PWA                           | 2    | Claude | MEDIUM   | T-104        | ⬜      |
+| T-110   | In-app onboarding checklist                | 2    | Claude | MEDIUM   | T-101        | ⬜      |
+| T-201   | Advanced analytics dashboard               | 3    | Claude | HIGH     | T-006        | ⬜      |
+| T-202   | Multi-location support                     | 3    | Claude | HIGH     | T-009, T-005 | ⬜      |
+| T-203   | Team management (multi-user)               | 3    | Claude | HIGH     | —            | ⬜      |
+| T-204   | Zapier & outbound webhooks                 | 3    | Claude | MEDIUM   | —            | ⬜      |
+| T-205   | Additional CRM integrations                | 3    | Claude | MEDIUM   | T-204        | ⬜      |
+| T-206   | Google Business Profile integration        | 3    | Claude | MEDIUM   | —            | ⬜      |
+| T-207   | Deposit payment collection                 | 3    | Claude | MEDIUM   | T-005        | ⬜      |
+| T-208   | Demo / trial mode                          | 3    | Claude | HIGH     | T-101        | ⬜      |
+| T-301   | White-label / reseller program             | 4    | Claude | HIGH     | T-203, T-202 | ⬜      |
+| T-302   | Public API                                 | 4    | Claude | MEDIUM   | T-204        | ⬜      |
+| T-303   | Advanced AI voice features                 | 4    | Claude | MEDIUM   | T-003        | ⬜      |
+| T-304   | Enterprise hardening (non-HIPAA)           | 4    | Claude | MEDIUM   | T-203, T-202 | ⬜      |
+| T-305   | Integration marketplace                    | 4    | Claude | LOW      | T-302, T-204 | ⬜      |
 
 **To claim a task:** pick the highest-priority row whose `Depends On` are all ✅ and status is ⬜. Set it 🟡, create branch `feat/T-XXX-<slug>` (or `fix/`), do the work, satisfy the Acceptance Test, open a PR, then set ✅ on merge.
 
@@ -756,6 +762,253 @@ DEFINITION_OF_DONE:
 - [ ] Tenant reaches live state with all 7 setup artifacts present in DB.
 - [ ] Test call booked an appointment.
 - [ ] `docs/UX_FRICTION_LOG.md` created with ≥5 itemized findings, each tagged with the screen + step.
+
+---
+
+### T-015: Restore wizard starter services (EPIC — SKU + look-first)
+
+STATUS: 🟡 IN_PROGRESS
+OWNER: Claude-able (T-015-E has a human spot-check)
+PRIORITY: HIGH
+EFFORT: 12–16h
+DEPENDS_ON: None
+CONTEXT: Wizard Step 1 auto-seeds draft services from `business_templates.example_services`. Seed/baseline drift left **every** template empty, so a new business is asked "What service do you offer?" against a blank list.
+
+**This is NOT the vertical intake trees (T-000/T-008), and does not replace them.** Two different things that both stay:
+
+- **Services** = bookable calendar slot types. Consumed by `book_with_scheduling` → `resolveServiceForBooking`.
+- **Intake trees** = the questions a call asks (symptom, event details). Consumed by `ChecklistAgent`.
+
+#### Audit result (measured 2026-09-01, not assumed)
+
+```
+SELECT count(*) FILTER (WHERE cardinality(example_services)=0)  AS empty_svc,
+       count(*) FILTER (WHERE cardinality(example_resources)=0) AS empty_res,
+       count(*) AS total FROM business_templates;
+ empty_svc | empty_res | total
+-----------+-----------+-------
+        31 |        31 |    31
+```
+
+**Three independent layers, all of which must be fixed or the next rebuild re-empties them:**
+
+1. `supabase/seed.sql` INSERTs `'{}'` for both columns (line ~122). Its `ON CONFLICT DO UPDATE` deliberately omits them — which _preserves_ migration data on a re-seed, but on a fresh DB the INSERT is the only writer, so `{}` wins.
+2. `supabase/baseline.sql` carries **no** `COPY public.business_templates` — it is schema-only. `scripts/rebuild-db.sh` is `DROP SCHEMA` → baseline → seed, so **migrations never run on a rebuild** and the migration that populated examples is skipped entirely.
+3. `supabase/migrations/20260317000004_example_services.sql` — the only populating migration — covers **20** business types, three of which are the deleted HIPAA verticals (`dentist`, `vet-clinic`, `chiropractor`), and misses 11 of the 31 live types (catering, real-estate, law-firm, oil-change, car-wash, body-shop, car-detailing, garage-door, locksmith, lash-studio, med-spa, insurance, answering-service). So even the migrate path was never complete.
+
+#### Two more findings that change the design
+
+4. **The default-service backfill is alphabetical in practice.** Both `seed.sql` and `20260630000000` pick the bookable service "whose duration is closest to 30 minutes, tie-broken by `s.name ASC`". `seedServices` hardcodes `duration_minutes: 30` for every row, so the duration term is always a tie and **the default is whichever starter sorts first alphabetically**. For a plumber seeded `Drain cleaning, Service call` that silently makes _Drain cleaning_ the fallthrough — exactly the "vague speech books the wrong thing" failure this task exists to prevent. Defaults must be set explicitly per vertical, not left to sort order.
+5. **`example_services` is `text[]` — names only, nowhere to put a description.** `resolveServiceForBooking`'s semantic step embeds `concat_ws('. ', s.name, s.subtitle, s.description)`. A look-first row seeded name-only ("Diagnostic visit") has almost nothing for "my check engine light is on" to match against; the description is what does the work. `services` already has `description` and `subtitle` columns — the template side is the gap.
+
+#### Non-negotiables (from the work order, restated so they are checkable)
+
+1. **SKU** = caller can name it and the shop can slot it (Oil Change, Haircut). **Look-first** = book the visit type, not the unknown fix (Diagnostic visit, Service call, Event consult).
+2. 2–4 starters per vertical. Not 5–7 department menus.
+3. Caller language, not shop-writer buckets. "Brakes" / "Basic Service" are not day-one defaults.
+4. Every seeded row must be honest as a **~30-minute** bookable unit while `seedServices` hardcodes 30.
+5. Look-first rows carry a one-line description suitable for embedding — never name-only.
+6. `default_service_id` policy is explicit per vertical: repair-heavy (auto-shop, plumber, HVAC, electrician, …) → the **look-first** row; specialty SKU (oil-change, nail-salon, …) → the **main SKU**.
+7. Never seed: HIPAA types, the event itself ("Wedding Reception"), memberships, "Emergency fix" as a normal SKU, "Message Taking" as a service, resource names ("Bay 1"), banned verticals.
+8. Persisted in `supabase/seed.sql` + a migration for existing DBs + baseline regen. A live `UPDATE` alone is not done.
+9. `example_resources` restored separately, shape only (`Van 1` / `Bay 1` from `resource_label`) — never mixed into services.
+
+#### Out of scope (explicitly)
+
+Rewriting intake trees · owner-editable "add questions to tree" · full service menus / pricing / a multi-hour duration system · re-adding deleted HIPAA templates.
+
+#### DEFINITION OF DONE (epic)
+
+- [x] Seed/rebuild leaves live verticals with non-empty `example_services` and sensible `example_resources` — 0 empty rows after `npm run db:rebuild -- --yes`; 31 templates / 72 starters / 62 resources
+- [x] Wizard Step 1 shows starters after a pick, for the T-008 sample verticals + auto-shop — `starterSeeding.test.tsx` 7/7, real component against the real catalogue
+- [x] Defaults + descriptions wired; resolver tests cover SKU / look-first / fallthrough — `starterServiceResolution.realdb.test.ts` 8/8, real DB + pgvector
+- [x] No HIPAA / event-as-service / Message Taking / emergency-fix SKUs — enforced by four SAD tests, not by care
+- [x] Acceptance commands pasted in full (no `tail`); CI green — PR #393, run `33526935939` on `6c2bdd8`, all 4 jobs pass
+- [ ] **Human spot-check of wizard Step 1** — the owner's, not mine. The only box left.
+
+**STATUS stays 🟡, not ✅.** This doc's own rule is that DONE means merged to `main`; CI green is a precondition, not the finish line.
+
+---
+
+### T-015-A: Data model / seed path
+
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
+OWNER: Claude-able
+PRIORITY: HIGH
+DEPENDS_ON: None
+CONTEXT: Layers 1–3 and finding 5 above. The column is `text[]`; descriptions need somewhere to live.
+FILES: `supabase/seed.sql`, `supabase/baseline.sql`, a new `supabase/migrations/*`, `src/routes/vocabulary.ts`, `src/routes/tenants.ts`, `dashboard/lib/types.ts`, `dashboard/components/SetupWizard/*`.
+ACCEPTANCE_TEST:
+
+```bash
+npm run db:rebuild -- --yes
+psql "$LOCAL" -c "SELECT business_type, cardinality(example_services) FROM business_templates WHERE cardinality(example_services)=0"
+# expects zero rows
+```
+
+### T-015-B: Content — starter lists for all 31 live templates
+
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
+OWNER: Claude-able
+PRIORITY: HIGH
+DEPENDS_ON: T-015-A
+CONTEXT: 2–4 per vertical under the SKU / look-first rules. Deviations from the work order's reference list must be written down with a reason, not silently invented.
+
+### T-015-C: Descriptions + default_service_id policy
+
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
+OWNER: Claude-able
+PRIORITY: HIGH
+DEPENDS_ON: T-015-B
+CONTEXT: Finding 4 — the alphabetical default must be replaced by an explicit per-vertical policy. Finding 5 — look-first rows need descriptions on the seeded `services` row so the semantic step has something to match.
+
+### T-015-D: Resolver / booking safety checks
+
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
+OWNER: Claude-able
+PRIORITY: HIGH
+DEPENDS_ON: T-015-C
+CONTEXT: Prove the three paths against a real DB: spoken "check engine light" / "weird noise" → Diagnostic visit (NOT Oil Change); vague speech → the vertical's default look-first row; "oil change" → Oil Change. **No lowering `INTENT_MATCH_THRESHOLD` to make a case pass** — a threshold moved to turn a test green is the test lying.
+
+### T-015-E: Wizard UX acceptance
+
+STATUS: 🟡 IN_PROGRESS (PR #393, CI green on 6c2bdd8 — evidence in the results section below)
+OWNER: Mixed (Claude drives the browser; human spot-checks)
+PRIORITY: HIGH
+DEPENDS_ON: T-015-B
+CONTEXT: Fresh tenant → Setup Assistant → pick Catering / Plumber / Salon / Real Estate / Auto shop → Step 1 shows non-empty starters without typing. Changing business type clears auto-seeded rows and reseeds from the new template.
+
+---
+
+---
+
+## T-015 — WHAT WAS ACTUALLY DONE, AND WHAT IS STILL OPEN
+
+Every number below came from a command that was run; nothing here is an estimate.
+
+### T-015-A — data model / seed path · 🟡 (CI green on 6c2bdd8)
+
+**A defect in this migration was found and fixed after the first push, by a test.**
+The type conversion was not idempotent: a re-run did `DROP DEFAULT`, then died on
+the type change (the column is jsonb by then, so
+`COALESCE(example_services, '{}'::text[])` no longer type-checks) and left the
+column `jsonb NOT NULL` with **no default** — after which every
+`INSERT INTO business_templates` that omitted the column failed with
+"null value in column example_services violates not-null constraint".
+`tests/routes/vocabulary.test.ts` caught it. Re-running a migration is a normal
+act (restoring a snapshot, catching a local DB up, recovering a partial failure),
+so the conversion is now guarded AND — the part that matters — the end state
+(`SET DEFAULT` / `SET NOT NULL`) is asserted OUTSIDE the guard. Guarding alone
+would not have repaired an already-damaged database: the guard sees jsonb, skips,
+and the missing default stays missing forever. Proven by applying the file three
+times in a row against both `postgres` and `test_db`.
+
+The column became `jsonb` rather than gaining a second column, because a parallel
+"descriptions" list is the same drift that emptied this one. Generated from
+`shared/starterServices.ts` by `scripts/generate-starter-services-sql.ts` into
+BOTH the migration and `seed.sql`; `npm run verify:starter-services` fails CI on
+a hand-edit.
+
+ACCEPTANCE — after `npm run db:rebuild -- --yes` (baseline + seed, **no migrations**,
+which is the exact path that used to leave everything empty):
+
+```
+SELECT business_type, jsonb_array_length(example_services), cardinality(example_resources)
+  FROM business_templates
+ WHERE jsonb_array_length(example_services) = 0 OR cardinality(example_resources) = 0;
+ business_type | starters | resources
+---------------+----------+-----------
+(0 rows)
+
+SELECT count(*), sum(jsonb_array_length(example_services)), sum(cardinality(example_resources))
+  FROM business_templates;
+ templates | starter_services | example_resources
+-----------+------------------+-------------------
+        31 |               70 |                62
+```
+
+### T-015-B — content · 🟡 (CI green on 6c2bdd8)
+
+**72 starters across 31 verticals, every one of them 2–4. No exceptions.**
+
+CORRECTION, recorded because the first version of this shipped wrong: med-spa and
+law-firm originally shipped ONE starter each, and the vocabulary test's floor was
+loosened to `>= 1` to accommodate them, with a comment claiming "the work order's
+product rule changed". That claim was false. The work order's RULE always said
+2–4; its reference LIST said "Aesthetic consultation only" and "Consultation
+only" for those two. That is a conflict inside the work order, not permission to
+ship one — and resolving it silently left the catalogue header (2–4), this
+roadmap (2–4) and the test (`>= 1`) disagreeing about what the rule even was.
+
+Resolved the other way instead, per the work order's own instruction to fix the
+list and say why. Each of those two gained a second starter that stands on its
+own terms:
+
+- **med-spa → "Follow-up visit".** The consultation still leads, because
+  everything a med spa does is decided AT that consultation. A follow-up is the
+  one other genuinely bookable thing that presumes no unassessed procedure: an
+  existing client returning to have completed work checked.
+- **law-firm → "Case status call".** The consultation still leads and
+  `case_intake` (a TREE, not a service row) still collects the matter. A status
+  call is the other real inbound — an EXISTING client asking where their matter
+  has got to — and it presumes nothing about whether the firm took a new case.
+
+The floor in `tests/routes/vocabulary.test.ts` is back to 2, and
+`tests/starterServices.test.ts` now asserts a flat 2–4 with no allowlist.
+Deviations from the reference list are in the catalogue's per-vertical comments;
+the significant ones are under "Deviations" below.
+
+### T-015-C — descriptions + default policy · 🟡 (CI green on 6c2bdd8)
+
+`seedServices` and the SOLO wizard's own seeding path both carry the description
+now. `src/services/defaultServicePolicy.ts` sets `default_service_id` from the
+starter marked `is_default`, wired into `/setup/commit` AND a new
+`POST /setup/default-service` for the solo path, which never goes through commit.
+
+### T-015-D — resolver safety · 🟡 (CI green on 6c2bdd8)
+
+`tests/integration/starterServiceResolution.realdb.test.ts`, 8/8, real DB and
+real pgvector. `INTENT_MATCH_THRESHOLD` was NOT touched — see "Honest limits".
+
+### T-015-E — wizard UX · 🟡 (component proof CI-green on 6c2bdd8; the human half is still open)
+
+`dashboard/components/SetupWizard/starterSeeding.test.tsx`, 7/7: the real
+`SetupWizard` renders Step 1 with each vertical's starters and the look-first
+description, from the real catalogue rather than a fixture.
+
+- [ ] **Human spot-check still outstanding:** open the wizard, pick a type, see
+      the list. A browser probe was attempted and its failures were traced to the
+      probe's own navigation, not the product — so it is not offered as evidence.
+
+### Deviations from the reference list, with reasons
+
+- **car-detailing** — a full detail is a half-day, so seeding it as a 30-minute
+  row is a lie on the calendar. Ships "Detail consultation" (look-first) +
+  "Express interior clean".
+- **lash-studio** — a new full set is ~2 hours. Ships "Lash fill" (the frequent,
+  genuinely short booking) + "Lash consultation".
+- **cleaning / landscaping** — scope is unknown until someone looks, so both lead
+  with a walkthrough estimate rather than a named job.
+- **insurance** — "Insurance quote" over "New quote consultation": callers say
+  "quote".
+- **Three rows knowingly break the ~30-minute rule** — salon "Color", cleaning
+  "One-time clean", yoga "Private session". They are what callers actually say,
+  and an owner edits Step 1 anyway. Flagged `duration_caveat` in the catalogue so
+  the next person fixes the duration system instead of rediscovering the tension.
+
+### Honest limits — what this work does NOT prove
+
+- **The semantic threshold is not proven offline.** The resolver test uses a
+  deterministic bag-of-words embedder so CI needs no network. It reproduces the
+  DIRECTION of similarity, not the magnitude a real embedding gives two sentences
+  that mean the same thing in different words: the auto-shop phrase scores ~0.30
+  against it, under the production `INTENT_MATCH_THRESHOLD` of 0.35. Lowering
+  that constant would have turned the test green while making the product worse,
+  so the test asserts what IS provable offline — that given the descriptions the
+  right row is NEAREST — plus a control proving name-only seeding loses it.
+  Whether a real OpenAI embedding clears 0.35 needs a live call.
+- **No live call has been made** against a tenant seeded this way.
+- **Durations are still all 30 minutes.** Nothing here builds a duration system.
 
 ---
 

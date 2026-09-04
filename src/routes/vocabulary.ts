@@ -23,7 +23,7 @@ export function registerVocabularyRoutes(
           COALESCE(t.employee_label, bt.employee_label, 'Employee') AS employee_label,
           COALESCE(t.employee_plural, bt.employee_plural, 'Employees') AS employee_plural,
           COALESCE(t.booking_label, bt.booking_label, 'Appointment') AS booking_label,
-          COALESCE(bt.example_services, '{}') AS example_services,
+          COALESCE(bt.example_services, '[]'::jsonb) AS example_services,
           COALESCE(bt.example_resources, '{}') AS example_resources
         FROM tenants t
         LEFT JOIN business_templates bt ON bt.business_type = t.business_type

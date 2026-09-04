@@ -1,5 +1,7 @@
 'use client';
 
+import type { StarterService } from '../../../shared/starterServices';
+
 import React from 'react';
 import { Plus, Pencil, Trash2, Clock } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -17,9 +19,12 @@ import type { Step1Props, WizardService } from './types';
  * entirely — anything is better than the cross-industry "Oil Change,
  * Haircut, Tire Rotation" we had before.
  */
-function servicePlaceholder(examples: readonly string[] | undefined): string {
+function servicePlaceholder(examples: readonly StarterService[] | undefined): string {
   if (!examples || examples.length === 0) return 'e.g. 30-minute consultation';
-  return `e.g. ${examples.slice(0, 3).join(', ')}`;
+  return `e.g. ${examples
+    .slice(0, 3)
+    .map((s) => s.name)
+    .join(', ')}`;
 }
 
 export function Step1Services({

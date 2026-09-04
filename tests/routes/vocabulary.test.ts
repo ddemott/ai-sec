@@ -203,13 +203,54 @@ describe('Business Vocabulary System', () => {
     });
 
     it('should have example_services populated on all 20 templates', async () => {
+      // T-015 changed what this asserts, so the bound moved from 3 to 2.
+      //
+      // It used to demand >= 3, which encoded the old 5-item department menus
+      // ("Oil Change, Brake Service, Engine Diagnostic, Tire Rotation, State
+      // Inspection"). The starter catalogue is 2–4 caller-language rows per
+      // vertical, so 2 is the floor.
+      //
+      // CORRECTION, recorded because the wrong version was committed first: this
+      // comment previously said the floor was 1 and that "the work order's
+      // product rule changed". That was false. The work order's rule always said
+      // 2–4; its reference LIST said "consultation only" for med-spa and
+      // law-firm, which is a conflict inside the work order — not permission to
+      // ship one. Loosening this floor to 1 hid that conflict and left the
+      // catalogue header, the roadmap, and this test disagreeing. Those two
+      // verticals now carry a second defensible starter and the floor is 2.
+      //
+      // The assertion also got STRONGER, not weaker: it caps the list at 4,
+      // asserts every expected template was actually found, and checks each entry
+      // is an object with a non-empty name rather than counting entries of any
+      // shape. That last part matters because the column changed from text[] to
+      // jsonb, and a silent shape regression would sail through a length check.
       if (!dbAvailable) return;
       const res = await client.query(
         'SELECT business_type, example_services FROM business_templates WHERE business_type = ANY($1)',
         [EXPECTED_TYPES]
       );
+      expect(res.rows.length).toBe(EXPECTED_TYPES.length);
       for (const row of res.rows) {
-        expect(row.example_services.length).toBeGreaterThanOrEqual(3);
+        const starters = row.example_services as Array<{ name?: string }>;
+        expect(
+          Array.isArray(starters),
+          `${row.business_type} example_services is not an array`
+        ).toBe(true);
+        expect(
+          starters.length,
+          `${row.business_type} has ${starters.length} starter(s) — the rule is 2–4, and a blank ` +
+            `or single-row Step 1 is what T-015 exists to prevent`
+        ).toBeGreaterThanOrEqual(2);
+        expect(
+          starters.length,
+          `${row.business_type} has ${starters.length} starters; 2–4 is the rule, more is a menu`
+        ).toBeLessThanOrEqual(4);
+        for (const starter of starters) {
+          expect(
+            typeof starter?.name === 'string' && starter.name.length > 0,
+            `${row.business_type} has a starter with no name: ${JSON.stringify(starter)}`
+          ).toBe(true);
+        }
       }
     });
 

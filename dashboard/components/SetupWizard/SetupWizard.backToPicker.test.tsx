@@ -64,7 +64,7 @@ vi.mock('@/lib/api', () => ({
       listFull: vi.fn().mockResolvedValue([
         {
           business_type: 'answering-service',
-          example_services: ['Phone Consultation', 'In-Person Meeting'],
+          example_services: [{ name: 'Phone Consultation' }, { name: 'In-Person Meeting' }],
         },
       ]),
     },

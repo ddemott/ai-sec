@@ -884,6 +884,33 @@ describe('SetupWizard: Sad Paths — Validation (Empty Form Submissions)', () =>
   });
 });
 
+/**
+ * Two timeouts that must NOT be equal.
+ *
+ * This test failed CI on 2026-09-01 (run 33504352556, Dashboard job) with
+ * "Test timed out in 5000ms" — and the component was fine. The inner
+ * `findByText` was given a 5000ms budget while vitest's own default test
+ * timeout is ALSO 5000ms, so the two raced for the same window: the test spends
+ * time in `goToStep9()` first (eight step transitions, each with its own fetch),
+ * and whatever is left is less than the 5000ms the inner wait believes it has.
+ * On a loaded runner vitest wins the race and kills the test before the wait can
+ * report anything useful, so the failure names a timeout instead of naming the
+ * missing element.
+ *
+ * This is the same defect `scripts/purge-soft-deleted.test.ts` documents at
+ * length ("Deliberately ABOVE the subprocess budget, not equal to it. If the two
+ * match, vitest and spawnSync race on a genuine hang and vitest can win —
+ * emitting a bare 'timed out' that names nothing"). Same shape, different pair
+ * of clocks.
+ *
+ * So the outer budget is deliberately well above the inner one. Neither number
+ * is an assertion about speed: a genuinely broken component still fails, it just
+ * fails with "Unable to find an element with the text: Activation failed", which
+ * is the sentence that tells you what actually went wrong.
+ */
+const FIND_BUDGET_MS = 5_000;
+const TEST_TIMEOUT_MS = 20_000;
+
 describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
   async function goToStep9() {
     render(<SetupWizard isOpen={true} onClose={() => {}} />);
@@ -951,25 +978,31 @@ describe('SetupWizard: Sad Paths — Phone Provisioning Failure', () => {
     ).toBeNull();
   });
 
-  test('generic error message used when error is not an Error instance', async () => {
-    await goToStep9();
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: unknown) => {
-      const path = typeof url === 'string' ? url : String(url);
-      if (path.includes('/provisioning/activate')) {
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- THE POINT of this sad-path is to exercise the non-Error rejection branch in the production component
-        return Promise.reject('string error without Error wrapper');
-      }
-      return Promise.resolve({ ok: true, json: async () => [] });
-    });
+  test(
+    'generic error message used when error is not an Error instance',
+    async () => {
+      await goToStep9();
+      (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: unknown) => {
+        const path = typeof url === 'string' ? url : String(url);
+        if (path.includes('/provisioning/activate')) {
+          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- THE POINT of this sad-path is to exercise the non-Error rejection branch in the production component
+          return Promise.reject('string error without Error wrapper');
+        }
+        return Promise.resolve({ ok: true, json: async () => [] });
+      });
 
-    fireEvent.click(screen.getByText('Activate AI Phone Line'));
+      fireEvent.click(screen.getByText('Activate AI Phone Line'));
 
-    // CI runners under load have blown the default 1000ms waitFor here
-    // (same class as the recorded SetupWizard flake). The assertion is
-    // "the generic copy appeared", not "it appeared in 1s".
-    expect(await screen.findByText('Activation failed', {}, { timeout: 5000 })).toBeInTheDocument();
-    expect(screen.getByText('Failed to activate phone')).toBeInTheDocument();
-  });
+      // CI runners under load have blown the default 1000ms waitFor here
+      // (same class as the recorded SetupWizard flake). The assertion is
+      // "the generic copy appeared", not "it appeared in 1s".
+      expect(
+        await screen.findByText('Activation failed', {}, { timeout: FIND_BUDGET_MS })
+      ).toBeInTheDocument();
+      expect(screen.getByText('Failed to activate phone')).toBeInTheDocument();
+    },
+    TEST_TIMEOUT_MS
+  );
 });
 
 describe('SetupWizard: Sad Paths — Empty Lists / Guards Handled Gracefully', () => {

@@ -94,12 +94,20 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
         ]);
         const tpl = (templates || []).find((t) => t.business_type === config?.business_type);
         if (!tpl?.example_services?.length) return;
-        for (const name of tpl.example_services) {
+        for (const starter of tpl.example_services) {
           // Server-tagged so a future business_type change can wipe these
           // template defaults without touching anything the owner typed.
           // See migration 20260528000000_is_auto_seeded_flag.sql.
+          //
+          // The description rides along. This is the SOLO wizard's own seeding
+          // path — separate from useWizardCrud.seedServices, and just as real —
+          // and a look-first starter seeded without its description is
+          // unreachable by meaning: resolveServiceForBooking embeds
+          // name + subtitle + description, so "Service call" alone gives
+          // "water is coming from under my sink" nothing to match.
           const result = await Api.services.create(tenantId, {
-            name,
+            name: starter.name,
+            ...(starter.description ? { description: starter.description } : {}),
             duration_minutes: 30,
             is_auto_seeded: true,
           });
@@ -385,6 +393,18 @@ export default function SoloWizard({ isOpen, onClose, onBackToPicker }: SetupWiz
       // the hours-preload effect. Otherwise stay additive so a failed preload
       // can never wipe the owner's existing hours.
       await Api.shifts.expandWeekly(tenantId, ownerEmployeeId, pattern, undefined, hoursHydrated);
+
+      // Pick the fallthrough service by POLICY. The solo path never goes through
+      // /setup/commit, which is where the team wizard does this — so without
+      // this call a solo tenant finishes setup with default_service_id unset,
+      // and the next caller whose words match no service is booked into
+      // whichever service sorts first alphabetically. Non-fatal: a failure here
+      // leaves the pre-existing behaviour, it does not break go-live.
+      try {
+        await Api.setup.applyDefaultService(tenantId);
+      } catch {
+        /* keep going — setup completing matters more than the default */
+      }
 
       // 4. Fetch coverage
       const coverage = await Api.coverage.check(tenantId);

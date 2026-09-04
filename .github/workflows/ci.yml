@@ -137,6 +137,13 @@ jobs:
       - name: Verify CLAUDE.md (drift detector — NEEDS-REFACTORING #13)
         run: npm run verify:claude-md
 
+      # NOT gated either. supabase/seed.sql and the starter-services migration
+      # are GENERATED from shared/starterServices.ts; a hand-edit to the SQL
+      # silently becomes a second source of truth, which is the exact drift that
+      # left example_services empty for all 31 business types. Fail loudly here.
+      - name: Verify generated starter-service SQL matches shared/starterServices.ts
+        run: npm run verify:starter-services
+
       - name: Run backend tests
         if: github.event_name != 'pull_request' || steps.changes.outputs.code != 'false'
         run: npm test

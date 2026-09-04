@@ -825,6 +825,20 @@ export const Api = {
         service_employee: Array<{ service_id: string; employee_id: string }>;
         service_resource: Array<{ service_id: string; resource_id: string }>;
       }>(`/setup/graph`, tenantParam(tenantId)),
+    /**
+     * Apply the fallthrough-service policy (tenants.default_service_id).
+     * /setup/commit does this itself; the SOLO wizard does not go through
+     * commit, so it calls this at finalize. Without it a solo tenant finishes
+     * setup with no default and the next unmatched call books whichever service
+     * sorts first alphabetically.
+     */
+    applyDefaultService: (tenantId: string | null) =>
+      apiMutate<{ success: boolean; applied: boolean; serviceName: string | null }>(
+        `/setup/default-service`,
+        'POST',
+        { tenant_id: tenantId }
+      ),
+
     // What a SYNC commit of this draft would destroy: upcoming appointments booked
     // against services/staff/resources the owner removed in the wizard. Called
     // BEFORE commit so they can still back out — the commit reports the same
