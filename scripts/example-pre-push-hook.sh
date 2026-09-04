@@ -28,14 +28,33 @@ echo "==> Running pre-push checks (projectType: $PTYPE)..."
 # We classify off the ACTUAL pushed SHA range — not HEAD — so `git push origin
 # other` (a ref that isn't checked out) is judged correctly. The fast path is
 # enabled ONLY for a single-ref push whose exact range (remote sha → local sha)
-# is all docs. ANY ambiguity — multiple refs (--all), a branch deletion, no
-# stdin (hook run by hand from a terminal), an unreadable range — falls back to
-# running the full suite.
+# is all docs. ANY ambiguity — multiple refs (--all), no stdin (hook run by hand
+# from a terminal), an unreadable range — falls back to running the full suite.
+#
+# A branch DELETION is the one case that skips outright rather than falling
+# back. Git signals it with an all-zero LOCAL sha: the push uploads no objects
+# and no ref on the remote gains any commit, so there is nothing a test could
+# be testing. Running the suite there does not merely waste ~7 min — a suite
+# that fails for an unrelated reason (machine under load, a real red test on
+# another branch) BLOCKS the deletion entirely, which is how two already-merged
+# branches sat un-purged on origin on 2026-09-03.
 DOCS_ONLY=0
 ZERO='0000000000000000000000000000000000000000'
 if [ ! -t 0 ]; then
     STDIN_REFS="$(cat)"                  # the pushed-ref list (empty when no stdin)
     REF_COUNT="$(printf '%s\n' "$STDIN_REFS" | grep -c '[^[:space:]]' || true)"
+
+    # Deletion-only push: every ref on stdin has an all-zero LOCAL sha. Nothing
+    # is uploaded, so nothing can break. Exit before the checks below.
+    NON_DELETE_COUNT="$(printf '%s\n' "$STDIN_REFS" \
+        | grep '[^[:space:]]' \
+        | awk -v z="$ZERO" '$2 != z' \
+        | grep -c '' || true)"
+    if [ "$REF_COUNT" != "0" ] && [ "$NON_DELETE_COUNT" = "0" ]; then
+        echo "  🗑  Branch deletion only — no objects pushed, skipping all checks."
+        exit 0
+    fi
+
     if [ "$REF_COUNT" = "1" ]; then
         # shellcheck disable=SC2034
         read -r _lref lsha _rref rsha <<EOF_REF
