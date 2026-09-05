@@ -85,15 +85,15 @@ Below is a full list of its features:
 
 [![CI](https://github.com/ddemott/secretary-hq/actions/workflows/ci.yml/badge.svg)](https://github.com/ddemott/secretary-hq/actions/workflows/ci.yml)
 
-|               |                                                                                                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Phase**     | 13 — Production Readiness                                                                                                                                                                                                                                                                                                                         |
-| **Backend**   | Live on Railway (`secretary-hq-production.up.railway.app`)                                                                                                                                                                                                                                                                                        |
-| **Dashboard** | Live at `https://www.secretaryhq.com` (Railway origin `dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                                                                                                                      |
-| **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4.1-mini (LLM) + Deepgram Aura (TTS). Call flow = question trees (`agent/src/checklist/`). PSTN inbound reaches the agent (confirmed 2026-06-30); the booking + transfer legs still need a live different-carrier call — see `docs/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7. |
-| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                                                                                                                                                      |
-| **Tests**     | Latest audit rerun (2026-08-18): dashboard 1,046 passing, agent 943 passing, root `npm test` blocked locally by missing `app_user` role setup in `test_db`; see `docs/TEST_COVERAGE.md` for exact output and the last full-green snapshot                                                                                                         |
-| **E2E**       | 40 committed Playwright spec files                                                                                                                                                                                                                                                                                                                |
+|               |                                                                                                                                                                                                                                                                                                                                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase**     | 13 — Production Readiness                                                                                                                                                                                                                                                                                                                                  |
+| **Backend**   | Live on Railway (`secretary-hq-production.up.railway.app`)                                                                                                                                                                                                                                                                                                 |
+| **Dashboard** | Live at `https://www.secretaryhq.com` (Railway origin `dashboard-production-cee3.up.railway.app`); set `DASHBOARD_URL` on backend Railway service for Stripe/OAuth redirects                                                                                                                                                                               |
+| **Voice AI**  | Live — Telnyx → LiveKit Cloud → Deepgram Nova-3 (STT) + OpenAI GPT-4.1-mini (LLM) + Deepgram Aura (TTS). Call flow = question trees (`agent/src/checklist/`). PSTN inbound reaches the agent (confirmed 2026-06-30); the booking + transfer legs still need a live different-carrier call — see `docs/planning/TODO.md` (P0 Voice) + `docs/RUNBOOK.md` §7. |
+| **Phone**     | `+1 630-822-9086` (current). Previous `+1 630-866-1960` (purchased 2026-06-02) dead. Test verification number `+1 630-822-9086`. Old `+1-630-937-9478` dead.                                                                                                                                                                                               |
+| **Tests**     | Latest audit rerun (2026-08-18): dashboard 1,046 passing, agent 943 passing, root `npm test` blocked locally by missing `app_user` role setup in `test_db`; see `docs/TEST_COVERAGE.md` for exact output and the last full-green snapshot                                                                                                                  |
+| **E2E**       | 40 committed Playwright spec files                                                                                                                                                                                                                                                                                                                         |
 
 **Quick status commands** (see `scripts/simulate.sh`):
 
@@ -102,9 +102,9 @@ Below is a full list of its features:
 - `npm run ci:watch` — live tail the latest CI run
 - `./scripts/simulate.sh ci --watch` (same)
 
-**CI gate**: GitHub branch protection on `main` (applied 2026-06-15) requires the 4 CI jobs to be green before merges (and thus Railway deploys from `main`) are allowed. Always run `npm run ci:status` before merging. (See `.github/BRANCH_PROTECTION.md` + `docs/TODO.md`.)
+**CI gate**: GitHub branch protection on `main` (applied 2026-06-15) requires the 4 CI jobs to be green before merges (and thus Railway deploys from `main`) are allowed. Always run `npm run ci:status` before merging. (See `.github/BRANCH_PROTECTION.md` + `docs/planning/TODO.md`.)
 
-See `docs/TODO.md` for remaining work and `docs/RESOLVED.md` for completed phases + historical session notes.
+See `docs/planning/TODO.md` for remaining work and `docs/planning/RESOLVED.md` for completed phases + historical session notes.
 
 ---
 
@@ -347,12 +347,12 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 **Planning, tasks & status**
 
-| Doc                     | Purpose                                                                                                |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `docs/TODO.md`          | The one backlog — all open work, prioritized (GAPS + IMPROVEMENT_IDEAS + go-live folded in 2026-07-05) |
-| `docs/RESOLVED.md`      | Completed phases + historical bug tracker + session-notes archive (incl. the folded-doc snapshots)     |
-| `docs/TEST_COVERAGE.md` | Test coverage status and gaps                                                                          |
-| `docs/TEST_DB_AUDIT.md` | Mocked-DB vs real-SQL coverage map                                                                     |
+| Doc                         | Purpose                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `docs/planning/TODO.md`     | The one backlog — all open work, prioritized (GAPS + IMPROVEMENT_IDEAS + go-live folded in 2026-07-05) |
+| `docs/planning/RESOLVED.md` | Completed phases + historical bug tracker + session-notes archive (incl. the folded-doc snapshots)     |
+| `docs/TEST_COVERAGE.md`     | Test coverage status and gaps                                                                          |
+| `docs/TEST_DB_AUDIT.md`     | Mocked-DB vs real-SQL coverage map                                                                     |
 
 **Voice AI**
 
@@ -414,4 +414,4 @@ See `docs/DEPLOYMENT.md` for the step-by-step guide.
 
 Proprietary. All rights reserved.
 
-**Docs hygiene note (2026-07-05):** TODO consolidation — `GAPS.md`, `IMPROVEMENT_IDEAS.md`, `IMPROVEMENTS_TODO.md`, and `AIASSISTANT_GO_LIVE_TODO.md` were folded into `docs/TODO.md` (now the one backlog, deduped + prioritized) and deleted; their done items + verbatim snapshots were appended to `docs/RESOLVED.md`; navigational refs across CLAUDE/README/docs updated. Prior pass 2026-07-04 rebuilt this Documentation table from the actual `docs/` tree. See docs/README.md + RESOLVED.md.
+**Docs hygiene note (2026-07-05):** TODO consolidation — `GAPS.md`, `IMPROVEMENT_IDEAS.md`, `IMPROVEMENTS_TODO.md`, and `AIASSISTANT_GO_LIVE_TODO.md` were folded into `docs/planning/TODO.md` (now the one backlog, deduped + prioritized) and deleted; their done items + verbatim snapshots were appended to `docs/planning/RESOLVED.md`; navigational refs across CLAUDE/README/docs updated. Prior pass 2026-07-04 rebuilt this Documentation table from the actual `docs/` tree. See docs/README.md + RESOLVED.md.
