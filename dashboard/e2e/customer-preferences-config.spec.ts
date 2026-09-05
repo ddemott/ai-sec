@@ -19,17 +19,12 @@ import { test, expect } from './helpers/test';
 import { openAiPersona, saveAiPersona } from './helpers/aiPersona';
 import { Pool } from 'pg';
 
-const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
-let pool: Pool;
-
-test.beforeAll(() => {
-  pool = new Pool({ connectionString: PG_URL });
-});
+const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:***@localhost:5433/postgres';
 // The super-admin tenant this spec edits (auth.setup logs in as
 // admin@secretaryhq.com). Scoping every write to it is the point — see afterAll.
 const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
 
-test.afterAll(async () => {
+test.afterAll(async ({ pgPool }) => {
   // Reset ONLY the tenant this spec touched. This used to be an unconditional
   // `UPDATE tenants SET save_preferences_enabled = false,
   // preferences_instructions = NULL` with no WHERE clause — it reset the
@@ -39,18 +34,18 @@ test.afterAll(async () => {
   // the day anyone raises that for speed, this becomes a cross-spec data
   // corruption that presents as a flake somewhere else entirely. The house rule
   // is that a test owns its data and cleans up ITS OWN rows.
-  await pool
+  await pgPool
     .query(
       `UPDATE tenants SET save_preferences_enabled = false, preferences_instructions = NULL
         WHERE tenant_id = $1`,
       [PLATFORM_TENANT_ID]
     )
     .catch(() => {});
-  await pool.end();
 });
 
 test('owner enables Customer Preferences + guidance, and it survives a reload', async ({
   page,
+  pgPool,
 }) => {
   // WHO: a salon owner configuring how the AI remembers customers.
   // WHAT: toggle the feature on, type guidance, Save, reload — the toggle is

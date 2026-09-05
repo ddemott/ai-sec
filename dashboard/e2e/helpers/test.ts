@@ -139,6 +139,12 @@ export const test = base.extend({
     // See waitForDbQuiescence() above for the why.
     await waitForDbQuiescence();
   },
+
+  pgPool: async ({}, use) => {
+    const pool = new Pool({ connectionString: PG_URL });
+    await use(pool);
+    await pool.end();
+  },
 });
 
 // Close the pool at suite end so the process can exit cleanly.
