@@ -92,7 +92,11 @@ async function waitForDbQuiescence(timeoutMs = 5000): Promise<void> {
   );
 }
 
-export const test = base.extend({
+interface TestFixtures {
+  pgPool: Pool;
+}
+
+export const test = base.extend<TestFixtures>({
   page: async ({ page }, use, testInfo) => {
     const errors: string[] = [];
 

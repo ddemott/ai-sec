@@ -17,9 +17,9 @@
  */
 import { test, expect } from './helpers/test';
 import { openAiPersona, saveAiPersona } from './helpers/aiPersona';
-import { Pool } from 'pg';
 
-const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:***@localhost:5433/postgres';
+const PG_URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/postgres';
+
 // The super-admin tenant this spec edits (auth.setup logs in as
 // admin@secretaryhq.com). Scoping every write to it is the point — see afterAll.
 const PLATFORM_TENANT_ID = '00000000-0000-0000-0000-000000000000';
@@ -82,7 +82,7 @@ test('owner enables Customer Preferences + guidance, and it survives a reload', 
   // apart: a failure at this line is a WRITE bug, a failure after the reload is
   // a READ/render bug. The root cause is not yet proven either way; this makes
   // the next occurrence diagnostic instead of ambiguous.
-  const stored = await pool.query<{ preferences_instructions: string | null }>(
+  const stored = await pgPool.query<{ preferences_instructions: string | null }>(
     `SELECT preferences_instructions FROM tenants WHERE tenant_id = $1`,
     [PLATFORM_TENANT_ID]
   );
